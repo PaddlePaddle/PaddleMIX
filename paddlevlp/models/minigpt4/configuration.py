@@ -17,7 +17,7 @@ import copy
 import os
 from typing import Union
 
-from paddlenlp.utils.log import logger
+from ...utils.log import logger
 from paddlenlp.transformers.auto.modeling import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.llama.configuration import LlamaConfig

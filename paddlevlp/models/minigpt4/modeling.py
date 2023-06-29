@@ -22,11 +22,6 @@ import paddle.nn.functional as F
 from paddle.distributed.fleet.utils import recompute
 from paddle.nn import CrossEntropyLoss
 
-from paddlenlp.ops import transfer_param
-from paddlenlp.utils.log import logger
-
-from paddlenlp.utils.initializer import normal_, ones_, zeros_
-from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutput,
@@ -41,6 +36,11 @@ from paddlenlp.transformers.model_utils import (
     find_pruneable_heads_and_indices,
     prune_linear_layer,
 )
+
+from ...utils.log import logger
+from ...activations import ACT2FN
+from ...utils.initializer import normal_, ones_, zeros_
+from ...utils.parameters import transfer_param
 
 MiniGPT4_PRETRAINED_MODEL_ARCHIVE_LIST = []
 

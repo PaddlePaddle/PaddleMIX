@@ -23,10 +23,11 @@ import numpy as np
 import paddle
 from PIL import Image
 
-from paddlenlp.transformers.image_processing_utils import BatchFeature
-from paddlenlp.transformers.image_utils import ImageInput
-from paddlenlp.transformers.processing_utils import ProcessorMixin
 from paddlenlp.transformers.tokenizer_utils_base import BatchEncoding, TensorType, TextInput
+
+from .image_processing_utils import BatchFeature
+from .image_utils import ImageInput
+from .base_processing import ProcessorMixin
 
 __all__ = [
     "MiniGPT4Processor",

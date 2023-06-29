@@ -20,15 +20,17 @@ from typing import Dict, List, Optional, Union
 import numpy as np
 import PIL
 
-from paddlenlp.transformers.image_processing_utils import BaseImageProcessor, BatchFeature, get_size_dict
-from paddlenlp.transformers.image_transforms import (
+from paddlenlp.transformers.tokenizer_utils_base import TensorType
+
+from .image_processing_utils import BaseImageProcessor, BatchFeature, get_size_dict
+from .image_transforms import (
     convert_to_rgb,
     normalize,
     rescale,
     resize,
     to_channel_dimension_format,
 )
-from paddlenlp.transformers.image_utils import (
+from .image_utils import (
     ChannelDimension,
     ImageInput,
     PILImageResampling,
@@ -36,7 +38,6 @@ from paddlenlp.transformers.image_utils import (
     to_numpy_array,
     valid_images,
 )
-from paddlenlp.transformers.tokenizer_utils_base import TensorType
 
 __all__ = [
     "MiniGPT4ImageProcessor",

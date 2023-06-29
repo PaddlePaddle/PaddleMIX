@@ -42,7 +42,7 @@ class Logger(object):
     """
 
     def __init__(self, name: str = None):
-        name = "PaddleNLP" if not name else name
+        name = "PaddleMIX" if not name else name
         self.logger = logging.getLogger(name)
 
         for key, conf in log_config.items():

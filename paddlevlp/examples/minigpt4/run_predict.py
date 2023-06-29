@@ -20,7 +20,7 @@ os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 import requests
 from PIL import Image
 
-from paddlenlp.transformers import MiniGPT4ForConditionalGeneration, MiniGPT4Processor
+from paddlevlp import MiniGPT4ForConditionalGeneration, MiniGPT4Processor
 
 
 def predict(args):
@@ -39,7 +39,6 @@ def predict(args):
     inputs = processor([image], text, prompt)
 
     # generate with MiniGPT4
-    # breakpoint
     generate_kwargs = {
         "max_length": 300,
         "num_beams": 1,
