@@ -14,7 +14,6 @@
 
 from enum import Enum
 
-
 class ExplicitEnum(Enum):
     """
     Enum with more explicit error message for missing values.

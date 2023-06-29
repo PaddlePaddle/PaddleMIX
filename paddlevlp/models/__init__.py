@@ -14,3 +14,5 @@
 # limitations under the license.
 
 from .blip2.modeling import *
+from .minigpt4.configuration import *
+from .minigpt4.modeling import *
