@@ -1,5 +1,4 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The Salesforce Team Authors and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import numpy as np
+from typing import Union
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
@@ -26,140 +27,12 @@ from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
 
 """ swin_transformer model configuration"""
-__all__ = ["SWIN_TRANSFORMER_PRETRAINED_INIT_CONFIGURATION", "SwinTransformerConfig", "SWIN_TRANSFORMER_PRETRAINED_RESOURCE_FILES_MAP"]
-
-
-SWIN_TRANSFORMER_PRETRAINED_INIT_CONFIGURATION = {
-    "swin_T_224_1k": {
-        "in_chans": 3,
-        "embed_dim": 96, 
-        "depths": [2, 2, 6, 2], 
-        "num_heads": [3, 6, 12, 24],
-        "window_size": 7,
-        "pretrain_img_size": 224,
-        "patch_size": 4,
-        "out_indices": (0, 1, 2, 3),
-        "mlp_ratio": 4.0,
-        "qkv_bias": True,
-        "qk_scale": None,
-        "drop_rate": 0.0,
-        "attn_drop_rate": 0.0,
-        "drop_path_rate": 0.2,
-        "norm_layer": "LayerNorm",
-        "ape": False,
-        "patch_norm": True,
-        "frozen_stages": -1,
-        "dilation": False,
-        "use_checkpoint": False,
-
-
-    },
-    "swin_B_224_22k": {
-        "in_chans": 3,
-        "embed_dim": 128, 
-        "depths": [2, 2, 18, 2], 
-        "num_heads": [4, 8, 16, 32], 
-        "window_size": 7,
-        "pretrain_img_size": 224,
-        "patch_size": 4,
-        "out_indices": (0, 1, 2, 3),
-        "mlp_ratio": 4.0,
-        "qkv_bias": True,
-        "qk_scale": None,
-        "drop_rate": 0.0,
-        "attn_drop_rate": 0.0,
-        "drop_path_rate": 0.2,
-        "norm_layer": "LayerNorm",
-        "ape": False,
-        "patch_norm": True,
-        "frozen_stages": -1,
-        "dilation": False,
-        "use_checkpoint": False
-    },
-    "swin_B_384_22k": {
-        "in_chans": 3,
-        "embed_dim": 128, 
-        "depths": [2, 2, 18, 2], 
-        "num_heads": [4, 8, 16, 32], 
-        "window_size": 12,
-        "pretrain_img_size": 384,
-        "patch_size": 4,
-        "out_indices": (0, 1, 2, 3),
-        "mlp_ratio": 4.0,
-        "qkv_bias": True,
-        "qk_scale": None,
-        "drop_rate": 0.0,
-        "attn_drop_rate": 0.0,
-        "drop_path_rate": 0.2,
-        "norm_layer": "LayerNorm",
-        "ape": False,
-        "patch_norm": True,
-        "frozen_stages": -1,
-        "dilation": False,
-        "use_checkpoint":False
-    },
-    "swin_L_224_22k": {
-        "in_chans": 3,
-        "embed_dim": 192, 
-        "depths": [2, 2, 18, 2], 
-        "num_heads": [6, 12, 24, 48], 
-        "window_size": 7,
-        "pretrain_img_size": 224,
-        "patch_size": 4,
-        "out_indices": (0, 1, 2, 3),
-        "mlp_ratio": 4.0,
-        "qkv_bias": True,
-        "qk_scale": None,
-        "drop_rate": 0.0,
-        "attn_drop_rate": 0.0,
-        "drop_path_rate": 0.2,
-        "norm_layer": "LayerNorm",
-        "ape": False,
-        "patch_norm": True,
-        "frozen_stages": -1,
-        "dilation": False,
-        "use_checkpoint": False
-    },
-    "swin_L_384_22k":{
-        "in_chans": 3,
-        "embed_dim": 192, 
-        "depths": [2, 2, 18, 2],
-        "num_heads": [6, 12, 24, 48], 
-        "window_size": 12,
-        "pretrain_img_size": 384,
-        "patch_size": 4,
-        "out_indices": (0, 1, 2, 3),
-        "mlp_ratio": 4.0,
-        "qkv_bias": True,
-        "qk_scale": None,
-        "drop_rate": 0.0,
-        "attn_drop_rate": 0.0,
-        "drop_path_rate": 0.2,
-        "norm_layer": "LayerNorm",
-        "ape": False,
-        "patch_norm": True,
-        "frozen_stages": -1,
-        "dilation": False,
-        "use_checkpoint": False
-    },
-    
-}
-
-SWIN_TRANSFORMER_PRETRAINED_RESOURCE_FILES_MAP = {
-    "model_state": {
-        "swin_T_224_1k": "https://bj.bcebos.com/v1/paddledet/models/pretrained/swin_tiny_patch4_window7_224_22kto1k_pretrained.pdparams",
-        "swin_B_224_22k": "https://bj.bcebos.com/v1/paddledet/models/pretrained/swin_base_patch4_window7_224_22kto1k_pretrained.pdparams",
-        "swin_B_384_22k": "https://bj.bcebos.com/v1/paddledet/models/pretrained/swin_base_patch4_window12_384_22kto1k_pretrained.pdparams",
-        "swin_L_224_22k": "https://bj.bcebos.com/v1/paddledet/models/pretrained/swin_large_patch4_window7_224_22kto1k_pretrained.pdparams",
-        "swin_L_384_22k": "https://bj.bcebos.com/v1/paddledet/models/pretrained/swin_large_patch4_window12_384_22kto1k_pretrained.pdparams",
-    }
-}
+__all__ = ["SwinTransformerConfig"]
 
 
 class SwinTransformerConfig(PretrainedConfig):
   
     model_type = "swintransformer"
-    pretrained_init_configuration = SWIN_TRANSFORMER_PRETRAINED_INIT_CONFIGURATION
 
     def __init__(
         self,
@@ -182,9 +55,12 @@ class SwinTransformerConfig(PretrainedConfig):
         out_indices=(0, 1, 2, 3),
         frozen_stages=-1,
         dilation=False,
-        use_checkpoint=False
+        use_checkpoint=False,
+        **kwargs,
     ):
-        super().__init__()
+        kwargs["return_dict"] = kwargs.pop("return_dict", True)
+        super().__init__(**kwargs)
+
         self.in_chans = in_chans
         self.embed_dim = embed_dim
         self.depths = depths
@@ -206,6 +82,27 @@ class SwinTransformerConfig(PretrainedConfig):
         self.dilation = dilation
         self.use_checkpoint = use_checkpoint
 
+
+    @classmethod
+    def from_pretrained(
+        cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs
+    ) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(
+            pretrained_model_name_or_path, **kwargs
+        )
+
+        if (
+            "model_type" in config_dict
+            and hasattr(cls, "model_type")
+            and config_dict["model_type"] != cls.model_type
+        ):
+            logger.warning(
+                f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
+                f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
+            )
+
+        return cls.from_dict(config_dict, **kwargs)
+
 class SwinTransformerPretrainedModel(PretrainedModel):
     """
     See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
@@ -215,10 +112,6 @@ class SwinTransformerPretrainedModel(PretrainedModel):
     config_class = SwinTransformerConfig
     resource_files_names = {"model_state": "model_state.pdparams"}
     base_model_prefix = "swintransformer"
-
-    pretrained_init_configuration = SWIN_TRANSFORMER_PRETRAINED_INIT_CONFIGURATION
-    pretrained_resource_files_map = SWIN_TRANSFORMER_PRETRAINED_RESOURCE_FILES_MAP
-
 
 class Mlp(nn.Layer):
     """Multilayer perceptron."""

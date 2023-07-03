@@ -60,7 +60,7 @@ class Transformer(nn.Layer):
         # init query
         learnable_tgt_init=False,
         # two stage
-        two_stage_type="no",  # ['no', 'standard', 'early', 'combine', 'enceachlayer', 'enclayer1']
+        two_stage_type="no",  
         embed_init_tgt=False,
         # for text
         use_text_enhancer=False,
@@ -155,7 +155,6 @@ class Transformer(nn.Layer):
         if num_feature_levels > 1:
             if self.num_encoder_layers > 0:
                 self.level_embed = self.create_parameter(shape=[num_feature_levels, d_model])
-                # self.level_embed = nn.Parameter(torch.Tensor(num_feature_levels, d_model))
             else:
                 self.level_embed = None
 
@@ -278,9 +277,6 @@ class Transformer(nn.Layer):
         # - enc_intermediate_refpoints: None or (nenc+1, bs, nq, c) or (nenc, bs, nq, c)
         #########################################################
         text_dict["encoded_text"] = memory_text
-        # if os.environ.get("SHILONG_AMP_INFNAN_DEBUG") == '1':
-        #     if memory.isnan().any() | memory.isinf().any():
-        #         import ipdb; ipdb.set_trace()
 
 
         if self.two_stage_type == "standard":
@@ -318,8 +314,6 @@ class Transformer(nn.Layer):
     
             tgt_undetach = paddle.take_along_axis(arr=output_memory, axis=1,indices=topk_proposals.unsqueeze(axis=-1).tile(repeat_times=[1, 1, self.d_model]))
 
-            # gather tgt
-            # tgt_undetach = paddle.gather_nd(output_memory, topk_ind)
             if self.embed_init_tgt:
                 tgt_ = (
                     self.tgt_embed.weight[:, None, :].tile([1, bs, 1]).transpose([1, 0, 2])
@@ -550,9 +544,6 @@ class TransformerEncoder(nn.Layer):
 
         # main process
         for layer_id, layer in enumerate(self.layers):
-            # if output.isnan().any() or memory_text.isnan().any():
-            #     if os.environ.get('IPDB_SHILONG_DEBUG', None) == 'INFO':
-            #         import ipdb; ipdb.set_trace()
             if self.fusion_layers:
                 if self.use_checkpoint:
                     output, memory_text = recompute(
@@ -689,10 +680,7 @@ class TransformerDecoder(nn.Layer):
             raw_query_pos = self.ref_point_head(query_sine_embed)  # nq, bs, 256
             pos_scale = self.query_scale(output) if self.query_scale is not None else 1
             query_pos = pos_scale * raw_query_pos
-            # if os.environ.get("SHILONG_AMP_INFNAN_DEBUG") == '1':
-            #     if query_pos.isnan().any() | query_pos.isinf().any():
-            #         import ipdb; ipdb.set_trace()
-            
+         
             # main process
             output = layer(
                 tgt=output,
@@ -719,14 +707,10 @@ class TransformerDecoder(nn.Layer):
                     print(f"num_nan {num_nan}, num_inf {num_inf}")
                 except Exception as e:
                     print(e)
-                    # if os.environ.get("SHILONG_AMP_INFNAN_DEBUG") == '1':
-                    #     import ipdb; ipdb.set_trace()
+                  
 
             # iter update
             if self.bbox_embed is not None:
-                # box_holder = self.bbox_embed(output)
-                # box_holder[..., :self.query_dim] += inverse_sigmoid(reference_points)
-                # new_reference_points = box_holder[..., :self.query_dim].sigmoid()
 
                 reference_before_sigmoid = inverse_sigmoid(reference_points)
                 delta_unsig = self.bbox_embed[layer_id](output)
@@ -790,8 +774,7 @@ class DeformableTransformerEncoderLayer(nn.Layer):
     def forward(
         self, src, pos, reference_points, spatial_shapes, level_start_index, key_padding_mask=None
     ):
-        # self attention
-        # import ipdb; ipdb.set_trace()
+    
 
         src2 = self.self_attn(
             query=self.with_pos_embed(src, pos),

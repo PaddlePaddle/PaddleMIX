@@ -1,4 +1,4 @@
-import argparse
+from dataclasses import dataclass, field
 import os
 import numpy as np
 import paddle
@@ -7,6 +7,8 @@ import paddle.nn.functional as F
 from paddlevlp.processors.groundingdino_processing import GroudingDinoProcessor
 from paddlevlp.models.groundingdino.modeling import GroundingDinoModel
 from PIL import Image, ImageDraw, ImageFont
+from paddlenlp.trainer import PdArgumentParser
+from paddlevlp.utils.log import logger
 
 
 def plot_boxes_to_image(image_pil, tgt):
@@ -49,39 +51,74 @@ def plot_boxes_to_image(image_pil, tgt):
 
     return image_pil, mask
 
-def main():
-    parser = argparse.ArgumentParser("Grounding DINO example", add_help=True)
-    parser.add_argument("--dino_type", "-dt", type=str, default="groundingdino-swint-ogc", help="dino type")
-    parser.add_argument("--image_path", "-i", type=str, required=True, help="path to image file")
-    parser.add_argument("--text_prompt", "-t", type=str, required=True, help="text prompt")
-    parser.add_argument(
-        "--output_dir", "-o", type=str, default="outputs", help="output directory"
-    )
+@dataclass
+class DataArguments:
+    """
+    Arguments pertaining to what data we are going to input our model for training and eval.
+    Using `PdArgumentParser` we can turn this class
+    into argparse arguments to be able to specify them on
+    the command line.
+    """
 
-    parser.add_argument("--box_threshold", type=float, default=0.3, help="box threshold")
-    parser.add_argument("--text_threshold", type=float, default=0.25, help="text threshold")
-    parser.add_argument(
-        "--visual",
-        type=eval,
+    input_image: str = field(
+        metadata={"help": "The name of input image."}
+    )  
+    prompt: str = field(
+        default=None, metadata={"help": "The prompt of the image to be generated."}
+    )  
+
+
+@dataclass
+class ModelArguments:
+    """
+    Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
+    """
+
+    model_name_or_path: str = field(
+        default="GroundingDino/groundingdino-swint-ogc",
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
+    box_threshold: float = field(
+        default=0.3,
+        metadata={
+            "help": "box threshold."
+        },
+    )
+    text_threshold: float = field(
+        default=0.25,
+        metadata={
+            "help": "text threshold."
+        },
+    )
+    output_dir: str = field(
+        default="output",
+        metadata={
+            "help": "output directory."
+        },
+    )
+    visual: bool = field(
         default=True,
+        metadata={
+            "help": "save visual image."
+        },
     )
-    
 
-    args = parser.parse_args()
-
+def main():
+    parser = PdArgumentParser((ModelArguments, DataArguments))
+    model_args, data_args = parser.parse_args_into_dataclasses()
 
     #bulid processor
     processor = GroudingDinoProcessor.from_pretrained(
         'bert-base-uncased'
     ) 
     #bulid model
-    print(f'dino_model {args.dino_type}')
-    dino_model = GroundingDinoModel.from_pretrained(args.dino_type)
+    logger.info("dino_model: {}".format(model_args.model_name_or_path))
+    dino_model = GroundingDinoModel.from_pretrained(model_args.model_name_or_path)
 
     #read image
-    image_pil = Image.open(args.image_path).convert("RGB")
+    image_pil = Image.open(data_args.input_image).convert("RGB")
     #preprocess image text_prompt
-    image_tensor,mask,tokenized_out = processor(images=image_pil,text=args.text_prompt)
+    image_tensor,mask,tokenized_out = processor(images=image_pil,text=data_args.prompt)
 
     with paddle.no_grad():
         outputs = dino_model(image_tensor,mask, input_ids=tokenized_out['input_ids'],
@@ -94,14 +131,14 @@ def main():
      # filter output
     logits_filt = logits.clone()
     boxes_filt = boxes.clone()
-    filt_mask = logits_filt.max(axis=1) > args.box_threshold
+    filt_mask = logits_filt.max(axis=1) > model_args.box_threshold
     logits_filt = logits_filt[filt_mask]  # num_filt, 256
     boxes_filt = boxes_filt[filt_mask]  # num_filt, 4
 
      # build pred
     pred_phrases = []
     for logit, box in zip(logits_filt, boxes_filt):
-        pred_phrase = processor.decode(logit > args.text_threshold)
+        pred_phrase = processor.decode(logit > model_args.text_threshold)
         pred_phrases.append(pred_phrase + f"({str(logit.max().item())[:4]})")
 
    
@@ -111,13 +148,13 @@ def main():
         "size": [size[1], size[0]],  # H,W
         "labels": pred_phrases,
     }
-    print("output:",pred_dict)
+    logger.info("output{}".format(pred_dict))
 
-    if args.visual:
+    if model_args.visual:
         # make dir
-        os.makedirs(args.output_dir, exist_ok=True)
+        os.makedirs(model_args.output_dir, exist_ok=True)
         image_with_box = plot_boxes_to_image(image_pil, pred_dict)[0]
-        image_with_box.save(os.path.join(args.output_dir, "pred.jpg"))
+        image_with_box.save(os.path.join(model_args.output_dir, "pred.jpg"))
 
 
 if __name__ == "__main__":

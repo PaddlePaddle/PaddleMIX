@@ -35,11 +35,7 @@ from .bertwarper import (
     generate_masks_with_special_tokens_and_transfer_map,
 )
 
-from .configuration import (
-    GROUNDINGDINO_PRETRAINED_INIT_CONFIGURATION,
-    GROUNDINGDINO_PRETRAINED_RESOURCE_FILES_MAP,
-    GroundingDinoConfig,
-)
+from .configuration import GroundingDinoConfig
 from .backbone import build_backbone
 from .transformer import build_transformer
 
@@ -58,10 +54,8 @@ class GroundingDinoPretrainedModel(PretrainedModel):
     model_config_file = "config.json"
     config_class = GroundingDinoConfig
     resource_files_names = {"model_state": "model_state.pdparams"}
-    base_model_prefix = "groundding"
+    base_model_prefix = "grounddingDino"
 
-    pretrained_init_configuration = GROUNDINGDINO_PRETRAINED_INIT_CONFIGURATION
-    pretrained_resource_files_map = GROUNDINGDINO_PRETRAINED_RESOURCE_FILES_MAP
 
 @register_base_model
 class GroundingDinoModel(GroundingDinoPretrainedModel):

@@ -16,10 +16,9 @@ python setup_ms_deformable_attn_op.py install
 ```
 ## 2.2 dynamic inference
 ```bash
-python3.8 run_predict.py -dt groundingdino-swint-ogc 
--i image_you_want_to_detect.jpg \
--o "dir you want to save the output" \
--t "Detect Cat"
+python3.8 run_predict.py 
+--input_imag image_you_want_to_detect.jpg \
+--prompt "cat" \
 ```
 
 

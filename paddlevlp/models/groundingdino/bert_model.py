@@ -67,9 +67,6 @@ class BertSelfAttention(nn.Layer):
         
         mixed_query_layer = self.query(hidden_states)
         
-        # If this is instantiated as a cross-attention module, the keys
-        # and values come from an encoder; the attention mask needs to be
-        # such that the encoder's padding tokens are not attended to.
         is_cross_attention = encoder_hidden_states is not None
 
         if is_cross_attention and past_key_value is not None:
@@ -93,13 +90,6 @@ class BertSelfAttention(nn.Layer):
         query_layer = self.transpose_for_scores(mixed_query_layer)
         # return query_layer,key_layer
         if self.is_decoder: # False
-            # if cross_attention save Tuple(torch.Tensor, torch.Tensor) of all cross attention key/value_states.
-            # Further calls to cross_attention layer can then reuse all cross-attention
-            # key/value_states (first "if" case)
-            # if uni-directional self-attention (decoder) save Tuple(torch.Tensor, torch.Tensor) of
-            # all previous decoder key/value_states. Further calls to uni-directional self-attention
-            # can concat previous decoder key/value_states to current projected key/value_states (third "elif" case)
-            # if encoder bi-directional self-attention `past_key_value` is always `None`
             past_key_value = (key_layer, value_layer)
        
         # Take the dot product between "query" and "key" to get the raw attention scores.
@@ -108,29 +98,20 @@ class BertSelfAttention(nn.Layer):
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
 
         if self.clamp_min_for_underflow:
-            attention_scores = paddle.clip(attention_scores, min=-50000) # Do not increase -50000, data type half has quite limited range
+            attention_scores = paddle.clip(attention_scores, min=-50000) 
         if self.clamp_max_for_overflow:
-            attention_scores = paddle.clip(attention_scores, max=50000) # Do not increase 50000, data type half has quite limited range
+            attention_scores = paddle.clip(attention_scores, max=50000) 
 
         if attention_mask is not None:
-            # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
+           
             attention_scores = attention_scores + attention_mask
 
-        # Normalize the attention scores to probabilities.
+      
         attention_probs = nn.Softmax(axis=-1)(attention_scores)
 
-        # if math.isnan(attention_probs.sum().item()):
-        #     for i in range(attention_probs.size(1)):
-        #         for j in range(attention_probs.size(2)):
-        #             if math.isnan(attention_probs[0, i, j].sum().item()):
-        #                 print(i, j)
-        #                 pdb.set_trace()
-
-        # This is actually dropping out entire tokens to attend to, which might
-        # seem a bit unusual, but is taken from the original Transformer paper.
         attention_probs = self.dropout(attention_probs)
 
-        # Mask heads if we want to
+        
         if head_mask is not None:
             attention_probs = attention_probs * head_mask
         
@@ -155,10 +136,9 @@ class BertSelfOutput(nn.Layer):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, hidden_states, input_tensor):
-        hidden_states = self.dense(hidden_states)  # diff 7.2274e-06
-        hidden_states = self.dropout(hidden_states) # diff 4.22e-05  
-        #                             hidden_states + input_tensor diff : 7.22e-6
-        hidden_states = self.LayerNorm(hidden_states + input_tensor)  #diff 1.087e-05
+        hidden_states = self.dense(hidden_states)  
+        hidden_states = self.dropout(hidden_states)   
+        hidden_states = self.LayerNorm(hidden_states + input_tensor)  
         return hidden_states
 
 
@@ -190,9 +170,6 @@ class BertAttention(nn.Layer):
         )  #pass    
         # return self_outputs
         attention_output = self.output(self_outputs[0], hidden_states)
-        # print(attention_output.shape, self_outputs[0].shape, len(self_outputs))
-        # attention_output 1.087e-05,  self_outputs 1.31e-06 , hidden_states 1.33e-08
-        # return attention_output, self_outputs, hidden_states
         outputs = (attention_output,) + self_outputs[1:]  # add attentions if we output them
         return outputs
 
@@ -234,11 +211,9 @@ class BertEmbeddings(nn.Layer):
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
-        # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
-        # any TensorFlow checkpoint file
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        # position_ids (1, len position emb) is contiguous in memory and exported when serialized
+       
         self.position_embedding_type = getattr(config, "position_embedding_type", "absolute")
         self.register_buffer("position_ids", paddle.arange(config.max_position_embeddings).reshape((1, -1)))
         self.register_buffer(
@@ -263,9 +238,6 @@ class BertEmbeddings(nn.Layer):
         if position_ids is None:
             position_ids = self.position_ids[:, past_key_values_length : seq_length + past_key_values_length]
 
-        # Setting the token_type_ids to the registered buffer in constructor where it is all zeros, which usually occurs
-        # when its auto-generated, registered buffer helps users when tracing the model without passing token_type_ids, solves
-        # issue #5664
         if token_type_ids is None:
             if hasattr(self, "token_type_ids"):
                 buffered_token_type_ids = self.token_type_ids[:, :seq_length]
@@ -312,7 +284,7 @@ class BertLayer(nn.Layer):
         past_key_value = None,
         output_attentions = False,
     ):
-        # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
+        
         self_attn_past_key_value = past_key_value[:2] if past_key_value is not None else None
         self_attention_outputs = self.attention(
             hidden_states,
@@ -338,7 +310,6 @@ class BertLayer(nn.Layer):
                     " by setting `config.add_cross_attention=True`"
                 )
 
-            # cross_attn cached key/values tuple is at positions 3,4 of past_key_value tuple
             cross_attn_past_key_value = past_key_value[-2:] if past_key_value is not None else None
             cross_attention_outputs = self.crossattention(
                 attention_output,
@@ -350,17 +321,15 @@ class BertLayer(nn.Layer):
                 output_attentions,
             )
             attention_output = cross_attention_outputs[0]
-            outputs = outputs + cross_attention_outputs[1:-1]  # add cross attentions if we output attention weights
+            outputs = outputs + cross_attention_outputs[1:-1]  
 
-            # add cross-attn cache to positions 3,4 of present_key_value tuple
             cross_attn_present_key_value = cross_attention_outputs[-1]
             present_key_value = present_key_value + cross_attn_present_key_value
 
         layer_output = self.feed_forward_chunk(attention_output)
-        # return layer_output, attention_output
+   
         outputs = (layer_output,) + outputs
 
-        # if decoder, return the attn key/values as the last output
         if self.is_decoder:
             outputs = outputs + (present_key_value,)
 
@@ -452,8 +421,7 @@ class BertPooler(nn.Layer):
         self.activation = nn.Tanh()
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
-        # We "pool" the model by simply taking the hidden state corresponding
-        # to the first token.
+        
         first_token_tensor = hidden_states[:, 0]
         pooled_output = self.dense(first_token_tensor)
         pooled_output = self.activation(pooled_output)
@@ -481,8 +449,6 @@ class BertModel(nn.Layer):
         self.encoder = BertEncoder(config)
         self.pooler = BertPooler(config) if add_pooling_layer else None
 
-        # Initialize weights and apply final processing
-        # self.post_init() 
 
     def get_input_embeddings(self):
         return self.embeddings.word_embeddings
@@ -505,30 +471,22 @@ class BertModel(nn.Layer):
             dtype = np.float32
 
         if not (attention_mask.dim() == 2 and self.config.is_decoder):
-            # show warning only if it won't be shown in `create_extended_attention_mask_for_decoder`
+           
             if device is not None:
                 warnings.warn(
                     "The `device` argument is deprecated and will be removed in v5 of Transformers.", FutureWarning
                 )
-        # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
-        # ourselves in which case we just need to make it broadcastable to all heads.
+   
         if attention_mask.dim() == 3:
             extended_attention_mask = attention_mask[:, None, :, :]
         elif attention_mask.dim() == 2:
-            # Provided a padding mask of dimensions [batch_size, seq_length]
-            # - if the model is a decoder, apply a causal mask in addition to the padding mask
-            # - if the model is an encoder, make the mask broadcastable to [batch_size, num_heads, seq_length, seq_length]
+           
             extended_attention_mask = attention_mask[:, None, None, :]
         else:
             raise ValueError(
                 f"Wrong shape for input_ids (shape {input_shape}) or attention_mask (shape {attention_mask.shape})"
             )
 
-        # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
-        # masked positions, this operation will create a tensor which is 0.0 for
-        # positions we want to attend and the dtype's smallest value for masked positions.
-        # Since we are adding it to the raw scores before the softmax, this is
-        # effectively the same as removing these entirely.
         extended_attention_mask = paddle.cast(extended_attention_mask, dtype=dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * np.finfo(dtype).min
         return extended_attention_mask
@@ -611,12 +569,8 @@ class BertModel(nn.Layer):
             else:
                 token_type_ids = paddle.zeros(input_shape, dtype=paddle.int64)
 
-        # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
-        # ourselves in which case we just need to make it broadcastable to all heads.
         extended_attention_mask = self.get_extended_attention_mask(attention_mask, input_shape)
 
-        # If a 2D or 3D attention mask is provided for the cross-attention
-        # we need to make broadcastable to [batch_size, num_heads, seq_length, seq_length]
         if self.config.is_decoder and encoder_hidden_states is not None:
             encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states.shape
             encoder_hidden_shape = (encoder_batch_size, encoder_sequence_length)
@@ -626,11 +580,6 @@ class BertModel(nn.Layer):
         else:
             encoder_extended_attention_mask = None
 
-        # Prepare head mask if needed
-        # 1.0 in head_mask indicate we keep the head
-        # attention_probs has shape bsz x n_heads x N x N
-        # input head_mask has shape [num_heads] or [num_hidden_layers x num_heads]
-        # and head_mask is converted to shape [num_hidden_layers x batch x num_heads x seq_length x seq_length]
         head_mask = self.get_head_mask(head_mask, self.config.num_hidden_layers)
 
         embedding_output = self.embeddings(
@@ -677,8 +626,6 @@ class language_model(nn.Layer):
         print("LANGUAGE BACKBONE USE GRADIENT CHECKPOINTING: ", self.cfg.MODEL.LANGUAGE_BACKBONE.USE_CHECKPOINT)
         bert_config.gradient_checkpointing = self.cfg.MODEL.LANGUAGE_BACKBONE.USE_CHECKPOINT
         
-        # bert_config.attention_probs_dropout_prob = 0.0
-        # bert_config.hidden_dropout_prob = 0.0
 
         self.model = BertModel(bert_config)
         self.language_dim = 768

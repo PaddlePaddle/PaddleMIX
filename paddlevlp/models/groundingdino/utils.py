@@ -94,13 +94,10 @@ def gen_encoder_output_proposals(
         else:
             wh = paddle.ones_like(grid) * 0.05 * (2.0**lvl)
 
-        # scale = torch.cat([W_[None].unsqueeze(-1), H_[None].unsqueeze(-1)], 1).view(1, 1, 1, 2).repeat(N_, 1, 1, 1)
-        # grid = (grid.unsqueeze(0).expand(N_, -1, -1, -1) + 0.5) / scale
-        # wh = torch.ones_like(grid) / scale
         proposal = paddle.concat((grid, wh), -1).reshape([N_, -1, 4])
         proposals.append(proposal)
         _cur += H_ * W_
-    # import ipdb; ipdb.set_trace()
+ 
     output_proposals = paddle.concat(proposals, 1)
     output_proposals_valid = ((output_proposals > 0.01) & (output_proposals < 0.99)).all(
         -1, keepdim=True
@@ -113,8 +110,6 @@ def gen_encoder_output_proposals(
     output_memory = masked_fill(output_memory, memory_padding_mask.unsqueeze(-1), float(0))
     output_memory = masked_fill(output_memory, ~output_proposals_valid, float(0))
 
-    # output_memory = output_memory.masked_fill(memory_padding_mask.unsqueeze(-1), float('inf'))
-    # output_memory = output_memory.masked_fill(~output_proposals_valid, float('inf'))
 
     return output_memory, output_proposals
 
@@ -204,8 +199,7 @@ def _get_activation_fn(activation, d_model=256, batch_dim=0):
 
 
 def gen_sineembed_for_position(pos_tensor):
-    # n_query, bs, _ = pos_tensor.size()
-    # sineembed_tensor = torch.zeros(n_query, bs, 256)
+
     scale = 2 * math.pi
     dim_t = paddle.arange(128)
     dim_t = 10000 ** (2 * (paddle.floor_divide(dim_t, paddle.to_tensor(2))) / 128)

@@ -1,5 +1,4 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The Salesforce Team Authors and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -70,7 +69,7 @@ def build_backbone(args):
     ]:
         pretrain_img_size = int(args.backbone.split("_")[-2])
         backbone = SwinTransformerModel.from_pretrained(
-            args.backbone,
+            "Swintransformer/"+args.backbone,
             pretrain_img_size=pretrain_img_size,
             out_indices=tuple(return_interm_indices),
             dilation=False,
