@@ -16,3 +16,4 @@
 from .blip_processing import *
 from .minigpt4_processing import *
 from .minigpt4_image_processing import *
+from .groundingdino_processing import *
