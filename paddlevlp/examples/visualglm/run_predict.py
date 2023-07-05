@@ -30,7 +30,6 @@ def predict(args):
     processor = VisualGLMProcessor.from_pretrained(args.pretrained_name_or_path)
     print("load processor and model done!")
 
-    url = "https://paddlenlp.bj.bcebos.com/data/images/mugs.png"
     url = "https://paddlenlp.bj.bcebos.com/data/images/titanic.jpeg"
     image = Image.open(requests.get(url, stream=True).raw)
     generate_kwargs = {

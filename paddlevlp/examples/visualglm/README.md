@@ -43,7 +43,7 @@ python run_predict.py \
 ```
 
 ## 3. License 说明
-VisualGLM-6B模型权重使用需要遵循清华大学发布的[Model License](./MODEL_LICENSE.txt)。
+VisualGLM-6B模型权重使用需要遵循清华大学发布的[Model License](https://github.com/THUDM/VisualGLM-6B/blob/main/MODEL_LICENSE.txt)。
 
 
 ## Reference
