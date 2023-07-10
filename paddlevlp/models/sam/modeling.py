@@ -152,7 +152,7 @@ class SamModel(SamPretrainedModel):
             image_pe=self.prompt_encoder.get_dense_pe(),
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
-            multimask_output=True, )
+            multimask_output=False)
 
         return low_res_masks
     
@@ -175,7 +175,7 @@ class SamModel(SamPretrainedModel):
             image_pe=self.prompt_encoder.get_dense_pe(),
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
-            multimask_output=True)
+            multimask_output=False)
      
         return low_res_masks  #, iou_predictions, low_res_masks   
 
@@ -202,7 +202,7 @@ class SamModel(SamPretrainedModel):
             image_pe=self.prompt_encoder.get_dense_pe(),
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
-            multimask_output=True, )
+            multimask_output=False, )
 
         return low_res_masks, iou_predictions  # (64, 3) # low_res_masks,
 

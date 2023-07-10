@@ -17,33 +17,18 @@ from paddle.utils.cpp_extension import load
 from paddlenlp.trainer import PdArgumentParser
 from paddlevlp.utils.log import logger
 
+import matplotlib.pyplot as plt
 
-def postprocess(mask):
-    masks = np.array(mask[:,0,:,:])
-    init_mask = np.zeros(masks.shape[-2:])
-    for mask in masks:
-        mask = mask.reshape(mask.shape[-2:])
-        mask[mask == False] = 0
-        mask[mask == True] = 1
-        init_mask += mask
+def show_mask(mask, ax, random_color=False):
+    if random_color:
+        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+    else:
+        color = np.array([30/255, 144/255, 255/255, 0.6])
+    h, w = mask.shape[-2:]
+    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
+    ax.imshow(mask_image)
 
-    init_mask[init_mask == 0] = 0
-    init_mask[init_mask != 0] = 255
-    #init_mask = 255 - init_mask
-    init_mask = Image.fromarray(init_mask).convert('L')
 
-    return init_mask
-
-def mask_image(image, mask):
-    """Mask an image.
-    """
-    mask_data = np.array(mask, dtype="int32")
-    if len(mask_data.shape) == 2: # mode L
-        mask_data = np.expand_dims(mask_data, 2)
-    masked = np.array(image, dtype="int32") - mask_data
-    masked = masked.clip(0, 255).astype("uint8")
-    masked = Image.fromarray(masked)
-    return masked
 
 class DeployConfig:
     def __init__(self, path):
@@ -134,7 +119,7 @@ class Predictor:
         """
         self.args = args
         self.cfg = DeployConfig(args.cfg)
-        self.processor = SamProcessor.from_pretrained('Sam') 
+        self.processor = SamProcessor.from_pretrained(args.model_name_or_path) 
 
         self._init_base_config()
 
@@ -193,7 +178,7 @@ class Predictor:
 
        
     def run(self, image, prompt_out):
-        image,prompt_out = self._preprocess(image,prompt_out)
+        image,prompt_out = self.preprocess(image,prompt_out)
         input_names = self.predictor.get_input_names()
         input_handle1 = self.predictor.get_input_handle(input_names[0])
         input_handle2 = self.predictor.get_input_handle(input_names[1])
@@ -211,19 +196,19 @@ class Predictor:
 
         results = output_handle.copy_to_cpu()
        
-        results = self._postprocess(results)
+        results = self.postprocess(results)
     
            
         return results
    
 
-    def _preprocess(self, image, prompts):
+    def preprocess(self, image, prompts):
 
         image_seg,prompt = self.processor(image,input_type=self.args.input_type,box=prompts['boxs'],point_coords=prompts['points']) 
 
         return [image_seg, prompt]
 
-    def _postprocess(self, results):
+    def postprocess(self, results):
         return self.processor.postprocess_masks(results)
 
 
@@ -251,6 +236,10 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
     """
+    model_name_or_path: str = field(
+        default="Sam/SamVitH",
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     input_type: str = field(
         default="boxs",
         metadata={
@@ -342,10 +331,17 @@ def main(model_args,data_args):
     if model_args.visual:
         # make dir
         os.makedirs(model_args.output_dir, exist_ok=True)
-        init_mask = postprocess(seg_masks)
-        
-        image_masked = mask_image(image_pil, init_mask)
-        image_masked.save(os.path.join(model_args.output_dir, "image_masked.jpg"))
+        # draw output image
+        plt.figure(figsize=(10, 10))
+        plt.imshow(image_pil)
+        for mask in seg_masks:
+            show_mask(mask.cpu().numpy(), plt.gca(), random_color=True)
+
+        plt.axis('off')
+        plt.savefig(
+            os.path.join(model_args.output_dir, 'mask_pred.jpg'), 
+            bbox_inches="tight", dpi=300, pad_inches=0.0
+        )
 
     if use_auto_tune(model_args) and \
         os.path.exists(model_args.auto_tuned_shape_file):

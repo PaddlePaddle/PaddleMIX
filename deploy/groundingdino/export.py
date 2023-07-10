@@ -52,17 +52,15 @@ def apply_to_static(model):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser("Grounding DINO example", add_help=True)
-    parser.add_argument("--dino_type", "-dt", type=str, default="groundingdino-swint-ogc", help="dino type")
+    parser.add_argument("--dino_type", "-dt", type=str, default="GroundingDino/groundingdino-swint-ogc", help="dino type")
     parser.add_argument(
         "--output_dir", "-o", type=str, default="output_groundingdino",  help="output directory"
     )
     args = parser.parse_args()
   
-    config_file = args.dino_type  
-  
     output_dir = args.output_dir
     # load model
-    model = GroundingDinoModel.from_pretrained(config_file)
+    model = GroundingDinoModel.from_pretrained(args.dino_type)
     model.eval()
    
     static_model,input_spec = apply_to_static(model)

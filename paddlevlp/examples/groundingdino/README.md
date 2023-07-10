@@ -17,7 +17,7 @@ python setup_ms_deformable_attn_op.py install
 ## 2.2 dynamic inference
 ```bash
 python run_predict.py \
---input_imag image_you_want_to_detect.jpg \
+--input_image image_you_want_to_detect.jpg \
 --prompt "cat" \
 ```
 

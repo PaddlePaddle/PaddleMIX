@@ -16,17 +16,11 @@ python export.py --model_type SamVitH --input_type boxs  --save_dir sam_export
 python export.py --model_type SamVitH --input_type points  --save_dir sam_export
 
 
-#inference
- python predict.py \
- --model_dir output_groundingdino
- -image_file image_you_want_to_detect.jpg \
- -output_dir "dir you want to save the output" \
- -t "Detect Cat"
 
 #boxs prompt
 python predict.py 
 --input_image image_you_want_to_detect.jpg \
---box_prompt 548 372 593 429 443 374 482 418\
+--box_prompt 548 372 593 429 443 374 482 418 \
 --input_type boxs \
 --cfg sam_export_SamVitH_boxs/deploy.yaml 
 

@@ -22,10 +22,11 @@ python export.py
 
 #inference
  python predict.py  \
- --model_dir output_groundingdino \
- -image_file image_you_want_to_detect.jpg \
+ --text_encoder_type GroundingDino/groundingdino-swint-ogc
+ --model_path output_groundingdino \
+ --input_image image_you_want_to_detect.jpg \
  -output_dir "dir you want to save the output" \
- -t "Detect Cat"
+ -prompt "Detect Cat"
 
 ```
 

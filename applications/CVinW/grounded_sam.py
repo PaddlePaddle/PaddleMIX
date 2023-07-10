@@ -14,34 +14,26 @@ from paddlevlp.processors.groundingdino_processing import GroudingDinoProcessor
 from paddlevlp.models.groundingdino.modeling import GroundingDinoModel
 from paddlevlp.models.sam.modeling import SamModel
 from paddlevlp.processors.sam_processing import SamProcessor
+import matplotlib.pyplot as plt
 
 
-def postprocess(mask):
-    masks = np.array(mask[:,0,:,:])
-    init_mask = np.zeros(masks.shape[-2:])
-    for mask in masks:
-        mask = mask.reshape(mask.shape[-2:])
-        mask[mask == False] = 0
-        mask[mask == True] = 1
-        init_mask += mask
+def show_mask(mask, ax, random_color=False):
+    if random_color:
+        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+    else:
+        color = np.array([30/255, 144/255, 255/255, 0.6])
+    h, w = mask.shape[-2:]
+    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
+    ax.imshow(mask_image)
 
-    init_mask[init_mask == 0] = 0
-    init_mask[init_mask != 0] = 255
-    #init_mask = 255 - init_mask
-    init_mask = Image.fromarray(init_mask).convert('L')
 
-    return init_mask
+def show_box(box, ax, label):
+    x0, y0 = box[0], box[1]
+    w, h = box[2] - box[0], box[3] - box[1]
+    ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2)) 
+    ax.text(x0, y0, label)
 
-def mask_image(image, mask):
-    """Mask an image.
-    """
-    mask_data = np.array(mask, dtype="int32")
-    if len(mask_data.shape) == 2: # mode L
-        mask_data = np.expand_dims(mask_data, 2)
-    masked = np.array(image, dtype="int32") - mask_data
-    masked = masked.clip(0, 255).astype("uint8")
-    masked = Image.fromarray(masked)
-    return masked
+
 
 
 @dataclass
@@ -106,16 +98,16 @@ def main():
 
     #bulid dino processor
     dino_processor = GroudingDinoProcessor.from_pretrained(
-        'bert-base-uncased'
+       model_args.dino_model_name_or_path
     ) 
 
     #bulid dino model
     logger.info("dino_model: {}".format(model_args.dino_model_name_or_path))
     dino_model = GroundingDinoModel.from_pretrained(model_args.dino_model_name_or_path)
-    
+    dino_model.eval()
     #buidl sam processor
     sam_processor = SamProcessor.from_pretrained(
-        'Sam'
+        model_args.sam_model_name_or_path
     ) 
     #bulid model
     logger.info("SamModel: {}".format(model_args.sam_model_name_or_path))
@@ -169,14 +161,27 @@ def main():
     image_seg,prompt = sam_processor(image_pil,input_type="boxs",box=boxes,point_coords=None) 
     seg_masks = sam_model(img=image_seg,prompt=prompt)
     seg_masks = sam_processor.postprocess_masks(seg_masks)
+
+    logger.info("Sam finish!")
     
     if model_args.visual:
         # make dir
         os.makedirs(model_args.output_dir, exist_ok=True)
-        init_mask = postprocess(seg_masks)
-        
-        image_masked = mask_image(image_pil, init_mask)
-        image_masked.save(os.path.join(model_args.output_dir, "image_masked.jpg"))
+        # draw output image
+        plt.figure(figsize=(10, 10))
+        plt.imshow(image_pil)
+        for mask in seg_masks:
+            show_mask(mask.cpu().numpy(), plt.gca(), random_color=True)
+        for box, label in zip(boxes, pred_phrases):
+            show_box(box, plt.gca(), label)
+
+        plt.axis('off')
+        plt.savefig(
+            os.path.join(model_args.output_dir, 'mask_pred.jpg'), 
+            bbox_inches="tight", dpi=300, pad_inches=0.0
+        )
+
+    logger.info("finish!")
 
 
 if __name__ == "__main__":

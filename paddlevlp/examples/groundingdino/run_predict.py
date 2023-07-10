@@ -109,12 +109,12 @@ def main():
 
     #bulid processor
     processor = GroudingDinoProcessor.from_pretrained(
-        'bert-base-uncased'
+        model_args.model_name_or_path
     ) 
     #bulid model
     logger.info("dino_model: {}".format(model_args.model_name_or_path))
     dino_model = GroundingDinoModel.from_pretrained(model_args.model_name_or_path)
-
+    dino_model.eval()
     #read image
     image_pil = Image.open(data_args.input_image).convert("RGB")
     #preprocess image text_prompt

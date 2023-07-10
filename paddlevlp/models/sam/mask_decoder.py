@@ -132,7 +132,7 @@ class MaskDecoder(paddle.nn.Layer):
         perm_0 = list(range(x.ndim))
         perm_0[1] = 2
         perm_0[2] = 1
-        """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+
         src = x.transpose(perm=perm_0).reshape([b, c, h, w])
         upscaled_embedding = self.output_upscaling(src)
         hyper_in_list: List[paddle.Tensor] = []
@@ -141,8 +141,7 @@ class MaskDecoder(paddle.nn.Layer):
                 mask_tokens_out[:, (i), :]))
         hyper_in = paddle.stack(x=hyper_in_list, axis=1)
         b, c, h, w = upscaled_embedding.shape
-        """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
-        """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+
         masks = (hyper_in @upscaled_embedding.reshape([b, c, h * w])).reshape(
             [b, -1, h, w])
         iou_pred = self.iou_prediction_head(iou_token_out)

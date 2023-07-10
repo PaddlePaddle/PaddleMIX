@@ -151,8 +151,8 @@ class Predictor(object):
            
     def create_inputs(self):
 
-        self.input_map['image'] = self.image.numpy()
-        self.input_map['mask'] = np.array(self.mask.numpy(),dtype='int64')
+        self.input_map['x'] = self.image.numpy()
+        self.input_map['m'] = np.array(self.mask.numpy(),dtype='int64')
 
         for key in self.tokenized_input.keys():
             self.input_map[key] = np.array(self.tokenized_input[key].numpy(),dtype='int64')
@@ -160,25 +160,24 @@ class Predictor(object):
         input_names = self.predictor.get_input_names()
         for i in range(len(input_names)):
             input_tensor = self.predictor.get_input_handle(input_names[i])
-            if input_names[i] == 'x':
-                input_tensor.copy_from_cpu(self.input_map['image'])
-            elif input_names[i] == 'm':
-                input_tensor.copy_from_cpu(self.input_map['mask'])
-            elif input_names[i] in self.input_map.keys():
-                input_tensor.copy_from_cpu(self.input_map[input_names[i]])
+            input_tensor.copy_from_cpu(self.input_map[input_names[i]])
     
     def preprocess(self,image,text):
 
         self.image,self.mask,self.tokenized_input = self.processor(images=image,text=text)
         
-    def run(self):
+    def run(self,image,prompt):
+        self.preprocess(image,data_args.prompt)
+
         self.create_inputs()
         self.predictor.run()
         output_names = self.predictor.get_output_names()
         pred_boxes =  self.predictor.get_output_handle(output_names[0]).copy_to_cpu()
         pred_logits = self.predictor.get_output_handle(output_names[1]).copy_to_cpu()
 
-        return {"pred_logits":paddle.to_tensor(pred_logits),"pred_boxes":paddle.to_tensor(pred_boxes)}
+        pred_dict = {"pred_logits":paddle.to_tensor(pred_logits),"pred_boxes":paddle.to_tensor(pred_boxes)}
+        boxes_filt, pred_phrases = self.postprocess(pred_dict)
+        return boxes_filt, pred_phrases
 
     def postprocess(self,outputs,with_logits=True):
         
@@ -209,11 +208,8 @@ def main(model_args,data_args):
     #read image
     image_pil = Image.open(data_args.input_image).convert("RGB")
     
-    predictor.preprocess(image_pil,data_args.prompt)
     
-    result = predictor.run()
-
-    boxes_filt, pred_phrases = predictor.postprocess(result)
+    boxes_filt, pred_phrases = predictor.run(image_pil,data_args.prompt)
     
     # make dir
     os.makedirs(model_args.output_dir, exist_ok=True)
@@ -257,7 +253,7 @@ class ModelArguments:
         metadata={"help": "Path to pretrained model or model identifier"},
     )
     text_encoder_type: str = field(
-        default="bert-base-uncased",
+        default="GroundingDino/groundingdino-swint-ogc",
         metadata={"help": "type for text encoder ."},
     )
     box_threshold: float = field(

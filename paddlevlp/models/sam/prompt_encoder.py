@@ -114,8 +114,7 @@ class PromptEncoder(paddle.nn.Layer):
     def _embed_boxes(self, boxes: paddle.Tensor) -> paddle.Tensor:
         """Embeds box prompts."""
         boxes = boxes + 0.5
-        """Class Method: *.reshape, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
-        coords = boxes.reshape([-1, 2, 2])
+       
         corner_embedding = self.pe_layer.forward_with_coords(
             coords, self.input_image_size)
         corner_embedding[:, (0), :] += self.point_embeddings[2].weight
@@ -183,7 +182,6 @@ class PromptEncoder(paddle.nn.Layer):
         if masks is not None:
             dense_embeddings = self._embed_masks(masks)
         else:
-            """Class Method: *.reshape, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             dense_embeddings = self.no_mask_embed.weight.reshape(
                 [1, -1, 1, 1]).expand(shape=[
                     bs, -1, self.image_embedding_size[0],
@@ -233,5 +231,5 @@ class PositionEmbeddingRandom(paddle.nn.Layer):
         coords = coords_input.clone()
         coords[:, :, (0)] = coords[:, :, (0)] / image_size[1]
         coords[:, :, (1)] = coords[:, :, (1)] / image_size[0]
-        """Class Method: *.to, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+
         return self._pe_encoding(coords.astype('float32'))
