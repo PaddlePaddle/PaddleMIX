@@ -423,9 +423,10 @@ class PatchMerging(nn.Layer):
         pad_input = (H % 2 == 1) or (W % 2 == 1)
         if pad_input:
             pad_list = paddle.zeros([4],dtype="int32")
-            pad_list[1] = H % 2
-            pad_list[3] = W % 2
-            x = F.pad(x, pad_list)
+            pad_list[3] = H % 2
+            pad_list[1] = W % 2
+            x = F.pad(x, pad_list, data_format='NHWC')
+
          
         x0 = x[:, 0::2, 0::2, :]  # B H/2 W/2 C
         x1 = x[:, 1::2, 0::2, :]  # B H/2 W/2 C

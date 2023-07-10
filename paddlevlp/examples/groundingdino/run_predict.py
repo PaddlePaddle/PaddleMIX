@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 import os
 import numpy as np
+import requests
 import paddle
 import paddle.nn.functional as F
 
@@ -109,14 +110,20 @@ def main():
 
     #bulid processor
     processor = GroudingDinoProcessor.from_pretrained(
-        'bert-base-uncased'
+        model_args.model_name_or_path
     ) 
     #bulid model
     logger.info("dino_model: {}".format(model_args.model_name_or_path))
     dino_model = GroundingDinoModel.from_pretrained(model_args.model_name_or_path)
-
+    dino_model.eval()
     #read image
-    image_pil = Image.open(data_args.input_image).convert("RGB")
+    url = (data_args.input_image)
+    #read image
+    if os.path.isfile(url):
+        #read image
+        image_pil = Image.open(data_args.input_image).convert("RGB")
+    else:
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
     #preprocess image text_prompt
     image_tensor,mask,tokenized_out = processor(images=image_pil,text=data_args.prompt)
 

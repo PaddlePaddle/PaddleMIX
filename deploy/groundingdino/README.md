@@ -14,11 +14,20 @@ cd /paddlevlp/models/groundingdino/csrc/
 python setup_ms_deformable_attn_op.py install
 
 ```
-## 2.2 dynamic inference
+## 2.2 Export model for static inference
 ```bash
-python run_predict.py \
---input_image image_you_want_to_detect.jpg \
---prompt "cat" \
+#export grounding dino model
+python export.py
+
+
+#inference
+ python predict.py  \
+ --text_encoder_type GroundingDino/groundingdino-swint-ogc
+ --model_path output_groundingdino \
+ --input_image image_you_want_to_detect.jpg \
+ -output_dir "dir you want to save the output" \
+ -prompt "Detect Cat"
+
 ```
 
 

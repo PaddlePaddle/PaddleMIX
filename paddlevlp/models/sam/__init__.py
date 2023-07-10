@@ -1,11 +1,10 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The Salesforce Team Authors and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#    http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,10 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .blip_processing import *
-from .minigpt4_processing import *
-from .minigpt4_image_processing import *
-from .visualglm_processing import *
-from .visualglm_image_processing import *
-from .groundingdino_processing import *
-from .sam_processing import *
+# This implementation refers to: https://github.com/facebookresearch/segment-anything
+
+from .image_encoder import ImageEncoderViT
+from .mask_decoder import MaskDecoder
+from .prompt_encoder import PromptEncoder
+from .transformer import TwoWayTransformer
