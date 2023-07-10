@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import requests
 from dataclasses import dataclass, field
 
 import paddle
@@ -204,9 +205,13 @@ class Predictor(object):
 
 def main(model_args,data_args):
     predictor = Predictor(model_args,data_args)
-    
+    url = (data_args.input_image)
     #read image
-    image_pil = Image.open(data_args.input_image).convert("RGB")
+    if os.path.isfile(url):
+        #read image
+        image_pil = Image.open(data_args.input_image).convert("RGB")
+    else:
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
     
     
     boxes_filt, pred_phrases = predictor.run(image_pil,data_args.prompt)

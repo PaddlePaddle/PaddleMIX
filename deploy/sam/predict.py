@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import requests
 from dataclasses import dataclass, field
 from typing import List
 import codecs
@@ -311,7 +312,14 @@ class ModelArguments:
 
 def main(model_args,data_args):
    
-    image_pil = Image.open(data_args.input_image).convert("RGB")
+    url = (data_args.input_image)
+    #read image
+    if os.path.isfile(url):
+        #read image
+        image_pil = Image.open(data_args.input_image).convert("RGB")
+    else:
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
+
     if data_args.box_prompt is not None:
         data_args.box_prompt = np.array(data_args.box_prompt)
     if data_args.points_prompt is not None:

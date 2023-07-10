@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 import os
 import sys
 import numpy as np
+import requests
 from typing import List
 
 import paddle
@@ -95,7 +96,7 @@ class ModelArguments:
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
-
+    url = (data_args.input_image)
     #bulid dino processor
     dino_processor = GroudingDinoProcessor.from_pretrained(
        model_args.dino_model_name_or_path
@@ -114,7 +115,11 @@ def main():
     sam_model = SamModel.from_pretrained(model_args.sam_model_name_or_path,input_type="boxs")
 
     #read image
-    image_pil = Image.open(data_args.input_image).convert("RGB")
+    if os.path.isfile(url):
+        #read image
+        image_pil = Image.open(data_args.input_image).convert("RGB")
+    else:
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
     #preprocess image text_prompt
     image_tensor,mask,tokenized_out = dino_processor(images=image_pil,text=data_args.prompt)
 
