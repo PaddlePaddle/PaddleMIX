@@ -15,10 +15,12 @@ import os
 from dataclasses import dataclass, field
 
 import paddle
+from sklearn.utils import compute_sample_weight
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
 from paddlenlp.transformers import AutoConfig, OPTConfig, T5Config
-
+import sys
+sys.path.insert(0,"/paddle/workspace/wjm/merge_blip2/PaddleMIX-master-597ba145fd4c2d9bfb9e2a9fd40401af15fb537e")
 import paddlevlp
 from paddlevlp.datasets import load_dataset
 from paddlevlp.models.blip2.configuration import (Blip2Config,
@@ -27,10 +29,14 @@ from paddlevlp.models.blip2.configuration import (Blip2Config,
 from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlevlp.optimization import FilterParamsName
 from paddlevlp.processors.blip_processing import Blip2Processor
-from paddlevlp.trainer import Trainer
+from paddlevlp.trainer import BLIP2_Trainer as Trainer
 from paddlevlp.utils.log import logger
-
-
+from paddlenlp.transformers import AutoTokenizer
+from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
+from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
+# os.environ["FLAGS_fast_eager_deletion_mode"]="1"
+# os.environ["export FLAGS_eager_delete_tensor_gb"]="0.0"
+# os.environ["FLAGS_fraction_of_gpu_memory_to_use"]="0"
 class BlipCollator:
     """
     Data collator that will dynamically pad the inputs to the longest sequence in the batch.
@@ -45,7 +51,11 @@ class BlipCollator:
 
     def __call__(self, data_list):
         images = [sample["image"] for sample in data_list]
-        text = [sample["text_input"] for sample in data_list]
+        if "text_input" not in data_list[0].keys():
+            text=None
+        else:
+            text = [sample["text_input"] for sample in data_list]
+        image_id = [sample["image_id"] for sample in data_list]
         batch = self.processor(
             images=images,
             text=text,
@@ -54,6 +64,7 @@ class BlipCollator:
             return_attention_mask=True,
             mode="train",
         )
+        batch.update({'image_id':image_id})
         return batch
 
 
@@ -70,6 +81,10 @@ class DataArguments:
         default="coco_caption",
         metadata={"help": "The name of the task to use (via the datasets library)."},
     )
+    prompt: str = field(
+        default="a photo of ", metadata={"help": "The prompt of the image to be generated."}
+    )  # "Question: how many cats are there? Answer:"
+
 
 
 @dataclass
@@ -102,10 +117,10 @@ class PreTrainingArguments(TrainingArguments):
         },
     )
     weight_decay: float = field(
-        default=0.5, metadata={"help": "Weight decay if we apply some."}
+        default=0.05, metadata={"help": "Weight decay if we apply some."}
     )
     learning_rate: float = field(
-        default=1e-4, metadata={"help": "The initial learning rate."}
+        default=1e-6, metadata={"help": "The initial learning rate."}
     )
     num_train_epochs: float = field(
         default=10.0, metadata={"help": "Total number of training epochs to perform."}
@@ -114,7 +129,7 @@ class PreTrainingArguments(TrainingArguments):
         default=1e-6, metadata={"help": "Initial learning rate of warm up."}
     )
     eta_min: float = field(
-        default=1e-5, metadata={"help": "The minimum value of learning rate."}
+        default=1e-6, metadata={"help": "The minimum value of learning rate."}
     )
     warmup_steps: int = field(
         default=2000, metadata={"help": "Number of warmup steps."}
@@ -122,6 +137,29 @@ class PreTrainingArguments(TrainingArguments):
     lr_scheduler_name: str = field(
         default="CosineDecayWithWarmup", metadata={"help": "The scheduler name to use."}
     )
+    per_device_train_batch_size: int = field(
+        default=128, metadata={"help":"Batch size per GPU core/CPU for training. (default: 8)"}
+    )
+    per_device_eval_batch_size : int = field(
+        default=1, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
+    )
+    warmup_start_lr : float = field(
+        default=1e-6, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
+    )
+    min_lr : float = field(
+        default=1e-5, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
+    )
+    output_dir : str = field(
+        default=".", metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
+    )
+    do_eval : bool = field(default=True, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
+    do_train : bool = field(default=True, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
+
+    logging_steps : int = field(default=1, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
+    evaluation_strategy : str = field(default="steps", metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
+
+    fp16_opt_level : str = field(default="O1", metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
+    fp16 : bool = field(default=True, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
 
 
 def create_scheduler(dataset_len, config):
@@ -172,7 +210,9 @@ def create_model(config):
     )
 
     model = Blip2ForConditionalGeneration(blip2_config)
+    paddle.device.cuda.empty_cache()# post_init_func(self, init_func, *args, **kwargs)吃显存
     return model
+
 
 
 def load_pretrained_model(model, pretrained_model_path):
@@ -185,6 +225,7 @@ def load_pretrained_model(model, pretrained_model_path):
         )
 
     state_dict = paddle.load(pretrained_model_path)
+    interpolate_pos_embed(model, state_dict)
     for key in model.state_dict().keys():
         if key in state_dict.keys():
             if state_dict[key].shape != model.state_dict()[key].shape:
@@ -199,7 +240,7 @@ def main():
     # Log model and data config
     training_args.print_config(model_args, "Model")
     training_args.print_config(data_args, "Data")
-
+    training_args.prompt=data_args.prompt
     paddle.set_device(training_args.device)
     # Log on each process the small summary:
     logger.warning(
@@ -227,31 +268,98 @@ def main():
             )
 
     # create dataset
-    processor = Blip2Processor.from_pretrained(model_args.model_name_or_path)
-    blip_collator = BlipCollator(processor)
-    train_dataset = load_dataset(data_args.task_name, splits="train")
-    dataset_len = len(train_dataset)
 
+    image_processor = BlipImageProcessor(image_mean=[0.48145466, 0.4578275, 0.40821073],
+                                         image_std=[0.26862954, 0.26130258, 0.27577711],
+                                         flip_prob=0.5,
+                                         do_resize=True,
+                                         scale=[0.5,1.0],
+                                         size= {"height": 224,"width": 224},
+                                         rescale_factor=0.00392156862745098,
+                                         do_flip=True,
+                                         do_normalize=True,
+                                         do_rand_resize_crop=True,
+                                         do_rescale=True,
+                                         do_convert_rgb=False,
+                                         do_collate=False,
+                                         interpolation= "bicubic",
+                                         processor_class= "Blip2Processor",
+                                         processor_type= "BlipImageProcessor",
+                                         image_processor_type= "BlipImageProcessor",
+                                        # resample=3
+                                         )
+
+    text_processor_class = BlipTextProcessor(do_caption=True,
+                                        do_question=False,
+                                        image_processor_type="BlipTextProcessor",
+                                        max_words=50,
+                                        processor_class="Blip2Processor",
+                                        processor_type="BlipTextProcessor",
+                                        prompt= "")
+    tokenizer_class = AutoTokenizer.from_pretrained("facebook/opt-2.7b", use_fast=False)
+    processor = Blip2Processor(image_processor,text_processor_class,tokenizer_class)
+
+    image_processor_eval = BlipImageProcessor(image_mean=[0.48145466, 0.4578275, 0.40821073],
+                                        image_std=[0.26862954, 0.26130258, 0.27577711],
+                                        flip_prob=0,
+                                        do_resize=True,
+                                        size= {"height": 224,"width": 224},
+                                        rescale_factor=0.00392156862745098,
+                                        do_flip=False,
+                                        do_normalize=True,
+                                        do_rand_resize_crop=False,
+                                        do_rescale=True,
+                                        do_convert_rgb=False,
+                                        do_collate=False,
+                                        interpolation= "bicubic",
+                                        processor_class= "Blip2Processor",
+                                        processor_type= "BlipImageProcessor",
+                                        image_processor_type= "BlipImageProcessor",
+                                    # resample=3
+                                    )
+
+    text_processor_class_eval = BlipTextProcessor(do_caption=True,
+                                        do_question=False,
+                                        image_processor_type="BlipTextProcessor",
+                                        max_words=50,
+                                        processor_class="Blip2Processor",
+                                        processor_type="BlipTextProcessor",
+                                        prompt="a photo of")
+
+
+    train_dataset = load_dataset(data_args.task_name, splits="train")
+    eval_dataset = {"test":load_dataset(data_args.task_name, splits="test")}
+    dataset_len = len(train_dataset)
+    eval_processor = Blip2Processor(image_processor_eval,text_processor_class_eval,tokenizer_class)
     # create model
+    blip_collator = BlipCollator(processor)
+    blip_eval_collator = BlipCollator(eval_processor)
     model = create_model(model_args)
     load_pretrained_model(model, training_args.pretrained_model_path)
 
+
     # load model for debug
-    # weight = paddle.load('/paddle/wangguanzhong/blip-jinman/PaddleNLP/blip2/blip2_checkout_4_output.pdparams')
+    # weight= paddle.load("model_state.pdparams",return_numpy=True)#blip2_opt2.7b
+    # model.set_state_dict(weight)
+    # weight = paddle.load('output.pdparams',return_numpy=True)
     # model.set_state_dict(weight)
 
     # create optimizer
     optimizer, lr_sched = create_optimizer_and_scheduler(
         model, dataset_len, training_args
     )
-
     # create trainer
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         data_collator=blip_collator,
+        eval_collator=blip_eval_collator,
         optimizers=(optimizer, lr_sched),
+        processor=processor,
+        eval_processor=eval_processor,
+        tokenizer=AutoTokenizer.from_pretrained("facebook/opt-2.7b", use_fast=False)
     )
 
     # Training
@@ -260,12 +368,17 @@ def main():
         checkpoint = training_args.resume_from_checkpoint
     elif last_checkpoint is not None:
         checkpoint = last_checkpoint
+    # TrainerControl(should_training_stop=False, should_epoch_stop=False, should_save=False, should_evaluate=False, should_log=False)
+
+    # if training_args.do_eval:
+
+
+
 
     if training_args.do_train:
         trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()
         trainer.save_state()
-
 
 if __name__ == "__main__":
     main()
