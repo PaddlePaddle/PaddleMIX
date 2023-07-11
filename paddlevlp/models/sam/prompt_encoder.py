@@ -114,7 +114,7 @@ class PromptEncoder(paddle.nn.Layer):
     def _embed_boxes(self, boxes: paddle.Tensor) -> paddle.Tensor:
         """Embeds box prompts."""
         boxes = boxes + 0.5
-       
+        coords = boxes.reshape([-1, 2, 2])
         corner_embedding = self.pe_layer.forward_with_coords(
             coords, self.input_image_size)
         corner_embedding[:, (0), :] += self.point_embeddings[2].weight
