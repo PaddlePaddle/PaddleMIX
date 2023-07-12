@@ -13,8 +13,6 @@
 # limitations under the License.
 
 from dataclasses import dataclass, field
-import sys
-sys.path.insert(0,"/paddle/workspace/wjm/merge_blip2/PaddleMIX-master-597ba145fd4c2d9bfb9e2a9fd40401af15fb537e")
 import paddle
 import requests
 from paddlenlp.trainer import PdArgumentParser

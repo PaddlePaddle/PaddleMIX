@@ -19,8 +19,6 @@ from sklearn.utils import compute_sample_weight
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
 from paddlenlp.transformers import AutoConfig, OPTConfig, T5Config
-import sys
-sys.path.insert(0,"/paddle/workspace/wjm/merge_blip2/PaddleMIX-master-597ba145fd4c2d9bfb9e2a9fd40401af15fb537e")
 import paddlevlp
 from paddlevlp.datasets import load_dataset
 from paddlevlp.models.blip2.configuration import (Blip2Config,
