@@ -1,6 +1,4 @@
 import sys
-sys.path.append(
-    '/home/niuzhibo/work/temp/EVA/PPEVACLIP/rei/eva_clip/timm_ext/utils')
 import paddle
 """ Attention Pool 2D
 

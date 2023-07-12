@@ -3,15 +3,6 @@ import json
 import logging
 import re
 from .distributed import is_master
-from .adan import Adan
-from .lion import Lion
-from .lamb import Lamb
-from .anyprecision_optimizer import AnyPrecisionAdamW
-try:
-    from apex.optimizers import FusedAdam, FusedLAMB
-except:
-    print('Please install lastest apex to use FusedAdam and FusedLAMB')
-    FusedAdam, FusedLAMB = None, None
 
 
 def get_num_layer_for_transformer(param_name, num_max_layer):
@@ -172,32 +163,22 @@ def get_all_parameters(args, model):
 
 
 def create_optimizer(args, model, lr_scheduler=None, return_params=False):
-    optimizer_args = dict(beta1=args.beta1, beta2=args.beta2)
+    optimizer_args = dict(beta1=args.adam_beta1, beta2=args.adam_beta2)
     if lr_scheduler is not None:
         learning_rate = lr_scheduler
     else:
         learning_rate = 1.0
 
-    if args.optimizer != 'lion':
-        optimizer_args['epsilon'] = args.epsilon
-    if args.optimizer == 'selflamb':
-        base_optimizer = Lamb
-    elif args.optimizer == 'lamb':
+    if args.optimizer == 'lamb':
         optimizer_args['learning_rate'] = learning_rate
         optimizer_args['lamb_weight_decay'] = args.weight_decay
         base_optimizer = paddle.optimizer.Lamb
-    elif args.optimizer == 'adan':
-        base_optimizer = Adan
-    elif args.optimizer == 'fused_lamb':
-        base_optimizer = FusedLAMB
-    elif args.optimizer == 'lion':
-        base_optimizer = Lion
     else:
         optimizer_args['learning_rate'] = learning_rate
         base_optimizer = paddle.optimizer.AdamW
-    if args.fp16_opt_level == 'O2' and args.optimizer != 'selflamb':
+    if args.fp16_opt_level == 'O2':
         optimizer_args['multi_precision'] = True
-    if args.max_grad_norm and args.optimizer != 'selflamb':
+    if args.max_grad_norm:
         grad_clip = paddle.nn.ClipGradByGlobalNorm(
             clip_norm=args.max_grad_norm)
         optimizer_args['grad_clip'] = grad_clip

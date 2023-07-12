@@ -10,15 +10,19 @@ import logging
 import collections
 from collections import OrderedDict
 import math
-from typing import Callable, Optional, Sequence
+from typing import Callable, Optional, Sequence, Union
 import numpy as np
 from .rope import VisionRotaryEmbedding, VisionRotaryEmbeddingFast
 from .utils import to_2tuple
 from .timm_ext import params_normal_
+from .fusedln import FusedLayerNorm
 try:
     from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention, LowerTriangularMask
 except:
     print("Warning: import memory_efficient_attention error")
+
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
+from paddlenlp.transformers.model_utils import PretrainedModel
 
 from cmath import log
 import math
@@ -1154,23 +1158,97 @@ class VisionTransformer(paddle.nn.Layer):
         return pooled
 
 
-class TextTransformer(paddle.nn.Layer):
-    def __init__(self,
-                 context_length: int=77,
-                 vocab_size: int=49408,
-                 width: int=512,
-                 heads: int=8,
-                 layers: int=12,
-                 ls_init_value: float=None,
-                 output_dim: int=512,
-                 act_layer: Callable=paddle.nn.GELU,
-                 norm_layer: Callable=LayerNorm,
-                 xattn: bool=False,
-                 attn_mask: bool=True,
-                 embed_cls: bool=False,
-                 pad_id: int=0,
-                 output_tokens: bool=False):
-        super().__init__()
+class EVATextTransformerConfig(PretrainedConfig):
+
+    model_type = "evatext_transformer"
+
+    def __init__(
+            self,
+            context_length: int=77,
+            vocab_size: int=49408,
+            width: int=512,
+            heads: int=8,
+            layers: int=12,
+            ls_init_value: float=None,
+            output_dim: int=512,
+            act_layer: Callable=paddle.nn.GELU,
+            norm_layer: Callable=LayerNorm,
+            xattn: bool=False,
+            attn_mask: bool=True,
+            embed_cls: bool=False,
+            pad_id: int=0,
+            output_tokens: bool=False,
+            quick_gelu: bool=False,
+            **kwargs, ):
+        kwargs["return_dict"] = kwargs.pop("return_dict", True)
+        super().__init__(**kwargs)
+
+        self.context_length = context_length
+        self.vocab_size = vocab_size
+        self.width = width
+        self.heads = heads
+        self.layers = layers
+        self.ls_init_value = ls_init_value
+        self.output_dim = output_dim
+        self.act_layer = act_layer
+        self.norm_layer = norm_layer
+        self.xattn = xattn
+        self.attn_mask = attn_mask
+        self.embed_cls = embed_cls
+        self.pad_id = pad_id
+        self.output_tokens = output_tokens
+        self.quick_gelu = quick_gelu
+
+    @classmethod
+    def from_pretrained(cls,
+                        pretrained_model_name_or_path: Union[str, os.PathLike],
+                        **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(
+            pretrained_model_name_or_path, **kwargs)
+
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
+            logger.warning(
+                f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
+                f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
+            )
+
+        if "text_cfg" in config_dict:
+            config_dict = config_dict["text_cfg"]
+
+        return cls.from_dict(config_dict, **kwargs)
+
+
+class EVATextTransformerPretrainedModel(PretrainedModel):
+    """
+    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    """
+
+    model_config_file = "config.json"
+    config_class = EVATextTransformerConfig
+    resource_files_names = {"model_state": "model_state_text.pdparams"}
+    base_model_prefix = "evatext_transformer"
+
+
+class EVATextTransformer(EVATextTransformerPretrainedModel):
+    def __init__(self, config: EVATextTransformerConfig):
+        super().__init__(config)
+
+        context_length = config.context_length
+        vocab_size = config.vocab_size
+        width = config.width
+        heads = config.heads
+        layers = config.layers
+        ls_init_value = config.ls_init_value
+        output_dim = config.output_dim
+        xattn = config.xattn
+        attn_mask = config.attn_mask
+        embed_cls = config.embed_cls
+        pad_id = config.pad_id
+        output_tokens = config.output_tokens
+        norm_layer = FusedLayerNorm if config.fusedLN else LayerNorm
+        act_layer = QuickGELU if config.quick_gelu else paddle.nn.GELU
+
         self.num_pos = self.context_length = context_length
         self.vocab_size = vocab_size
         self.width = width
@@ -1326,27 +1404,99 @@ class TextTransformer(paddle.nn.Layer):
         return pooled
 
 
-class MultimodalTransformer(Transformer):
+class MultimodalTransformerConfig(PretrainedConfig):
+
+    model_type = "multimodal_transformer"
+
     def __init__(
             self,
-            width: int,
-            layers: int,
-            heads: int,
-            context_length: int=77,
+            width: int=512,
+            layers: int=12,
+            heads: int=8,
+            context_length: int=76,
             mlp_ratio: float=4.0,
             ls_init_value: float=None,
-            act_layer: Callable=paddle.nn.GELU,
-            norm_layer: Callable=LayerNorm,
-            output_dim: int=512, ):
+            quick_gelu: bool=False,
+            cast_dtype: Union[str, paddle.dtype]=None,
+            output_dim: int=512,
+            xattn: bool=False,
+            **kwargs, ):
+        kwargs["return_dict"] = kwargs.pop("return_dict", True)
+        super().__init__(**kwargs)
 
-        super().__init__(
-            width=width,
-            layers=layers,
-            heads=heads,
-            mlp_ratio=mlp_ratio,
-            ls_init_value=ls_init_value,
-            act_layer=act_layer,
-            norm_layer=norm_layer, )
+        self.width = width
+        self.layers = layers
+        self.heads = heads
+        self.context_length = context_length
+        self.mlp_ratio = mlp_ratio
+        self.ls_init_value = ls_init_value
+        self.quick_gelu = quick_gelu
+        self.cast_dtype = cast_dtype
+        self.output_dim = output_dim
+        self.xattn = xattn
+
+    @classmethod
+    def from_pretrained(cls,
+                        pretrained_model_name_or_path: Union[str, os.PathLike],
+                        **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(
+            pretrained_model_name_or_path, **kwargs)
+
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
+            logger.warning(
+                f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
+                f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
+            )
+
+        if "multimodal_cfg" in config_dict:
+            config_dict = config_dict["multimodal_cfg"]
+
+        return cls.from_dict(config_dict, **kwargs)
+
+
+class MultimodalTransformerPretrainedModel(PretrainedModel):
+    """
+    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    """
+
+    model_config_file = "config.json"
+    config_class = MultimodalTransformerConfig
+    resource_files_names = {"model_state": "model_state_multimodal.pdparams"}
+    base_model_prefix = "multimodal_transformer"
+
+
+class MultimodalTransformer(MultimodalTransformerPretrainedModel):
+    def __init__(self, config):
+
+        super().__init__(config)
+        width = config.width
+        layers = config.layers
+        heads = config.heads
+        context_length = config.context_length
+        mlp_ratio = config.mlp_ratio
+        ls_init_value = config.ls_init_value
+        quick_gelu = config.quick_gelu
+        cast_dtype = config.cast_dtype
+        output_dim = config.output_dim
+        xattn = config.xattn
+
+        act_layer = QuickGELU if quick_gelu else nn.GELU
+        norm_layer = LayerNormFp32 if cast_dtype in ('float16', 'bfloat16'
+                                                     ) else LayerNorm
+
+        self.enable_recompute = False
+        self.resblocks = paddle.nn.LayerList(sublayers=[
+            ResidualAttentionBlock(
+                width,
+                heads,
+                mlp_ratio,
+                ls_init_value=ls_init_value,
+                act_layer=act_layer,
+                norm_layer=norm_layer,
+                xattn=xattn) for _ in range(layers)
+        ])
+
         self.context_length = context_length
         self.cross_attn = paddle.nn.LayerList([
             ResidualAttentionBlock(

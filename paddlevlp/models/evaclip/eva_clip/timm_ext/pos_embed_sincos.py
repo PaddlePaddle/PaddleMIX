@@ -1,6 +1,4 @@
 import sys
-sys.path.append(
-    '/home/niuzhibo/work/temp/EVA/PPEVACLIP/rei/eva_clip/timm_ext/utils')
 import paddle
 """ Sin-cos, fourier, rotary position embedding modules and functions
 

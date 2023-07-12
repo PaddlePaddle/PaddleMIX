@@ -1,111 +1,105 @@
-from typing import Optional
 """ CoCa Model
 
 Adapted from https://github.com/mlfoundations/open_clip/blob/main/src/open_clip/coca_model.py
 """
+from typing import Optional, Union
+import os
 import paddle
 from paddle import nn
 from paddle.nn import functional as F
 import numpy as np
 from dataclasses import dataclass
-from .loss import ClipLoss, CoCaLoss
-# Note: in models/loss.py not loss.py
 
-from .transformer import (
-    LayerNormFp32,
-    LayerNorm,
-    QuickGELU,
-    MultimodalTransformer, )
-from .model import CLIPTextCfg, CLIPVisionCfg, _build_vision_tower, _build_text_tower
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
+from paddlenlp.transformers.model_utils import PretrainedModel
 
-
-@dataclass
-class MultimodalCfg(CLIPTextCfg):
-    mlp_ratio: int = 4
-    dim_head: int = 64
-    heads: int = 8
-    n_queries: int = 256
-    attn_pooler_heads: int = 8
+from .loss import CoCaLoss
+from .eva_vit_model import EVAVisionTransformerConfig, EVAVisionTransformer
+from .transformer import (LayerNormFp32, LayerNorm, QuickGELU,
+                          MultimodalTransformerConfig, MultimodalTransformer,
+                          EVATextTransformerConfig, EVATextTransformer)
 
 
-def _build_text_decoder_tower(
-        embed_dim,
-        multimodal_cfg,
-        quick_gelu: bool=False,
-        cast_dtype: Optional[paddle.dtype]=None, ):
-    multimodal_cfg = MultimodalCfg(**multimodal_cfg) if isinstance(
-        multimodal_cfg, dict) else multimodal_cfg
-    act_layer = QuickGELU if quick_gelu else nn.GELU
-    norm_layer = LayerNormFp32 if cast_dtype in ('float16', 'bfloat16'
-                                                 ) else LayerNorm
+class CoCaConfig(PretrainedConfig):
 
-    decoder = MultimodalTransformer(
-        context_length=multimodal_cfg.context_length,
-        width=multimodal_cfg.width,
-        heads=multimodal_cfg.heads,
-        layers=multimodal_cfg.layers,
-        ls_init_value=multimodal_cfg.ls_init_value,
-        output_dim=embed_dim,
-        act_layer=act_layer,
-        norm_layer=norm_layer, )
+    model_type = "coca"
 
-    return decoder
-
-
-class CoCa(nn.Layer):
     def __init__(
             self,
-            args,  #
-            embed_dim: int,
-            multimodal_cfg: MultimodalCfg,
-            text_cfg: CLIPTextCfg,
-            vision_cfg: CLIPVisionCfg,
-            quick_gelu: bool=False,
-            cast_dtype: Optional[paddle.dtype]=None,
-            pad_id: int=0, ):
-        super().__init__()
-        print("coca text cfg:", text_cfg)
-        # multimodal_cfg = MultimodalCfg(**multimodal_cfg) if isinstance(multimodal_cfg, dict) else multimodal_cfg
-        # text_cfg = CLIPTextCfg(**text_cfg) if isinstance(text_cfg, dict) else text_cfg
-        # vision_cfg = CLIPVisionCfg(**vision_cfg) if isinstance(vision_cfg, dict) else vision_cfg
+            vision_cfg={},
+            text_cfg={},
+            multimodal_cfg={},
+            **kwargs, ):
+        kwargs["return_dict"] = kwargs.pop("return_dict", True)
+        super().__init__(**kwargs)
 
-        self.text = _build_text_tower(
-            embed_dim=embed_dim,
-            text_cfg=text_cfg,
-            quick_gelu=quick_gelu,
-            cast_dtype=cast_dtype, )
+        self.vision_config = vision_cfg
+        self.text_config = text_cfg
+        self.multimodal_config = multimodal_cfg
 
-        vocab_size = (
-            text_cfg['vocab_size']  # for hf models
-            if "hf_model_name" in text_cfg and
-            text_cfg['hf_model_name'] is not None else text_cfg['vocab_size'])
+    @classmethod
+    def from_pretrained(cls,
+                        pretrained_model_name_or_path: Union[str, os.PathLike],
+                        **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(
+            pretrained_model_name_or_path, **kwargs)
 
-        self.visual = _build_vision_tower(
-            embed_dim=embed_dim,
-            vision_cfg=vision_cfg,
-            quick_gelu=quick_gelu,
-            cast_dtype=cast_dtype, )
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
+            logger.warning(
+                f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
+                f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
+            )
 
-        self.text_decoder = _build_text_decoder_tower(
-            vocab_size,
-            multimodal_cfg=multimodal_cfg,
-            quick_gelu=quick_gelu,
-            cast_dtype=cast_dtype, )
+        return cls.from_dict(config_dict, **kwargs)
+
+
+class CoCaPretrainedModel(PretrainedModel):
+    """
+    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    """
+
+    model_config_file = "config.json"
+    config_class = CoCaConfig
+    resource_files_names = {"model_state": "model_state.pdparams"}
+    base_model_prefix = "coca"
+
+
+class CoCa(CoCaPretrainedModel):
+    def __init__(
+            self,
+            config,
+            coca_caption_loss_weight=2.0,
+            coca_contrastive_loss_weight=1.0,
+            local_loss=False,
+            gather_with_grad=False,
+            cache_labels=True,
+            data_world_rank=0,
+            data_world_size=1, ):
+        super().__init__(config)
+
+        vision_config = EVAVisionTransformerConfig(**config.vision_config)
+        text_config = EVATextTransformerConfig(**config.text_config)
+        multimodal_config = MultimodalTransformerConfig(
+            **config.multimodal_config)
+
+        self.visual = EVAVisionTransformer(vision_config)
+        self.text = EVATextTransformer(text_config)
+        self.text_decoder = MultimodalTransformer(multimodal_config)
 
         init_data = paddle.ones(shape=[1]) * np.log(1 / 0.07)
         self.logit_scale = self.create_parameter(
             shape=[1],
             default_initializer=paddle.nn.initializer.Assign(init_data))
 
-        self.pad_id = pad_id
         self.loss = CoCaLoss(
-            caption_loss_weight=args.coca_caption_loss_weight,
-            clip_loss_weight=args.coca_contrastive_loss_weight,
-            local_loss=False,  # args.local_loss,
-            gather_with_grad=False,  # args.gather_with_grad,
-            cache_labels=True,
-            rank=args.data_world_rank,
-            world_size=args.data_world_size, )
+            caption_loss_weight=coca_caption_loss_weight,
+            clip_loss_weight=coca_contrastive_loss_weight,
+            local_loss=local_loss,
+            gather_with_grad=gather_with_grad,
+            cache_labels=cache_labels,
+            rank=data_world_rank,
+            world_size=data_world_size, )
 
     # @paddle.jit.ignore
     def set_grad_checkpointing(self, enable=True):
@@ -137,11 +131,12 @@ class CoCa(nn.Layer):
 
     def forward(self,
                 image,
-                text,
+                input_ids,
                 embed_cls=True,
                 image_latent=None,
                 image_embs=None,
                 type_ids=None):
+        text = input_ids
         text_latent, token_embs = self._encode_text(text, embed_cls=embed_cls)
         if image_latent is None or image_embs is None:
             image_latent, image_embs = self._encode_image(image)
@@ -150,31 +145,7 @@ class CoCa(nn.Layer):
         labels = text[:, -token_embs.shape[1]:]
 
         logits = self.text_decoder(image_embs, token_embs)
-        return [
-            image_latent, text_latent, self.logit_scale.exp(), logits, labels
-        ]
 
-
-def prepare_inputs_for_generation(input_ids, image_inputs, past=None,
-                                  **kwargs):
-    if past:
-        input_ids = input_ids[:, -1].unsqueeze(-1)
-
-    attention_mask = kwargs.get("attention_mask", None)
-    position_ids = kwargs.get("position_ids", None)
-
-    if attention_mask is not None and position_ids is None:
-        # create position_ids on the fly for batch generation
-        position_ids = attention_mask.astype(dtype='int64').cumsum(axis=-1) - 1
-        #position_ids.masked_fill_(attention_mask == 0, 1)
-        mask = attention_mask == 0
-        position_ids = paddle.where(mask > 0, mask, paddle.full_like(mask, 1))
-    else:
-        position_ids = None
-    return {
-        "text": input_ids,
-        "images": image_inputs,
-        "past_key_values": past,
-        "position_ids": position_ids,
-        "attention_mask": attention_mask,
-    }
+        loss_itc, logits_per_image, logits_per_text, labels = self.loss((
+            image_latent, text_latent, self.logit_scale.exp(), logits, labels))
+        return loss_itc, image_latent, text_latent, self.logit_scale.exp()

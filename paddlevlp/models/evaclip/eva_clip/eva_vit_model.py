@@ -1,14 +1,19 @@
 import paddle
 import math
 import os
+from typing import Union, Dict
 from . import timm_ext
 from functools import partial
-from .transformer import PatchDropout, AttentionalPooler
+from .transformer import PatchDropout, AttentionalPooler, LayerNorm
 from .rope import VisionRotaryEmbedding, VisionRotaryEmbeddingFast
+from .fusedln import FusedLayerNorm
 
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
+
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
+from paddlenlp.transformers.model_utils import PretrainedModel
 
 
 class DropPath(paddle.nn.Layer):
@@ -470,45 +475,158 @@ class RelativePositionBias(paddle.nn.Layer):
         return relative_position_bias.transpose(perm=[2, 0, 1])
 
 
-class EVAVisionTransformer(paddle.nn.Layer):
+class EVAVisionTransformerConfig(PretrainedConfig):
+
+    model_type = "evavision_transformer"
+    attribute_map: Dict[str, str] = {}
+
+    def __init__(
+            self,
+            img_size=224,
+            patch_size=16,
+            in_chans=3,
+            num_classes=1000,
+            embed_dim=768,
+            depth=12,
+            num_heads=12,
+            mlp_ratio=4.0,
+            qkv_bias=False,
+            qk_scale=None,
+            drop_rate=0.0,
+            attn_drop_rate=0.0,
+            drop_path_rate=0.0,
+            init_values=None,
+            patch_dropout=0.0,
+            use_abs_pos_emb=True,
+            use_rel_pos_bias=False,
+            use_shared_rel_pos_bias=False,
+            rope=False,
+            use_mean_pooling=True,
+            attentional_pool=False,
+            n_queries: int=256,
+            attn_pooler_heads: int=8,
+            init_scale=0.001,
+            enable_recompute=False,
+            xattn=False,
+            postnorm=False,
+            pt_hw_seq_len=16,
+            intp_freq=False,
+            naiveswiglu=False,
+            subln=False,
+            output_tokens=False,
+            fusedLN=False,
+            **kwargs, ):
+        kwargs["return_dict"] = kwargs.pop("return_dict", True)
+        super().__init__(**kwargs)
+
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.in_chans = in_chans
+        self.num_classes = num_classes
+        self.embed_dim = embed_dim
+        self.depth = depth
+        self.num_heads = num_heads
+        self.mlp_ratio = mlp_ratio
+        self.qkv_bias = qkv_bias
+        self.qk_scale = qk_scale
+        self.drop_rate = drop_rate
+        self.attn_drop_rate = attn_drop_rate
+        self.drop_path_rate = drop_path_rate
+        self.init_values = init_values
+        self.patch_dropout = patch_dropout
+        self.use_abs_pos_emb = use_abs_pos_emb
+        self.use_rel_pos_bias = use_rel_pos_bias
+        self.use_shared_rel_pos_bias = use_shared_rel_pos_bias
+        self.rope = rope
+        self.use_mean_pooling = use_mean_pooling
+        self.attentional_pool = attentional_pool
+        self.n_queries = n_queries
+        self.attn_pooler_heads = attn_pooler_heads
+        self.init_scale = init_scale
+        self.enable_recompute = enable_recompute
+        self.xattn = xattn
+        self.postnorm = postnorm
+        self.pt_hw_seq_len = pt_hw_seq_len
+        self.intp_freq = intp_freq
+        self.naiveswiglu = naiveswiglu
+        self.subln = subln
+        self.output_tokens = output_tokens
+        self.fusedLN = fusedLN
+
+    @classmethod
+    def from_pretrained(cls,
+                        pretrained_model_name_or_path: Union[str, os.PathLike],
+                        **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(
+            pretrained_model_name_or_path, **kwargs)
+
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
+            logger.warning(
+                f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
+                f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
+            )
+
+        if "vision_cfg" in config_dict:
+            config_dict = config_dict["vision_cfg"]
+
+        return cls.from_dict(config_dict, **kwargs)
+
+
+class EVAVisionTransformerPretrainedModel(PretrainedModel):
+    """
+    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    """
+
+    model_config_file = "config.json"
+    config_class = EVAVisionTransformerConfig
+    resource_files_names = {"model_state": "model_state_vision.pdparams"}
+    base_model_prefix = "evavision_transformer"
+
+
+class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
     """ Vision Transformer with support for patch or hybrid CNN input stage
     """
 
-    def __init__(self,
-                 img_size=224,
-                 patch_size=16,
-                 in_chans=3,
-                 num_classes=1000,
-                 embed_dim=768,
-                 depth=12,
-                 num_heads=12,
-                 mlp_ratio=4.0,
-                 qkv_bias=False,
-                 qk_scale=None,
-                 drop_rate=0.0,
-                 attn_drop_rate=0.0,
-                 drop_path_rate=0.0,
-                 norm_layer=paddle.nn.LayerNorm,
-                 init_values=None,
-                 patch_dropout=0.0,
-                 use_abs_pos_emb=True,
-                 use_rel_pos_bias=False,
-                 use_shared_rel_pos_bias=False,
-                 rope=False,
-                 use_mean_pooling=True,
-                 attentional_pool=False,
-                 n_queries: int=256,
-                 attn_pooler_heads: int=8,
-                 init_scale=0.001,
-                 enable_recompute=False,
-                 xattn=False,
-                 postnorm=False,
-                 pt_hw_seq_len=16,
-                 intp_freq=False,
-                 naiveswiglu=False,
-                 subln=False,
-                 output_tokens=False):
-        super(EVAVisionTransformer, self).__init__()
+    def __init__(self, config: EVAVisionTransformerConfig):
+        super(EVAVisionTransformer, self).__init__(config)
+
+        img_size = config.img_size
+        patch_size = config.patch_size
+        in_chans = config.in_chans
+        num_classes = config.num_classes
+        embed_dim = config.embed_dim
+        depth = config.depth
+        mlp_ratio = config.mlp_ratio
+        qkv_bias = config.qkv_bias
+        qk_scale = config.qk_scale
+        drop_rate = config.drop_rate
+        attn_drop_rate = config.attn_drop_rate
+        drop_path_rate = config.drop_path_rate
+        init_values = config.init_values
+        patch_dropout = config.patch_dropout
+        use_abs_pos_emb = config.use_abs_pos_emb
+        use_rel_pos_bias = config.use_rel_pos_bias
+        use_shared_rel_pos_bias = config.use_shared_rel_pos_bias
+        rope = config.rope
+        use_mean_pooling = config.use_mean_pooling
+        attentional_pool = config.attentional_pool
+        n_queries = config.n_queries
+        attn_pooler_heads = config.attn_pooler_heads
+        init_scale = config.init_scale
+        enable_recompute = config.enable_recompute
+        xattn = config.xattn
+        postnorm = config.postnorm
+        pt_hw_seq_len = config.pt_hw_seq_len
+        intp_freq = config.intp_freq
+        naiveswiglu = config.naiveswiglu
+        subln = config.subln
+        output_tokens = config.output_tokens
+        norm_layer = partial(
+            FusedLayerNorm, epsilon=1e-6) if config.fusedLN else partial(
+                LayerNorm, epsilon=1e-6)
+        num_heads = config.embed_dim // config.head_width
+
         self.image_size = img_size
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim

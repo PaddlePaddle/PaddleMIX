@@ -16,301 +16,84 @@ except:
 from .modified_resnet import ModifiedResNet
 from .timm_model import TimmModel
 from .eva_vit_model import EVAVisionTransformer
-from .transformer import LayerNorm, QuickGELU, Attention, VisionTransformer, TextTransformer
+from .transformer import LayerNorm, QuickGELU, Attention, VisionTransformer, EVATextTransformer
 from .fusedln import FusedLayerNorm
 # from paddle.nn import LayerNorm as FusedLayerNorm
 
-
-@dataclass
-class CLIPVisionCfg:
-    layers: Union[Tuple[int, int, int, int], int] = 12
-    width: int = 768
-    head_width: int = 64
-    mlp_ratio: float = 4.0
-    patch_size: int = 16
-    image_size: Union[Tuple[int, int], int] = 224
-    ls_init_value: Optional[float] = None
-    patch_dropout: float = 0.0
-    global_average_pool: bool = False
-    drop_path_rate: Optional[float] = None
-    timm_model_name: str = None
-    timm_model_pretrained: bool = False
-    timm_pool: str = 'avg'
-    timm_proj: str = 'linear'
-    timm_proj_bias: bool = False
-    eva_model_name: str = None
-    qkv_bias: bool = True
-    fusedLN: bool = False
-    xattn: bool = False
-    postnorm: bool = False
-    rope: bool = False
-    pt_hw_seq_len: int = 16
-    intp_freq: bool = False
-    naiveswiglu: bool = False
-    subln: bool = False
-    attentional_pool: bool = False  # whether to use attentional pooler in the last embedding layer
-    n_queries: int = 256  # n_queries for attentional pooler
-    attn_pooler_heads: int = 8  # n heads for attentional_pooling
-    output_tokens: bool = False
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
+from paddlenlp.transformers.model_utils import PretrainedModel
+from .eva_vit_model import EVAVisionTransformerConfig
+from .transformer import EVATextTransformerConfig
 
 
-@dataclass
-class CLIPTextCfg:
-    context_length: int = 77
-    vocab_size: int = 49408
-    width: int = 512
-    heads: int = 8
-    layers: int = 12
-    ls_init_value: Optional[float] = None
-    hf_model_name: str = None
-    hf_tokenizer_name: str = None
-    hf_model_pretrained: bool = True
-    proj: str = 'mlp'
-    pooler_type: str = 'mean_pooler'
-    masked_language_modeling: bool = False
-    fusedLN: bool = False
-    xattn: bool = False
-    attn_mask: bool = True
-    embed_cls: bool = False
-    pad_id: int = 0
-    output_tokens: bool = False
+class EVACLIPConfig(PretrainedConfig):
+
+    model_type = "evaclip"
+
+    def __init__(
+            self,
+            vision_cfg={},
+            text_cfg={},
+            **kwargs, ):
+        kwargs["return_dict"] = kwargs.pop("return_dict", True)
+        super().__init__(**kwargs)
+
+        self.vision_config = vision_cfg
+        self.text_config = text_cfg
+
+    @classmethod
+    def from_pretrained(cls,
+                        pretrained_model_name_or_path: Union[str, os.PathLike],
+                        **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(
+            pretrained_model_name_or_path, **kwargs)
+
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
+            logger.warning(
+                f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
+                f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
+            )
+
+        return cls.from_dict(config_dict, **kwargs)
 
 
-def get_cast_dtype(precision: str):
-    cast_dtype = None
-    if precision == 'bf16':
-        cast_dtype = 'bfloat16'
-    elif precision == 'fp16':
-        cast_dtype = 'float16'
-    return cast_dtype
+class EVACLIPPretrainedModel(PretrainedModel):
+    """
+    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    """
+
+    model_config_file = "config.json"
+    config_class = EVACLIPConfig
+    resource_files_names = {"model_state": "model_state.pdparams"}
+    base_model_prefix = "evaclip"
 
 
-def _build_vision_tower(embed_dim: int,
-                        vision_cfg: CLIPVisionCfg,
-                        quick_gelu: bool=False,
-                        cast_dtype: Optional[paddle.dtype]=None):
-    if isinstance(vision_cfg, dict):
-        vision_cfg = CLIPVisionCfg(**vision_cfg)
-    act_layer = QuickGELU if quick_gelu else paddle.nn.GELU
-    if vision_cfg.eva_model_name:
-        vision_heads = vision_cfg.width // vision_cfg.head_width
-        norm_layer = LayerNorm
-        visual = EVAVisionTransformer(
-            img_size=vision_cfg.image_size,
-            patch_size=vision_cfg.patch_size,
-            num_classes=embed_dim,
-            use_mean_pooling=vision_cfg.global_average_pool,
-            init_values=vision_cfg.ls_init_value,
-            patch_dropout=vision_cfg.patch_dropout,
-            embed_dim=vision_cfg.width,
-            depth=vision_cfg.layers,
-            num_heads=vision_heads,
-            mlp_ratio=vision_cfg.mlp_ratio,
-            qkv_bias=vision_cfg.qkv_bias,
-            drop_path_rate=vision_cfg.drop_path_rate,
-            norm_layer=partial(
-                FusedLayerNorm, epsilon=1e-6)
-            if vision_cfg.fusedLN else partial(
-                norm_layer, epsilon=1e-6),
-            xattn=vision_cfg.xattn,
-            rope=vision_cfg.rope,
-            postnorm=vision_cfg.postnorm,
-            pt_hw_seq_len=vision_cfg.pt_hw_seq_len,
-            intp_freq=vision_cfg.intp_freq,
-            naiveswiglu=vision_cfg.naiveswiglu,
-            subln=vision_cfg.subln,
-            attentional_pool=vision_cfg.attentional_pool,
-            n_queries=vision_cfg.n_queries,
-            attn_pooler_heads=vision_cfg.attn_pooler_heads,
-            output_tokens=vision_cfg.output_tokens, )
-    elif vision_cfg.timm_model_name:
-        visual = TimmModel(
-            vision_cfg.timm_model_name,
-            pretrained=vision_cfg.timm_model_pretrained,
-            pool=vision_cfg.timm_pool,
-            proj=vision_cfg.timm_proj,
-            proj_bias=vision_cfg.timm_proj_bias,
-            embed_dim=embed_dim,
-            image_size=vision_cfg.image_size)
-        act_layer = paddle.nn.GELU
-    elif isinstance(vision_cfg.layers, (tuple, list)):
-        vision_heads = vision_cfg.width * 32 // vision_cfg.head_width
-        visual = ModifiedResNet(
-            layers=vision_cfg.layers,
-            output_dim=embed_dim,
-            heads=vision_heads,
-            image_size=vision_cfg.image_size,
-            width=vision_cfg.width)
-    else:
-        vision_heads = vision_cfg.width // vision_cfg.head_width
-        norm_layer = LayerNormFp32 if cast_dtype in ('float16', 'bfloat16'
-                                                     ) else LayerNorm
-        visual = VisionTransformer(
-            image_size=vision_cfg.image_size,
-            patch_size=vision_cfg.patch_size,
-            width=vision_cfg.width,
-            layers=vision_cfg.layers,
-            heads=vision_heads,
-            mlp_ratio=vision_cfg.mlp_ratio,
-            ls_init_value=vision_cfg.ls_init_value,
-            patch_dropout=vision_cfg.patch_dropout,
-            global_average_pool=vision_cfg.global_average_pool,
-            attentional_pool=vision_cfg.attentional_pool,
-            n_queries=vision_cfg.n_queries,
-            attn_pooler_heads=vision_cfg.attn_pooler_heads,
-            output_tokens=vision_cfg.output_tokens,
-            output_dim=embed_dim,
-            act_layer=act_layer,
-            norm_layer=norm_layer)
-    return visual
-
-
-def _build_text_tower(embed_dim: int,
-                      text_cfg: CLIPTextCfg,
-                      quick_gelu: bool=False,
-                      cast_dtype: Optional[paddle.dtype]=None):
-    if isinstance(text_cfg, dict):
-        text_cfg = CLIPTextCfg(**text_cfg)
-    if text_cfg.hf_model_name:
-        text = HFTextEncoder(
-            text_cfg.hf_model_name,
-            output_dim=embed_dim,
-            tokenizer_name=text_cfg.hf_tokenizer_name,
-            proj=text_cfg.proj,
-            pooler_type=text_cfg.pooler_type,
-            masked_language_modeling=text_cfg.masked_language_modeling)
-    else:
-        act_layer = QuickGELU if quick_gelu else paddle.nn.GELU
-        norm_layer = LayerNorm
-        text = TextTransformer(
-            context_length=text_cfg.context_length,
-            vocab_size=text_cfg.vocab_size,
-            width=text_cfg.width,
-            heads=text_cfg.heads,
-            layers=text_cfg.layers,
-            ls_init_value=text_cfg.ls_init_value,
-            output_dim=embed_dim,
-            act_layer=act_layer,
-            norm_layer=FusedLayerNorm if text_cfg.fusedLN else norm_layer,
-            xattn=text_cfg.xattn,
-            attn_mask=text_cfg.attn_mask,
-            embed_cls=text_cfg.embed_cls,
-            pad_id=text_cfg.pad_id,
-            output_tokens=text_cfg.output_tokens)
-    return text
-
-
-class CLIP(paddle.nn.Layer):
-    def __init__(self,
-                 args,
-                 embed_dim: int,
-                 vision_cfg: CLIPVisionCfg,
-                 text_cfg: CLIPTextCfg,
-                 quick_gelu: bool=False,
-                 cast_dtype: Optional[paddle.dtype]=None):
-        super().__init__()
-        self.visual = _build_vision_tower(embed_dim, vision_cfg, quick_gelu,
-                                          cast_dtype)
-        text = _build_text_tower(embed_dim, text_cfg, quick_gelu, cast_dtype)
-        self.transformer = text.transformer
-        self.vocab_size = text.vocab_size
-        self.token_embedding = text.token_embedding
-        self.positional_embedding = text.positional_embedding
-        self.ln_final = text.ln_final
-        self.text_projection = text.text_projection
-        self.register_buffer('attn_mask', text.attn_mask, persistable=False)
+class EVACLIP(EVACLIPPretrainedModel):
+    def __init__(
+            self,
+            config,
+            local_loss=False,
+            gather_with_grad=False,
+            cache_labels=True,
+            data_world_rank=0,
+            data_world_size=1, ):
+        super().__init__(config)
+        vision_config = EVAVisionTransformerConfig(**config.vision_config)
+        text_config = EVATextTransformerConfig(**config.text_config)
+        self.visual = EVAVisionTransformer(vision_config)
+        self.text = EVATextTransformer(text_config)
         init_data = paddle.ones(shape=[1]) * np.log(1 / 0.07)
         self.logit_scale = self.create_parameter(
             shape=[1],
             default_initializer=paddle.nn.initializer.Assign(init_data))
 
         self.loss = ClipLoss(
-            local_loss=False,
-            gather_with_grad=False,
-            cache_labels=True,
-            rank=args.data_world_rank,
-            world_size=args.data_world_size, )
-
-    def lock_image_tower(self, unlocked_groups=0, freeze_bn_stats=False):
-        self.visual.lock(
-            unlocked_groups=unlocked_groups, freeze_bn_stats=freeze_bn_stats)
-
-    def no_weight_decay(self):
-        return {'logit_scale'}
-
-    def encode_image(self, image, normalize: bool=False):
-        features = self.visual(image)
-        return paddle.nn.functional.normalize(
-            x=features, axis=-1) if normalize else features
-
-    def encode_text(self, text, normalize: bool=False):
-        cast_dtype = self.transformer.get_cast_dtype()
-        if isinstance(cast_dtype, paddle.dtype):
-            dtype = cast_dtype
-        elif isinstance(
-                cast_dtype,
-                str) and cast_dtype not in ['cpu', 'cuda', 'ipu', 'xpu']:
-            dtype = cast_dtype
-        elif isinstance(cast_dtype, paddle.Tensor):
-            dtype = cast_dtype.dtype
-        else:
-            dtype = self.token_embedding(text).dtype
-        x = self.token_embedding(text).cast(dtype)
-        if isinstance(cast_dtype, paddle.dtype):
-            dtype = cast_dtype
-        elif isinstance(
-                cast_dtype,
-                str) and cast_dtype not in ['cpu', 'cuda', 'ipu', 'xpu']:
-            dtype = cast_dtype
-        elif isinstance(cast_dtype, paddle.Tensor):
-            dtype = cast_dtype.dtype
-        else:
-            dtype = self.positional_embedding.dtype
-        x = x + self.positional_embedding.cast(dtype)
-        x = x.transpose(perm=[1, 0, 2])
-        x = self.transformer(x, attn_mask=self.attn_mask)
-        x = x.transpose(perm=[1, 0, 2])
-        x = self.ln_final(x)
-        x = x[paddle.arange(end=x.shape[0]), text.argmax(
-            axis=-1)] @self.text_projection
-        return paddle.nn.functional.normalize(x=x, axis=-1) if normalize else x
-
-    def forward(self, image, text, type_ids=None):
-        image_features = self.encode_image(image, normalize=True)
-        text_features = self.encode_text(text, normalize=True)
-        # return [image_features, text_features, self.logit_scale.exp()]
-
-        loss_itc, logits_per_image, logits_per_text, labels = self.loss(
-            (image_features, text_features, self.logit_scale.exp()))
-        return loss_itc, image_features, text_features, self.logit_scale.exp()
-
-
-class CustomCLIP(paddle.nn.Layer):
-    def __init__(self,
-                 args,
-                 embed_dim: int,
-                 vision_cfg: CLIPVisionCfg,
-                 text_cfg: CLIPTextCfg,
-                 quick_gelu: bool=False,
-                 cast_dtype: Optional[paddle.dtype]=None,
-                 itm_task: bool=False):
-        super().__init__()
-        self.visual = _build_vision_tower(embed_dim, vision_cfg, quick_gelu,
-                                          cast_dtype)
-        self.text = _build_text_tower(embed_dim, text_cfg, quick_gelu,
-                                      cast_dtype)
-        init_data = paddle.ones(shape=[1]) * np.log(1 / 0.07)
-        self.logit_scale = self.create_parameter(
-            shape=[1],
-            default_initializer=paddle.nn.initializer.Assign(init_data))
-
-        self.loss = ClipLoss(
-            local_loss=False,
-            gather_with_grad=False,
-            cache_labels=True,
-            rank=args.data_world_rank,
-            world_size=args.data_world_size, )
-        # print("args.data_world_rank:{}, args.data_world_size:{}".format(args.data_world_rank, args.data_world_size))
+            local_loss=local_loss,
+            gather_with_grad=gather_with_grad,
+            cache_labels=cache_labels,
+            rank=data_world_rank,
+            world_size=data_world_size, )
 
     def lock_image_tower(self, unlocked_groups=0, freeze_bn_stats=False):
         self.visual.lock(
@@ -343,7 +126,6 @@ class CustomCLIP(paddle.nn.Layer):
         features = self.text(text)
         return paddle.nn.functional.normalize(
             x=features, axis=-1) if normalize else features
-        # return features
 
     def forward(self, image, input_ids, skiploss=False):
         self.clip_scale()

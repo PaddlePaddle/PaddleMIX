@@ -120,22 +120,20 @@ class CLIPProcessor(ProcessorMixin):
             max_length=max_length,
             padding=True,
             **kwargs, )
-        if True:
-            for key, value in text_encoding.items():
-                shape = value.shape
-                if shape[-1] != max_length:
-                    if key == 'input_ids':
-                        fill_value = value.numpy()[..., -1][-1]
-                    else:
-                        fill_value = 0
-                    newshape = shape
-                    newshape[-1] = max_length - shape[-1]
-                    padtensor = paddle.full(
-                        shape=newshape,
-                        fill_value=fill_value,
-                        dtype=value.dtype)
-                    newvalue = paddle.concat([value, padtensor], axis=-1)
-                    text_encoding[key] = newvalue
+
+        for key, value in text_encoding.items():
+            shape = value.shape
+            if shape[-1] != max_length:
+                if key == 'input_ids':
+                    fill_value = value.numpy()[..., -1][-1]
+                else:
+                    fill_value = 0
+                newshape = shape
+                newshape[-1] = max_length - shape[-1]
+                padtensor = paddle.full(
+                    shape=newshape, fill_value=fill_value, dtype=value.dtype)
+                newvalue = paddle.concat([value, padtensor], axis=-1)
+                text_encoding[key] = newvalue
 
         encoding_image_processor.update(text_encoding)
 

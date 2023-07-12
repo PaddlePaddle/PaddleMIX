@@ -19,6 +19,10 @@ PPMIX_HOME              -->  the root directory for storing PaddleMIX related da
 └─ DATA_HOME         -->  Store automatically downloaded datasets.
 """
 import os
+import paddle
+import numpy as np
+import random
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 
 
 def _get_user_home():
@@ -33,10 +37,8 @@ def _get_ppmix_home():
                 return home_path
             else:
                 raise RuntimeError(
-                    "The environment variable PPMIX_HOME {} is not a directory.".format(
-                        home_path
-                    )
-                )
+                    "The environment variable PPMIX_HOME {} is not a directory.".
+                    format(home_path))
         else:
             return home_path
     return os.path.join(_get_user_home(), ".paddlemix")
@@ -82,3 +84,19 @@ PAST_KEY_VALUES_FILE_NAME = "pre_caches.npy"
 
 # for conversion
 ENABLE_TORCH_CHECKPOINT = _get_bool_env("ENABLE_TORCH_CHECKPOINT", "true")
+
+
+def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
+    device_id = paddle.device.get_device()
+    assert 'gpu' in device_id
+
+    random.seed(basic_seed + data_world_rank)
+    np.random.seed(basic_seed + data_world_rank)
+    paddle.seed(basic_seed + data_world_rank)
+
+    # local_seed/ global_seed is used to control dropout in ModelParallel
+    local_seed = 1024 + basic_seed + mp_rank * 100 + data_world_rank
+    global_seed = 2048 + basic_seed + data_world_rank
+    tracker = get_rng_state_tracker()
+    tracker.add("global_seed", global_seed)
+    tracker.add("local_seed", local_seed)

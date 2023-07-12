@@ -1,17 +1,12 @@
 # coding:utf-8
 import sys
 import os
-# add python path of PaddleDetection to sys.path
-parent_path = os.path.abspath(os.path.join(__file__, *(['..'] * 4)))
-sys.path.insert(0, parent_path)
-
 import numpy as np
 import time
 import pprint
 import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
-from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 try:
     from paddle.fluid.dygraph.parallel import sync_params_buffers
 except ImportError:
@@ -19,11 +14,13 @@ except ImportError:
 
 from dataclasses import dataclass, field
 
-from paddlevlp.models.evaclip.eva_clip import create_model_and_transforms
+from paddlevlp.models.evaclip.eva_clip.model import EVACLIP
+from paddlevlp.models.evaclip.eva_clip.coca_model import CoCa
 from paddlevlp.models.evaclip.training.optim import create_optimizer
 from paddlevlp.models.evaclip.utils.checkpoint import save, load_model
 from paddlevlp.optimization import CosineDecayWithWarmup
 from paddlevlp.datasets import load_dataset
+from paddlevlp.utils.env import set_hyrbid_parallel_seed
 
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
@@ -47,13 +44,14 @@ class DataArguments:
 
     task_name: str = field(
         default="coco_clip",
-        metadata={"help": "The name of the task to use (via the datasets library)."},
-    )
+        metadata={
+            "help": "The name of the task to use (via the datasets library)."
+        }, )
 
     image_size: int = field(
         default=224,
-        metadata={"help": "image size for training"},
-    )
+        metadata={"help": "image size for training"}, )
+
 
 @dataclass
 class ModelArguments:
@@ -63,56 +61,19 @@ class ModelArguments:
 
     model: str = field(
         default="EVA02-CLIP-B-16",
-        metadata={"help": "model name to create"},
-    )
-    vision_layers: int = field(
-        default=12,
-        metadata={"help": " ViT layers for training"},
-    )
-    vision_width: int = field(
-        default=896,
-        metadata={"help": " The width of ViT for training"},
-    )
-    vision_heads: int = field(
-        default=14,
-        metadata={"help": " The heads of ViT for training"},
-    )
-    transformer_width: int = field(
-        default=768,
-        metadata={"help": " The width of text-transformer for training"},
-    )
-    transformer_heads: int = field(
-        default=12,
-        metadata={"help": " head for text-transformer for training"},
-    )
-    transformer_layers: int = field(
-        default=12,
-        metadata={"help": " layers for text-transformer for training"},
-    )
-    vocab_size: int = field(
-        default=50000,
-        metadata={"help": " The vocab_size for tokens for training"},
-    )
-    patch_size: int = field(
-        default=16,
-        metadata={"help": " vit patch size"},
-    )
-    embed_dim: int = field(
-        default=256,
-        metadata={"help": " The embedding dim for training"},
-    )
-    coca_caption_loss_weight: float = field(
-        default=2.0,
-        metadata={"help": " Weight assigned to caption loss in CoCa."},
-    )
-    coca_contrastive_loss_weight: float = field(
-        default=1.0,
-        metadata={"help": " Weight assigned to contrastive loss when training CoCa."},
-    )
+        metadata={
+            "help":
+            "model name to create, for example [EVA02-CLIP-B-16/coca_EVA02-B-16]"
+        }, )
     model_name_or_path: str = field(
         default="clip",
-        metadata={"help": "Path to pretrained model or model identifier"},
-    )
+        metadata={"help": "Path to pretrained model or model identifier"}, )
+    coca_caption_loss_weight: float = field(
+        default=2.0,
+        metadata={"help": "coca_caption_loss_weight set, default: 2.0"}, )
+    coca_contrastive_loss_weight: float = field(
+        default=1.0,
+        metadata={"help": "coca_contrastive_loss_weight set, default: 1.0"}, )
 
 
 @dataclass
@@ -124,89 +85,62 @@ class PreTrainingArguments(TrainingArguments):
     pretrained_model_path: str = field(
         default=None,
         metadata={
-            "help": "The path to pre-trained model that we will use for pretraining."
-        },
-    )
-    weight_decay: float = field(
-        default=0.05, metadata={"help": "Weight decay if we apply some."}
-    )
+            "help":
+            "The path to pre-trained model that we will use for pretraining."
+        }, )
     text_wd: float = field(
-        default=0.05, metadata={"help": "Weight decay for text tower"}
-    )
+        default=0.05, metadata={"help": "Weight decay for text tower"})
     visual_wd: float = field(
-        default=0.05, metadata={"help": "Weight decay for visual tower"}
-    )
-    learning_rate: float = field(
-        default=5e-4, metadata={"help": "The initial learning rate."}
-    )
-    text_lr :float = field(
-        default=2e-5, metadata={"help": "The initial learning rate of text tower."}
-    )
-    visual_lr :float = field(
-        default=2e-4, metadata={"help": "The initial learning rate of text tower."}
-    )
+        default=0.05, metadata={"help": "Weight decay for visual tower"})
+    text_lr: float = field(
+        default=2e-5,
+        metadata={"help": "The initial learning rate of text tower."})
+    visual_lr: float = field(
+        default=2e-4,
+        metadata={"help": "The initial learning rate of text tower."})
     layer_decay: float = field(
-        default=1.0, metadata={"help": "The basic layer decay."}
-    )
-    text_ld :float = field(
-        default=0.75, metadata={"help": "The layer decay of text tower."}
-    )
-    visual_ld :float = field(
-        default=0.75, metadata={"help": "The layer decay of text tower."}
-    )
-    warmup_steps: int = field(
-        default=2000, metadata={"help": "Number of warmup steps."}
-    )
-    lr_scheduler_name: str = field(
-        default="CosineDecayWithWarmup", metadata={"help": "The scheduler name to use."}
-    )
+        default=1.0, metadata={"help": "The basic layer decay."})
+    text_ld: float = field(
+        default=0.75, metadata={"help": "The layer decay of text tower."})
+    visual_ld: float = field(
+        default=0.75, metadata={"help": "The layer decay of text tower."})
     start_epoch: int = field(
         default=0,
-        metadata={"help": " manual epoch number (useful on restarts)"},
-    )
-    seed: int = field(
-        default=0,
-        metadata={"help": " seed for initializing training."},
-    )
+        metadata={"help": " manual epoch number (useful on restarts)"}, )
     context_length: int = field(
-        default=76,
-        metadata={"help": " context length for text."},
-    )
+        default=77,
+        metadata={"help": " context length for text."}, )
     optimizer: str = field(
-        default="lamb", metadata={"help": "optimizer setting, [lamb/adamw]"}
-    )
-    beta1: float = field(
-        default=0.9,
-        metadata={"help": " clip grad by global norm to this value"},
-    )
-    beta2: float = field(
-        default=0.999,
-        metadata={"help": " clip grad by global norm to this value"},
-    )
-    epsilon: float = field(
-        default=1e-08,
-        metadata={"help": " clip grad by global norm to this value"},
-    )
+        default="lamb", metadata={"help": "optimizer setting, [lamb/adamw]"})
     dp_degree: int = field(
         default=2,
-        metadata={"help": " data parallel degrees."},
-    )
+        metadata={"help": " data parallel degrees."}, )
     last_epoch: int = field(
-        default=-1, metadata={"help": "the last epoch to resume"}
-    )
+        default=-1, metadata={"help": "the last epoch to resume"})
     accum_freq: int = field(
-        default=1, metadata={"help": "accum frequency (default: 1)"}
-    )
+        default=1, metadata={"help": "accum frequency (default: 1)"})
+
 
 class SelfTrainer(Trainer):
     def __init__(self, **kwargs):
+        """
+        自定义训练器，与Trainer的区别：
+        1、自定义优化器策略
+        2、支持accum_freq训练
+        
+        Args:
+            kwargs (dict): 包含任意传入的参数及对应的值
+        
+        Returns:
+            None
+        """
         super().__init__(**kwargs)
         if self.args.accum_freq > 1:
             self.accum_features = {}
             self.accum_images = []
             self.accum_texts = []
             self.step = 0
-        
+
     def create_optimizer_and_scheduler(self, num_training_steps: int):
         """
         Setup the optimizer and the learning rate scheduler.
@@ -215,10 +149,19 @@ class SelfTrainer(Trainer):
         Trainer's init through `optimizers`, or subclass and override this method (or `create_optimizer` and/or
         `create_scheduler`) in a subclass.
         """
-        self.lr_scheduler = paddle.optimizer.lr.CosineAnnealingDecay(1.0, num_training_steps-self.args.warmup_steps, last_epoch=self.args.last_epoch)
+        self.lr_scheduler = paddle.optimizer.lr.CosineAnnealingDecay(
+            1.0,
+            num_training_steps - self.args.warmup_steps,
+            last_epoch=self.args.last_epoch)
         if self.args.warmup_steps > 0:
-            self.lr_scheduler = paddle.optimizer.lr.LinearWarmup(self.lr_scheduler, self.args.warmup_steps, 0, 1.0, last_epoch=self.args.last_epoch)
-        self.optimizer = create_optimizer(self.args, self.model, self.lr_scheduler)
+            self.lr_scheduler = paddle.optimizer.lr.LinearWarmup(
+                self.lr_scheduler,
+                self.args.warmup_steps,
+                0,
+                1.0,
+                last_epoch=self.args.last_epoch)
+        self.optimizer = create_optimizer(self.args, self.model,
+                                          self.lr_scheduler)
 
     def training_step(self, model, inputs) -> paddle.Tensor:
         """
@@ -240,7 +183,7 @@ class SelfTrainer(Trainer):
         """
         if self.args.pipeline_parallel_degree > 1:
             return self.training_pipeline_step(model, inputs)
-        elif self.args.accum_freq>1:
+        elif self.args.accum_freq > 1:
             return self.training_step_accumfreq(model, inputs)
 
         model.train()
@@ -292,7 +235,8 @@ class SelfTrainer(Trainer):
         # Call backwards each time, but only step optimizer at the end.
         # optimizer.clear_grad()
         for j in range(self.args.accum_freq):
-            preds = model(self.accum_images[j], self.accum_texts[j], skiploss=True)
+            preds = model(
+                self.accum_images[j], self.accum_texts[j], skiploss=True)
             image_features, text_features, logit_scale = preds[:3]
             model_out = {
                 'image_features': image_features,
@@ -301,12 +245,11 @@ class SelfTrainer(Trainer):
             inputs = {}
             for key, val in self.accum_features.items():
                 accumulated = self.accum_features[key]
-                inputs[key] = paddle.concat(accumulated[:j] + [
-                    model_out[key]
-                ] + accumulated[j + 1:])
+                inputs[key] = paddle.concat(
+                    accumulated[:j] + [model_out[key]] + accumulated[j + 1:])
             loss, logits_per_image, logits_per_text, labels = modelloss(
                 (inputs['image_features'], inputs['text_features'],
-                logit_scale))
+                 logit_scale))
             del inputs
 
             if self.do_grad_scaling:
@@ -320,21 +263,6 @@ class SelfTrainer(Trainer):
 
         return loss.detach()
 
-
-def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
-    device_id = paddle.device.get_device()
-    assert 'gpu' in device_id
-
-    random.seed(basic_seed + data_world_rank)
-    np.random.seed(basic_seed + data_world_rank)
-    paddle.seed(basic_seed + data_world_rank)
-
-    # local_seed/ global_seed is used to control dropout in ModelParallel
-    local_seed = 1024 + basic_seed + mp_rank * 100 + data_world_rank
-    global_seed = 2048 + basic_seed + data_world_rank
-    tracker = get_rng_state_tracker()
-    tracker.add("global_seed", global_seed)
-    tracker.add("local_seed", local_seed)
 
 class Collator:
     """
@@ -357,20 +285,26 @@ class Collator:
             max_length=77,
             return_tensors="pd",
             return_attention_mask=False,
-            mode="train",
-        )
+            mode="train", )
         return batch
 
 
 def main_worker(training_args, model_args, data_args):
-    model = create_model_and_transforms(
-        model_args,
-        model_args.model,
-        None,
-        force_custom_clip=True)
+    if model_args.model.startswith("coca"):
+        model = CoCa.from_pretrained(
+            "EVA/" + model_args.model,
+            data_world_rank=training_args.data_world_rank,
+            data_world_size=training_args.data_world_size,
+            ignore_mismatched_sizes=True)
+    else:
+        model = EVACLIP.from_pretrained(
+            "EVA/" + model_args.model,
+            data_world_rank=training_args.data_world_rank,
+            data_world_size=training_args.data_world_size)
 
     if training_args.pretrained_model_path and training_args.pretrained_model_path != "None" and training_args.resume_from_checkpoint is None:
-        load_model(training_args, model, ckpt_dir=training_args.pretrained_model_path)
+        load_model(
+            training_args, model, ckpt_dir=training_args.pretrained_model_path)
 
     train_dataset = load_dataset('coco_clip', splits="train")
 
@@ -378,10 +312,10 @@ def main_worker(training_args, model_args, data_args):
     collator = Collator(processor)
 
     trainer = SelfTrainer(
-    model=model,
-    args=training_args,
-    train_dataset=train_dataset,
-    data_collator=collator,)
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        data_collator=collator, )
 
     # Training
     checkpoint = None
@@ -395,7 +329,9 @@ def main_worker(training_args, model_args, data_args):
 
 
 def setdistenv(args):
-    args.dp_degree = dist.get_world_size() // (args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree)
+    args.dp_degree = dist.get_world_size() // (args.tensor_parallel_degree *
+                                               args.sharding_parallel_degree *
+                                               args.pipeline_parallel_degree)
     strategy = fleet.DistributedStrategy()
     strategy.hybrid_configs = {
         "dp_degree": args.dp_degree,
@@ -421,19 +357,22 @@ def setdistenv(args):
     args.sharding_rank = hcg.get_sharding_parallel_rank()
 
     args.data_world_rank = args.dp_rank * args.sharding_parallel_degree + args.sharding_rank
-    args.data_world_size = dist.get_world_size() // abs(args.tensor_parallel_degree * args.pipeline_parallel_degree)
+    args.data_world_size = dist.get_world_size() // abs(
+        args.tensor_parallel_degree * args.pipeline_parallel_degree)
 
     # seed control in hybrid parallel
     set_hyrbid_parallel_seed(args.seed, args.data_world_rank, args.mp_rank)
 
+
 if __name__ == "__main__":
-    parser = PdArgumentParser((ModelArguments, DataArguments, PreTrainingArguments))
+    parser = PdArgumentParser(
+        (ModelArguments, DataArguments, PreTrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
     # paddle.set_flags({'FLAGS_cudnn_deterministic': True})
     # paddle.set_flags({'FLAGS_embedding_deterministic': 1})
     training_args.hostname = socket.gethostname()
-    if training_args.accum_freq > 1: 
-        training_args.gradient_accumulation_steps=training_args.accum_freq
+    if training_args.accum_freq > 1:
+        training_args.gradient_accumulation_steps = training_args.accum_freq
     pprint.pprint(data_args)
     pprint.pprint(model_args)
     pprint.pprint(training_args)
