@@ -133,8 +133,6 @@ class Blip2VisionEmbeddings(nn.Layer):
         patch_embeds = self.patch_embedding(
             pixel_values
         )  # shape = [*, width, grid, grid]
-        # print('DEBUG!!!!! pixel_values: ', np.abs(pixel_values.numpy()).mean())
-        # print('DEBUG!!!!! patch_embedding weight: ', np.abs(self.patch_embedding.weight.numpy()).mean(), self.patch_embedding.weight.shape)
         patch_embeds = patch_embeds.flatten(2).transpose([0, 2, 1])
         class_embeds = self.class_embedding.expand([batch_size, 1, -1]).cast(
             target_dtype
@@ -143,7 +141,6 @@ class Blip2VisionEmbeddings(nn.Layer):
         embeddings = embeddings + self.position_embedding[
             :, : embeddings.shape[1], :
         ].cast(target_dtype)
-        # rint('DEBUG!!!!embeddings: ', np.abs(embeddings.numpy()).mean())
         return embeddings
 
 
@@ -285,7 +282,6 @@ class Blip2EncoderLayer(nn.Layer):
                 returned tensors for more detail.
         """
         residual = hidden_states
-        # print('DEBUG!! vit input: ', np.abs(hidden_states.numpy()).mean())
 
         hidden_states = self.layer_norm1(hidden_states)
 
@@ -299,7 +295,6 @@ class Blip2EncoderLayer(nn.Layer):
         residual = hidden_states
         hidden_states = self.layer_norm2(hidden_states)
         hidden_states = self.mlp(hidden_states)
-        # print('DEBUG!! vit layer mlp: ', np.abs(hidden_states.numpy()).mean())
 
         hidden_states = hidden_states + residual
 
@@ -1285,8 +1280,6 @@ class Blip2QFormerModel(Blip2PretrainedModel):
         )
         sequence_output = encoder_outputs[0]
         pooled_output = sequence_output[:, 0, :]
-        # print('DEBUG!!!sequence_output', sequence_output.shape, np.abs(sequence_output.numpy()).mean())
-        # print('DEBUG!!!pooled_output', pooled_output.shape, np.abs(pooled_output.numpy()).mean())
 
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
@@ -1599,10 +1592,6 @@ class Blip2Model(Blip2PretrainedModel):
         attention_mask = paddle.concat(
             [language_model_attention_mask, attention_mask], axis=1
         )
-        # import numpy as np
-        # inputs_embeds  = paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/inputs_embeds.npy"))
-        # labels  = paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/targets.npy"))
-        # attention_mask =  paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/attention_mask.npy"))
         with paddle.amp.auto_cast(level='O2'):
             outputs = self.language_model(
                     inputs_embeds=inputs_embeds,
@@ -1624,7 +1613,6 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         self.visual_encoder, self.ln_vision = self.init_vision_encoder(
            "eva_clip_g",config.vision_config.image_size,config.vision_config.dropout
         )
-        # self.post_layernorm = nn.LayerNorm(config.vision_config.hidden_size, epsilon=config.vision_config.layer_norm_eps)
         self.freeze_vit = config.freeze_vit
         if self.freeze_vit:
             # freeze vit except the post layer norm layer.
@@ -1742,12 +1730,6 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         return_dict = (
             return_dict if return_dict is not None else self.config.use_return_dict
         )
-        # import numpy as np
-        # pixel_values=paddle.to_tensor(np.load("image.npy"))
-        # step 1: forward the images through the vision encoder,
-        # to get image embeddings of shape (batch_size, seq_len, hidden_size)
-        # with self.autocast_smart_context_manager():
-        # pixel_values=paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/image.npy"))
         with paddle.amp.auto_cast(level='O2'):
             image_embeds = self.ln_vision(self.visual_encoder(pixel_values))
         image_embeds = image_embeds.astype("float32")
@@ -1756,9 +1738,6 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
 
         query_tokens = self.query_tokens.expand([image_embeds.shape[0], -1, -1])
-        # print('DEBUG!! Blip2ForCond query_tokens: ', query_tokens.shape, np.abs(query_tokens.numpy()).mean())
-        # print('DEBUG!! Blip2ForCond image_embeds: ', image_embeds.shape, np.abs(image_embeds.numpy()).mean())
-        # print('DEBUG!! Blip2ForCond image_attention_mask: ', image_attention_mask.shape, np.abs(image_attention_mask.numpy()).mean())
         query_outputs = self.qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
@@ -1768,13 +1747,10 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         query_output = query_outputs[0]
 
         # step 3: use the language model, conditioned on the query outputs and the prompt
-        # print('DEBUG!!! Blip2ForCond query_output: ', query_output.shape, query_output)
         language_model_inputs = self.language_projection(query_output)
         language_model_attention_mask = paddle.ones(
             language_model_inputs.shape[:-1], dtype="int64"
         )
-        # input_ids=paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/input_ids.npy"))
-        # attention_mask=paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/attention_mask.npy"))
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
         inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
         if attention_mask is None:
@@ -1793,12 +1769,6 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         ).fill_(-100)
         labels = paddle.concat([empty_targets, targets], axis=1)
         labels.stop_gradient = True
-        # import numpy as np
-        # inputs_embeds  = paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/inputs_embeds.npy"))
-        # labels  = paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/targets.npy"))
-        # attention_mask =  paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/attention_mask.npy"))
-        # with self.autocast_smart_context_manager():
-        # print(input_ids.shape)
         with paddle.amp.auto_cast(level='O2'):
             outputs = self.language_model(
                     inputs_embeds=inputs_embeds,
@@ -1830,7 +1800,6 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         """
         batch_size = pixel_values.shape[0]
         image_embeds = self.ln_vision(self.visual_encoder(pixel_values))
-        # print('DEBUG!!! image_embeds: ', image_embeds.shape, ' ', np.abs(image_embeds.numpy()).mean(), image_embeds)
         image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
 
         query_tokens = self.query_tokens.expand([image_embeds.shape[0], -1, -1])
@@ -1857,10 +1826,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         )
         # concatenate query embeddings with prompt embeddings
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
-        # print('DEBUG!! input_ids: ', input_ids.shape,'', np.abs(input_ids.numpy()).mean(), input_ids)
-        # print('DEBUG!! inputs_embeds: ', inputs_embeds.shape,'', np.abs(inputs_embeds.numpy()).mean(), inputs_embeds)
         inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
-        # print('DEBUG!! inputs_embeds concat: ', inputs_embeds.shape,'', np.abs(inputs_embeds.numpy()).mean(), inputs_embeds)
 
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,

@@ -101,16 +101,22 @@ def is_dp_group_support_in_group_sharded_parallel():
     return "dp_group" in set(inspect.signature(paddle.distributed.sharding.group_sharded_parallel).parameters.keys())
 
 
-__all__ = ["BLIP2_Trainer"]
+__all__ = ["BLIP2Trainer"]
 
 
-class BLIP2_Trainer(Trainer):
+class BLIP2Trainer(Trainer):
     """
-    BLIP2_Trainer is a simple but feature-complete training and eval loop for PaddlePaddle, optimized for PaddleNLP.
+    BLIP2Trainer is a feature-complete training and eval loop for BLIP2.
+
+    Args:
+    processor: (`Blip2Processor`) low level data processors to convert input text to PaddleNLP Datasets.
+    eval_processor: (`Blip2Processor`) Unlike rocessor, eval_processor is used for model evaluation.
+    eval_collator: (`BlipCollator`) dynamically pad the inputs to the longest sequence in the batch.
 
     """
 
     from paddlenlp.trainer.trainer_utils import log_metrics, metrics_format, save_metrics, save_state
+
 
     def __init__(
         self,

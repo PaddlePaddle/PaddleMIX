@@ -22,8 +22,6 @@ from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlevlp.processors.blip_processing import Blip2Processor
 from paddlevlp.utils.log import logger
 
-from paddlevlp.examples.blip2.Logger import MetricLogger, SmoothedValue
-
 @dataclass
 class DataArguments:
     """

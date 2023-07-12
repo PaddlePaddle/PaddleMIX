@@ -27,7 +27,7 @@ from paddlevlp.models.blip2.configuration import (Blip2Config,
 from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlevlp.optimization import FilterParamsName
 from paddlevlp.processors.blip_processing import Blip2Processor
-from paddlevlp.trainer import BLIP2_Trainer as Trainer
+from paddlevlp.trainer import BLIP2Trainer as Trainer
 from paddlevlp.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
@@ -357,7 +357,7 @@ def main():
         optimizers=(optimizer, lr_sched),
         processor=processor,
         eval_processor=eval_processor,
-        tokenizer=AutoTokenizer.from_pretrained("facebook/opt-2.7b", use_fast=False)
+        tokenizer=tokenizer_class
     )
 
     # Training
