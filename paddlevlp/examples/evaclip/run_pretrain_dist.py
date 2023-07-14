@@ -1,30 +1,27 @@
 # coding:utf-8
 import sys
 import os
+parent_path = os.path.abspath(os.path.join(__file__, *(['..'] * 4)))
+sys.path.insert(0, parent_path)
 import numpy as np
 import time
 import pprint
 import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
-try:
-    from paddle.fluid.dygraph.parallel import sync_params_buffers
-except ImportError:
-    from paddle.distributed.parallel import sync_params_buffers
-
 from dataclasses import dataclass, field
 
 from paddlevlp.models.evaclip.eva_clip.model import EVACLIP
 from paddlevlp.models.evaclip.eva_clip.coca_model import CoCa
-from paddlevlp.models.evaclip.training.optim import create_optimizer
+from paddlevlp.models.evaclip.eva_clip.optim import create_optimizer
 from paddlevlp.models.evaclip.utils.checkpoint import save, load_model
 from paddlevlp.optimization import CosineDecayWithWarmup
 from paddlevlp.datasets import load_dataset
-from paddlevlp.utils.env import set_hyrbid_parallel_seed
+from paddlevlp.utils.env import setdistenv
+from paddlevlp.trainer import CLIPTrainer
 
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
-from paddlenlp.trainer import Trainer
 
 import socket
 import time
@@ -121,26 +118,7 @@ class PreTrainingArguments(TrainingArguments):
         default=1, metadata={"help": "accum frequency (default: 1)"})
 
 
-class SelfTrainer(Trainer):
-    def __init__(self, **kwargs):
-        """
-        自定义训练器，与Trainer的区别：
-        1、自定义优化器策略
-        2、支持accum_freq训练
-        
-        Args:
-            kwargs (dict): 包含任意传入的参数及对应的值
-        
-        Returns:
-            None
-        """
-        super().__init__(**kwargs)
-        if self.args.accum_freq > 1:
-            self.accum_features = {}
-            self.accum_images = []
-            self.accum_texts = []
-            self.step = 0
-
+class SelfTrainer(CLIPTrainer):
     def create_optimizer_and_scheduler(self, num_training_steps: int):
         """
         Setup the optimizer and the learning rate scheduler.
@@ -162,106 +140,6 @@ class SelfTrainer(Trainer):
                 last_epoch=self.args.last_epoch)
         self.optimizer = create_optimizer(self.args, self.model,
                                           self.lr_scheduler)
-
-    def training_step(self, model, inputs) -> paddle.Tensor:
-        """
-        Perform a training step on a batch of inputs.
-
-        Subclass and override to inject custom behavior.
-
-        Args:
-            model (`nn.Layer`):
-                The model to train.
-            inputs (`Dict[str, Union[paddle.Tensor, Any]]`):
-                The inputs and targets of the model.
-
-                The dictionary will be unpacked before being fed to the model. Most models expect the targets under the
-                argument `labels`. Check your model's documentation for all accepted arguments.
-
-        Return:
-            `paddle.Tensor`: The tensor with training loss on this batch.
-        """
-        if self.args.pipeline_parallel_degree > 1:
-            return self.training_pipeline_step(model, inputs)
-        elif self.args.accum_freq > 1:
-            return self.training_step_accumfreq(model, inputs)
-
-        model.train()
-        inputs = self._prepare_inputs(inputs)
-
-        with self.autocast_smart_context_manager():
-            loss = self.compute_loss(model, inputs)
-
-        if self.args.gradient_accumulation_steps > 1:
-            loss = loss / self.args.gradient_accumulation_steps
-
-        if self.do_grad_scaling:
-            self.scaler.scale(loss).backward()
-        else:
-            loss.backward()
-
-        return loss.detach()
-
-    def training_step_accumfreq(self, model, inputs) -> paddle.Tensor:
-        model.train()
-        inputs = self._prepare_inputs(inputs)
-        with paddle.no_grad():
-            preds = model(**inputs, skiploss=True)
-            image_features, text_features, logit_scale = preds[:3]
-        model_out = {
-            'image_features': image_features,
-            'text_features': text_features
-        }
-        for key, val in model_out.items():
-            if key in self.accum_features:
-                self.accum_features[key].append(val)
-            else:
-                self.accum_features[key] = [val]
-        self.accum_images.append(inputs['image'])
-        self.accum_texts.append(inputs['input_ids'])
-        self.step += 1
-
-        # If (cnt + 1) % accum_freq is not zero, move on to the next batch.
-        if (self.step % self.args.accum_freq) > 0:
-            # FIXME this makes data time logging unreliable when accumulating
-            return paddle.full([1], 0, dtype="float32")
-
-        if hasattr(model, '_layers'):
-            modelloss = model._layers.loss
-        else:
-            modelloss = model.loss
-        # Now, ready to take gradients for the last accum_freq batches.
-        # Re-do the forward pass for those batches, and use the cached features from the other batches as negatives.
-        # Call backwards each time, but only step optimizer at the end.
-        # optimizer.clear_grad()
-        for j in range(self.args.accum_freq):
-            preds = model(
-                self.accum_images[j], self.accum_texts[j], skiploss=True)
-            image_features, text_features, logit_scale = preds[:3]
-            model_out = {
-                'image_features': image_features,
-                'text_features': text_features
-            }
-            inputs = {}
-            for key, val in self.accum_features.items():
-                accumulated = self.accum_features[key]
-                inputs[key] = paddle.concat(
-                    accumulated[:j] + [model_out[key]] + accumulated[j + 1:])
-            loss, logits_per_image, logits_per_text, labels = modelloss(
-                (inputs['image_features'], inputs['text_features'],
-                 logit_scale))
-            del inputs
-
-            if self.do_grad_scaling:
-                self.scaler.scale(loss).backward()
-            else:
-                loss.backward()
-        self.accum_features.clear()
-        self.accum_images.clear()
-        self.accum_texts.clear()
-        self.step = 0
-
-        return loss.detach()
 
 
 class Collator:
@@ -326,42 +204,6 @@ def main_worker(training_args, model_args, data_args):
         trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()
         trainer.save_state()
-
-
-def setdistenv(args):
-    args.dp_degree = dist.get_world_size() // (args.tensor_parallel_degree *
-                                               args.sharding_parallel_degree *
-                                               args.pipeline_parallel_degree)
-    strategy = fleet.DistributedStrategy()
-    strategy.hybrid_configs = {
-        "dp_degree": args.dp_degree,
-        "mp_degree": args.tensor_parallel_degree,
-        "sharding_degree": args.sharding_parallel_degree,
-        "pp_degree": args.pipeline_parallel_degree,
-    }
-    strategy.find_unused_parameters = True
-
-    # set control in tensor parallel
-    strategy.tensor_parallel_configs = {"tensor_init_seed": args.seed}
-
-    fleet.init(is_collective=True, strategy=strategy)
-
-    # if paddle.distributed.get_world_size() > 1:
-    #     paddle.distributed.init_parallel_env()
-
-    args.rank = dist.get_rank()
-    # obtain rank message of hybrid parallel
-    hcg = fleet.get_hybrid_communicate_group()
-    args.mp_rank = hcg.get_model_parallel_rank()
-    args.dp_rank = hcg.get_data_parallel_rank()
-    args.sharding_rank = hcg.get_sharding_parallel_rank()
-
-    args.data_world_rank = args.dp_rank * args.sharding_parallel_degree + args.sharding_rank
-    args.data_world_size = dist.get_world_size() // abs(
-        args.tensor_parallel_degree * args.pipeline_parallel_degree)
-
-    # seed control in hybrid parallel
-    set_hyrbid_parallel_seed(args.seed, args.data_world_rank, args.mp_rank)
 
 
 if __name__ == "__main__":

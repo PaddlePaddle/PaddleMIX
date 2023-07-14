@@ -23,6 +23,8 @@ import paddle
 import numpy as np
 import random
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+import paddle.distributed as dist
+from paddle.distributed import fleet
 
 
 def _get_user_home():
@@ -100,3 +102,39 @@ def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
     tracker = get_rng_state_tracker()
     tracker.add("global_seed", global_seed)
     tracker.add("local_seed", local_seed)
+
+
+def setdistenv(args):
+    args.dp_degree = dist.get_world_size() // (args.tensor_parallel_degree *
+                                               args.sharding_parallel_degree *
+                                               args.pipeline_parallel_degree)
+    strategy = fleet.DistributedStrategy()
+    strategy.hybrid_configs = {
+        "dp_degree": args.dp_degree,
+        "mp_degree": args.tensor_parallel_degree,
+        "sharding_degree": args.sharding_parallel_degree,
+        "pp_degree": args.pipeline_parallel_degree,
+    }
+    strategy.find_unused_parameters = True
+
+    # set control in tensor parallel
+    strategy.tensor_parallel_configs = {"tensor_init_seed": args.seed}
+
+    fleet.init(is_collective=True, strategy=strategy)
+
+    # if paddle.distributed.get_world_size() > 1:
+    #     paddle.distributed.init_parallel_env()
+
+    args.rank = dist.get_rank()
+    # obtain rank message of hybrid parallel
+    hcg = fleet.get_hybrid_communicate_group()
+    args.mp_rank = hcg.get_model_parallel_rank()
+    args.dp_rank = hcg.get_data_parallel_rank()
+    args.sharding_rank = hcg.get_sharding_parallel_rank()
+
+    args.data_world_rank = args.dp_rank * args.sharding_parallel_degree + args.sharding_rank
+    args.data_world_size = dist.get_world_size() // abs(
+        args.tensor_parallel_degree * args.pipeline_parallel_degree)
+
+    # seed control in hybrid parallel
+    set_hyrbid_parallel_seed(args.seed, args.data_world_rank, args.mp_rank)

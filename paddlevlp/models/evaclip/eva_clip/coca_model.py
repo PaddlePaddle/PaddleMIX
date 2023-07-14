@@ -18,6 +18,7 @@ from .eva_vit_model import EVAVisionTransformerConfig, EVAVisionTransformer
 from .transformer import (LayerNormFp32, LayerNorm, QuickGELU,
                           MultimodalTransformerConfig, MultimodalTransformer,
                           EVATextTransformerConfig, EVATextTransformer)
+from paddlenlp.utils.log import logger
 
 
 class CoCaConfig(PretrainedConfig):

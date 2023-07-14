@@ -13,7 +13,6 @@ try:
     from .hf_model import HFTextEncoder
 except:
     HFTextEncoder = None
-from .modified_resnet import ModifiedResNet
 from .timm_model import TimmModel
 from .eva_vit_model import EVAVisionTransformer
 from .transformer import LayerNorm, QuickGELU, Attention, VisionTransformer, EVATextTransformer
@@ -22,6 +21,7 @@ from .fusedln import FusedLayerNorm
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel
+from paddlenlp.utils.log import logger
 from .eva_vit_model import EVAVisionTransformerConfig
 from .transformer import EVATextTransformerConfig
 

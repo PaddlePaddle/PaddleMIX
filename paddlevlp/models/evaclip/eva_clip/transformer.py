@@ -30,6 +30,7 @@ import sys
 from functools import reduce
 import numpy as np
 import paddle
+from paddlenlp.utils.log import logger
 
 
 def _convert_attention_mask(attn_mask, dtype):

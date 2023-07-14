@@ -325,17 +325,16 @@ to_4tuple = _ntuple(4)
 to_ntuple = lambda n, x: _ntuple(n)(x)
 
 
-def is_logging(args):
-    def is_global_master(args):
-        return args.rank == 0
+def is_global_master(args):
+    return args.rank == 0
 
-    def is_local_master(args):
-        return args.local_rank == 0
 
-    def is_master(args, local=False):
-        return is_local_master(args) if local else is_global_master(args)
+def is_local_master(args):
+    return args.local_rank == 0
 
-    return is_master
+
+def is_master(args, local=False):
+    return is_local_master(args) if local else is_global_master(args)
 
 
 class AllGather(paddle.autograd.PyLayer):

@@ -2,7 +2,7 @@ import paddle
 import json
 import logging
 import re
-from .distributed import is_master
+from .utils import is_master
 
 
 def get_num_layer_for_transformer(param_name, num_max_layer):

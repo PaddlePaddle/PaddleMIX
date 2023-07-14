@@ -14,6 +14,7 @@ from paddle.incubate.nn.memory_efficient_attention import memory_efficient_atten
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel
+from paddlenlp.utils.log import logger
 
 
 class DropPath(paddle.nn.Layer):
