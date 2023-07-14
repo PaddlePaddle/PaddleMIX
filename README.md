@@ -71,6 +71,39 @@ pip install -e .
         <b>视觉语言模型（paddlevlp）</b>
       </td>
       <td>
+        <b>扩散类模型（ppdiffuser）</b>
+      </td>
+    </tr>
+    <tr valign="top">
+      <td>
+        <ul>
+        </ul>
+          <li><b>图文预训练</b></li>
+        <ul>
+            <li><a href="paddlevlp/examples/evaclip">EVA-CLIP</a></li>
+            <li><a href="paddlevlp/examples/blip2">BLIP-2</a></li>
+            <li><a href="paddlevlp/examples/minigpt4">miniGPT-4</a></li>
+            <li><a href="paddlevlp/examples/visualglm">VIsualGLM</a></li>
+      </ul>
+      </ul>
+          <li><b>开放世界视觉模型</b></li>
+        <ul>
+            <li><a href="paddlevlp/examples/groundingdino">Grounding DINO</a></li>
+            <li><a href="paddlevlp/examples/Sam">SAM</a></li>
+      </ul>
+      </td>
+      <td>
+        <ul>
+        </ul>
+          <li><b>文生图</b></li>
+        <ul>
+           <li><a href="ppdiffusers/examples">Stable Diffusion</a></li>
+            <li><a href="ppdiffusers/examples">ControlNet</a></li>
+        </ul>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 ## 许可证书
 
