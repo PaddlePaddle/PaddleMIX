@@ -17,7 +17,7 @@ PaddleMIX是基于飞桨的跨模态大模型开发套件，聚合图像、文�
 ## 最新进展
 
 **2023.7.31 发布 PaddleMIX v0.1**
-* 首次发布PaddleMIX跨模态大模型开发套件，融合PPdiffuser多模态扩散模型工具箱能力，广泛支持PaddleNLP大语言模型
+* 首次发布PaddleMIX跨模态大模型开发套件，融合PPdiffusers多模态扩散模型工具箱能力，广泛支持PaddleNLP大语言模型
 * 新增EVA-CLIP，BLIP-2，miniGPT-4，Stable Diffusion，ControlNet等xx个跨模态大模型
 
 ## 主要特性
@@ -71,7 +71,7 @@ pip install -e .
         <b>视觉语言模型（paddlevlp）</b>
       </td>
       <td>
-        <b>扩散类模型（ppdiffuser）</b>
+        <b>扩散类模型（ppdiffusers）</b>
       </td>
     </tr>
     <tr valign="top">
