@@ -566,7 +566,8 @@ class DiffusionPipeline(ConfigMixin):
             # TODO junnyu, before register model, we may need to keep some module in fp32
             if (isinstance(module, nn.Layer) and
                     hasattr(module, "_keep_in_fp32_modules") and
-                    module.dtype == paddle.float16):
+                    module.dtype == paddle.float16 and
+                    module._keep_in_fp32_modules is not None):
                 for module_name, sub_module in module.named_sublayers(
                         include_self=True):
                     if any(n in module_name
@@ -784,7 +785,8 @@ class DiffusionPipeline(ConfigMixin):
             # TODO junnyu, before register model, we may need to keep some module in fp32
             if (isinstance(module, nn.Layer) and
                     hasattr(module, "_keep_in_fp32_modules") and
-                    module.dtype == paddle.float16):
+                    module.dtype == paddle.float16 and
+                    module._keep_in_fp32_modules is not None):
                 for module_name, sub_module in module.named_sublayers(
                         include_self=True):
                     if any(n in module_name
