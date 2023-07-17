@@ -565,17 +565,35 @@ class BertEncoder(nn.Layer):
             layer_head_mask = head_mask[i] if head_mask is not None else None
             past_key_value = past_key_values[i] if past_key_values is not None else None
 
-            layer_outputs = layer_module(
-                hidden_states,
-                attention_mask,
-                layer_head_mask,
-                encoder_hidden_states,
-                encoder_attention_mask,
-                past_key_value,
-                output_attentions,
-                query_length,
-            )
+            # layer_outputs = layer_module(
+            #     hidden_states,
+            #     attention_mask,
+            #     layer_head_mask,
+            #     encoder_hidden_states,
+            #     encoder_attention_mask,
+            #     past_key_value,
+            #     output_attentions,
+            #     query_length,
+            # )
+            def create_custom_forward(module):
+                def custom_forward(*inputs):
+                    return module(
+                        *inputs,
+                    )
 
+                return custom_forward
+            from paddle.distributed.fleet.utils import recompute
+            layer_outputs = recompute(
+                create_custom_forward(layer_module),
+                *(hidden_states, attention_mask,
+                    layer_head_mask,
+                    encoder_hidden_states,
+                    encoder_attention_mask,
+                    past_key_value,
+                    output_attentions,
+                    query_length),
+                **{"preserve_rng_state": True,"use_reentrant":False}
+                )
             hidden_states = layer_outputs[0]
             if use_cache:
                 next_decoder_cache += (layer_outputs[-1],)

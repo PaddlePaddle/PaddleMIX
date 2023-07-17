@@ -1622,7 +1622,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             self.visual_encoder.eval()
             logger.info("freeze vision encoder")
         # self.qformer = Blip2QFormerModel(config.qformer_config)
-        self.qformer, self.query_tokens = self.init_Qformer(
+        self.Qformer, self.query_tokens = self.init_Qformer(
             config.num_query_tokens, config.vision_config.hidden_size
         )
         self.language_projection = nn.Linear(
@@ -1730,6 +1730,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         return_dict = (
             return_dict if return_dict is not None else self.config.use_return_dict
         )
+        # import numpy as np
+        # pixel_values = paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/image.npy")).astype("float32")
         with paddle.amp.auto_cast(level='O2'):
             image_embeds = self.ln_vision(self.visual_encoder(pixel_values))
         image_embeds = image_embeds.astype("float32")
@@ -1738,7 +1740,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
 
         query_tokens = self.query_tokens.expand([image_embeds.shape[0], -1, -1])
-        query_outputs = self.qformer.bert(
+        query_outputs = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
             encoder_attention_mask=image_attention_mask,
@@ -1769,6 +1771,9 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         ).fill_(-100)
         labels = paddle.concat([empty_targets, targets], axis=1)
         labels.stop_gradient = True
+        # inputs_embeds=paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/inputs_embeds.npy")).cuda()
+        # attention_mask=paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/attention_mask.npy")).cuda()
+        # labels=paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/targets.npy")).cuda()
         with paddle.amp.auto_cast(level='O2'):
             outputs = self.language_model(
                     inputs_embeds=inputs_embeds,
@@ -1776,6 +1781,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                     return_dict=True,
                     labels=labels,)
             loss = outputs.loss
+        print(loss)
         return {"loss": loss}
 
     @paddle.no_grad()
@@ -1803,7 +1809,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
 
         query_tokens = self.query_tokens.expand([image_embeds.shape[0], -1, -1])
-        query_outputs = self.qformer.bert(
+        query_outputs = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
             encoder_attention_mask=image_attention_mask,

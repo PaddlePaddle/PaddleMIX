@@ -11,6 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import sys
+sys.path.insert(0,"/paddle/workspace/wjm/origin/PaddleMIX")
 import os
 from dataclasses import dataclass, field
 
@@ -27,7 +30,7 @@ from paddlevlp.models.blip2.configuration import (Blip2Config,
 from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlevlp.optimization import FilterParamsName
 from paddlevlp.processors.blip_processing import Blip2Processor
-from paddlevlp.trainer import BLIP2Trainer as Trainer
+from paddlevlp.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlevlp.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
@@ -150,11 +153,11 @@ class PreTrainingArguments(TrainingArguments):
     output_dir : str = field(
         default=".", metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
     )
-    do_eval : bool = field(default=True, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
+    do_eval : bool = field(default=False, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
     do_train : bool = field(default=True, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
 
-    logging_steps : int = field(default=1, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
-    evaluation_strategy : str = field(default="steps", metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
+    logging_steps : int = field(default=50, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
+    evaluation_strategy : str = field(default="no", metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
 
     fp16_opt_level : str = field(default="O1", metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
     fp16 : bool = field(default=True, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
@@ -163,12 +166,12 @@ class PreTrainingArguments(TrainingArguments):
 def create_scheduler(dataset_len, config):
     lr_sched_func = getattr(paddlevlp.optimization, config.lr_scheduler_name)
     lr_sched = lr_sched_func(
-        learning_rate=config.learning_rate,
-        epochs=config.num_train_epochs,
-        eta_min=config.eta_min,
-        warmup_steps=config.warmup_steps,
-        warmup_start_lr=config.warmup_start_lr,
-        step_each_epoch=dataset_len,
+        learning_rate=0.0001,
+        epochs=10,
+        warmup_start_lr=1e-06,
+        eta_min=1e-05,
+        warmup_steps=2000,
+        step_each_epoch=dataset_len//128//4,
     )
     return lr_sched
 
@@ -333,14 +336,21 @@ def main():
     blip_collator = BlipCollator(processor)
     blip_eval_collator = BlipCollator(eval_processor)
     model = create_model(model_args)
-    load_pretrained_model(model, training_args.pretrained_model_path)
-
-
     # load model for debug
     # weight= paddle.load("model_state.pdparams",return_numpy=True)#blip2_opt2.7b
     # model.set_state_dict(weight)
-    # weight = paddle.load('output.pdparams',return_numpy=True)
+
+
+    # weight = paddle.load('/paddle/workspace/wjm/origin/PaddleMIX/blip2_pretrained_mix.pdparams')
+    # for key,value in weight.items():
+    #     if "opt_model" in key:
+    #         model.state_dict()["language_model."+key[10:]].set_value(value)
+    # model.state_dict()['language_projection.weight'].set_value(weight['opt_proj.weight'])
+    # model.state_dict()['language_projection.bias'].set_value(weight['opt_proj.bias'])
     # model.set_state_dict(weight)
+    weight = paddle.load('/paddle/workspace/wjm/origin/PaddleMIX/blip2_stage2_pretrained_717.pdparams')
+    model.set_state_dict(weight)
+    interpolate_pos_embed(model, weight)
 
     # create optimizer
     optimizer, lr_sched = create_optimizer_and_scheduler(

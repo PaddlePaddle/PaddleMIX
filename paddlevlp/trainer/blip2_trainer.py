@@ -188,7 +188,7 @@ class BLIP2Trainer(Trainer):
         if training and self.do_grad_scaling:  # self.args.fp16_opt_level=="O2":
             # model, self.optimizer
             decorated = paddle.amp.decorate(
-                models=[model.visual_encoder,model.language_model], optimizers=self.optimizer, level=self.args.fp16_opt_level
+                models=[model.visual_encoder,model.language_model], optimizers=self.optimizer, level="O2"
             )
             model.visual_encoder,model.language_model= decorated[0]
             self.optimizer = decorated[1]
