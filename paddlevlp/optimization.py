@@ -94,7 +94,6 @@ class FilterParamsName(object):
             if p.stop_gradient:
                 continue  # frozen weights
             if p.ndim < 2 or "bias" in n or "ln" in n or "bn" in n:
-                # print(n)
                 p_non_wd.append(p)
                 self.p_non_wd_name.append(n)
             else:
@@ -103,5 +102,5 @@ class FilterParamsName(object):
         logger.info("number of trainable parameters: %d" % num_parameters)
         return p_wd, p_non_wd
 
-    def apply_decay_param_fun(self, name):
+    def _apply_decay_param_fun(self, name):
         return name not in self.p_non_wd_name

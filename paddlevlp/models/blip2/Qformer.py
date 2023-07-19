@@ -12,6 +12,7 @@ Authors:
 Date:   2023/3/08 17:00:00
 """
 
+from altair import value
 import sklearn
 import math
 from dataclasses import dataclass
@@ -23,6 +24,8 @@ import paddle
 from paddle import Tensor, device, dtype, nn
 from paddle.nn import CrossEntropyLoss
 import paddle.nn.functional as F
+from paddle.distributed import fleet
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.model_outputs import (
@@ -34,7 +37,10 @@ from paddlenlp.transformers.model_outputs import (
 
 from paddlenlp.transformers.model_utils import  PretrainedModel
 from paddlenlp.transformers.bert.configuration import BertConfig
-
+import numpy as np
+import paddle
+from paddle.distributed.fleet.utils import recompute
+import random
 class CrossEntropyLoss(nn.Layer):
     """
     Softmax Cross entropy loss
@@ -147,14 +153,34 @@ class BertSelfAttention(nn.Layer):
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
-
-        self.query = nn.Linear(config.hidden_size, self.all_head_size)
-        if is_cross_attention:
-            self.key = nn.Linear(config.encoder_width, self.all_head_size)
-            self.value = nn.Linear(config.encoder_width, self.all_head_size)
+        if config.mp_degree>1:
+            self.query = fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,               weight_attr=None,
+                has_bias=False,
+                gather_output=True)
         else:
-            self.key = nn.Linear(config.hidden_size, self.all_head_size)
-            self.value = nn.Linear(config.hidden_size, self.all_head_size)
+            self.query = nn.Linear(config.hidden_size, self.all_head_size)
+        if is_cross_attention:
+            if config.mp_degree>1:
+                self.key=fleet.meta_parallel.ColumnParallelLinear(config.encoder_width, self.all_head_size,weight_attr=None,
+                    has_bias=False,
+                    gather_output=True)
+                self.value=fleet.meta_parallel.ColumnParallelLinear(config.encoder_width, self.all_head_size,weight_attr=None,
+                    has_bias=False,
+                    gather_output=True)
+            else:
+                self.key = nn.Linear(config.encoder_width, self.all_head_size)
+                self.value = nn.Linear(config.encoder_width, self.all_head_size)
+        else:
+            if config.mp_degree>1:
+                self.key = nn.Linear(config.hidden_size, self.all_head_size)
+                self.value = nn.Linear(config.hidden_size, self.all_head_size)
+            else:
+                self.key=fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,weight_attr=None,
+                    has_bias=False,
+                    gather_output=True)
+                self.value=fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,weight_attr=None,
+                    has_bias=False,
+                    gather_output=True)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = getattr(
@@ -287,7 +313,8 @@ class BertSelfAttention(nn.Layer):
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
-        attention_probs_dropped = self.dropout(attention_probs)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            attention_probs_dropped = self.dropout(attention_probs)
 
         # Mask heads if we want to
         if head_mask is not None:
@@ -316,7 +343,8 @@ class BertSelfOutput(nn.Layer):
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
@@ -378,7 +406,8 @@ class BertOutput(nn.Layer):
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
@@ -409,7 +438,7 @@ class BertLayer(nn.Layer):
 
     def forward(
         self,
-        hidden_states,
+        hidden_states=None,
         attention_mask=None,
         head_mask=None,
         encoder_hidden_states=None,
@@ -417,6 +446,7 @@ class BertLayer(nn.Layer):
         past_key_value=None,
         output_attentions=False,
         query_length=0,
+        **kwargs
     ):
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
         self_attn_past_key_value = (
@@ -556,8 +586,9 @@ class BertEncoder(nn.Layer):
         )
 
         next_decoder_cache = () if use_cache else None
-
-        for i in range(self.config.num_hidden_layers):
+        # cuda_state = paddle.get_cuda_rng_state()
+        # paddle.set_cuda_rng_state(cuda_state)
+        for i in range(self.config.num_hidden_layers):#add recompute
             layer_module = self.layer[i]
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
@@ -565,35 +596,38 @@ class BertEncoder(nn.Layer):
             layer_head_mask = head_mask[i] if head_mask is not None else None
             past_key_value = past_key_values[i] if past_key_values is not None else None
 
-            # layer_outputs = layer_module(
-            #     hidden_states,
-            #     attention_mask,
-            #     layer_head_mask,
-            #     encoder_hidden_states,
-            #     encoder_attention_mask,
-            #     past_key_value,
-            #     output_attentions,
-            #     query_length,
-            # )
-            def create_custom_forward(module):
-                def custom_forward(*inputs):
-                    return module(
-                        *inputs,
-                    )
+            # def create_custom_forward(module):
+            #     def custom_forward(*inputs):
+            #         return module(
+            #             *inputs,
+            #         )
 
-                return custom_forward
-            from paddle.distributed.fleet.utils import recompute
-            layer_outputs = recompute(
-                create_custom_forward(layer_module),
-                *(hidden_states, attention_mask,
-                    layer_head_mask,
-                    encoder_hidden_states,
-                    encoder_attention_mask,
-                    past_key_value,
-                    output_attentions,
-                    query_length),
-                **{"preserve_rng_state": True,"use_reentrant":False}
-                )
+            #     return custom_forward
+            # layer_outputs = recompute(
+            #     create_custom_forward(layer_module),
+            #     *(hidden_states, attention_mask,
+            #         layer_head_mask,
+            #         encoder_hidden_states,
+            #         encoder_attention_mask,
+            #         past_key_value,
+            #         output_attentions,
+            #         query_length),
+            #     **{"preserve_rng_state": True,"use_reentrant":False}
+            #     )
+
+
+            layer_outputs = layer_module(
+                hidden_states,
+                attention_mask,
+                layer_head_mask,
+                encoder_hidden_states,
+                encoder_attention_mask,
+                past_key_value,
+                output_attentions,
+                query_length,
+            )
+
+
             hidden_states = layer_outputs[0]
             if use_cache:
                 next_decoder_cache += (layer_outputs[-1],)
@@ -641,8 +675,6 @@ class BertPooler(nn.Layer):
         self.activation = nn.Tanh()
 
     def forward(self, hidden_states):
-        # We "pool" the model by simply taking the hidden state corresponding
-        # to the first token.
         first_token_tensor = hidden_states[:, 0]
         pooled_output = self.dense(first_token_tensor)
         pooled_output = self.activation(pooled_output)
@@ -653,6 +685,9 @@ class BertPredictionHeadTransform(nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        # self.dense = fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, config.hidden_size,weight_attr=None,
+        #         has_bias=False,
+        #         gather_output=True)
         if isinstance(config.hidden_act, str):
             self.transform_act_fn = ACT2FN[config.hidden_act]
         else:

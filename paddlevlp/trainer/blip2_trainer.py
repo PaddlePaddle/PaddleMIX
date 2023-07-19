@@ -11,26 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import paddlevlp
 from paddlenlp.trainer.trainer import Trainer
+from paddlevlp.optimization import FilterParamsName
 from paddlevlp.examples.blip2.utils import coco_caption_eval
-# Copyright 2020-present the HuggingFace Inc. team.
-# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
-# This file is modified from
-#  https://github.com/huggingface/transformers/blob/main/src/transformers/trainer.py
 
 import contextlib
 import inspect
@@ -130,6 +115,29 @@ class BLIP2Trainer(Trainer):
         self.eval_processor=eval_processor
         self.eval_collator=eval_collator
 
+    def create_optimizer_and_scheduler(self, num_training_steps: int):
+        self.lr_scheduler=self.create_scheduler(num_training_steps=num_training_steps)
+        param_filter = FilterParamsName()
+        p_wd, p_non_wd = param_filter(self.model)
+        self.optimizer = paddle.optimizer.AdamW(
+            parameters=p_wd + p_non_wd,
+            learning_rate=self.lr_scheduler,
+            weight_decay=float(self.args.weight_decay),
+            beta1=self.args.adam_beta1,
+            beta2=self.args.adam_beta2,
+            apply_decay_param_fun=param_filter._apply_decay_param_fun,
+    )
+    def create_scheduler(self,num_training_steps):
+        lr_sched_func = getattr(paddlevlp.optimization, self.args.lr_scheduler_name)
+        lr_sched = lr_sched_func(
+                        learning_rate=self.args.learning_rate,
+                        epochs=self.args.num_train_epochs,
+                        warmup_start_lr=self.args.warmup_start_lr,
+                        eta_min=self.args.eta_min,
+                        warmup_steps=self.args.warmup_steps,
+                        step_each_epoch=num_training_steps,
+        )
+        return lr_sched
     def get_eval_dataloader(self, eval_dataset: Optional[Dataset] = None) -> DataLoader:
         """
         Returns the evaluation [`~paddle.io.DataLoader`].
@@ -191,12 +199,25 @@ class BLIP2Trainer(Trainer):
                 models=[model.visual_encoder,model.language_model], optimizers=self.optimizer, level="O2"
             )
             model.visual_encoder,model.language_model= decorated[0]
-            self.optimizer = decorated[1]
+            self.optimizer.set_state_dict(decorated[1].state_dict())
 
         # Multi-gpu training
         if self.args.world_size > 1 and not self.args.use_hybrid_parallel:
             model = paddle.DataParallel(model)
-            # Distributed training (should be after fp16 initialization)
+            assert self.args.tensor_parallel_degree < 2,"tensor_parallel_degree = {}, pelease init optimizer.".format(self.args.tensor_parallel_degree)
+        in_pipeline_parallel_mode = self.args.pipeline_parallel_degree > 1
+        in_sharding_parallel_mode = self.sharding is not None
+        in_tensor_parallel_model = self.args.tensor_parallel_degree > 1
+        # breakpoint()
+        if not in_pipeline_parallel_mode and not in_sharding_parallel_mode and in_tensor_parallel_model:
+            if self.args.amp_master_grad:
+                mix_precision_utils.MixPrecisionLayer(model, dtype=self.amp_dtype)  # return value has no use
+
+            model = fleet.distributed_model(model)
+            assert self.optimizer is not None, "Tensor parallel mode need decorate optimizer, pelease init optimizer."
+            if self.args.amp_master_grad:
+                self.optimizer = mix_precision_utils.MixPrecisionOptimizer(self.optimizer)
+            self.optimizer = fleet.distributed_optimizer(self.optimizer)
         return model
 
     def autocast_smart_context_manager(self):
@@ -212,8 +233,6 @@ class BLIP2Trainer(Trainer):
             ctx_manager = contextlib.nullcontext() if sys.version_info >= (3, 7) else contextlib.suppress()
 
         return ctx_manager
-
-
 
     def evaluate(
         self,

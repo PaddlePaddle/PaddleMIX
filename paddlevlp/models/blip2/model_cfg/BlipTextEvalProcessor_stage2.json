@@ -1,0 +1,9 @@
+{
+    "do_caption":true,
+    "do_question":false,
+    "image_processor_type":"BlipTextProcessor",
+    "max_words":50,
+    "processor_class":"Blip2Processor",
+    "processor_type":"BlipTextProcessor",
+    "prompt":"a photo of"
+                                    }

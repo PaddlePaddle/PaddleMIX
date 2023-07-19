@@ -14,10 +14,14 @@
 
 import sys
 sys.path.insert(0,"/paddle/workspace/wjm/origin/PaddleMIX")
+import paddle.distributed as dist
+from paddle.distributed import fleet
 import os
 from dataclasses import dataclass, field
-
+import numpy as np
+import random
 import paddle
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from sklearn.utils import compute_sample_weight
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
@@ -28,16 +32,12 @@ from paddlevlp.models.blip2.configuration import (Blip2Config,
                                                   Blip2QFormerConfig,
                                                   Blip2VisionConfig)
 from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
-from paddlevlp.optimization import FilterParamsName
 from paddlevlp.processors.blip_processing import Blip2Processor
 from paddlevlp.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlevlp.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
 from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
-# os.environ["FLAGS_fast_eager_deletion_mode"]="1"
-# os.environ["export FLAGS_eager_delete_tensor_gb"]="0.0"
-# os.environ["FLAGS_fraction_of_gpu_memory_to_use"]="0"
 class BlipCollator:
     """
     Data collator that will dynamically pad the inputs to the longest sequence in the batch.
@@ -121,7 +121,7 @@ class PreTrainingArguments(TrainingArguments):
         default=0.05, metadata={"help": "Weight decay if we apply some."}
     )
     learning_rate: float = field(
-        default=1e-6, metadata={"help": "The initial learning rate."}
+        default=0.0001, metadata={"help": "The initial learning rate."}
     )
     num_train_epochs: float = field(
         default=10.0, metadata={"help": "Total number of training epochs to perform."}
@@ -130,7 +130,7 @@ class PreTrainingArguments(TrainingArguments):
         default=1e-6, metadata={"help": "Initial learning rate of warm up."}
     )
     eta_min: float = field(
-        default=1e-6, metadata={"help": "The minimum value of learning rate."}
+        default=1e-5, metadata={"help": "The minimum value of learning rate."}
     )
     warmup_steps: int = field(
         default=2000, metadata={"help": "Number of warmup steps."}
@@ -145,50 +145,19 @@ class PreTrainingArguments(TrainingArguments):
         default=1, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
     )
     warmup_start_lr : float = field(
-        default=1e-6, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
-    )
-    min_lr : float = field(
-        default=1e-5, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
+        default=1e-6, metadata={"help": " The initial learning rate of blip2."}
     )
     output_dir : str = field(
-        default=".", metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
+        default=".", metadata={"help": "The output path"}
     )
-    do_eval : bool = field(default=False, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
-    do_train : bool = field(default=True, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
+    do_eval : bool = field(default=False, metadata={"help": "Whether to evaluation."})
+    do_train : bool = field(default=True, metadata={"help": "Whether to train."})
 
-    logging_steps : int = field(default=50, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
-    evaluation_strategy : str = field(default="no", metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
+    logging_steps : int = field(default=50, metadata={"help": "Logging interval"})
+    evaluation_strategy : str = field(default="no", metadata={"help": "Evaluation strategy (epoch/steps/no)"})
 
-    fp16_opt_level : str = field(default="O1", metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
-    fp16 : bool = field(default=True, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"})
-
-
-def create_scheduler(dataset_len, config):
-    lr_sched_func = getattr(paddlevlp.optimization, config.lr_scheduler_name)
-    lr_sched = lr_sched_func(
-        learning_rate=0.0001,
-        epochs=10,
-        warmup_start_lr=1e-06,
-        eta_min=1e-05,
-        warmup_steps=2000,
-        step_each_epoch=dataset_len//128//4,
-    )
-    return lr_sched
-
-
-def create_optimizer_and_scheduler(model, dataset_len, config):
-    lr_sched = create_scheduler(dataset_len, config)
-    param_filter = FilterParamsName()
-    p_wd, p_non_wd = param_filter(model)
-    optimizer = paddle.optimizer.AdamW(
-        parameters=p_wd + p_non_wd,
-        learning_rate=lr_sched,
-        weight_decay=float(config.weight_decay),
-        beta1=config.adam_beta1,
-        beta2=config.adam_beta2,
-        apply_decay_param_fun=param_filter.apply_decay_param_fun,
-    )
-    return optimizer, lr_sched
+    fp16_opt_level : str = field(default="O1", metadata={"help": "Mixed Precision Type"})
+    fp16 : bool = field(default=True, metadata={"help": "Whether to use mixed Precision"})
 
 
 def get_text_config(text_model_name_or_path):
@@ -206,6 +175,11 @@ def create_model(config):
     vision_config = Blip2VisionConfig.from_pretrained(config.model_name_or_path)
     qformer_config = Blip2QFormerConfig.from_pretrained(config.model_name_or_path)
     text_config = get_text_config(config.text_model_name_or_path)
+    # add tensor_parallel_degree
+    vision_config.mp_degree=config.mp_degree
+    qformer_config.mp_degree=config.mp_degree
+    text_config.mp_degree=config.mp_degree
+
     blip2_config = Blip2Config.from_vision_qformer_text_configs(
         vision_config, qformer_config, text_config
     )
@@ -227,11 +201,6 @@ def load_pretrained_model(model, pretrained_model_path):
 
     state_dict = paddle.load(pretrained_model_path)
     interpolate_pos_embed(model, state_dict)
-    for key in model.state_dict().keys():
-        if key in state_dict.keys():
-            if state_dict[key].shape != model.state_dict()[key].shape:
-                del state_dict[key]
-
     model.set_state_dict(state_dict)
 
 
@@ -242,6 +211,11 @@ def main():
     training_args.print_config(model_args, "Model")
     training_args.print_config(data_args, "Data")
     training_args.prompt=data_args.prompt
+    setdistenv(training_args)
+
+
+    model_args.data_world_rank = training_args.data_world_rank
+    model_args.data_world_size = training_args.data_world_size
     paddle.set_device(training_args.device)
     # Log on each process the small summary:
     logger.warning(
@@ -257,11 +231,6 @@ def main():
         and not training_args.overwrite_output_dir
     ):
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
-        # if last_checkpoint is None and len(
-        #         os.listdir(training_args.output_dir)) > 1:
-        #     raise ValueError(
-        #         f"Output directory ({training_args.output_dir}) already exists and is not empty. "
-        #         "Use --overwrite_output_dir to overcome.")
         if last_checkpoint is not None and training_args.resume_from_checkpoint is None:
             logger.info(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
@@ -269,93 +238,22 @@ def main():
             )
 
     # create dataset
-
-    image_processor = BlipImageProcessor(image_mean=[0.48145466, 0.4578275, 0.40821073],
-                                         image_std=[0.26862954, 0.26130258, 0.27577711],
-                                         flip_prob=0.5,
-                                         do_resize=True,
-                                         scale=[0.5,1.0],
-                                         size= {"height": 224,"width": 224},
-                                         rescale_factor=0.00392156862745098,
-                                         do_flip=True,
-                                         do_normalize=True,
-                                         do_rand_resize_crop=True,
-                                         do_rescale=True,
-                                         do_convert_rgb=False,
-                                         do_collate=False,
-                                         interpolation= "bicubic",
-                                         processor_class= "Blip2Processor",
-                                         processor_type= "BlipImageProcessor",
-                                         image_processor_type= "BlipImageProcessor",
-                                        # resample=3
-                                         )
-
-    text_processor_class = BlipTextProcessor(do_caption=True,
-                                        do_question=False,
-                                        image_processor_type="BlipTextProcessor",
-                                        max_words=50,
-                                        processor_class="Blip2Processor",
-                                        processor_type="BlipTextProcessor",
-                                        prompt= "")
     tokenizer_class = AutoTokenizer.from_pretrained("facebook/opt-2.7b", use_fast=False)
+    image_processor = BlipImageProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipImageProcessor_stage2.json")
+    text_processor_class = BlipTextProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipTextProcessor_stage2.json")
     processor = Blip2Processor(image_processor,text_processor_class,tokenizer_class)
-
-    image_processor_eval = BlipImageProcessor(image_mean=[0.48145466, 0.4578275, 0.40821073],
-                                        image_std=[0.26862954, 0.26130258, 0.27577711],
-                                        flip_prob=0,
-                                        do_resize=True,
-                                        size= {"height": 224,"width": 224},
-                                        rescale_factor=0.00392156862745098,
-                                        do_flip=False,
-                                        do_normalize=True,
-                                        do_rand_resize_crop=False,
-                                        do_rescale=True,
-                                        do_convert_rgb=False,
-                                        do_collate=False,
-                                        interpolation= "bicubic",
-                                        processor_class= "Blip2Processor",
-                                        processor_type= "BlipImageProcessor",
-                                        image_processor_type= "BlipImageProcessor",
-                                    # resample=3
-                                    )
-
-    text_processor_class_eval = BlipTextProcessor(do_caption=True,
-                                        do_question=False,
-                                        image_processor_type="BlipTextProcessor",
-                                        max_words=50,
-                                        processor_class="Blip2Processor",
-                                        processor_type="BlipTextProcessor",
-                                        prompt="a photo of")
-
+    image_processor_eval = BlipImageProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipImageEvalProcessor_stage2.json")
+    text_processor_class_eval = BlipTextProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipTextEvalProcessor_stage2.json")
+    eval_processor = Blip2Processor(image_processor_eval,text_processor_class_eval,tokenizer_class)
 
     train_dataset = load_dataset(data_args.task_name, splits="train")
     eval_dataset = {"test":load_dataset(data_args.task_name, splits="test")}
-    dataset_len = len(train_dataset)
-    eval_processor = Blip2Processor(image_processor_eval,text_processor_class_eval,tokenizer_class)
     # create model
     blip_collator = BlipCollator(processor)
     blip_eval_collator = BlipCollator(eval_processor)
+    model_args.mp_degree=training_args.tensor_parallel_degree
     model = create_model(model_args)
-    # load model for debug
-    # weight= paddle.load("model_state.pdparams",return_numpy=True)#blip2_opt2.7b
-    # model.set_state_dict(weight)
 
-
-    # weight = paddle.load('/paddle/workspace/wjm/origin/PaddleMIX/blip2_pretrained_mix.pdparams')
-    # for key,value in weight.items():
-    #     if "opt_model" in key:
-    #         model.state_dict()["language_model."+key[10:]].set_value(value)
-    # model.state_dict()['language_projection.weight'].set_value(weight['opt_proj.weight'])
-    # model.state_dict()['language_projection.bias'].set_value(weight['opt_proj.bias'])
-    # model.set_state_dict(weight)
-    weight = paddle.load('/paddle/workspace/wjm/origin/PaddleMIX/blip2_stage2_pretrained_717.pdparams')
-    model.set_state_dict(weight)
-    interpolate_pos_embed(model, weight)
-
-    # create optimizer
-    optimizer, lr_sched = create_optimizer_and_scheduler(
-        model, dataset_len, training_args
-    )
     # create trainer
     trainer = Trainer(
         model=model,
@@ -364,29 +262,73 @@ def main():
         eval_dataset=eval_dataset,
         data_collator=blip_collator,
         eval_collator=blip_eval_collator,
-        optimizers=(optimizer, lr_sched),
         processor=processor,
         eval_processor=eval_processor,
         tokenizer=tokenizer_class
     )
-
     # Training
     checkpoint = None
     if training_args.resume_from_checkpoint is not None:
         checkpoint = training_args.resume_from_checkpoint
-    elif last_checkpoint is not None:
-        checkpoint = last_checkpoint
-    # TrainerControl(should_training_stop=False, should_epoch_stop=False, should_save=False, should_evaluate=False, should_log=False)
-
-    # if training_args.do_eval:
-
-
-
+        state_dict = paddle.load(checkpoint)
+        interpolate_pos_embed(model, state_dict)#wjm
+        model.set_state_dict(state_dict)
 
     if training_args.do_train:
         trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()
         trainer.save_state()
 
+
+def setdistenv(args):
+    args.dp_degree = dist.get_world_size() // (args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree)
+    strategy = fleet.DistributedStrategy()
+    strategy.tensor_parallel = True
+    print(args.dp_degree)
+    print(args.sharding_parallel_degree)
+    # breakpoint()
+    strategy.hybrid_configs = {
+        "dp_degree": args.dp_degree,
+        "mp_degree": 1,
+        "sharding_degree": 1,
+        "pp_degree": 1,
+    }
+    strategy.find_unused_parameters = True
+
+    # set control in tensor parallel
+    strategy.tensor_parallel_configs = {"tensor_init_seed": args.seed}
+
+    fleet.init(is_collective=True, strategy=strategy)
+
+    # if paddle.distributed.get_world_size() > 1:
+    #     paddle.distributed.init_parallel_env()
+
+    args.rank = dist.get_rank()
+    # obtain rank message of hybrid parallel
+    hcg = fleet.get_hybrid_communicate_group()
+    args.mp_rank = hcg.get_model_parallel_rank()
+    args.dp_rank = hcg.get_data_parallel_rank()
+    args.sharding_rank = hcg.get_sharding_parallel_rank()
+
+    args.data_world_rank = args.dp_rank * args.sharding_parallel_degree + args.sharding_rank
+    args.data_world_size = dist.get_world_size() // abs(args.tensor_parallel_degree * args.pipeline_parallel_degree)
+
+    # seed control in hybrid parallel
+    set_hyrbid_parallel_seed(args.seed, args.data_world_rank, args.mp_rank)
+
+def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
+    device_id = paddle.device.get_device()
+    assert 'gpu' in device_id
+
+    random.seed(basic_seed + data_world_rank)
+    np.random.seed(basic_seed + data_world_rank)
+    paddle.seed(basic_seed + data_world_rank)
+    #TODO add manual_seed
+    # local_seed/ global_seed is used to control dropout in ModelParallel
+    local_seed = 1024 + basic_seed + mp_rank * 100 + data_world_rank
+    global_seed = 2048 + basic_seed + data_world_rank
+    tracker = get_rng_state_tracker()
+    tracker.add("global_seed", global_seed)
+    tracker.add("local_seed", local_seed)
 if __name__ == "__main__":
     main()
