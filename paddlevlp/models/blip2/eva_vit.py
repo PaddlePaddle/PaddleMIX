@@ -347,6 +347,7 @@ class VisionTransformer(nn.Layer):
                  norm_layer='nn.LayerNorm',
                  epsilon=1e-5,
                  mp_degree=1,
+                 gradient_checkpointing=False,
                  **kwargs):
         super().__init__()
         self.class_num = class_num
@@ -373,6 +374,7 @@ class VisionTransformer(nn.Layer):
 
         self.add_parameter("cls_token", self.cls_token)
         self.pos_drop = nn.Dropout(p=drop_rate)
+        sel.gradient_checkpointing=gradient_checkpointing
 
         dpr = np.linspace(0, drop_path_rate, depth)
 
@@ -389,7 +391,8 @@ class VisionTransformer(nn.Layer):
                 norm_layer=norm_layer,
                 epsilon=epsilon,
                 window_size=self.window_size,
-                mp_degree=mp_degree) for i in range(depth)
+                mp_degree=mp_degree,
+                ) for i in range(depth)
 
         ])
 
@@ -423,7 +426,10 @@ class VisionTransformer(nn.Layer):
         rel_pos_bias = self.rel_pos_bias() if hasattr(self,
                                                       'rel_pos_bias') else None
         for blk in self.blocks:
-            x = blk(x, rel_pos_bias=rel_pos_bias)
+            if self.gradient_checkpointing and self.training:
+                x = recompute(blk,x, rel_pos_bias=rel_pos_bias)
+            else:
+                x = blk(x, rel_pos_bias=rel_pos_bias)
         #x = self.norm(x)
         return x
 
@@ -457,7 +463,7 @@ def interpolate_pos_embed(model, checkpoint_model):
             checkpoint_model['visual_encoder.pos_embed'] = new_pos_embed
 
 
-def create_eva_vit_g(img_size=224,drop_path_rate=0.4,mp_degree=1):
+def create_eva_vit_g(img_size=224,drop_path_rate=0.4,mp_degree=1,gradient_checkpointing):
     model = VisionTransformer(
         img_size=img_size,
         patch_size=14,
@@ -469,5 +475,6 @@ def create_eva_vit_g(img_size=224,drop_path_rate=0.4,mp_degree=1):
         drop_rate=drop_path_rate,
         epsilon=1e-6,
         mp_degree=mp_degree,
+        gradient_checkpointing=gradient_checkpointing
     )
     return model

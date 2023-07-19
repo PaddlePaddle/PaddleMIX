@@ -158,6 +158,7 @@ class PreTrainingArguments(TrainingArguments):
 
     fp16_opt_level : str = field(default="O1", metadata={"help": "Mixed Precision Type"})
     fp16 : bool = field(default=True, metadata={"help": "Whether to use mixed Precision"})
+    gradient_checkpointing : bool = field(default=False, metadata={"help": "Forward recompute for saving graphics memory"})
 
 
 def get_text_config(text_model_name_or_path):
@@ -179,7 +180,9 @@ def create_model(config):
     vision_config.mp_degree=config.mp_degree
     qformer_config.mp_degree=config.mp_degree
     text_config.mp_degree=config.mp_degree
-
+    vision_config.gradient_checkpointing=config.gradient_checkpointing
+    qformer_config.mp_degree=config.gradient_checkpointing
+    text_config.mp_degree=config.gradient_checkpointing
     blip2_config = Blip2Config.from_vision_qformer_text_configs(
         vision_config, qformer_config, text_config
     )

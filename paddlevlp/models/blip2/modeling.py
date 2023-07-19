@@ -1613,7 +1613,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         config.vision_config.image_size
         self.visual_encoder, self.ln_vision = self.init_vision_encoder(
            "eva_clip_g",config.vision_config.image_size,config.vision_config.dropout,
-           config.vision_config.mp_degree if hasattr(config.vision_config, "mp_degree") else 1
+           config.vision_config.mp_degree if hasattr(config.vision_config, "mp_degree") else 1,
+           gradient_checkpointing=config.vision_config.gradient_checkpointing
         )
         self.freeze_vit = config.freeze_vit
         if self.freeze_vit:
@@ -1626,7 +1627,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         # self.qformer = Blip2QFormerModel(config.qformer_config)
         self.Qformer, self.query_tokens = self.init_Qformer(
             config.num_query_tokens, config.vision_config.hidden_size,
-            mp_degree=config.qformer_config.mp_degree if hasattr(config.qformer_config, "mp_degree") else 1
+            mp_degree=config.qformer_config.mp_degree if hasattr(config.qformer_config, "mp_degree") else 1,
+            gradient_checkpointing=config.qformer_config.gradient_checkpointing
         )
         self.language_projection = nn.Linear(
             config.qformer_config.hidden_size, config.text_config.hidden_size
@@ -1647,7 +1649,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         self.pad_token_id = config.text_config.pad_token_id
     @classmethod
     def init_vision_encoder(
-        cls, model_name, img_size, drop_path_rate,mp_degree
+        cls, model_name, img_size, drop_path_rate,mp_degree,gradient_checkpointing=False
     ):
 
         visual_encoder = create_eva_vit_g(img_size, drop_path_rate,mp_degree)
@@ -1655,7 +1657,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         ln_vision = paddle.nn.LayerNorm(visual_encoder.num_features)
         return visual_encoder, ln_vision
     @classmethod
-    def init_Qformer(cls, num_query_token, vision_width, cross_attention_freq=2,mp_degree=1):
+    def init_Qformer(cls, num_query_token, vision_width, cross_attention_freq=2,mp_degree=1,gradient_checkpointing=False):
         encoder_config = BertConfig.from_pretrained("bert-base-uncased")
         encoder_config.encoder_width = vision_width
         # insert cross-attention layer every other block
@@ -1663,6 +1665,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         encoder_config.cross_attention_freq = cross_attention_freq
         encoder_config.query_length = num_query_token
         encoder_config.mp_degree=mp_degree
+        encoder_config.gradient_checkpointing=gradient_checkpointing
         # todo check dropout
         # encoder_config.attention_probs_dropout_prob = 0
         # encoder_config.hidden_dropout_prob = 0

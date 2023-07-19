@@ -564,7 +564,7 @@ class BertEncoder(nn.Layer):
         self.layer = nn.LayerList(
             [BertLayer(config, i) for i in range(config.num_hidden_layers)]
         )
-
+        self.gradient_checkpointing = config.gradient_checkpointing
     def forward(
         self,
         hidden_states,
@@ -596,36 +596,37 @@ class BertEncoder(nn.Layer):
             layer_head_mask = head_mask[i] if head_mask is not None else None
             past_key_value = past_key_values[i] if past_key_values is not None else None
 
-            # def create_custom_forward(module):
-            #     def custom_forward(*inputs):
-            #         return module(
-            #             *inputs,
-            #         )
+            if self.gradient_checkpointing and self.training:
+                def create_custom_forward(module):
+                    def custom_forward(*inputs):
+                        return module(
+                            *inputs,
+                        )
 
-            #     return custom_forward
-            # layer_outputs = recompute(
-            #     create_custom_forward(layer_module),
-            #     *(hidden_states, attention_mask,
-            #         layer_head_mask,
-            #         encoder_hidden_states,
-            #         encoder_attention_mask,
-            #         past_key_value,
-            #         output_attentions,
-            #         query_length),
-            #     **{"preserve_rng_state": True,"use_reentrant":False}
-            #     )
+                    return custom_forward
+                layer_outputs = recompute(
+                    create_custom_forward(layer_module),
+                    *(hidden_states, attention_mask,
+                        layer_head_mask,
+                        encoder_hidden_states,
+                        encoder_attention_mask,
+                        past_key_value,
+                        output_attentions,
+                        query_length),
+                    **{"preserve_rng_state": True,"use_reentrant":False}
+                    )
 
-
-            layer_outputs = layer_module(
-                hidden_states,
-                attention_mask,
-                layer_head_mask,
-                encoder_hidden_states,
-                encoder_attention_mask,
-                past_key_value,
-                output_attentions,
-                query_length,
-            )
+            else:
+                layer_outputs = layer_module(
+                    hidden_states,
+                    attention_mask,
+                    layer_head_mask,
+                    encoder_hidden_states,
+                    encoder_attention_mask,
+                    past_key_value,
+                    output_attentions,
+                    query_length,
+                )
 
 
             hidden_states = layer_outputs[0]
