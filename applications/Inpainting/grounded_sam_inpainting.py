@@ -89,7 +89,7 @@ class ModelArguments:
         metadata={"help": "Path to pretrained model or model identifier"},
     )
     sam_model_name_or_path: str = field(
-        default="Sam/SamVitH",
+        default="Sam/SamVitH-1024",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
     box_threshold: float = field(
