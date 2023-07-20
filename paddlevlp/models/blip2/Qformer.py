@@ -172,15 +172,15 @@ class BertSelfAttention(nn.Layer):
                 self.value = nn.Linear(config.encoder_width, self.all_head_size)
         else:
             if config.mp_degree>1:
-                self.key = nn.Linear(config.hidden_size, self.all_head_size)
-                self.value = nn.Linear(config.hidden_size, self.all_head_size)
-            else:
                 self.key=fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,weight_attr=None,
                     has_bias=False,
                     gather_output=True)
                 self.value=fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,weight_attr=None,
                     has_bias=False,
                     gather_output=True)
+            else:
+                self.key = nn.Linear(config.hidden_size, self.all_head_size)
+                self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = getattr(
@@ -313,8 +313,7 @@ class BertSelfAttention(nn.Layer):
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
-        with get_rng_state_tracker().rng_state("global_seed"):
-            attention_probs_dropped = self.dropout(attention_probs)
+        attention_probs_dropped = self.dropout(attention_probs)
 
         # Mask heads if we want to
         if head_mask is not None:
@@ -343,8 +342,7 @@ class BertSelfOutput(nn.Layer):
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        with get_rng_state_tracker().rng_state("global_seed"):
-            hidden_states = self.dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
@@ -406,8 +404,7 @@ class BertOutput(nn.Layer):
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        with get_rng_state_tracker().rng_state("global_seed"):
-            hidden_states = self.dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
@@ -588,6 +585,7 @@ class BertEncoder(nn.Layer):
         next_decoder_cache = () if use_cache else None
         # cuda_state = paddle.get_cuda_rng_state()
         # paddle.set_cuda_rng_state(cuda_state)
+        print("qformergradient_checkpointing:{}".format(self.gradient_checkpointing))
         for i in range(self.config.num_hidden_layers):#add recompute
             layer_module = self.layer[i]
             if output_hidden_states:

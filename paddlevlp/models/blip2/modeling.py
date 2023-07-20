@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """ Paddle BLIP2 model."""
-
+from paddlevlp.utils.log import logger
 import math
 from dataclasses import dataclass
 from typing import Any, Optional, Tuple, Union
@@ -416,7 +416,7 @@ class Blip2Encoder(nn.Layer):
 
         encoder_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
-
+        logger.info("gradient_checkpointing of qformer:{}".format(self.gradient_checkpointing))
         hidden_states = inputs_embeds
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
@@ -1614,7 +1614,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         self.visual_encoder, self.ln_vision = self.init_vision_encoder(
            "eva_clip_g",config.vision_config.image_size,config.vision_config.dropout,
            config.vision_config.mp_degree if hasattr(config.vision_config, "mp_degree") else 1,
-           gradient_checkpointing=config.vision_config.gradient_checkpointing
+           gradient_checkpointing=config.vision_config.gradient_checkpointing if hasattr(config.vision_config, "gradient_checkpointing") else False
         )
         self.freeze_vit = config.freeze_vit
         if self.freeze_vit:
@@ -1628,14 +1628,14 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         self.Qformer, self.query_tokens = self.init_Qformer(
             config.num_query_tokens, config.vision_config.hidden_size,
             mp_degree=config.qformer_config.mp_degree if hasattr(config.qformer_config, "mp_degree") else 1,
-            gradient_checkpointing=config.qformer_config.gradient_checkpointing
+            gradient_checkpointing=config.qformer_config.gradient_checkpointing if hasattr(config.qformer_config, "gradient_checkpointing") else False
         )
         self.language_projection = nn.Linear(
             config.qformer_config.hidden_size, config.text_config.hidden_size
         )
         if config.use_decoder_only_language_model:
             if isinstance(config.text_config, OPTConfig):
-                language_model = OPTForCausalLM.from_pretrained("facebook/opt-2.7b",low_cpu_mem_usage=True,load_state_as_np=True)
+                                language_model = OPTForCausalLM.from_pretrained("facebook/opt-2.7b",load_state_as_np=True)
             else:
                 raise NotImplementedError
         else:
@@ -1652,7 +1652,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         cls, model_name, img_size, drop_path_rate,mp_degree,gradient_checkpointing=False
     ):
 
-        visual_encoder = create_eva_vit_g(img_size, drop_path_rate,mp_degree)
+        visual_encoder = create_eva_vit_g(img_size, drop_path_rate,mp_degree,gradient_checkpointing)
 
         ln_vision = paddle.nn.LayerNorm(visual_encoder.num_features)
         return visual_encoder, ln_vision
@@ -1776,64 +1776,20 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         labels.stop_gradient = True
         with paddle.amp.auto_cast(level='O2'):
             outputs = self.language_model(
-                inputs_embeds=inputs_embeds,
-                attention_mask=attention_mask,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-                return_dict=return_dict,
-            )
-            logits = outputs.logits if return_dict else outputs
-            loss = None
-
-            # we compute the loss here since we need to take into account the sequence length of the query embeds
-            if labels is not None:
-                logits = logits[:, -labels.shape[1] :, :]
-                # Shift so that tokens < n predict n
-                shift_logits = logits[..., :-1, :]
-                shift_labels = labels[..., 1:]
-
-                # Flatten the tokens
-                loss_fct = CrossEntropyLoss(reduction="none")
-                shift_logits = shift_logits.reshape(
-                    [-1, self.config.text_config.vocab_size]
-                )
-                shift_labels = shift_labels.reshape([-1])
-                loss = (
-                    loss_fct(shift_logits, shift_labels).sum()
-                    / (shift_labels > 0).sum()
-                )
-            else:
-                outputs = self.language_model(
                     inputs_embeds=inputs_embeds,
                     attention_mask=attention_mask,
-                    decoder_input_ids=decoder_input_ids,
-                    decoder_attention_mask=decoder_attention_mask,
-                    output_attentions=output_attentions,
-                    output_hidden_states=output_hidden_states,
-                    return_dict=return_dict,
-                    labels=labels,
-                )
-                loss = outputs.loss if return_dict else outputs[0]
-                logits = outputs.logits if return_dict else outputs[1]
-            # print('DEBUG!!! Blip2ForCond loss: ', loss.shape, loss)
-            if not return_dict:
-                output = (logits, image_embeds, query_outputs, outputs)
-                return ((loss,) + output) if loss is not None else output
-
-            return Blip2ForConditionalGenerationModelOutput(
-                loss=loss,
-                logits=logits,
-                vision_outputs=image_embeds,
-                qformer_outputs=query_outputs,
-                language_model_outputs=outputs,
-            )
+                    return_dict=True,
+                    labels=labels,)
+            loss = outputs.loss
+        print(loss)
+        return {"loss": loss}
     @paddle.no_grad()
     def encode_image(
         self,
         pixel_values: paddle.Tensor,
         **kwargs,
     ):
-        image_embeds = self.ln_vision(self.visual_encoder(pixel_values.astype("float32")))
+        image_embeds = self.ln_vision(self.visual_encoder(pixel_values.astype("float16")))
         image_embeds = image_embeds.astype("float32")
 
         image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")

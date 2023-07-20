@@ -159,7 +159,9 @@ class PreTrainingArguments(TrainingArguments):
     fp16_opt_level : str = field(default="O1", metadata={"help": "Mixed Precision Type"})
     fp16 : bool = field(default=True, metadata={"help": "Whether to use mixed Precision"})
     gradient_checkpointing : bool = field(default=False, metadata={"help": "Forward recompute for saving graphics memory"})
-
+    tensor_parallel_degree : int = field(default=1, metadata={"help": "Set the number of tensor model parallel"})
+    sharding_parallel_degree : int = field(default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"})
+    pipeline_parallel_degree : int = field(default=1, metadata={"help": "Enable pipeline parallel"})
 
 def get_text_config(text_model_name_or_path):
     if "t5" in text_model_name_or_path:
@@ -181,8 +183,8 @@ def create_model(config):
     qformer_config.mp_degree=config.mp_degree
     text_config.mp_degree=config.mp_degree
     vision_config.gradient_checkpointing=config.gradient_checkpointing
-    qformer_config.mp_degree=config.gradient_checkpointing
-    text_config.mp_degree=config.gradient_checkpointing
+    qformer_config.gradient_checkpointing=config.gradient_checkpointing
+    text_config.gradient_checkpointing=config.gradient_checkpointing
     blip2_config = Blip2Config.from_vision_qformer_text_configs(
         vision_config, qformer_config, text_config
     )
@@ -210,6 +212,7 @@ def load_pretrained_model(model, pretrained_model_path):
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments, PreTrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
     # Log model and data config
     training_args.print_config(model_args, "Model")
     training_args.print_config(data_args, "Data")
@@ -255,8 +258,9 @@ def main():
     blip_collator = BlipCollator(processor)
     blip_eval_collator = BlipCollator(eval_processor)
     model_args.mp_degree=training_args.tensor_parallel_degree
+    model_args.gradient_checkpointing=training_args.gradient_checkpointing
     model = create_model(model_args)
-
+    logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     # create trainer
     trainer = Trainer(
         model=model,
@@ -284,18 +288,28 @@ def main():
 
 
 def setdistenv(args):
+    if args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree!=1:
+        args.use_hybrid_parallel=True
     args.dp_degree = dist.get_world_size() // (args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree)
     strategy = fleet.DistributedStrategy()
-    strategy.tensor_parallel = True
-    print(args.dp_degree)
-    print(args.sharding_parallel_degree)
+    if args.tensor_parallel_degree>1:
+        strategy.tensor_parallel = True
+    args.data_parallel_degree=args.dp_degree
+    logger.info("args.dp_degree:{}".format(args.dp_degree))
+    logger.info("args.sharding_parallel_degree):{}".format(args.sharding_parallel_degree))
     # breakpoint()
     strategy.hybrid_configs = {
         "dp_degree": args.dp_degree,
-        "mp_degree": 1,
-        "sharding_degree": 1,
-        "pp_degree": 1,
+        "mp_degree": args.tensor_parallel_degree,
+        "sharding_degree": args.sharding_parallel_degree,
+        "pp_degree": args.pipeline_parallel_degree,
     }
+    BATCH_SIZE=128
+    MICRO_BATCH_SIZE=32
+    strategy.pipeline_configs = {
+        "accumulate_steps": BATCH_SIZE // MICRO_BATCH_SIZE,
+        "micro_batch_size": MICRO_BATCH_SIZE
+}
     strategy.find_unused_parameters = True
 
     # set control in tensor parallel

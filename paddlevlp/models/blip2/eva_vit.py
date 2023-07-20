@@ -14,7 +14,7 @@
 
 # Code was based on https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 # reference: https://arxiv.org/abs/2010.11929
-
+from paddlevlp.utils.log import logger
 from collections.abc import Callable, Iterable
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
@@ -89,11 +89,9 @@ class Mlp(nn.Layer):
     def forward(self, x):
         x = self.fc1(x)
         x = self.act(x)
-        with get_rng_state_tracker().rng_state("global_seed"):
-            x = self.drop(x)
+        x = self.drop(x)
         x = self.fc2(x)
-        with get_rng_state_tracker().rng_state("global_seed"):
-            x = self.drop(x)
+        x = self.drop(x)
         return x
 
 
@@ -180,13 +178,11 @@ class Attention(nn.Layer):
             attn = attn + relative_position_bias.unsqueeze(0)
 
         attn = nn.functional.softmax(attn, axis=-1)
-        with get_rng_state_tracker().rng_state("global_seed"):
-            attn = self.attn_drop(attn)
+        attn = self.attn_drop(attn)
 
         x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
         x = self.proj(x)
-        with get_rng_state_tracker().rng_state("global_seed"):
-            x = self.proj_drop(x)
+        x = self.proj_drop(x)
         return x
 
 
@@ -374,8 +370,8 @@ class VisionTransformer(nn.Layer):
 
         self.add_parameter("cls_token", self.cls_token)
         self.pos_drop = nn.Dropout(p=drop_rate)
-        sel.gradient_checkpointing=gradient_checkpointing
-
+        self.gradient_checkpointing=gradient_checkpointing
+        logger.info("self.gradient_checkpointing:{}".format(self.gradient_checkpointing))
         dpr = np.linspace(0, drop_path_rate, depth)
 
         self.blocks = nn.LayerList([
@@ -421,12 +417,12 @@ class VisionTransformer(nn.Layer):
 
         if self.pos_embed is not None:
             x = x + self.pos_embed
-        with get_rng_state_tracker().rng_state("global_seed"):
-            x = self.pos_drop(x)
+        x = self.pos_drop(x)
         rel_pos_bias = self.rel_pos_bias() if hasattr(self,
                                                       'rel_pos_bias') else None
         for blk in self.blocks:
             if self.gradient_checkpointing and self.training:
+
                 x = recompute(blk,x, rel_pos_bias=rel_pos_bias)
             else:
                 x = blk(x, rel_pos_bias=rel_pos_bias)
@@ -463,7 +459,7 @@ def interpolate_pos_embed(model, checkpoint_model):
             checkpoint_model['visual_encoder.pos_embed'] = new_pos_embed
 
 
-def create_eva_vit_g(img_size=224,drop_path_rate=0.4,mp_degree=1,gradient_checkpointing):
+def create_eva_vit_g(img_size=224,drop_path_rate=0.4,mp_degree=1,gradient_checkpointing=False):
     model = VisionTransformer(
         img_size=img_size,
         patch_size=14,

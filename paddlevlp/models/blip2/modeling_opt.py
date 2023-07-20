@@ -540,23 +540,23 @@ class OPTEmbeddings(Layer):
 
     def __init__(self, config: OPTConfig):
         super(OPTEmbeddings, self).__init__()
-        # if config.mp_degree > 1:
-        #     self.word_embeddings = fleet.meta_parallel.VocabParallelEmbedding(
-        #         config.vocab_size,
-        #         config.word_embed_proj_dim,
-        #         weight_attr=paddle.ParamAttr(
-        #             initializer=nn.initializer.Normal(mean=0.0, std=config.initializer_range)
-        #         ),
-        #     )
-        # else:
-        self.word_embeddings = nn.Embedding(
-            config.vocab_size,
-            config.word_embed_proj_dim,
-            # padding_idx=config.pad_token_id,
-            weight_attr=paddle.ParamAttr(
-                initializer=nn.initializer.Normal(mean=0.0, std=config.initializer_range)
-            ),
-        )
+        if config.mp_degree > 1:
+            self.word_embeddings = fleet.meta_parallel.VocabParallelEmbedding(
+                config.vocab_size,
+                config.word_embed_proj_dim,
+                weight_attr=paddle.ParamAttr(
+                    initializer=nn.initializer.Normal(mean=0.0, std=config.initializer_range)
+                ),
+            )
+        else:
+            self.word_embeddings = nn.Embedding(
+                config.vocab_size,
+                config.word_embed_proj_dim,
+                # padding_idx=config.pad_token_id,
+                weight_attr=paddle.ParamAttr(
+                    initializer=nn.initializer.Normal(mean=0.0, std=config.initializer_range)
+                ),
+            )
 
         if config.word_embed_proj_dim != config.hidden_size:
             if config.mp_degree > 1:
@@ -981,11 +981,12 @@ class OPTForCausalLM(OPTPretrainedModel):
 
     def __init__(self, config: OPTConfig):
         super(OPTForCausalLM, self).__init__(config)
+        config.mp_degree=2
         self.opt = OPTModel(config)
         self.lm_head = OPTLMHead(
             hidden_size=self.opt.config.hidden_size,
             vocab_size=self.opt.config.vocab_size,
-            embedding_weights=self.opt.embeddings.word_embeddings.weight,
+            # embedding_weights=self.opt.embeddings.word_embeddings.weight,
         )
 
     def forward(
@@ -1072,6 +1073,7 @@ class OPTForCausalLM(OPTPretrainedModel):
 
         loss = None
         if labels is not None:
+            # breakpoint()
             logits = logits[:, -labels.shape[1] :, :]
             shift_logits = logits[:, :-1, :]
             shift_labels = labels[:, 1:]

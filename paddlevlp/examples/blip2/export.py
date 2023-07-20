@@ -12,15 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import sys
-sys.path.insert(0,"/paddle/workspace/wjm/origin/PaddleMIX")
 from dataclasses import dataclass, field
 import os
 import paddle
 import requests
 from paddlenlp.trainer import PdArgumentParser
 from PIL import Image
-os.environ["http_proxy"]="http://172.19.57.45:3128"
-os.environ["https_proxy"]="http://172.19.57.45:3128"
 from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlevlp.processors.blip_processing import Blip2Processor
 from paddlevlp.utils.log import logger
@@ -69,7 +66,7 @@ class ModelArguments:
             "help": "The path to pre-trained model that we will use for inference."
         },)
     fp16: str = field(
-        default=False,
+        default=True,
         metadata={
             "help": "Export with mixed precision."
         },
@@ -95,7 +92,7 @@ def main():
         decorated = paddle.amp.decorate(
             models=[model.visual_encoder,model.language_model], optimizers=None, level="O2"
         )
-        model.visual_encoder,model.language_model= decorated[0]
+        model.visual_encoder,model.language_model= decorated
         dtype="float16"
 
     shape1 = [None,3,None,None]
