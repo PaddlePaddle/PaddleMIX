@@ -17,6 +17,8 @@
 Processor class for MiniGPT4.
 """
 
+import os
+import random
 from typing import List, Optional, Union
 
 import numpy as np
@@ -70,20 +72,47 @@ class MiniGPT4Processor(ProcessorMixin):
     image_processor_class = "MiniGPT4ImageProcessor"
     tokenizer_class = "LlamaTokenizer"
 
-    def __init__(self, image_processor, tokenizer):
+    def __init__(self, image_processor, tokenizer, **kwargs):
         tokenizer.return_token_type_ids = False
         tokenizer.model_input_names = ["input_ids", "attention_mask"]
         tokenizer.padding_side = "right"
         tokenizer.pad_token = tokenizer.eos_token
         super().__init__(image_processor, tokenizer)
         self.current_processor = self.image_processor
-        self.default_prompt = "###Human: <Img><ImageHere></Img> <TextHere>###Assistant: "
+        self.default_prompt = "###Human: <Img><ImageHere></Img> <TextHere> ###Assistant: " # check
         self.image_tag = "<ImageHere>"
         self.text_tag = "<TextHere>"
+        self.end_sym = "###"
+        self.max_target_len = 160
+
+        self.text_list = []
+        # text_path = kwargs.pop("text_path", None)
+        # breakpoint()
+        # if text_path is not None: 
+        #     self.text_list = self.read_texts(text_path)
+
+    # def read_texts(self, path):
+    #     if not os.path.isfile(path):
+    #         raise ValueError("A file expected for path, but acceived: {}".format(path))
+        
+    #     text_list = []
+    #     with open(path, "r", encoding="utf-8") as f:
+    #         for text in f.readlines():
+    #             text_list.append(text.strip())
+    #     return text_list
+
+    def read_texts(self, path):
+        if not os.path.isfile(path):
+            raise ValueError("A file expected for path, but acceived: {}".format(path))
+        
+        with open(path, "r", encoding="utf-8") as f:
+            for text in f.readlines():
+                self.text_list.append(text.strip())
 
     def process_images(
         self,
         images: ImageInput,
+        mode: str = "test",
         return_tensors: Optional[Union[str, TensorType]] = TensorType.PADDLE,
         **kwargs,
     ) -> BatchFeature:
@@ -98,10 +127,36 @@ class MiniGPT4Processor(ProcessorMixin):
             images = [images]
 
         # processing with image processor
-        processed_images = self.image_processor(images, return_tensors=return_tensors)
+        processed_images = self.image_processor(images, mode=mode, return_tensors=return_tensors)
 
         return processed_images
 
+    def process_target_texts(
+        self,
+        target_texts,
+        end_sym: str = None,
+        max_target_len: int = None,
+        **kwargs
+    ):
+        end_sym = end_sym if end_sym is not None else self.end_sym
+        max_target_len = max_target_len if max_target_len is not None else self.max_target_len
+        target_texts = [t + end_sym for t in target_texts]
+        target_tokens = self.tokenizer(
+            target_texts,
+            return_tensors="pd",
+            padding="longest",
+            truncation=True,
+            max_length=max_target_len,
+            return_attention_mask=True,
+            add_special_tokens=False
+        )
+        target_input_ids = target_tokens.input_ids
+        full_mat = paddle.full(target_input_ids.shape, -100, target_input_ids.dtype)
+        masked_target_input_ids = paddle.where(target_input_ids != self.tokenizer.pad_token_id, target_input_ids, full_mat)
+
+        return {"labels":target_input_ids, "masked_labels":masked_target_input_ids, "label_attention_mask": target_tokens.attention_mask}
+
+        
     def process_texts(
         self,
         texts: Union[TextInput, List[TextInput]],
@@ -148,7 +203,7 @@ class MiniGPT4Processor(ProcessorMixin):
                 assemble_texts.append(prompt.replace(self.text_tag, text))
             else:
                 assemble_texts.append(text)
-
+        # breakpoint()
         # processing with text tokenizer
         first_texts, second_texts = zip(*[assemble_text.split(self.image_tag) for assemble_text in assemble_texts])
         first_text_encoding = self.tokenizer(
@@ -173,6 +228,7 @@ class MiniGPT4Processor(ProcessorMixin):
         images: ImageInput = None,
         text: str = None,
         prompt: str = None,
+        mode: str = "test",
         return_tensors: Optional[Union[str, TensorType]] = TensorType.PADDLE,
         **kwargs,
     ) -> BatchFeature:
@@ -182,6 +238,11 @@ class MiniGPT4Processor(ProcessorMixin):
         Please refer to the docstring of the above two methods for more information.
         """
         prompt = prompt if prompt is not None else self.default_prompt
+        if mode == "test": # check
+            if len(self.text_list) != 0:
+                text = random.choice(self.text_list)
+            elif text is None:
+                raise ValueError("If you want to train model, you have to input a text or input a text_path when instaniating processor.")
 
         if images is None and text is None:
             raise ValueError("Images and text are None, you have to specify either images or texts.")
@@ -208,7 +269,7 @@ class MiniGPT4Processor(ProcessorMixin):
         # image-only mode
         if text is None:
             # processing with image processor
-            processed_features = self.process_images(images, return_tensors=return_tensors, **kwargs)
+            processed_features = self.process_images(images, mode=mode, return_tensors=return_tensors, **kwargs)
             return processed_features
 
         # text-only mode
@@ -218,7 +279,7 @@ class MiniGPT4Processor(ProcessorMixin):
             return encoded_texts
 
         # text-image mode
-        processed_features = self.image_processor(images, return_tensors=return_tensors)
+        processed_features = self.image_processor(images, mode=mode, return_tensors=return_tensors)
         encoded_texts = self.process_texts(texts, prompts, **kwargs)
         processed_features.update(encoded_texts)
 
