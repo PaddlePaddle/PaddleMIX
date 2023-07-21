@@ -102,6 +102,8 @@ else:
     from .pipeline_fastdeploy_stable_diffusion import FastDeployStableDiffusionPipeline
     from .pipeline_fastdeploy_stable_diffusion_controlnet import (
         FastDeployStableDiffusionControlNetPipeline, )
+    from .pipeline_fastdeploy_stable_diffusion_image_variation import (
+        FastDeployStableDiffusionImageVariationPipeline, )
     from .pipeline_fastdeploy_stable_diffusion_img2img import (
         FastDeployStableDiffusionImg2ImgPipeline, )
     from .pipeline_fastdeploy_stable_diffusion_inpaint import (

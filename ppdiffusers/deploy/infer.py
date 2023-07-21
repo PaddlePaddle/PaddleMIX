@@ -77,9 +77,10 @@ def parse_arguments():
             "inpaint_legacy",
             "cycle_diffusion",
             "hiresfix",
+            "mixture_tiling",
             "all",
         ],
-        help="The task can be one of [text2img, img2img, inpaint, inpaint_legacy, cycle_diffusion, hiresfix, all]. ",
+        help="The task can be one of [text2img, img2img, inpaint, inpaint_legacy, cycle_diffusion, hiresfix, mixture_tiling, all]. ",
     )
     parser.add_argument(
         "--parse_prompt_type",
@@ -95,6 +96,11 @@ def parse_arguments():
         type=strtobool,
         default=True,
         help="Wheter to use FP16 mode")
+    parser.add_argument(
+        "--use_bf16",
+        type=strtobool,
+        default=False,
+        help="Wheter to use BF16 mode")
     parser.add_argument(
         "--device_id",
         type=int,
@@ -165,11 +171,13 @@ def create_paddle_inference_runtime(
         use_trt=False,
         dynamic_shape=None,
         use_fp16=False,
+        use_bf16=False,
         device_id=0,
         disable_paddle_trt_ops=[],
         disable_paddle_pass=[],
         paddle_stream=None,
         workspace=None, ):
+    assert not use_fp16 or not use_bf16, "use_fp16 and use_bf16 are mutually exclusive"
     option = fd.RuntimeOption()
     option.use_paddle_backend()
     if device_id == -1:
@@ -180,6 +188,8 @@ def create_paddle_inference_runtime(
         option.set_external_raw_stream(paddle_stream)
     for pass_name in disable_paddle_pass:
         option.paddle_infer_option.delete_pass(pass_name)
+    if use_bf16:
+        option.paddle_infer_option.inference_precision = "bfloat16"
     if use_trt:
         option.paddle_infer_option.disable_trt_ops(disable_paddle_trt_ops)
         option.paddle_infer_option.enable_trt = True
@@ -290,6 +300,7 @@ def main(args):
             "opt_shape": [1, text_encoder_max_length],
         }
     }
+
     vae_encoder_dynamic_shape = {
         "sample": {
             "min_shape": [1, 3, min_image_size, min_image_size],
@@ -297,6 +308,7 @@ def main(args):
             "opt_shape": [1, 3, min_image_size, min_image_size],
         }
     }
+
     vae_decoder_dynamic_shape = {
         "latent_sample": {
             "min_shape":
@@ -307,6 +319,7 @@ def main(args):
             [1, vae_in_channels, min_image_size // 8, min_image_size // 8],
         }
     }
+
     unet_dynamic_shape = {
         "sample": {
             "min_shape":
@@ -371,6 +384,7 @@ def main(args):
                 use_trt=args.use_trt,
                 dynamic_shape=text_encoder_dynamic_shape,
                 use_fp16=args.use_fp16,
+                use_bf16=args.use_bf16,
                 device_id=args.device_id,
                 disable_paddle_trt_ops=["arg_max", "range", "lookup_table_v2"],
                 paddle_stream=paddle_stream, ),
@@ -378,18 +392,21 @@ def main(args):
                 use_trt=args.use_trt,
                 dynamic_shape=vae_encoder_dynamic_shape,
                 use_fp16=args.use_fp16,
+                use_bf16=args.use_bf16,
                 device_id=args.device_id,
                 paddle_stream=paddle_stream, ),
             vae_decoder=create_paddle_inference_runtime(
                 use_trt=args.use_trt,
                 dynamic_shape=vae_decoder_dynamic_shape,
                 use_fp16=args.use_fp16,
+                use_bf16=args.use_bf16,
                 device_id=args.device_id,
                 paddle_stream=paddle_stream, ),
             unet=create_paddle_inference_runtime(
                 use_trt=args.use_trt,
                 dynamic_shape=unet_dynamic_shape,
                 use_fp16=args.use_fp16,
+                use_bf16=args.use_bf16,
                 device_id=args.device_id,
                 paddle_stream=paddle_stream, ), )
     pipe = FastDeployStableDiffusionMegaPipeline.from_pretrained(
@@ -553,7 +570,7 @@ def main(args):
                 custom_pipeline="pipeline_fastdeploy_stable_diffusion_hires_fix",
             )
             # custom_pipeline
-            # https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/community/pipeline_fastdeploy_stable_diffusion_hires_fix.py
+            # https://github.com/PaddlePaddle/PaddleNLP/blob/develop/ppdiffusers/examples/community/pipeline_fastdeploy_stable_diffusion_hires_fix.py
             hiresfix_pipe._progress_bar_config = pipe._progress_bar_config
             # hiresfix
             prompt = "a photo of an astronaut riding a horse on mars"
@@ -641,6 +658,67 @@ def main(args):
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
             images[0].save(f"{folder}/cycle_diffusion.png")
+
+        if args.task_name in ["mixture_tiling", "all"]:
+            print("mixture_tiling yes yes yes")
+            mixture_tiling_pipe = DiffusionPipeline.from_pretrained(
+                args.model_dir,
+                vae_encoder=pipe.vae_encoder,
+                vae_decoder=pipe.vae_decoder,
+                text_encoder=pipe.text_encoder,
+                tokenizer=pipe.tokenizer,
+                unet=pipe.unet,
+                scheduler=pipe.scheduler,
+                safety_checker=pipe.safety_checker,
+                feature_extractor=pipe.feature_extractor,
+                requires_safety_checker=pipe.requires_safety_checker,
+                # custom_pipeline="pipeline_fastdeploy_stable_diffusion_mixture_tiling",
+                custom_pipeline="/root/project/paddlenlp/ppdiffusers_upgrade/PaddleNLP/ppdiffusers/examples/community/pipeline_fastdeploy_stable_diffusion_mixture_tiling.py",
+            )
+            # custom_pipeline
+            mixture_tiling_pipe._progress_bar_config = pipe._progress_bar_config
+            # mixture_tiling
+            time_costs = []
+            # warmup
+            mixture_tiling_pipe(
+                prompt=[[
+                    "A charming house in the countryside, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                    # "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                    # "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                ]],
+                tile_height=512,
+                tile_width=512,
+                tile_row_overlap=0,
+                tile_col_overlap=0,
+                guidance_scale=8,
+                seed=7178915308,
+                num_inference_steps=50,
+                infer_op_dict=None, )
+            print("==> Test mixture tiling.")
+            for step in trange(args.benchmark_steps):
+                start = time.time()
+                images = mixture_tiling_pipe(
+                    prompt=[[
+                        "A charming house in the countryside, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                        # "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                        # "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                    ]],
+                    tile_height=512,
+                    tile_width=512,
+                    tile_row_overlap=0,
+                    tile_col_overlap=0,
+                    guidance_scale=8,
+                    seed=7178915308,
+                    num_inference_steps=50,
+                    infer_op_dict=None, )["images"]
+                latency = time.time() - start
+                time_costs += [latency]
+                # print(f"No {step:3d} time cost: {latency:2f} s")
+            print(
+                f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
+                f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
+            )
+            images[0].save("mixture_tiling.png")
 
 
 if __name__ == "__main__":
