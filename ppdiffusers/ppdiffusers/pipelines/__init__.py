@@ -123,6 +123,7 @@ else:
     from .stable_diffusion import (
         FastDeployCycleDiffusionPipeline,
         FastDeployStableDiffusionControlNetPipeline,
+        FastDeployStableDiffusionImageVariationPipeline,
         FastDeployStableDiffusionImg2ImgPipeline,
         FastDeployStableDiffusionInpaintPipeline,
         FastDeployStableDiffusionInpaintPipelineLegacy,
