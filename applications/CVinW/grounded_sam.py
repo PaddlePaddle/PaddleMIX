@@ -50,7 +50,7 @@ class DataArguments:
         metadata={"help": "The name of input image."}
     )  
     prompt: str = field(
-        default=None, metadata={"help": "The prompt of the image to be generated."}
+        default=None, metadata={"help": "The prompt of the image to be det."}
     )  
 
 
@@ -65,7 +65,7 @@ class ModelArguments:
         metadata={"help": "Path to pretrained model or model identifier"},
     )
     sam_model_name_or_path: str = field(
-        default="Sam/SamVitH",
+        default="Sam/SamVitH-1024",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
     box_threshold: float = field(
@@ -117,7 +117,7 @@ def main():
     #read image
     if os.path.isfile(url):
         #read image
-        image_pil = Image.open(data_args.input_image).convert("RGB")
+        image_pil = Image.open(url).convert("RGB")
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
     #preprocess image text_prompt
