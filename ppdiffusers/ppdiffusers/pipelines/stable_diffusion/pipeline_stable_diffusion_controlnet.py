@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import inspect
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -35,6 +36,7 @@ from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 
 EXAMPLE_DOC_STRING = """
     Examples:
@@ -77,35 +79,35 @@ EXAMPLE_DOC_STRING = """
 class MultiControlNetModel(ModelMixin):
     r"""
     Multiple `ControlNetModel` wrapper class for Multi-ControlNet
+
     This module is a wrapper for multiple instances of the `ControlNetModel`. The `forward()` API is designed to be
     compatible with `ControlNetModel`.
+
     Args:
         controlnets (`List[ControlNetModel]`):
             Provides additional conditioning to the unet during the denoising process. You must set multiple
             `ControlNetModel` as a list.
     """
 
-    def __init__(
-            self,
-            controlnets: Union[List[ControlNetModel], Tuple[ControlNetModel]]):
+    def __init__(self, controlnets: Union[List[ControlNetModel], Tuple[ControlNetModel]]):
         super().__init__()
         self.nets = nn.LayerList(controlnets)
 
     def forward(
-            self,
-            sample: paddle.Tensor,
-            timestep: Union[paddle.Tensor, float, int],
-            encoder_hidden_states: paddle.Tensor,
-            controlnet_cond: List[paddle.Tensor],
-            conditioning_scale: Union[List[List[float]], List[float]],
-            class_labels: Optional[paddle.Tensor]=None,
-            timestep_cond: Optional[paddle.Tensor]=None,
-            attention_mask: Optional[paddle.Tensor]=None,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None,
-            return_dict: bool=True, ) -> Union[ControlNetOutput, Tuple]:
-        for i, (
-                image, scale, controlnet
-        ) in enumerate(zip(controlnet_cond, conditioning_scale, self.nets)):
+        self,
+        sample: paddle.Tensor,
+        timestep: Union[paddle.Tensor, float, int],
+        encoder_hidden_states: paddle.Tensor,
+        controlnet_cond: List[paddle.Tensor],
+        conditioning_scale: List[float],
+        class_labels: Optional[paddle.Tensor] = None,
+        timestep_cond: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        guess_mode: bool = False,
+        return_dict: bool = True,
+    ) -> Union[ControlNetOutput, Tuple]:
+        for i, (image, scale, controlnet) in enumerate(zip(controlnet_cond, conditioning_scale, self.nets)):
             down_samples, mid_sample = controlnet(
                 sample,
                 timestep,
@@ -116,7 +118,9 @@ class MultiControlNetModel(ModelMixin):
                 timestep_cond,
                 attention_mask,
                 cross_attention_kwargs,
-                return_dict, )
+                guess_mode,
+                return_dict,
+            )
 
             # merge samples
             if i == 0:
@@ -124,16 +128,14 @@ class MultiControlNetModel(ModelMixin):
             else:
                 down_block_res_samples = [
                     samples_prev + samples_curr
-                    for samples_prev, samples_curr in zip(
-                        down_block_res_samples, down_samples)
+                    for samples_prev, samples_curr in zip(down_block_res_samples, down_samples)
                 ]
                 mid_block_res_sample += mid_sample
 
         return down_block_res_samples, mid_block_res_sample
 
 
-class StableDiffusionControlNetPipeline(DiffusionPipeline,
-                                        TextualInversionLoaderMixin):
+class StableDiffusionControlNetPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
     r"""
     Pipeline for text-to-image generation using Stable Diffusion with ControlNet guidance.
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
@@ -169,17 +171,17 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
     _optional_components = ["safety_checker", "feature_extractor"]
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            controlnet: Union[ControlNetModel, List[ControlNetModel], Tuple[
-                ControlNetModel], MultiControlNetModel],
-            scheduler: KarrasDiffusionSchedulers,
-            safety_checker: StableDiffusionSafetyChecker,
-            feature_extractor: CLIPImageProcessor,
-            requires_safety_checker: bool=True, ):
+        self,
+        vae: AutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: UNet2DConditionModel,
+        controlnet: Union[ControlNetModel, List[ControlNetModel], Tuple[ControlNetModel], MultiControlNetModel],
+        scheduler: KarrasDiffusionSchedulers,
+        safety_checker: StableDiffusionSafetyChecker,
+        feature_extractor: CLIPImageProcessor,
+        requires_safety_checker: bool = True,
+    ):
         super().__init__()
 
         if safety_checker is None and requires_safety_checker:
@@ -209,8 +211,9 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             controlnet=controlnet,
             scheduler=scheduler,
             safety_checker=safety_checker,
-            feature_extractor=feature_extractor, )
-        self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+            feature_extractor=feature_extractor,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     def enable_vae_slicing(self):
@@ -245,13 +248,14 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
     def _encode_prompt(
-            self,
-            prompt,
-            num_images_per_prompt,
-            do_classifier_free_guidance,
-            negative_prompt=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None, ):
+        self,
+        prompt,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt=None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+    ):
         r"""
         Encodes the prompt into text encoder hidden states.
         Args:
@@ -290,32 +294,36 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                 padding="max_length",
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_input_ids = text_inputs.input_ids
-            untruncated_ids = self.tokenizer(
-                prompt, padding="longest", return_tensors="pd").input_ids
+            untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                    -1] and not paddle.equal_all(text_input_ids,
-                                                 untruncated_ids):
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+                text_input_ids, untruncated_ids
+            ):
                 removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
+                    untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1]
+                )
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
-                    f" {self.tokenizer.model_max_length} tokens: {removed_text}")
+                    f" {self.tokenizer.model_max_length} tokens: {removed_text}"
+                )
 
-            config = (self.text_encoder.config
-                      if isinstance(self.text_encoder.config, dict) else
-                      self.text_encoder.config.to_dict())
-            if config.get("use_attention_mask",
-                          None) is not None and config["use_attention_mask"]:
+            config = (
+                self.text_encoder.config
+                if isinstance(self.text_encoder.config, dict)
+                else self.text_encoder.config.to_dict()
+            )
+            if config.get("use_attention_mask", None) is not None and config["use_attention_mask"]:
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
 
             prompt_embeds = self.text_encoder(
                 text_input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             prompt_embeds = prompt_embeds[0]
 
         prompt_embeds = prompt_embeds.cast(self.text_encoder.dtype)
@@ -323,8 +331,7 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape(
-            [bs_embed * num_images_per_prompt, seq_len, -1])
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
@@ -334,21 +341,22 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             elif type(prompt) is not type(negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}.")
+                    f" {type(prompt)}."
+                )
             elif isinstance(negative_prompt, str):
                 uncond_tokens = [negative_prompt]
             elif batch_size != len(negative_prompt):
                 raise ValueError(
                     f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                     f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`.")
+                    " the batch size of `prompt`."
+                )
             else:
                 uncond_tokens = negative_prompt
 
             # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
-                uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
-                                                          self.tokenizer)
+                uncond_tokens = self.maybe_convert_prompt(uncond_tokens, self.tokenizer)
 
             max_length = prompt_embeds.shape[1]
             uncond_input = self.tokenizer(
@@ -356,50 +364,48 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
 
-            config = (self.text_encoder.config
-                      if isinstance(self.text_encoder.config, dict) else
-                      self.text_encoder.config.to_dict())
-            if config.get("use_attention_mask",
-                          None) is not None and config["use_attention_mask"]:
+            config = (
+                self.text_encoder.config
+                if isinstance(self.text_encoder.config, dict)
+                else self.text_encoder.config.to_dict()
+            )
+            if config.get("use_attention_mask", None) is not None and config["use_attention_mask"]:
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
 
             negative_prompt_embeds = self.text_encoder(
                 uncond_input.input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             negative_prompt_embeds = negative_prompt_embeds[0]
 
         if do_classifier_free_guidance:
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds.cast(
-                dtype=self.text_encoder.dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=self.text_encoder.dtype)
 
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                [1, num_images_per_prompt, 1])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
+            negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            prompt_embeds = paddle.concat(
-                [negative_prompt_embeds, prompt_embeds])
+            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
 
         return prompt_embeds
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is not None:
-            safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors="pd")
+            safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image,
-                clip_input=safety_checker_input.pixel_values.cast(dtype))
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype)
+            )
         else:
             has_nsfw_concept = None
         return image, has_nsfw_concept
@@ -420,55 +426,51 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     def check_inputs(
-            self,
-            prompt,
-            image,
-            height,
-            width,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None,
-            controlnet_conditioning_scale=1.0, ):
+        self,
+        prompt,
+        image,
+        height,
+        width,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+        controlnet_conditioning_scale=1.0,
+    ):
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two.")
+                " only forward one of the two."
+            )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -481,7 +483,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                 raise ValueError(
                     "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}.")
+                    f" {negative_prompt_embeds.shape}."
+                )
 
         # `prompt` needs more sophisticated handling when there are multiple
         # conditionings.
@@ -497,15 +500,12 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             self.check_image(image, prompt, prompt_embeds)
         elif isinstance(self.controlnet, MultiControlNetModel):
             if not isinstance(image, list):
-                raise TypeError(
-                    "For multiple controlnets: `image` must be type `list`")
+                raise TypeError("For multiple controlnets: `image` must be type `list`")
 
             # When `image` is a nested list:
             # (e.g. [[canny_image_1, pose_image_1], [canny_image_2, pose_image_2]])
             elif any(isinstance(i, list) for i in image):
-                raise ValueError(
-                    "A single batch of multiple conditionings are supported at the moment."
-                )
+                raise ValueError("A single batch of multiple conditionings are supported at the moment.")
             elif len(image) != len(self.controlnet.nets):
                 raise ValueError(
                     "For multiple controlnets: `image` must have the same length as the number of controlnets."
@@ -519,32 +519,26 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
         # Check `controlnet_conditioning_scale`
         if isinstance(self.controlnet, ControlNetModel):
             if not isinstance(controlnet_conditioning_scale, float):
-                raise TypeError(
-                    "For single controlnet: `controlnet_conditioning_scale` must be type `float`."
-                )
+                raise TypeError("For single controlnet: `controlnet_conditioning_scale` must be type `float`.")
         elif isinstance(self.controlnet, MultiControlNetModel):
             if isinstance(controlnet_conditioning_scale, list):
-                if any(
-                        isinstance(i, list)
-                        for i in controlnet_conditioning_scale):
-                    raise ValueError(
-                        "A single batch of multiple conditionings are supported at the moment."
-                    )
-            elif isinstance(controlnet_conditioning_scale, list) and len(
-                    controlnet_conditioning_scale) != len(self.controlnet.nets):
+                if any(isinstance(i, list) for i in controlnet_conditioning_scale):
+                    raise ValueError("A single batch of multiple conditionings are supported at the moment.")
+            elif isinstance(controlnet_conditioning_scale, list) and len(controlnet_conditioning_scale) != len(
+                self.controlnet.nets
+            ):
                 raise ValueError(
                     "For multiple controlnets: When `controlnet_conditioning_scale` is specified as `list`, it must have"
-                    " the same length as the number of controlnets")
+                    " the same length as the number of controlnets"
+                )
         else:
             assert False
 
     def check_image(self, image, prompt, prompt_embeds):
         image_is_pil = isinstance(image, PIL.Image.Image)
         image_is_tensor = isinstance(image, paddle.Tensor)
-        image_is_pil_list = isinstance(image, list) and isinstance(
-            image[0], PIL.Image.Image)
-        image_is_tensor_list = isinstance(image, list) and isinstance(
-            image[0], paddle.Tensor)
+        image_is_pil_list = isinstance(image, list) and isinstance(image[0], PIL.Image.Image)
+        image_is_tensor_list = isinstance(image, list) and isinstance(image[0], paddle.Tensor)
 
         if not image_is_pil and not image_is_tensor and not image_is_pil_list and not image_is_tensor_list:
             raise TypeError(
@@ -573,15 +567,16 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             )
 
     def prepare_image(
-            self,
-            image,
-            width,
-            height,
-            batch_size,
-            num_images_per_prompt,
-            dtype,
-            do_classifier_free_guidance=False,
-            guess_mode=False, ):
+        self,
+        image,
+        width,
+        height,
+        batch_size,
+        num_images_per_prompt,
+        dtype,
+        do_classifier_free_guidance=False,
+        guess_mode=False,
+    ):
         if not isinstance(image, paddle.Tensor):
             if isinstance(image, PIL.Image.Image):
                 image = [image]
@@ -590,8 +585,7 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                 images = []
                 for image_ in image:
                     image_ = image_.convert("RGB")
-                    image_ = image_.resize(
-                        (width, height), resample=PIL_INTERPOLATION["lanczos"])
+                    image_ = image_.resize((width, height), resample=PIL_INTERPOLATION["lanczos"])
                     image_ = np.array(image_)
                     image_ = image_[None, :]
                     images.append(image_)
@@ -620,18 +614,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
         return image
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
-        ]
+    def prepare_latents(self, batch_size, num_channels_latents, height, width, dtype, generator, latents=None):
+        shape = [batch_size, num_channels_latents, height // self.vae_scale_factor, width // self.vae_scale_factor]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -669,48 +653,44 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
 
     # override DiffusionPipeline
     def save_pretrained(
-            self,
-            save_directory: Union[str, os.PathLike],
-            safe_serialization: bool=False,
-            variant: Optional[str]=None,
-            to_diffusers: bool=None, ):
+        self,
+        save_directory: Union[str, os.PathLike],
+        safe_serialization: bool = False,
+        variant: Optional[str] = None,
+        to_diffusers: bool = None,
+    ):
         if isinstance(self.controlnet, ControlNetModel):
             super().save_pretrained(
-                save_directory,
-                safe_serialization=safe_serialization,
-                variant=variant,
-                to_diffusers=to_diffusers)
-        else:
-            raise NotImplementedError(
-                "Currently, the `save_pretrained()` is not implemented for Multi-ControlNet."
+                save_directory, safe_serialization=safe_serialization, variant=variant, to_diffusers=to_diffusers
             )
+        else:
+            raise NotImplementedError("Currently, the `save_pretrained()` is not implemented for Multi-ControlNet.")
 
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
-            self,
-            prompt: Union[str, List[str]]=None,
-            image: Union[paddle.Tensor, PIL.Image.Image, List[paddle.Tensor],
-                         List[PIL.Image.Image]]=None,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: int=1,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None,
-            controlnet_conditioning_scale: Union[float, List[float]]=1.0,
-            guess_mode: bool=False, ):
+        self,
+        prompt: Union[str, List[str]] = None,
+        image: Union[paddle.Tensor, PIL.Image.Image, List[paddle.Tensor], List[PIL.Image.Image]] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: int = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        controlnet_conditioning_scale: Union[float, List[float]] = 1.0,
+        guess_mode: bool = False,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
         Args:
@@ -775,7 +755,7 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
                 `self.processor` in
-                [ppdiffusers.cross_attention](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/models/cross_attention.py).
+                [ppdiffusers.cross_attention](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/ppdiffusers/ppdiffusers/models/cross_attention.py).
             controlnet_conditioning_scale (`float` or `List[float]`, *optional*, defaults to 1.0):
                 The outputs of the controlnet are multiplied by `controlnet_conditioning_scale` before they are added
                 to the residual in the original unet. If multiple ControlNets are specified in init, you can set the
@@ -804,7 +784,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             negative_prompt,
             prompt_embeds,
             negative_prompt_embeds,
-            controlnet_conditioning_scale, )
+            controlnet_conditioning_scale,
+        )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -819,10 +800,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
         # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
 
-        if isinstance(self.controlnet, MultiControlNetModel) and isinstance(
-                controlnet_conditioning_scale, float):
-            controlnet_conditioning_scale = [controlnet_conditioning_scale
-                                             ] * len(self.controlnet.nets)
+        if isinstance(self.controlnet, MultiControlNetModel) and isinstance(controlnet_conditioning_scale, float):
+            controlnet_conditioning_scale = [controlnet_conditioning_scale] * len(self.controlnet.nets)
 
         # 3. Encode input prompt
         prompt_embeds = self._encode_prompt(
@@ -831,7 +810,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds, )
+            negative_prompt_embeds=negative_prompt_embeds,
+        )
 
         # 4. Prepare image
         if isinstance(self.controlnet, ControlNetModel):
@@ -843,7 +823,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                 num_images_per_prompt=num_images_per_prompt,
                 dtype=self.controlnet.dtype,
                 do_classifier_free_guidance=do_classifier_free_guidance,
-                guess_mode=guess_mode, )
+                guess_mode=guess_mode,
+            )
         elif isinstance(self.controlnet, MultiControlNetModel):
             images = []
 
@@ -856,7 +837,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                     num_images_per_prompt=num_images_per_prompt,
                     dtype=self.controlnet.dtype,
                     do_classifier_free_guidance=do_classifier_free_guidance,
-                    guess_mode=guess_mode, )
+                    guess_mode=guess_mode,
+                )
 
                 images.append(image_)
 
@@ -877,21 +859,19 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             width,
             prompt_embeds.dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 8. Denoising loop
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
-                latent_model_input = self.scheduler.scale_model_input(
-                    latent_model_input, t)
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # controlnet(s) inference
                 if guess_mode and do_classifier_free_guidance:
@@ -910,20 +890,17 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                     controlnet_cond=image,
                     conditioning_scale=controlnet_conditioning_scale,
                     guess_mode=guess_mode,
-                    return_dict=False, )
+                    return_dict=False,
+                )
 
                 if guess_mode and do_classifier_free_guidance:
                     # Infered ControlNet only for the conditional batch.
                     # To apply the output of ControlNet to both the unconditional and conditional batches,
                     # add 0 to the unconditional batch to keep it unchanged.
-                    down_block_res_samples = [
-                        paddle.concat([paddle.zeros_like(d), d])
-                        for d in down_block_res_samples
-                    ]
-                    mid_block_res_sample = paddle.concat([
-                        paddle.zeros_like(mid_block_res_sample),
-                        mid_block_res_sample
-                    ])
+                    down_block_res_samples = [paddle.concat([paddle.zeros_like(d), d]) for d in down_block_res_samples]
+                    mid_block_res_sample = paddle.concat(
+                        [paddle.zeros_like(mid_block_res_sample), mid_block_res_sample]
+                    )
 
                 # predict the noise residual
                 noise_pred = self.unet(
@@ -932,22 +909,19 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                     encoder_hidden_states=prompt_embeds,
                     cross_attention_kwargs=cross_attention_kwargs,
                     down_block_additional_residuals=down_block_res_samples,
-                    mid_block_additional_residual=mid_block_res_sample, ).sample
+                    mid_block_additional_residual=mid_block_res_sample,
+                ).sample
 
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
+                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -960,8 +934,7 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             image = self.decode_latents(latents)
 
             # 9. Run safety checker
-            image, has_nsfw_concept = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
 
             # 10. Convert to PIL
             image = self.numpy_to_pil(image)
@@ -970,11 +943,9 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             image = self.decode_latents(latents)
 
             # 9. Run safety checker
-            image, has_nsfw_concept = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
 
         if not return_dict:
             return (image, has_nsfw_concept)
 
-        return StableDiffusionPipelineOutput(
-            images=image, nsfw_content_detected=has_nsfw_concept)
+        return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)
