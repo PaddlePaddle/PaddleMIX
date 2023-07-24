@@ -30,9 +30,9 @@ from paddlevlp.processors.groundingdino_processing import GroudingDinoProcessor
 from paddlevlp.models.groundingdino.modeling import GroundingDinoModel
 from paddlevlp.models.sam.modeling import SamModel
 from paddlevlp.processors.sam_processing import SamProcessor
-from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
-from paddlevlp.processors.blip_processing import Blip2Processor
-import nltk
+from ppdiffusers import StableDiffusionInpaintPipeline
+
+from paddlenlp import Taskflow
 
 from paddlevlp.utils.log import logger
 import matplotlib.pyplot as plt
@@ -65,9 +65,12 @@ class DataArguments:
     """
 
     input_image: str = field(
-        metadata={"help": "The name of input image."}
+        metadata={"help": "The name of input image."},
     )  
-  
+    
+    prompt: str = field(
+        default=None, metadata={"help": "The prompt of the image to be inpaint."},
+    )
 
 
 @dataclass
@@ -75,8 +78,8 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
     """
-    blip2_model_name_or_path: str = field(
-        default="Salesforce/blip2-opt-2.7b",
+    stable_diffusion_pipeline_name_or_path: str = field(
+        default="stabilityai/stable-diffusion-2-inpainting",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
     dino_model_name_or_path: str = field(
@@ -85,6 +88,10 @@ class ModelArguments:
     )
     sam_model_name_or_path: str = field(
         default="Sam/SamVitH-1024",
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
+    chatglm_model_name_or_path: str = field(
+        default="THUDM/chatglm-6b",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
     box_threshold: float = field(
@@ -100,7 +107,7 @@ class ModelArguments:
         },
     )
     output_dir: str = field(
-        default="automatic_label",
+        default="inpainting_output",
         metadata={
             "help": "output directory."
         },
@@ -112,49 +119,30 @@ class ModelArguments:
         },
     )
 
-def generate_caption(raw_image, processor,blip2_model):
+def filter_prompts_with_chatglm(caption,model_name_or_path="THUDM/chatglm-6b"):
+     prompt = "Given caption,extract the main object to be replaced and marked it as 'main_object', " + \
+              f"Extract the remaining part as 'other prompt', " + \
+              f"Return main_object, other prompt in English" + \
+              f"Given caption: {caption}."
+
+     
     
-    inputs = processor(
-        images=raw_image,
-        text=None,
-        return_tensors="pd",
-        return_attention_mask=True,
-        mode="test",
-    )
-    generated_ids, scores = blip2_model.generate(**inputs)
-    generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[
-        0
-    ].strip()
-    logger.info("Generate text: {}".format(generated_text))
-
-    return generated_text
-
-def generate_tags(caption):
-    lemma = nltk.wordnet.WordNetLemmatizer()
-  
-    nltk.download(['punkt', 'averaged_perceptron_tagger', 'wordnet'])
-    tags_list = [word for (word, pos) in nltk.pos_tag(nltk.word_tokenize(caption)) if pos[0] == 'N']
-    tags_lemma = [lemma.lemmatize(w) for w in tags_list]
-    tags = ', '.join(map(str, tags_lemma))
-
-    return tags
+     logger.info("chatglm: {}".format(model_name_or_path))
+     textGen = Taskflow("text2text_generation",model=model_name_or_path)
+    
+     reply = textGen(prompt)['result'][0]
+     
+     det_prompt,inpaint_prompt = reply.split('\n')[0].split(':')[-1].strip(), reply.split('\n')[-1].split(':')[-1].strip()
+     
+     return det_prompt,inpaint_prompt
+    
+     
 
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
     url = (data_args.input_image)
-
-    logger.info("blip2_model: {}".format(model_args.blip2_model_name_or_path))
-    #bulid blip2 processor
-    blip2_processor = Blip2Processor.from_pretrained(
-        model_args.blip2_model_name_or_path
-    )  # "Salesforce/blip2-opt-2.7b"
-    #bulid blip2 model
-    blip2_model = Blip2ForConditionalGeneration.from_pretrained(model_args.blip2_model_name_or_path)
-
-    blip2_model.eval()
-    blip2_model.to("gpu")
-    logger.info("blip2_model build finish!")
+    
     
     logger.info("dino_model: {}".format(model_args.dino_model_name_or_path))
     #bulid dino processor
@@ -178,18 +166,18 @@ def main():
     #read image
     if os.path.isfile(url):
         #read image
-        image_pil = Image.open(data_args.input_image)
+        image_pil = Image.open(url)
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw)
-    
-    caption = generate_caption(image_pil,processor=blip2_processor,blip2_model=blip2_model)
-    prompt = generate_tags(caption)
-    logger.info("prompt: {}".format(prompt))
+
+    det_prompt,inpaint_prompt = filter_prompts_with_chatglm(data_args.prompt,model_args.chatglm_model_name_or_path)
+    logger.info("det prompt: {}".format(det_prompt))
+    logger.info("inpaint prompt: {}".format(inpaint_prompt))
 
     image_pil = image_pil.convert("RGB")
 
     #preprocess image text_prompt
-    image_tensor,mask,tokenized_out = dino_processor(images=image_pil,text=prompt)
+    image_tensor,mask,tokenized_out = dino_processor(images=image_pil,text=det_prompt)
 
     with paddle.no_grad():
         outputs = dino_model(image_tensor,mask, input_ids=tokenized_out['input_ids'],
@@ -248,12 +236,28 @@ def main():
         for box, label in zip(boxes, pred_phrases):
             show_box(box, plt.gca(), label)
         
-        plt.title(caption)
         plt.axis('off')
         plt.savefig(
             os.path.join(model_args.output_dir, 'mask_pred.jpg'), 
             bbox_inches="tight", dpi=300, pad_inches=0.0
         )
+
+    
+    logger.info("stable diffusion pipeline: {}".format(model_args.stable_diffusion_pipeline_name_or_path))
+    pipe = StableDiffusionInpaintPipeline.from_pretrained(model_args.stable_diffusion_pipeline_name_or_path)
+    logger.info("stable diffusion pipeline build finish!")
+    
+    merge_mask = paddle.sum(seg_masks,axis=0).unsqueeze(0)
+    merge_mask = merge_mask>0
+    mask_pil = Image.fromarray(merge_mask[0][0].cpu().numpy())
+    
+    image_pil = image_pil.resize((512, 512))
+    mask_pil = mask_pil.resize((512, 512))
+    
+    image = pipe(prompt=inpaint_prompt, image=image_pil, mask_image=mask_pil).images[0]
+    image = image.resize(size)
+    image.save(os.path.join(model_args.output_dir, "grounded_sam_chatglm_output.jpg"))
+
 
     logger.info("finish!")
     
