@@ -104,15 +104,12 @@ class PreTrainingArguments(TrainingArguments):
     output_dir: str = field(
         default="./checkpoints", metadata={"help": "The directory name for saving checkpoint"}
     )
-
     use_amp: str = field(
         default=True, metadata={"help": "Whether to use amp for training."}
     )
-
     warmup_proportion: float = field(
         default=0.1, metadata={"help": "The warmup rate."}
     )
-
     freeze_vit: float = field(
         default=True, metadata={"help": "Whether to freeze vit."}
     )
@@ -120,15 +117,12 @@ class PreTrainingArguments(TrainingArguments):
     freeze_qformer: float = field(
         default=True, metadata={"help": "Whether to freeze Qformer."}
     )
-
     freeze_llama: float = field(
         default=True, metadata={"help": "Whether to freeze Llama."}
     )
-
     seed: int = field(
         default=42, metadata={"help": "The random seed."}
     )
-
     log_freq: int = field(
         default=1, metadata={"help":"The log frequency."}
     )
@@ -157,8 +151,6 @@ class MiniGPT4Collator:
         return batch_data
 
 def create_model(model_args):
-    # vision_config = MiniGPT4VisionConfig.from_pretrained(model_args.pretrained_model_name_or_path)
-    # qformer_config = MiniGPT4QFormerConfig.from_pretrained(model_args.pretrained_model_name_or_path)
     config = MiniGPT4Config.from_pretrained(model_args.pretrained_model_name_or_path)
     model = MiniGPT4ForConditionalGeneration(config)
     return model
@@ -178,14 +170,6 @@ def load_pretrained_model(model, pretrained_model_path, del_keys=[]):
     for key in del_keys:
         state_dict.pop(key)
     
-    ##############check#################
-    # language_project_weight = np.load("/wangqinghui/MiniGPT-4/language_projection_weight.npy")
-    # language_project_bias = np.load("/wangqinghui/MiniGPT-4/language_projection_bias.npy")
-    # language_project_weight = np.load("/wangqinghui/MiniGPT-4/random_language_projection_weight.npy")
-    # language_project_bias = np.load("/wangqinghui/MiniGPT-4/random_language_projection_bias.npy")
-    # state_dict["language_projection.weight"] = paddle.to_tensor(language_project_weight)
-    # state_dict["language_projection.bias"] = paddle.to_tensor(language_project_bias)
-
     for key in model.state_dict().keys():
         if key in state_dict.keys():
             if state_dict[key].shape != model.state_dict()[key].shape:
@@ -239,14 +223,6 @@ def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
 
-# def apply_decay_param_fun(param_name):
-#     # decay_parameters = ["language_projection.weight", "language_projection.bias"]
-#     # if param_name == "language_projection.weight":
-#     #     return True
-#     if "weight" in param_name:
-#         return True
-#     else:
-#         return False
 
 def get_grouped_parameters(model):
     num_parameters = 0
@@ -299,10 +275,13 @@ def main():
     convert_weights_to_dtype(model.vision_model, dtype="float16")
     convert_weights_to_dtype(model.qformer, dtype="float32")
     convert_weights_to_dtype(model.language_model, dtype="float16")
-    freeze_model(model.vision_model, enable_eval=True)
-    freeze_parameter(model.query_tokens)
-    freeze_model(model.qformer, enable_eval=True)
-    freeze_model(model.language_model, enable_eval=False)
+    if training_args.freeze_vit:
+        freeze_model(model.vision_model, enable_eval=True)
+    if training_args.freeze_qformer:
+        freeze_parameter(model.query_tokens)
+        freeze_model(model.qformer, enable_eval=True)
+    if training_args.freeze_llama:
+        freeze_model(model.language_model, enable_eval=False)
 
     # training setting
     num_training_steps = training_args.num_train_epochs * len(train_loader)
@@ -350,17 +329,6 @@ def main():
     # save model
     model.save_pretrained(training_args.output_dir)
     processor.tokenizer.save_pretrained(training_args.output_dir)
-
-    
-    
-
-        
-
-
-            
-    
-
-
 
 
 if __name__ == "__main__":
