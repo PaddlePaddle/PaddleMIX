@@ -15,7 +15,6 @@
 import math
 
 from paddle.optimizer.lr import LRScheduler
-
 from paddlevlp.utils.log import logger
 
 __all__ = [

@@ -79,27 +79,12 @@ class MiniGPT4Processor(ProcessorMixin):
         tokenizer.pad_token = tokenizer.eos_token
         super().__init__(image_processor, tokenizer)
         self.current_processor = self.image_processor
-        self.default_prompt = "###Human: <Img><ImageHere></Img> <TextHere> ###Assistant: " # check
+        self.default_prompt = "###Human: <Img><ImageHere></Img> <TextHere> ###Assistant: "
         self.image_tag = "<ImageHere>"
         self.text_tag = "<TextHere>"
         self.end_sym = "###"
         self.max_target_len = 160
-
         self.text_list = []
-        # text_path = kwargs.pop("text_path", None)
-        # breakpoint()
-        # if text_path is not None: 
-        #     self.text_list = self.read_texts(text_path)
-
-    # def read_texts(self, path):
-    #     if not os.path.isfile(path):
-    #         raise ValueError("A file expected for path, but acceived: {}".format(path))
-        
-    #     text_list = []
-    #     with open(path, "r", encoding="utf-8") as f:
-    #         for text in f.readlines():
-    #             text_list.append(text.strip())
-    #     return text_list
 
     def read_texts(self, path):
         if not os.path.isfile(path):
@@ -238,12 +223,12 @@ class MiniGPT4Processor(ProcessorMixin):
         Please refer to the docstring of the above two methods for more information.
         """
         prompt = prompt if prompt is not None else self.default_prompt
-        if mode == "test": # check
-            if len(self.text_list) != 0:
+        if mode == "train":
+            if text is None and len(self.text_list) != 0:
                 text = random.choice(self.text_list)
-            elif text is None:
+            elif text is None and len(self.text_list) == 0:
                 raise ValueError("If you want to train model, you have to input a text or input a text_path when instaniating processor.")
-
+        
         if images is None and text is None:
             raise ValueError("Images and text are None, you have to specify either images or texts.")
         if images is not None and not isinstance(images, (Image.Image, np.ndarray, paddle.Tensor, list)):

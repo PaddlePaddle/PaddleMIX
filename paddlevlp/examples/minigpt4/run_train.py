@@ -21,22 +21,16 @@ import random
 
 import paddle
 import paddle.nn as nn
-
-from paddlevlp.datasets import load_dataset
 from paddle.io import BatchSampler, DataLoader
 
-
+from paddlenlp.ops import transfer_param
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
-
-from paddlevlp import MiniGPT4Processor, MiniGPT4ForConditionalGeneration
-from paddlevlp import MiniGPT4VisionConfig, MiniGPT4QFormerConfig, MiniGPT4Config
-from paddlevlp.utils.log import logger
-
-from paddlenlp.ops import transfer_param
-from paddlevlp import MiniGPT4VisionModel, MiniGPT4QFormerModel
 from paddlenlp.transformers import LlamaForCausalLM
+from paddlevlp.datasets import load_dataset
+from paddlevlp import MiniGPT4Processor, MiniGPT4ForConditionalGeneration, MiniGPT4VisionConfig, MiniGPT4QFormerConfig, MiniGPT4Config, MiniGPT4VisionModel, MiniGPT4QFormerModel
 from paddlevlp.utils import paddlevlp_load
+from paddlevlp.utils.log import logger
 from paddlevlp.optimization import CosineDecayWithWarmup
 
 
@@ -157,7 +151,7 @@ class MiniGPT4Collator:
         images = [sample["image"] for sample in data_list]
         target_texts = [sample["text_input"] for sample in data_list]
         # random text from text_list read by processor and combine it with default prompt
-        batch_data = self.processor(images=images, mode="test") # check
+        batch_data = self.processor(images=images, mode="train")
         target_outputs = self.processor.process_target_texts(target_texts)
         batch_data.update(target_outputs)
         return batch_data
@@ -187,10 +181,10 @@ def load_pretrained_model(model, pretrained_model_path, del_keys=[]):
     ##############check#################
     # language_project_weight = np.load("/wangqinghui/MiniGPT-4/language_projection_weight.npy")
     # language_project_bias = np.load("/wangqinghui/MiniGPT-4/language_projection_bias.npy")
-    language_project_weight = np.load("/wangqinghui/MiniGPT-4/random_language_projection_weight.npy")
-    language_project_bias = np.load("/wangqinghui/MiniGPT-4/random_language_projection_bias.npy")
-    state_dict["language_projection.weight"] = paddle.to_tensor(language_project_weight)
-    state_dict["language_projection.bias"] = paddle.to_tensor(language_project_bias)
+    # language_project_weight = np.load("/wangqinghui/MiniGPT-4/random_language_projection_weight.npy")
+    # language_project_bias = np.load("/wangqinghui/MiniGPT-4/random_language_projection_bias.npy")
+    # state_dict["language_projection.weight"] = paddle.to_tensor(language_project_weight)
+    # state_dict["language_projection.bias"] = paddle.to_tensor(language_project_bias)
 
     for key in model.state_dict().keys():
         if key in state_dict.keys():
@@ -245,14 +239,14 @@ def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
 
-def apply_decay_param_fun(param_name):
-    # decay_parameters = ["language_projection.weight", "language_projection.bias"]
-    # if param_name == "language_projection.weight":
-    #     return True
-    if "weight" in param_name:
-        return True
-    else:
-        return False
+# def apply_decay_param_fun(param_name):
+#     # decay_parameters = ["language_projection.weight", "language_projection.bias"]
+#     # if param_name == "language_projection.weight":
+#     #     return True
+#     if "weight" in param_name:
+#         return True
+#     else:
+#         return False
 
 def get_grouped_parameters(model):
     num_parameters = 0
@@ -274,7 +268,6 @@ def get_grouped_parameters(model):
         },
         {"params": p_non_wd, "weight_decay": 0.0},
     ]
-    # breakpoint()
     return grouped_params
 
 
@@ -296,11 +289,10 @@ def main():
     processor.read_texts(data_args.text_path)
     minigpt4_collator = MiniGPT4Collator(processor)
     dataset = load_dataset("cc_sbu_dataset", SPLITS=["train"])
-    batch_sampler = BatchSampler(dataset, batch_size=training_args.batch_size, shuffle=False, drop_last=True) # check
+    batch_sampler = BatchSampler(dataset, batch_size=training_args.batch_size, shuffle=True, drop_last=True)
     train_loader = DataLoader(dataset, batch_sampler=batch_sampler, collate_fn=minigpt4_collator, num_workers=0)
     
-    # breakpoint()
-    # model = MiniGPT4ForConditionalGeneration.from_pretrained(model_args.pretrained_model_name_or_path)
+    # load MiniGPT4 model for training
     model = create_model(model_args)
     del_keys = ["language_projection.weight", "language_projection.bias"]
     load_pretrained_model(model, training_args.pretrained_model_path, del_keys=del_keys)
@@ -312,8 +304,6 @@ def main():
     freeze_model(model.qformer, enable_eval=True)
     freeze_model(model.language_model, enable_eval=False)
 
-    # breakpoint()
-    # model.train()
     # training setting
     num_training_steps = training_args.num_train_epochs * len(train_loader)
     lr_scheduler = CosineDecayWithWarmup(
@@ -325,32 +315,29 @@ def main():
         last_step=-1,
     )
 
-    # decay_params = [p.name for n, p in model.named_parameters() if not any(nd in n for nd in ["bias", "norm"])]
+    decay_params = [p.name for n, p in model.named_parameters() if not any(nd in n for nd in ["bias", "norm"])]
     grouped_params = get_grouped_parameters(model)
     optimizer = paddle.optimizer.AdamW(
         learning_rate=lr_scheduler,
         parameters=grouped_params,
         weight_decay=training_args.weight_decay,
-        apply_decay_param_fun=apply_decay_param_fun,
+        # apply_decay_param_fun=lambda x: x in decay_params,
     )
     if training_args.use_amp:
         scaler = paddle.amp.GradScaler(init_loss_scaling=65536.0, incr_every_n_steps=2000, decr_every_n_nan_or_inf=1)
 
     # start to train MiniGPT4
-    # breakpoint()
     for epoch in range(training_args.num_train_epochs):
         for step, batch_data in enumerate(train_loader):
             with paddle.amp.auto_cast(enable=training_args.use_amp, custom_white_list={}, level="O1"):
                 outputs = model(**batch_data, return_dict=True)
                 loss = outputs.loss
-            # breakpoint()
             if step % training_args.log_freq == 0:
                 print("epoch: {}, step: {}, lr: {}, loss: {}".format(epoch, step, lr_scheduler.get_lr(), loss.item()))
             
             if training_args.use_amp:
-                scaled = scaler.scale(loss) # 35846.53906250
+                scaled = scaler.scale(loss)
                 scaled.backward()
-                # scaler.minimize(optimizer, scaled)
                 scaler.step(optimizer)
                 scaler.update()
             else:
@@ -362,7 +349,7 @@ def main():
     
     # save model
     model.save_pretrained(training_args.output_dir)
-    tokenizer.save_pretrained(training_args.output_dir)
+    processor.tokenizer.save_pretrained(training_args.output_dir)
 
     
     
