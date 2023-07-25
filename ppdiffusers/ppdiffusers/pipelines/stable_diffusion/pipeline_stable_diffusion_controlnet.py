@@ -106,8 +106,9 @@ class MultiControlNetModel(ModelMixin):
             cross_attention_kwargs: Optional[Dict[str, Any]]=None,
             guess_mode: bool=False,
             return_dict: bool=True, ) -> Union[ControlNetOutput, Tuple]:
-        for i, (image, scale, controlnet) in enumerate(
-                zip(controlnet_cond, conditioning_scale, self.nets)):
+        for i, (
+                image, scale, controlnet
+        ) in enumerate(zip(controlnet_cond, conditioning_scale, self.nets)):
             down_samples, mid_sample = controlnet(
                 sample,
                 timestep,
@@ -298,14 +299,14 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             untruncated_ids = self.tokenizer(
                 prompt, padding="longest", return_tensors="pd").input_ids
 
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
-                    text_input_ids, untruncated_ids):
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[
+                    -1] and not paddle.equal_all(text_input_ids,
+                                                 untruncated_ids):
                 removed_text = self.tokenizer.batch_decode(
                     untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
-                    f" {self.tokenizer.model_max_length} tokens: {removed_text}"
-                )
+                    f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
             config = (self.text_encoder.config
                       if isinstance(self.text_encoder.config, dict) else
@@ -350,8 +351,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
 
             # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
-                uncond_tokens = self.maybe_convert_prompt(
-                    uncond_tokens, self.tokenizer)
+                uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
+                                                          self.tokenizer)
 
             max_length = prompt_embeds.shape[1]
             uncond_input = self.tokenizer(
@@ -452,9 +453,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                 f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
             )
 
-        if (callback_steps is None) or (callback_steps is not None and
-                                        (not isinstance(callback_steps, int) or
-                                         callback_steps <= 0)):
+        if (callback_steps is None) or (callback_steps is not None and (
+                not isinstance(callback_steps, int) or callback_steps <= 0)):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
                 f" {type(callback_steps)}.")
@@ -778,7 +778,7 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
                 `self.processor` in
-                [ppdiffusers.cross_attention](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/ppdiffusers/ppdiffusers/models/cross_attention.py).
+                [ppdiffusers.cross_attention](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/models/cross_attention.py).
             controlnet_conditioning_scale (`float` or `List[float]`, *optional*, defaults to 1.0):
                 The outputs of the controlnet are multiplied by `controlnet_conditioning_scale` before they are added
                 to the residual in the original unet. If multiple ControlNets are specified in init, you can set the

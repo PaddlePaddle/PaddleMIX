@@ -672,8 +672,7 @@ def main(args):
                 safety_checker=pipe.safety_checker,
                 feature_extractor=pipe.feature_extractor,
                 requires_safety_checker=pipe.requires_safety_checker,
-                # custom_pipeline="pipeline_fastdeploy_stable_diffusion_mixture_tiling",
-                custom_pipeline="/root/project/paddlenlp/ppdiffusers_upgrade/PaddleNLP/ppdiffusers/examples/community/pipeline_fastdeploy_stable_diffusion_mixture_tiling.py",
+                custom_pipeline="pipeline_fastdeploy_stable_diffusion_mixture_tiling",
             )
             # custom_pipeline
             mixture_tiling_pipe._progress_bar_config = pipe._progress_bar_config
@@ -683,8 +682,8 @@ def main(args):
             mixture_tiling_pipe(
                 prompt=[[
                     "A charming house in the countryside, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-                    # "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-                    # "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                    "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                    "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
                 ]],
                 tile_height=512,
                 tile_width=512,
