@@ -3,17 +3,24 @@ import paddle.nn as nn
 from paddle.nn import functional as F
 from paddle import distributed as dist
 import pprint
+
 from .timm_ext import LabelSmoothingCrossEntropy
-import time
+from paddlevlp.models.common.distributed_utils import allgather
 
 
-def gather_features_cat_group(image_features, text_features, group):
+def gather_features_cat_group(image_features,
+                              text_features,
+                              group,
+                              gather_with_grad=False):
     if group.world_size <= 1:
         return image_features, text_features
     features = paddle.concat([image_features, text_features], axis=-1)
-    gathered_features = []
-    dist.all_gather(gathered_features, features, group=group)
-    features = paddle.concat(gathered_features, axis=0)
+    if gather_with_grad:
+        features = allgather(features, group=group)
+    else:
+        gathered_features = []
+        dist.all_gather(gathered_features, features, group=group)
+        features = paddle.concat(gathered_features, axis=0)
     image_features, text_features = paddle.split(features, 2, axis=-1)
     return image_features, text_features
 
@@ -28,12 +35,13 @@ def gather_features(image_features,
     hcg = paddle.distributed.fleet.get_hybrid_communicate_group()
     shardinggroup = hcg.get_sharding_parallel_group()
     dpgroup = hcg.get_data_parallel_group()
-    # We gather tensors from all gpus, paddle doesn't support allgather backward now
     if gather_with_grad:
-        image_features, text_features = gather_features_cat_group(
-            image_features, text_features, shardinggroup)
-        image_features, text_features = gather_features_cat_group(
-            image_features, text_features, dpgroup)
+        if shardinggroup.nranks > 1:
+            image_features, text_features = gather_features_cat_group(
+                image_features, text_features, shardinggroup, gather_with_grad)
+        if dpgroup.nranks > 1:
+            image_features, text_features = gather_features_cat_group(
+                image_features, text_features, dpgroup, gather_with_grad)
         all_image_features = image_features
         all_text_features = text_features
     else:
@@ -74,10 +82,10 @@ def gather_features_bk(image_features,
     # We gather tensors from all gpus
     if gather_with_grad:
         all_image_features_list = []
-        dist.all_gather(all_image_features_list, image_features)
+        allgather(all_image_features_list, image_features)
         all_image_features = paddle.concat(all_image_features_list, axis=0)
         all_text_features_list = []
-        dist.all_gather(all_text_features_list, text_features)
+        allgather(all_text_features_list, text_features)
         all_text_features = paddle.concat(all_text_features_list, axis=0)
     else:
         gathered_image_features = []
@@ -116,11 +124,9 @@ class ClipLoss(nn.Layer):
     def forward(self, preds):
         image_features, text_features, logit_scale = preds
         if self.world_size > 1:
-            time1 = time.time()
-            all_image_features, all_text_features = gather_features_bk(
+            all_image_features, all_text_features = gather_features(
                 image_features, text_features, self.local_loss,
                 self.gather_with_grad, self.rank, self.world_size)
-            time2 = time.time()
 
             if self.local_loss:
                 logits_per_image = logit_scale * image_features @all_text_features.T
@@ -131,10 +137,10 @@ class ClipLoss(nn.Layer):
         else:
             logits_per_image = logit_scale * image_features @text_features.T
             logits_per_text = logit_scale * text_features @image_features.T
-        time3 = time.time()
 
         # calculated ground-truth and cache if enabled
         num_logits = logits_per_image.shape[0]
+        # if self.prev_num_logits != num_logits or device not in self.labels:
         labels = paddle.arange(num_logits, dtype=paddle.int64)
         if self.world_size > 1 and self.local_loss:
             labels = labels + num_logits * self.rank
@@ -143,10 +149,8 @@ class ClipLoss(nn.Layer):
         #         self.prev_num_logits = num_logits
         # else:
         #     labels = self.labels[device]
-        timearange = time.time()
         total_loss = (F.cross_entropy(logits_per_image, labels) +
                       F.cross_entropy(logits_per_text, labels)) / 2
-        time4 = time.time()
         return total_loss, logits_per_image, logits_per_text, labels
 
 
@@ -186,10 +190,7 @@ class CoCaLoss(ClipLoss):
         clip_loss = self.clip_loss_weight * clip_loss
 
         if output_dict:  #output_dict:
-            return {
-                "contrastive_loss": clip_loss,
-                "caption_loss": caption_loss
-            }
+            return {"contrastive_loss": clip_loss, "caption_loss": caption_loss}
 
         return clip_loss + caption_loss, logits_per_image, logits_per_text, labels
 

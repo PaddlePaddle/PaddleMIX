@@ -45,8 +45,8 @@ class EVACLIPConfig(PretrainedConfig):
     def from_pretrained(cls,
                         pretrained_model_name_or_path: Union[str, os.PathLike],
                         **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(
-            pretrained_model_name_or_path, **kwargs)
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
+                                                  **kwargs)
 
         if ("model_type" in config_dict and hasattr(cls, "model_type") and
                 config_dict["model_type"] != cls.model_type):
@@ -201,7 +201,6 @@ def build_model_from_openai_state_dict(state_dict: dict,
                            1)**0.5)
         image_size = vision_patch_size * grid_size
     else:
-        """Class Method: *.split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
         counts: list = [
             len(
                 set(
@@ -211,8 +210,8 @@ def build_model_from_openai_state_dict(state_dict: dict,
         ]
         vision_layers = tuple(counts)
         vision_width = state_dict['visual.layer1.0.conv1.weight'].shape[0]
-        output_width = round((state_dict[
-            'visual.attnpool.positional_embedding'].shape[0] - 1)**0.5)
+        output_width = round((state_dict['visual.attnpool.positional_embedding']
+                              .shape[0] - 1)**0.5)
         vision_patch_size = None
         assert output_width**2 + 1 == state_dict[
             'visual.attnpool.positional_embedding'].shape[0]
@@ -222,7 +221,6 @@ def build_model_from_openai_state_dict(state_dict: dict,
     vocab_size = state_dict['token_embedding.weight'].shape[0]
     transformer_width = state_dict['ln_final.weight'].shape[0]
     transformer_heads = transformer_width // 64
-    """Class Method: *.split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
     transformer_layers = len(
         set(
             k.split('.')[2] for k in state_dict

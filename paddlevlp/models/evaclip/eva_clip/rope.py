@@ -21,18 +21,15 @@ def broadcat(tensors, dim=-1):
     expanded_dims.insert(dim, (dim, dims[dim]))
     expandable_shapes = list(zip(*map(lambda t: t[1], expanded_dims)))
     tensors = list(
-        map(lambda t: t[0].expand(shape=t[1]), zip(tensors,
-                                                   expandable_shapes)))
+        map(lambda t: t[0].expand(shape=t[1]), zip(tensors, expandable_shapes)))
     return paddle.concat(x=tensors, axis=dim)
 
 
 def rotate_half(x):
-    # x = rearrange(x, '... (d r) -> ... d r', r=2)
     x = x.reshape(list(x.shape)[:-1] + [-1, 2])
     x1, x2 = x.unbind(axis=-1)
     x = paddle.stack(x=(-x2, x1), axis=-1)
     return x.reshape(list(x.shape)[:-2] + [-1])
-    # return rearrange(x, '... d r -> ... (d r)')
 
 
 class VisionRotaryEmbedding(paddle.nn.Layer):
@@ -68,8 +65,7 @@ class VisionRotaryEmbedding(paddle.nn.Layer):
         freqs_w = paddle.einsum('..., f -> ... f', t, freqs)
         # freqs_w = repeat(freqs_w, '... n -> ... (n r)', r=2)
         freqs_w = freqs_w.repeat_interleave(2, axis=-1)
-        freqs = broadcat(
-            (freqs_h[:, (None), :], freqs_w[(None), :, :]), dim=-1)
+        freqs = broadcat((freqs_h[:, (None), :], freqs_w[(None), :, :]), dim=-1)
         self.register_buffer('freqs_cos', freqs.cos())
         self.register_buffer('freqs_sin', freqs.sin())
         logging.info(f'Shape of rope freq: {self.freqs_cos.shape}')
@@ -117,9 +113,7 @@ class VisionRotaryEmbeddingFast(paddle.nn.Layer):
         # freqs = repeat(freqs, '... n -> ... (n r)', r=2)
         freqs = freqs.repeat_interleave(2, axis=freqs.rank() - 1)
         freqs = broadcat((freqs[:, (None), :], freqs[(None), :, :]), dim=-1)
-        """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
         freqs_cos = freqs.cos().reshape((-1, freqs.shape[-1]))
-        """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
         freqs_sin = freqs.sin().reshape((-1, freqs.shape[-1]))
         self.patch_dropout = patch_dropout
         self.register_buffer('freqs_cos', freqs_cos)
@@ -131,10 +125,6 @@ class VisionRotaryEmbeddingFast(paddle.nn.Layer):
             batch = t.shape[0]
             batch_indices = paddle.arange(end=batch)
             batch_indices = batch_indices[..., None]
-            # freqs_cos = repeat(
-            #     self.freqs_cos, 'i j -> n i m j', n=t.shape[0], m=t.shape[1])
-            # freqs_sin = repeat(
-            #     self.freqs_sin, 'i j -> n i m j', n=t.shape[0], m=t.shape[1])
             freqs_cos = self.freqs_cos.unsqueeze(0)
             freqs_cos = freqs_cos.unsqueeze(2)
             freqs_cos = freqs_cos.repeat_interleave(t.shape[0], axis=0)
@@ -146,10 +136,8 @@ class VisionRotaryEmbeddingFast(paddle.nn.Layer):
             freqs_sin = freqs_sin.repeat_interleave(t.shape[1], axis=2)
 
             freqs_cos = freqs_cos[batch_indices, patch_indices_keep]
-            # freqs_cos = rearrange(freqs_cos, 'n i m j -> n m i j')
             freqs_cos = freqs_cos.transpose((0, 2, 1, 3))
             freqs_sin = freqs_sin[batch_indices, patch_indices_keep]
-            # freqs_sin = rearrange(freqs_sin, 'n i m j -> n m i j')
             freqs_sin = freqs_sin.transpose((0, 2, 1, 3))
             return t * freqs_cos + rotate_half(t) * freqs_sin
         return t * self.freqs_cos + rotate_half(t) * self.freqs_sin

@@ -1,11 +1,12 @@
 import sys
-import paddle
 from itertools import repeat
 import collections.abc
 import logging
 import math
 import numpy as np
 import scipy
+import paddle
+import paddle.distributed as dist
 
 
 def resize_clip_pos_embed(state_dict,
@@ -205,12 +206,10 @@ def resize_rel_pos_embed(state_dict,
                 print('Target positions = %s' % str(dx))
                 all_rel_pos_bias = []
                 for i in range(num_attn_heads):
-                    """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
                     z = rel_pos_bias[:, (i)].reshape(
                         (src_size, src_size)).astype(dtype='float32').numpy()
                     #use scipy for numpy input
                     f = scipy.interpolate.interp2d(x, y, z, kind='cubic')
-                    """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
                     if isinstance(rel_pos_bias.place, paddle.dtype):
                         dtype = rel_pos_bias.place
                     elif isinstance(rel_pos_bias.place,
@@ -304,7 +303,6 @@ def freeze_batch_norm_2d(module, module_match={}, name=''):
             new_child = freeze_batch_norm_2d(child, module_match,
                                              full_child_name)
             if new_child is not child:
-                """Class Method: *.add_module, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
                 res.add_sublayer(child_name, new_child)
     return res
 
@@ -335,28 +333,3 @@ def is_local_master(args):
 
 def is_master(args, local=False):
     return is_local_master(args) if local else is_global_master(args)
-
-
-class AllGather(paddle.autograd.PyLayer):
-    """An autograd function that performs allgather on a tensor.
-    Performs all_gather operation on the provided tensors.
-    *** Warning ***: torch.distributed.all_gather has no gradient.
-    """
-
-    @staticmethod
-    def forward(ctx, tensor, rank, world_size):
-        tensors_gather = [
-            paddle.empty_like(x=tensor) for _ in range(world_size)
-        ]
-        paddle.distributed.all_gather(tensors_gather, tensor)
-        ctx.rank = rank
-        ctx.batch_size = tensor.shape[0]
-        return paddle.concat(x=tensors_gather, axis=0)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        return grad_output[ctx.batch_size * ctx.rank:ctx.batch_size * (
-            ctx.rank + 1)], None, None
-
-
-allgather = AllGather.apply

@@ -228,8 +228,7 @@ class MultiHeadAttention(paddle.nn.Layer):
             if self.fuse_attention_qkv:
                 q, k, v = self._fuse_prepare_qkv(query)
             else:
-                q, k, v = self._prepare_qkv(query, key, value, use_cache,
-                                            cache)
+                q, k, v = self._prepare_qkv(query, key, value, use_cache, cache)
         else:
             q, k, v, cache = self._prepare_qkv(query, key, value, use_cache,
                                                cache)
@@ -380,12 +379,10 @@ def _in_projection_packed(q: paddle.Tensor,
                 x=q, weight=w, bias=b).chunk(
                     chunks=3, axis=-1)
         else:
-            """Class Method: *.split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             w_q, w_kv = w.split([E, E * 2])
             if b is None:
                 b_q = b_kv = None
             else:
-                """Class Method: *.split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
                 b_q, b_kv = b.split([E, E * 2])
             return (paddle.nn.functional.linear(
                 x=q, weight=w_q, bias=b_q), ) + paddle.nn.functional.linear(
@@ -467,19 +464,16 @@ class Attention(paddle.nn.Layer):
             x=x, weight=self.in_proj_weight, bias=self.in_proj_bias).chunk(
                 chunks=3, axis=-1)
         if self.xattn:
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = q.reshape((L, N, self.num_heads, -1))
             perm_3 = list(range(x.ndim))
             perm_3[0] = 1
             perm_3[1] = 0
             q = x.transpose(perm=perm_3)
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = k.reshape((L, N, self.num_heads, -1))
             perm_4 = list(range(x.ndim))
             perm_4[0] = 1
             perm_4[1] = 0
             k = x.transpose(perm=perm_4)
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = v.reshape((L, N, self.num_heads, -1))
             perm_5 = list(range(x.ndim))
             perm_5[0] = 1
@@ -494,19 +488,16 @@ class Attention(paddle.nn.Layer):
                 attn_bias=LowerTriangularMask()
                 if attn_mask is not None else None)
         else:
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = q.reshape((L, N * self.num_heads, -1))
             perm_6 = list(range(x.ndim))
             perm_6[0] = 1
             perm_6[1] = 0
             q = x.transpose(perm=perm_6)
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = k.reshape((L, N * self.num_heads, -1))
             perm_7 = list(range(x.ndim))
             perm_7[0] = 1
             perm_7[1] = 0
             k = x.transpose(perm=perm_7)
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = v.reshape((L, N * self.num_heads, -1))
             perm_8 = list(range(x.ndim))
             perm_8[0] = 1
@@ -522,9 +513,7 @@ class Attention(paddle.nn.Layer):
                                   y=x.transpose(perm=perm_9))
                 logit_scale = paddle.clip(
                     x=self.logit_scale, max=self.logit_scale_max).exp()
-                """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
                 attn = attn.reshape((N, self.num_heads, L, L)) * logit_scale
-                """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
                 attn = attn.reshape((-1, L, L))
             else:
                 q = q * self.scale
@@ -537,7 +526,6 @@ class Attention(paddle.nn.Layer):
                 if attn_mask.dtype == 'bool':
                     new_attn_mask = paddle.zeros_like(
                         x=attn_mask).astype(q.dtype)
-                    """Class Method: *.masked_fill_, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
                     # new_attn_mask.masked_fill_(attn_mask, float('-inf'))
                     new_attn_mask = masked_fill(new_attn_mask, attn_mask,
                                                 float('-inf'))
@@ -548,9 +536,7 @@ class Attention(paddle.nn.Layer):
                 attn = self.attn_drop(attn)
             x = paddle.bmm(x=attn, y=v)
         if self.head_scale is not None:
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = x.reshape((N, self.num_heads, L, C)) * self.head_scale
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = x.reshape((-1, L, C))
         x = x
         perm_11 = list(range(x.ndim))
@@ -641,19 +627,16 @@ class CustomAttention(paddle.nn.Layer):
                 if attn_mask is not None else None)
 
         else:
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = q.reshape((N_q, B_q * self.num_heads, -1))
             perm_12 = list(range(x.ndim))
             perm_12[0] = 1
             perm_12[1] = 0
             q = x.transpose(perm=perm_12)
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = k.reshape((N_k, B_k * self.num_heads, -1))
             perm_13 = list(range(x.ndim))
             perm_13[0] = 1
             perm_13[1] = 0
             k = x.transpose(perm=perm_13)
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = v.reshape((N_v, B_v * self.num_heads, -1))
             perm_14 = list(range(x.ndim))
             perm_14[0] = 1
@@ -669,10 +652,8 @@ class CustomAttention(paddle.nn.Layer):
                                   y=x.transpose(perm=perm_15))
                 logit_scale = paddle.clip(
                     x=self.logit_scale, max=self.logit_scale_max).exp()
-                """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
                 attn = attn.reshape(
                     (B_q, self.num_heads, N_q, N_k)) * logit_scale
-                """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
                 attn = attn.reshape((-1, N_q, N_k))
             else:
                 q = q * self.scale
@@ -685,8 +666,6 @@ class CustomAttention(paddle.nn.Layer):
                 if attn_mask.dtype == 'bool':
                     new_attn_mask = paddle.zeros_like(
                         x=attn_mask).astype(q.dtype)
-                    """Class Method: *.masked_fill_, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
-                    # new_attn_mask.masked_fill_(attn_mask, float('-inf'))
                     new_attn_mask = masked_fill(new_attn_mask, attn_mask,
                                                 float('-inf'))
                     attn_mask = new_attn_mask
@@ -696,9 +675,7 @@ class CustomAttention(paddle.nn.Layer):
                 attn = self.attn_drop(attn)
             x = paddle.bmm(x=attn, y=v)
         if self.head_scale is not None:
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = x.reshape((B_q, self.num_heads, N_q, C_q)) * self.head_scale
-            """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
             x = x.reshape((-1, N_q, C_q))
         x = x
         perm_17 = list(range(x.ndim))
@@ -741,8 +718,9 @@ class CustomResidualAttentionBlock(paddle.nn.Layer):
         self.ln_attn = norm_layer(
             d_model) if scale_attn else paddle.nn.Identity()
         self.ls_1 = LayerScale(
-            d_model, ls_init_value
-        ) if ls_init_value is not None else paddle.nn.Identity()
+            d_model,
+            ls_init_value) if ls_init_value is not None else paddle.nn.Identity(
+            )
         self.ln_2 = norm_layer(d_model)
         mlp_width = int(d_model * mlp_ratio)
         self.mlp = paddle.nn.Sequential(
@@ -753,16 +731,17 @@ class CustomResidualAttentionBlock(paddle.nn.Layer):
                 has_bias=True,
                 gather_output=True)), ('ln', norm_layer(mlp_width)
                                        if scale_fc else paddle.nn.Identity()),
-               ('gelu', act_layer()), (
-                   'c_proj', fleet.meta_parallel.ColumnParallelLinear(
-                       mlp_width,
-                       d_model,
-                       weight_attr=None,
-                       has_bias=True,
-                       gather_output=True))])
+               ('gelu', act_layer()), ('c_proj',
+                                       fleet.meta_parallel.ColumnParallelLinear(
+                                           mlp_width,
+                                           d_model,
+                                           weight_attr=None,
+                                           has_bias=True,
+                                           gather_output=True))])
         self.ls_2 = LayerScale(
-            d_model, ls_init_value
-        ) if ls_init_value is not None else paddle.nn.Identity()
+            d_model,
+            ls_init_value) if ls_init_value is not None else paddle.nn.Identity(
+            )
 
     def forward(self,
                 q: paddle.Tensor,
@@ -956,8 +935,7 @@ class Transformer(paddle.nn.Layer):
     def get_cast_dtype(self) -> paddle.dtype:
         return self.resblocks[0].mlp.c_fc.weight.dtype
 
-    def forward(self,
-                x: paddle.Tensor,
+    def forward(self, x: paddle.Tensor,
                 attn_mask: Optional[paddle.Tensor]=None):
         for r in self.resblocks:
             if self.enable_recompute:
@@ -1078,8 +1056,7 @@ class VisionTransformer(paddle.nn.Layer):
                 self.conv1, self.class_embedding, self.positional_embedding,
                 self.ln_pre
             ], *self.transformer.resblocks[:-1],
-                      [self.transformer.resblocks[-1],
-                       self.ln_post], self.proj]
+                      [self.transformer.resblocks[-1], self.ln_post], self.proj]
 
             def _unlock(x):
                 if isinstance(x, Sequence):
@@ -1204,8 +1181,8 @@ class EVATextTransformerConfig(PretrainedConfig):
     def from_pretrained(cls,
                         pretrained_model_name_or_path: Union[str, os.PathLike],
                         **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(
-            pretrained_model_name_or_path, **kwargs)
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
+                                                  **kwargs)
 
         if ("model_type" in config_dict and hasattr(cls, "model_type") and
                 config_dict["model_type"] != cls.model_type):
@@ -1330,7 +1307,6 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
     def build_attention_mask(self):
         mask = paddle.empty(shape=[self.num_pos, self.num_pos])
         mask.fill_(value=float('-inf'))
-        """Class Method: *.triu_, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
         mask = paddle.triu(mask, 1)
         return mask
 
@@ -1440,8 +1416,8 @@ class MultimodalTransformerConfig(PretrainedConfig):
     def from_pretrained(cls,
                         pretrained_model_name_or_path: Union[str, os.PathLike],
                         **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(
-            pretrained_model_name_or_path, **kwargs)
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
+                                                  **kwargs)
 
         if ("model_type" in config_dict and hasattr(cls, "model_type") and
                 config_dict["model_type"] != cls.model_type):

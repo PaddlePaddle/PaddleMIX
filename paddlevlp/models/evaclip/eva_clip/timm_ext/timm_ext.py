@@ -66,7 +66,6 @@ def drop_path(x,
         paddle.empty(
             shape=shape, dtype=x.dtype))
     if keep_prob > 0.0 and scale_by_keep:
-        """Class Method: *.div_, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
         random_tensor = random_tensor.divide(keep_prob)
     return x * random_tensor
 
@@ -175,8 +174,7 @@ class LabelSmoothingCrossEntropy(paddle.nn.Layer):
         self.smoothing = smoothing
         self.confidence = 1.0 - smoothing
 
-    def forward(self, x: paddle.Tensor,
-                target: paddle.Tensor) -> paddle.Tensor:
+    def forward(self, x: paddle.Tensor, target: paddle.Tensor) -> paddle.Tensor:
         logprobs = paddle.nn.functional.log_softmax(x=x, axis=-1)
         nll_loss = -logprobs.take_along_axis(
             axis=-1, indices=target.unsqueeze(axis=1))
