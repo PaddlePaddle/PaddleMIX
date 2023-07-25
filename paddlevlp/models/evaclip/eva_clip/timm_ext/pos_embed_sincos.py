@@ -208,7 +208,6 @@ def apply_rot_embed_list(x: List[paddle.Tensor], sin_emb, cos_emb):
 
 
 def apply_rot_embed_cat(x: paddle.Tensor, emb):
-    """Class Method: *.tensor_split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
     sin_emb, cos_emb = emb.split(2, -1)
     if sin_emb.ndim == 3:
         return x * cos_emb.unsqueeze(axis=1).expand_as(

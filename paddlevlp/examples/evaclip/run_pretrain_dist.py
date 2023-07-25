@@ -116,6 +116,9 @@ class PreTrainingArguments(TrainingArguments):
         default=-1, metadata={"help": "the last epoch to resume"})
     accum_freq: int = field(
         default=1, metadata={"help": "accum frequency (default: 1)"})
+    gather_with_grad: bool = field(
+        default=False,
+        metadata={"help": "Whether to use gather_with_grad in loss."}, )
 
 
 class SelfTrainer(CLIPTrainer):
@@ -177,6 +180,7 @@ def main_worker(training_args, model_args, data_args):
     else:
         model = EVACLIP.from_pretrained(
             "EVA/" + model_args.model,
+            gather_with_grad=training_args.gather_with_grad,
             data_world_rank=training_args.data_world_rank,
             data_world_size=training_args.data_world_size)
 

@@ -80,16 +80,12 @@ class TimmModel(paddle.nn.Layer):
             for group_idx in range(max_layer_id + 1):
                 group = gparams[group_idx]
                 for param in group:
-                    """Class Method: *.get_parameter, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
                     # may never use
                     self.trunk.get_parameter(param).stop_gradient = not False
             if freeze_bn_stats:
                 gmodules = timm_ext.group_modules(
                     self.trunk, matcher, reverse=True)
-                gmodules = {
-                    k
-                    for k, v in gmodules.items() if v <= max_layer_id
-                }
+                gmodules = {k for k, v in gmodules.items() if v <= max_layer_id}
                 freeze_batch_norm_2d(self.trunk, gmodules)
 
     def set_grad_checkpointing(self, enable=True):
