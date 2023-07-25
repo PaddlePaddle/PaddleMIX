@@ -436,7 +436,7 @@ class VisionTransformer(nn.Layer):
 
 def interpolate_pos_embed(model, checkpoint_model):
     if 'visual_encoder.pos_embed' in checkpoint_model:
-        pos_embed_checkpoint = checkpoint_model['visual_encoder.pos_embed']
+        pos_embed_checkpoint =paddle.to_tensor(checkpoint_model['visual_encoder.pos_embed'])
         embedding_size = pos_embed_checkpoint.shape[-1]
         print(dir(model))
         num_patches = model.visual_encoder.patch_embed.num_patches
@@ -456,7 +456,7 @@ def interpolate_pos_embed(model, checkpoint_model):
                 pos_tokens, size=(new_size, new_size), mode='bicubic', align_corners=False)
             pos_tokens = pos_tokens.transpose((0, 2, 3, 1)).flatten(1, 2)
             new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
-            checkpoint_model['visual_encoder.pos_embed'] = new_pos_embed
+            checkpoint_model['visual_encoder.pos_embed'] = new_pos_embed.numpy()
 
 
 def create_eva_vit_g(img_size=224,drop_path_rate=0.4,mp_degree=1,gradient_checkpointing=False):

@@ -180,6 +180,7 @@ def create_model(config):
     vision_config = Blip2VisionConfig.from_pretrained(config.model_name_or_path)
     qformer_config = Blip2QFormerConfig.from_pretrained(config.model_name_or_path)
     text_config = get_text_config(config.text_model_name_or_path)
+    vision_config.image_size= config.image_size
     # add tensor_parallel_degree
     vision_config.mp_degree=config.mp_degree
     qformer_config.mp_degree=config.mp_degree
