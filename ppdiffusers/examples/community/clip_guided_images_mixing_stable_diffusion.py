@@ -286,6 +286,7 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline):
             content_image: Union[paddle.Tensor, PIL.Image.Image],
             style_prompt: Optional[str]=None,
             content_prompt: Optional[str]=None,
+            negative_prompt=None,
             height: Optional[int]=512,
             width: Optional[int]=512,
             noise_strength: float=0.6,
@@ -380,8 +381,12 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline):
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance:
             max_length = content_text_input.input_ids.shape[-1]
+            if negative_prompt is None:
+                uncond_tokens = [""]
+            else:
+                uncond_tokens = [negative_prompt]
             uncond_input = self.tokenizer(
-                [""],
+                uncond_tokens,
                 padding="max_length",
                 max_length=max_length,
                 return_tensors="pd")
