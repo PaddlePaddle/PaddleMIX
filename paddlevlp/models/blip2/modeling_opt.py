@@ -981,12 +981,11 @@ class OPTForCausalLM(OPTPretrainedModel):
 
     def __init__(self, config: OPTConfig):
         super(OPTForCausalLM, self).__init__(config)
-        config.mp_degree=2
         self.opt = OPTModel(config)
         self.lm_head = OPTLMHead(
             hidden_size=self.opt.config.hidden_size,
             vocab_size=self.opt.config.vocab_size,
-            # embedding_weights=self.opt.embeddings.word_embeddings.weight,
+            embedding_weights=self.opt.embeddings.word_embeddings.weight,
         )
 
     def forward(

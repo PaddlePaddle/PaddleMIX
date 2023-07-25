@@ -262,6 +262,16 @@ def main():
     model = create_model(model_args)
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     # create trainer
+
+    # decorated = paddle.amp.decorate(
+    #     models=[model.visual_encoder,model.language_model], optimizers=None, level="O2"
+    # )
+    # model.visual_encoder,model.language_model= decorated
+
+    weight = "/paddle/workspace/checkpoints/blip2_pretrained.pdparams"
+    state_dict = paddle.load(weight)
+    interpolate_pos_embed(model, state_dict)#wjm
+    model.set_state_dict(state_dict)
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -274,7 +284,7 @@ def main():
         tokenizer=tokenizer_class
     )
     # Training
-    checkpoint = None
+    checkpoint=None
     if training_args.resume_from_checkpoint is not None:
         checkpoint = training_args.resume_from_checkpoint
         state_dict = paddle.load(checkpoint)
@@ -290,7 +300,10 @@ def main():
 def setdistenv(args):
     if args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree!=1:
         args.use_hybrid_parallel=True
-    args.dp_degree = dist.get_world_size() // (args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree)
+    args.dp_degree = dist.get_world_size() \
+                   // (args.tensor_parallel_degree \
+                    * args.sharding_parallel_degree * \
+                     args.pipeline_parallel_degree)
     strategy = fleet.DistributedStrategy()
     if args.tensor_parallel_degree>1:
         strategy.tensor_parallel = True

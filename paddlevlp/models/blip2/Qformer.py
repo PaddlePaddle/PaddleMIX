@@ -585,7 +585,7 @@ class BertEncoder(nn.Layer):
         next_decoder_cache = () if use_cache else None
         # cuda_state = paddle.get_cuda_rng_state()
         # paddle.set_cuda_rng_state(cuda_state)
-        print("qformergradient_checkpointing:{}".format(self.gradient_checkpointing))
+        # print("qformergradient_checkpointing:{}".format(self.gradient_checkpointing))
         for i in range(self.config.num_hidden_layers):#add recompute
             layer_module = self.layer[i]
             if output_hidden_states:

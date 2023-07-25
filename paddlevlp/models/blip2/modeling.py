@@ -1630,12 +1630,18 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             mp_degree=config.qformer_config.mp_degree if hasattr(config.qformer_config, "mp_degree") else 1,
             gradient_checkpointing=config.qformer_config.gradient_checkpointing if hasattr(config.qformer_config, "gradient_checkpointing") else False
         )
+        self.Qformer.cls = None
+        self.Qformer.bert.embeddings.word_embeddings = None
+        self.Qformer.bert.embeddings.position_embeddings = None
+        for layer in self.Qformer.bert.encoder.layer:
+            layer.output = None
+            layer.intermediate = None
         self.language_projection = nn.Linear(
             config.qformer_config.hidden_size, config.text_config.hidden_size
         )
         if config.use_decoder_only_language_model:
             if isinstance(config.text_config, OPTConfig):
-                                language_model = OPTForCausalLM.from_pretrained("facebook/opt-2.7b",load_state_as_np=True)
+                    language_model = OPTForCausalLM.from_pretrained("facebook/opt-2.7b",load_state_as_np=True)
             else:
                 raise NotImplementedError
         else:
@@ -1781,7 +1787,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                     return_dict=True,
                     labels=labels,)
             loss = outputs.loss
-        print(loss)
+        # print(loss)
         return {"loss": loss}
     @paddle.no_grad()
     def encode_image(
