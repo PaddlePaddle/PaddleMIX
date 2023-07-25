@@ -251,10 +251,6 @@ class BertSelfAttention(nn.Layer):
         query_layer = self.transpose_for_scores(mixed_query_layer)
 
         past_key_value = (key_layer, value_layer)
-        # attention_mask=paddle.to_tensor(np.load("attention_mask.npy"))
-        # key_layer=paddle.to_tensor(np.load("key_layer.npy"))
-        # value_layer=paddle.to_tensor(np.load("value_layer.npy"))
-        # query_layer=paddle.to_tensor(np.load("query_layer.npy"))
         # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = paddle.matmul(query_layer, key_layer.transpose([0, 1, 3, 2]))
 
@@ -294,11 +290,6 @@ class BertSelfAttention(nn.Layer):
                     + relative_position_scores_query
                     + relative_position_scores_key
                 )
-        # # key_layer=paddle.to_tensor(np.load("key_layer.npy"))
-        # # value_layer=paddle.to_tensor(np.load("value_layer.npy"))
-        # # query_layer=paddle.to_tensor(np.load("query_layer.npy"))
-        # # attention_scores = paddle.matmul(query_layer, key_layer.transpose([0, 1, 3, 2]))
-        # attention_mask=paddle.to_tensor(np.load("attention_mask.npy"))#attentionmask写法有问题
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         if attention_mask is not None:
             # Apply the attention mask is (precomputed for all layers in BertModel forward() function)

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import sys
-sys.path.insert(0,"/paddle/workspace/wjm/origin/PaddleMIX")
 import paddle.distributed as dist
 from paddle.distributed import fleet
 import os
@@ -261,17 +260,7 @@ def main():
     model_args.gradient_checkpointing=training_args.gradient_checkpointing
     model = create_model(model_args)
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
-    # create trainer
 
-    # decorated = paddle.amp.decorate(
-    #     models=[model.visual_encoder,model.language_model], optimizers=None, level="O2"
-    # )
-    # model.visual_encoder,model.language_model= decorated
-
-    weight = "/paddle/workspace/checkpoints/blip2_pretrained.pdparams"
-    state_dict = paddle.load(weight)
-    interpolate_pos_embed(model, state_dict)#wjm
-    model.set_state_dict(state_dict)
     trainer = Trainer(
         model=model,
         args=training_args,
