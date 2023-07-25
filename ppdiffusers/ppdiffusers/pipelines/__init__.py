@@ -69,6 +69,7 @@ else:
         IFPipeline,
         IFSuperResolutionPipeline, )
     from .latent_diffusion import LDMTextToImagePipeline
+    from .lvdm import LVDMUncondPipeline, LVDMTextToVideoPipeline
     from .paint_by_example import PaintByExamplePipeline
     from .semantic_stable_diffusion import SemanticStableDiffusionPipeline
     from .stable_diffusion import (

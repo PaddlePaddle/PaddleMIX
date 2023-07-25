@@ -23,7 +23,7 @@ import re
 from collections import OrderedDict
 from pathlib import PosixPath
 from typing import Any, Dict, Tuple, Union
-
+from omegaconf.listconfig import ListConfig
 import numpy as np
 import paddle
 
@@ -594,6 +594,8 @@ class ConfigMixin:
                 value = value.tolist()
             elif isinstance(value, PosixPath):
                 value = str(value)
+            elif isinstance(value, ListConfig):
+                value = list(value)
             return value
 
         config_dict = {k: to_json_saveable(v) for k, v in config_dict.items()}
