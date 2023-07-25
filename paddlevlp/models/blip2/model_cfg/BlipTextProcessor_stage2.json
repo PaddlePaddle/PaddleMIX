@@ -1,0 +1,8 @@
+{
+    "do_caption":true,
+    "do_question":false,
+    "image_processor_type":"BlipTextProcessor",
+    "processor_class":"Blip2Processor",
+    "processor_type":"BlipTextProcessor",
+    "prompt":""
+}

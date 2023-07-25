@@ -11,16 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import sys
 from dataclasses import dataclass, field
+import os
 import paddle
 import requests
 from paddlenlp.trainer import PdArgumentParser
 from PIL import Image
-
 from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlevlp.processors.blip_processing import Blip2Processor
 from paddlevlp.utils.log import logger
+import os
+import yaml
+import argparse
+import paddle
+import argparse
+import os
+import random
+
+import numpy as np
+# import torch
+import paddle
 
 @dataclass
 class DataArguments:
@@ -31,7 +42,7 @@ class DataArguments:
     the command line.
     """
 
-    input_image: str = field(
+    input_image: str = field( default="http://images.cocodataset.org/val2017/000000039769.jpg",
         metadata={"help": "The name of input image."}
     )  # "http://images.cocodataset.org/val2017/000000039769.jpg"
     prompt: str = field(
@@ -53,6 +64,11 @@ class ModelArguments:
         default=None,
         metadata={
             "help": "The path to pre-trained model that we will use for inference."
+        },)
+    fp16: str = field(
+        default=True,
+        metadata={
+            "help": "Export with mixed precision."
         },
     )
 
@@ -65,32 +81,46 @@ def main():
     )  # "http://images.cocodataset.org/val2017/000000039769.jpg"
     image = Image.open(requests.get(url, stream=True).raw)
 
-    prompt = data_args.prompt
+    prompt = "a photo of "
     processor = Blip2Processor.from_pretrained(
         model_args.model_name_or_path
     )  # "Salesforce/blip2-opt-2.7b"
-    inputs = processor(
-        images=image,
-        text=prompt,
-        return_tensors="pd",
-        return_attention_mask=True,
-        mode="test",
-    )
     model = Blip2ForConditionalGeneration.from_pretrained(model_args.model_name_or_path)
-
-    # load checkpoint
-    if model_args.pretrained_model_path:
-        weight = paddle.load(model_args.pretrained_model_path)
-        model.set_state_dict(weight)
-
     model.eval()
-    model.to("gpu")  # doctest: +IGNORE_RESULT
-    generated_ids, scores = model.generate(**inputs)
-    generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[
-        0
-    ].strip()
-    logger.info("Generate text: {}".format(generated_text))
+    dtype="float32"
+    if model_args.fp16:
+        decorated = paddle.amp.decorate(
+            models=[model.visual_encoder,model.language_model], optimizers=None, level="O2"
+        )
+        model.visual_encoder,model.language_model= decorated
+        dtype="float16"
 
+    shape1 = [None,3,None,None]
+    input_spec = [
+        paddle.static.InputSpec(
+            shape=shape1, dtype='float32'),
+    ]
+    image_encoder = paddle.jit.to_static(model.encode_image, input_spec=input_spec)
+    save_path = "blip2_export"
+    paddle.jit.save(image_encoder, os.path.join(save_path, 'image_encoder'))
 
+    # TODO add test config
+    deploy_info = {
+        'Deploy': {
+            'model': 'image_encoder.pdmodel',
+            'params': 'image_encoder.pdiparams',
+            'input_img_shape': shape1,
+            'output_dtype':dtype
+        }
+    }
+    msg = '\n---------------Deploy Information---------------\n'
+    msg += str(yaml.dump(deploy_info))
+    logger.info(msg)
+
+    yml_file = os.path.join(save_path, 'deploy.yaml')
+    with open(yml_file, 'w') as file:
+        yaml.dump(deploy_info, file)
+
+    logger.info(f'The inference model is saved in {save_path}')
 if __name__ == "__main__":
     main()

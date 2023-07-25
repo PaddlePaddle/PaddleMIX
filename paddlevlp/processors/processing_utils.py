@@ -32,6 +32,7 @@ from paddlevlp.utils.downloader import (COMMUNITY_MODEL_PREFIX,
 from paddlevlp.utils.log import logger
 
 PROCESSOR_CONFIG_MAPPING = {
+
     "image": "image_preprocessor_config.json",
     "text": "text_preprocessor_config.json",
 }

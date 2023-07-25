@@ -1,0 +1,18 @@
+{
+        "image_mean":[0.48145466, 0.4578275, 0.40821073],
+        "image_std":[0.26862954, 0.26130258, 0.27577711],
+        "flip_prob":0,
+        "do_resize":true,
+        "size":{"height": 364,"width": 364},
+        "rescale_factor":0.00392156862745098,
+        "do_flip":false,
+        "do_normalize":true,
+        "do_rand_resize_crop":false,
+        "do_rescale":true,
+        "do_convert_rgb":false,
+        "do_collate":false,
+        "interpolation":"bicubic",
+        "processor_class":"Blip2Processor",
+        "processor_type":"BlipImageProcessor",
+        "image_processor_type":"BlipImageProcessor"
+}

@@ -48,7 +48,7 @@ class BlipCollator:
 
     def __init__(self, processor,mode="train"):
         self.processor = processor
-        self.mode=mode
+
     def __call__(self, data_list):
         images = [sample["image"] for sample in data_list]
         if "text_input" not in data_list[0].keys():
@@ -62,7 +62,7 @@ class BlipCollator:
             max_length=32,
             return_tensors="pd",
             return_attention_mask=True,
-            mode=self.mode,
+            mode="train",
         )
         batch.update({'image_id':image_id})
         return batch
@@ -102,8 +102,8 @@ class ModelArguments:
         default="facebook/opt-2.7b",
         metadata={"help": "The type of text model to use (OPT, T5)."},
     )
-    image_size : int = field(
-        default=224, metadata={"help": " Image size for training. (default:224)"}
+    image_size: int = field(
+        default=364, metadata={"help": " image size for evaluation."}
     )
 
 
@@ -144,7 +144,7 @@ class PreTrainingArguments(TrainingArguments):
         default=128, metadata={"help":"Batch size per GPU core/CPU for training. (default: 8)"}
     )
     per_device_eval_batch_size : int = field(
-        default=128, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
+        default=1, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
     )
     warmup_start_lr : float = field(
         default=1e-6, metadata={"help": " The initial learning rate of blip2."}
@@ -152,7 +152,7 @@ class PreTrainingArguments(TrainingArguments):
     output_dir : str = field(
         default=".", metadata={"help": "The output path"}
     )
-    do_eval : bool = field(default=False, metadata={"help": "Whether to evaluation."})
+    do_eval : bool = field(default=True, metadata={"help": "Whether to evaluation."})
     do_train : bool = field(default=True, metadata={"help": "Whether to train."})
 
     logging_steps : int = field(default=50, metadata={"help": "Logging interval"})
@@ -181,6 +181,7 @@ def create_model(config):
     qformer_config = Blip2QFormerConfig.from_pretrained(config.model_name_or_path)
     text_config = get_text_config(config.text_model_name_or_path)
     # add tensor_parallel_degree
+    vision_config.image_size= config.image_size
     vision_config.mp_degree=config.mp_degree
     qformer_config.mp_degree=config.mp_degree
     text_config.mp_degree=config.mp_degree
@@ -276,20 +277,8 @@ def main():
         eval_processor=eval_processor,
         tokenizer=tokenizer_class
     )
-    # Training
-    checkpoint=None
-    if training_args.resume_from_checkpoint is not None:
-        checkpoint = training_args.resume_from_checkpoint
-        state_dict = paddle.load(checkpoint)
-        interpolate_pos_embed(model, state_dict)
-        model.set_state_dict(state_dict)
-    if training_args.do_eval:
-        eval_metrics = trainer.evaluate(eval_dataset)
-        trainer.log_metrics("eval", eval_metrics)
-    if training_args.do_train:
-        trainer.train(resume_from_checkpoint=checkpoint)
-        trainer.save_model()
-        trainer.save_state()
+    eval_metrics = trainer.evaluate(eval_dataset)
+    trainer.log_metrics("eval", eval_metrics)
 
 
 def setdistenv(args):
@@ -324,6 +313,9 @@ def setdistenv(args):
     strategy.tensor_parallel_configs = {"tensor_init_seed": args.seed}
 
     fleet.init(is_collective=True, strategy=strategy)
+
+    # if paddle.distributed.get_world_size() > 1:
+    #     paddle.distributed.init_parallel_env()
 
     args.rank = dist.get_rank()
     # obtain rank message of hybrid parallel
