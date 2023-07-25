@@ -1862,12 +1862,19 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            decode_strategy="greedy_search",
-            length_penalty=1.0,
+            do_sample=False,
+            top_p=0.9,
+            decode_strategy="greedy_search", # align to torch
+            temperature=1,
             num_beams=5,
             max_length=30,
-            **generate_kwargs,
+            min_length=8,
+            eos_token_id=50118,
+            repetition_penalty=1,
+            length_penalty=1,
+            num_return_sequences=1,
         )
+
         return outputs
 
     def autocast_smart_context_manager(self):

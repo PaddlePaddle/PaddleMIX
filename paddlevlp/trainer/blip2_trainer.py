@@ -266,7 +266,8 @@ class BLIP2Trainer(Trainer):
         """
         # memory metrics - must set up as early as possible
         self._memory_tracker.start()
-
+        if isinstance(eval_dataset,dict):
+            eval_dataset=eval_dataset['test']
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
         start_time = time.time()
 
@@ -282,8 +283,6 @@ class BLIP2Trainer(Trainer):
             speed_metrics(
                 metric_key_prefix,
                 start_time,
-                num_samples=output.num_samples,
-                num_steps=math.ceil(output.num_samples / total_batch_size),
             )
         )
 
@@ -387,19 +386,19 @@ class BLIP2Trainer(Trainer):
         inputs = self._prepare_inputs(inputs)
         results = []
         with paddle.no_grad():
-            with paddle.amp.auto_cast(level='O2'):
-                prompt = self.args.prompt
-                model_inputs = self.eval_processor(
-                    images=[inputs['pixel_values'][i] for i in  range(inputs['pixel_values'].shape[0])],
-                    text=[prompt]*inputs['pixel_values'].shape[0],
-                    return_tensors="pd",
-                    return_attention_mask=True,
-                    mode="test",
-                )
-                generated_ids, scores = model.generate(**model_inputs)
-                generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
-                for caption, img_id in zip(generated_text, inputs['image_id']):
-                    results.append({"caption": caption, "image_id": int(img_id)})
+            # with paddle.amp.auto_cast(level='O2'):
+            model_inputs = self.eval_processor(
+                text=[""]*inputs['pixel_values'].shape[0],
+                return_tensors="pd",
+                return_attention_mask=True,
+                mode="test",
+            )
+            model_inputs.update(inputs)
+            generated_ids, scores = model.generate(**model_inputs)
+            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
+            generated_text = [text.strip() for text in generated_text]
+            for caption, img_id in zip(generated_text, inputs['image_id']):
+                results.append({"caption": caption, "image_id": int(img_id)})
         return results
 
 
@@ -407,9 +406,10 @@ class BLIP2Trainer(Trainer):
     def after_evaluation(self, val_result):
         eval_result_file = self.save_result(
             result=val_result,
-            result_dir=self.args.output_dir+"/resulut",
+            result_dir=self.args.output_dir+"/result",
             filename="{}_epoch{}".format('eval', 'eval'),
             remove_duplicate="image_id",
+            world_size=self.args.world_size
         )
 
         metrics = self._report_metrics(
@@ -419,7 +419,7 @@ class BLIP2Trainer(Trainer):
         return metrics
 
     @staticmethod
-    def save_result(result, result_dir, filename, remove_duplicate=""):
+    def save_result(result, result_dir, filename, remove_duplicate="",world_size=1):
         import logging
         rank_id_curr_node = int(os.environ.get("PADDLE_RANK_IN_NODE", 0))
         result_file = os.path.join(
@@ -429,7 +429,7 @@ class BLIP2Trainer(Trainer):
         json.dump(result, open(result_file, "w"))
 
         final_result_file = os.path.join(result_dir, "%s.json" % filename)
-        if self.args.world_size > 1:
+        if world_size > 1:
            paddle.distributed.barrier()
         if rank_id_curr_node==0:
             logging.warning("rank %d starts merging results." % rank_id_curr_node)
