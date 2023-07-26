@@ -1,6 +1,6 @@
-## Lataent Video Diffusion Model模型训练
+## Latent Video Diffusion Model模型训练
 
-本教程介绍 **LVDM(Lataent Video Diffusion Model)** 的训练，这里的训练仅针对扩散模型(UNet)部分，而不涉及一阶段的模型的训练。
+本教程介绍 [**LVDM(Latent Video Diffusion Model)**](https://arxiv.org/abs/2211.13221) 的训练，这里的训练仅针对扩散模型(UNet)部分，而不涉及一阶段的模型的训练。
 
 
 ## 准备工作
