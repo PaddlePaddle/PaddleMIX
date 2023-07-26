@@ -46,7 +46,7 @@ def interpolate_pos_encoding_2d(target_spatial_size, pos_embed):
     )
     if updated:
         pos_embed, _ = cast_if_src_dtype(pos_embed, 'float32', 'bfloat16')
-    """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+    
     # pos_embed = pos_embed.transpose(perm=[0, 2, 3, 1]).view(1, -1, dim)
     pos_embed = pos_embed.transpose(perm=[0, 2, 3, 1]).reshape((1, -1, dim))
     return pos_embed
@@ -70,7 +70,7 @@ def interpolate_pos_encoding(
         assert len(input_shape) == 4, 'temporal interpolation not supported'
         num_frames = patches_layout[0]
         num_spatial_tokens = patches_layout[1] * patches_layout[2]
-        """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+    
         # pos_embed = pos_embed.view(1, num_frames, num_spatial_tokens, -1)
         pos_embed = pos_embed.reshape((1, num_frames, num_spatial_tokens, -1))
         pos_embed = interpolate_pos_encoding_2d(
@@ -144,7 +144,7 @@ class SpatioTemporalPosEmbeddingHelper(VerboseNNModule):
         self.num_tokens = num_cls_tokens + num_patches
         self.learnable = learnable
         if self.learnable:
-            # self.pos_embed = torch.nn.Parameter(paddle.zeros(shape=[1, self.num_tokens, embed_dim]))
+
             self.pos_embed = paddle.create_parameter(
                 shape=[1, self.num_tokens, embed_dim],
                 dtype="float32",
@@ -199,14 +199,14 @@ class RGBDTPreprocessor(VerboseNNModule):
                 embed_dim=self.embed_dim,
             )
         if self.num_cls_tokens > 0:
-            # self.cls_token = torch.nn.Parameter(paddle.zeros(shape=[1, self.num_cls_tokens, self.embed_dim]))
+
             self.cls_token = paddle.create_parameter(
                 shape=[1, self.num_cls_tokens, self.embed_dim],
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(value=0.0),
             )
         if self.use_type_embed:
-            # >>>            self.type_embed = torch.nn.Parameter(paddle.zeros(shape=[1, 1,self.embed_dim]))
+
             self.type_embed = paddle.create_parameter(
                 shape=[1, 1, self.embed_dim],
                 dtype="float32",
@@ -220,13 +220,13 @@ class RGBDTPreprocessor(VerboseNNModule):
             scale = self.embed_dim**-0.5
             if self.use_pos_embed:
                 paddle.nn.initializer.Normal()(self.pos_embedding_helper.pos_embed)
-                # torch.nn.init.normal_(self.pos_embedding_helper.pos_embed)
+  
                 self.pos_embedding_helper.pos_embed.set_value(
                     self.pos_embedding_helper.pos_embed * scale
                 )
             if self.num_cls_tokens > 0:
                 paddle.nn.initializer.Normal()(self.cls_token)
-                # torch.nn.init.normal_(self.cls_token)
+     
                 self.cls_token.set_value(self.cls_token * scale)
         elif init_param_style == 'vit':
             self.cls_token.data.fill_(value=0)
@@ -234,7 +234,7 @@ class RGBDTPreprocessor(VerboseNNModule):
             raise ValueError(f'Unknown init {init_param_style}')
         if self.use_type_embed:
             paddle.nn.initializer.Normal()(self.type_embed)
-            # torch.nn.init.normal_(self.type_embed)
+ 
 
     def tokenize_input_and_cls_pos(self, input, stem, mask):
         tokens = stem(input)
@@ -291,7 +291,7 @@ def build_causal_attention_mask(context_length):
     out_0.stop_gradient = not False
     mask = out_0
     mask.fill_(value=float('-inf'))
-    """Class Method: *.triu_, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+
     # mask.triu_(1)
     mask = paddle.triu(mask, 1)
     return mask
@@ -312,7 +312,7 @@ class TextPreprocessor(VerboseNNModule):
         self.vocab_size = vocab_size
         self.context_length = context_length
         self.token_embedding = paddle.nn.Embedding(vocab_size, embed_dim)
-        # self.pos_embed = torch.nn.Parameter(paddle.empty(shape=[1, self.context_length + num_cls_tokens, embed_dim]))
+
         self.pos_embed = paddle.create_parameter(
             shape=[1, self.context_length + num_cls_tokens, embed_dim],
             dtype="float32",
@@ -331,7 +331,7 @@ class TextPreprocessor(VerboseNNModule):
         self.embed_dim = embed_dim
         if num_cls_tokens > 0:
             assert self.causal_masking is False, "Masking + CLS token isn't implemented"
-            # self.cls_token = torch.nn.Parameter(paddle.zeros(shape=[1, self.num_cls_tokens, embed_dim]))
+         
             self.cls_token = paddle.create_parameter(
                 shape=[1, self.num_cls_tokens, embed_dim],
                 dtype="float32",
@@ -343,13 +343,12 @@ class TextPreprocessor(VerboseNNModule):
     def init_parameters(self, init_param_style='openclip'):
         paddle.nn.initializer.Normal(std=0.02)(self.token_embedding.weight)
         paddle.nn.initializer.Normal(std=0.01)(self.pos_embed)
-        # torch.nn.init.normal_(self.token_embedding.weight, std=0.02)
-        # torch.nn.init.normal_(self.pos_embed, std=0.01)
+
         if init_param_style == 'openclip':
             scale = self.embed_dim**-0.5
             if self.num_cls_tokens > 0:
                 paddle.nn.initializer.Normal()(self.cls_token)
-                # torch.nn.init.normal_(self.cls_token)
+             
                 self.cls_token.set_value(self.cls_token * scale)
         elif init_param_style == 'vit':
             self.cls_token.data.fill_(value=0)
@@ -469,7 +468,7 @@ class SimpleTokenizer(object):
             bpe_bytes = io.BytesIO(fh.read())
             merges: List[str] = gzip.open(bpe_bytes).read().decode('utf-8').split('\n')
         merges = merges[1 : 49152 - 256 - 2 + 1]
-        """Class Method: *.split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+       
         merges: List[Tuple[str, ...]] = [tuple(merge.split()) for merge in merges]
         vocab = list(bytes_to_unicode().values())
         vocab = vocab + [(v + '</w>') for v in vocab]
@@ -534,7 +533,7 @@ class SimpleTokenizer(object):
         text = whitespace_clean(basic_clean(text)).lower()
         for token in re.findall(self.pat, text):
             token = ''.join(self.byte_encoder[b] for b in token.encode('utf-8'))
-            """Class Method: *.split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+
             bpe_tokens.extend(
                 self.encoder[bpe_token] for bpe_token in self.bpe(token).split(' ')
             )
@@ -583,7 +582,7 @@ class IMUPreprocessor(VerboseNNModule):
         self.use_pos_embed = pos_embed_fn is not None
         self.num_cls_tokens = num_cls_tokens
         self.kernel_size = kernel_size
-        # self.pos_embed = torch.nn.Parameter(paddle.empty(shape=[1, img_size[1] // kernel_size + num_cls_tokens, embed_dim]))
+        
         self.pos_embed = paddle.create_parameter(
             shape=[1, img_size[1] // kernel_size + num_cls_tokens, embed_dim],
             dtype="float32",
@@ -594,7 +593,7 @@ class IMUPreprocessor(VerboseNNModule):
             ),
         )
         if self.num_cls_tokens > 0:
-            # self.cls_token = torch.nn.Parameter(paddle.zeros(shape=[1, self.num_cls_tokens, self.embed_dim]))
+
             self.cls_token = paddle.create_parameter(
                 shape=[1, self.num_cls_tokens, self.embed_dim],
                 dtype="float32",
@@ -605,12 +604,12 @@ class IMUPreprocessor(VerboseNNModule):
     @paddle.no_grad()
     def init_parameters(self, init_param_style):
         paddle.nn.initializer.TruncatedNormal(std=0.01)(self.pos_embed)
-        # torch.nn.init.normal_(self.pos_embed, std=0.01)
+   
         if init_param_style == 'openclip':
             scale = self.embed_dim**-0.5
             if self.num_cls_tokens > 0:
                 paddle.nn.initializer.TruncatedNormal()(self.cls_token)
-                # torch.nn.init.normal_(self.cls_token)
+          
                 self.cls_token.set_value(self.cls_token * scale)
         elif init_param_style == 'vit':
             self.cls_token.data.fill_(value=0)
@@ -630,7 +629,7 @@ class IMUPreprocessor(VerboseNNModule):
         return tokens
 
     def forward(self, imu):
-        """Class Method: *.unfold, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+
         imu = imu.unfold(-1, self.kernel_size, self.kernel_size).transpose(
             perm=[0, 2, 1, 3]
         )  # 需要对齐

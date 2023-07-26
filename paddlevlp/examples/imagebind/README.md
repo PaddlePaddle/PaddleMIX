@@ -18,9 +18,9 @@ example: Extract and compare features across modalities (e.g. Image, Text and Au
 cd paddlevlp/imagebind/
 
 run_predict.py \
---pretrained_name_or_path The dir name of imagebind checkpoint. \
+--model_name_or_path The dir name of imagebind checkpoint. \
 --input_text "A dog."
---input_image ".assets/dog_image.jpg" \
---input_audio ".assets/dog_audio.wav" \
+--input_image an image file. \
+--input_audio an audio file.  \
 ```
 

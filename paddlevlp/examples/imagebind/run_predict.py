@@ -8,72 +8,122 @@ import numpy as np
 import argparse
 import requests
 from PIL import Image
+from dataclasses import dataclass, field
+from paddlenlp.trainer import PdArgumentParser
 
 from paddlevlp.utils.log import logger
 from paddlevlp.models.imagebind.modeling import ImageBindModel
 
-def predict(args):
 
+class Predictor:
+    def __init__(self, model_args):
+        self.processor = ImageBindProcessor.from_pretrained(model_args.model_name_or_path)
+        self.predictor = ImageBindModel.from_pretrained(model_args.model_name_or_path)
+        self.predictor.eval()
+       
+    def run(self, inputs):
+        with paddle.no_grad():
+            embeddings = self.predictor(inputs)
 
-    processor = ImageBindProcessor.from_pretrained(args.pretrained_name_or_path)
+        return embeddings    
     
+def main(model_args,data_args):
+
     #bulid model
-    logger.info("imagebind_model: {}".format(args.pretrained_name_or_path))
-    imagebind_model = ImageBindModel.from_pretrained(args.pretrained_name_or_path)
-    imagebind_model.eval()
+    logger.info("imagebind_model: {}".format(model_args.model_name_or_path))
 
-
-    url = (args.input_image)
+    url = (data_args.input_image)
     if os.path.isfile(url):
         #read image
-        image_pil = Image.open(args.input_image).convert("RGB")
-    else:
+        image_pil = Image.open(data_args.input_image).convert("RGB")
+    elif url:
         image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
+    else:
+        image_pil = None
         
-    encoding = processor(images=image_pil,text=args.input_text, audios=args.input_audio, return_tensors='pd')
-    if args.input_text:
+    predictor = Predictor(model_args)
+        
+    encoding = predictor.processor(images=image_pil,text=data_args.input_text, audios=data_args.input_audio, return_tensors='pd')
+    inputs = {}
+    if data_args.input_text:
         tokenized_processor = encoding['input_ids']
+        inputs.update({ModalityType.TEXT: tokenized_processor})
+        # input.update()
     if image_pil:
         image_processor = encoding["pixel_values"]
-    if args.input_audio:
+        inputs.update({ModalityType.VISION: image_processor})
+    if data_args.input_audio:
         audio_processor = encoding["audio_values"]
+        inputs.update({ModalityType.AUDIO:audio_processor})
 
+    embeddings = predictor.run(inputs)
+
+    if data_args.input_text:
+        logger.info("Generate text: {}".format(embeddings[ModalityType.TEXT]))
+    if image_pil: 
+        logger.info("Generate vision: {}".format(embeddings[ModalityType.VISION]))
+    if data_args.input_audio:
+        logger.info("Generate audio: {}".format(embeddings[ModalityType.AUDIO]))
     
-    inputs = {ModalityType.TEXT: tokenized_processor, ModalityType.VISION: image_processor, ModalityType.AUDIO:audio_processor}
-    with paddle.no_grad():
-        embeddings = imagebind_model(inputs)
-    
-    print(embeddings[ModalityType.TEXT])
-    print(embeddings[ModalityType.VISION])
-    print(embeddings[ModalityType.AUDIO])
         
+    
+@dataclass
+class DataArguments:
+    """
+    Arguments pertaining to what data we are going to input our model for training and eval.
+    Using `PdArgumentParser` we can turn this class
+    into argparse arguments to be able to specify them on
+    the command line.
+    """
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--pretrained_name_or_path",
-        default="../../../imagebind/",
-        type=str,
-        help="The dir name of imagebind checkpoint.",
-    )
-    parser.add_argument(
-        "--input_text",
-        default='A dog.',
-        type=str,
-        help="The name of imagebind text input.",
-    )
-    parser.add_argument(
-        "--input_image",
-        default='../../../.assets/dog_image.jpg',
-        type=str,
-        help="The name of imagebind image input.",
-    )
-    parser.add_argument(
-        "--input_audio",
-        default='../../../.assets/dog_audio.wav',
-        type=str,
-        help="The name of imagebind audio input.",
-    )
-    args = parser.parse_args()
+    input_text: str = field(
+        default = "A dog.",
+        metadata={"help": "The name of imagebind text input."}
+        
+    )  
+    input_image: str = field(
+        default = "",
+        #wget https://github.com/facebookresearch/ImageBind/blob/main/.assets/bird_image.jpg
+        metadata={"help": "The name of imagebind image input."}
+        
+    )  
+    input_audio: str = field(
+        default = None,
+        #wget https://github.com/facebookresearch/ImageBind/blob/main/.assets/bird_audio.wav
+        metadata={"help": "The name of imagebind audio input."}
+        
+    )  
+  
 
-    predict(args)
+@dataclass
+class ModelArguments:
+    """
+    Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
+    """
+
+    model_name_or_path: str = field(
+        default="imagebind-1.2b/",
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
+
+    device: str = field(
+        default="GPU",
+        metadata={
+            "help": "Choose the device you want to run, it can be: CPU/GPU/XPU, default is CPU."
+        },
+    )
+
+
+
+
+if __name__ == '__main__':
+  
+    parser = PdArgumentParser((ModelArguments, DataArguments))
+    model_args, data_args = parser.parse_args_into_dataclasses()
+
+    model_args.device = model_args.device.upper()
+    assert model_args.device in ['CPU', 'GPU', 'XPU', 'NPU'
+                            ], "device should be CPU, GPU, XPU or NPU"
+
+
+    main(model_args,data_args)

@@ -34,7 +34,6 @@ class LearnableLogitScaling(paddle.nn.Layer):
         self.learnable = learnable
         log_logit_scale = paddle.ones(shape=[]) * np.log(self.logit_scale_init)
         if learnable:
-            # self.log_logit_scale = torch.nn.Parameter(log_logit_scale)
             self.log_logit_scale = paddle.create_parameter(
                 shape=log_logit_scale.shape if log_logit_scale.dim() != 0 else [1],
                 dtype=log_logit_scale.dtype,

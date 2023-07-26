@@ -1,5 +1,3 @@
-import sys
-import paddlevlp.utils.paddle_aux
 import paddle
 from functools import partial
 from typing import Callable, List, Optional
@@ -176,7 +174,7 @@ class BlockWithMasking(paddle.nn.Layer):
                 gamma_shape = [1, 1, dim]
             elif self.layer_scale_type == 'scalar':
                 gamma_shape = [1, 1, 1]
-            # self.layer_scale_gamma1 = torch.nn.Parameter(paddle.ones(shape=gamma_shape) * layer_scale_init_value, requires_grad=True)
+        
             self.layer_scale_gamma1 = paddle.create_parameter(
                 shape=gamma_shape,
                 dtype="float32",
@@ -187,8 +185,6 @@ class BlockWithMasking(paddle.nn.Layer):
                 dtype="float32",
                 default_initializer=paddle.nn.initializer.Constant(value=1.0),
             )
-            # self.layer_scale_gamma2 = torch.nn.Parameter(paddle.ones(shape=
-            #     gamma_shape) * layer_scale_init_value, requires_grad=True)
 
     def forward(self, x: paddle.Tensor, attn_mask: paddle.Tensor):
         if self.layer_scale_type is None:
@@ -267,18 +263,17 @@ class SimpleTransformer(paddle.nn.Layer):
         if isinstance(m, paddle.nn.Linear):
             if self.weight_init_style == 'jax':
                 paddle.nn.initializer.XavierUniform()(m.weight)
-                # torch.nn.init.xavier_uniform_(m.weight)
+      
             elif self.weight_init_style == 'pytorch':
                 paddle.nn.initializer.TruncatedNormal(std=0.02)(m.weight)
-                # timm.models.layers.trunc_normal_(m.weight, std=0.02)
+         
             if m.bias is not None:
                 paddle.nn.initializer.Constant(value=0.0)(m.bias)
-                # torch.nn.init.constant_(m.bias, 0)
+            
         elif isinstance(m, paddle.nn.LayerNorm):
             paddle.nn.initializer.Constant(value=0.0)(m.bias)
             paddle.nn.initializer.Constant(value=1.0)(m.weight)
-            # torch.nn.init.constant_(m.bias, 0)
-            # torch.nn.init.constant_(m.weight, 1.0)
+         
 
     def forward(
         self,
@@ -307,12 +302,10 @@ class SimpleTransformer(paddle.nn.Layer):
         if checkpoint_blk_ids:
             checkpoint_blk_ids = set(checkpoint_blk_ids)
         for blk_id, blk in enumerate(self.blocks):
-            if use_checkpoint and blk_id in checkpoint_blk_ids:
-                # tokens = torch.utils.checkpoint.checkpoint(blk, tokens,
-                #     attn_mask, use_reentrant=False)
+            if use_checkpoint and blk_id in checkpoint_blk_ids:    
                 pass
             else:
-                # tokens = paddle.transpose(tokens, perm=[1,0,2])
+  
                 tokens = blk(tokens, attn_mask=attn_mask)
         if self.post_transformer_layer:
             tokens = self.post_transformer_layer(tokens)
