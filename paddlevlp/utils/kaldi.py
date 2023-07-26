@@ -1,12 +1,6 @@
-#  import torchaudio
 from typing import Tuple
 import math
 import paddle
-
-# import paddle_aux
-import sys
-
-sys.path.append('/workspace/zhouhai/paddlepaddle/convert_test/paddle_project/utils')
 
 __all__ = [
     'get_mel_banks',
@@ -660,12 +654,6 @@ def fbank(
     mel_energies = _subtract_column_mean(mel_energies, subtract_mean)
     return mel_energies
 
-
-#  def _get_dct_matrix(num_ceps: int, num_mel_bins: int) -> paddle.Tensor:
-    #  dct_matrix = torchaudio.functional.create_dct(num_mel_bins, num_mel_bins, 'ortho')
-    #  dct_matrix[:, (0)] = math.sqrt(1 / float(num_mel_bins))
-    #  dct_matrix = dct_matrix[:, :num_ceps]
-    #  return dct_matrix
 
 
 def _get_lifter_coeffs(num_ceps: int, cepstral_lifter: float) -> paddle.Tensor:

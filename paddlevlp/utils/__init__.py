@@ -11,3 +11,22 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import paddle
+from paddlevlp.utils.kaldi import *
+from paddlevlp.utils.resample import *
+from paddlevlp.utils.paddle_aux import *
+
+class finfo:
+    bits: int
+    min: float
+    max: float
+    eps: float
+    tiny: float
+    smallest_normal: float
+    resolution: float
+    dtype: str
+
+    def __init__(self, dtype=None) -> None:
+        ...
+
+setattr(paddle, "finfo", finfo)

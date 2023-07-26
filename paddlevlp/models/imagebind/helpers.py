@@ -51,12 +51,6 @@ class LearnableLogitScaling(paddle.nn.Layer):
             * x
         )
 
-    # def extra_repr(self):
-    #     st = (
-    #         f'logit_scale_init={self.logit_scale_init},learnable={self.learnable}, max_logit_scale={self.max_logit_scale}'
-    #         )
-    #     return st
-
 
 class EinOpsRearrange(paddle.nn.Layer):
     def __init__(self, rearrange_expr: str, **kwargs) -> None:
@@ -87,23 +81,6 @@ class VerboseNNModule(paddle.nn.Layer):
             + ')\n'
         )
         return st
-
-    # def extra_repr(self) ->str:
-    #     named_modules = set()
-    #     for p in self.named_modules():
-    #         named_modules.update([p[0]])
-    #     named_modules = list(named_modules)
-    #     string_repr = ''
-    #     for p in self.named_parameters():
-    #         """Class Method: *.split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
-    #         name = p[0].split('.')[0]
-    #         if name not in named_modules:
-    #             string_repr += self.get_readable_tensor_repr(name, p)
-    #     for p in self.named_buffers():
-    #         """Class Method: *.split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
-    #         name = p[0].split('.')[0]
-    #         string_repr += self.get_readable_tensor_repr(name, p)
-    #     return string_repr
 
 
 def cast_if_src_dtype(

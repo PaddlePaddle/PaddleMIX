@@ -1,6 +1,4 @@
 import sys
-
-sys.path.append('/workspace/zhouhai/project/imagebind/paddle_imagebind/utils')
 import paddle
 import math
 from typing import Optional, Tuple, Union, List

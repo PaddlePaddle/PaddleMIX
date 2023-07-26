@@ -118,26 +118,6 @@ def stride(self, dim):
 setattr(paddle.Tensor, "stride", stride)
 
 
-# def as_strided(self, size, stride):
-#     dx, dy = self.shape
-#     x = paddle.arange(0, dx)
-#     xx = paddle.expand(x, (dy, dx)).flatten(0)
-#     y = paddle.arange(0, dy).reshape((-1, 1))
-#     yy = paddle.expand(y, (dy, dx)).flatten(0)
-#     datas = []
-#     for i in range(0, size[0]*stride[0], stride[0]):
-#         axes = [0,]
-#         starts = [i,]
-#         ends = [stride[1]*size[1]+i,]
-#         strides = [stride[1],]
-#         new_x = paddle.strided_slice(
-#             xx, axes=axes, starts=starts, ends=ends, strides=strides)
-#         new_y = paddle.strided_slice(
-#             yy, axes=axes, starts=starts, ends=ends, strides=strides)
-#         datas.append(self[new_y, new_x])
-#     return paddle.stack(datas)
-
-
 def as_strided(self, size, stride):
     if self.dim() == 1:
         self = self.unsqueeze(0)
