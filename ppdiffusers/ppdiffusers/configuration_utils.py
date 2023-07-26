@@ -23,7 +23,11 @@ import re
 from collections import OrderedDict
 from pathlib import PosixPath
 from typing import Any, Dict, Tuple, Union
-from omegaconf.listconfig import ListConfig
+try:
+    from omegaconf.listconfig import ListConfig
+    _omegaconf_available = True
+except:
+    _omegaconf_available = False
 import numpy as np
 import paddle
 
@@ -594,7 +598,7 @@ class ConfigMixin:
                 value = value.tolist()
             elif isinstance(value, PosixPath):
                 value = str(value)
-            elif isinstance(value, ListConfig):
+            elif _omegaconf_available and isinstance(value, ListConfig):
                 value = list(value)
             return value
 
