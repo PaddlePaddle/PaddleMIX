@@ -15,7 +15,9 @@ To appear at CVPR 2023 (*Highlighted paper*)
 
 example: Extract and compare features across modalities (e.g. Image, Text and Audio).
 ```bash
-python paddlevlp/imagebind/run_predict.py \
+cd paddlevlp/imagebind/
+
+run_predict.py \
 --pretrained_name_or_path The dir name of imagebind checkpoint. \
 --input_text "A dog."
 --input_image ".assets/dog_image.jpg" \

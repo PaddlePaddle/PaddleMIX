@@ -1,8 +1,6 @@
 import paddle
 import sys
 import os
-currentPath = os.path.split(os.path.realpath(__file__))[0]
-sys.path.append(currentPath + '/../../../')
 from paddlevlp.datasets import *
 from paddlevlp import ImageBindModel, ImageBindProcessor
 from paddlevlp.models import ModalityType
@@ -54,7 +52,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--pretrained_name_or_path",
-        default="./imagebind/",
+        default="../../../imagebind/",
         type=str,
         help="The dir name of imagebind checkpoint.",
     )
@@ -62,19 +60,19 @@ if __name__ == "__main__":
         "--input_text",
         default='A dog.',
         type=str,
-        help="The dir name of imagebind text input.",
+        help="The name of imagebind text input.",
     )
     parser.add_argument(
         "--input_image",
-        default='.assets/dog_image.jpg',
+        default='../../../.assets/dog_image.jpg',
         type=str,
-        help="The dir name of imagebind image input.",
+        help="The name of imagebind image input.",
     )
     parser.add_argument(
         "--input_audio",
-        default='.assets/dog_audio.wav',
+        default='../../../.assets/dog_audio.wav',
         type=str,
-        help="The dir name of imagebind audio input.",
+        help="The name of imagebind audio input.",
     )
     args = parser.parse_args()
 
