@@ -77,8 +77,10 @@ EXAMPLE_DOC_STRING = """
 class MultiControlNetModel(ModelMixin):
     r"""
     Multiple `ControlNetModel` wrapper class for Multi-ControlNet
+
     This module is a wrapper for multiple instances of the `ControlNetModel`. The `forward()` API is designed to be
     compatible with `ControlNetModel`.
+
     Args:
         controlnets (`List[ControlNetModel]`):
             Provides additional conditioning to the unet during the denoising process. You must set multiple
@@ -97,11 +99,12 @@ class MultiControlNetModel(ModelMixin):
             timestep: Union[paddle.Tensor, float, int],
             encoder_hidden_states: paddle.Tensor,
             controlnet_cond: List[paddle.Tensor],
-            conditioning_scale: Union[List[List[float]], List[float]],
+            conditioning_scale: List[float],
             class_labels: Optional[paddle.Tensor]=None,
             timestep_cond: Optional[paddle.Tensor]=None,
             attention_mask: Optional[paddle.Tensor]=None,
             cross_attention_kwargs: Optional[Dict[str, Any]]=None,
+            guess_mode: bool=False,
             return_dict: bool=True, ) -> Union[ControlNetOutput, Tuple]:
         for i, (
                 image, scale, controlnet
@@ -116,6 +119,7 @@ class MultiControlNetModel(ModelMixin):
                 timestep_cond,
                 attention_mask,
                 cross_attention_kwargs,
+                guess_mode,
                 return_dict, )
 
             # merge samples
@@ -449,9 +453,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                 f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
             )
 
-        if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+        if (callback_steps is None) or (callback_steps is not None and (
+                not isinstance(callback_steps, int) or callback_steps <= 0)):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
                 f" {type(callback_steps)}.")
