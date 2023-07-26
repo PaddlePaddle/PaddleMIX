@@ -52,10 +52,7 @@ def _get_strided(
     """
     assert waveform.dim() == 1
     num_samples = waveform.shape[0]
-    """Class Method: *.stride, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
-    # shape = waveform.shape
-    # shape.append(1)
-    # strides = paddle.cumprod(paddle.to_tensor(shape)[1:], dim=0)[-1].item()
+
     strides = window_shift * waveform.stride(0), waveform.stride(0)
     if snip_edges:
         if num_samples < window_size:
@@ -73,7 +70,7 @@ def _get_strided(
         else:
             waveform = paddle.concat(x=(waveform[-pad:], pad_right), axis=0)
     sizes = m, window_size
-    """Class Method: *.as_strided, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+    
     return waveform.as_strided(sizes, strides)
 
 

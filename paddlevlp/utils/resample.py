@@ -51,7 +51,7 @@ def _get_sinc_resample_kernel(
         #  kernel.scale_(scale=window)
         kernels.append(kernel)
     scale = base_freq / orig_freq
-    """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+
     kernels = paddle.stack(x=kernels).reshape((new_freq, 1, -1)).scale_(scale=scale)
     if dtype is None:
         kernels = kernels.to(dtype='float32')
@@ -68,7 +68,7 @@ def _apply_sinc_resample_kernel(
     orig_freq = int(orig_freq) // gcd
     new_freq = int(new_freq) // gcd
     shape = waveform.shape
-    """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+
     waveform = waveform.reshape((-1, shape[-1]))
     num_wavs, length = waveform.shape
     waveform = paddle.nn.functional.pad(
@@ -86,7 +86,7 @@ def _apply_sinc_resample_kernel(
     resampled = x.transpose(perm=perm_0).reshape(num_wavs, -1)
     target_length = int(math.ceil(new_freq * length / orig_freq))
     resampled = resampled[(...), :target_length]
-    """Class Method: *.view, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
+
     resampled = resampled.reshape((shape[:-1] + resampled.shape[-1:]))
     return resampled
 
