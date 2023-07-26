@@ -1,5 +1,5 @@
 einops>=0.6.1
 av
-# accimage
+accimage
 decord
 omegaconf

@@ -1,12 +1,11 @@
-ppdiffusers_lvdm_path=/root/project/paddlenlp/lvdm/paddle/PaddleMIX/ppdiffusers
-export PYTHONPATH=$ppdiffusers_lvdm_path:$PYTHONPATH
+ppdiffusers_path=PaddleMIX/ppdiffusers
+export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
 set -eux
-
 # export CUDA_VISIBLE_DEVICES=1
 # export NVIDIA_TF32_OVERRIDE=0
 
 # ppdiffusers train
-cd $ppdiffusers_lvdm_path/examples/text_to_video_lvdm
+cd $ppdiffusers_path/examples/text_to_video_lvdm
 python -u train_lvdm_short.py \
     --do_train \
     --do_eval \

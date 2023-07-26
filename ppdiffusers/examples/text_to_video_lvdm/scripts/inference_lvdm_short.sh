@@ -1,4 +1,5 @@
-export PYTHONPATH=/root/project/paddlenlp/lvdm/paddle/PaddleMIX/ppdiffusers:$PYTHONPATH
+ppdiffusers_path=PaddleMIX/ppdiffusers
+export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
 export CUDA_VISIBLE_DEVICES=1
 set -eux
 

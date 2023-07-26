@@ -1,14 +1,13 @@
-ppdiffusers_lvdm_path=/root/project/paddlenlp/lvdm/paddle/PaddleMIX/ppdiffusers
-export PYTHONPATH=$ppdiffusers_lvdm_path:$PYTHONPATH
+ppdiffusers_path=PaddleMIX/ppdiffusers
+export PYTHONPATH=$ppdiffusers_path:$PYTHONPATH
 set -eux
-
 # export CUDA_VISIBLE_DEVICES=1
 # export NVIDIA_TF32_OVERRIDE=0
 export FLAGS_conv_workspace_size_limit=4096
 echo use_fp16_true-num_nodes_1-gpu_num_4-batch_size_4-accumulate_grad_batches_2-num_workers_8-use_recompute-use_xformers_auto
 
 # ppdiffusers train
-cd $ppdiffusers_lvdm_path/examples/text_to_video_lvdm
+cd $ppdiffusers_path/examples/text_to_video_lvdm
 python -u -m paddle.distributed.launch --gpus "4,5,6,7" train_lvdm_text2video.py \
     --do_train \
     --do_eval \
