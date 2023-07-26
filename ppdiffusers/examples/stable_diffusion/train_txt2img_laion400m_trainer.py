@@ -26,9 +26,11 @@ from sd import (
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint, set_seed
 from paddlenlp.utils.log import logger
 
-def use_fusedlinear_for_speed(default = False):
+
+def use_fusedlinear_for_speed(default=False):
     if default:
         paddle.nn.Linear = paddle.incubate.nn.FusedLinear
+
 
 def main():
     parser = PdArgumentParser(
@@ -124,6 +126,7 @@ def main():
     trainer.train(resume_from_checkpoint=checkpoint)
     trainer.save_model()
     trainer.save_state()
+
 
 if __name__ == "__main__":
     # for higher ips
