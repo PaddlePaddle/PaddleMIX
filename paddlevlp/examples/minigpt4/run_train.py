@@ -13,8 +13,6 @@
 # limitations under the License.
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "5"
-os.environ["FLAGS_use_cuda_managed_memory"]="true"
 from dataclasses import dataclass, field
 import numpy as np
 import random
@@ -31,6 +29,7 @@ from paddlevlp.datasets import load_dataset
 from paddlevlp import MiniGPT4Processor, MiniGPT4ForConditionalGeneration, MiniGPT4VisionConfig, MiniGPT4QFormerConfig, MiniGPT4Config, MiniGPT4VisionModel, MiniGPT4QFormerModel
 from paddlevlp.utils import paddlevlp_load
 from paddlevlp.utils.log import logger
+from paddlevlp.utils.parameters import freeze_parameters
 from paddlevlp.optimization import CosineDecayWithWarmup
 
 
@@ -59,8 +58,8 @@ class ModelArguments:
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
     """
     pretrained_model_name_or_path: str = field(
-        default="/wangqinghui/PaddleMIX/PaddleMIX/paddlevlp/models/minigpt4/minigpt4-13b",
-        metadata={"help": "Path to pretrained model or model identifier"},
+        default="",
+        metadata={"help": "The directory path to save pretrained model or model identifier"},
     )
 
 
@@ -71,7 +70,7 @@ class PreTrainingArguments(TrainingArguments):
     """
 
     pretrained_model_path: str = field(
-        default="/wangqinghui/PaddleMIX/PaddleMIX/paddlevlp/models/minigpt4/minigpt4-13b/model_state.pdparams",
+        default="",
         metadata={
             "help": "The path to pre-trained model that we will use for pretraining."
         },
@@ -113,7 +112,6 @@ class PreTrainingArguments(TrainingArguments):
     freeze_vit: float = field(
         default=True, metadata={"help": "Whether to freeze vit."}
     )
-
     freeze_qformer: float = field(
         default=True, metadata={"help": "Whether to freeze Qformer."}
     )
@@ -125,6 +123,9 @@ class PreTrainingArguments(TrainingArguments):
     )
     log_freq: int = field(
         default=1, metadata={"help":"The log frequency."}
+    )
+    num_workers: int = field(
+        default=0, metadata={"help": "The random seed."}
     )
 
 
@@ -149,6 +150,13 @@ class MiniGPT4Collator:
         target_outputs = self.processor.process_target_texts(target_texts)
         batch_data.update(target_outputs)
         return batch_data
+
+
+def set_seed(seed):
+    paddle.seed(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+
 
 def create_model(model_args):
     config = MiniGPT4Config.from_pretrained(model_args.pretrained_model_name_or_path)
@@ -203,28 +211,8 @@ def convert_weights_to_dtype(model, dtype: str):
     else:
         raise TypeError("Not support model type: {}.".format(type(model)))
 
-def disabled_train(mode="train"):
-    return
 
-def freeze_model(model, enable_eval=True):
-    if enable_eval:
-        model.eval()
-        model.train = disabled_train
-    
-    for n, param in model.named_parameters():
-        param.stop_gradient = True
-
-def freeze_parameter(parameter):
-    parameter.stop_gradient = True
-
-
-def set_seed(seed):
-    paddle.seed(seed)
-    random.seed(seed)
-    np.random.seed(seed)
-
-
-def get_grouped_parameters(model):
+def get_grouped_parameters(model, training_args):
     num_parameters = 0
     p_wd, p_non_wd = [], []
     for n, p in model.named_parameters():
@@ -240,7 +228,7 @@ def get_grouped_parameters(model):
     grouped_params = [
         {
             "params": p_wd,
-            "weight_decay": 0.05,
+            "weight_decay": training_args.weight_decay,
         },
         {"params": p_non_wd, "weight_decay": 0.0},
     ]
@@ -266,22 +254,27 @@ def main():
     minigpt4_collator = MiniGPT4Collator(processor)
     dataset = load_dataset("cc_sbu_dataset", SPLITS=["train"])
     batch_sampler = BatchSampler(dataset, batch_size=training_args.batch_size, shuffle=True, drop_last=True)
-    train_loader = DataLoader(dataset, batch_sampler=batch_sampler, collate_fn=minigpt4_collator, num_workers=0)
+    train_loader = DataLoader(dataset, batch_sampler=batch_sampler, collate_fn=minigpt4_collator, num_workers=training_args.num_workers)
     
     # load MiniGPT4 model for training
     model = create_model(model_args)
-    del_keys = ["language_projection.weight", "language_projection.bias"]
+    # if you wanna train from scratch, you can set del_keys = ["language_projection.weight", "language_projection.bias"]
+    del_keys = []
+    logger.info("Try to load the specified model.")
     load_pretrained_model(model, training_args.pretrained_model_path, del_keys=del_keys)
+    logger.info("Try to convert the model dtype to the specified dtype.")
     convert_weights_to_dtype(model.vision_model, dtype="float16")
     convert_weights_to_dtype(model.qformer, dtype="float32")
     convert_weights_to_dtype(model.language_model, dtype="float16")
+    logger.info("Try to freeze model parameters.")
     if training_args.freeze_vit:
-        freeze_model(model.vision_model, enable_eval=True)
+        freeze_parameters(model.vision_model, enable_eval=True)
     if training_args.freeze_qformer:
-        freeze_parameter(model.query_tokens)
-        freeze_model(model.qformer, enable_eval=True)
+        freeze_parameters(model.query_tokens)
+        freeze_parameters(model.qformer, enable_eval=True)
     if training_args.freeze_llama:
-        freeze_model(model.language_model, enable_eval=False)
+        freeze_parameters(model.language_model, enable_eval=False)
+    logger.info("Initializing the model done!")
 
     # training setting
     num_training_steps = training_args.num_train_epochs * len(train_loader)
@@ -294,13 +287,11 @@ def main():
         last_step=-1,
     )
 
-    decay_params = [p.name for n, p in model.named_parameters() if not any(nd in n for nd in ["bias", "norm"])]
-    grouped_params = get_grouped_parameters(model)
+    grouped_params = get_grouped_parameters(model, training_args)
     optimizer = paddle.optimizer.AdamW(
         learning_rate=lr_scheduler,
         parameters=grouped_params,
         weight_decay=training_args.weight_decay,
-        # apply_decay_param_fun=lambda x: x in decay_params,
     )
     if training_args.use_amp:
         scaler = paddle.amp.GradScaler(init_loss_scaling=65536.0, incr_every_n_steps=2000, decr_every_n_nan_or_inf=1)
