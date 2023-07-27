@@ -116,7 +116,7 @@ class BLIP2Trainer(Trainer):
         self.eval_collator=eval_collator
 
     def create_optimizer_and_scheduler(self, num_training_steps: int):
-        self.lr_scheduler=self.create_scheduler(num_training_steps=num_training_steps)
+        self.lr_scheduler=self.create_scheduler(num_training_steps//self.args.num_train_epochs)
         param_filter = FilterParamsName()
         p_wd, p_non_wd = param_filter(self.model)
         self.optimizer = paddle.optimizer.AdamW(

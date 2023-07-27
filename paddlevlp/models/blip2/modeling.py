@@ -1641,7 +1641,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         )
         if config.use_decoder_only_language_model:
             if isinstance(config.text_config, OPTConfig):
-                    language_model = OPTForCausalLM.from_pretrained("facebook/opt-2.7b",load_state_as_np=True)
+                language_model = OPTForCausalLM(config.text_config)
             else:
                 raise NotImplementedError
         else:
