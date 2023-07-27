@@ -6,4 +6,4 @@
     "processor_class":"Blip2Processor",
     "processor_type":"BlipTextProcessor",
     "prompt":"a photo of"
-                                    }
+}
