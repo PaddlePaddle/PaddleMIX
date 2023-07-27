@@ -13,9 +13,10 @@
 # limitations under the License.
 
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
 import paddle.distributed as dist
 from paddle.distributed import fleet
-import os
 from dataclasses import dataclass, field
 import numpy as np
 import random
@@ -37,36 +38,7 @@ from paddlevlp.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
 from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
-class BlipCollator:
-    """
-    Data collator that will dynamically pad the inputs to the longest sequence in the batch.
-
-    Args:
-        processor (`paddlevlp.processors.ProcessorMixin`):
-            The processor used for pre-process the data.
-    """
-
-    def __init__(self, processor,mode="train"):
-        self.processor = processor
-
-    def __call__(self, data_list):
-        images = [sample["image"] for sample in data_list]
-        if "text_input" not in data_list[0].keys():
-            text=None
-        else:
-            text = [sample["text_input"] for sample in data_list]
-        image_id = [sample["image_id"] for sample in data_list]
-        batch = self.processor(
-            images=images,
-            text=text,
-            max_length=32,
-            return_tensors="pd",
-            return_attention_mask=True,
-            mode="train",
-        )
-        batch.update({'image_id':image_id})
-        return batch
-
+from paddlevlp.examples.blip2.utils import BlipCollator
 
 @dataclass
 class DataArguments:

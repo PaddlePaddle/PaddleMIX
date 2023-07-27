@@ -13,19 +13,18 @@
 # limitations under the License.
 
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
 import paddle.distributed as dist
 from paddle.distributed import fleet
-import os
 from dataclasses import dataclass, field
 import numpy as np
 import random
 import paddle
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-from sklearn.utils import compute_sample_weight
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
 from paddlenlp.transformers import AutoConfig, OPTConfig, T5Config
-import paddlevlp
 from paddlevlp.datasets import load_dataset
 from paddlevlp.models.blip2.configuration import (Blip2Config,
                                                   Blip2QFormerConfig,
@@ -37,36 +36,8 @@ from paddlevlp.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
 from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
-class BlipCollator:
-    """
-    Data collator that will dynamically pad the inputs to the longest sequence in the batch.
-
-    Args:
-        processor (`paddlevlp.processors.ProcessorMixin`):
-            The processor used for pre-process the data.
-    """
-
-    def __init__(self, processor,mode="train"):
-        self.processor = processor
-        self.mode=mode
-    def __call__(self, data_list):
-        images = [sample["image"] for sample in data_list]
-        if "text_input" not in data_list[0].keys():
-            text=None
-        else:
-            text = [sample["text_input"] for sample in data_list]
-        image_id = [sample["image_id"] for sample in data_list]
-        batch = self.processor(
-            images=images,
-            text=text,
-            max_length=32,
-            return_tensors="pd",
-            return_attention_mask=True,
-            mode=self.mode,
-        )
-        batch.update({'image_id':image_id})
-        return batch
-
+from paddlevlp.examples.blip2.utils import BlipCollator
+from paddlevlp.examples.blip2.utils import load_pretrained_model
 
 @dataclass
 class DataArguments:
@@ -196,22 +167,6 @@ def create_model(config):
     paddle.device.cuda.empty_cache()# post_init_func(self, init_func, *args, **kwargs)吃显存
     return model
 
-
-
-def load_pretrained_model(model, pretrained_model_path):
-    if pretrained_model_path is None:
-        return
-
-    if not os.path.exists(pretrained_model_path):
-        ValueError(
-            "Cannot find pretrained model path: {}".format(pretrained_model_path)
-        )
-
-    state_dict = paddle.load(pretrained_model_path)
-    interpolate_pos_embed(model, state_dict)
-    model.set_state_dict(state_dict)
-
-
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments, PreTrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
@@ -306,7 +261,8 @@ def setdistenv(args):
     args.data_parallel_degree=args.dp_degree
     logger.info("args.dp_degree:{}".format(args.dp_degree))
     logger.info("args.sharding_parallel_degree):{}".format(args.sharding_parallel_degree))
-    # breakpoint()
+    if args.sharding_parallel_degree>1:
+        args.sharding="stage1"
     strategy.hybrid_configs = {
         "dp_degree": args.dp_degree,
         "mp_degree": args.tensor_parallel_degree,
