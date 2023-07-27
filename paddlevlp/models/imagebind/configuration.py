@@ -4,7 +4,7 @@ from typing import Union
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.clip.configuration import CLIPTextConfig, CLIPVisionConfig
 
-from ...utils.log import logger
+from paddlevlp.utils.log import logger
 
 __all__ = ["ImageBindVisionConfig", "ImageBindTextConfig", "ImageBindConfig", "ImageBindAudioConfig"]
 

@@ -17,7 +17,7 @@ def _get_sinc_resample_kernel(
 ):
     if not (int(orig_freq) == orig_freq and int(new_freq) == new_freq):
         raise Exception(
-            'Frequencies must be of integer type to ensure quality resampling computation. To work around this, manually convert both frequencies to integer values that maintain their resampling rate ratio before passing them into the function. Example: To downsample a 44100 hz waveform by a factor of 8, use `orig_freq=8` and `new_freq=1` instead of `orig_freq=44100` and `new_freq=5512.5`. For more information, please refer to https://github.com/pytorch/audio/issues/1487.'
+            'Frequencies must be of integer type to ensure quality resampling computation. To work around this, manually convert both frequencies to integer values that maintain their resampling rate ratio before passing them into the function. Example: To downsample a 44100 hz waveform by a factor of 8, use `orig_freq=8` and `new_freq=1` instead of `orig_freq=44100` and `new_freq=5512.5`.'
         )
     if resampling_method not in ['sinc_interpolation', 'kaiser_window']:
         raise ValueError('Invalid resampling method: {}'.format(resampling_method))
@@ -104,7 +104,6 @@ def resample(
 
     .. devices:: CPU CUDA
 
-    .. properties:: Autograd TorchScript
 
     Note:
         ``transforms.Resample`` precomputes and reuses the resampling kernel, so using it will result in

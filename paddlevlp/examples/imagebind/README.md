@@ -17,7 +17,7 @@ example: Extract and compare features across modalities (e.g. Image, Text and Au
 ```bash
 cd paddlevlp/imagebind/
 
-run_predict.py \
+python run_predict.py \
 --model_name_or_path The dir name of imagebind checkpoint. \
 --input_text "A dog."
 --input_image an image file. \
