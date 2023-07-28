@@ -40,7 +40,7 @@ from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
 from paddlevlp.processors.blip_processing import BlipImageProcessor, BlipTextProcessor
 from paddlevlp.examples.blip2.utils import BlipCollator
-from paddlevlp.examples.blip2.utils import load_pretrained_model
+from paddlevlp.examples.blip2.utils import load_pretrained_model, LLM_LIST
 
 
 @dataclass
@@ -79,6 +79,9 @@ class ModelArguments:
     image_size: int = field(
         default=224,
         metadata={"help": " Image size for training. (default:224)"})
+    llm_name: str = field(
+        default="opt-2.7b",
+        metadata={"help": "llm name which you ned to load in LLM_LIST"})
 
 
 @dataclass
@@ -244,6 +247,7 @@ def main():
     logger.info("training_args.use_hybrid_parallel:{}".format(
         training_args.use_hybrid_parallel))
     # create trainer
+    load_pretrained_model(model.language_model, LLM_LIST[model_args.llm_name])
     load_pretrained_model(model, training_args.pretrained_model_path)
     trainer = Trainer(
         model=model,

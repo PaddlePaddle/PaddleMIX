@@ -40,7 +40,7 @@ from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
 from paddlevlp.processors.blip_processing import BlipImageProcessor, BlipTextProcessor
 from paddlevlp.examples.blip2.utils import BlipCollator
-from paddlevlp.examples.blip2.utils import load_pretrained_model
+from paddlevlp.examples.blip2.utils import load_pretrained_model, LLM_LIST
 
 
 @dataclass
@@ -243,6 +243,7 @@ def main():
     logger.info("training_args.use_hybrid_parallel:{}".format(
         training_args.use_hybrid_parallel))
     # create trainer
+    load_pretrained_model(model, LLM_LIST[model_args.llm_name])
     load_pretrained_model(model, training_args.pretrained_model_path)
     trainer = Trainer(
         model=model,
