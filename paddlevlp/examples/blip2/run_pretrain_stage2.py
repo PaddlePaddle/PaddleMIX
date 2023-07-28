@@ -247,7 +247,7 @@ def main():
     logger.info("training_args.use_hybrid_parallel:{}".format(
         training_args.use_hybrid_parallel))
     # create trainer
-    load_pretrained_model(model, LLM_LIST[model_args.llm_name])
+    load_pretrained_model(model.language_model, LLM_LIST[model_args.llm_name])
     load_pretrained_model(model, training_args.pretrained_model_path)
     trainer = Trainer(
         model=model,
