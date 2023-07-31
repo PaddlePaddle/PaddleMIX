@@ -16,8 +16,8 @@ except:
 from .timm_model import TimmModel
 from .eva_vit_model import EVAVisionTransformer
 from .transformer import LayerNorm, QuickGELU, Attention, VisionTransformer, EVATextTransformer
-from .fusedln import FusedLayerNorm
-# from paddle.nn import LayerNorm as FusedLayerNorm
+# from .fusedln import FusedLayerNorm
+from paddle.nn import LayerNorm as FusedLayerNorm
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel
@@ -89,7 +89,7 @@ class EVACLIP(EVACLIPPretrainedModel):
             default_initializer=paddle.nn.initializer.Assign(init_data))
 
         self.loss = ClipLoss(
-            local_loss=local_loss,
+            local_loss=True,
             gather_with_grad=gather_with_grad,
             cache_labels=cache_labels,
             rank=data_world_rank,
@@ -122,19 +122,23 @@ class EVACLIP(EVACLIPPretrainedModel):
             x=features, axis=-1) if normalize else features
         return out
 
-    def encode_text(self, text, normalize: bool=False):
+    def encode_text(self, text, text_features=None, normalize: bool=False):
+        if text_features is not None:
+            # directly use text_features if given
+            return paddle.nn.functional.normalize(x=text_features, axis=-1) if normalize else text_features
         features = self.text(text)
         return paddle.nn.functional.normalize(
             x=features, axis=-1) if normalize else features
 
-    def forward(self, image, input_ids, skiploss=False):
+    def forward(self, image, input_ids, text_features=None, skiploss=False):
         self.clip_scale()
         text = input_ids
         image_features = self.encode_image(image, normalize=True)
-        text_features = self.encode_text(text, normalize=True)
+        text_features = self.encode_text(text, text_features=text_features, normalize=True)
         if skiploss:
             return image_features, text_features, self.logit_scale.exp()
 
+        # print("image_features:{}, text_features:{}".format(image_features.detach().cpu().numpy().mean(), text_features.detach().cpu().numpy().mean()))
         loss_itc, logits_per_image, logits_per_text, labels = self.loss(
             (image_features, text_features, self.logit_scale.exp()))
         return loss_itc, image_features, text_features, self.logit_scale.exp()

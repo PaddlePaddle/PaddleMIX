@@ -55,7 +55,8 @@ class CLIPProcessor(ProcessorMixin):
     attributes = ["image_processor", "text_processor", "tokenizer"]
     image_processor_class = "CLIPImageProcessor"
     text_processor_class = "CLIPTextProcessor"
-    tokenizer_class = "AutoTokenizer"
+    tokenizer_class = "SimpleTokenizer"
+    # tokenizer_class = "AutoTokenizer"
 
     def __init__(self, image_processor, text_processor, tokenizer):
         super().__init__(image_processor, text_processor, tokenizer)
@@ -112,9 +113,10 @@ class CLIPProcessor(ProcessorMixin):
         encoding_image_processor = self.image_processor(
             images, return_tensors=return_tensors, mode=mode)
 
-        text_encoding = self.text_processor(text, mode=mode)
+        # text_encoding = self.text_processor(text, mode=mode)
+        text_encoding = text
         text_encoding = self.tokenizer(
-            text=text_encoding,
+            texts=text_encoding,
             return_tensors=return_tensors,
             return_token_type_ids=False,
             max_length=max_length,
@@ -123,7 +125,9 @@ class CLIPProcessor(ProcessorMixin):
 
         for key, value in text_encoding.items():
             shape = value.shape
-            if shape[-1] != max_length:
+            if shape[-1] > max_length:
+                text_encoding[key] = value[...,:max_length]
+            elif shape[-1] < max_length:
                 if key == 'input_ids':
                     fill_value = value.numpy()[..., -1][-1]
                 else:
@@ -309,6 +313,7 @@ class CLIPImageProcessor(BaseImageProcessor):
             do_collate: bool=False,
             mode: str="train",
             **kwargs, ) -> None:
+        scale = (1.0, 1.0)
         super().__init__(**kwargs)
         size = size if size is not None else {"height": 384, "width": 384}
         size = get_size_dict(size, default_to_square=True)

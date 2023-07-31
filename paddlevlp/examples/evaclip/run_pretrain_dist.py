@@ -17,6 +17,8 @@ from paddlevlp.models.evaclip.eva_clip.optim import create_optimizer
 from paddlevlp.models.evaclip.utils.checkpoint import save, load_model
 from paddlevlp.optimization import CosineDecayWithWarmup
 from paddlevlp.datasets import load_dataset
+from paddlevlp.datasets.laion_clip import LaionCLIP
+from paddlevlp.models.evaclip.eva_clip.data_src.data import LaionDataset
 from paddlevlp.utils.env import setdistenv
 from paddlevlp.trainer import CLIPTrainer
 
@@ -28,6 +30,7 @@ import time
 import random
 
 from paddlevlp.processors.clip_processing import CLIPProcessor
+from paddlevlp.processors import SimpleTokenizer, tokenize
 
 
 @dataclass
@@ -48,6 +51,16 @@ class DataArguments:
     image_size: int = field(
         default=224,
         metadata={"help": "image size for training"}, )
+
+    train_data: str = field(
+        default="",
+        metadata={"help": "The traindata list path."}, )
+
+    precomputed_text_emb: str = field(
+        default="open_clip_vit_g_14",
+        metadata={"help": "precomputed_text_emb name."}, )
+
+ 
 
 
 @dataclass
@@ -130,6 +143,8 @@ class SelfTrainer(CLIPTrainer):
         Trainer's init through `optimizers`, or subclass and override this method (or `create_optimizer` and/or
         `create_scheduler`) in a subclass.
         """
+        print("before fix num_training_steps:", num_training_steps)
+        num_training_steps = 256000
         self.lr_scheduler = paddle.optimizer.lr.CosineAnnealingDecay(
             1.0,
             num_training_steps - self.args.warmup_steps,
@@ -188,7 +203,9 @@ def main_worker(training_args, model_args, data_args):
         load_model(
             training_args, model, ckpt_dir=training_args.pretrained_model_path)
 
-    train_dataset = load_dataset('coco_clip', splits="train")
+    # train_dataset = load_dataset('laion_clip', splits="train")
+    train_dataset = LaionDataset(data_args.train_data, get_text_emb=data_args.precomputed_text_emb, data_world_rank=training_args.data_world_rank, data_world_size=training_args.data_world_size)
+    # train_dataset = LaionCLIP()
 
     processor = CLIPProcessor.from_pretrained(model_args.model_name_or_path)
     collator = Collator(processor)

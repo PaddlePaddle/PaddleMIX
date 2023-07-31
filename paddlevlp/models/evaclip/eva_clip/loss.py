@@ -111,11 +111,13 @@ class ClipLoss(nn.Layer):
             rank=0,
             world_size=1, ):
         super().__init__()
+        local_loss=False
         self.local_loss = local_loss
         self.gather_with_grad = gather_with_grad
         self.cache_labels = cache_labels
         self.rank = rank
         self.world_size = world_size
+        # print("cliploss rank:{}, world_size:{}".format(rank, world_size))
 
         # cache state
         # self.prev_num_logits = 0
@@ -127,10 +129,12 @@ class ClipLoss(nn.Layer):
             all_image_features, all_text_features = gather_features(
                 image_features, text_features, self.local_loss,
                 self.gather_with_grad, self.rank, self.world_size)
+            # print("all_image_features, all_text_features", all_image_features.shape, all_image_features.detach().cpu().numpy().mean(), all_text_features.shape, all_text_features.detach().cpu().numpy().mean())
 
             if self.local_loss:
                 logits_per_image = logit_scale * image_features @all_text_features.T
                 logits_per_text = logit_scale * text_features @all_image_features.T
+                # print("logits_per_image, logits_per_text", logits_per_image.detach().cpu().numpy().mean(), logits_per_text.detach().cpu().numpy().mean())
             else:
                 logits_per_image = logit_scale * all_image_features @all_text_features.T
                 logits_per_text = logits_per_image.T
@@ -151,6 +155,9 @@ class ClipLoss(nn.Layer):
         #     labels = self.labels[device]
         total_loss = (F.cross_entropy(logits_per_image, labels) +
                       F.cross_entropy(logits_per_text, labels)) / 2
+        # print("total_loss:", total_loss.numpy().mean())
+        # import pdb;pdb.set_trace()
+
         return total_loss, logits_per_image, logits_per_text, labels
 
 

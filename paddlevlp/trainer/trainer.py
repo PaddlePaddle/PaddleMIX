@@ -14,7 +14,7 @@
 
 import paddle
 from paddlenlp.trainer.trainer import Trainer
-
+from paddle.io import DataLoader
 
 class CLIPTrainer(Trainer):
     def __init__(self, **kwargs):
@@ -135,3 +135,22 @@ class CLIPTrainer(Trainer):
         self.step = 0
 
         return loss.detach()
+
+    def get_train_dataloader(self):
+        """
+        Returns the training [`~paddle.io.DataLoader`].
+
+        Will use no sampler if `self.train_dataset` does not implement `__len__`, a random sampler (adapted to
+        distributed training if necessary) otherwise.
+
+        Subclass and override this method if you want to inject some custom behavior.
+        """
+
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.args.per_device_train_batch_size,
+            collate_fn=self.data_collator,
+            num_workers=self.args.dataloader_num_workers,
+            prefetch_factor=1,
+            shuffle=False,
+        )

@@ -162,6 +162,11 @@ def get_all_parameters(args, model):
     return parameters
 
 
+def print_optim(optimizer):
+    for param_group in optimizer._param_groups:
+        print(param_group['group'], param_group['learning_rate'], param_group['lr_scale'])
+
+
 def create_optimizer(args, model, lr_scheduler=None, return_params=False):
     optimizer_args = dict(beta1=args.adam_beta1, beta2=args.adam_beta2)
     if lr_scheduler is not None:
@@ -184,6 +189,8 @@ def create_optimizer(args, model, lr_scheduler=None, return_params=False):
         optimizer_args['grad_clip'] = grad_clip
     parameters = get_all_parameters(args, model)
     optimizer = base_optimizer(parameters=parameters, **optimizer_args)
+    print(optimizer_args)
+    print_optim(optimizer)
     if is_master(args):
         print(f'Optimizer: {args.optimizer}')
         print(f'Optimizer config: {optimizer_args}')
