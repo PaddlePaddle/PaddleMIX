@@ -363,6 +363,8 @@ class Blip2Config(PretrainedConfig):
         self.initializer_factor = 1.0
         self.initializer_range = 0.02
         self.freeze_vit = True
+        self.amp_vision = getattr(kwargs, 'amp_vision', True) 
+        self.amp_text = getattr(kwargs, 'amp_text', True) 
 
     @classmethod
     def from_vision_qformer_text_configs(

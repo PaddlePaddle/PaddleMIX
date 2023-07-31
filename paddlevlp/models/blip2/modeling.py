@@ -1653,6 +1653,10 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         for name, param in self.language_model.named_parameters():
             param.stop_gradient = True
         self.pad_token_id = config.text_config.pad_token_id
+
+        self.amp_vision = config.amp_vision 
+        self.amp_text = config.amp_text
+
     @classmethod
     def init_vision_encoder(
         cls, model_name, img_size, drop_path_rate,mp_degree,gradient_checkpointing=False
@@ -1741,9 +1745,14 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         return_dict = (
             return_dict if return_dict is not None else self.config.use_return_dict
         )
-        with paddle.amp.auto_cast(level='O2'):
+
+        if self.amp_vision:
+            with paddle.amp.auto_cast(level='O2'):
+                image_embeds = self.ln_vision(self.visual_encoder(pixel_values))
+            image_embeds = image_embeds.astype("float32")
+
+        else:
             image_embeds = self.ln_vision(self.visual_encoder(pixel_values))
-        image_embeds = image_embeds.astype("float32")
 
         # step 2: forward the query tokens through the QFormer, using the image embeddings for cross-attention
         image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
@@ -1780,15 +1789,26 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         ).fill_(-100)
         labels = paddle.concat([empty_targets, targets], axis=1)
         labels.stop_gradient = True
-        with paddle.amp.auto_cast(level='O2'):
+
+        if self.amp_text:
+            with paddle.amp.auto_cast(level='O2'):
+                outputs = self.language_model(
+                        inputs_embeds=inputs_embeds,
+                        attention_mask=attention_mask,
+                        return_dict=True,
+                        labels=labels,)
+                loss = outputs.loss
+        else:
             outputs = self.language_model(
                     inputs_embeds=inputs_embeds,
                     attention_mask=attention_mask,
                     return_dict=True,
                     labels=labels,)
             loss = outputs.loss
-        # print(loss)
+
         return {"loss": loss}
+
+
     @paddle.no_grad()
     def encode_image(
         self,
