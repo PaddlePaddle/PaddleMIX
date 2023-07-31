@@ -687,8 +687,18 @@ def main():
     if args.tokenizer_name:
         tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
     elif args.pretrained_model_name_or_path:
-        tokenizer = AutoTokenizer.from_pretrained(
-            url_or_path_join(args.pretrained_model_name_or_path, "tokenizer"))
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(
+                url_or_path_join(args.pretrained_model_name_or_path,
+                                 "tokenizer"))
+        except KeyError as e:
+            if 'XLMRobertaTokenizerr' in str(e):
+                from paddlenlp.transformers import XLMRobertaTokenizer
+                tokenizer = XLMRobertaTokenizer.from_pretrained(
+                    url_or_path_join(args.pretrained_model_name_or_path,
+                                     "tokenizer"))
+            else:
+                raise e
 
     # import correct text encoder class
     text_encoder_cls = import_model_class_from_model_name_or_path(
