@@ -35,9 +35,14 @@ from ppdiffusers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
     UNet2DConditionModel, )
+from ppdiffusers.loaders import FromCkptMixin
 from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
     StableDiffusionPipelineOutput, )
-from ppdiffusers.utils import PIL_INTERPOLATION, randn_tensor
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
+    StableDiffusionSafetyChecker, )
+from ppdiffusers.utils import PIL_INTERPOLATION, randn_tensor, logging
+
+logger = logging.get_logger(__name__)
 
 
 def preprocess(image, w, h):
@@ -97,7 +102,8 @@ def set_requires_grad(model, value):
         param.stop_gradient = not value
 
 
-class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline):
+class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
+    # _optional_components = ["safety_checker", "feature_extractor"]
     def __init__(
             self,
             vae: AutoencoderKL,
@@ -108,10 +114,28 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline):
             scheduler: Union[PNDMScheduler, LMSDiscreteScheduler, DDIMScheduler,
                              DPMSolverMultistepScheduler],
             feature_extractor: CLIPFeatureExtractor,
+            safety_checker: StableDiffusionSafetyChecker,
             blip_model=None,
             blip_processor=None,
-            clip_interrogator=None, ):
+            clip_interrogator=None,
+            requires_safety_checker: bool=True, ):
         super().__init__()
+        if safety_checker is None and requires_safety_checker:
+            logger.warning(
+                f"You have disabled the safety checker for {self.__class__} by passing `safety_checker=None`. Ensure"
+                " that you abide to the conditions of the Stable Diffusion license and do not expose unfiltered"
+                " results in services or applications open to the public. PaddleNLP team, diffusers team and Hugging Face"
+                " strongly recommend to keep the safety filter enabled in all public facing circumstances, disabling"
+                " it only for use-cases that involve analyzing network behavior or auditing its results. For more"
+                " information, please have a look at https://github.com/huggingface/diffusers/pull/254 ."
+            )
+
+        if safety_checker is not None and feature_extractor is None:
+            raise ValueError(
+                f"Make sure to define a feature extractor when loading {self.__class__} if you want to use the safety"
+                " checker. If you do not want to use the safety checker, you can pass `'safety_checker=None'` instead."
+            )
+        # breakpoint()
         self.register_modules(
             vae=vae,
             text_encoder=text_encoder,
@@ -122,7 +146,8 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline):
             feature_extractor=feature_extractor,
             blip_model=blip_model,
             blip_processor=blip_processor,
-            clip_interrogator=clip_interrogator, )
+            clip_interrogator=clip_interrogator,
+            safety_checker=safety_checker, )
         self.feature_extractor_size = (
             feature_extractor.size if isinstance(feature_extractor.size, int)
             else feature_extractor.size["shortest_edge"])
@@ -130,6 +155,7 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline):
             mean=feature_extractor.image_mean, std=feature_extractor.image_std)
         set_requires_grad(self.text_encoder, False)
         set_requires_grad(self.clip_model, False)
+        self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     def enable_attention_slicing(self,
                                  slice_size: Optional[Union[str, int]]="auto"):
@@ -158,6 +184,17 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline):
         t_start = max(num_inference_steps - init_timestep, 0)
         timesteps = self.scheduler.timesteps[t_start:]
         return timesteps, num_inference_steps - t_start
+
+    def run_safety_checker(self, image, dtype):
+        if self.safety_checker is not None:
+            safety_checker_input = self.feature_extractor(
+                self.numpy_to_pil(image), return_tensors="pd")
+            image, has_nsfw_concept = self.safety_checker(
+                images=image,
+                clip_input=safety_checker_input.pixel_values.cast(dtype))
+        else:
+            has_nsfw_concept = None
+        return image, has_nsfw_concept
 
     def prepare_latents(self,
                         image,
@@ -479,9 +516,12 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline):
         image = self.vae.decode(latents).sample
         image = (image / 2 + 0.5).clip(min=0, max=1)
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
+        image, has_nsfw_concept = self.run_safety_checker(image,
+                                                          text_embeddings.dtype)
+
         if output_type == "pil":
             image = self.numpy_to_pil(image)
         if not return_dict:
             return image, None
         return StableDiffusionPipelineOutput(
-            images=image, nsfw_content_detected=None)
+            images=image, nsfw_content_detected=has_nsfw_concept)
