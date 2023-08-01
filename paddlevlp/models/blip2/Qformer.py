@@ -1,16 +1,17 @@
-# !/usr/bin/env python3
-# -*- coding:UTF-8 -*-
-################################################################################
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The Salesforce Team Authors and The HuggingFace Team. All rights reserved.
 #
-# Copyright (c) 2023 Baidu.com, Inc. All Rights Reserved
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-################################################################################
-"""
-Authors:
-        wangsiqi06(wangsiqi06@baidu.com), zhouwenshuo(zhouwenshuo@baidu.com)
-
-Date:   2023/3/08 17:00:00
-"""
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from altair import value
 import sklearn
@@ -40,7 +41,6 @@ from paddlenlp.transformers.bert.configuration import BertConfig
 import numpy as np
 import paddle
 from paddle.distributed.fleet.utils import recompute
-import random
 class CrossEntropyLoss(nn.Layer):
     """
     Softmax Cross entropy loss
@@ -134,7 +134,8 @@ class BertEmbeddings(nn.Layer):
         else:
             embeddings = query_embeds
         embeddings = self.LayerNorm(embeddings)
-        embeddings = self.dropout(embeddings)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            embeddings = self.dropout(embeddings)
         return embeddings
 
 
@@ -154,18 +155,18 @@ class BertSelfAttention(nn.Layer):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
         if config.mp_degree>1:
-            self.query = fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,               weight_attr=None,
-                has_bias=False,
+            self.query = fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,weight_attr=None,
+                has_bias=True,
                 gather_output=True)
         else:
             self.query = nn.Linear(config.hidden_size, self.all_head_size)
         if is_cross_attention:
             if config.mp_degree>1:
                 self.key=fleet.meta_parallel.ColumnParallelLinear(config.encoder_width, self.all_head_size,weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
                 self.value=fleet.meta_parallel.ColumnParallelLinear(config.encoder_width, self.all_head_size,weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
             else:
                 self.key = nn.Linear(config.encoder_width, self.all_head_size)
@@ -173,10 +174,10 @@ class BertSelfAttention(nn.Layer):
         else:
             if config.mp_degree>1:
                 self.key=fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
                 self.value=fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
             else:
                 self.key = nn.Linear(config.hidden_size, self.all_head_size)
@@ -304,7 +305,8 @@ class BertSelfAttention(nn.Layer):
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
-        attention_probs_dropped = self.dropout(attention_probs)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            attention_probs_dropped = self.dropout(attention_probs)
 
         # Mask heads if we want to
         if head_mask is not None:
@@ -333,7 +335,8 @@ class BertSelfOutput(nn.Layer):
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
@@ -395,7 +398,8 @@ class BertOutput(nn.Layer):
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 

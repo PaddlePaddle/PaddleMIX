@@ -195,10 +195,16 @@ class BLIP2Trainer(Trainer):
         # Mixed precision training
         if training and self.do_grad_scaling:  # self.args.fp16_opt_level=="O2":
             # model, self.optimizer
-            decorated = paddle.amp.decorate(
-                models=[model.visual_encoder,model.language_model], optimizers=self.optimizer, level="O2"
-            )
-            model.visual_encoder,model.language_model= decorated[0]
+            if hasattr(model,"language_model"):
+                decorated = paddle.amp.decorate(
+                    models=[model.visual_encoder,model.language_model], optimizers=self.optimizer, level="O2"
+                )
+                model.visual_encoder,model.language_model= decorated[0]
+            else:
+                decorated = paddle.amp.decorate(
+                    models=[model.visual_encoder], optimizers=self.optimizer, level="O2"
+                )
+                model.visual_encoder = decorated[0][0]
             self.optimizer.set_state_dict(decorated[1].state_dict())
 
         # Multi-gpu training

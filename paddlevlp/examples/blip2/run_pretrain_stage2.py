@@ -36,9 +36,7 @@ from paddlevlp.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
 from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
-from paddlevlp.examples.blip2.utils import BlipCollator
-from paddlevlp.examples.blip2.utils import load_pretrained_model
-
+from paddlevlp.examples.blip2.utils import BlipCollator,LLM_LIST,load_model
 @dataclass
 class DataArguments:
     """
@@ -202,7 +200,7 @@ def main():
             )
 
     # create dataset
-    tokenizer_class = AutoTokenizer.from_pretrained("facebook/opt-2.7b", use_fast=False)
+    tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path, use_fast=False)
     image_processor = BlipImageProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipImageProcessor_stage2.json")
     text_processor_class = BlipTextProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipTextProcessor_stage2.json")
     processor = Blip2Processor(image_processor,text_processor_class,tokenizer_class)
@@ -218,9 +216,12 @@ def main():
     model_args.mp_degree=training_args.tensor_parallel_degree
     model_args.gradient_checkpointing=training_args.gradient_checkpointing
     model = create_model(model_args)
+
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     # create trainer
-    load_pretrained_model(model, training_args.pretrained_model_path)
+    load_model(training_args,model, ckpt_dir="blip2_pretrained.pdparams", load_language_model=False)
+    load_model(training_args,model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
+
     trainer = Trainer(
         model=model,
         args=training_args,

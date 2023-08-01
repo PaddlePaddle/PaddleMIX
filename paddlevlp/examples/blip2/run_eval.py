@@ -26,7 +26,6 @@ from sklearn.utils import compute_sample_weight
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
 from paddlenlp.transformers import AutoConfig, OPTConfig, T5Config
-import paddlevlp
 from paddlevlp.datasets import load_dataset
 from paddlevlp.models.blip2.configuration import (Blip2Config,
                                                   Blip2QFormerConfig,
@@ -36,9 +35,8 @@ from paddlevlp.processors.blip_processing import Blip2Processor
 from paddlevlp.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlevlp.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
-from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
 from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
-from paddlevlp.examples.blip2.utils import BlipCollator
+from paddlevlp.examples.blip2.utils import BlipCollator,load_model,LLM_LIST
 
 @dataclass
 class DataArguments:
@@ -85,10 +83,10 @@ class PreTrainingArguments(TrainingArguments):
     Arguments pertaining to what training options we are going to use during pretraining.
     """
 
-    pretrained_model_path: str = field(
+    model_path: str = field(
         default="https://bj.bcebos.com/v1/paddlenlp/models/community/Salesforce/blip2-opt-2.7b/blip2_pretrained.pdparams",
         metadata={
-            "help": "The path to pre-trained model that we will use for pretraining."
+            "help": "The path to model that we will use for eval."
         },
     )
     weight_decay: float = field(
@@ -169,21 +167,6 @@ def create_model(config):
     return model
 
 
-
-def load_pretrained_model(model, pretrained_model_path):
-    if pretrained_model_path is None:
-        return
-
-    if not os.path.exists(pretrained_model_path):
-        ValueError(
-            "Cannot find pretrained model path: {}".format(pretrained_model_path)
-        )
-
-    state_dict = paddle.load(pretrained_model_path)
-    interpolate_pos_embed(model, state_dict)
-    model.set_state_dict(state_dict)
-
-
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments, PreTrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
@@ -237,7 +220,8 @@ def main():
     model = create_model(model_args)
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     # create trainer
-    load_pretrained_model(model, training_args.pretrained_model_path)
+    load_model(training_args,model, ckpt_dir=model_args.model_path,load_language_model=False)
+    load_model(training_args,model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path],load_language_model=True)
     trainer = Trainer(
         model=model,
         args=training_args,
