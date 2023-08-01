@@ -23,7 +23,11 @@ import re
 from collections import OrderedDict
 from pathlib import PosixPath
 from typing import Any, Dict, Tuple, Union
-
+try:
+    from omegaconf.listconfig import ListConfig
+    _omegaconf_available = True
+except:
+    _omegaconf_available = False
 import numpy as np
 import paddle
 
@@ -588,6 +592,8 @@ class ConfigMixin:
                 value = value.tolist()
             elif isinstance(value, PosixPath):
                 value = str(value)
+            elif _omegaconf_available and isinstance(value, ListConfig):
+                value = list(value)
             return value
 
         config_dict = {k: to_json_saveable(v) for k, v in config_dict.items()}
