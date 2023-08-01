@@ -108,20 +108,18 @@ class ClipLoss(nn.Layer):
             local_loss=False,
             gather_with_grad=False,
             cache_labels=False,
+            visual_loss=True,
+            text_loss=False,
             rank=0,
             world_size=1, ):
         super().__init__()
-        local_loss=False
         self.local_loss = local_loss
         self.gather_with_grad = gather_with_grad
         self.cache_labels = cache_labels
         self.rank = rank
         self.world_size = world_size
-        # print("cliploss rank:{}, world_size:{}".format(rank, world_size))
-
-        # cache state
-        # self.prev_num_logits = 0
-        # self.labels = {}
+        self.visual_loss = visual_loss
+        self.text_loss = text_loss
 
     def forward(self, preds):
         image_features, text_features, logit_scale = preds
@@ -153,10 +151,12 @@ class ClipLoss(nn.Layer):
         #         self.prev_num_logits = num_logits
         # else:
         #     labels = self.labels[device]
-        total_loss = (F.cross_entropy(logits_per_image, labels) +
-                      F.cross_entropy(logits_per_text, labels)) / 2
-        # print("total_loss:", total_loss.numpy().mean())
-        # import pdb;pdb.set_trace()
+        total_loss = paddle.to_tensor(0.0)
+        if self.visual_loss:
+            total_loss += F.cross_entropy(logits_per_image, labels)
+        if self.text_loss:
+            total_loss += F.cross_entropy(logits_per_text, labels)
+        # print("total_loss:{}, logits_per_image:{}, logit_scale:{}".format(total_loss.item(), logits_per_image.detach().cpu().numpy().mean(), logit_scale.item()))
 
         return total_loss, logits_per_image, logits_per_text, labels
 

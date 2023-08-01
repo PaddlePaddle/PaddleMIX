@@ -152,10 +152,10 @@ def get_all_parameters(args, model):
     assigner_visual, assigner_text = get_assigner(args, model)
     parameters = []
     visual_parameters = get_parameters(args, model, assigner_visual, 'visual')
-    text_parameters = get_parameters(args, model, assigner_text, 'text')
+    # text_parameters = get_parameters(args, model, assigner_text, 'text')
     other_parameters = get_parameters(args, model, None, 'other')
     parameters.extend(visual_parameters)
-    parameters.extend(text_parameters)
+    # parameters.extend(text_parameters)
     parameters.extend(other_parameters)
     if len(parameters) == 0:
         parameters = model.parameters()
@@ -183,10 +183,10 @@ def create_optimizer(args, model, lr_scheduler=None, return_params=False):
         base_optimizer = paddle.optimizer.AdamW
     if args.fp16_opt_level == 'O2':
         optimizer_args['multi_precision'] = True
-    if args.max_grad_norm:
-        grad_clip = paddle.nn.ClipGradByGlobalNorm(
-            clip_norm=args.max_grad_norm)
-        optimizer_args['grad_clip'] = grad_clip
+    # if args.max_grad_norm:
+    #     grad_clip = paddle.nn.ClipGradByGlobalNorm(
+    #         clip_norm=args.max_grad_norm)
+    #     optimizer_args['grad_clip'] = grad_clip
     parameters = get_all_parameters(args, model)
     optimizer = base_optimizer(parameters=parameters, **optimizer_args)
     print(optimizer_args)

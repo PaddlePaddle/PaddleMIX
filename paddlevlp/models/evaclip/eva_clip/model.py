@@ -89,7 +89,7 @@ class EVACLIP(EVACLIPPretrainedModel):
             default_initializer=paddle.nn.initializer.Assign(init_data))
 
         self.loss = ClipLoss(
-            local_loss=True,
+            local_loss=local_loss,
             gather_with_grad=gather_with_grad,
             cache_labels=cache_labels,
             rank=data_world_rank,
@@ -130,15 +130,15 @@ class EVACLIP(EVACLIPPretrainedModel):
         return paddle.nn.functional.normalize(
             x=features, axis=-1) if normalize else features
 
-    def forward(self, image, input_ids, text_features=None, skiploss=False):
+    def forward(self, image, input_ids, text_emb=None, skiploss=False):
         self.clip_scale()
         text = input_ids
+        text_features = text_emb
         image_features = self.encode_image(image, normalize=True)
         text_features = self.encode_text(text, text_features=text_features, normalize=True)
         if skiploss:
             return image_features, text_features, self.logit_scale.exp()
 
-        # print("image_features:{}, text_features:{}".format(image_features.detach().cpu().numpy().mean(), text_features.detach().cpu().numpy().mean()))
         loss_itc, logits_per_image, logits_per_text, labels = self.loss(
             (image_features, text_features, self.logit_scale.exp()))
         return loss_itc, image_features, text_features, self.logit_scale.exp()

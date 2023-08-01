@@ -15,6 +15,8 @@
 import paddle
 from paddlenlp.trainer.trainer import Trainer
 from paddle.io import DataLoader
+from paddlevlp.models.evaclip.eva_clip.utils import clip_grad_norm
+from torch.utils.tensorboard import SummaryWriter
 
 class CLIPTrainer(Trainer):
     def __init__(self, **kwargs):
@@ -34,6 +36,11 @@ class CLIPTrainer(Trainer):
             self.accum_features = {}
             self.accum_images = []
             self.accum_texts = []
+            self.step = 0
+        
+        self.rank = paddle.distributed.get_rank()
+        if self.rank==0:
+            self.writer = SummaryWriter("tensorboard_record")
             self.step = 0
 
     def training_step(self, model, inputs) -> paddle.Tensor:
@@ -72,6 +79,13 @@ class CLIPTrainer(Trainer):
             self.scaler.scale(loss).backward()
         else:
             loss.backward()
+
+        if self.args.max_grad_norm > 0.0:
+            _ = clip_grad_norm(model, self.args.max_grad_norm)
+
+        if self.rank == 0:
+            self.step += 1
+            self.writer.add_scalar("train/loss", loss.item(), self.step)
 
         return loss.detach()
 
@@ -129,6 +143,10 @@ class CLIPTrainer(Trainer):
                 self.scaler.scale(loss).backward()
             else:
                 loss.backward()
+
+        if self.args.max_grad_norm > 0.0:
+            _ = clip_grad_norm(model, self.args.max_grad_norm)
+
         self.accum_features.clear()
         self.accum_images.clear()
         self.accum_texts.clear()

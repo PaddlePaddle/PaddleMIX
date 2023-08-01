@@ -213,8 +213,9 @@ class Attention(paddle.nn.Layer):
             self.relative_position_bias_table = None
             self.relative_position_index = None
         self.attn_drop = paddle.nn.Dropout(p=attn_drop)
-        self.inner_attn_ln = norm_layer(
-            all_head_dim) if subln else paddle.nn.Identity()
+        # self.inner_attn_ln = norm_layer(
+        #     all_head_dim) if subln else paddle.nn.Identity()
+        self.inner_attn_ln = paddle.nn.Identity()
         self.proj = fleet.meta_parallel.ColumnParallelLinear(
             all_head_dim,
             dim,

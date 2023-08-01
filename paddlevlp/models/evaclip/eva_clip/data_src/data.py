@@ -240,7 +240,6 @@ class TusouDataset(IterableDataset):
 
         image = self.preprocess(data['image'])
         image = image.astype(paddle.float16)
-
         if self.get_text_emb:
             return image, data['text_emb'], data['text']
         else:

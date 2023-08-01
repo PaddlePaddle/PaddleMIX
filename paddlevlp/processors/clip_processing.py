@@ -139,6 +139,9 @@ class CLIPProcessor(ProcessorMixin):
                 newvalue = paddle.concat([value, padtensor], axis=-1)
                 text_encoding[key] = newvalue
 
+        if 'text_emb' in kwargs:
+            text_encoding['text_emb'] = paddle.to_tensor(kwargs['text_emb'])
+
         encoding_image_processor.update(text_encoding)
 
         return encoding_image_processor
@@ -204,7 +207,7 @@ class CLIPTextProcessor(BaseTextProcessor):
         """
         if not isinstance(text, (list, tuple)):
             text = [text]
-        # import pdb; pdb.set_trace()
+
         results = [self.prompt + self.pre_caption(t) for t in text]
         if mode == "train":
             results = [res + "\n" for res in results]

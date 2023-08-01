@@ -34,23 +34,6 @@ from .dataset import DatasetBuilder
 
 def paddle_worker_info(group=None):
     """Return node and worker info for paddle and some distributed environments."""
-    # rank = 0
-    # world_size = 1
-    # worker = 0
-    # num_workers = 1
-    # if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
-    #     rank = int(os.environ["RANK"])
-    #     world_size = int(os.environ["WORLD_SIZE"])
-    # else:
-    #     try:
-    #         import paddle.distributed
-
-    #         if paddle.distributed.is_available() and paddle.distributed.is_initialized():
-    #             group = group or paddle.distributed.group.WORLD
-    #             rank = paddle.distributed.get_rank(group=group)
-    #             world_size = paddle.distributed.get_world_size(group=group)
-    #     except ModuleNotFoundError:
-    #         pass
     if "WORKER" in os.environ and "NUM_WORKERS" in os.environ:
         worker = int(os.environ["WORKER"])
         num_workers = int(os.environ["NUM_WORKERS"])
@@ -63,7 +46,6 @@ def paddle_worker_info(group=None):
         else:
             print("error worker_info is None")
             exit()
-            # import pdb;pdb.set_trace()
 
 
     return worker, num_workers

@@ -132,6 +132,9 @@ class PreTrainingArguments(TrainingArguments):
     gather_with_grad: bool = field(
         default=False,
         metadata={"help": "Whether to use gather_with_grad in loss."}, )
+    local_loss: bool = field(
+        default=False,
+        metadata={"help": "Whether to use local loss in loss."}, )
 
 
 class SelfTrainer(CLIPTrainer):
@@ -144,7 +147,6 @@ class SelfTrainer(CLIPTrainer):
         `create_scheduler`) in a subclass.
         """
         print("before fix num_training_steps:", num_training_steps)
-        num_training_steps = 256000
         self.lr_scheduler = paddle.optimizer.lr.CosineAnnealingDecay(
             1.0,
             num_training_steps - self.args.warmup_steps,
@@ -175,9 +177,11 @@ class Collator:
     def __call__(self, data_list):
         images = [sample["image"] for sample in data_list]
         text = [sample["text"] for sample in data_list]
+        text_emb = [sample["text_emb"] for sample in data_list]
         batch = self.processor(
             images=images,
             text=text,
+            text_emb=text_emb,
             max_length=77,
             return_tensors="pd",
             return_attention_mask=False,
@@ -188,17 +192,22 @@ class Collator:
 def main_worker(training_args, model_args, data_args):
     if model_args.model.startswith("coca"):
         model = CoCa.from_pretrained(
-            "EVA/" + model_args.model,
+            model_args.model,
+            local_loss=training_args.local_loss,
+            gather_with_grad=training_args.gather_with_grad,
             data_world_rank=training_args.data_world_rank,
             data_world_size=training_args.data_world_size,
             ignore_mismatched_sizes=True)
     else:
         model = EVACLIP.from_pretrained(
-            "EVA/" + model_args.model,
+            model_args.model,
+            ignore_mismatched_sizes=True,
+            local_loss=training_args.local_loss,
             gather_with_grad=training_args.gather_with_grad,
             data_world_rank=training_args.data_world_rank,
             data_world_size=training_args.data_world_size)
 
+    training_args.model = model_args.model
     if training_args.pretrained_model_path and training_args.pretrained_model_path != "None" and training_args.resume_from_checkpoint is None:
         load_model(
             training_args, model, ckpt_dir=training_args.pretrained_model_path)
@@ -215,6 +224,7 @@ def main_worker(training_args, model_args, data_args):
         args=training_args,
         train_dataset=train_dataset,
         data_collator=collator, )
+
 
     # Training
     checkpoint = None
