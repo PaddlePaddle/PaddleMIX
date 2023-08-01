@@ -1,5 +1,9 @@
 paddlenlp>=2.6.0rc0
-safetensors
+safetensors>=0.3.1
 ftfy
 regex
 Pillow
+invisible-watermark>=0.2.0
+omegaconf
+note_seq
+urllib3<=2.0.0
