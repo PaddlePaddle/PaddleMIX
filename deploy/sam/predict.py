@@ -9,26 +9,26 @@ import yaml
 import paddle
 import paddle.nn.functional as F
 from paddle.inference import Config as PredictConfig
-from paddle.inference import create_predictor,PrecisionType
+from paddle.inference import create_predictor, PrecisionType
 
 from PIL import Image, ImageDraw, ImageFont
 
-from paddlevlp.processors.sam_processing import SamProcessor
+from paddlemix.processors.sam_processing import SamProcessor
 from paddle.utils.cpp_extension import load
 from paddlenlp.trainer import PdArgumentParser
-from paddlevlp.utils.log import logger
+from paddlemix.utils.log import logger
 
 import matplotlib.pyplot as plt
+
 
 def show_mask(mask, ax, random_color=False):
     if random_color:
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
     else:
-        color = np.array([30/255, 144/255, 255/255, 0.6])
+        color = np.array([30 / 255, 144 / 255, 255 / 255, 0.6])
     h, w = mask.shape[-2:]
     mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
     ax.imshow(mask_image)
-
 
 
 class DeployConfig:
@@ -120,7 +120,7 @@ class Predictor:
         """
         self.args = args
         self.cfg = DeployConfig(args.cfg)
-        self.processor = SamProcessor.from_pretrained(args.model_name_or_path) 
+        self.processor = SamProcessor.from_pretrained(args.model_name_or_path)
 
         self._init_base_config()
 
@@ -142,7 +142,6 @@ class Predictor:
                 "..., Expected all_dynamic_shape_set == true, ...', "
                 "please set --enable_auto_tune=True to use auto_tune. \n")
             exit()
-
 
     def _init_base_config(self):
         self.pred_cfg = PredictConfig(self.cfg.model, self.cfg.params)
@@ -177,35 +176,36 @@ class Predictor:
         }
         precision_mode = precision_map[self.args.precision]
 
-       
     def run(self, image, prompt_out):
-        image,prompt_out = self.preprocess(image,prompt_out)
+        image, prompt_out = self.preprocess(image, prompt_out)
         input_names = self.predictor.get_input_names()
         input_handle1 = self.predictor.get_input_handle(input_names[0])
         input_handle2 = self.predictor.get_input_handle(input_names[1])
         output_names = self.predictor.get_output_names()
         output_handle = self.predictor.get_output_handle(output_names[0])
-        
+
         input_handle1.reshape(image.shape)
         input_handle1.copy_from_cpu(image.numpy())
-        if self.args.input_type=='boxs':
-            prompt_out = prompt_out.reshape([-1,4])
+        if self.args.input_type == 'boxs':
+            prompt_out = prompt_out.reshape([-1, 4])
         input_handle2.reshape(prompt_out.shape)
         input_handle2.copy_from_cpu(prompt_out.numpy())
 
         self.predictor.run()
 
         results = output_handle.copy_to_cpu()
-       
+
         results = self.postprocess(results)
-    
-           
+
         return results
-   
 
     def preprocess(self, image, prompts):
 
-        image_seg,prompt = self.processor(image,input_type=self.args.input_type,box=prompts['boxs'],point_coords=prompts['points']) 
+        image_seg, prompt = self.processor(
+            image,
+            input_type=self.args.input_type,
+            box=prompts['boxs'],
+            point_coords=prompts['points'])
 
         return [image_seg, prompt]
 
@@ -221,15 +221,12 @@ class DataArguments:
     into argparse arguments to be able to specify them on
     the command line.
     """
-    input_image: str = field(
-        metadata={"help": "The name of input image."}
-    )  
+    input_image: str = field(metadata={"help": "The name of input image."})
     box_prompt: List[int] = field(
-        default=None, metadata={"help": "box promt format as xyxyxyxy...]."}
-    )  
+        default=None, metadata={"help": "box promt format as xyxyxyxy...]."})
     points_prompt: List[int] = field(
-        default=None, metadata={"help": "point promt format as [[xy],[xy]...]."}
-    ) 
+        default=None,
+        metadata={"help": "point promt format as [[xy],[xy]...]."})
 
 
 @dataclass
@@ -239,103 +236,83 @@ class ModelArguments:
     """
     model_name_or_path: str = field(
         default="Sam/SamVitH",
-        metadata={"help": "Path to pretrained model or model identifier"},
-    )
+        metadata={"help": "Path to pretrained model or model identifier"}, )
     input_type: str = field(
         default="boxs",
         metadata={
-            "help": "The model prompt type, choices ['boxs', 'points', 'points_grid']."
-        },
-    )
+            "help":
+            "The model prompt type, choices ['boxs', 'points', 'points_grid']."
+        }, )
     cfg: str = field(
         default=None,
-        metadata={
-            "help": "The config file."
-        },
-    )
+        metadata={"help": "The config file."}, )
     use_trt: bool = field(
         default=False,
         metadata={
             "help": "Whether to use Nvidia TensorRT to accelerate prediction."
-        },
-    )
+        }, )
     precision: str = field(
         default="fp32",
-        metadata={
-            "help": "The tensorrt precision."
-        },
-    )
+        metadata={"help": "The tensorrt precision."}, )
     min_subgraph_size: int = field(
         default=3,
-        metadata={
-            "help": "The min subgraph size in tensorrt prediction.'"
-        },
-    )
+        metadata={"help": "The min subgraph size in tensorrt prediction.'"}, )
     enable_auto_tune: bool = field(
         default=False,
         metadata={
-            "help": "Whether to enable tuned dynamic shape. We uses some images to collect \
+            "help":
+            "Whether to enable tuned dynamic shape. We uses some images to collect \
              the dynamic shape for trt sub graph, which avoids setting dynamic shape manually."
-        },
-    )
+        }, )
     device: str = field(
         default="GPU",
         metadata={
-            "help": "Choose the device you want to run, it can be: CPU/GPU/XPU, default is CPU."
-        },
-    )
+            "help":
+            "Choose the device you want to run, it can be: CPU/GPU/XPU, default is CPU."
+        }, )
     cpu_threads: int = field(
         default=10,
-        metadata={
-            "help": "Number of threads to predict when using cpu."
-        },
-    )
+        metadata={"help": "Number of threads to predict when using cpu."}, )
     enable_mkldnn: bool = field(
         default=False,
-        metadata={
-            "help": "Enable to use mkldnn to speed up when using cpu."
-        },
-    )
-   
+        metadata={"help": "Enable to use mkldnn to speed up when using cpu."}, )
+
     output_dir: str = field(
         default="seg_output",
-        metadata={
-            "help": "output directory."
-        },
-    )
+        metadata={"help": "output directory."}, )
     visual: bool = field(
         default=True,
-        metadata={
-            "help": "save visual image."
-        },
-    )
+        metadata={"help": "save visual image."}, )
 
-def main(model_args,data_args):
-   
+
+def main(model_args, data_args):
+
     url = (data_args.input_image)
     #read image
     if os.path.isfile(url):
         #read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     else:
-        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert(
+            "RGB")
 
     if data_args.box_prompt is not None:
         data_args.box_prompt = np.array(data_args.box_prompt)
     if data_args.points_prompt is not None:
         data_args.points_prompt = np.array([data_args.points_prompt])
-    
+
     if use_auto_tune(model_args):
         tune_img_nums = 10
         auto_tune(model_args, [image_pil], tune_img_nums)
 
     predictor = Predictor(model_args)
-    
+
     image_pil = Image.open(data_args.input_image).convert("RGB")
-    seg_masks = predictor.run(image_pil,
-                  {'points': data_args.points_prompt,
-                   'boxs': data_args.box_prompt})
-    
+    seg_masks = predictor.run(image_pil, {
+        'points': data_args.points_prompt,
+        'boxs': data_args.box_prompt
+    })
+
     if model_args.visual:
         # make dir
         os.makedirs(model_args.output_dir, exist_ok=True)
@@ -347,9 +324,10 @@ def main(model_args,data_args):
 
         plt.axis('off')
         plt.savefig(
-            os.path.join(model_args.output_dir, 'mask_pred.jpg'), 
-            bbox_inches="tight", dpi=300, pad_inches=0.0
-        )
+            os.path.join(model_args.output_dir, 'mask_pred.jpg'),
+            bbox_inches="tight",
+            dpi=300,
+            pad_inches=0.0)
 
     if use_auto_tune(model_args) and \
         os.path.exists(model_args.auto_tuned_shape_file):
@@ -357,15 +335,12 @@ def main(model_args,data_args):
 
 
 if __name__ == '__main__':
-  
+
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
 
     model_args.device = model_args.device.upper()
     assert model_args.device in ['CPU', 'GPU', 'XPU', 'NPU'
-                            ], "device should be CPU, GPU, XPU or NPU"
+                                 ], "device should be CPU, GPU, XPU or NPU"
 
-   
-    main(model_args,data_args)
-
-
+    main(model_args, data_args)

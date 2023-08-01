@@ -10,15 +10,17 @@ from paddle.inference import create_predictor
 
 from PIL import Image, ImageDraw, ImageFont
 
-from paddlevlp.processors.groundingdino_processing import GroudingDinoProcessor
+from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
 from paddle.utils.cpp_extension import load
 from paddlenlp.trainer import PdArgumentParser
-from paddlevlp.utils.log import logger
+from paddlemix.utils.log import logger
 
 ms_deformable_attn = load(
     name="deformable_detr_ops",
-    sources=["./paddlevlp/models/groundingdino/csrc/ms_deformable_attn_op.cc",
-    "./paddlevlp/models/groundingdino/csrc/ms_deformable_attn_op.cu"])
+    sources=[
+        "./paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cc",
+        "./paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cu"
+    ])
 
 
 def load_predictor(model_dir,
@@ -53,7 +55,7 @@ def load_predictor(model_dir,
             .format(run_mode, device))
     infer_model = os.path.join(model_dir, 'groundingdino_model.pdmodel')
     infer_params = os.path.join(model_dir, 'groundingdino_model.pdiparams')
-  
+
     config = Config(infer_model, infer_params)
     if device == 'GPU':
         # initial GPU memory(M), device ID
@@ -84,7 +86,6 @@ def load_predictor(model_dir,
                 )
                 pass
 
-
     # disable print log when predict
     config.disable_glog_info()
     # enable shared memory
@@ -95,6 +96,7 @@ def load_predictor(model_dir,
         config.delete_pass("shuffle_channel_detect_pass")
     predictor = create_predictor(config)
     return predictor, config
+
 
 def plot_boxes_to_image(image_pil, tgt):
     H, W = tgt["size"]
@@ -138,53 +140,60 @@ def plot_boxes_to_image(image_pil, tgt):
 
 
 class Predictor(object):
-    def __init__(self,model_args,data_args):
-        self.processor = GroudingDinoProcessor.from_pretrained(model_args.text_encoder_type) 
+    def __init__(self, model_args, data_args):
+        self.processor = GroudingDinoProcessor.from_pretrained(
+            model_args.text_encoder_type)
         self.box_threshold = model_args.box_threshold
         self.text_threshold = model_args.text_threshold
         self.predictor, self.config = load_predictor(model_args.model_path)
-   
+
         self.image = None
         self.mask = None
         self.tokenized_input = {}
-        self.input_map ={}
+        self.input_map = {}
 
-           
     def create_inputs(self):
 
         self.input_map['x'] = self.image.numpy()
-        self.input_map['m'] = np.array(self.mask.numpy(),dtype='int64')
+        self.input_map['m'] = np.array(self.mask.numpy(), dtype='int64')
 
         for key in self.tokenized_input.keys():
-            self.input_map[key] = np.array(self.tokenized_input[key].numpy(),dtype='int64')
-       
+            self.input_map[key] = np.array(
+                self.tokenized_input[key].numpy(), dtype='int64')
+
         input_names = self.predictor.get_input_names()
         for i in range(len(input_names)):
             input_tensor = self.predictor.get_input_handle(input_names[i])
             input_tensor.copy_from_cpu(self.input_map[input_names[i]])
-    
-    def preprocess(self,image,text):
 
-        self.image,self.mask,self.tokenized_input = self.processor(images=image,text=text)
-        
-    def run(self,image,prompt):
-        self.preprocess(image,data_args.prompt)
+    def preprocess(self, image, text):
+
+        self.image, self.mask, self.tokenized_input = self.processor(
+            images=image, text=text)
+
+    def run(self, image, prompt):
+        self.preprocess(image, data_args.prompt)
 
         self.create_inputs()
         self.predictor.run()
         output_names = self.predictor.get_output_names()
-        pred_boxes =  self.predictor.get_output_handle(output_names[0]).copy_to_cpu()
-        pred_logits = self.predictor.get_output_handle(output_names[1]).copy_to_cpu()
+        pred_boxes = self.predictor.get_output_handle(output_names[
+            0]).copy_to_cpu()
+        pred_logits = self.predictor.get_output_handle(output_names[
+            1]).copy_to_cpu()
 
-        pred_dict = {"pred_logits":paddle.to_tensor(pred_logits),"pred_boxes":paddle.to_tensor(pred_boxes)}
+        pred_dict = {
+            "pred_logits": paddle.to_tensor(pred_logits),
+            "pred_boxes": paddle.to_tensor(pred_boxes)
+        }
         boxes_filt, pred_phrases = self.postprocess(pred_dict)
         return boxes_filt, pred_phrases
 
-    def postprocess(self,outputs,with_logits=True):
-        
+    def postprocess(self, outputs, with_logits=True):
+
         logits = F.sigmoid(outputs["pred_logits"])[0]  # (nq, 256)
         boxes = outputs["pred_boxes"][0]  # (nq, 4)
-      
+
         # filter output
         logits_filt = logits.clone()
         boxes_filt = boxes.clone()
@@ -197,38 +206,41 @@ class Predictor(object):
         for logit, box in zip(logits_filt, boxes_filt):
             pred_phrase = self.processor.decode(logit > self.text_threshold)
             if with_logits:
-                pred_phrases.append(pred_phrase + f"({str(logit.max().item())[:4]})")
+                pred_phrases.append(pred_phrase +
+                                    f"({str(logit.max().item())[:4]})")
             else:
                 pred_phrases.append(pred_phrase)
 
         return boxes_filt, pred_phrases
 
-def main(model_args,data_args):
-    predictor = Predictor(model_args,data_args)
+
+def main(model_args, data_args):
+    predictor = Predictor(model_args, data_args)
     url = (data_args.input_image)
     #read image
     if os.path.isfile(url):
         #read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     else:
-        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
-    
-    
-    boxes_filt, pred_phrases = predictor.run(image_pil,data_args.prompt)
-    
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert(
+            "RGB")
+
+    boxes_filt, pred_phrases = predictor.run(image_pil, data_args.prompt)
+
     # make dir
     os.makedirs(model_args.output_dir, exist_ok=True)
 
-     # visualize pred
+    # visualize pred
     size = image_pil.size
     pred_dict = {
         "boxes": boxes_filt,
         "size": [size[1], size[0]],  # H,W
         "labels": pred_phrases,
     }
-  
+
     image_with_box = plot_boxes_to_image(image_pil, pred_dict)[0]
     image_with_box.save(os.path.join(model_args.output_dir, "pred.jpg"))
+
 
 @dataclass
 class DataArguments:
@@ -239,12 +251,10 @@ class DataArguments:
     the command line.
     """
 
-    input_image: str = field(
-        metadata={"help": "The name of input image."}
-    )  
+    input_image: str = field(metadata={"help": "The name of input image."})
     prompt: str = field(
-        default=None, metadata={"help": "The prompt of the image to be generated."}
-    )  
+        default=None,
+        metadata={"help": "The prompt of the image to be generated."})
 
 
 @dataclass
@@ -255,55 +265,39 @@ class ModelArguments:
 
     model_path: str = field(
         default="output_groundingdino/",
-        metadata={"help": "Path to pretrained model or model identifier"},
-    )
+        metadata={"help": "Path to pretrained model or model identifier"}, )
     text_encoder_type: str = field(
         default="GroundingDino/groundingdino-swint-ogc",
-        metadata={"help": "type for text encoder ."},
-    )
+        metadata={"help": "type for text encoder ."}, )
     box_threshold: float = field(
         default=0.3,
-        metadata={
-            "help": "box threshold."
-        },
-    )
+        metadata={"help": "box threshold."}, )
     text_threshold: float = field(
         default=0.25,
-        metadata={
-            "help": "text threshold."
-        },
-    )
+        metadata={"help": "text threshold."}, )
     output_dir: str = field(
         default="output",
-        metadata={
-            "help": "output directory."
-        },
-    )
+        metadata={"help": "output directory."}, )
     run_mode: str = field(
         default="paddle",
         metadata={
             "help": "mode of running(paddle/trt_fp32/trt_fp16/trt_int8)."
-        },
-    )
+        }, )
     device: str = field(
         default="GPU",
         metadata={
-            "help": "Choose the device you want to run, it can be: CPU/GPU/XPU, default is CPU."
-        },
-    )
-
+            "help":
+            "Choose the device you want to run, it can be: CPU/GPU/XPU, default is CPU."
+        }, )
 
 
 if __name__ == '__main__':
-  
+
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
 
     model_args.device = model_args.device.upper()
     assert model_args.device in ['CPU', 'GPU', 'XPU', 'NPU'
-                            ], "device should be CPU, GPU, XPU or NPU"
+                                 ], "device should be CPU, GPU, XPU or NPU"
 
-
-    main(model_args,data_args)
-
-
+    main(model_args, data_args)
