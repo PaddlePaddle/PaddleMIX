@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """
-Processor class for GroundingDino.
+Processor class for Sam.
 """
 
 import re

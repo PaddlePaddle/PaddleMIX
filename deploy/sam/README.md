@@ -10,10 +10,10 @@ Paddle implementation of [Segment Anything](https://ai.facebook.com/research/pub
 ## 2.2 Export model for static inference
 ```bash
 #export sam model input_type box
-python export.py --model_type SamVitH --input_type boxs  --save_dir sam_export
+python export.py --model_type Sam/SamVitH-1024 --input_type boxs  --save_dir sam_export
 
 #export sam model input_type points
-python export.py --model_type SamVitH --input_type points  --save_dir sam_export
+python export.py --model_type Sam/SamVitH-1024 --input_type points  --save_dir sam_export
 
 
 

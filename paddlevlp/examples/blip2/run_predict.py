@@ -35,6 +35,7 @@ from paddlevlp.models.blip2.configuration import Blip2VisionConfig, Blip2QFormer
 from paddlenlp.transformers import T5Config, OPTConfig, AutoConfig
 from paddlevlp.examples.blip2.utils import load_model,LLM_LIST
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments)
+
 @dataclass
 class DataArguments:
     """

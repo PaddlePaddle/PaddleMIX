@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from altair import value
 import sklearn
 import math
 from dataclasses import dataclass
@@ -41,6 +40,7 @@ from paddlenlp.transformers.bert.configuration import BertConfig
 import numpy as np
 import paddle
 from paddle.distributed.fleet.utils import recompute
+
 class CrossEntropyLoss(nn.Layer):
     """
     Softmax Cross entropy loss
