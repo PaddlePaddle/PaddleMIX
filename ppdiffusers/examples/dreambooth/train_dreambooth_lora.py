@@ -692,7 +692,7 @@ def main():
                 url_or_path_join(args.pretrained_model_name_or_path,
                                  "tokenizer"))
         except KeyError as e:
-            if 'XLMRobertaTokenizerr' in str(e):
+            if 'XLMRobertaTokenizer' in str(e):
                 from paddlenlp.transformers import XLMRobertaTokenizer
                 tokenizer = XLMRobertaTokenizer.from_pretrained(
                     url_or_path_join(args.pretrained_model_name_or_path,
