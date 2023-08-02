@@ -15,14 +15,12 @@
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 import os
-from tqdm import trange
 import numpy as np
 from einops import rearrange
 
 import paddle
-from packaging import version
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 
 from ...configuration_utils import FrozenDict
 from ...models import LVDMAutoencoderKL, LVDMUNet3DModel

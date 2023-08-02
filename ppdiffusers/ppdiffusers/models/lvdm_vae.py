@@ -1,11 +1,9 @@
-import nntplib
-import paddle
 from .lvdm_distributions import DiagonalGaussianDistribution
 from .lvdm_aemodules3d import SamePadConv3d, Encoder, Decoder
 
 from dataclasses import dataclass
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import BaseOutput, apply_forward_hook
+from ..utils import BaseOutput
 from .modeling_utils import ModelMixin
 from .vae import DecoderOutput
 

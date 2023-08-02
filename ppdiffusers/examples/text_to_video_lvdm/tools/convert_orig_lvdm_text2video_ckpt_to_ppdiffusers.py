@@ -20,8 +20,6 @@ import numpy as np
 import paddle
 import torch
 
-from paddlenlp.utils.downloader import get_path_from_url
-
 try:
     from omegaconf import OmegaConf
 except ImportError:
