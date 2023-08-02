@@ -12,8 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import sys
-from dataclasses import dataclass, field
 import os
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
+from dataclasses import dataclass, field
 import paddle
 import requests
 from paddlenlp.trainer import PdArgumentParser
@@ -23,14 +24,9 @@ from paddlevlp.processors.blip_processing import Blip2Processor
 from paddlevlp.utils.log import logger
 import os
 import yaml
-import argparse
 import paddle
 import argparse
 import os
-import random
-
-import numpy as np
-# import torch
 import paddle
 
 @dataclass

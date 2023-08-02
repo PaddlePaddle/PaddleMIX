@@ -12,21 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-import os.path as osp
-import tarfile
-import shutil
-import zipfile
-import requests
 from pycocoevalcap.eval import COCOEvalCap
 from pycocotools.coco import COCO
-from paddlevlp.utils.downloader import is_url, _decompress, _md5check, WEIGHTS_HOME, DOWNLOAD_RETRY_LIMIT
+from paddlevlp.utils.downloader import get_weights_path_from_url
+from paddlevlp.utils.downloader import is_url
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
 import paddle
-from paddlevlp.utils.downloader import is_url
 from paddlevlp.utils.log import logger
-from tqdm.auto import tqdm
+
 LLM_LIST = {
-    "opt-2.7b":
+    "facebook/opt-2.7b":
     "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-2.7b/model_state.pdparams",
     "t5-small":
     "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-small/model_state.pdparams",
@@ -42,8 +37,11 @@ LLM_LIST = {
     "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-v1_1-base/model_state.pdparams",
     "t5-v1_1-large":
     "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-v1_1-large/model_state.pdparams",
+    "facebook/llama-7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-7b/model_state.pdparams",
+    "facebook/llama-13b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-13b/model_state.pdparams",
+    "facebook/llama-30b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-30b/model_state.pdparams",
+    "facebook/llama-65b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-65b/model_state.pdparams",
 }
-
 
 class BlipCollator:
     """
@@ -54,14 +52,13 @@ class BlipCollator:
             The processor used for pre-process the data.
     """
 
-    def __init__(self, processor, mode="train"):
+    def __init__(self, processor,mode="train"):
         self.processor = processor
-        self.mode = mode
-
+        self.mode=mode
     def __call__(self, data_list):
         images = [sample["image"] for sample in data_list]
         if "text_input" not in data_list[0].keys():
-            text = None
+            text=None
         else:
             text = [sample["text_input"] for sample in data_list]
         image_id = [sample["image_id"] for sample in data_list]
@@ -71,17 +68,15 @@ class BlipCollator:
             max_length=32,
             return_tensors="pd",
             return_attention_mask=True,
-            mode=self.mode, )
-        batch.update({'image_id': image_id})
+            mode=self.mode,
+        )
+        batch.update({'image_id':image_id})
         return batch
-
 
 def coco_caption_eval(coco_gt_root, results_file, split):
     urls = {
-        "val":
-        "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json",
-        "test":
-        "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json",
+        "val": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json",
+        "test": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json",
     }
     filenames = {
         "val": "coco_karpathy_val_gt.json",
@@ -104,129 +99,122 @@ def coco_caption_eval(coco_gt_root, results_file, split):
 
     return coco_eval
 
-
-def load_pretrained_model(model, pretrained_model_path):
-    if pretrained_model_path is None:
+def load_model(args, model, optimizer=None, ckpt_dir="", load_language_model=True):
+    """
+    load the saved checkpoint file and update the state dicts of model and optimizer.
+    """
+    if ckpt_dir is None:
         return
 
-    if not os.path.exists(pretrained_model_path):
-        ValueError("Cannot find pretrained model path: {}".format(
-            pretrained_model_path))
+    if not os.path.exists(ckpt_dir):
+        ValueError(
+            "Cannot find pretrained model path: {}".format(ckpt_dir)
+        )
 
-    if os.path.isfile(pretrained_model_path):
-        path = pretrained_model_path
-    elif is_url(pretrained_model_path):
-        path = get_weights_path_from_url(pretrained_model_path)
+    if os.path.isfile(ckpt_dir):
+        path=ckpt_dir
+    elif is_url(ckpt_dir):
+        path=get_weights_path_from_url(ckpt_dir)
     else:
-        assert os.path.exists(
-            pretrained_model_path), f"{pretrained_model_path} not exist"
-    state_dict = paddle.load(path, return_numpy=True)
-    interpolate_pos_embed(model, state_dict)
-    model.set_state_dict(state_dict)
+        assert os.path.exists(ckpt_dir), f"{ckpt_dir} not exist"
 
+    ckpt_dir=path
+    if ckpt_dir and os.path.isfile(ckpt_dir):
+        # breakpoint()
+        print("Try to load a whole checkpoint from %s " % ckpt_dir)
+        embedding_list = ['word_embeddings']
+        collinear_list = ["fc1","fc2","qkv","proj","query","key","value","qkv_proj","q_proj","k_proj","v_proj","linear1","linear2","project_in","project_out"]
+        rowlinear_list = ["out_proj"]
+        all_list = collinear_list + rowlinear_list + embedding_list
+        skip_list = [
+           'visual_encoder.patch_embed.proj.weight', 'visual_encoder.patch_embed.proj.bias'
+        ]
 
-def _map_path(url, root_dir):
-    # parse path after download under root_dir
-    fname = osp.join(url.split("/")[-2], url.split("/")[-1])
-    fpath = fname
-    return osp.join(root_dir, fpath)
+        col_list = []
+        row_list = []
+        emb_list = []
 
+        mp_rank = args.mp_rank
+        mp_size = args.tensor_parallel_degree
 
-def get_weights_path_from_url(url, md5sum=None):
-    """Get weights path from WEIGHT_HOME, if not exists,
-    download it from url.
-    Args:
-        url (str): download url
-        md5sum (str): md5 sum of download package
+        def renamebias(model_dict, whole_key):
+            if 'q_bias' in whole_key:
+                key = whole_key.replace('q_bias', 'q_proj.bias')
+            elif 'v_bias' in whole_key:
+                key = whole_key.replace('v_bias', 'v_proj.bias')
+            model_dict[key] = model_dict[whole_key]
+            del model_dict[whole_key]
+            return model_dict
 
-    Returns:
-        str: a local path to save downloaded weights.
-    Examples:
-        .. code-block:: python
-            from paddle.utils.download import get_weights_path_from_url
-            resnet18_pretrained_weight_url = 'https://paddle-hapi.bj.bcebos.com/models/resnet18.pdparams'
-            local_weight_path = get_weights_path_from_url(resnet18_pretrained_weight_url)
-    """
-    path = get_path_from_url(url, WEIGHTS_HOME, md5sum)
-    return path
+        def col_split_modeldict(model_dict):
+            if len(model_dict.shape) == 2:
+                subbatch = model_dict.shape[1] // mp_size
+                return model_dict[:, mp_rank * subbatch:(mp_rank + 1) *
+                                  subbatch]
+            elif len(model_dict.shape) == 1:
+                subbatch = model_dict.shape[0] // mp_size
+                return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
 
-
-def get_path_from_url(url, root_dir, md5sum=None, check_exist=True):
-    """Download from given url to root_dir.
-    if file or directory specified by url is exists under
-    root_dir, return the path directly, otherwise download
-    from url and decompress it, return the path.
-    Args:
-        url (str): download url
-        root_dir (str): root dir for downloading, it should be
-                        WEIGHTS_HOME or DATASET_HOME
-        md5sum (str): md5 sum of download package
-
-    Returns:
-        str: a local path to save downloaded models & weights & datasets.
-    """
-
-    assert is_url(url), "downloading from {} not a url".format(url)
-    # parse path after download to decompress under root_dir
-    fullpath = _map_path(url, root_dir)
-
-    if osp.exists(fullpath) and check_exist and _md5check(fullpath, md5sum):
-        logger.info("Found {}".format(fullpath))
-    else:
-        fullpath = _download(url, root_dir, md5sum)
-
-    if tarfile.is_tarfile(fullpath) or zipfile.is_zipfile(fullpath):
-        fullpath = _decompress(fullpath)
-
-    # model tokenizer config, [file-lock]
-    return fullpath
-
-
-def _download(url, path, md5sum=None):
-    """
-    Download from url, save to path.
-    url (str): download url
-    path (str): download to given path
-    """
-    path = osp.join(path, url.split("/")[-2])
-    os.makedirs(path, exist_ok=True)
-    fname = osp.join(url.split("/")[-1])
-    fullname = osp.join(path, fname)
-    retry_cnt = 0
-
-    while not (osp.exists(fullname) and _md5check(fullname, md5sum)):
-        if retry_cnt < DOWNLOAD_RETRY_LIMIT:
-            retry_cnt += 1
-        else:
-            raise RuntimeError("Download from {} failed. "
-                               "Retry limit reached".format(url))
-
-        logger.info("Downloading {} from {}".format(fname, url))
-
-        req = requests.get(url, stream=True)
-        if req.status_code != 200:
-            raise RuntimeError("Downloading from {} failed with code "
-                               "{}!".format(url, req.status_code))
-
-        # For protecting download interupted, download to
-        # tmp_fullname firstly, move tmp_fullname to fullname
-        # after download finished
-        tmp_fullname = fullname + "_tmp"
-        total_size = req.headers.get("content-length")
-        with open(tmp_fullname, "wb") as f:
-            if total_size:
-                with tqdm(
-                        total=int(total_size),
-                        unit="B",
-                        unit_scale=True,
-                        unit_divisor=1024) as pbar:
-                    for chunk in req.iter_content(chunk_size=1024):
-                        f.write(chunk)
-                        pbar.update(len(chunk))
+        def row_split_modeldict(model_dict):
+            if len(model_dict.shape) == 2:
+                subbatch = model_dict.shape[0] // mp_size
+                return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
             else:
-                for chunk in req.iter_content(chunk_size=1024):
-                    if chunk:
-                        f.write(chunk)
-        shutil.move(tmp_fullname, fullname)
+                return model_dict
 
-    return fullname
+        def emb_split_modeldict(model_dict):
+            subbatch = model_dict.shape[0] // mp_size
+            return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
+
+        model_dict = paddle.load(ckpt_dir)
+        for whole_key in model_dict.keys():
+            if not '.' in whole_key:
+                continue
+
+            key = whole_key.split('.')[-2]
+            if whole_key in skip_list:
+                continue
+            if key in all_list:
+                if key in collinear_list:
+                    col_list.append((key, model_dict[whole_key].shape))
+                    model_dict[whole_key] = col_split_modeldict(model_dict[
+                        whole_key])
+                elif key in rowlinear_list:
+                    row_list.append((key, model_dict[whole_key].shape))
+                    model_dict[whole_key] = row_split_modeldict(model_dict[
+                        whole_key])
+                else:
+                    emb_list.append((key, model_dict[whole_key].shape))
+                    model_dict[whole_key] = emb_split_modeldict(model_dict[
+                        whole_key])
+
+        param_state_dict=model_dict
+        import numpy as np
+        model_dict = model.state_dict()
+        model_weight = {}
+        incorrect_keys = 0
+        for key, value in model_dict.items():
+            if key in param_state_dict.keys():
+
+                if isinstance(param_state_dict[key], np.ndarray):
+                    param_state_dict[key] = paddle.to_tensor(param_state_dict[key])
+                if value.dtype == param_state_dict[key].dtype:
+                    model_weight[key] = param_state_dict[key]
+                else:
+                    model_weight[key] = param_state_dict[key].astype(value.dtype)
+                if value.shape!=param_state_dict[key].shape:
+                    logger.info('Unmatched key: {}'.format(key))
+                    print(value.shape,param_state_dict[key].shape,key)
+
+            else:
+                if load_language_model==False and "language_model" in key:
+                    continue
+                logger.info('Unmatched key: {}'.format(key))
+                incorrect_keys += 1
+        interpolate_pos_embed(model, model_weight)
+        model.set_state_dict(model_weight)
+
+        del model_dict
+    else:
+        print("`load` requires a valid value of `ckpt_dir`.")
+        raise TypeError("`load` requires a valid value of `ckpt_dir`.")
