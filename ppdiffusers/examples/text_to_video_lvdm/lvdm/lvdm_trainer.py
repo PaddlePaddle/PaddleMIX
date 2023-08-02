@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import contextlib
-import os
 import sys
 
 import paddle
@@ -25,11 +24,8 @@ from paddlenlp.trainer.integrations import (
     INTEGRATION_TO_CALLBACK,
     VisualDLCallback,
     rewrite_logs, )
-from paddlenlp.trainer.utils.helper import (  # nested_truncate,
-    distributed_concat, nested_concat, nested_detach, nested_numpify,
-    nested_truncate, )
+from paddlenlp.trainer.utils.helper import nested_detach
 from paddlenlp.utils.log import logger
-from ppdiffusers.training_utils import unwrap_model
 
 from .frame_dataset import VideoFrameDataset
 from .webvid_dataset import WebVidDataset
