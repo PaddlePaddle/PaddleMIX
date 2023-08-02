@@ -21,12 +21,12 @@ import os
 import re
 import shutil
 import sys
-from distutils.version import StrictVersion
 from pathlib import Path
 from typing import Dict, Optional, Union
 from urllib import request
 
 from huggingface_hub import HfFolder, cached_download, hf_hub_download, model_info
+from packaging import version
 
 from . import PPDIFFUSERS_DYNAMIC_MODULE_NAME, PPDIFFUSERS_MODULES_CACHE, logging
 
@@ -45,7 +45,7 @@ def get_ppdiffusers_versions():
     releases = json.loads(request.urlopen(url).read())["releases"].keys()
     ignore = ["0.6.0.dev1"]
     releases = [r for r in releases if r not in ignore]
-    return sorted(releases, key=StrictVersion)
+    return sorted(releases, key=lambda x: version.Version(x))
 
 
 def init_ppdiffusers_modules():

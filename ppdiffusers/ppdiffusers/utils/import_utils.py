@@ -261,6 +261,17 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _bs4_available = False
 
+_invisible_watermark_available = importlib.util.find_spec(
+    "imwatermark") is not None
+try:
+    _invisible_watermark_version = importlib_metadata.version(
+        "invisible-watermark")
+    logger.debug(
+        f"Successfully imported invisible-watermark version {_invisible_watermark_version}"
+    )
+except importlib_metadata.PackageNotFoundError:
+    _invisible_watermark_available = False
+
 
 def is_paddle_available():
     return _paddle_available
@@ -348,6 +359,10 @@ def is_ftfy_available():
 
 def is_bs4_available():
     return _bs4_available
+
+
+def is_invisible_watermark_available():
+    return _invisible_watermark_available
 
 
 # docstyle-ignore
@@ -482,6 +497,11 @@ installation section: https://github.com/rspeer/python-ftfy/tree/master#installi
 that match your environment. Please note that you may need to restart your runtime after installation.
 """
 
+# docstyle-ignore
+INVISIBLE_WATERMARK_IMPORT_ERROR = """
+{0} requires the invisible-watermark library but it was not found in your environment. You can install it with pip: `pip install invisible-watermark>=0.2.0`
+"""
+
 BACKENDS_MAPPING = OrderedDict([
     ("bs4", (is_bs4_available, BS4_IMPORT_ERROR)),
     ("fastdeploy", (is_fastdeploy_available, FASTDEPLOY_IMPORT_ERROR)),
@@ -502,6 +522,8 @@ BACKENDS_MAPPING = OrderedDict([
     ("note_seq", (is_note_seq_available, NOTE_SEQ_IMPORT_ERROR)),
     ("compel", (is_compel_available, COMPEL_IMPORT_ERROR)),
     ("ftfy", (is_ftfy_available, FTFY_IMPORT_ERROR)),
+    ("invisible_watermark",
+     (is_invisible_watermark_available, INVISIBLE_WATERMARK_IMPORT_ERROR)),
 ])
 
 
@@ -545,7 +567,7 @@ class DummyObject(type):
     """
 
     def __getattr__(cls, key):
-        if key.startswith("_"):
+        if key.startswith("_") and key != "_load_connected_pipes":
             return super().__getattr__(cls, key)
         requires_backends(cls, cls._backends)
 

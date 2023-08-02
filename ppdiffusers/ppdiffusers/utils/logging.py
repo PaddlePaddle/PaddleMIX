@@ -120,22 +120,17 @@ def get_logger(name: Optional[str]=None) -> logging.Logger:
 
 def get_verbosity() -> int:
     """
-    Return the current level for the 🤗 PPDiffusers' root logger as an int.
+    Return the current level for the PPDiffusers' root logger as an `int`.
 
     Returns:
-        `int`: The logging level.
-
-    <Tip>
-
-    🤗 Diffusers has following logging levels:
-
-    - 50: `ppdiffusers.logging.CRITICAL` or `ppdiffusers.logging.FATAL`
-    - 40: `ppdiffusers.logging.ERROR`
-    - 30: `ppdiffusers.logging.WARNING` or `ppdiffusers.logging.WARN`
-    - 20: `ppdiffusers.logging.INFO`
-    - 10: `ppdiffusers.logging.DEBUG`
-
-    </Tip>"""
+        `int`:
+            Logging level integers which can be one of:
+            - `50`: `diffusers.logging.CRITICAL` or `diffusers.logging.FATAL`
+            - `40`: `diffusers.logging.ERROR`
+            - `30`: `diffusers.logging.WARNING` or `diffusers.logging.WARN`
+            - `20`: `diffusers.logging.INFO`
+            - `10`: `diffusers.logging.DEBUG`
+    """
 
     _configure_library_root_logger()
     return _get_library_root_logger().getEffectiveLevel()
@@ -147,7 +142,7 @@ def set_verbosity(verbosity: int) -> None:
 
     Args:
         verbosity (`int`):
-            Logging level, e.g., one of:
+            Logging level which can be one of:
 
             - `ppdiffusers.logging.CRITICAL` or `ppdiffusers.logging.FATAL`
             - `ppdiffusers.logging.ERROR`
@@ -181,7 +176,7 @@ def set_verbosity_error():
 
 
 def disable_default_handler() -> None:
-    """Disable the default handler of the PaddleNLP PPDiffusers' root logger."""
+    """Disable the default handler of the PPDiffusers' root logger."""
 
     _configure_library_root_logger()
 
@@ -190,7 +185,7 @@ def disable_default_handler() -> None:
 
 
 def enable_default_handler() -> None:
-    """Enable the default handler of the PaddleNLP PPDiffusers' root logger."""
+    """Enable the default handler of the PPDiffusers' root logger."""
 
     _configure_library_root_logger()
 
@@ -199,7 +194,7 @@ def enable_default_handler() -> None:
 
 
 def add_handler(handler: logging.Handler) -> None:
-    """adds a handler to the PaddleNLP PPDiffusers' root logger."""
+    """adds a handler to the PPDiffusers' root logger."""
 
     _configure_library_root_logger()
 
@@ -208,7 +203,7 @@ def add_handler(handler: logging.Handler) -> None:
 
 
 def remove_handler(handler: logging.Handler) -> None:
-    """removes given handler from the PaddleNLP PPDiffusers' root logger."""
+    """removes given handler from the PPDiffusers' root logger."""
 
     _configure_library_root_logger()
 
@@ -254,7 +249,7 @@ def enable_explicit_format() -> None:
 
 def reset_format() -> None:
     """
-    Resets the formatting for PaddleNLP PPDiffusers' loggers.
+    Resets the formatting for PPDiffusers' loggers.
 
     All handlers currently bound to the root logger are affected by this method.
     """

@@ -68,6 +68,7 @@ from .import_utils import (
     is_fastdeploy_available,
     is_ftfy_available,
     is_inflect_available,
+    is_invisible_watermark_available,
     is_k_diffusion_available,
     is_k_diffusion_version,
     is_librosa_available,
@@ -111,6 +112,7 @@ if is_paddle_available():
         print_tensor_test,
         require_paddle_gpu,
         slow, )
+    from .paddle_utils import maybe_allow_in_graph
 
 if is_torch_available():
     from .testing_utils import require_torch
@@ -122,7 +124,7 @@ def apply_forward_hook(method):
     return method
 
 
-from .testing_utils import export_to_video
+from .testing_utils import export_to_gif, export_to_obj, export_to_ply, export_to_video
 
 
 def check_min_version(min_version):

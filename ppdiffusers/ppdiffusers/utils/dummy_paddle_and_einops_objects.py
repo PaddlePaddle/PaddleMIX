@@ -17,6 +17,21 @@
 from . import DummyObject, requires_backends
 
 
+class LVDMUncondPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "einops"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "einops"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "einops"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "einops"])
+
+
 class UViTModel(metaclass=DummyObject):
     _backends = ["paddle", "einops"]
 

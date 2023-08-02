@@ -217,6 +217,8 @@ class EMAModel:
         self.cur_decay_value = decay
         one_minus_decay = 1 - decay
 
+        # TODO(westfish): support zero3 and collecting (or gathering) a partitioned parameter
+
         for s_param, param in zip(self.shadow_params, parameters):
             if not param.stop_gradient:
                 s_param.copy_(s_param - one_minus_decay * (s_param - param),
