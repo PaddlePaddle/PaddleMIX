@@ -106,9 +106,11 @@ class PatchedLoraProjection(nn.Layer):
         if dtype is None:
             dtype = self.regular_linear_layer.weight.dtype
 
+        in_features, out_features = self.regular_linear_layer.weight.shape
+
         self.lora_linear_layer = LoRALinearLayer(
-            self.regular_linear_layer.in_features,
-            self.regular_linear_layer.out_features,
+            in_features,
+            out_features,
             network_alpha=network_alpha,
             dtype=dtype,
             rank=rank, )

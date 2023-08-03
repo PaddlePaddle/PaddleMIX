@@ -25,6 +25,12 @@ from .logging import get_logger
 
 logger = get_logger(__name__)  # pylint: disable=invalid-name
 
+
+# dummpy decorator, we do not use it
+def maybe_allow_in_graph(cls):
+    return cls
+
+
 if is_paddle_available():
     import paddle
 

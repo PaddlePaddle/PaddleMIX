@@ -21,19 +21,25 @@ import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 
+from .activations import get_activation
 from ..initializer import zeros_
 from .attention import AdaGroupNorm
+from .attention_processor import SpatialNorm
+from .lora import LoRACompatibleConv, LoRACompatibleLinear
 
 
 class Upsample1D(nn.Layer):
-    """
-    An upsampling layer with an optional convolution.
+    """A 1D upsampling layer with an optional convolution.
 
     Parameters:
-            channels: channels in the inputs and outputs.
-            use_conv: a bool determining if a convolution is applied.
-            use_conv_transpose:
-            out_channels:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        use_conv_transpose (`bool`, default `False`):
+            option to use a convolution transpose.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
     """
 
     def __init__(self,
@@ -56,28 +62,31 @@ class Upsample1D(nn.Layer):
             self.conv = nn.Conv1D(
                 self.channels, self.out_channels, 3, padding=1)
 
-    def forward(self, x):
-        assert x.shape[1] == self.channels
+    def forward(self, inputs):
+        assert inputs.shape[1] == self.channels
         if self.use_conv_transpose:
-            return self.conv(x)
+            return self.conv(inputs)
 
-        x = F.interpolate(x, scale_factor=2.0, mode="nearest")
+        outputs = F.interpolate(inputs, scale_factor=2.0, mode="nearest")
 
         if self.use_conv:
-            x = self.conv(x)
+            outputs = self.conv(outputs)
 
-        return x
+        return outputs
 
 
 class Downsample1D(nn.Layer):
-    """
-    A downsampling layer with an optional convolution.
+    """A 1D downsampling layer with an optional convolution.
 
     Parameters:
-        channels: channels in the inputs and outputs.
-        use_conv: a bool determining if a convolution is applied.
-        out_channels:
-        padding:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
+        padding (`int`, default `1`):
+            padding for the convolution.
     """
 
     def __init__(self,
@@ -105,20 +114,23 @@ class Downsample1D(nn.Layer):
             assert self.channels == self.out_channels
             self.conv = nn.AvgPool1D(kernel_size=stride, stride=stride)
 
-    def forward(self, x):
-        assert x.shape[1] == self.channels
-        return self.conv(x)
+    def forward(self, inputs):
+        assert inputs.shape[1] == self.channels
+        return self.conv(inputs)
 
 
 class Upsample2D(nn.Layer):
-    """
-    An upsampling layer with an optional convolution.
+    """A 2D upsampling layer with an optional convolution.
 
     Parameters:
-        channels: channels in the inputs and outputs.
-        use_conv: a bool determining if a convolution is applied.
-        use_conv_transpose:
-        out_channels:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        use_conv_transpose (`bool`, default `False`):
+            option to use a convolution transpose.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
     """
 
     def __init__(self,
@@ -183,14 +195,17 @@ class Upsample2D(nn.Layer):
 
 
 class Downsample2D(nn.Layer):
-    """
-    A downsampling layer with an optional convolution.
+    """A 2D downsampling layer with an optional convolution.
 
     Parameters:
-        channels: channels in the inputs and outputs.
-        use_conv: a bool determining if a convolution is applied.
-        out_channels:
-        padding:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
+        padding (`int`, default `1`):
+            padding for the convolution.
     """
 
     def __init__(self,
@@ -208,7 +223,7 @@ class Downsample2D(nn.Layer):
         self.name = name
 
         if use_conv:
-            conv = nn.Conv2D(
+            conv = LoRACompatibleConv(
                 self.channels,
                 self.out_channels,
                 3,
@@ -240,6 +255,19 @@ class Downsample2D(nn.Layer):
 
 
 class FirUpsample2D(nn.Layer):
+    """A 2D FIR upsampling layer with an optional convolution.
+
+    Parameters:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
+        fir_kernel (`tuple`, default `(1, 3, 3, 1)`):
+            kernel for the FIR filter.
+    """
+
     def __init__(self,
                  channels=None,
                  out_channels=None,
@@ -353,6 +381,19 @@ class FirUpsample2D(nn.Layer):
 
 
 class FirDownsample2D(nn.Layer):
+    """A 2D FIR downsampling layer with an optional convolution.
+
+    Parameters:
+        channels (`int`):
+            number of channels in the inputs and outputs.
+        use_conv (`bool`, default `False`):
+            option to use a convolution.
+        out_channels (`int`, optional):
+            number of output channels. Defaults to `channels`.
+        fir_kernel (`tuple`, default `(1, 3, 3, 1)`):
+            kernel for the FIR filter.
+    """
+
     def __init__(self,
                  channels=None,
                  out_channels=None,
@@ -453,18 +494,19 @@ class KDownsample2D(nn.Layer):
                 kernel_1d, kernel_1d, transpose_x=True),
             persistable=False)
 
-    def forward(self, x):
-        x = F.pad(x, (self.pad, ) * 4, self.pad_mode)
+    def forward(self, inputs):
+        inputs = F.pad(inputs, (self.pad, ) * 4, self.pad_mode)
         weight = paddle.zeros(
             [
-                x.shape[1], x.shape[1], self.kernel.shape[0],
+                inputs.shape[1], inputs.shape[1], self.kernel.shape[0],
                 self.kernel.shape[1]
             ],
-            dtype=x.dtype)
-        indices = paddle.arange(x.shape[1])
+            dtype=inputs.dtype)
+        indices = paddle.arange(inputs.shape[1])
         # TODO verify this method
-        weight[indices, indices] = self.kernel.cast(weight.dtype)
-        return F.conv2d(x, weight, stride=2)
+        weight[indices, indices] = self.kernel.cast(weight.dtype).expand(
+            [inputs.shape[1], -1, -1])
+        return F.conv2d(inputs, weight, stride=2)
 
 
 class KUpsample2D(nn.Layer):
@@ -479,17 +521,18 @@ class KUpsample2D(nn.Layer):
                 kernel_1d, kernel_1d, transpose_x=True),
             persistable=False)
 
-    def forward(self, x):
-        x = F.pad(x, ((self.pad + 1) // 2, ) * 4, self.pad_mode)
+    def forward(self, inputs):
+        inputs = F.pad(inputs, ((self.pad + 1) // 2, ) * 4, self.pad_mode)
         weight = paddle.zeros(
             [
-                x.shape[1], x.shape[1], self.kernel.shape[0],
+                inputs.shape[1], inputs.shape[1], self.kernel.shape[0],
                 self.kernel.shape[1]
             ],
-            dtype=x.dtype)
-        indices = paddle.arange(x.shape[1])
+            dtype=inputs.dtype)
+        indices = paddle.arange(inputs.shape[1])
         # TODO verify this method
-        weight[indices, indices] = self.kernel.cast(weight.dtype)
+        weight[indices, indices] = self.kernel.cast(weight.dtype).expand(
+            [inputs.shape[1], -1, -1])
         return F.conv2d_transpose(x, weight, stride=2, padding=self.pad * 2 + 1)
 
 
@@ -538,7 +581,7 @@ class ResnetBlock2D(nn.Layer):
             eps=1e-6,
             non_linearity="swish",
             skip_time_act: bool=False,  # skip_time_act is the same as pre_temb_non_linearity
-            time_embedding_norm="default",  # default, scale_shift, ada_group
+            time_embedding_norm="default",  # default, scale_shift, ada_group, spatial
             kernel=None,
             output_scale_factor=1.0,
             use_in_shortcut=None,
@@ -568,19 +611,23 @@ class ResnetBlock2D(nn.Layer):
         if self.time_embedding_norm == "ada_group":
             self.norm1 = AdaGroupNorm(
                 temb_channels, in_channels, groups, eps=eps)
+        elif self.time_embedding_norm == "spatial":
+            self.norm1 = SpatialNorm(in_channels, temb_channels)
         else:
             self.norm1 = nn.GroupNorm(
                 num_groups=groups, num_channels=in_channels, epsilon=eps)
 
-        self.conv1 = nn.Conv2D(
+        self.conv1 = LoRACompatibleConv(
             in_channels, out_channels, kernel_size=3, stride=1, padding=1)
 
         if temb_channels is not None:
             if self.time_embedding_norm == "default":
-                self.time_emb_proj = nn.Linear(temb_channels, out_channels)
+                self.time_emb_proj = LoRACompatibleLinear(temb_channels,
+                                                          out_channels)
             elif self.time_embedding_norm == "scale_shift":
-                self.time_emb_proj = nn.Linear(temb_channels, 2 * out_channels)
-            elif self.time_embedding_norm == "ada_group":
+                self.time_emb_proj = LoRACompatibleLinear(temb_channels,
+                                                          2 * out_channels)
+            elif self.time_embedding_norm == "ada_group" or self.time_embedding_norm == "spatial":
                 self.time_emb_proj = None
             else:
                 raise ValueError(
@@ -591,27 +638,22 @@ class ResnetBlock2D(nn.Layer):
         if self.time_embedding_norm == "ada_group":
             self.norm2 = AdaGroupNorm(
                 temb_channels, out_channels, groups_out, eps=eps)
+        elif self.time_embedding_norm == "spatial":
+            self.norm2 = SpatialNorm(out_channels, temb_channels)
         else:
             self.norm2 = nn.GroupNorm(
                 num_groups=groups_out, num_channels=out_channels, epsilon=eps)
 
         self.dropout = nn.Dropout(dropout)
         conv_2d_out_channels = conv_2d_out_channels or out_channels
-        self.conv2 = nn.Conv2D(
+        self.conv2 = LoRACompatibleConv(
             out_channels,
             conv_2d_out_channels,
             kernel_size=3,
             stride=1,
             padding=1)
 
-        if non_linearity == "swish":
-            self.nonlinearity = lambda x: F.silu(x)
-        elif non_linearity == "mish":
-            self.nonlinearity = nn.Mish()
-        elif non_linearity == "silu":
-            self.nonlinearity = nn.Silu()
-        elif non_linearity == "gelu":
-            self.nonlinearity = nn.GELU()
+        self.nonlinearity = get_activation(non_linearity)
 
         self.upsample = self.downsample = None
         if self.up:
@@ -637,7 +679,7 @@ class ResnetBlock2D(nn.Layer):
 
         self.conv_shortcut = None
         if self.use_in_shortcut:
-            self.conv_shortcut = nn.Conv2D(
+            self.conv_shortcut = LoRACompatibleConv(
                 in_channels,
                 conv_2d_out_channels,
                 kernel_size=1,
@@ -648,7 +690,7 @@ class ResnetBlock2D(nn.Layer):
     def forward(self, input_tensor, temb):
         hidden_states = input_tensor
 
-        if self.time_embedding_norm == "ada_group":
+        if self.time_embedding_norm == "ada_group" or self.time_embedding_norm == "spatial":
             hidden_states = self.norm1(hidden_states, temb)
         else:
             hidden_states = self.norm1(hidden_states)
@@ -672,7 +714,7 @@ class ResnetBlock2D(nn.Layer):
         if temb is not None and self.time_embedding_norm == "default":
             hidden_states = hidden_states + temb
 
-        if self.time_embedding_norm == "ada_group":
+        if self.time_embedding_norm == "ada_group" or self.time_embedding_norm == "spatial":
             hidden_states = self.norm2(hidden_states, temb)
         else:
             hidden_states = self.norm2(hidden_states)
@@ -694,11 +736,6 @@ class ResnetBlock2D(nn.Layer):
             input_tensor + hidden_states) / self.output_scale_factor
 
         return output_tensor
-
-
-class Mish(nn.Layer):
-    def forward(self, hidden_states):
-        return hidden_states * paddle.tanh(F.softplus(hidden_states))
 
 
 # unet_rl.py
@@ -726,13 +763,13 @@ class Conv1dBlock(nn.Layer):
         self.group_norm = nn.GroupNorm(n_groups, out_channels)
         self.mish = nn.Mish()
 
-    def forward(self, x):
-        x = self.conv1d(x)
-        x = rearrange_dims(x)
-        x = self.group_norm(x)
-        x = rearrange_dims(x)
-        x = self.mish(x)
-        return x
+    def forward(self, inputs):
+        intermediate_repr = self.conv1d(inputs)
+        intermediate_repr = rearrange_dims(intermediate_repr)
+        intermediate_repr = self.group_norm(intermediate_repr)
+        intermediate_repr = rearrange_dims(intermediate_repr)
+        output = self.mish(intermediate_repr)
+        return output
 
 
 # unet_rl.py
@@ -748,10 +785,10 @@ class ResidualTemporalBlock1D(nn.Layer):
         self.residual_conv = (nn.Conv1D(inp_channels, out_channels, 1) if
                               inp_channels != out_channels else nn.Identity())
 
-    def forward(self, x, t):
+    def forward(self, inputs, t):
         """
         Args:
-            x : [ batch_size x inp_channels x horizon ]
+            inputs : [ batch_size x inp_channels x horizon ]
             t : [ batch_size x embed_dim ]
 
         returns:
@@ -759,9 +796,9 @@ class ResidualTemporalBlock1D(nn.Layer):
         """
         t = self.time_emb_act(t)
         t = self.time_emb(t)
-        out = self.conv_in(x) + rearrange_dims(t)
+        out = self.conv_in(inputs) + rearrange_dims(t)
         out = self.conv_out(out)
-        return out + self.residual_conv(x)
+        return out + self.residual_conv(inputs)
 
 
 def upsample_2d(hidden_states, kernel=None, factor=2, gain=1):
@@ -924,6 +961,7 @@ class TemporalConvLayer(nn.Layer):
         out_dim = out_dim or in_dim
         self.in_dim = in_dim
         self.out_dim = out_dim
+        # conv layers
         self.conv1 = nn.Sequential(
             nn.GroupNorm(
                 num_groups=32, num_channels=in_dim),

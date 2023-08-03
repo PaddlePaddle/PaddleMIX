@@ -93,7 +93,6 @@ from .import_utils import (
 from .load_utils import is_torch_file, safetensors_load, smart_load, torch_load
 from .logging import get_logger
 from .outputs import BaseOutput
-from .paddle_utils import rand_tensor, randint_tensor, randn_tensor
 from .pil_utils import PIL_INTERPOLATION, numpy_to_pil, pd_to_pil, pt_to_pil
 
 if is_paddle_available():
@@ -112,7 +111,7 @@ if is_paddle_available():
         print_tensor_test,
         require_paddle_gpu,
         slow, )
-    from .paddle_utils import maybe_allow_in_graph
+    from .paddle_utils import rand_tensor, randint_tensor, randn_tensor, maybe_allow_in_graph
 
 if is_torch_available():
     from .testing_utils import require_torch
