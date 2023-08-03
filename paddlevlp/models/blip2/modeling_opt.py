@@ -117,6 +117,7 @@ class MultiHeadAttention(nn.Layer):
         self.dropout = config.attention_probs_dropout_prob
         self.need_weights = need_weights
         self.fuse_attention_qkv = config.fuse_attention_qkv
+        self.mp_degree=config.mp_degree
 
         assert (
             self.head_dim * self.num_heads * config.mp_degree == config.hidden_size
@@ -268,7 +269,10 @@ class MultiHeadAttention(nn.Layer):
 
         weights = F.softmax(product)
         if self.dropout:
-            with get_rng_state_tracker().rng_state("local_seed"):
+            if self.mp_degree>1:
+                with get_rng_state_tracker().rng_state("local_seed"):
+                    weights = F.dropout(weights, self.dropout, training=self.training, mode="upscale_in_train")
+            else:
                 weights = F.dropout(weights, self.dropout, training=self.training, mode="upscale_in_train")
 
         out = tensor.matmul(weights, v)
@@ -358,6 +362,7 @@ class TransformerDecoderLayer(nn.Layer):
             self.activation = nn.GELU(approximate=True)
         else:
             self.activation = getattr(F, activation)
+        self.mp_degree=config.mp_degree
 
     def forward(self, tgt, memory, tgt_mask=None, use_cache=False, cache=None, output_attentions=False):
         residual = tgt
@@ -370,7 +375,10 @@ class TransformerDecoderLayer(nn.Layer):
             tgt, attn_weights = self.self_attn(tgt, tgt, tgt, tgt_mask, use_cache, cache)
         else:
             tgt, attn_weights, incremental_cache = self.self_attn(tgt, tgt, tgt, tgt_mask, use_cache, cache)
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                tgt = residual + self.dropout1(tgt)
+        else:
             tgt = residual + self.dropout1(tgt)
         if not self.normalize_before:
             tgt = self.norm1(tgt)
@@ -378,7 +386,10 @@ class TransformerDecoderLayer(nn.Layer):
         residual = tgt
         if self.normalize_before:
             tgt = self.norm2(tgt)
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                tgt = self.dropout2(self.linear2(self.activation(self.linear1(tgt))))
+        else:
             tgt = self.dropout2(self.linear2(self.activation(self.linear1(tgt))))
         tgt = residual + tgt
 
@@ -587,7 +598,7 @@ class OPTEmbeddings(Layer):
             embedding_dim=config.hidden_size,
             initializer_range=config.initializer_range,
         )
-
+        self.mp_degree=config.mp_degree
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, input_ids=None, attention_mask=None, input_embeddings=None, past_key_values_length=None):
@@ -600,9 +611,12 @@ class OPTEmbeddings(Layer):
         position_embeddings = self.position_embeddings(attention_mask, past_key_values_length)
 
         embeddings = input_embeddings + position_embeddings
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                embeddings = self.dropout(embeddings)
+        else:
             embeddings = self.dropout(embeddings)
-            return embeddings
+        return embeddings
 
 
 class OPTPretrainedModel(PretrainedModel):
