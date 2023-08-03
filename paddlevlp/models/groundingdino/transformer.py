@@ -306,7 +306,8 @@ class Transformer(nn.Layer):
                 axis=1,
                 indices=topk_ind)
         
-            refpoint_embed_ = refpoint_embed_undetach.detach()
+            #refpoint_embed_ = refpoint_embed_undetach.detach()
+            refpoint_embed_ = refpoint_embed_undetach
             init_box_proposal = F.sigmoid(paddle.take_along_axis(
                 arr=output_proposals,
                 axis=1,
@@ -319,7 +320,8 @@ class Transformer(nn.Layer):
                     self.tgt_embed.weight[:, None, :].tile([1, bs, 1]).transpose([1, 0, 2])
                 )  # nq, bs, d_model
             else:
-                tgt_ = tgt_undetach.detach()
+                #tgt_ = tgt_undetach.detach()
+                tgt_ = tgt_undetach
 
             if refpoint_embed is not None:
                 refpoint_embed = paddle.concat([refpoint_embed, refpoint_embed_], axis=1)
@@ -717,7 +719,8 @@ class TransformerDecoder(nn.Layer):
                 outputs_unsig = delta_unsig + reference_before_sigmoid
                 new_reference_points = F.sigmoid(outputs_unsig)
 
-                reference_points = new_reference_points.detach()
+                #reference_points = new_reference_points.detach()
+                reference_points = new_reference_points
                 # if layer_id != self.num_layers - 1:
                 ref_points.append(new_reference_points)
                

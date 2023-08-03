@@ -513,8 +513,9 @@ class BasicLayer(nn.Layer):
         """
         
         # calculate attention mask for SW-MSA
-        Hp = paddle.ceil(paddle.to_tensor(H / self.window_size)).astype("int32") * self.window_size
-        Wp = paddle.ceil(paddle.to_tensor(W / self.window_size)).astype("int32") * self.window_size
+        Hp = (H + self.window_size - 1) // self.window_size  * self.window_size
+        Wp = (W + self.window_size - 1) // self.window_size  * self.window_size
+
         img_mask = paddle.zeros((1,Hp,Wp,1), dtype=paddle.float32)  # 1 Hp Wp 1
         h_slices = (
             slice(0, -self.window_size),
