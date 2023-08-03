@@ -138,10 +138,14 @@ if is_paddle_available():
                                       "paddle.Generator"]]=None,
             dtype: Optional["paddle.dtype"]=None,
             *kwargs, ):
-        """This is a helper function that allows to create random tensors on the desired `device` with the desired `dtype`. When
-        passing a list of generators one can seed each batched size individually. If CPU generators are passed the tensor
-        will always be created on CPU.
+        """A helper function to create random tensors with the desired `dtype`. When
+        passing a list of generators, you can seed each batch size individually. If CPU generators are passed, the tensor
+        is always created on the CPU.
         """
+        # make sure generator list of length 1 is treated like a non-list
+        if isinstance(generator, list) and len(generator) == 1:
+            generator = generator[0]
+
         if isinstance(generator, (list, tuple)):
             batch_size = shape[0]
             shape = (1, ) + tuple(shape[1:])

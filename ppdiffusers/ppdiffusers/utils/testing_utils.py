@@ -702,22 +702,27 @@ class CaptureLogger:
 def enable_full_determinism():
     """
     Helper function for reproducible behavior during distributed training. See
-    - https://pytorch.org/docs/stable/notes/randomness.html for pytorch
+    - https://pytorch.org/docs/stable/notes/randomness.html
+    - https://www.paddlepaddle.org.cn/documentation/docs/zh/develop/dev_guides/api_contributing_guides/new_cpp_op_cn.html#suanzishuzhiwendingxingwenti
     """
-    #  Enable PyTorch deterministic mode. This potentially requires either the environment
+    #  Enable deterministic mode. This potentially requires either the environment
     #  variable 'CUDA_LAUNCH_BLOCKING' or 'CUBLAS_WORKSPACE_CONFIG' to be set,
     # depending on the CUDA version, so we set them both here
+
     os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":16:8"
-    torch.use_deterministic_algorithms(True)
 
     # Enable CUDNN deterministic mode
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cuda.matmul.allow_tf32 = False
+    os.environ["FLAGS_cudnn_deterministic"] = "True"
+    os.environ["FLAGS_cpu_deterministic"] = "True"
+    os.environ["NVIDIA_TF32_OVERRIDE"] = "0"
 
 
 def disable_full_determinism():
     os.environ["CUDA_LAUNCH_BLOCKING"] = "0"
     os.environ["CUBLAS_WORKSPACE_CONFIG"] = ""
-    torch.use_deterministic_algorithms(False)
+
+    # Disable CUDNN deterministic mode
+    os.environ["FLAGS_cudnn_deterministic"] = "False"
+    os.environ["FLAGS_cpu_deterministic"] = "False"
+    os.environ["NVIDIA_TF32_OVERRIDE"] = "1"

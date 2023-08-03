@@ -19,3 +19,12 @@
 
 from .pipelines import (  # noqa: F401
     DiffusionPipeline, ImagePipelineOutput, TextPipelineOutput, )
+
+from .utils import deprecate
+
+deprecate(
+    "pipelines_utils",
+    "0.22.0",
+    "Importing `DiffusionPipeline` or `ImagePipelineOutput` from ppdiffusers.pipeline_utils is deprecated. Please import from ppdiffusers.pipelines.pipeline_utils instead.",
+    standard_warn=False,
+    stacklevel=3, )
