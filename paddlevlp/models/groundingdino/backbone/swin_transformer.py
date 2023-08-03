@@ -383,8 +383,7 @@ class SwinTransformerBlock(nn.Layer):
         else:
             x = shifted_x
 
-        if pad_r > 0 or pad_b > 0:
-            x = x[:, :H, :W, :]
+        x = x[:, :H, :W, :]
 
         x = x.reshape([B, H * W, C])
 
@@ -420,12 +419,10 @@ class PatchMerging(nn.Layer):
         x = x.reshape([B, H, W, C])
 
         # padding
-        pad_input = (H % 2 == 1) or (W % 2 == 1)
-        if pad_input:
-            pad_list = paddle.zeros([4],dtype="int32")
-            pad_list[3] = H % 2
-            pad_list[1] = W % 2
-            x = F.pad(x, pad_list, data_format='NHWC')
+        pad_list = paddle.zeros([4],dtype="int32")
+        pad_list[3] = H % 2
+        pad_list[1] = W % 2
+        x = F.pad(x, pad_list, data_format='NHWC')
 
          
         x0 = x[:, 0::2, 0::2, :]  # B H/2 W/2 C
