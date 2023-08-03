@@ -462,7 +462,7 @@ class ModelMixin(nn.Layer):
         if from_diffusers and use_safetensors and not is_safetensors_available(
         ):
             raise ValueError(
-                "`use_safetensors`=True but safetensors is not installed. Please install safetensors with `pip install safetenstors"
+                "`use_safetensors`=True but safetensors is not installed. Please install safetensors with `pip install safetensors"
             )
         if use_safetensors is None:
             use_safetensors = is_safetensors_available()

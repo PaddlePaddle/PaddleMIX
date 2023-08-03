@@ -1313,7 +1313,7 @@ class DiffusionPipeline(ConfigMixin):
         if from_diffusers and use_safetensors and not is_safetensors_available(
         ):
             raise ValueError(
-                "`use_safetensors`=True but safetensors is not installed. Please install safetensors with `pip install safetenstors"
+                "`use_safetensors`=True but safetensors is not installed. Please install safetensors with `pip install safetensors"
             )
         allow_pickle = False
         if use_safetensors is None:
