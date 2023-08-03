@@ -105,6 +105,7 @@ class BertEmbeddings(nn.Layer):
         self.position_embedding_type = getattr(
             config, "position_embedding_type", "absolute"
         )
+        self.mp_degree=config.mp_degree
 
     def forward(
         self,
@@ -134,7 +135,10 @@ class BertEmbeddings(nn.Layer):
         else:
             embeddings = query_embeds
         embeddings = self.LayerNorm(embeddings)
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if  self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                embeddings = self.dropout(embeddings)
+        else:
             embeddings = self.dropout(embeddings)
         return embeddings
 
@@ -182,7 +186,7 @@ class BertSelfAttention(nn.Layer):
             else:
                 self.key = nn.Linear(config.hidden_size, self.all_head_size)
                 self.value = nn.Linear(config.hidden_size, self.all_head_size)
-
+        self.mp_degree=config.mp_degree
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = getattr(
             config, "position_embedding_type", "absolute"
@@ -305,7 +309,10 @@ class BertSelfAttention(nn.Layer):
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                attention_probs_dropped = self.dropout(attention_probs)
+        else:
             attention_probs_dropped = self.dropout(attention_probs)
 
         # Mask heads if we want to
@@ -332,10 +339,14 @@ class BertSelfOutput(nn.Layer):
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.mp_degree=config.mp_degree
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                hidden_states = self.dropout(hidden_states)
+        else:
             hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
@@ -395,10 +406,14 @@ class BertOutput(nn.Layer):
         self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.mp_degree =config.mp_degree
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                hidden_states = self.dropout(hidden_states)
+        else:
             hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states

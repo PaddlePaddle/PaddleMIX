@@ -81,7 +81,7 @@ class Blip2Qformer(Blip2PretrainedModel):
 
         image = pixel_values
         image_embeds = self.ln_vision(self.visual_encoder(image))
-        # breakpoint()
+
         image_atts = paddle.ones(image_embeds.shape[:-1], dtype="int64")
         query_tokens = self.query_tokens.expand(shape=[image_embeds.shape[0], -1, -1])
 
@@ -145,6 +145,7 @@ class Blip2Qformer(Blip2PretrainedModel):
                 )
             image_embeds_neg.append(image_embeds_world[neg_idx])
         image_embeds_neg = paddle.stack(x=image_embeds_neg, axis=0)
+        # image_embeds_neg = paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/image_embeds_neg.npy"))
         text_ids_neg = []
         text_atts_neg = []
         for b in range(bs):
@@ -154,6 +155,8 @@ class Blip2Qformer(Blip2PretrainedModel):
             text_atts_neg.append(text_attention_mask_world[neg_idx])
         text_ids_neg = paddle.stack(x=text_ids_neg, axis=0)
         text_atts_neg = paddle.stack(x=text_atts_neg, axis=0)
+        # text_ids_neg = paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/text_ids_neg.npy"))
+        # text_atts_neg = paddle.to_tensor(np.load("/paddle/workspace/wjm/baidu/personal-code/PaddleNLP/blip2/text_atts_neg.npy"))
         text_ids_all = paddle.concat(x=[text_tokens.input_ids, text_tokens.
             input_ids, text_ids_neg], axis=0)
         text_atts_all = paddle.concat(x=[text_tokens.attention_mask,
@@ -194,6 +197,8 @@ class Blip2Qformer(Blip2PretrainedModel):
             attention_mask, past_key_values=query_output.past_key_values,
             return_dict=True, labels=labels)
         loss_lm = lm_output.loss
+        # print(dict(loss=loss_itc + loss_itm + loss_lm, loss_itc=
+        #             loss_itc, loss_itm=loss_itm, loss_lm=loss_lm))
         return Blip2ForStage1ModelOutput(loss=loss_itc + loss_itm + loss_lm, loss_itc=
             loss_itc, loss_itm=loss_itm, loss_lm=loss_lm)
 
