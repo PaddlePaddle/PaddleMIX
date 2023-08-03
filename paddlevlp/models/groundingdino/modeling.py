@@ -208,13 +208,12 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
         # text_token_mask: True for nomask, False for mask
         # text_self_attention_masks: True for nomask, False for mask
         
-        if encoded_text.shape[1] > self.max_text_len:
-            encoded_text = encoded_text[:, : self.max_text_len, :]
-            text_token_mask = text_token_mask[:, : self.max_text_len]
-            position_ids = position_ids[:, : self.max_text_len]
-            text_self_attention_masks = text_self_attention_masks[
-                :, : self.max_text_len, : self.max_text_len
-            ]
+        encoded_text = encoded_text[:, : self.max_text_len, :]
+        text_token_mask = text_token_mask[:, : self.max_text_len]
+        position_ids = position_ids[:, : self.max_text_len]
+        text_self_attention_masks = text_self_attention_masks[
+            :, : self.max_text_len, : self.max_text_len
+        ]
 
         text_dict = {
             "encoded_text": encoded_text,  # bs, 195, d_model
