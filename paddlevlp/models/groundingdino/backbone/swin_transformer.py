@@ -581,14 +581,10 @@ class PatchEmbed(nn.Layer):
         """Forward function."""
         # padding
         _, _, H, W = x.shape
-        if W % self.patch_size[1] != 0:
-            pad_list = paddle.zeros([4],dtype="int32")
-            pad_list[1] = self.patch_size[1] - W % self.patch_size[1]
-            x = F.pad(x, pad_list)
-        if H % self.patch_size[0] != 0:
-            pad_list = paddle.zeros([4],dtype="int32")
-            pad_list[3] = self.patch_size[0] - H % self.patch_size[0]
-            x = F.pad(x, pad_list)
+        pad_list = paddle.zeros([4],dtype="int32")
+        pad_list[1] = self.patch_size[1] - W % self.patch_size[1]
+        pad_list[3] = self.patch_size[0] - H % self.patch_size[0]
+        x = F.pad(x, pad_list)
         
         x = self.proj(x)  # B C Wh Ww
         if self.norm is not None:
