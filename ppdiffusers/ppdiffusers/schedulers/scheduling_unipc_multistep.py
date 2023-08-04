@@ -24,6 +24,7 @@ import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
+from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
 
 
 def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
@@ -118,6 +119,17 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             by disable the corrector at the first few steps (e.g., disable_corrector=[0])
         solver_p (`SchedulerMixin`, default `None`):
             can be any other scheduler. If specified, the algorithm will become solver_p + UniC.
+        use_karras_sigmas (`bool`, *optional*, defaults to `False`):
+             This parameter controls whether to use Karras sigmas (Karras et al. (2022) scheme) for step sizes in the
+             noise schedule during the sampling process. If True, the sigmas will be determined according to a sequence
+             of noise levels {σi} as defined in Equation (5) of the paper https://arxiv.org/pdf/2206.00364.pdf.
+        timestep_spacing (`str`, default `"linspace"`):
+            The way the timesteps should be scaled. Refer to Table 2. of [Common Diffusion Noise Schedules and Sample
+            Steps are Flawed](https://arxiv.org/abs/2305.08891) for more information.
+        steps_offset (`int`, default `0`):
+            an offset added to the inference steps. You can use a combination of `offset=1` and
+            `set_alpha_to_one=False`, to make the last step use step 0 for the previous alpha product, as done in
+            stable diffusion.
     """
 
     _compatibles = [e.name for e in KarrasDiffusionSchedulers]
@@ -140,7 +152,10 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             solver_type: str="bh2",
             lower_order_final: bool=True,
             disable_corrector: List[int]=[],
-            solver_p: SchedulerMixin=None, ):
+            solver_p: SchedulerMixin=None,
+            use_karras_sigmas: Optional[bool]=False,
+            timestep_spacing: str="linspace",
+            steps_offset: int=0, ):
         if trained_betas is not None:
             self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
         elif beta_schedule == "linear":
@@ -172,7 +187,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
         if solver_type not in ["bh1", "bh2"]:
             if solver_type in ["midpoint", "heun", "logrho"]:
-                self.register_to_config(solver_type="bh1")
+                self.register_to_config(solver_type="bh2")
             else:
                 raise NotImplementedError(
                     f"{solver_type} does is not implemented for {self.__class__}"
@@ -200,9 +215,43 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             num_inference_steps (`int`):
                 the number of diffusion steps used when generating samples with a pre-trained model.
         """
-        timesteps = (np.linspace(0, self.config.num_train_timesteps - 1,
-                                 num_inference_steps + 1).round()[::-1][:-1]
-                     .copy().astype(np.int64))
+        # "linspace", "leading", "trailing" corresponds to annotation of Table 2. of https://arxiv.org/abs/2305.08891
+        if self.config.timestep_spacing == "linspace":
+            timesteps = (np.linspace(0, self.config.num_train_timesteps - 1,
+                                     num_inference_steps + 1).round()[::-1][:-1]
+                         .copy().astype(np.int64))
+        elif self.config.timestep_spacing == "leading":
+            step_ratio = self.config.num_train_timesteps // (
+                num_inference_steps + 1)
+            # creates integer timesteps by multiplying by ratio
+            # casting to int to avoid issues when num_inference_step is power of 3
+            timesteps = (np.arange(0, num_inference_steps + 1) *
+                         step_ratio).round()[::-1][:-1].copy().astype(np.int64)
+            timesteps += self.config.steps_offset
+        elif self.config.timestep_spacing == "trailing":
+            step_ratio = self.config.num_train_timesteps / num_inference_steps
+            # creates integer timesteps by multiplying by ratio
+            # casting to int to avoid issues when num_inference_step is power of 3
+            timesteps = np.arange(self.config.num_train_timesteps, 0,
+                                  -step_ratio).round().copy().astype(np.int64)
+            timesteps -= 1
+        else:
+            raise ValueError(
+                f"{self.config.timestep_spacing} is not supported. Please make sure to choose one of 'linspace', 'leading' or 'trailing'."
+            )
+
+        sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod)**
+                          0.5)
+        if self.config.use_karras_sigmas:
+            log_sigmas = np.log(sigmas)
+            sigmas = self._convert_to_karras(
+                in_sigmas=sigmas, num_inference_steps=num_inference_steps)
+            timesteps = np.array(
+                [self._sigma_to_t(sigma, log_sigmas)
+                 for sigma in sigmas]).round()
+            timesteps = np.flip(timesteps).copy().astype(np.int64)
+
+        self.sigmas = paddle.to_tensor(sigmas)
 
         # when num_inference_steps == num_train_timesteps, we can end up with
         # duplicates in timesteps.
@@ -241,8 +290,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
         abs_sample = sample.abs()  # "a certain percentile absolute pixel value"
 
-        s = paddle.quantile(
-            abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
+        s = quantile(abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
         # paddle.clip donot support min > max
         if self.config.sample_max_value < 1:
             s = paddle.ones_like(s) * self.config.sample_max_value

@@ -350,7 +350,7 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin,
         for module in self.children():
             fn_recursive_set_attention_slice(module, reversed_slice_size)
 
-    # Copied from diffusers.models.unet_2d_condition.UNet2DConditionModel.set_attn_processor
+    # Copied from ppdiffusers.models.unet_2d_condition.UNet2DConditionModel.set_attn_processor
     def set_attn_processor(self,
                            processor: Union[AttentionProcessor, Dict[
                                str, AttentionProcessor]]):

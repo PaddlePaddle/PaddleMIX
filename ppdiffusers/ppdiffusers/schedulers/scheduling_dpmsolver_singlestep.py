@@ -1,5 +1,5 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2022 TSAIL Team and The HuggingFace Team. All rights reserved.
+# Copyright 2023 TSAIL Team and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,11 +22,18 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
+from ..utils import logging
 from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
+
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
-def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
+def betas_for_alpha_bar(
+        num_diffusion_timesteps,
+        max_beta=0.999,
+        alpha_transform_type="cosine", ):
     """
     Create a beta schedule that discretizes the given alpha_t_bar function, which defines the cumulative product of
     (1-beta) over time from t = [0,1].
@@ -39,19 +46,31 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
         num_diffusion_timesteps (`int`): the number of betas to produce.
         max_beta (`float`): the maximum beta to use; use values lower than 1 to
                      prevent singularities.
+        alpha_transform_type (`str`, *optional*, default to `cosine`): the type of noise schedule for alpha_bar.
+                     Choose from `cosine` or `exp`
 
     Returns:
         betas (`np.ndarray`): the betas used by the scheduler to step the model outputs
     """
+    if alpha_transform_type == "cosine":
 
-    def alpha_bar(time_step):
-        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2)**2
+        def alpha_bar_fn(t):
+            return math.cos((t + 0.008) / 1.008 * math.pi / 2)**2
+
+    elif alpha_transform_type == "exp":
+
+        def alpha_bar_fn(t):
+            return math.exp(t * -12.0)
+
+    else:
+        raise ValueError(
+            f"Unsupported alpha_tranform_type: {alpha_transform_type}")
 
     betas = []
     for i in range(num_diffusion_timesteps):
         t1 = i / num_diffusion_timesteps
         t2 = (i + 1) / num_diffusion_timesteps
-        betas.append(min(1 - alpha_bar(t2) / alpha_bar(t1), max_beta))
+        betas.append(min(1 - alpha_bar_fn(t2) / alpha_bar_fn(t1), max_beta))
     return paddle.to_tensor(betas, dtype=paddle.float32)
 
 
@@ -114,6 +133,21 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         lower_order_final (`bool`, default `True`):
             whether to use lower-order solvers in the final steps. For singlestep schedulers, we recommend to enable
             this to use up all the function evaluations.
+        use_karras_sigmas (`bool`, *optional*, defaults to `False`):
+             This parameter controls whether to use Karras sigmas (Karras et al. (2022) scheme) for step sizes in the
+             noise schedule during the sampling process. If True, the sigmas will be determined according to a sequence
+             of noise levels {σi} as defined in Equation (5) of the paper https://arxiv.org/pdf/2206.00364.pdf.
+        lambda_min_clipped (`float`, default `-inf`):
+            the clipping threshold for the minimum value of lambda(t) for numerical stability. This is critical for
+            cosine (squaredcos_cap_v2) noise schedule.
+        variance_type (`str`, *optional*):
+            Set to "learned" or "learned_range" for diffusion models that predict variance. For example, OpenAI's
+            guided-diffusion (https://github.com/openai/guided-diffusion) predicts both mean and variance of the
+            Gaussian distribution in the model's output. DPM-Solver only needs the "mean" output because it is based on
+            diffusion ODEs. whether the model's output contains the predicted Gaussian variance. For example, OpenAI's
+            guided-diffusion (https://github.com/openai/guided-diffusion) predicts both mean and variance of the
+            Gaussian distribution in the model's output. DPM-Solver only needs the "mean" output because it is based on
+            diffusion ODEs.
 
     """
 
@@ -135,7 +169,10 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
             sample_max_value: float=1.0,
             algorithm_type: str="dpmsolver++",
             solver_type: str="midpoint",
-            lower_order_final: bool=True, ):
+            lower_order_final: bool=True,
+            use_karras_sigmas: Optional[bool]=False,
+            lambda_min_clipped: float=-float("inf"),
+            variance_type: Optional[str]=None, ):
         if trained_betas is not None:
             self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
         elif beta_schedule == "linear":
@@ -225,6 +262,52 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
                 orders = [1] * steps
         return orders
 
+    def set_timesteps(
+            self,
+            num_inference_steps: int, ):
+        """
+        Sets the timesteps used for the diffusion chain. Supporting function to be run before inference.
+
+        Args:
+            num_inference_steps (`int`):
+                the number of diffusion steps used when generating samples with a pre-trained model.
+            
+        """
+        self.num_inference_steps = num_inference_steps
+        # Clipping the minimum of all lambda(t) for numerical stability.
+        # This is critical for cosine (squaredcos_cap_v2) noise schedule.
+        clipped_idx = paddle.searchsorted(
+            paddle.flip(self.lambda_t, [0]), self.config.lambda_min_clipped)
+        timesteps = (np.linspace(
+            0, self.config.num_train_timesteps - 1 - clipped_idx,
+            num_inference_steps + 1).round()[::-1][:-1].copy().astype(np.int64))
+
+        sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod)**
+                          0.5)
+        if self.config.use_karras_sigmas:
+            log_sigmas = np.log(sigmas)
+            sigmas = self._convert_to_karras(
+                in_sigmas=sigmas, num_inference_steps=num_inference_steps)
+            timesteps = np.array(
+                [self._sigma_to_t(sigma, log_sigmas)
+                 for sigma in sigmas]).round()
+            timesteps = np.flip(timesteps).copy().astype(np.int64)
+
+        self.sigmas = paddle.to_tensor(sigmas)
+
+        self.timesteps = paddle.to_tensor(timesteps)
+        self.model_outputs = [None] * self.config.solver_order
+        self.sample = None
+
+        if not self.config.lower_order_final and num_inference_steps % self.config.solver_order != 0:
+            logger.warn(
+                "Changing scheduler {self.config} to have `lower_order_final` set to True to handle uneven amount of inference steps. Please make sure to always use an even number of `num_inference steps when using `lower_order_final=True`."
+            )
+            self.register_to_config(lower_order_final=True)
+
+        self.order_list = self.get_order_list(num_inference_steps)
+
+    # Copied from ppdiffusers.schedulers.scheduling_ddpm.DDPMScheduler._threshold_sample
     def _threshold_sample(self, sample: paddle.Tensor) -> paddle.Tensor:
         """
         "Dynamic thresholding: At each sampling step we set s to a certain percentile absolute pixel value in xt0 (the
@@ -247,8 +330,7 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
 
         abs_sample = sample.abs()  # "a certain percentile absolute pixel value"
 
-        s = paddle.quantile(
-            abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
+        s = quantile(abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
         # paddle.clip donot support min > max
         if self.config.sample_max_value < 1:
             s = paddle.ones_like(s) * self.config.sample_max_value
@@ -267,22 +349,46 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
 
         return sample
 
-    def set_timesteps(self, num_inference_steps: int):
-        """
-        Sets the timesteps used for the diffusion chain. Supporting function to be run before inference.
+    # Copied from ppdiffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._sigma_to_t
+    def _sigma_to_t(self, sigma, log_sigmas):
+        # get log sigma
+        log_sigma = np.log(sigma)
 
-        Args:
-            num_inference_steps (`int`):
-                the number of diffusion steps used when generating samples with a pre-trained model.
-        """
-        self.num_inference_steps = num_inference_steps
-        timesteps = (np.linspace(0, self.config.num_train_timesteps - 1,
-                                 num_inference_steps + 1).round()[::-1][:-1]
-                     .copy().astype(np.int64))
-        self.timesteps = paddle.to_tensor(timesteps)
-        self.model_outputs = [None] * self.config.solver_order
-        self.sample = None
-        self.orders = self.get_order_list(num_inference_steps)
+        # get distribution
+        dists = log_sigma - log_sigmas[:, np.newaxis]
+
+        # get sigmas range
+        low_idx = np.cumsum(
+            (dists >= 0),
+            axis=0).argmax(axis=0).clip(max=log_sigmas.shape[0] - 2)
+        high_idx = low_idx + 1
+
+        low = log_sigmas[low_idx]
+        high = log_sigmas[high_idx]
+
+        # interpolate sigmas
+        w = (low - log_sigma) / (low - high)
+        w = np.clip(w, 0, 1)
+
+        # transform interpolation to time range
+        t = (1 - w) * low_idx + w * high_idx
+        t = t.reshape(sigma.shape)
+        return t
+
+    # Copied from ppdiffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._convert_to_karras
+    def _convert_to_karras(self, in_sigmas: paddle.Tensor,
+                           num_inference_steps) -> paddle.Tensor:
+        """Constructs the noise schedule of Karras et al. (2022)."""
+
+        sigma_min: float = in_sigmas[-1].item()
+        sigma_max: float = in_sigmas[0].item()
+
+        rho = 7.0  # 7.0 is the value used in the paper
+        ramp = np.linspace(0, 1, num_inference_steps)
+        min_inv_rho = sigma_min**(1 / rho)
+        max_inv_rho = sigma_max**(1 / rho)
+        sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho))**rho
+        return sigmas
 
     def convert_model_output(self,
                              model_output: paddle.Tensor,
@@ -310,6 +416,9 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         # DPM-Solver++ needs to solve an integral of the data prediction model.
         if self.config.algorithm_type == "dpmsolver++":
             if self.config.prediction_type == "epsilon":
+                # DPM-Solver and DPM-Solver++ only need the "mean" output.
+                if self.config.variance_type in ["learned_range"]:
+                    model_output = model_output[:, :3]
                 alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[
                     timestep]
                 x0_pred = (sample - sigma_t * model_output) / alpha_t
@@ -331,6 +440,9 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         # DPM-Solver needs to solve an integral of the noise prediction model.
         elif self.config.algorithm_type == "dpmsolver":
             if self.config.prediction_type == "epsilon":
+                # DPM-Solver and DPM-Solver++ only need the "mean" output.
+                if self.config.variance_type in ["learned_range"]:
+                    model_output = model_output[:, :3]
                 return model_output
             elif self.config.prediction_type == "sample":
                 alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[
@@ -573,6 +685,12 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         self.model_outputs[-1] = model_output
 
         order = self.order_list[step_index]
+
+        #  For img2img denoising might start with order>1 which is not possible
+        #  In this case make sure that the first two steps are both order=1
+        while self.model_outputs[-order] is None:
+            order -= 1
+
         # For single-step solvers, we use the initial value at each time with order = 1.
         if order == 1:
             self.sample = sample
@@ -603,6 +721,7 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         """
         return sample
 
+    # Copied from ppdiffusers.schedulers.scheduling_ddpm.DDPMScheduler.add_noise
     def add_noise(
             self,
             original_samples: paddle.Tensor,

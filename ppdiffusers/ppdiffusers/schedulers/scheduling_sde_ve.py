@@ -163,8 +163,7 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
             model_output: paddle.Tensor,
             timestep: int,
             sample: paddle.Tensor,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
+            generator: Optional[paddle.Generator]=None,
             return_dict: bool=True, ) -> Union[SdeVeOutput, Tuple]:
         """
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
@@ -222,8 +221,7 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
             self,
             model_output: paddle.Tensor,
             sample: paddle.Tensor,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
+            generator: Optional[paddle.Generator]=None,
             return_dict: bool=True, ) -> Union[SchedulerOutput, Tuple]:
         """
         Correct the predicted sample based on the output model_output of the network. This is often run repeatedly

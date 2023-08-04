@@ -261,6 +261,14 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _bs4_available = False
 
+_paddlesde_available = importlib.util.find_spec("paddlesde") is not None
+try:
+    _paddlesde_version = importlib_metadata.version("paddlesde")
+    logger.debug(
+        f"Successfully imported paddlesde version {_paddlesde_version}")
+except importlib_metadata.PackageNotFoundError:
+    _paddlesde_available = False
+
 _invisible_watermark_available = importlib.util.find_spec(
     "imwatermark") is not None
 try:
@@ -359,6 +367,10 @@ def is_ftfy_available():
 
 def is_bs4_available():
     return _bs4_available
+
+
+def is_paddlesde_available():
+    return _paddlesde_available
 
 
 def is_invisible_watermark_available():
@@ -498,6 +510,11 @@ that match your environment. Please note that you may need to restart your runti
 """
 
 # docstyle-ignore
+PADDLESDE_IMPORT_ERROR = """
+{0} requires the paddlesde library but it was not found in your environment. You can install it with pip: `pip install paddlesde`
+"""
+
+# docstyle-ignore
 INVISIBLE_WATERMARK_IMPORT_ERROR = """
 {0} requires the invisible-watermark library but it was not found in your environment. You can install it with pip: `pip install invisible-watermark>=0.2.0`
 """
@@ -522,6 +539,7 @@ BACKENDS_MAPPING = OrderedDict([
     ("note_seq", (is_note_seq_available, NOTE_SEQ_IMPORT_ERROR)),
     ("compel", (is_compel_available, COMPEL_IMPORT_ERROR)),
     ("ftfy", (is_ftfy_available, FTFY_IMPORT_ERROR)),
+    ("paddlesde", (is_paddlesde_available, PADDLESDE_IMPORT_ERROR)),
     ("invisible_watermark",
      (is_invisible_watermark_available, INVISIBLE_WATERMARK_IMPORT_ERROR)),
 ])

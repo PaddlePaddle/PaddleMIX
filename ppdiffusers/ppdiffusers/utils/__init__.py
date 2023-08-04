@@ -78,6 +78,7 @@ from .import_utils import (
     is_paddle_version,
     is_paddlenlp_available,
     is_paddlenlp_version,
+    is_paddlesde_available,
     is_ppxformers_available,
     is_safetensors_available,
     is_scipy_available,
