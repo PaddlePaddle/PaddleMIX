@@ -197,7 +197,8 @@ class MultiHeadAttention(nn.Layer):
         if attn_mask is not None:
             # Support bool or int mask
             attn_mask = _convert_attention_mask(attn_mask, product.dtype)
-            product = product + attn_mask
+            product = product + attn_mask 
+
         weights = F.softmax(product)
         if self.dropout:
             weights = F.dropout(

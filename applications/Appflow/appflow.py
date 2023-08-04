@@ -72,16 +72,6 @@ APPLICATIONS = {
 
 
 
-
-support_schema_list = [
-    
-]
-
-support_argument_list = [
-    
-]
-
-
 class Appflow(object):
     """
     The Taskflow is the end2end interface that could convert the raw text to model result, and decode the model result to task result. The main functions as follows:
@@ -171,12 +161,4 @@ class Appflow(object):
         task_list = list(TASKS.keys())
         return task_list
 
-    # def interactive_mode(self, max_turn):
-    #     with self.task_instance.interactive_mode(max_turn):
-    #         while True:
-    #             human = input("[Human]:").strip()
-    #             if human.lower() == "exit":
-    #                 exit()
-    #             robot = self.task_instance(human)[0]
-    #             print("[Bot]:%s" % robot)
 

@@ -45,11 +45,13 @@ class OpenSetDetTask(AppTask):
         self._static_mode = kwargs.get("static_mode", False)
 
         self._construct_processor(model)
+        self._construct_model(model)
+
         if self._static_mode:
             self._static_model_name = self._get_static_model_name()
             self._get_inference_model()
-        else:
-            self._construct_model(model)
+     
+            
 
     def _construct_input_spec(self):
         """
@@ -69,7 +71,7 @@ class OpenSetDetTask(AppTask):
         Construct the tokenizer for the predictor.
         """
          #bulid processor
-        self._processor = GroudingDinoProcessor.from_pretrained(model) 
+        self._processor = GroudingDinoProcessor.from_pretrained(model,cache_dir=self._model_dir) 
 
     def _construct_model(self, model):
         """
@@ -77,7 +79,7 @@ class OpenSetDetTask(AppTask):
         """
 
         #bulid model
-        model_instance = GroundingDinoModel.from_pretrained(model)
+        model_instance = GroundingDinoModel.from_pretrained(model,cache_dir=self._model_dir)
 
         # Load the model parameter for the predict
         model_instance.eval()
@@ -209,13 +211,12 @@ class OpenSetSegTask(AppTask):
         self._static_mode = kwargs.get("static_mode", False)
 
         self._construct_processor(model)
+        self._construct_model(model)
 
         if self._static_mode:
             self._static_model_name = self._get_static_model_name()
             self._get_inference_model()
-        else:
-            self._construct_model(model)
-
+     
 
     def _construct_input_spec(self):
         """
@@ -242,7 +243,7 @@ class OpenSetSegTask(AppTask):
         Construct the tokenizer for the predictor.
         """
          #bulid processor
-        self._processor = SamProcessor.from_pretrained(model) 
+        self._processor = SamProcessor.from_pretrained(model,cache_dir=self._model_dir) 
 
     def _construct_model(self, model):
         """
@@ -250,7 +251,7 @@ class OpenSetSegTask(AppTask):
         """
 
         #bulid model
-        model_instance = SamModel.from_pretrained(model,input_type=self._input_type)
+        model_instance = SamModel.from_pretrained(model,input_type=self._input_type,cache_dir=self._model_dir)
 
         # Load the model parameter for the predict
         model_instance.eval()

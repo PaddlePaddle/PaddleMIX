@@ -45,11 +45,13 @@ class AppTask(Task):
 
         if "task_path" in self.kwargs:
             self._task_path = self.kwargs["task_path"]
-            self._custom_model = True
+            self._model_dir = self._task_path
         elif self._priority_path:
             self._task_path = os.path.join(self._home_path, "models", self._priority_path)
+            self._model_dir = os.path.join(self._home_path, "models")
         else:
             self._task_path = os.path.join(self._home_path, "models", self.model)
+            self._model_dir = os.path.join(self._home_path, "models")
 
     
     def _construct_tokenizer(self, model):
@@ -140,41 +142,6 @@ class AppTask(Task):
         """
         Return the inference program, inputs and outputs in static mode.
         """
-        if self._custom_model:
-            param_path = os.path.join(self._task_path, "model_state.pdparams")
-
-            if os.path.exists(param_path):
-                cache_info_path = os.path.join(self._task_path, ".cache_info")
-                md5 = md5file(param_path)
-                self._param_updated = True
-                if os.path.exists(cache_info_path) and open(cache_info_path).read()[:-8] == md5:
-                    self._param_updated = False
-                elif self.task == "information_extraction" and self.model != "uie-data-distill-gp":
-                    # UIE related models are moved to paddlenlp.transformers after v2.4.5
-                    # So we convert the parameter key names for compatibility
-                    # This check will be discard in future
-                    fp = open(cache_info_path, "w")
-                    fp.write(md5 + "taskflow")
-                    fp.close()
-                    model_state = paddle.load(param_path)
-                    prefix_map = {"UIE": "ernie", "UIEM": "ernie_m", "UIEX": "ernie_layout"}
-                    new_state_dict = {}
-                    for name, param in model_state.items():
-                        if "ernie" in name:
-                            new_state_dict[name] = param
-                        elif "encoder.encoder" in name:
-                            trans_name = name.replace("encoder.encoder", prefix_map[self._init_class] + ".encoder")
-                            new_state_dict[trans_name] = param
-                        elif "encoder" in name:
-                            trans_name = name.replace("encoder", prefix_map[self._init_class])
-                            new_state_dict[trans_name] = param
-                        else:
-                            new_state_dict[name] = param
-                    paddle.save(new_state_dict, param_path)
-                else:
-                    fp = open(cache_info_path, "w")
-                    fp.write(md5 + "taskflow")
-                    fp.close()
 
         # When the user-provided model path is already a static model, skip to_static conversion
         if self.is_static_model:
