@@ -32,6 +32,7 @@ zeros_ = Constant(value=0.)
 ones_ = Constant(value=1.)
 from paddle.distributed.fleet.utils import recompute
 
+
 def to_2tuple(x):
     return tuple([x] * 2)
 
@@ -74,13 +75,19 @@ class Mlp(nn.Layer):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
-        if mp_degree>1:
-            self.fc1 = fleet.meta_parallel.ColumnParallelLinear(in_features, hidden_features,                weight_attr=None,
-                    has_bias=True,
-                    gather_output=True)
-            self.fc2 = fleet.meta_parallel.ColumnParallelLinear(hidden_features, out_features,                weight_attr=None,
-            has_bias=True,
-            gather_output=True)
+        if mp_degree > 1:
+            self.fc1 = fleet.meta_parallel.ColumnParallelLinear(
+                in_features,
+                hidden_features,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True)
+            self.fc2 = fleet.meta_parallel.ColumnParallelLinear(
+                hidden_features,
+                out_features,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True)
         else:
             self.fc1 = nn.Linear(in_features, hidden_features)
             self.fc2 = nn.Linear(hidden_features, out_features)
@@ -92,9 +99,9 @@ class Mlp(nn.Layer):
         x = self.fc1(x)
         x = self.act(x)
         x = self.fc2(x)
-        if self.mp_degree>1:
+        if self.mp_degree > 1:
             with get_rng_state_tracker().rng_state("global_seed"):
-               x = self.drop(x)
+                x = self.drop(x)
         else:
             x = self.drop(x)
         return x
@@ -114,21 +121,22 @@ class Attention(nn.Layer):
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim**-0.5
-        if mp_degree>1:
-            self.qkv = fleet.meta_parallel.ColumnParallelLinear(dim, dim * 3,
-                    weight_attr=None,
-                    has_bias=True,
-                    gather_output=True)
+        if mp_degree > 1:
+            self.qkv = fleet.meta_parallel.ColumnParallelLinear(
+                dim,
+                dim * 3,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True)
         else:
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
-        if mp_degree>1:
-            self.proj = fleet.meta_parallel.ColumnParallelLinear(dim, dim,                weight_attr=None,
-                    has_bias=True,
-                    gather_output=True)
+        if mp_degree > 1:
+            self.proj = fleet.meta_parallel.ColumnParallelLinear(
+                dim, dim, weight_attr=None, has_bias=True, gather_output=True)
         else:
             self.proj = nn.Linear(dim, dim)
-        self.mp_degree=mp_degree
+        self.mp_degree = mp_degree
         self.proj_drop = nn.Dropout(proj_drop)
 
     def _register_relative_position_index(
@@ -161,15 +169,16 @@ class Attention(nn.Layer):
         relative_position_index[0:, 0] = self.num_relative_distance - 2
         relative_position_index[0, 0] = self.num_relative_distance - 1
 
-        self.register_buffer("relative_position_index",
-                             relative_position_index)
+        self.register_buffer("relative_position_index", relative_position_index)
 
     def forward(self, x, rel_pos_bias=None):
         # B= paddle.shape(x)[0]
         N, C = x.shape[1:]
         # if self.q_bias is not None:
         #     qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
-        qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //self.num_heads)).transpose((2, 0, 3, 1, 4))
+        qkv = self.qkv(x).reshape(
+            (-1, N, 3, self.num_heads, C // self.num_heads)).transpose(
+                (2, 0, 3, 1, 4))
         # print(self.qkv.bias[2100])
         q, k, v = qkv[0], qkv[1], qkv[2]
 
@@ -184,7 +193,7 @@ class Attention(nn.Layer):
             attn = attn + relative_position_bias.unsqueeze(0)
 
         attn = nn.functional.softmax(attn, axis=-1)
-        if self.mp_degree>1:
+        if self.mp_degree > 1:
             with get_rng_state_tracker().rng_state("global_seed"):
                 attn = self.attn_drop(attn)
         else:
@@ -192,7 +201,7 @@ class Attention(nn.Layer):
 
         x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
         x = self.proj(x)
-        if self.mp_degree>1:
+        if self.mp_degree > 1:
             with get_rng_state_tracker().rng_state("global_seed"):
                 x = self.proj_drop(x)
         else:
@@ -297,8 +306,7 @@ class RelativePositionBias(nn.Layer):
         relative_position_index[0:, 0] = self.num_relative_distance - 2
         relative_position_index[0, 0] = self.num_relative_distance - 1
 
-        self.register_buffer("relative_position_index",
-                             relative_position_index)
+        self.register_buffer("relative_position_index", relative_position_index)
 
         # trunc_normal_(self.relative_position_bias_table, std=.02)
 
@@ -342,8 +350,9 @@ class VisionTransformer(Blip2PretrainedModel):
     main_input_name = "pixel_values"
     config_class = Blip2VisionConfig
 
-    def __init__(self, config: Blip2VisionConfig):
+    def __init__(self, config: Blip2VisionConfig, **kwargs):
         super().__init__(config)
+        mp_degree = kwargs.get('mp_degree')
         self.class_num = config.class_num
         self.num_features = self.embed_dim = config.embed_dim
         _img_size = to_2tuple(config.img_size)
@@ -367,8 +376,9 @@ class VisionTransformer(Blip2PretrainedModel):
 
         self.add_parameter("cls_token", self.cls_token)
         self.pos_drop = nn.Dropout(p=config.drop_rate)
-        self.gradient_checkpointing=config.gradient_checkpointing
-        logger.info("self.gradient_checkpointing:{}".format(self.gradient_checkpointing))
+        self.gradient_checkpointing = config.gradient_checkpointing
+        logger.info("self.gradient_checkpointing:{}".format(
+            self.gradient_checkpointing))
         dpr = np.linspace(0, config.drop_path_rate, config.depth)
 
         self.blocks = nn.LayerList([
@@ -384,22 +394,21 @@ class VisionTransformer(Blip2PretrainedModel):
                 norm_layer=config.norm_layer,
                 epsilon=config.epsilon,
                 window_size=self.window_size,
-                mp_degree=config.mp_degree,
-                ) for i in range(config.depth)
-
+                mp_degree=mp_degree, ) for i in range(config.depth)
         ])
 
         #self.norm = eval(norm_layer)(embed_dim, epsilon=epsilon)
-        self.mp_degree=config.mp_degree
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed)
         trunc_normal_(self.cls_token)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
-        if isinstance(m, (nn.Linear,fleet.meta_parallel.ColumnParallelLinear)):
+        if isinstance(m, (nn.Linear, fleet.meta_parallel.ColumnParallelLinear)):
             trunc_normal_(m.weight)
-            if isinstance(m, (nn.Linear,fleet.meta_parallel.ColumnParallelLinear)) and m.bias is not None:
+            if isinstance(m,
+                          (nn.Linear, fleet.meta_parallel.ColumnParallelLinear
+                           )) and m.bias is not None:
                 zeros_(m.bias)
         elif isinstance(m, nn.LayerNorm):
             zeros_(m.bias)
@@ -414,7 +423,7 @@ class VisionTransformer(Blip2PretrainedModel):
 
         if self.pos_embed is not None:
             x = x + self.pos_embed
-        if self.mp_degree>1:
+        if self.mp_degree > 1:
             with get_rng_state_tracker().rng_state("global_seed"):
                 x = self.pos_drop(x)
         else:
@@ -424,7 +433,7 @@ class VisionTransformer(Blip2PretrainedModel):
         for blk in self.blocks:
             if self.gradient_checkpointing and self.training:
 
-                x = recompute(blk,x, rel_pos_bias=rel_pos_bias)
+                x = recompute(blk, x, rel_pos_bias=rel_pos_bias)
             else:
                 x = blk(x, rel_pos_bias=rel_pos_bias)
         #x = self.norm(x)
@@ -435,46 +444,63 @@ class VisionTransformer(Blip2PretrainedModel):
         return x
 
 
-def interpolate_pos_embed(model, checkpoint_model=paddle.load("blip2_pretrained.pdparams")):
+def interpolate_pos_embed(
+        model, checkpoint_model=paddle.load("blip2_pretrained.pdparams")):
     if 'visual_encoder.pos_embed' in checkpoint_model:
-        pos_embed_checkpoint =paddle.to_tensor(checkpoint_model['visual_encoder.pos_embed'])
+        pos_embed_checkpoint = paddle.to_tensor(checkpoint_model[
+            'visual_encoder.pos_embed'])
         embedding_size = pos_embed_checkpoint.shape[-1]
         num_patches = model.visual_encoder.patch_embed.num_patches
-        num_extra_tokens = model.visual_encoder.pos_embed.shape[-2] - num_patches
+        num_extra_tokens = model.visual_encoder.pos_embed.shape[
+            -2] - num_patches
         # height (== width) for the checkpoint position embedding
-        orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens) ** 0.5)
+        orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens)**
+                        0.5)
         # height (== width) for the new position embedding
-        new_size = int(num_patches ** 0.5)
+        new_size = int(num_patches**0.5)
         # class_token and dist_token are kept unchanged
         if orig_size != new_size:
-            print("Position interpolate from %dx%d to %dx%d" % (orig_size, orig_size, new_size, new_size))
+            print("Position interpolate from %dx%d to %dx%d" %
+                  (orig_size, orig_size, new_size, new_size))
             extra_tokens = pos_embed_checkpoint[:, :num_extra_tokens]
             # only the position tokens are interpolated
             pos_tokens = pos_embed_checkpoint[:, num_extra_tokens:]
-            pos_tokens = pos_tokens.reshape((-1, orig_size, orig_size, embedding_size)).transpose((0, 3, 1, 2))
+            pos_tokens = pos_tokens.reshape(
+                (-1, orig_size, orig_size, embedding_size)).transpose(
+                    (0, 3, 1, 2))
             pos_tokens = paddle.nn.functional.interpolate(
-                pos_tokens, size=(new_size, new_size), mode='bicubic', align_corners=False)
+                pos_tokens,
+                size=(new_size, new_size),
+                mode='bicubic',
+                align_corners=False)
             pos_tokens = pos_tokens.transpose((0, 2, 3, 1)).flatten(1, 2)
             new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
             checkpoint_model['visual_encoder.pos_embed'] = new_pos_embed.numpy()
     elif 'pos_embed' in checkpoint_model:
-        pos_embed_checkpoint =paddle.to_tensor(checkpoint_model['pos_embed'])
+        pos_embed_checkpoint = paddle.to_tensor(checkpoint_model['pos_embed'])
         embedding_size = pos_embed_checkpoint.shape[-1]
         num_patches = model.patch_embed.num_patches
         num_extra_tokens = model.pos_embed.shape[-2] - num_patches
         # height (== width) for the checkpoint position embedding
-        orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens) ** 0.5)
+        orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens)**
+                        0.5)
         # height (== width) for the new position embedding
-        new_size = int(num_patches ** 0.5)
+        new_size = int(num_patches**0.5)
         # class_token and dist_token are kept unchanged
         if orig_size != new_size:
-            print("Position interpolate from %dx%d to %dx%d" % (orig_size, orig_size, new_size, new_size))
+            print("Position interpolate from %dx%d to %dx%d" %
+                  (orig_size, orig_size, new_size, new_size))
             extra_tokens = pos_embed_checkpoint[:, :num_extra_tokens]
             # only the position tokens are interpolated
             pos_tokens = pos_embed_checkpoint[:, num_extra_tokens:]
-            pos_tokens = pos_tokens.reshape((-1, orig_size, orig_size, embedding_size)).transpose((0, 3, 1, 2))
+            pos_tokens = pos_tokens.reshape(
+                (-1, orig_size, orig_size, embedding_size)).transpose(
+                    (0, 3, 1, 2))
             pos_tokens = paddle.nn.functional.interpolate(
-                pos_tokens, size=(new_size, new_size), mode='bicubic', align_corners=False)
+                pos_tokens,
+                size=(new_size, new_size),
+                mode='bicubic',
+                align_corners=False)
             pos_tokens = pos_tokens.transpose((0, 2, 3, 1)).flatten(1, 2)
             new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
             checkpoint_model['pos_embed'] = new_pos_embed.numpy()

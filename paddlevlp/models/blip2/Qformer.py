@@ -93,7 +93,6 @@ class BertEmbeddings(nn.Layer):
 
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
-        config.mp_degree = 1
         self.word_embeddings = nn.Embedding(
             config.vocab_size,
             config.hidden_size,
@@ -1105,8 +1104,8 @@ class BertLMHeadModel(BertPreTrainedModel):
                  train_in_satge1=False,
                  **kwargs):
         super().__init__(config)
+        config.mp_degree = kwargs.get('mp_degree')
         config.encoder_width = encoder_width
-        config.mp_degree = 1
         config.gradient_checkpointing = False
         self.ln_vision = paddle.nn.LayerNorm(config.encoder_width)
         config.query_length = config.num_query_tokens

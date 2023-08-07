@@ -359,7 +359,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         super().__init__(config)
         from paddlevlp.models.blip2.eva_vit import VisionTransformer
         self.visual_encoder = VisionTransformer.from_pretrained(
-            pretrained_model_name_or_path=config.vision_config)
+            pretrained_model_name_or_path=config.vision_config,
+            mp_degree=config.mp_degree)
         self.freeze_vit = config.freeze_vit
         self.train_stage1 = False
         if self.freeze_vit:
@@ -376,7 +377,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 pretrained_model_name_or_path=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=True,
-                tokenizer_length=len(self.tokenizer))
+                tokenizer_length=len(self.tokenizer),
+                mp_degree=config.mp_degree)
 
             state_dict = self.Qformer.state_dict()
             for name, param in self.Qformer.named_parameters():
@@ -392,7 +394,9 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             if config.use_decoder_only_language_model:
                 if "opt" in config.text_config:
                     language_model = OPTForCausalLM.from_pretrained(
-                        config.text_config, load_state_as_np=True)
+                        config.text_config,
+                        load_state_as_np=True,
+                        mp_degree=config.mp_degree)
                 else:
                     raise NotImplementedError
             else:
@@ -411,7 +415,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 pretrained_model_name_or_path=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=False,
-                text_hidden_size=self.language_model.hidden_size)
+                text_hidden_size=self.language_model.hidden_size,
+                mp_degree=config.mp_degree)
             self.Qformer.cls = None
             self.Qformer.bert.embeddings.word_embeddings = None
             self.Qformer.bert.embeddings.position_embeddings = None
