@@ -213,6 +213,7 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
             ]
             init_latents = paddle.concat(x=init_latents, axis=0)
         else:
+            breakpoint()
             init_latents = self.vae.encode(image).latent_dist.sample(generator)
         init_latents = 0.18215 * init_latents
         init_latents = init_latents.repeat_interleave(
@@ -296,8 +297,8 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
         # image = paddle.vision.transforms.Resize(self.feature_extractor_size)(image)
         c_size = image.shape[0]
         image = rearrange(image, "c t h w -> (c t) h w")
-        image = paddle.vision.transforms.Resize(self.feature_extractor_size)(
-            image)
+        image = paddle.vision.transforms.Resize(
+            (self.feature_extractor_size, self.feature_extractor_size))(image)
         image = rearrange(image, "(c t) h w -> c t h w", c=c_size)
 
         image = self.normalize(image)
