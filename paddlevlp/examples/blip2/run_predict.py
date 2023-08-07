@@ -31,8 +31,8 @@ from PIL import Image
 from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlevlp.processors.blip_processing import Blip2Processor
 from paddlevlp.utils.log import logger
-from paddlevlp.models.blip2.configuration import Blip2VisionConfig, Blip2QFormerConfig, Blip2Config
-from paddlenlp.transformers import T5Config, OPTConfig, AutoConfig
+from paddlenlp.transformers import AutoTokenizer
+from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
 from paddlevlp.examples.blip2.utils import load_model,LLM_LIST
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments)
 @dataclass
@@ -61,7 +61,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="blip2-opt-2.7b",
+        default="blip2-caption-opt2.7b",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
 
@@ -152,8 +152,10 @@ def main():
     model_args.data_world_size = training_args.data_world_size
     paddle.set_device(training_args.device)
     prompt = data_args.prompt
-    processor = Blip2Processor.from_pretrained(
-        model_args.model_name_or_path)  # "Salesforce/blip2-opt-2.7b"
+    tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path, use_fast=False)
+    image_processor = BlipImageProcessor.from_pretrained(os.path.join(model_args.model_name_or_path,"processor","eval"))
+    text_processor_class = BlipTextProcessor.from_pretrained(os.path.join(model_args.model_name_or_path,"processor","eval"))
+    processor = Blip2Processor(image_processor,text_processor_class,tokenizer_class)
     inputs = processor(
         images=image,
         text=prompt,
