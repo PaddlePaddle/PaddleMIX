@@ -66,7 +66,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="Salesforce/blip2-opt-2.7b",
+        default="paddlemix/blip2-stage2",
         metadata={"help": "Path to pretrained model or model identifier"}, )
 
     text_model_name_or_path: str = field(

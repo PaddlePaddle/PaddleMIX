@@ -63,7 +63,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="blip2-caption-opt2.7b",
+        default="paddlemix/blip2-caption-opt2.7b",
         metadata={"help": "Path to pretrained model or model identifier"}, )
 
     text_model_name_or_path: str = field(
