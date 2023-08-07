@@ -93,7 +93,7 @@ class BertEmbeddings(nn.Layer):
 
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
-
+        config.mp_degree=1
         self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
@@ -1130,11 +1130,29 @@ class BertLMHeadModel(BertPreTrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
     _keys_to_ignore_on_load_missing = [r"position_ids", r"predictions.decoder.bias"]
 
-    def __init__(self, config):
+    def __init__(self, config,encoder_width = None,train_in_satge1 = False,**kwargs):
         super().__init__(config)
-
+        config.encoder_width=encoder_width
+        config.mp_degree=1
+        config.gradient_checkpointing=False
+        self.ln_vision=paddle.nn.LayerNorm(config.encoder_width)
+        config.query_length=config.num_query_tokens
         self.bert = BertModel(config, add_pooling_layer=False)
         self.cls = BertOnlyMLMHead(config)
+
+        self.query_tokens = paddle.create_parameter(
+            shape=(1, config.num_query_tokens, config.hidden_size),
+            dtype='float32',
+            default_initializer=paddle.nn.initializer.Normal(mean=0.0, std=config.initializer_range)
+        )
+        if train_in_satge1:
+            self.vision_proj = paddle.nn.Linear(in_features=config.hidden_size, out_features=config.embed_dim)
+            self.text_proj = paddle.nn.Linear(in_features=config.hidden_size, out_features=config.embed_dim)
+            self.itm_head = paddle.nn.Linear(in_features=config.hidden_size, out_features=2)
+            self.resize_token_embeddings(kwargs.get('tokenizer_length'))
+        else:
+            text_hidden_size=kwargs.get('text_hidden_size')
+            self.language_projection=paddle.nn.Linear(in_features=config.hidden_size, out_features=text_hidden_size)
 
         # self.init_weights()
 

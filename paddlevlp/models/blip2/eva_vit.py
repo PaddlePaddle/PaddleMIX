@@ -23,6 +23,8 @@ import paddle
 import paddle.nn as nn
 from paddle.nn.initializer import TruncatedNormal, Constant, Normal
 from paddle.distributed import fleet
+from paddlevlp.models.blip2.configuration import Blip2VisionConfig
+from paddlevlp.models.blip2.modeling import Blip2PretrainedModel
 
 trunc_normal_ = TruncatedNormal(std=.02)
 normal_ = Normal
@@ -334,78 +336,61 @@ class PatchEmbed(nn.Layer):
         return x
 
 
-class VisionTransformer(nn.Layer):
+class VisionTransformer(Blip2PretrainedModel):
     """ Vision Transformer with support for patch input
     """
+    main_input_name = "pixel_values"
+    config_class = Blip2VisionConfig
 
-    def __init__(self,
-                 img_size=224,
-                 patch_size=16,
-                 in_chans=3,
-                 class_num=1000,
-                 embed_dim=768,
-                 depth=12,
-                 num_heads=12,
-                 mlp_ratio=4,
-                 qkv_bias=False,
-                 qk_scale=None,
-                 drop_rate=0.,
-                 attn_drop_rate=0.,
-                 drop_path_rate=0.,
-                 norm_layer='nn.LayerNorm',
-                 epsilon=1e-5,
-                 mp_degree=1,
-                 gradient_checkpointing=False,
-                 **kwargs):
-        super().__init__()
-        self.class_num = class_num
-        self.return_embed = kwargs.get('return_embed', True)
-        self.num_features = self.embed_dim = embed_dim
-        _img_size = to_2tuple(img_size)
-        _patch_size = to_2tuple(patch_size)
+    def __init__(self, config: Blip2VisionConfig):
+        super().__init__(config)
+        self.class_num = config.class_num
+        self.num_features = self.embed_dim = config.embed_dim
+        _img_size = to_2tuple(config.img_size)
+        _patch_size = to_2tuple(config.patch_size)
         self.window_size = (_img_size[0] // _patch_size[0],
                             _img_size[1] // _patch_size[1])
         self.patch_embed = PatchEmbed(
-            img_size=img_size,
-            patch_size=patch_size,
-            in_chans=in_chans,
-            embed_dim=embed_dim)
+            img_size=config.img_size,
+            patch_size=config.patch_size,
+            in_chans=config.in_chans,
+            embed_dim=config.embed_dim)
         num_patches = self.patch_embed.num_patches
         self.cls_token = self.create_parameter(
-            shape=(1, 1, embed_dim), default_initializer=zeros_)
+            shape=(1, 1, config.embed_dim), default_initializer=zeros_)
 
         self.pos_embed = self.create_parameter(
-            shape=(1, num_patches + 1, embed_dim),
+            shape=(1, num_patches + 1, config.embed_dim),
             default_initializer=zeros_)
 
         self.add_parameter("pos_embed", self.pos_embed)
 
         self.add_parameter("cls_token", self.cls_token)
-        self.pos_drop = nn.Dropout(p=drop_rate)
-        self.gradient_checkpointing=gradient_checkpointing
+        self.pos_drop = nn.Dropout(p=config.drop_rate)
+        self.gradient_checkpointing=config.gradient_checkpointing
         logger.info("self.gradient_checkpointing:{}".format(self.gradient_checkpointing))
-        dpr = np.linspace(0, drop_path_rate, depth)
+        dpr = np.linspace(0, config.drop_path_rate, config.depth)
 
         self.blocks = nn.LayerList([
             Block(
-                dim=embed_dim,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                drop=drop_rate,
-                attn_drop=attn_drop_rate,
+                dim=config.embed_dim,
+                num_heads=config.num_heads,
+                mlp_ratio=config.mlp_ratio,
+                qkv_bias=config.qkv_bias,
+                qk_scale=config.qk_scale,
+                drop=config.drop_rate,
+                attn_drop=config.attn_drop_rate,
                 drop_path=dpr[i],
-                norm_layer=norm_layer,
-                epsilon=epsilon,
+                norm_layer=config.norm_layer,
+                epsilon=config.epsilon,
                 window_size=self.window_size,
-                mp_degree=mp_degree,
-                ) for i in range(depth)
+                mp_degree=config.mp_degree,
+                ) for i in range(config.depth)
 
         ])
 
         #self.norm = eval(norm_layer)(embed_dim, epsilon=epsilon)
-        self.mp_degree=mp_degree
+        self.mp_degree=config.mp_degree
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed)
         trunc_normal_(self.cls_token)
@@ -450,11 +435,10 @@ class VisionTransformer(nn.Layer):
         return x
 
 
-def interpolate_pos_embed(model, checkpoint_model):
+def interpolate_pos_embed(model, checkpoint_model=paddle.load("blip2_pretrained.pdparams")):
     if 'visual_encoder.pos_embed' in checkpoint_model:
         pos_embed_checkpoint =paddle.to_tensor(checkpoint_model['visual_encoder.pos_embed'])
         embedding_size = pos_embed_checkpoint.shape[-1]
-        print(dir(model))
         num_patches = model.visual_encoder.patch_embed.num_patches
         num_extra_tokens = model.visual_encoder.pos_embed.shape[-2] - num_patches
         # height (== width) for the checkpoint position embedding
@@ -473,20 +457,24 @@ def interpolate_pos_embed(model, checkpoint_model):
             pos_tokens = pos_tokens.transpose((0, 2, 3, 1)).flatten(1, 2)
             new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
             checkpoint_model['visual_encoder.pos_embed'] = new_pos_embed.numpy()
-
-
-def create_eva_vit_g(img_size=224,drop_path_rate=0.4,mp_degree=1,gradient_checkpointing=False):
-    model = VisionTransformer(
-        img_size=img_size,
-        patch_size=14,
-        embed_dim=1408,
-        depth=39,
-        num_heads=1408//88,
-        mlp_ratio=4.3637,
-        qkv_bias=True,
-        drop_rate=drop_path_rate,
-        epsilon=1e-6,
-        mp_degree=mp_degree,
-        gradient_checkpointing=gradient_checkpointing
-    )
-    return model
+    elif 'pos_embed' in checkpoint_model:
+        pos_embed_checkpoint =paddle.to_tensor(checkpoint_model['pos_embed'])
+        embedding_size = pos_embed_checkpoint.shape[-1]
+        num_patches = model.patch_embed.num_patches
+        num_extra_tokens = model.pos_embed.shape[-2] - num_patches
+        # height (== width) for the checkpoint position embedding
+        orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens) ** 0.5)
+        # height (== width) for the new position embedding
+        new_size = int(num_patches ** 0.5)
+        # class_token and dist_token are kept unchanged
+        if orig_size != new_size:
+            print("Position interpolate from %dx%d to %dx%d" % (orig_size, orig_size, new_size, new_size))
+            extra_tokens = pos_embed_checkpoint[:, :num_extra_tokens]
+            # only the position tokens are interpolated
+            pos_tokens = pos_embed_checkpoint[:, num_extra_tokens:]
+            pos_tokens = pos_tokens.reshape((-1, orig_size, orig_size, embedding_size)).transpose((0, 3, 1, 2))
+            pos_tokens = paddle.nn.functional.interpolate(
+                pos_tokens, size=(new_size, new_size), mode='bicubic', align_corners=False)
+            pos_tokens = pos_tokens.transpose((0, 2, 3, 1)).flatten(1, 2)
+            new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
+            checkpoint_model['pos_embed'] = new_pos_embed.numpy()

@@ -36,7 +36,7 @@ from paddlevlp.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlevlp.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
-from paddlevlp.examples.blip2.utils import BlipCollator,load_model,LLM_LIST
+from paddlevlp.examples.blip2.utils import BlipCollator
 
 @dataclass
 class DataArguments:
@@ -64,16 +64,13 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="Salesforce/blip2-opt-2.7b",
+        default="blip2-opt-2.7b",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
 
     text_model_name_or_path: str = field(
         default="facebook/opt-2.7b",
         metadata={"help": "The type of text model to use (OPT, T5)."},
-    )
-    image_size: int = field(
-        default=364, metadata={"help": " image size for evaluation."}
     )
 
 
@@ -82,13 +79,6 @@ class PreTrainingArguments(TrainingArguments):
     """
     Arguments pertaining to what training options we are going to use during pretraining.
     """
-
-    model_path: str = field(
-        default="https://bj.bcebos.com/v1/paddlenlp/models/community/Salesforce/blip2-opt-2.7b/blip2_pretrained.pdparams",
-        metadata={
-            "help": "The path to model that we will use for eval."
-        },
-    )
     weight_decay: float = field(
         default=0.05, metadata={"help": "Weight decay if we apply some."}
     )
@@ -134,36 +124,16 @@ class PreTrainingArguments(TrainingArguments):
     tensor_parallel_degree : int = field(default=1, metadata={"help": "Set the number of tensor model parallel"})
     sharding_parallel_degree : int = field(default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"})
     pipeline_parallel_degree : int = field(default=1, metadata={"help": "Enable pipeline parallel"})
-
-def get_text_config(text_model_name_or_path):
-    if "t5" in text_model_name_or_path:
-        text_config = T5Config.from_pretrained(text_model_name_or_path)
-    elif "opt" in text_model_name_or_path:
-        text_config = OPTConfig.from_pretrained(text_model_name_or_path)
-    else:
-        text_config = AutoConfig.from_pretrained(text_model_name_or_path)
-    return text_config
-
-
+    model_path: str = field(
+        default=None,
+        metadata={
+            "help": "The path to model if you want to load weights from the specified path"
+        },
+    )
 def create_model(config):
     # blip2_config = Blip2ForConditionalGeneration(onfig.model_name_or_path)
-    vision_config = Blip2VisionConfig.from_pretrained(config.model_name_or_path)
-    qformer_config = Blip2QFormerConfig.from_pretrained(config.model_name_or_path)
-    text_config = get_text_config(config.text_model_name_or_path)
-    # add tensor_parallel_degree
-    vision_config.image_size= config.image_size
-    vision_config.mp_degree=config.mp_degree
-    qformer_config.mp_degree=config.mp_degree
-    text_config.mp_degree=config.mp_degree
-    vision_config.gradient_checkpointing=config.gradient_checkpointing
-    qformer_config.gradient_checkpointing=config.gradient_checkpointing
-    text_config.gradient_checkpointing=config.gradient_checkpointing
-    blip2_config = Blip2Config.from_vision_qformer_text_configs(
-        vision_config, qformer_config, text_config
-    )
-
-    model = Blip2ForConditionalGeneration(blip2_config)
-    paddle.device.cuda.empty_cache()# post_init_func(self, init_func, *args, **kwargs)吃显存
+    model =  Blip2ForConditionalGeneration.from_pretrained(pretrained_model_name_or_path=config.model_name_or_path)
+    paddle.device.cuda.empty_cache()
     return model
 
 
@@ -220,8 +190,6 @@ def main():
     model = create_model(model_args)
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     # create trainer
-    load_model(training_args,model, ckpt_dir=model_args.model_path,load_language_model=False)
-    load_model(training_args,model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path],load_language_model=True)
     trainer = Trainer(
         model=model,
         args=training_args,

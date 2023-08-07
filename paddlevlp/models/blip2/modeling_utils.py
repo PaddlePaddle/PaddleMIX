@@ -130,3 +130,7 @@ class GatherLayer(paddle.autograd.PyLayer):
         all_gradients = paddle.stack(grads)
         paddle.distributed.all_reduce(all_gradients)
         return all_gradients[paddle.distributed.get_rank()]
+
+def masked_fill(x, mask, value):
+    y = paddle.full(x.shape, value, x.dtype)
+    return paddle.where(mask, y, x)

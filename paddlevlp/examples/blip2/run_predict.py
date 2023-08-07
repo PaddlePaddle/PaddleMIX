@@ -61,14 +61,8 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="Salesforce/blip2-opt-2.7b",
+        default="blip2-opt-2.7b",
         metadata={"help": "Path to pretrained model or model identifier"},
-    )
-    model_path: str = field(
-        default="https://bj.bcebos.com/v1/paddlenlp/models/community/Salesforce/blip2-opt-2.7b/blip2_pretrained.pdparams",
-        metadata={
-            "help": "The path to model that we will use for eval."
-        },
     )
 
     text_model_name_or_path: str = field(
@@ -129,28 +123,15 @@ class PreTrainingArguments(TrainingArguments):
     tensor_parallel_degree : int = field(default=1, metadata={"help": "Set the number of tensor model parallel"})
     sharding_parallel_degree : int = field(default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"})
     pipeline_parallel_degree : int = field(default=1, metadata={"help": "Enable pipeline parallel"})
-
-def get_text_config(text_model_name_or_path):
-    if "t5" in text_model_name_or_path:
-        text_config = T5Config.from_pretrained(text_model_name_or_path)
-    elif "opt" in text_model_name_or_path:
-        text_config = OPTConfig.from_pretrained(text_model_name_or_path)
-    else:
-        text_config = AutoConfig.from_pretrained(text_model_name_or_path)
-    return text_config
-
-
-def create_model(config):
-    vision_config = Blip2VisionConfig.from_pretrained(config.model_name_or_path)
-    qformer_config = Blip2QFormerConfig.from_pretrained(config.model_name_or_path)
-    text_config = get_text_config(config.text_model_name_or_path)
-    # add tensor_parallel_degree
-    vision_config.image_size= config.image_size
-    blip2_config = Blip2Config.from_vision_qformer_text_configs(
-        vision_config, qformer_config, text_config
+    model_path: str = field(
+        default=None,
+        metadata={
+            "help": "The path to model if you want to load weights from the specified path"
+        },
     )
 
-    model = Blip2ForConditionalGeneration(blip2_config)
+def create_model(config):
+    model =  Blip2ForConditionalGeneration.from_pretrained(pretrained_model_name_or_path=config.model_name_or_path)
     paddle.device.cuda.empty_cache()
     return model
 
@@ -180,9 +161,11 @@ def main():
         return_attention_mask=True,
         mode="test", )
     model = create_model(model_args)
-    load_model(training_args,model, ckpt_dir=model_args.model_path,load_language_model=False)
-    load_model(training_args,model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
     model.eval()
+    if training_args.model_path is not None:
+        checkpoint =training_args.model_path
+        load_model(training_args,model, ckpt_dir=checkpoint,load_language_model=False)
+        load_model(training_args,model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
     generated_ids, scores = model.generate(**inputs)
     generated_text = processor.batch_decode(
         generated_ids, skip_special_tokens=True)[0].strip()
