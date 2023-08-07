@@ -24,7 +24,8 @@ import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
-from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
+# from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
+quantile = paddle.quantile
 
 
 def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):

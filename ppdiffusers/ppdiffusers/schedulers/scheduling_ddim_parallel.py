@@ -26,7 +26,8 @@ from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import BaseOutput, randn_tensor
 from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin
 
-from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
+# from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
+quantile = paddle.quantile
 
 
 @dataclass

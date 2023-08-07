@@ -24,7 +24,8 @@ from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import randn_tensor
 from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
 
-from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
+# from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
+quantile = paddle.quantile
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar

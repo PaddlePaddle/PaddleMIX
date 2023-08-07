@@ -26,7 +26,8 @@ from ..utils import logging
 from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
-from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
+# from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
+quantile = paddle.quantile
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
