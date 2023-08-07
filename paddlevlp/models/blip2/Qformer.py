@@ -40,8 +40,6 @@ from paddlenlp.transformers.bert.configuration import BertConfig
 import numpy as np
 import paddle
 from paddle.distributed.fleet.utils import recompute
-import random
-
 
 class CrossEntropyLoss(nn.Layer):
     """
@@ -107,6 +105,7 @@ class BertEmbeddings(nn.Layer):
         self.position_embedding_type = getattr(
             config, "position_embedding_type", "absolute"
         )
+        self.mp_degree=config.mp_degree
 
     def forward(
         self,
@@ -136,7 +135,11 @@ class BertEmbeddings(nn.Layer):
         else:
             embeddings = query_embeds
         embeddings = self.LayerNorm(embeddings)
-        embeddings = self.dropout(embeddings)
+        if  self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                embeddings = self.dropout(embeddings)
+        else:
+            embeddings = self.dropout(embeddings)
         return embeddings
 
 
@@ -156,18 +159,18 @@ class BertSelfAttention(nn.Layer):
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
         if config.mp_degree>1:
-            self.query = fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,               weight_attr=None,
-                has_bias=False,
+            self.query = fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,weight_attr=None,
+                has_bias=True,
                 gather_output=True)
         else:
             self.query = nn.Linear(config.hidden_size, self.all_head_size)
         if is_cross_attention:
             if config.mp_degree>1:
                 self.key=fleet.meta_parallel.ColumnParallelLinear(config.encoder_width, self.all_head_size,weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
                 self.value=fleet.meta_parallel.ColumnParallelLinear(config.encoder_width, self.all_head_size,weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
             else:
                 self.key = nn.Linear(config.encoder_width, self.all_head_size)
@@ -175,15 +178,15 @@ class BertSelfAttention(nn.Layer):
         else:
             if config.mp_degree>1:
                 self.key=fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
                 self.value=fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, self.all_head_size,weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
             else:
                 self.key = nn.Linear(config.hidden_size, self.all_head_size)
                 self.value = nn.Linear(config.hidden_size, self.all_head_size)
-
+        self.mp_degree=config.mp_degree
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = getattr(
             config, "position_embedding_type", "absolute"
@@ -306,7 +309,11 @@ class BertSelfAttention(nn.Layer):
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
-        attention_probs_dropped = self.dropout(attention_probs)
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                attention_probs_dropped = self.dropout(attention_probs)
+        else:
+            attention_probs_dropped = self.dropout(attention_probs)
 
         # Mask heads if we want to
         if head_mask is not None:
@@ -332,10 +339,15 @@ class BertSelfOutput(nn.Layer):
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.mp_degree=config.mp_degree
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                hidden_states = self.dropout(hidden_states)
+        else:
+            hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
@@ -394,10 +406,15 @@ class BertOutput(nn.Layer):
         self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
+        self.mp_degree =config.mp_degree
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        hidden_states = self.dropout(hidden_states)
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                hidden_states = self.dropout(hidden_states)
+        else:
+            hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 

@@ -19,6 +19,7 @@ import paddle
 import paddle.nn.functional as F
 from paddle import nn
 
+from .activations import get_activation
 from ..utils import is_ppxformers_available
 from .resnet import Downsample1D, ResidualTemporalBlock1D, Upsample1D, rearrange_dims
 
@@ -62,14 +63,10 @@ class DownResnetBlock1D(nn.Layer):
 
         self.resnets = nn.LayerList(resnets)
 
-        if non_linearity == "swish":
-            self.nonlinearity = lambda x: F.silu(x)
-        elif non_linearity == "mish":
-            self.nonlinearity = nn.Mish()
-        elif non_linearity == "silu":
-            self.nonlinearity = nn.Silu()
-        else:
+        if non_linearity is None:
             self.nonlinearity = None
+        else:
+            self.nonlinearity = get_activation(non_linearity)
 
         self.downsample = None
         if add_downsample:
@@ -131,14 +128,10 @@ class UpResnetBlock1D(nn.Layer):
 
         self.resnets = nn.LayerList(resnets)
 
-        if non_linearity == "swish":
-            self.nonlinearity = lambda x: F.silu(x)
-        elif non_linearity == "mish":
-            self.nonlinearity = nn.Mish()
-        elif non_linearity == "silu":
-            self.nonlinearity = nn.Silu()
-        else:
+        if non_linearity is None:
             self.nonlinearity = None
+        else:
+            self.nonlinearity = get_activation(non_linearity)
 
         self.upsample = None
         if add_upsample:
@@ -213,14 +206,10 @@ class MidResTemporalBlock1D(nn.Layer):
 
         self.resnets = nn.LayerList(resnets)
 
-        if non_linearity == "swish":
-            self.nonlinearity = lambda x: F.silu(x)
-        elif non_linearity == "mish":
-            self.nonlinearity = nn.Mish()
-        elif non_linearity == "silu":
-            self.nonlinearity = nn.Silu()
-        else:
+        if non_linearity is None:
             self.nonlinearity = None
+        else:
+            self.nonlinearity = get_activation(non_linearity)
 
         self.upsample = None
         if add_upsample:
@@ -251,10 +240,7 @@ class OutConv1DBlock(nn.Layer):
         super().__init__()
         self.final_conv1d_1 = nn.Conv1D(embed_dim, embed_dim, 5, padding=2)
         self.final_conv1d_gn = nn.GroupNorm(num_groups_out, embed_dim)
-        if act_fn == "silu":
-            self.final_conv1d_act = nn.Silu()
-        if act_fn == "mish":
-            self.final_conv1d_act = nn.Mish()
+        self.final_conv1d_act = get_activation(act_fn)
         self.final_conv1d_2 = nn.Conv1D(embed_dim, out_channels, 1)
 
     def forward(self, hidden_states, temb=None):
@@ -268,11 +254,11 @@ class OutConv1DBlock(nn.Layer):
 
 
 class OutValueFunctionBlock(nn.Layer):
-    def __init__(self, fc_dim, embed_dim):
+    def __init__(self, fc_dim, embed_dim, act_fn="mish"):
         super().__init__()
         self.final_block = nn.LayerList([
             nn.Linear(fc_dim + embed_dim, fc_dim // 2),
-            nn.Mish(),
+            get_activation(act_fn),
             nn.Linear(fc_dim // 2, 1),
         ])
 
@@ -327,7 +313,8 @@ class Downsample1d(nn.Layer):
             ],
             dtype=hidden_states.dtype)
         indices = paddle.arange(hidden_states.shape[1])
-        weight[indices, indices] = self.kernel.cast(weight.dtype)
+        weight[indices, indices] = self.kernel.cast(weight.dtype).expand(
+            [hidden_states.shape[1], -1])
         return F.conv1d(hidden_states, weight, stride=2)
 
 
@@ -350,7 +337,8 @@ class Upsample1d(nn.Layer):
             ],
             dtype=hidden_states.dtype)
         indices = paddle.arange(hidden_states.shape[1])
-        weight[indices, indices] = self.kernel.cast(weight.dtype)
+        weight[indices, indices] = self.kernel.cast(weight.dtype).expand(
+            [hidden_states.shape[1], -1])
         return F.conv1d_transpose(
             hidden_states, weight, stride=2, padding=self.pad * 2 + 1)
 
@@ -401,11 +389,11 @@ class SelfAttention1d(nn.Layer):
             else:
                 try:
                     _ = F.scaled_dot_product_attention_(
-                        paddle.randn(
+                        paddle.ones(
                             (1, 1, 2, 40), dtype=paddle.float16),
-                        paddle.randn(
+                        paddle.ones(
                             (1, 1, 2, 40), dtype=paddle.float16),
-                        paddle.randn(
+                        paddle.ones(
                             (1, 1, 2, 40), dtype=paddle.float16),
                         attention_op=attention_op, )
                 except Exception as e:
@@ -769,5 +757,5 @@ def get_out_block(*, out_block_type, num_groups_out, embed_dim, out_channels,
     if out_block_type == "OutConv1DBlock":
         return OutConv1DBlock(num_groups_out, out_channels, embed_dim, act_fn)
     elif out_block_type == "ValueFunction":
-        return OutValueFunctionBlock(fc_dim, embed_dim)
+        return OutValueFunctionBlock(fc_dim, embed_dim, act_fn)
     return None

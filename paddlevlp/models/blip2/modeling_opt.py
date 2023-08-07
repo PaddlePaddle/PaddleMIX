@@ -28,7 +28,7 @@ from paddle.distributed import fleet
 from paddle.fluid import layers
 from paddle.nn import Layer
 from paddle.nn.layer.transformer import _convert_param_attr_to_list
-
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddlenlp.transformers.conversion_utils import StateDictNameMapping
 from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
 from paddlenlp.utils.log import logger
@@ -117,6 +117,7 @@ class MultiHeadAttention(nn.Layer):
         self.dropout = config.attention_probs_dropout_prob
         self.need_weights = need_weights
         self.fuse_attention_qkv = config.fuse_attention_qkv
+        self.mp_degree=config.mp_degree
 
         assert (
             self.head_dim * self.num_heads * config.mp_degree == config.hidden_size
@@ -268,7 +269,11 @@ class MultiHeadAttention(nn.Layer):
 
         weights = F.softmax(product)
         if self.dropout:
-            weights = F.dropout(weights, self.dropout, training=self.training, mode="upscale_in_train")
+            if self.mp_degree>1:
+                with get_rng_state_tracker().rng_state("local_seed"):
+                    weights = F.dropout(weights, self.dropout, training=self.training, mode="upscale_in_train")
+            else:
+                weights = F.dropout(weights, self.dropout, training=self.training, mode="upscale_in_train")
 
         out = tensor.matmul(weights, v)
 
@@ -324,19 +329,27 @@ class TransformerDecoderLayer(nn.Layer):
             self.linear1 = fleet.meta_parallel.ColumnParallelLinear(
                 d_model,
                 dim_feedforward,
-                gather_output=False,
-                has_bias=False,
-            )
+                has_bias=True,
+                gather_output=True)
+
         else:
             self.linear1 = nn.Linear(d_model, dim_feedforward, weight_attrs[2], bias_attr=bias_attrs[2])
 
         if config.mp_degree > 1:
-            self.linear2 = fleet.meta_parallel.RowParallelLinear(
+            self.linear2 = fleet.meta_parallel.ColumnParallelLinear(
                 dim_feedforward,
                 d_model,
-                input_is_parallel=True,
-                has_bias=False,
-            )
+                has_bias=True,
+                gather_output=True)
+
+            """
+            self.linear2 = fleet.meta_parallel.RowParallelLinear(
+                    dim_feedforward,
+                    d_model,
+                    input_is_parallel=True,
+                    has_bias=False,
+                )
+            """
         else:
             self.linear2 = nn.Linear(dim_feedforward, d_model, weight_attrs[2], bias_attr=bias_attrs[2])
 
@@ -349,6 +362,7 @@ class TransformerDecoderLayer(nn.Layer):
             self.activation = nn.GELU(approximate=True)
         else:
             self.activation = getattr(F, activation)
+        self.mp_degree=config.mp_degree
 
     def forward(self, tgt, memory, tgt_mask=None, use_cache=False, cache=None, output_attentions=False):
         residual = tgt
@@ -361,14 +375,22 @@ class TransformerDecoderLayer(nn.Layer):
             tgt, attn_weights = self.self_attn(tgt, tgt, tgt, tgt_mask, use_cache, cache)
         else:
             tgt, attn_weights, incremental_cache = self.self_attn(tgt, tgt, tgt, tgt_mask, use_cache, cache)
-        tgt = residual + self.dropout1(tgt)
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                tgt = residual + self.dropout1(tgt)
+        else:
+            tgt = residual + self.dropout1(tgt)
         if not self.normalize_before:
             tgt = self.norm1(tgt)
 
         residual = tgt
         if self.normalize_before:
             tgt = self.norm2(tgt)
-        tgt = self.dropout2(self.linear2(self.activation(self.linear1(tgt))))
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                tgt = self.dropout2(self.linear2(self.activation(self.linear1(tgt))))
+        else:
+            tgt = self.dropout2(self.linear2(self.activation(self.linear1(tgt))))
         tgt = residual + tgt
 
         if not self.normalize_before:
@@ -576,7 +598,7 @@ class OPTEmbeddings(Layer):
             embedding_dim=config.hidden_size,
             initializer_range=config.initializer_range,
         )
-
+        self.mp_degree=config.mp_degree
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
     def forward(self, input_ids=None, attention_mask=None, input_embeddings=None, past_key_values_length=None):
@@ -589,7 +611,11 @@ class OPTEmbeddings(Layer):
         position_embeddings = self.position_embeddings(attention_mask, past_key_values_length)
 
         embeddings = input_embeddings + position_embeddings
-        embeddings = self.dropout(embeddings)
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                embeddings = self.dropout(embeddings)
+        else:
+            embeddings = self.dropout(embeddings)
         return embeddings
 
 
@@ -985,7 +1011,7 @@ class OPTForCausalLM(OPTPretrainedModel):
         self.lm_head = OPTLMHead(
             hidden_size=self.opt.config.hidden_size,
             vocab_size=self.opt.config.vocab_size,
-            embedding_weights=self.opt.embeddings.word_embeddings.weight,
+            # embedding_weights=self.opt.embeddings.word_embeddings.weight,
         )
 
     def forward(

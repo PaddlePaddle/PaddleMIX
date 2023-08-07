@@ -1,7 +1,6 @@
 import paddle
 import numbers
 import random
-import warnings
 from . import _functional_video as F
 
 

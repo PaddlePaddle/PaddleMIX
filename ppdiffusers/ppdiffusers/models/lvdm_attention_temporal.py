@@ -9,7 +9,6 @@ except:
     _ppxformers_available = False
 
 import math
-from typing import Optional, Any
 from einops import rearrange, repeat
 from .lvdm_util import GEGLU, exists, default, Normalize, zero_module, normalization, conv_nd
 from ..utils.initializer_utils import xavier_uniform_, constant_
@@ -189,9 +188,6 @@ class CrossAttention(paddle.nn.Layer):
 
 
 class MemoryEfficientCrossAttention(paddle.nn.Layer):
-    """https://github.com/MatthieuTPHR/diffusers/blob/d80b531ff8060ec1ea982b65a1b8df70f73aa67c/src/diffusers/models/attention.py#L223
-    """
-
     def __init__(self,
                  query_dim,
                  context_dim=None,

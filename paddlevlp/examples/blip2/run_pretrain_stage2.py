@@ -14,21 +14,17 @@
 
 import sys
 import os
-sys.path.insert(
-    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
 import paddle.distributed as dist
 from paddle.distributed import fleet
-import os
 from dataclasses import dataclass, field
 import numpy as np
 import random
 import paddle
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-from sklearn.utils import compute_sample_weight
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
 from paddlenlp.transformers import AutoConfig, OPTConfig, T5Config
-import paddlevlp
 from paddlevlp.datasets import load_dataset
 from paddlevlp.models.blip2.configuration import (
     Blip2Config, Blip2QFormerConfig, Blip2VisionConfig)
@@ -38,10 +34,8 @@ from paddlevlp.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlevlp.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
-from paddlevlp.processors.blip_processing import BlipImageProcessor, BlipTextProcessor
-from paddlevlp.examples.blip2.utils import BlipCollator
-from paddlevlp.examples.blip2.utils import load_pretrained_model, LLM_LIST
-
+from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
+from paddlevlp.examples.blip2.utils import BlipCollator,LLM_LIST,load_model
 
 @dataclass
 class DataArguments:
@@ -187,7 +181,6 @@ def create_model(config):
     )  # post_init_func(self, init_func, *args, **kwargs)吃显存
     return model
 
-
 def main():
     parser = PdArgumentParser(
         (ModelArguments, DataArguments, PreTrainingArguments))
@@ -221,20 +214,14 @@ def main():
             )
 
     # create dataset
-    tokenizer_class = AutoTokenizer.from_pretrained(
-        "facebook/opt-2.7b", use_fast=False)
-    image_processor = BlipImageProcessor.from_pretrained(
-        "paddlevlp/models/blip2/model_cfg/BlipImageProcessor_stage2.json")
-    text_processor_class = BlipTextProcessor.from_pretrained(
-        "paddlevlp/models/blip2/model_cfg/BlipTextProcessor_stage2.json")
-    processor = Blip2Processor(image_processor, text_processor_class,
-                               tokenizer_class)
-    image_processor_eval = BlipImageProcessor.from_pretrained(
-        "paddlevlp/models/blip2/model_cfg/BlipImageEvalProcessor_stage2.json")
-    text_processor_class_eval = BlipTextProcessor.from_pretrained(
-        "paddlevlp/models/blip2/model_cfg/BlipTextEvalProcessor_stage2.json")
-    eval_processor = Blip2Processor(image_processor_eval,
-                                    text_processor_class_eval, tokenizer_class)
+
+    tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path, use_fast=False)
+    image_processor = BlipImageProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipImageProcessor_stage2.json")
+    text_processor_class = BlipTextProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipTextProcessor_stage2.json")
+    processor = Blip2Processor(image_processor,text_processor_class,tokenizer_class)
+    image_processor_eval = BlipImageProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipImageEvalProcessor_stage2.json")
+    text_processor_class_eval = BlipTextProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipTextEvalProcessor_stage2.json")
+    eval_processor = Blip2Processor(image_processor_eval,text_processor_class_eval,tokenizer_class)
 
     train_dataset = load_dataset(data_args.task_name, splits="train")
     eval_dataset = {"test": load_dataset(data_args.task_name, splits="test")}
@@ -244,11 +231,11 @@ def main():
     model_args.mp_degree = training_args.tensor_parallel_degree
     model_args.gradient_checkpointing = training_args.gradient_checkpointing
     model = create_model(model_args)
-    logger.info("training_args.use_hybrid_parallel:{}".format(
-        training_args.use_hybrid_parallel))
+
+    logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     # create trainer
-    load_pretrained_model(model.language_model, LLM_LIST[model_args.llm_name])
-    load_pretrained_model(model, training_args.pretrained_model_path)
+    load_model(training_args,model, ckpt_dir="blip2_pretrained.pdparams", load_language_model=False)
+    load_model(training_args,model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -287,9 +274,9 @@ def setdistenv(args):
         strategy.tensor_parallel = True
     args.data_parallel_degree = args.dp_degree
     logger.info("args.dp_degree:{}".format(args.dp_degree))
-    logger.info("args.sharding_parallel_degree):{}".format(
-        args.sharding_parallel_degree))
-    # breakpoint()
+    logger.info("args.sharding_parallel_degree):{}".format(args.sharding_parallel_degree))
+    if args.sharding_parallel_degree>1:
+        args.sharding="stage1"
     strategy.hybrid_configs = {
         "dp_degree": args.dp_degree,
         "mp_degree": args.tensor_parallel_degree,

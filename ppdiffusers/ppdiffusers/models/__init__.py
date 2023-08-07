@@ -21,6 +21,8 @@ from ..utils.import_utils import (
 
 if is_paddle_available():
     from .adapter import MultiAdapter, T2IAdapter
+    from .autoencoder_asym_kl import AsymmetricAutoencoderKL
+    from .adapter import MultiAdapter, T2IAdapter
     from .autoencoder_kl import AutoencoderKL
     from .controlnet import ControlNetModel
     from .dual_transformer_2d import DualTransformer2DModel

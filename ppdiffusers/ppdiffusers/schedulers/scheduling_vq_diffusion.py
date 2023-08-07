@@ -223,8 +223,7 @@ class VQDiffusionScheduler(SchedulerMixin, ConfigMixin):
             model_output: paddle.Tensor,
             timestep: paddle.Tensor,
             sample: paddle.Tensor,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
+            generator: Optional[paddle.Generator]=None,
             return_dict: bool=True, ) -> Union[VQDiffusionSchedulerOutput,
                                                Tuple]:
         """

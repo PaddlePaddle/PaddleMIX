@@ -30,7 +30,7 @@ def get_down_block(
         add_downsample,
         resnet_eps,
         resnet_act_fn,
-        attn_num_head_channels,
+        num_attention_heads,
         resnet_groups=None,
         cross_attention_dim=None,
         downsample_padding=None,
@@ -66,7 +66,7 @@ def get_down_block(
             resnet_groups=resnet_groups,
             downsample_padding=downsample_padding,
             cross_attention_dim=cross_attention_dim,
-            attn_num_head_channels=attn_num_head_channels,
+            num_attention_heads=num_attention_heads,
             dual_cross_attention=dual_cross_attention,
             use_linear_projection=use_linear_projection,
             only_cross_attention=only_cross_attention,
@@ -85,7 +85,7 @@ def get_up_block(
         add_upsample,
         resnet_eps,
         resnet_act_fn,
-        attn_num_head_channels,
+        num_attention_heads,
         resnet_groups=None,
         cross_attention_dim=None,
         dual_cross_attention=False,
@@ -120,7 +120,7 @@ def get_up_block(
             resnet_act_fn=resnet_act_fn,
             resnet_groups=resnet_groups,
             cross_attention_dim=cross_attention_dim,
-            attn_num_head_channels=attn_num_head_channels,
+            num_attention_heads=num_attention_heads,
             dual_cross_attention=dual_cross_attention,
             use_linear_projection=use_linear_projection,
             only_cross_attention=only_cross_attention,
@@ -141,7 +141,7 @@ class UNetMidBlock3DCrossAttn(nn.Layer):
             resnet_act_fn: str="swish",
             resnet_groups: int=32,
             resnet_pre_norm: bool=True,
-            attn_num_head_channels=1,
+            num_attention_heads=1,
             output_scale_factor=1.0,
             cross_attention_dim=1280,
             dual_cross_attention=False,
@@ -149,7 +149,7 @@ class UNetMidBlock3DCrossAttn(nn.Layer):
             upcast_attention=False, ):
         super().__init__()
         self.has_cross_attention = True
-        self.attn_num_head_channels = attn_num_head_channels
+        self.num_attention_heads = num_attention_heads
         resnet_groups = resnet_groups if resnet_groups is not None else min(
             in_channels // 4, 32)
         # there is always at least one resnet
@@ -177,8 +177,8 @@ class UNetMidBlock3DCrossAttn(nn.Layer):
         for _ in range(num_layers):
             attentions.append(
                 Transformer2DModel(
-                    in_channels // attn_num_head_channels,
-                    attn_num_head_channels,
+                    in_channels // num_attention_heads,
+                    num_attention_heads,
                     in_channels=in_channels,
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
@@ -187,8 +187,8 @@ class UNetMidBlock3DCrossAttn(nn.Layer):
                     upcast_attention=upcast_attention, ))
             temp_attentions.append(
                 TransformerTemporalModel(
-                    in_channels // attn_num_head_channels,
-                    attn_num_head_channels,
+                    in_channels // num_attention_heads,
+                    num_attention_heads,
                     in_channels=in_channels,
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
@@ -231,11 +231,13 @@ class UNetMidBlock3DCrossAttn(nn.Layer):
             hidden_states = attn(
                 hidden_states,
                 encoder_hidden_states=encoder_hidden_states,
-                cross_attention_kwargs=cross_attention_kwargs, ).sample
+                cross_attention_kwargs=cross_attention_kwargs,
+                return_dict=False, )[0]
             hidden_states = temp_attn(
                 hidden_states,
                 num_frames=num_frames,
-                cross_attention_kwargs=cross_attention_kwargs).sample
+                cross_attention_kwargs=cross_attention_kwargs,
+                return_dict=False)[0]
             hidden_states = resnet(hidden_states, temb)
             hidden_states = temp_conv(hidden_states, num_frames=num_frames)
         return hidden_states
@@ -254,7 +256,7 @@ class CrossAttnDownBlock3D(nn.Layer):
             resnet_act_fn: str="swish",
             resnet_groups: int=32,
             resnet_pre_norm: bool=True,
-            attn_num_head_channels=1,
+            num_attention_heads=1,
             cross_attention_dim=1280,
             output_scale_factor=1.0,
             downsample_padding=1,
@@ -269,7 +271,7 @@ class CrossAttnDownBlock3D(nn.Layer):
         temp_attentions = []
         temp_convs = []
         self.has_cross_attention = True
-        self.attn_num_head_channels = attn_num_head_channels
+        self.num_attention_heads = num_attention_heads
         for i in range(num_layers):
             in_channels = in_channels if i == 0 else out_channels
             resnets.append(
@@ -291,8 +293,8 @@ class CrossAttnDownBlock3D(nn.Layer):
                     dropout=0.1, ))
             attentions.append(
                 Transformer2DModel(
-                    out_channels // attn_num_head_channels,
-                    attn_num_head_channels,
+                    out_channels // num_attention_heads,
+                    num_attention_heads,
                     in_channels=out_channels,
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
@@ -302,8 +304,8 @@ class CrossAttnDownBlock3D(nn.Layer):
                     upcast_attention=upcast_attention, ))
             temp_attentions.append(
                 TransformerTemporalModel(
-                    out_channels // attn_num_head_channels,
-                    attn_num_head_channels,
+                    out_channels // num_attention_heads,
+                    num_attention_heads,
                     in_channels=out_channels,
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
@@ -333,6 +335,7 @@ class CrossAttnDownBlock3D(nn.Layer):
             attention_mask=None,
             num_frames=1,
             cross_attention_kwargs=None, ):
+        # TODO(Patrick, William) - attention mask is not used
         output_states = ()
         for resnet, temp_conv, attn, temp_attn in zip(
                 self.resnets, self.temp_convs, self.attentions,
@@ -342,11 +345,13 @@ class CrossAttnDownBlock3D(nn.Layer):
             hidden_states = attn(
                 hidden_states,
                 encoder_hidden_states=encoder_hidden_states,
-                cross_attention_kwargs=cross_attention_kwargs, ).sample
+                cross_attention_kwargs=cross_attention_kwargs,
+                return_dict=False, )[0]
             hidden_states = temp_attn(
                 hidden_states,
                 num_frames=num_frames,
-                cross_attention_kwargs=cross_attention_kwargs).sample
+                cross_attention_kwargs=cross_attention_kwargs,
+                return_dict=False, )[0]
             output_states += (hidden_states, )
         if self.downsamplers is not None:
             for downsampler in self.downsamplers:
@@ -435,7 +440,7 @@ class CrossAttnUpBlock3D(nn.Layer):
             resnet_act_fn: str="swish",
             resnet_groups: int=32,
             resnet_pre_norm: bool=True,
-            attn_num_head_channels=1,
+            num_attention_heads=1,
             cross_attention_dim=1280,
             output_scale_factor=1.0,
             add_upsample=True,
@@ -449,7 +454,7 @@ class CrossAttnUpBlock3D(nn.Layer):
         attentions = []
         temp_attentions = []
         self.has_cross_attention = True
-        self.attn_num_head_channels = attn_num_head_channels
+        self.num_attention_heads = num_attention_heads
         for i in range(num_layers):
             res_skip_channels = in_channels if (
                 i == num_layers - 1) else out_channels
@@ -473,8 +478,8 @@ class CrossAttnUpBlock3D(nn.Layer):
                     dropout=0.1, ))
             attentions.append(
                 Transformer2DModel(
-                    out_channels // attn_num_head_channels,
-                    attn_num_head_channels,
+                    out_channels // num_attention_heads,
+                    num_attention_heads,
                     in_channels=out_channels,
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
@@ -484,8 +489,8 @@ class CrossAttnUpBlock3D(nn.Layer):
                     upcast_attention=upcast_attention, ))
             temp_attentions.append(
                 TransformerTemporalModel(
-                    out_channels // attn_num_head_channels,
-                    attn_num_head_channels,
+                    out_channels // num_attention_heads,
+                    num_attention_heads,
                     in_channels=out_channels,
                     num_layers=1,
                     cross_attention_dim=cross_attention_dim,
@@ -513,6 +518,7 @@ class CrossAttnUpBlock3D(nn.Layer):
             attention_mask=None,
             num_frames=1,
             cross_attention_kwargs=None, ):
+        # TODO(Patrick, William) - attention mask is not used
         for resnet, temp_conv, attn, temp_attn in zip(
                 self.resnets, self.temp_convs, self.attentions,
                 self.temp_attentions):
@@ -526,11 +532,13 @@ class CrossAttnUpBlock3D(nn.Layer):
             hidden_states = attn(
                 hidden_states,
                 encoder_hidden_states=encoder_hidden_states,
-                cross_attention_kwargs=cross_attention_kwargs, ).sample
+                cross_attention_kwargs=cross_attention_kwargs,
+                return_dict=False, )[0]
             hidden_states = temp_attn(
                 hidden_states,
                 num_frames=num_frames,
-                cross_attention_kwargs=cross_attention_kwargs).sample
+                cross_attention_kwargs=cross_attention_kwargs,
+                return_dict=False, )[0]
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:
                 hidden_states = upsampler(hidden_states, upsample_size)

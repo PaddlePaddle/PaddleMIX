@@ -15,13 +15,12 @@
 # Code was based on https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 # reference: https://arxiv.org/abs/2010.11929
 from paddlevlp.utils.log import logger
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 import numpy as np
 import paddle
 import paddle.nn as nn
-import sys
 from paddle.nn.initializer import TruncatedNormal, Constant, Normal
 from paddle.distributed import fleet
 
@@ -75,23 +74,27 @@ class Mlp(nn.Layer):
         hidden_features = hidden_features or in_features
         if mp_degree>1:
             self.fc1 = fleet.meta_parallel.ColumnParallelLinear(in_features, hidden_features,                weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
             self.fc2 = fleet.meta_parallel.ColumnParallelLinear(hidden_features, out_features,                weight_attr=None,
-            has_bias=False,
+            has_bias=True,
             gather_output=True)
         else:
             self.fc1 = nn.Linear(in_features, hidden_features)
             self.fc2 = nn.Linear(hidden_features, out_features)
+        self.mp_degree = mp_degree
         self.act = act_layer()
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
         x = self.fc1(x)
         x = self.act(x)
-        x = self.drop(x)
         x = self.fc2(x)
-        x = self.drop(x)
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+               x = self.drop(x)
+        else:
+            x = self.drop(x)
         return x
 
 
@@ -112,17 +115,18 @@ class Attention(nn.Layer):
         if mp_degree>1:
             self.qkv = fleet.meta_parallel.ColumnParallelLinear(dim, dim * 3,
                     weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
         else:
             self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         if mp_degree>1:
             self.proj = fleet.meta_parallel.ColumnParallelLinear(dim, dim,                weight_attr=None,
-                    has_bias=False,
+                    has_bias=True,
                     gather_output=True)
         else:
             self.proj = nn.Linear(dim, dim)
+        self.mp_degree=mp_degree
         self.proj_drop = nn.Dropout(proj_drop)
 
     def _register_relative_position_index(
@@ -178,11 +182,19 @@ class Attention(nn.Layer):
             attn = attn + relative_position_bias.unsqueeze(0)
 
         attn = nn.functional.softmax(attn, axis=-1)
-        attn = self.attn_drop(attn)
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                attn = self.attn_drop(attn)
+        else:
+            attn = self.attn_drop(attn)
 
         x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
         x = self.proj(x)
-        x = self.proj_drop(x)
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                x = self.proj_drop(x)
+        else:
+            x = self.proj_drop(x)
         return x
 
 
@@ -239,7 +251,7 @@ class Block(nn.Layer):
 
     def forward(self, x, rel_pos_bias=None):
         if self.gamma_1 is not None:
-            x = x + self.drop_path(self.gamma_1 * self.attn(# 为什么不加seed
+            x = x + self.drop_path(self.gamma_1 * self.attn(
                 self.norm1(x), rel_pos_bias=rel_pos_bias))
             x = x + self.drop_path(self.gamma_2 * self.mlp(self.norm2(x)))
         else:
@@ -393,7 +405,7 @@ class VisionTransformer(nn.Layer):
         ])
 
         #self.norm = eval(norm_layer)(embed_dim, epsilon=epsilon)
-
+        self.mp_degree=mp_degree
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed)
         trunc_normal_(self.cls_token)
@@ -417,7 +429,11 @@ class VisionTransformer(nn.Layer):
 
         if self.pos_embed is not None:
             x = x + self.pos_embed
-        x = self.pos_drop(x)
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                x = self.pos_drop(x)
+        else:
+            x = self.pos_drop(x)
         rel_pos_bias = self.rel_pos_bias() if hasattr(self,
                                                       'rel_pos_bias') else None
         for blk in self.blocks:

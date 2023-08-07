@@ -19,7 +19,6 @@ import paddle
 from lvdm import (
     LatentVideoDiffusion,
     LatentVideoDiffusionTrainer,
-    VideoFrameDataset,
     WebVidDataset, )
 from lvdm.lvdm_args_text2video import WebVidDatasetArguments, TrainerArguments, ModelArguments
 
