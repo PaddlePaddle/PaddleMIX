@@ -144,9 +144,6 @@ class PreTrainingArguments(TrainingArguments):
     per_device_eval_batch_size : int = field(
         default=128, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
     )
-    warmup_start_lr : float = field(
-        default=1e-6, metadata={"help": " The initial learning rate of blip2."}
-    )
     output_dir : str = field(
         default=".", metadata={"help": "The output path"}
     )

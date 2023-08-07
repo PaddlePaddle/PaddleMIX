@@ -81,7 +81,7 @@ class Blip2Qformer(Blip2PretrainedModel):
 
         image = pixel_values
         image_embeds = self.ln_vision(self.visual_encoder(image))
-        # breakpoint()
+
         image_atts = paddle.ones(image_embeds.shape[:-1], dtype="int64")
         query_tokens = self.query_tokens.expand(shape=[image_embeds.shape[0], -1, -1])
 

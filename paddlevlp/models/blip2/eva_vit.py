@@ -82,6 +82,7 @@ class Mlp(nn.Layer):
         else:
             self.fc1 = nn.Linear(in_features, hidden_features)
             self.fc2 = nn.Linear(hidden_features, out_features)
+        self.mp_degree = mp_degree
         self.act = act_layer()
         self.drop = nn.Dropout(drop)
 
@@ -89,7 +90,10 @@ class Mlp(nn.Layer):
         x = self.fc1(x)
         x = self.act(x)
         x = self.fc2(x)
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+               x = self.drop(x)
+        else:
             x = self.drop(x)
         return x
 
@@ -122,6 +126,7 @@ class Attention(nn.Layer):
                     gather_output=True)
         else:
             self.proj = nn.Linear(dim, dim)
+        self.mp_degree=mp_degree
         self.proj_drop = nn.Dropout(proj_drop)
 
     def _register_relative_position_index(
@@ -177,12 +182,18 @@ class Attention(nn.Layer):
             attn = attn + relative_position_bias.unsqueeze(0)
 
         attn = nn.functional.softmax(attn, axis=-1)
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                attn = self.attn_drop(attn)
+        else:
             attn = self.attn_drop(attn)
 
         x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
         x = self.proj(x)
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                x = self.proj_drop(x)
+        else:
             x = self.proj_drop(x)
         return x
 
@@ -394,7 +405,7 @@ class VisionTransformer(nn.Layer):
         ])
 
         #self.norm = eval(norm_layer)(embed_dim, epsilon=epsilon)
-
+        self.mp_degree=mp_degree
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed)
         trunc_normal_(self.cls_token)
@@ -418,7 +429,10 @@ class VisionTransformer(nn.Layer):
 
         if self.pos_embed is not None:
             x = x + self.pos_embed
-        with get_rng_state_tracker().rng_state("global_seed"):
+        if self.mp_degree>1:
+            with get_rng_state_tracker().rng_state("global_seed"):
+                x = self.pos_drop(x)
+        else:
             x = self.pos_drop(x)
         rel_pos_bias = self.rel_pos_bias() if hasattr(self,
                                                       'rel_pos_bias') else None
