@@ -17,6 +17,8 @@ from paddlevlp.models.evaclip.eva_clip.optim import create_optimizer
 from paddlevlp.models.evaclip.utils.checkpoint import save, load_model
 from paddlevlp.optimization import CosineDecayWithWarmup
 from paddlevlp.datasets import load_dataset
+from paddlevlp.datasets.laion_clip import LaionCLIP
+from paddlevlp.models.evaclip.eva_clip.data_src.data import LaionDataset
 from paddlevlp.utils.env import setdistenv
 from paddlevlp.trainer import CLIPTrainer
 
@@ -28,6 +30,7 @@ import time
 import random
 
 from paddlevlp.processors.clip_processing import CLIPProcessor
+from paddlevlp.processors import SimpleTokenizer, tokenize
 
 
 @dataclass
@@ -49,6 +52,16 @@ class DataArguments:
         default=224,
         metadata={"help": "image size for training"}, )
 
+    train_data: str = field(
+        default="",
+        metadata={"help": "The traindata list path."}, )
+
+    precomputed_text_emb: str = field(
+        default="open_clip_vit_g_14",
+        metadata={"help": "precomputed_text_emb name."}, )
+
+ 
+
 
 @dataclass
 class ModelArguments:
@@ -57,7 +70,7 @@ class ModelArguments:
     """
 
     model: str = field(
-        default="EVA02-CLIP-B-16",
+        default="EVA/EVA02-CLIP-B-16",
         metadata={
             "help":
             "model name to create, for example [EVA02-CLIP-B-16/coca_EVA02-B-16]"
@@ -119,6 +132,9 @@ class PreTrainingArguments(TrainingArguments):
     gather_with_grad: bool = field(
         default=False,
         metadata={"help": "Whether to use gather_with_grad in loss."}, )
+    local_loss: bool = field(
+        default=False,
+        metadata={"help": "Whether to use local loss in loss."}, )
 
 
 class SelfTrainer(CLIPTrainer):
@@ -160,9 +176,11 @@ class Collator:
     def __call__(self, data_list):
         images = [sample["image"] for sample in data_list]
         text = [sample["text"] for sample in data_list]
+        text_emb = [sample["text_emb"] for sample in data_list]
         batch = self.processor(
             images=images,
             text=text,
+            text_emb=text_emb,
             max_length=77,
             return_tensors="pd",
             return_attention_mask=False,
@@ -173,22 +191,28 @@ class Collator:
 def main_worker(training_args, model_args, data_args):
     if model_args.model.startswith("coca"):
         model = CoCa.from_pretrained(
-            "EVA/" + model_args.model,
+            model_args.model,
+            local_loss=training_args.local_loss,
+            gather_with_grad=training_args.gather_with_grad,
             data_world_rank=training_args.data_world_rank,
             data_world_size=training_args.data_world_size,
             ignore_mismatched_sizes=True)
     else:
         model = EVACLIP.from_pretrained(
-            "EVA/" + model_args.model,
+            model_args.model,
+            ignore_mismatched_sizes=True,
+            local_loss=training_args.local_loss,
             gather_with_grad=training_args.gather_with_grad,
             data_world_rank=training_args.data_world_rank,
             data_world_size=training_args.data_world_size)
 
+    training_args.model = model_args.model
     if training_args.pretrained_model_path and training_args.pretrained_model_path != "None" and training_args.resume_from_checkpoint is None:
         load_model(
             training_args, model, ckpt_dir=training_args.pretrained_model_path)
 
-    train_dataset = load_dataset('coco_clip', splits="train")
+    # train_dataset = load_dataset('laion_clip', splits="train")
+    train_dataset = LaionDataset(data_args.train_data, get_text_emb=data_args.precomputed_text_emb, data_world_rank=training_args.data_world_rank, data_world_size=training_args.data_world_size)
 
     processor = CLIPProcessor.from_pretrained(model_args.model_name_or_path)
     collator = Collator(processor)
@@ -198,6 +222,7 @@ def main_worker(training_args, model_args, data_args):
         args=training_args,
         train_dataset=train_dataset,
         data_collator=collator, )
+
 
     # Training
     checkpoint = None
@@ -214,15 +239,14 @@ if __name__ == "__main__":
     parser = PdArgumentParser(
         (ModelArguments, DataArguments, PreTrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
-    # paddle.set_flags({'FLAGS_cudnn_deterministic': True})
-    # paddle.set_flags({'FLAGS_embedding_deterministic': 1})
     training_args.hostname = socket.gethostname()
-    if training_args.accum_freq > 1:
-        training_args.gradient_accumulation_steps = training_args.accum_freq
     pprint.pprint(data_args)
     pprint.pprint(model_args)
     pprint.pprint(training_args)
-
+    if training_args.accum_freq > 1:
+        # training_args.per_device_train_batch_size *= training_args.accum_freq
+        training_args.gradient_accumulation_steps = training_args.accum_freq
+    
     setdistenv(training_args)
     model_args.data_world_rank = training_args.data_world_rank
     model_args.data_world_size = training_args.data_world_size

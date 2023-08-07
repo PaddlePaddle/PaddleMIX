@@ -133,7 +133,7 @@ def get_assigner(args, model):
                  for i in range(visual_num_layers + 2)))
     else:
         assigner_visual = None
-    if text_ld < 1.0:
+    if text_ld < 1.0 and hasattr(model, 'text'):
         text_num_layers = model.text.get_num_layers()
         assigner_text = LayerDecayValueAssigner(
             list(text_ld**(text_num_layers + 1 - i)
@@ -178,10 +178,10 @@ def create_optimizer(args, model, lr_scheduler=None, return_params=False):
         base_optimizer = paddle.optimizer.AdamW
     if args.fp16_opt_level == 'O2':
         optimizer_args['multi_precision'] = True
-    if args.max_grad_norm:
-        grad_clip = paddle.nn.ClipGradByGlobalNorm(
-            clip_norm=args.max_grad_norm)
-        optimizer_args['grad_clip'] = grad_clip
+    # if args.max_grad_norm:
+    #     grad_clip = paddle.nn.ClipGradByGlobalNorm(
+    #         clip_norm=args.max_grad_norm)
+    #     optimizer_args['grad_clip'] = grad_clip
     parameters = get_all_parameters(args, model)
     optimizer = base_optimizer(parameters=parameters, **optimizer_args)
     if is_master(args):

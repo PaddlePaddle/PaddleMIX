@@ -213,8 +213,9 @@ class Attention(paddle.nn.Layer):
             self.relative_position_bias_table = None
             self.relative_position_index = None
         self.attn_drop = paddle.nn.Dropout(p=attn_drop)
-        self.inner_attn_ln = norm_layer(
-            all_head_dim) if subln else paddle.nn.Identity()
+        # self.inner_attn_ln = norm_layer(
+        #     all_head_dim) if subln else paddle.nn.Identity()
+        self.inner_attn_ln = paddle.nn.Identity()
         self.proj = fleet.meta_parallel.ColumnParallelLinear(
             all_head_dim,
             dim,
@@ -788,6 +789,7 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
             has_bias=True,
             gather_output=True) if num_classes > 0 else paddle.nn.Identity()
 
+
     def forward_features(self, x, return_all_features=False):
         x = self.patch_embed(x)
         batch_size, seq_len, _ = x.shape
@@ -816,7 +818,7 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
             cnt += 1
             if self.enable_recompute:
                 x = paddle.distributed.fleet.utils.recompute(blk, x,
-                                                             (rel_pos_bias, ))
+                                                             (rel_pos_bias, ), use_reentrant=False)
             else:
                 x = blk(x, rel_pos_bias=rel_pos_bias)
 
