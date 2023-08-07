@@ -84,41 +84,40 @@ class Blip2VisionConfig(PretrainedConfig):
 
     def __init__(
         self,
-        hidden_size=1408,
-        intermediate_size=6144,
-        projection_dim=512,
-        num_hidden_layers=39,
-        num_attention_heads=16,
-        num_channels=3,
-        image_size=224,
+        img_size=224,
         patch_size=14,
-        hidden_act="gelu",
-        layer_norm_eps=1e-6,
-        dropout=0.0,
-        attention_dropout=0.0,
-        initializer_range=1e-10,
-        initializer_factor=1.0,
+        embed_dim=1408,
+        depth=39,
+        num_heads=16,
+        mlp_ratio=4.3637,
         qkv_bias=True,
+        drop_rate=0,
+        epsilon=1e-6,
+        mp_degree=1,
+        gradient_checkpointing=False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
-        self.hidden_size = hidden_size
-        self.intermediate_size = intermediate_size
-        self.projection_dim = projection_dim
-        self.dropout = dropout
-        self.num_hidden_layers = num_hidden_layers
-        self.num_attention_heads = num_attention_heads
-        self.num_channels = num_channels
+        self.img_size = img_size
         self.patch_size = patch_size
-        self.image_size = image_size
-        self.initializer_range = initializer_range
-        self.initializer_factor = initializer_factor
-        self.attention_dropout = attention_dropout
-        self.layer_norm_eps = layer_norm_eps
-        self.hidden_act = hidden_act
+        self. embed_dim =  embed_dim
+        self.depth= depth
+        self.num_heads = num_heads
+        self.mlp_ratio = mlp_ratio
         self.qkv_bias = qkv_bias
+        self.drop_rate = drop_rate
+        self.epsilon = epsilon
+        self.mp_degree = mp_degree
+        self.gradient_checkpointing= gradient_checkpointing
+
+        self.in_chans =kwargs.get('in_chans', 3)
+        self.class_num = kwargs.get( 'class_num', 1000)
+        self.qk_scale = kwargs.get('qk_scale', None)
+        self.attn_drop_rate = kwargs.get( 'attn_drop_rate=', 0.)
+        self.drop_path_rate = kwargs.get( 'drop_path_rate', 0.)
+        self.norm_layer = kwargs.get( 'norm_layer', 'nn.LayerNorm')
 
     @classmethod
     def from_pretrained(
@@ -340,29 +339,18 @@ class Blip2Config(PretrainedConfig):
             logger.info(
                 "text_config is None. Initializing the text config with default values (`OPTConfig`)."
             )
-        self.vision_config = Blip2VisionConfig(**vision_config)
-        self.qformer_config = Blip2QFormerConfig(**qformer_config)
-        text_model_type = (
-            text_config["model_type"] if "model_type" in text_config else "opt"
-        )
-        # self.text_config = CONFIG_MAPPING[text_model_type](**text_config)
-        if text_model_type == "t5":
-            self.text_config = T5Config(**text_config)
-        elif text_model_type == "opt":
-            self.text_config = OPTConfig(**text_config)
-        else:
-            self.text_config = AutoConfig(**text_config)
+        self.vision_config = vision_config
+        self.qformer_config = qformer_config
+        self.text_config =  text_config
 
-        self.num_query_tokens = num_query_tokens
-        self.qformer_config.encoder_hidden_size = self.vision_config.hidden_size
-        self.use_decoder_only_language_model = (
-            self.text_config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
-        )
+        # self.use_decoder_only_language_model = (
+        #     self.text_config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+        # )
         # CONFIGURATION_MODEL_MAPPING = get_init_configurations()
         # self.use_decoder_only_language_model = self.text_config.model_type in CONFIGURATION_MODEL_MAPPING
         self.initializer_factor = 1.0
         self.initializer_range = 0.02
-        self.freeze_vit = True
+        self.freeze_vit = kwargs.get('freeze_vit', True)
 
     @classmethod
     def from_vision_qformer_text_configs(
@@ -380,9 +368,9 @@ class Blip2Config(PretrainedConfig):
         """
 
         return cls(
-            vision_config=vision_config.to_dict(),
-            qformer_config=qformer_config.to_dict(),
-            text_config=text_config.to_dict(),
+            vision_config=vision_config,
+            qformer_config=qformer_config,
+            text_config=text_config,
             **kwargs,
         )
 
@@ -393,8 +381,8 @@ class Blip2Config(PretrainedConfig):
             `Dict[str, any]`: Dictionary of all the attributes that make up this configuration instance,
         """
         output = copy.deepcopy(self.__dict__)
-        output["vision_config"] = self.vision_config.to_dict()
-        output["qformer_config"] = self.qformer_config.to_dict()
-        output["text_config"] = self.text_config.to_dict()
+        output["vision_config"] = self.vision_config
+        output["qformer_config"] = self.qformer_config
+        output["text_config"] = self.text_config
         output["model_type"] = self.__class__.model_type
         return output

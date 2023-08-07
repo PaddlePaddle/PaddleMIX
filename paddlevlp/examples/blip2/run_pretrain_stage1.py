@@ -29,7 +29,7 @@ from paddlevlp.datasets import load_dataset
 from paddlevlp.models.blip2.configuration import (Blip2Config,
                                                   Blip2QFormerConfig,
                                                   Blip2VisionConfig)
-from paddlevlp.models.blip2.blip2_stage1 import Blip2Qformer
+from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlevlp.processors.blip_processing import Blip2Processor
 from paddlevlp.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlevlp.utils.log import logger
@@ -37,6 +37,7 @@ from paddlenlp.transformers import AutoTokenizer
 from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
 from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
 from paddlevlp.examples.blip2.utils import load_model
+
 class BlipCollator:
     """
     Data collator that will dynamically pad the inputs to the longest sequence in the batch.
@@ -64,7 +65,7 @@ class BlipCollator:
         )
 
         # batch.update({'image_id':image_id},)
-        batch.update({'text_input':text},)
+        batch.update({'text_input_stage1':text},)
         return batch
 @dataclass
 class DataArguments:
@@ -92,7 +93,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="Salesforce/blip2-opt-2.7b",
+        default="blip2-stage1",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
 
@@ -111,12 +112,6 @@ class PreTrainingArguments(TrainingArguments):
     Arguments pertaining to what training options we are going to use during pretraining.
     """
 
-    pretrained_model_path: str = field(
-        default="https://bj.bcebos.com/v1/paddlenlp/models/community/Salesforce/blip2-opt-2.7b/blip2_pretrained.pdparams",
-        metadata={
-            "help": "The path to pre-trained model that we will use for pretraining."
-        },
-    )
     weight_decay: float = field(
         default=0.05, metadata={"help": "Weight decay if we apply some."}
     )
@@ -160,35 +155,19 @@ class PreTrainingArguments(TrainingArguments):
     sharding_parallel_degree : int = field(default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"})
     pipeline_parallel_degree : int = field(default=1, metadata={"help": "Enable pipeline parallel"})
     checkpoint_steps: int = field(
-        default=1107, metadata={"help": "save checkpoint with x steps"})
-def get_text_config(text_model_name_or_path):
-    if "t5" in text_model_name_or_path:
-        text_config = T5Config.from_pretrained(text_model_name_or_path)
-    elif "opt" in text_model_name_or_path:
-        text_config = OPTConfig.from_pretrained(text_model_name_or_path)
-    else:
-        text_config = AutoConfig.from_pretrained(text_model_name_or_path)
-    return text_config
-
-
-def create_model(config):
-    # blip2_config = Blip2ForConditionalGeneration(onfig.model_name_or_path)
-    vision_config = Blip2VisionConfig.from_pretrained(config.model_name_or_path)
-    qformer_config = Blip2QFormerConfig.from_pretrained(config.model_name_or_path)
-    text_config = get_text_config(config.text_model_name_or_path)
-    vision_config.image_size= config.image_size
-    # add tensor_parallel_degree
-    vision_config.mp_degree=config.mp_degree
-    qformer_config.mp_degree=config.mp_degree
-    text_config.mp_degree=config.mp_degree
-    vision_config.gradient_checkpointing=config.gradient_checkpointing
-    qformer_config.gradient_checkpointing=config.gradient_checkpointing
-    text_config.gradient_checkpointing=config.gradient_checkpointing
-    blip2_config = Blip2Config.from_vision_qformer_text_configs(
-        vision_config, qformer_config, text_config
+        default=1000, metadata={"help": "save checkpoint with x steps"})
+    model_path: str = field(
+        default=None,
+        metadata={
+            "help": "The path to model if you want to load weights from the specified path"
+        },
     )
-    model = Blip2Qformer(blip2_config)
-    paddle.device.cuda.empty_cache()# post_init_func(self, init_func, *args, **kwargs)吃显存
+def create_model(config):
+    blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
+    blip2_config.mp_degree=config.mp_degree
+    blip2_config.gradient_checkpointing=config.gradient_checkpointing
+    model = Blip2ForConditionalGeneration(blip2_config)
+    paddle.device.cuda.empty_cache()
     return model
 
 def main():
@@ -227,45 +206,35 @@ def main():
 
     # create dataset
     tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path, use_fast=False)
-    image_processor = BlipImageProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipImageProcessor_stage2.json")
-    text_processor_class = BlipTextProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipTextProcessor_stage2.json")
+    image_processor = BlipImageProcessor.from_pretrained(os.path.join(model_args.model_name_or_path,"processor","train"))
+    text_processor_class = BlipTextProcessor.from_pretrained(os.path.join(model_args.model_name_or_path,"processor","train"))
     processor = Blip2Processor(image_processor,text_processor_class,tokenizer_class)
-    image_processor_eval = BlipImageProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipImageEvalProcessor_stage2.json")
-    text_processor_class_eval = BlipTextProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipTextEvalProcessor_stage2.json")
-    eval_processor = Blip2Processor(image_processor_eval,text_processor_class_eval,tokenizer_class)
 
     train_dataset = load_dataset(data_args.task_name, splits="train")
     eval_dataset = {"test":load_dataset(data_args.task_name, splits="test")}
     # create model
     blip_collator = BlipCollator(processor)
-    blip_eval_collator = BlipCollator(eval_processor,mode="test")
     model_args.mp_degree=training_args.tensor_parallel_degree
     model_args.gradient_checkpointing=training_args.gradient_checkpointing
     model = create_model(model_args)
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     # create trainer
-    load_model(training_args,model, ckpt_dir=training_args.pretrained_model_path)
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=blip_collator,
-        eval_collator=blip_eval_collator,
         processor=processor,
-        eval_processor=eval_processor,
         tokenizer=tokenizer_class
     )
     # Training
     checkpoint=None
     if training_args.resume_from_checkpoint is not None:
         checkpoint = training_args.resume_from_checkpoint
-        state_dict = paddle.load(checkpoint)
+        state_dict = paddle.load("blip2_pretrained.pdparams")
         interpolate_pos_embed(model, state_dict)
         model.set_state_dict(state_dict)
-    if training_args.do_eval:
-        eval_metrics = trainer.evaluate(eval_dataset)
-        trainer.log_metrics("eval", eval_metrics)
     if training_args.do_train:
         trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()
