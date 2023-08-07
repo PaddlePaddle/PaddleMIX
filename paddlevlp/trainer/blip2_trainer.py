@@ -195,10 +195,16 @@ class BLIP2Trainer(Trainer):
         # Mixed precision training
         if training and self.do_grad_scaling:  # self.args.fp16_opt_level=="O2":
             # model, self.optimizer
-            decorated = paddle.amp.decorate(
-                models=[model.visual_encoder,model.language_model], optimizers=self.optimizer, level="O2"
-            )
-            model.visual_encoder,model.language_model= decorated[0]
+            if hasattr(model,"language_model"):
+                decorated = paddle.amp.decorate(
+                    models=[model.visual_encoder,model.language_model], optimizers=self.optimizer, level="O2"
+                )
+                model.visual_encoder,model.language_model= decorated[0]
+            else:
+                decorated = paddle.amp.decorate(
+                    models=[model.visual_encoder], optimizers=self.optimizer, level="O2"
+                )
+                model.visual_encoder = decorated[0][0]
             self.optimizer.set_state_dict(decorated[1].state_dict())
 
         # Multi-gpu training
@@ -208,7 +214,108 @@ class BLIP2Trainer(Trainer):
         in_pipeline_parallel_mode = self.args.pipeline_parallel_degree > 1
         in_sharding_parallel_mode = self.sharding is not None
         in_tensor_parallel_model = self.args.tensor_parallel_degree > 1
-        # breakpoint()
+        if in_pipeline_parallel_mode:
+            if self.args.amp_master_grad:
+                mix_precision_utils.MixPrecisionLayer(model, dtype=self.amp_dtype)  # return value has no use
+            # hack for pipeline model mini batch to batch
+            # need batter solution @ZHUI
+            # make batch_fn compatible for fleet.distributed_model decorate.
+            prepare_pipeline_inputs_func = (
+                model._prepare_pipeline_inputs_func if hasattr(model, "_prepare_pipeline_inputs_func") else None
+            )
+            model = fleet.distributed_model(model)
+            if prepare_pipeline_inputs_func is not None:
+                model._prepare_pipeline_inputs_func = prepare_pipeline_inputs_func
+            else:
+
+                def _prepare_pipeline_inputs_func(inputs):
+                    first_stage_keys = ["input_ids", "attention_mask", "position_ids"]
+                    last_stage_keys = ["labels"]
+
+                    def get_expected_keys(inputs, keys):
+                        ret = tuple([inputs.pop(k) for k in keys if k in inputs])
+                        if len(ret) == 1:
+                            ret = ret[0]
+                        return ret
+
+                    if type(inputs) is dict:
+                        return [
+                            get_expected_keys(inputs, first_stage_keys),
+                            get_expected_keys(inputs, last_stage_keys),
+                        ]
+
+                    keys = list(inputs[0].keys())
+                    inputs_batch = {key: [data.pop(key) for data in inputs] for key in keys}
+                    return [
+                        get_expected_keys(inputs_batch, first_stage_keys),
+                        get_expected_keys(inputs_batch, last_stage_keys),
+                    ]
+
+                logger.warning(
+                    "Using default prepare pipeline inputs func, only support input_ids and labels as inputs."
+                )
+                model._prepare_pipeline_inputs_func = _prepare_pipeline_inputs_func
+
+            assert self.optimizer is not None, "Pipeline mode need decorate optimizer, pelease init optimizer."
+            if self.args.amp_master_grad:
+                self.optimizer = mix_precision_utils.MixPrecisionOptimizer(self.optimizer)
+            self.optimizer = fleet.distributed_optimizer(self.optimizer)
+
+        # No pipeline mode, sharding only
+        if not in_pipeline_parallel_mode and in_sharding_parallel_mode:
+            # Sharded DDP!
+            if self.args.tensor_parallel_degree > 1:
+                hcg = fleet.get_hybrid_communicate_group()
+                assert (
+                    ShardingOption.SHARD_GRAD_OP in self.args.sharding or ShardingOption.SHARD_OP in self.args.sharding
+                ), "Only support tensor parallel + sharding stage1/stage2 hybrid parallel now."
+                model = paddle.distributed.fleet.meta_parallel.TensorParallel(model, hcg, strategy=None)
+
+            if ShardingOption.SHARD_OP in self.args.sharding:
+                model = fleet.distributed_model(model)
+                self.optimizer = fleet.distributed_optimizer(self.optimizer)
+            else:
+                # sync params (broadcast) buffers in dp group
+                if not is_dp_group_support_in_group_sharded_parallel() and self.args.data_parallel_degree > 1:
+                    try:
+                        from paddle.fluid.dygraph.parallel import sync_params_buffers
+                    except ImportError:
+                        # fix for new api in paddlepaddle v2.5
+                        from paddle.distributed.parallel import sync_params_buffers
+
+                    hcg = fleet.get_hybrid_communicate_group()
+                    dp_group = hcg.get_data_parallel_group()
+                    sync_params_buffers(model, comm_group=dp_group, src_rank=dp_group.ranks[0])
+
+                cpu_offload = ShardingOption.OFFLOAD in self.args.sharding
+                assert self.optimizer is not None, "optimizer is empty!"
+                level = None
+                if ShardingOption.SHARD_GRAD_OP in self.args.sharding:
+                    level = "os_g"
+                if ShardingOption.FULL_SHARD in self.args.sharding:
+                    level = "p_g_os"
+
+                from paddle.distributed.sharding import group_sharded_parallel
+
+                # add dp_group and exclude_layer params
+                # https://www.paddlepaddle.org.cn/documentation/docs/zh/develop/api/paddle/distributed/sharding/group_sharded_parallel_cn.html#group-sharded-parallel
+                extra_kwargs = {}
+                if is_dp_group_support_in_group_sharded_parallel():
+                    extra_kwargs["dp_group"] = self.dp_group
+                    extra_kwargs["exclude_layer"] = ["GroupNorm"]
+
+                model, optimizer, _ = group_sharded_parallel(
+                    model,
+                    self.optimizer,
+                    level=level,
+                    scaler=None,
+                    group=self.sharding_group,
+                    offload=cpu_offload,
+                    **extra_kwargs,
+                )
+                self.optimizer = optimizer
+
+        # pure tesnor parallel mode, no pipeline_parallel, no sharding.
         if not in_pipeline_parallel_mode and not in_sharding_parallel_mode and in_tensor_parallel_model:
             if self.args.amp_master_grad:
                 mix_precision_utils.MixPrecisionLayer(model, dtype=self.amp_dtype)  # return value has no use

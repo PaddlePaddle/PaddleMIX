@@ -1,5 +1,4 @@
 import paddle
-import warnings
 
 
 def _is_tensor_video_clip(clip):

@@ -2,10 +2,7 @@ import paddle
 from paddle.distributed.fleet.utils import recompute
 
 from abc import abstractmethod
-import math
 from einops import rearrange
-from functools import partial
-import numpy as np
 
 from .lvdm_util import conv_nd, linear, avg_pool_nd, zero_module, normalization, timestep_embedding, nonlinearity
 from .lvdm_attention_temporal import STAttentionBlock
@@ -13,7 +10,7 @@ from .lvdm_attention_temporal import SpatialTemporalTransformer
 
 from dataclasses import dataclass
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import BaseOutput, apply_forward_hook
+from ..utils import BaseOutput
 from .modeling_utils import ModelMixin
 
 

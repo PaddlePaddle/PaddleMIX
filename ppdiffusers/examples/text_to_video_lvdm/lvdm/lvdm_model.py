@@ -22,7 +22,6 @@ import random
 import numpy as np
 import paddle
 import paddle.nn as nn
-import paddle.nn.functional as F
 
 from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger

@@ -8,8 +8,8 @@ try:
     import accimage
 except ImportError:
     accimage = None
-from PIL import Image, ImageEnhance, ImageOps
-from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
+from PIL import Image
+from typing import Any, Dict, List, Optional, Tuple, Union
 import math
 try:
     import av
@@ -53,8 +53,6 @@ def write_video(filename: str,
         audio_codec (str): the name of the audio codec, i.e. "mp3", "aac", etc.
         audio_options (Dict): dictionary containing options to be passed into the PyAV audio stream
     """
-    # >>>    if not torch.jit.is_scripting() and not torch.jit.is_tracing():
-    #         _log_api_usage_once(write_video)
     _check_av_available()
     video_array = paddle.to_tensor(data=video_array).astype('uint8').numpy()
     if isinstance(fps, float):
@@ -131,8 +129,6 @@ def make_grid(tensor: Union[paddle.Tensor, List[paddle.Tensor]],
     Returns:
         grid (Tensor): the tensor containing grid of images.
     """
-    # >>>    if not torch.jit.is_scripting() and not torch.jit.is_tracing():
-    #         _log_api_usage_once(make_grid)
     if not paddle.is_tensor(x=tensor):
         if isinstance(tensor, list):
             for t in tensor:
@@ -162,9 +158,6 @@ def make_grid(tensor: Union[paddle.Tensor, List[paddle.Tensor]],
 
         def norm_ip(img, low, high):
             img.clip_(min=low, max=high)
-            #             """Class Method: *.sub_, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
-            #             """Class Method: *.div_, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
-            # >>>            img.sub_(low).div_(max(high - low, 1e-05))
             img = img.substract(low).divide(max(high - low, 1e-05))
 
         def norm_range(t, value_range):
@@ -241,19 +234,11 @@ def to_tensor(pic) -> paddle.Tensor:
     Returns:
         Tensor: Converted image.
     """
-    # >>>    if not torch.jit.is_scripting() and not torch.jit.is_tracing():
-    #         _log_api_usage_once(to_tensor)
-    #     if not (F_pil._is_pil_image(pic) or _is_numpy(pic)):
-    #         raise TypeError(f'pic should be PIL Image or ndarray. Got {type(pic)}')
-    #     if _is_numpy(pic) and not _is_numpy_image(pic):
-    #         raise ValueError(
-    #             f'pic should be 2/3 dimensional. Got {pic.ndim} dimensions.')
     default_float_dtype = paddle.get_default_dtype()
     if isinstance(pic, np.ndarray):
         if pic.ndim == 2:
             pic = pic[:, :, (None)]
         img = paddle.to_tensor(data=pic.transpose((2, 0, 1)))
-        # >>>        if isinstance(img, torch.ByteTensor):
         if img.dtype == paddle.uint8:
             return paddle.divide(
                 img.cast(default_float_dtype),
@@ -261,20 +246,13 @@ def to_tensor(pic) -> paddle.Tensor:
                     255, dtype=paddle.float32))
         else:
             return img
-    # if accimage is not None and isinstance(pic, accimage.Image):
-    #     nppic = np.zeros([pic.channels, pic.height, pic.width], dtype=np.
-    #         float32)
-    #     pic.copyto(nppic)
-    #     return paddle.to_tensor(data=nppic).cast(default_float_dtype)
     mode_to_nptype = {'I': np.int32, 'I;16': np.int16, 'F': np.float32}
     img = paddle.to_tensor(data=np.array(
         pic, mode_to_nptype.get(pic.mode, np.uint8), copy=True))
     if pic.mode == '1':
         img = 255 * img
-    # img = img.reshape([pic.size[1], pic.size[0], F_pil.get_image_num_channels(pic)])
     img = img.reshape([pic.size[1], pic.size[0], get_image_num_channels(pic)])
     img = img.transpose(perm=(2, 0, 1))
-    # >>>    if isinstance(img, torch.ByteTensor):
     if img.dtype == paddle.uint8:
         return paddle.divide(img.cast(default_float_dtype), 255)
     else:
@@ -341,7 +319,6 @@ def npz_to_video_grid(data_path,
     if nrow is None:
         nrow = int(np.ceil(np.sqrt(n)))
     if verbose:
-        # >>>        frame_grids = [torchvision.utils.make_grid(fs, nrow=nrow) for fs in tqdm(frame_grids, desc='Making grids')]
         frame_grids = [
             make_grid(
                 fs, nrow=nrow) for fs in tqdm(
@@ -349,7 +326,6 @@ def npz_to_video_grid(data_path,
         ]
 
     else:
-        # >>>        frame_grids = [torchvision.utils.make_grid(fs, nrow=nrow) for fs in frame_grids]
         frame_grids = [make_grid(fs, nrow=nrow) for fs in frame_grids]
 
     if os.path.dirname(out_path) != '':
@@ -365,8 +341,6 @@ def npz_to_video_grid(data_path,
         dtype = (paddle.stack(x=frame_grids) * 255).dtype
     frame_grids = (paddle.stack(x=frame_grids) * 255).transpose(
         perm=[0, 2, 3, 1]).cast(dtype)
-    # >>>    torchvision.io.write_video(out_path, frame_grids, fps=fps, video_codec=
-    #         'h264', options={'crf': '10'})
     write_video(
         out_path,
         frame_grids,
