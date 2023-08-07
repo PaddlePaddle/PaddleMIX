@@ -21,6 +21,7 @@ from .activations import get_activation
 from .attention_processor import Attention
 from .embeddings import CombinedTimestepLabelEmbeddings
 from .lora import LoRACompatibleLinear
+from ..utils import maybe_allow_in_graph
 
 
 def drop_path(input, drop_prob: float=0.0, training: bool=False):

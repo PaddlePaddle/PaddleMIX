@@ -1653,7 +1653,7 @@ class LoraLoaderMixin:
     def save_lora_weights(
             self,
             save_directory: Union[str, os.PathLike],
-            unet_lora_layers: Dict[str, nn.Layer, paddle.Tensor]=None,
+            unet_lora_layers: Dict[str, Union[nn.Layer, paddle.Tensor]]=None,
             text_encoder_lora_layers: Dict[str, nn.Layer]=None,
             is_main_process: bool=True,
             weight_name: str=None,

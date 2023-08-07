@@ -1585,7 +1585,7 @@ LORA_ATTENTION_PROCESSORS = (
     LoRAAttnAddedKVProcessor, )
 
 
-class SpatialNorm(nn.Module):
+class SpatialNorm(nn.Layer):
     """
     Spatially conditioned normalization as defined in https://arxiv.org/abs/2209.09002
     """
