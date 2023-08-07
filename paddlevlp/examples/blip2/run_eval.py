@@ -64,7 +64,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="blip2-opt-2.7b",
+        default="blip2-caption-opt2.7b",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
 
@@ -172,12 +172,12 @@ def main():
             )
 
     # create dataset
-    tokenizer_class = AutoTokenizer.from_pretrained("facebook/opt-2.7b", use_fast=False)
-    image_processor = BlipImageProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipImageProcessor_stage2.json")
-    text_processor_class = BlipTextProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipTextProcessor_stage2.json")
+    tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path, use_fast=False)
+    image_processor = BlipImageProcessor.from_pretrained(os.path.join(model_args.model_name_or_path,"processor","train"))
+    text_processor_class = BlipTextProcessor.from_pretrained(os.path.join(model_args.model_name_or_path,"processor","train"))
     processor = Blip2Processor(image_processor,text_processor_class,tokenizer_class)
-    image_processor_eval = BlipImageProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipImageEvalProcessor_stage2.json")
-    text_processor_class_eval = BlipTextProcessor.from_pretrained("paddlevlp/models/blip2/model_cfg/BlipTextEvalProcessor_stage2.json")
+    image_processor_eval = BlipImageProcessor.from_pretrained(os.path.join(model_args.model_name_or_path,"processor","eval"))
+    text_processor_class_eval = BlipTextProcessor.from_pretrained(os.path.join(model_args.model_name_or_path,"processor","eval"))
     eval_processor = Blip2Processor(image_processor_eval,text_processor_class_eval,tokenizer_class)
 
     train_dataset = load_dataset(data_args.task_name, splits="train")
