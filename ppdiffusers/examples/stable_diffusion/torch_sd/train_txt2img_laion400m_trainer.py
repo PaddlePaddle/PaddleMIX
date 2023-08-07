@@ -1,4 +1,4 @@
-# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,10 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import itertools
 import os
-
-import paddle
+import torch
+import transformers
 from sd import (
     SDDataArguments,
     SDModelArguments,
@@ -22,19 +21,23 @@ from sd import (
     StableDiffusionModel,
     StableDiffusionTrainer,
     TextImagePair, )
-
-from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint, set_seed
-from paddlenlp.utils.log import logger
+from transformers.trainer import get_last_checkpoint, set_seed
 
 
 def main():
-    parser = PdArgumentParser(
+    parser = transformers.HfArgumentParser(
         (SDModelArguments, SDDataArguments, SDTrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    log_level = training_args.get_process_log_level()
+    if training_args.should_log:
+        transformers.utils.logging.set_verbosity(log_level)
+        transformers.utils.logging.enable_default_handler()
+        transformers.utils.logging.enable_explicit_format()
+
+    training_args.print_config(training_args, "Training")
     training_args.print_config(model_args, "Model")
     training_args.print_config(data_args, "Data")
-
-    paddle.set_device(training_args.device)
 
     # Detecting last checkpoint.
     last_checkpoint = None
@@ -48,7 +51,7 @@ def main():
                 f"Output directory ({training_args.output_dir}) already exists and is not empty. "
                 "Use --overwrite_output_dir to overcome.")
         elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
-            logger.info(
+            print(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
             )
@@ -59,22 +62,6 @@ def main():
     model.set_recompute(training_args.recompute)
     model.set_xformers(training_args.enable_xformers_memory_efficient_attention)
     model.set_ema(training_args.use_ema)
-
-    if training_args.to_static:
-        input_ids = paddle.static.InputSpec(
-            name="input_ids",
-            shape=[-1, model_args.model_max_length],
-            dtype="int64")
-        pixel_values = paddle.static.InputSpec(
-            name="pixel_values",
-            shape=[-1, 3, training_args.resolution, training_args.resolution],
-            dtype="float32")
-        specs = [input_ids, pixel_values]
-        paddle.jit.ignore_module([os])
-        model = paddle.jit.to_static(model, input_spec=specs)
-        logger.info("Successfully to apply @to_static with specs: {}".format(
-            specs))
-
     train_dataset = TextImagePair(
         file_list=data_args.file_list,
         size=training_args.resolution,
@@ -90,27 +77,6 @@ def main():
         train_dataset=train_dataset,
         tokenizer=model.tokenizer, )
 
-    if model_args.train_text_encoder:
-        if training_args.text_encoder_learning_rate == training_args.unet_learning_rate:
-            params_to_train = itertools.chain(model.text_encoder.parameters(),
-                                              model.unet.parameters())
-        else:
-            # overwrite default learning rate with 1.0
-            training_args.learning_rate = 1.0
-            params_to_train = [
-                {
-                    "params": model.text_encoder.parameters(),
-                    "learning_rate": training_args.text_encoder_learning_rate,
-                },
-                {
-                    "params": model.unet.parameters(),
-                    "learning_rate": training_args.unet_learning_rate,
-                },
-            ]
-    else:
-        params_to_train = model.unet.parameters()
-    trainer.set_optimizer_grouped_parameters(params_to_train)
-
     checkpoint = None
     if training_args.resume_from_checkpoint is not None:
         checkpoint = training_args.resume_from_checkpoint
@@ -124,5 +90,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # for higher ips
     main()

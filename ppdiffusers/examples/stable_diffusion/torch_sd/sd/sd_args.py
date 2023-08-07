@@ -1,4 +1,4 @@
-# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,17 +13,22 @@
 # limitations under the License.
 
 import math
+import types
 from dataclasses import dataclass, field
 from typing import List, Optional
+
+import torch
+from transformers.trainer import TrainingArguments
 import os
-import paddle
-from paddlenlp.trainer import TrainingArguments
+from transformers.utils.logging import get_logger
 
 __all__ = [
     "SDTrainingArguments",
     "SDModelArguments",
     "SDDataArguments",
 ]
+
+logger = get_logger("transformers")
 
 
 def str2bool(v):
@@ -35,22 +40,24 @@ def str2bool(v):
         raise ValueError("Unsupported value encountered.")
 
 
-if str2bool(os.getenv("FLAG_FUSED_LINEAR", "True")):
-    paddle.nn.Linear = paddle.incubate.nn.FusedLinear
+if not str2bool(os.getenv("FLAG_SDP", "True")):
+    if hasattr(torch.nn.functional, "scaled_dot_product_attention"):
+        del torch.nn.functional.scaled_dot_product_attention
+        print(
+            "Removed `torch.nn.functional.scaled_dot_product_attention`, we will use default attention implement."
+        )
 
 
 @dataclass
 class SDTrainingArguments(TrainingArguments):
     image_logging_steps: int = field(
         default=1000, metadata={"help": "Log image every X steps."})
-    to_static: bool = field(
-        default=False, metadata={"help": "Whether or not to_static"})
+    recompute: bool = field(
+        default=False,
+        metadata={"help": "Whether or not run recompute."}, )
     benchmark: bool = field(
         default=False,
         metadata={"help": "Whether or not run benchmark."}, )
-    profiler_options: Optional[str] = field(
-        default=None,
-        metadata={"help": "profiler_options."}, )
     report_to: Optional[List[str]] = field(
         default_factory=lambda: ["custom_visualdl"],
         metadata={
@@ -71,12 +78,9 @@ class SDTrainingArguments(TrainingArguments):
     only_save_updated_model: bool = field(
         default=True,
         metadata={"help": "Whether or not save only_save_updated_model"})
-    unet_learning_rate: float = field(
-        default=None,
-        metadata={"help": "The initial learning rate for Unet Model."})
-    text_encoder_learning_rate: float = field(
-        default=None,
-        metadata={"help": "The initial learning rate for Text Encoder Model."})
+    log_level: str = field(
+        default="info",
+        metadata={"help": "log_level."}, )
 
     def __post_init__(self):
         super().__post_init__()
@@ -90,23 +94,31 @@ class SDTrainingArguments(TrainingArguments):
             self.enable_xformers_memory_efficient_attention)
         self.recompute = str2bool(os.getenv("FLAG_RECOMPUTE",
                                             "False")) or self.recompute
+        self.gradient_checkpointing = self.gradient_checkpointing or self.recompute
         self.benchmark = str2bool(os.getenv("FLAG_BENCHMARK",
                                             "False")) or self.benchmark
-        self.to_static = str2bool(os.getenv("FLAG_TO_STATIC",
-                                            "False")) or self.to_static
 
-        if self.text_encoder_learning_rate is None:
-            self.text_encoder_learning_rate = self.learning_rate
-        if self.unet_learning_rate is None:
-            self.unet_learning_rate = self.learning_rate
+    def print_config(self, args=None, key=""):
+        """
+        print all config values.
+        """
+        logger.info("=" * 60)
+        if args is None:
+            args = self
+            key = "Training"
 
-        # set default learning rate
-        self.learning_rate = self.unet_learning_rate
+        logger.info("{:^40}".format("{} Configuration Arguments".format(key)))
+        logger.info("{:30}: {}".format("torch version", torch.__version__))
+        logger.info("{:30}: {}".format("torch commit id",
+                                       torch.version.git_version))
 
-        if self.to_static:
-            self.use_ema = False
-            self.enable_xformers_memory_efficient_attention = False
-            self.recompute = False
+        for a in dir(args):
+            if a[:2] != "__":  # don't print double underscore methods
+                v = getattr(args, a)
+                if not isinstance(v, types.MethodType):
+                    logger.info("{:30}: {}".format(a, v))
+
+        logger.info("")
 
 
 @dataclass

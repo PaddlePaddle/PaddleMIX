@@ -12,21 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export FLAGS_conv_workspace_size_limit=4096
 export FLAG_USE_EMA=0
 export FLAG_BENCHMARK=1
 export FLAG_RECOMPUTE=1
-export FLAG_XFORMERS=1
-# use flash attention
-export FLAG_XFORMERS_ATTENTION_OP=flash
-# use fused linear
-export FLAG_FUSED_LINEAR=1
+# use torch2.0 scaled dot product attention
+export FLAG_SDP=1
+export FLAG_XFORMERS=0
 
-export OUTPUT_DIR="bf16_o2_paddle"
+export OUTPUT_DIR="bf16_torch"
 export BATCH_SIZE=64
 export MAX_ITER=200000
 
-nohup python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_txt2img_laion400m_trainer.py \
+nohup torchrun --nnodes 1 --nproc_per_node 8 train_txt2img_laion400m_trainer.py \
     --do_train \
     --output_dir ${OUTPUT_DIR} \
     --per_device_train_batch_size ${BATCH_SIZE} \
@@ -48,6 +45,8 @@ nohup python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_txt2
     --model_max_length 77 \
     --max_grad_norm -1 \
     --disable_tqdm True \
+    --tf32 True \
     --bf16 True \
-    --fp16_opt_level O2 \
-    --overwrite_output_dir > paddle_sd_bf16_o2.log 2>&1 &
+    --optim adamw_torch \
+    --ddp_find_unused_parameters False \
+    --overwrite_output_dir > torch_sd_bf16.log 2>&1 &
