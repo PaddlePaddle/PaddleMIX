@@ -378,11 +378,11 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
             text_encoder: CLIPTextModel,
             tokenizer: CLIPTokenizer,
             unet: UNet2DConditionModel,
-            controlnet: Union[ControlNetModel, List[ControlNetModel], Tuple[
-                ControlNetModel], MultiControlNetModel],
             scheduler: KarrasDiffusionSchedulers,
             safety_checker: StableDiffusionSafetyChecker,
             feature_extractor: CLIPFeatureExtractor,
+            controlnet: Union[ControlNetModel, List[ControlNetModel], Tuple[
+                ControlNetModel], MultiControlNetModel] = None,
             requires_safety_checker: bool=True, ):
         super().__init__()
 
