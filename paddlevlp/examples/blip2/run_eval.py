@@ -14,7 +14,8 @@
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
 import paddle.distributed as dist
 from paddle.distributed import fleet
 from dataclasses import dataclass, field
@@ -34,8 +35,9 @@ from paddlevlp.processors.blip_processing import Blip2Processor
 from paddlevlp.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlevlp.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
-from paddlevlp.processors.blip_processing import BlipImageProcessor,BlipTextProcessor
-from paddlevlp.examples.blip2.utils import BlipCollator,load_model,LLM_LIST
+from paddlevlp.processors.blip_processing import BlipImageProcessor, BlipTextProcessor
+from paddlevlp.examples.blip2.utils import BlipCollator
+
 
 @dataclass
 class DataArguments:
@@ -64,14 +66,12 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="Salesforce/blip2-opt-2.7b",
+        default="paddlemix/blip2-caption-opt2.7b",
         metadata={"help": "Path to pretrained model or model identifier"}, )
 
     text_model_name_or_path: str = field(
         default="facebook/opt-2.7b",
         metadata={"help": "The type of text model to use (OPT, T5)."}, )
-    image_size: int = field(
-        default=364, metadata={"help": " image size for evaluation."})
 
 
 @dataclass
@@ -79,13 +79,6 @@ class PreTrainingArguments(TrainingArguments):
     """
     Arguments pertaining to what training options we are going to use during pretraining.
     """
-
-    model_path: str = field(
-        default="https://bj.bcebos.com/v1/paddlenlp/models/community/Salesforce/blip2-opt-2.7b/blip2_pretrained.pdparams",
-        metadata={
-            "help": "The path to model that we will use for eval."
-        },
-    )
     weight_decay: float = field(
         default=0.05, metadata={"help": "Weight decay if we apply some."})
     learning_rate: float = field(
@@ -143,38 +136,36 @@ class PreTrainingArguments(TrainingArguments):
         })
     pipeline_parallel_degree: int = field(
         default=1, metadata={"help": "Enable pipeline parallel"})
-
-
-def get_text_config(text_model_name_or_path):
-    if "t5" in text_model_name_or_path:
-        text_config = T5Config.from_pretrained(text_model_name_or_path)
-    elif "opt" in text_model_name_or_path:
-        text_config = OPTConfig.from_pretrained(text_model_name_or_path)
-    else:
-        text_config = AutoConfig.from_pretrained(text_model_name_or_path)
-    return text_config
+    fp16_opt_level: str = field(
+        default="O1", metadata={"help": "Mixed Precision Type"})
+    fp16: bool = field(
+        default=True, metadata={"help": "Whether to use mixed Precision"})
+    gradient_checkpointing: bool = field(
+        default=False,
+        metadata={"help": "Forward recompute for saving graphics memory"})
+    tensor_parallel_degree: int = field(
+        default=1,
+        metadata={"help": "Set the number of tensor model parallel"})
+    sharding_parallel_degree: int = field(
+        default=1,
+        metadata={
+            "help": "Set the number of sharding, enable sharding parallel"
+        })
+    pipeline_parallel_degree: int = field(
+        default=1, metadata={"help": "Enable pipeline parallel"})
+    model_path: str = field(
+        default=None,
+        metadata={
+            "help":
+            "The path to model if you want to load weights from the specified path"
+        }, )
 
 
 def create_model(config):
     # blip2_config = Blip2ForConditionalGeneration(onfig.model_name_or_path)
-    vision_config = Blip2VisionConfig.from_pretrained(config.model_name_or_path)
-    qformer_config = Blip2QFormerConfig.from_pretrained(
-        config.model_name_or_path)
-    text_config = get_text_config(config.text_model_name_or_path)
-    # add tensor_parallel_degree
-    vision_config.image_size = config.image_size
-    vision_config.mp_degree = config.mp_degree
-    qformer_config.mp_degree = config.mp_degree
-    text_config.mp_degree = config.mp_degree
-    vision_config.gradient_checkpointing = config.gradient_checkpointing
-    qformer_config.gradient_checkpointing = config.gradient_checkpointing
-    text_config.gradient_checkpointing = config.gradient_checkpointing
-    blip2_config = Blip2Config.from_vision_qformer_text_configs(
-        vision_config, qformer_config, text_config)
-
-    model = Blip2ForConditionalGeneration(blip2_config)
-    paddle.device.cuda.empty_cache(
-    )  # post_init_func(self, init_func, *args, **kwargs)吃显存
+    model = Blip2ForConditionalGeneration.from_pretrained(
+        pretrained_model_name_or_path=config.model_name_or_path)
+    paddle.device.cuda.empty_cache()
     return model
 
 
@@ -212,17 +203,17 @@ def main():
 
     # create dataset
     tokenizer_class = AutoTokenizer.from_pretrained(
-        "facebook/opt-2.7b", use_fast=False)
+        model_args.text_model_name_or_path, use_fast=False)
     image_processor = BlipImageProcessor.from_pretrained(
-        "paddlevlp/models/blip2/model_cfg/BlipImageProcessor_stage2.json")
+        os.path.join(model_args.model_name_or_path, "processor", "train"))
     text_processor_class = BlipTextProcessor.from_pretrained(
-        "paddlevlp/models/blip2/model_cfg/BlipTextProcessor_stage2.json")
+        os.path.join(model_args.model_name_or_path, "processor", "train"))
     processor = Blip2Processor(image_processor, text_processor_class,
                                tokenizer_class)
     image_processor_eval = BlipImageProcessor.from_pretrained(
-        "paddlevlp/models/blip2/model_cfg/BlipImageEvalProcessor_stage2.json")
+        os.path.join(model_args.model_name_or_path, "processor", "eval"))
     text_processor_class_eval = BlipTextProcessor.from_pretrained(
-        "paddlevlp/models/blip2/model_cfg/BlipTextEvalProcessor_stage2.json")
+        os.path.join(model_args.model_name_or_path, "processor", "eval"))
     eval_processor = Blip2Processor(image_processor_eval,
                                     text_processor_class_eval, tokenizer_class)
 
@@ -237,8 +228,6 @@ def main():
     logger.info("training_args.use_hybrid_parallel:{}".format(
         training_args.use_hybrid_parallel))
     # create trainer
-    load_model(training_args,model, ckpt_dir=model_args.model_path,load_language_model=False)
-    load_model(training_args,model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path],load_language_model=True)
     trainer = Trainer(
         model=model,
         args=training_args,
