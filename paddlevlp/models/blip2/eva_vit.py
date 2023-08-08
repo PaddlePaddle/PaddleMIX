@@ -352,7 +352,8 @@ class VisionTransformer(Blip2PretrainedModel):
 
     def __init__(self, config: Blip2VisionConfig, **kwargs):
         super().__init__(config)
-        mp_degree = kwargs.get('mp_degree')
+        from paddle.distributed import fleet
+        mp_degree = fleet.DistributedStrategy().hybrid_configs['mp_degree']
         self.class_num = config.class_num
         self.num_features = self.embed_dim = config.embed_dim
         _img_size = to_2tuple(config.img_size)
@@ -397,7 +398,7 @@ class VisionTransformer(Blip2PretrainedModel):
                 mp_degree=mp_degree, ) for i in range(config.depth)
         ])
 
-        #self.norm = eval(norm_layer)(embed_dim, epsilon=epsilon)
+        self.mp_degree = mp_degree
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed)
         trunc_normal_(self.cls_token)
@@ -444,11 +445,9 @@ class VisionTransformer(Blip2PretrainedModel):
         return x
 
 
-def interpolate_pos_embed(
-        model, checkpoint_model=paddle.load("blip2_pretrained.pdparams")):
+def interpolate_pos_embed(model, checkpoint_model):
     if 'visual_encoder.pos_embed' in checkpoint_model:
-        pos_embed_checkpoint = paddle.to_tensor(checkpoint_model[
-            'visual_encoder.pos_embed'])
+        pos_embed_checkpoint = checkpoint_model['visual_encoder.pos_embed']
         embedding_size = pos_embed_checkpoint.shape[-1]
         num_patches = model.visual_encoder.patch_embed.num_patches
         num_extra_tokens = model.visual_encoder.pos_embed.shape[
@@ -475,9 +474,9 @@ def interpolate_pos_embed(
                 align_corners=False)
             pos_tokens = pos_tokens.transpose((0, 2, 3, 1)).flatten(1, 2)
             new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
-            checkpoint_model['visual_encoder.pos_embed'] = new_pos_embed.numpy()
+            checkpoint_model['visual_encoder.pos_embed'] = new_pos_embed
     elif 'pos_embed' in checkpoint_model:
-        pos_embed_checkpoint = paddle.to_tensor(checkpoint_model['pos_embed'])
+        pos_embed_checkpoint = checkpoint_model['pos_embed']
         embedding_size = pos_embed_checkpoint.shape[-1]
         num_patches = model.patch_embed.num_patches
         num_extra_tokens = model.pos_embed.shape[-2] - num_patches
@@ -503,4 +502,4 @@ def interpolate_pos_embed(
                 align_corners=False)
             pos_tokens = pos_tokens.transpose((0, 2, 3, 1)).flatten(1, 2)
             new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
-            checkpoint_model['pos_embed'] = new_pos_embed.numpy()
+            checkpoint_model['pos_embed'] = new_pos_embed

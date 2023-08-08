@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """ BLIP-2 model configuration"""
 import copy
 import os
@@ -83,59 +82,52 @@ class Blip2VisionConfig(PretrainedConfig):
     model_type = "blip_2_vision_model"
 
     def __init__(
-        self,
-        img_size=224,
-        patch_size=14,
-        embed_dim=1408,
-        depth=39,
-        num_heads=16,
-        mlp_ratio=4.3637,
-        qkv_bias=True,
-        drop_rate=0,
-        epsilon=1e-6,
-        mp_degree=1,
-        gradient_checkpointing=False,
-        **kwargs,
-    ):
+            self,
+            img_size=224,
+            patch_size=14,
+            embed_dim=1408,
+            depth=39,
+            num_heads=16,
+            mlp_ratio=4.3637,
+            qkv_bias=True,
+            drop_rate=0,
+            epsilon=1e-6,
+            gradient_checkpointing=False,
+            **kwargs, ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
         self.img_size = img_size
         self.patch_size = patch_size
-        self. embed_dim =  embed_dim
-        self.depth= depth
+        self.embed_dim = embed_dim
+        self.depth = depth
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
         self.qkv_bias = qkv_bias
         self.drop_rate = drop_rate
         self.epsilon = epsilon
-        self.mp_degree = mp_degree
-        self.gradient_checkpointing= gradient_checkpointing
+        self.gradient_checkpointing = gradient_checkpointing
 
-        self.in_chans =kwargs.get('in_chans', 3)
-        self.class_num = kwargs.get( 'class_num', 1000)
+        self.in_chans = kwargs.get('in_chans', 3)
+        self.class_num = kwargs.get('class_num', 1000)
         self.qk_scale = kwargs.get('qk_scale', None)
-        self.attn_drop_rate = kwargs.get( 'attn_drop_rate=', 0.)
-        self.drop_path_rate = kwargs.get( 'drop_path_rate', 0.)
-        self.norm_layer = kwargs.get( 'norm_layer', 'nn.LayerNorm')
+        self.attn_drop_rate = kwargs.get('attn_drop_rate=', 0.)
+        self.drop_path_rate = kwargs.get('drop_path_rate', 0.)
+        self.norm_layer = kwargs.get('norm_layer', 'nn.LayerNorm')
 
     @classmethod
-    def from_pretrained(
-        cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs
-    ) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(
-            pretrained_model_name_or_path, **kwargs
-        )
+    def from_pretrained(cls,
+                        pretrained_model_name_or_path: Union[str, os.PathLike],
+                        **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
+                                                  **kwargs)
 
         # get the vision config dict if we are loading from Blip2Config
         if config_dict.get("model_type") == "blip-2":
             config_dict = config_dict["vision_config"]
 
-        if (
-            "model_type" in config_dict
-            and hasattr(cls, "model_type")
-            and config_dict["model_type"] != cls.model_type
-        ):
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -204,25 +196,24 @@ class Blip2QFormerConfig(PretrainedConfig):
     model_type = "blip_2_qformer"
 
     def __init__(
-        self,
-        vocab_size=30522,
-        hidden_size=768,
-        num_hidden_layers=12,
-        num_attention_heads=12,
-        intermediate_size=3072,
-        hidden_act="gelu",
-        hidden_dropout_prob=0.1,
-        attention_probs_dropout_prob=0.1,
-        max_position_embeddings=512,
-        initializer_range=0.02,
-        layer_norm_eps=1e-12,
-        pad_token_id=0,
-        position_embedding_type="absolute",
-        classifier_dropout=None,
-        cross_attention_frequency=2,
-        encoder_hidden_size=1408,
-        **kwargs,
-    ):
+            self,
+            vocab_size=30522,
+            hidden_size=768,
+            num_hidden_layers=12,
+            num_attention_heads=12,
+            intermediate_size=3072,
+            hidden_act="gelu",
+            hidden_dropout_prob=0.1,
+            attention_probs_dropout_prob=0.1,
+            max_position_embeddings=512,
+            initializer_range=0.02,
+            layer_norm_eps=1e-12,
+            pad_token_id=0,
+            position_embedding_type="absolute",
+            classifier_dropout=None,
+            cross_attention_frequency=2,
+            encoder_hidden_size=1408,
+            **kwargs, ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(pad_token_id=pad_token_id, **kwargs)
 
@@ -243,22 +234,18 @@ class Blip2QFormerConfig(PretrainedConfig):
         self.encoder_hidden_size = encoder_hidden_size
 
     @classmethod
-    def from_pretrained(
-        cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs
-    ) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(
-            pretrained_model_name_or_path, **kwargs
-        )
+    def from_pretrained(cls,
+                        pretrained_model_name_or_path: Union[str, os.PathLike],
+                        **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
+                                                  **kwargs)
 
         # get the qformer config dict if we are loading from Blip2Config
         if config_dict.get("model_type") == "blip-2":
             config_dict = config_dict["qformer_config"]
 
-        if (
-            "model_type" in config_dict
-            and hasattr(cls, "model_type")
-            and config_dict["model_type"] != cls.model_type
-        ):
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -313,13 +300,12 @@ class Blip2Config(PretrainedConfig):
     is_composition = True
 
     def __init__(
-        self,
-        vision_config=None,
-        qformer_config=None,
-        text_config=None,
-        num_query_tokens=32,
-        **kwargs,
-    ):
+            self,
+            vision_config=None,
+            qformer_config=None,
+            text_config=None,
+            num_query_tokens=32,
+            **kwargs, ):
         super().__init__(**kwargs)
 
         if vision_config is None:
@@ -341,7 +327,7 @@ class Blip2Config(PretrainedConfig):
             )
         self.vision_config = vision_config
         self.qformer_config = qformer_config
-        self.text_config =  text_config
+        self.text_config = text_config
 
         # self.use_decoder_only_language_model = (
         #     self.text_config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
@@ -354,12 +340,11 @@ class Blip2Config(PretrainedConfig):
 
     @classmethod
     def from_vision_qformer_text_configs(
-        cls,
-        vision_config: Blip2VisionConfig,
-        qformer_config: Blip2QFormerConfig,
-        text_config: PretrainedConfig,
-        **kwargs,
-    ):
+            cls,
+            vision_config: Blip2VisionConfig,
+            qformer_config: Blip2QFormerConfig,
+            text_config: PretrainedConfig,
+            **kwargs, ):
         r"""
         Instantiate a [`Blip2Config`] (or a derived class) from a BLIP-2 vision model, Q-Former and language model
         configurations.
@@ -371,8 +356,7 @@ class Blip2Config(PretrainedConfig):
             vision_config=vision_config,
             qformer_config=qformer_config,
             text_config=text_config,
-            **kwargs,
-        )
+            **kwargs, )
 
     def to_dict(self):
         """
