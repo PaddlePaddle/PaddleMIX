@@ -11,7 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+export FLAGS_eager_delete_tensor_gb=0.0
+export FLAGS_fraction_of_gpu_memory_to_use=0.98
 export FLAGS_conv_workspace_size_limit=4096
 export FLAG_USE_EMA=0
 export FLAG_BENCHMARK=1
