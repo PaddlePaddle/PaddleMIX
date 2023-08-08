@@ -17,19 +17,17 @@ import os
 from huggingface_hub.constants import HUGGINGFACE_HUB_CACHE, hf_cache_home
 
 
-def str2bool(variable):
-    if isinstance(variable, bool):
-        return variable
-
-    if not isinstance(variable, str):
-        variable = str(variable)
-
-    if variable.lower() == "false":
-        return False
-    elif variable.lower() == "true":
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if not isinstance(v, str):
+        v = str(v)
+    if v.lower() in ("yes", "true", "t", "y", "1"):
         return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
     else:
-        raise ValueError("Not supported value: {}".format(variable))
+        raise ValueError("Not supported value: {}".format(v))
 
 
 ppnlp_cache_home = os.path.expanduser(

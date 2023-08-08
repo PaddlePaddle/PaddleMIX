@@ -1,4 +1,4 @@
-# Copyright (c) 2022 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2022 torchtorch Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,69 +13,142 @@
 # limitations under the License.
 import contextlib
 import inspect
-import os
 
-import paddle
-import paddle.nn as nn
-import paddle.nn.functional as F
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, UNet2DConditionModel
+from transformers import AutoTokenizer, CLIPTextModel
+from transformers.utils.logging import get_logger
 
-from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
-from paddlenlp.utils.log import logger
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DDPMScheduler,
-    UNet2DConditionModel,
-    is_ppxformers_available, )
-from ppdiffusers.initializer import reset_initialized_parameter, zeros_
-from ppdiffusers.models.attention import AttentionBlock
-from ppdiffusers.models.ema import LitEma
-from ppdiffusers.models.resnet import ResnetBlock2D
-from ppdiffusers.models.transformer_2d import Transformer2DModel
-from ppdiffusers.training_utils import freeze_params
+logger = get_logger("transformers")
 
 
-class StableDiffusionModel(nn.Layer):
+class LitEma(nn.Module):
+    def __init__(self, model, decay=0.9999, use_num_upates=True):
+        super().__init__()
+        if decay < 0.0 or decay > 1.0:
+            raise ValueError("Decay must be between 0 and 1")
+
+        self.m_name2s_name = {}
+        self.register_buffer("decay", torch.tensor(decay, dtype=torch.float32))
+        self.register_buffer(
+            "num_updates",
+            torch.tensor(
+                0, dtype=torch.int) if use_num_upates else torch.tensor(
+                    -1, dtype=torch.int))
+
+        for name, p in model.named_parameters():
+            if p.requires_grad:
+                # remove as '.'-character is not allowed in buffers
+                s_name = name.replace(".", "")
+                self.m_name2s_name.update({name: s_name})
+                self.register_buffer(s_name, p.clone().detach().data)
+
+        self.collected_params = []
+
+    def forward(self, model):
+        decay = self.decay
+
+        if self.num_updates >= 0:
+            self.num_updates += 1
+            decay = min(self.decay,
+                        (1 + self.num_updates) / (10 + self.num_updates))
+
+        one_minus_decay = 1.0 - decay
+
+        with torch.no_grad():
+            m_param = dict(model.named_parameters())
+            shadow_params = dict(self.named_buffers())
+
+            for key in m_param:
+                if m_param[key].requires_grad:
+                    sname = self.m_name2s_name[key]
+                    shadow_params[sname] = shadow_params[sname].type_as(m_param[
+                        key])
+                    shadow_params[sname].sub_(one_minus_decay * (
+                        shadow_params[sname] - m_param[key]))
+                else:
+                    assert key not in self.m_name2s_name
+
+    def copy_to(self, model):
+        m_param = dict(model.named_parameters())
+        shadow_params = dict(self.named_buffers())
+        for key in m_param:
+            if m_param[key].requires_grad:
+                m_param[key].data.copy_(shadow_params[self.m_name2s_name[key]]
+                                        .data)
+            else:
+                assert key not in self.m_name2s_name
+
+    def store(self, parameters):
+        """
+        Save the current parameters for restoring later.
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+            temporarily stored.
+        """
+        self.collected_params = [
+            param.detach().cpu().clone() for param in parameters
+        ]
+
+    def restore(self, parameters):
+        """
+        Restore the parameters stored with the `store` method.
+        Useful to validate the model with EMA parameters without affecting the
+        original optimization process. Store the parameters before the
+        `copy_to` method. After validation (or model saving), use this to
+        restore the former parameters.
+        Args:
+          parameters: Iterable of `torch.nn.Parameter`; the parameters to be
+            updated with the stored parameters.
+        """
+        for c_param, param in zip(self.collected_params, parameters):
+            param.data.copy_(c_param.data)
+        self.collected_params = None
+
+
+class StableDiffusionModel(nn.Module):
     def __init__(self, model_args):
         super().__init__()
         self.model_args = model_args
-        tokenizer_name_or_path = (
-            model_args.tokenizer_name
-            if model_args.tokenizer_name is not None else
-            os.path.join(model_args.pretrained_model_name_or_path, "tokenizer"))
-        vae_name_or_path = (
-            model_args.vae_name_or_path
-            if model_args.vae_name_or_path is not None else
-            os.path.join(model_args.pretrained_model_name_or_path, "vae"))
+        tokenizer_name_or_path = (model_args.tokenizer_name
+                                  if model_args.tokenizer_name is not None else
+                                  model_args.pretrained_model_name_or_path)
+        vae_name_or_path = (model_args.vae_name_or_path
+                            if model_args.vae_name_or_path is not None else
+                            model_args.pretrained_model_name_or_path)
         text_encoder_name_or_path = (
             model_args.text_encoder_name_or_path
             if model_args.text_encoder_name_or_path is not None else
-            os.path.join(model_args.pretrained_model_name_or_path,
-                         "text_encoder"))
-        unet_name_or_path = (
-            model_args.unet_name_or_path
-            if model_args.unet_name_or_path is not None else
-            os.path.join(model_args.pretrained_model_name_or_path, "unet"))
+            model_args.pretrained_model_name_or_path)
+        unet_name_or_path = (model_args.unet_name_or_path
+                             if model_args.unet_name_or_path is not None else
+                             model_args.pretrained_model_name_or_path)
         # init model and tokenizer
         tokenizer_kwargs = {}
         if model_args.model_max_length is not None:
             tokenizer_kwargs["model_max_length"] = model_args.model_max_length
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path,
-                                                       **tokenizer_kwargs)
-        self.vae = AutoencoderKL.from_pretrained(vae_name_or_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer_name_or_path,
+            **tokenizer_kwargs,
+            subfolder="tokenizer",
+            use_fast=False)
+        self.vae = AutoencoderKL.from_pretrained(
+            vae_name_or_path, subfolder="vae")
         self.text_encoder = CLIPTextModel.from_pretrained(
-            text_encoder_name_or_path)
+            text_encoder_name_or_path, subfolder="text_encoder")
         try:
-            self.unet = UNet2DConditionModel.from_pretrained(unet_name_or_path)
+            self.unet = UNet2DConditionModel.from_pretrained(
+                unet_name_or_path, subfolder="unet")
         except Exception:
             self.unet = UNet2DConditionModel.from_config(unet_name_or_path)
-            self.init_unet_weights()
             logger.info("Init unet model from scratch!")
 
-        freeze_params(self.vae.parameters())
+        self.vae.requires_grad_(False)
         logger.info("Freeze vae parameters!")
         if not self.model_args.train_text_encoder:
-            freeze_params(self.text_encoder.parameters())
+            self.text_encoder.requires_grad_(False)
             logger.info("Freeze text_encoder parameters!")
             self.text_encoder.eval()
             self.train_text_encoder = False
@@ -117,13 +190,14 @@ class StableDiffusionModel(nn.Layer):
 
         # Expand the tensors.
         # Adapted from https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L1026
-        sqrt_alphas_cumprod = sqrt_alphas_cumprod[timesteps].cast("float32")
+        sqrt_alphas_cumprod = sqrt_alphas_cumprod.to(
+            device=timesteps.device)[timesteps].float()
         while len(sqrt_alphas_cumprod.shape) < len(timesteps.shape):
             sqrt_alphas_cumprod = sqrt_alphas_cumprod[..., None]
         alpha = sqrt_alphas_cumprod.expand(timesteps.shape)
 
-        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[
-            timesteps].cast("float32")
+        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod.to(
+            device=timesteps.device)[timesteps].float()
         while len(sqrt_one_minus_alphas_cumprod.shape) < len(timesteps.shape):
             sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[...,
                                                                           None]
@@ -134,27 +208,28 @@ class StableDiffusionModel(nn.Layer):
         return snr
 
     def forward(self, input_ids=None, pixel_values=None, **kwargs):
-        self.vae.eval()
-        if not self.model_args.train_text_encoder:
-            self.text_encoder.eval()
-
         # vae encode
-        latents = self.vae.encode(pixel_values).latent_dist.sample()
+        latents = self.vae.encode(pixel_values, return_dict=False)[0].sample()
         latents = latents * self.vae.config.scaling_factor
 
         # Sample noise that we'll add to the latents
-        noise = paddle.randn(latents.shape)
+        noise = torch.randn(latents.shape, device=latents.device)
         if self.model_args.noise_offset:
             # https://www.crosslabs.org//blog/diffusion-with-offset-noise
-            noise += self.model_args.noise_offset * paddle.randn(
-                (latents.shape[0], latents.shape[1], 1, 1), dtype=noise.dtype)
+            noise += self.model_args.noise_offset * torch.randn(
+                (latents.shape[0], latents.shape[1], 1, 1),
+                dtype=noise.dtype,
+                device=noise.device)
         if self.model_args.input_perturbation:
-            new_noise = noise + self.model_args.input_perturbation * paddle.randn(
-                noise.shape, dtype=noise.dtype)
+            new_noise = noise + self.model_args.input_perturbation * torch.randn_like(
+                noise)
 
-        timesteps = paddle.randint(
-            0, self.noise_scheduler.config.num_train_timesteps,
-            (latents.shape[0], )).cast("int64")
+        timesteps = torch.randint(
+            0,
+            self.noise_scheduler.config.num_train_timesteps,
+            (latents.shape[0], ),
+            dtype=torch.long,
+            device=latents.device, )
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
         if self.model_args.input_perturbation:
@@ -163,13 +238,15 @@ class StableDiffusionModel(nn.Layer):
             noisy_latents = self.add_noise(latents, noise, timesteps)
 
         # text encode
-        encoder_hidden_states = self.text_encoder(input_ids)[0]
+        encoder_hidden_states = self.text_encoder(
+            input_ids, return_dict=False)[0]
 
         # unet
         model_pred = self.unet(
             sample=noisy_latents,
             timestep=timesteps,
-            encoder_hidden_states=encoder_hidden_states).sample
+            encoder_hidden_states=encoder_hidden_states,
+            return_dict=False)[0]
 
         # Get the target for loss depending on the prediction type
         if self.model_args.prediction_type == "epsilon":
@@ -182,34 +259,32 @@ class StableDiffusionModel(nn.Layer):
 
         # compute loss
         if self.model_args.snr_gamma is None:
-            loss = (F.mse_loss(
-                model_pred.cast("float32"),
-                target.cast("float32"),
-                reduction="none").mean([1, 2, 3]).mean())
+            loss = F.mse_loss(
+                model_pred.float(), target.float(),
+                reduction="none").mean([1, 2, 3]).mean()
         else:
             # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
             # Since we predict the noise instead of x_0, the original formulation is slightly changed.
             # This is discussed in Section 4.2 of the same paper.
             snr = self.compute_snr(timesteps)
-            mse_loss_weights = (paddle.stack(
-                [snr, self.model_args.snr_gamma * paddle.ones_like(timesteps)],
-                axis=1).min(axis=1)[0] / snr)
+            mse_loss_weights = (torch.stack(
+                [snr, self.model_args.snr_gamma * torch.ones_like(timesteps)],
+                dim=1).min(dim=1)[0] / snr)
             # We first calculate the original loss. Then we mean over the non-batch dimensions and
             # rebalance the sample-wise losses with their respective loss weights.
             # Finally, we take the mean of the rebalanced loss.
             loss = F.mse_loss(
-                model_pred.cast("float32"),
-                target.cast("float32"),
-                reduction="none")
-            loss = loss.mean(list(range(1, len(loss.shape)))) * mse_loss_weights
+                model_pred.float(), target.float(), reduction="none")
+            loss = loss.mean(
+                dim=list(range(1, len(loss.shape)))) * mse_loss_weights
             loss = loss.mean()
         return loss
 
     def add_noise(
             self,
-            original_samples: paddle.Tensor,
-            noise: paddle.Tensor,
-            timesteps: paddle.Tensor, ) -> paddle.Tensor:
+            original_samples: torch.Tensor,
+            noise: torch.Tensor,
+            timesteps: torch.Tensor, ) -> torch.Tensor:
         sqrt_alpha_prod = self.alphas_cumprod[timesteps]**0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()
         while len(sqrt_alpha_prod.shape) < len(original_samples.shape):
@@ -225,9 +300,9 @@ class StableDiffusionModel(nn.Layer):
         return noisy_samples
 
     def get_velocity(self,
-                     sample: paddle.Tensor,
-                     noise: paddle.Tensor,
-                     timesteps: paddle.Tensor) -> paddle.Tensor:
+                     sample: torch.Tensor,
+                     noise: torch.Tensor,
+                     timesteps: torch.Tensor) -> torch.Tensor:
         sqrt_alpha_prod = self.alphas_cumprod[timesteps]**0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()
         while len(sqrt_alpha_prod.shape) < len(sample.shape):
@@ -240,21 +315,6 @@ class StableDiffusionModel(nn.Layer):
 
         velocity = sqrt_alpha_prod * noise - sqrt_one_minus_alpha_prod * sample
         return velocity
-
-    def init_unet_weights(self):
-        reset_initialized_parameter(self.unet)
-        zeros_(self.unet.conv_out.weight)
-        zeros_(self.unet.conv_out.bias)
-        for _, m in self.unet.named_sublayers():
-            if isinstance(m, AttentionBlock):
-                zeros_(m.proj_attn.weight)
-                zeros_(m.proj_attn.bias)
-            if isinstance(m, ResnetBlock2D):
-                zeros_(m.conv2.weight)
-                zeros_(m.conv2.bias)
-            if isinstance(m, Transformer2DModel):
-                zeros_(m.proj_out.weight)
-                zeros_(m.proj_out.bias)
 
     @contextlib.contextmanager
     def ema_scope(self, context=None):
@@ -275,18 +335,18 @@ class StableDiffusionModel(nn.Layer):
         if self.use_ema:
             self.model_ema(self.unet)
 
-    @paddle.no_grad()
+    @torch.no_grad()
     def decode_image(self, pixel_values=None, max_batch=8, **kwargs):
         self.eval()
         if pixel_values.shape[0] > max_batch:
             pixel_values = pixel_values[:max_batch]
-        latents = self.vae.encode(pixel_values).latent_dist.sample()
-        image = self.vae.decode(latents).sample
-        image = (image / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1])
-        image = (image * 255.0).cast("float32").numpy().round()
+        latents = self.vae.encode(pixel_values, return_dict=False)[0].sample()
+        image = self.vae.decode(latents, return_dict=False)[0]
+        image = (image / 2 + 0.5).clamp(0, 1).permute(0, 2, 3, 1)
+        image = (image * 255.0).float().cpu().numpy().round()
         return image
 
-    @paddle.no_grad()
+    @torch.no_grad()
     def log_image(self,
                   input_ids=None,
                   height=256,
@@ -313,13 +373,16 @@ class StableDiffusionModel(nn.Layer):
                     padding="max_length",
                     truncation=True,
                     max_length=max_length,
-                    return_tensors="pd", )
-                uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0]
-                text_embeddings = paddle.concat(
-                    [uncond_embeddings, text_embeddings], axis=0)
+                    return_tensors="pt", )
+                uncond_embeddings = self.text_encoder(
+                    uncond_input.input_ids.to(device=input_ids.device),
+                    return_dict=False)[0]
+                text_embeddings = torch.cat(
+                    [uncond_embeddings, text_embeddings], dim=0)
 
-            latents = paddle.randn((input_ids.shape[0], self.unet.in_channels,
-                                    height // 8, width // 8))
+            latents = torch.randn(
+                (input_ids.shape[0], self.unet.config.in_channels, height // 8,
+                 width // 8)).to(device=input_ids.device)
             latents = latents * self.eval_scheduler.init_noise_sigma
             accepts_eta = "eta" in set(
                 inspect.signature(self.eval_scheduler.step).parameters.keys())
@@ -327,24 +390,29 @@ class StableDiffusionModel(nn.Layer):
             if accepts_eta:
                 extra_step_kwargs["eta"] = eta
             for t in self.eval_scheduler.timesteps:
-                latent_model_input = paddle.concat(
+                latent_model_input = torch.concat(
                     [latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.eval_scheduler.scale_model_input(
                     latent_model_input, t)
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
-                    encoder_hidden_states=text_embeddings).sample
+                    encoder_hidden_states=text_embeddings,
+                    return_dict=False)[0]
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
                 latents = self.eval_scheduler.step(
-                    noise_pred, t, latents, **extra_step_kwargs).prev_sample
+                    noise_pred,
+                    t,
+                    latents,
+                    **extra_step_kwargs,
+                    return_dict=False)[0]
             latents = 1 / self.vae.config.scaling_factor * latents
             image = self.vae.decode(latents).sample
-            image = (image / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1]) * 255.0
-        return image.cast("float32").numpy().round()
+            image = (image / 2 + 0.5).clamp(0, 1).permute(0, 2, 3, 1) * 255.0
+        return image.float().cpu().numpy().round()
 
     def set_recompute(self, use_recompute=False):
         if use_recompute:
@@ -358,32 +426,19 @@ class StableDiffusionModel(nn.Layer):
 
     def set_xformers(self, use_xformers=False):
         if use_xformers:
-            if not is_ppxformers_available():
-                raise ValueError(
-                    'Please run `python -m pip install "paddlepaddle-gpu>=2.5.0.post117" -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html first.'
-                )
-            else:
-                try:
-                    attention_op = os.getenv("FLAG_XFORMERS_ATTENTION_OP",
-                                             "none").lower()
-
-                    if attention_op == "none":
-                        attention_op = None
-
-                    self.unet.enable_xformers_memory_efficient_attention(
-                        attention_op)
-                    if hasattr(self.vae,
-                               "enable_xformers_memory_efficient_attention"):
-                        self.vae.enable_xformers_memory_efficient_attention(
-                            attention_op)
-                    if hasattr(self.text_encoder,
-                               "enable_xformers_memory_efficient_attention"):
-                        self.text_encoder.enable_xformers_memory_efficient_attention(
-                            attention_op)
-                except Exception as e:
-                    logger.warn(
-                        "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
-                        f" correctly and a GPU is available: {e}")
+            try:
+                self.unet.enable_xformers_memory_efficient_attention()
+                if hasattr(self.vae,
+                           "enable_xformers_memory_efficient_attention"):
+                    self.vae.enable_xformers_memory_efficient_attention()
+                if hasattr(self.text_encoder,
+                           "enable_xformers_memory_efficient_attention"):
+                    self.text_encoder.enable_xformers_memory_efficient_attention(
+                    )
+            except Exception as e:
+                logger.warn(
+                    "Could not enable memory efficient attention. Make sure develop torchtorch is installed"
+                    f" correctly and a GPU is available: {e}")
 
     def set_ema(self, use_ema=False):
         self.use_ema = use_ema

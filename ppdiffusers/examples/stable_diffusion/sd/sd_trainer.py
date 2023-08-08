@@ -28,7 +28,9 @@ from paddlenlp.transformers.model_utils import _add_variant
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
 from ppdiffusers.training_utils import unwrap_model
-
+import paddle.amp.auto_cast as autocast
+import contextlib
+import sys
 from .text_image_pair_dataset import TextImagePair, worker_init_fn
 
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
@@ -36,6 +38,35 @@ TRAINING_ARGS_NAME = "training_args.bin"
 
 
 class VisualDLWithImageCallback(VisualDLCallback):
+    def autocast_smart_context_manager(self, args):
+        if args.fp16 or args.bf16:
+            amp_dtype = "float16" if args.fp16 else "bfloat16"
+            custom_black_list = ["reduce_sum", "c_softmax_with_cross_entropy"]
+            custom_white_list = []
+            if args.fp16_opt_level == "O2":
+                # https://github.com/PaddlePaddle/Paddle/blob/eb97f4f0adca40b16a309b927e480178beb8ae96/python/paddle/amp/amp_lists.py#L85-L86
+                # the lookup_table is in black_list, but in O2, we need it return fp16
+                custom_white_list.extend(["lookup_table", "lookup_table_v2"])
+
+            if hasattr(args, "amp_custom_white_list"):
+                if args.amp_custom_white_list is not None:
+                    custom_white_list.extend(args.amp_custom_white_list)
+            if hasattr(args, "amp_custom_black_list"):
+                if self.args.amp_custom_black_list is not None:
+                    custom_black_list.extend(args.amp_custom_black_list)
+
+            ctx_manager = autocast(
+                True,
+                custom_black_list=set(custom_black_list),
+                custom_white_list=set(custom_white_list),
+                level=args.fp16_opt_level,
+                dtype=amp_dtype, )
+        else:
+            ctx_manager = contextlib.nullcontext() if sys.version_info >= (
+                3, 7) else contextlib.suppress()
+
+        return ctx_manager
+
     def on_step_end(self, args, state, control, model=None, **kwargs):
         if hasattr(model, "on_train_batch_end"):
             model.on_train_batch_end()
@@ -50,21 +81,23 @@ class VisualDLWithImageCallback(VisualDLCallback):
         if (inputs is not None and model is not None and
                 args.image_logging_steps > 0 and
                 state.global_step % args.image_logging_steps == 0):
-            max_batch = 4 if args.resolution > 256 else 8
-            image_logs["reconstruction"] = model.decode_image(
-                pixel_values=inputs["pixel_values"], max_batch=max_batch)
-            image_logs["ddim-samples-1.0"] = model.log_image(
-                input_ids=inputs["input_ids"],
-                guidance_scale=1.0,
-                height=args.resolution,
-                width=args.resolution,
-                max_batch=max_batch, )
-            image_logs["ddim-samples-7.5"] = model.log_image(
-                input_ids=inputs["input_ids"],
-                guidance_scale=7.5,
-                height=args.resolution,
-                width=args.resolution,
-                max_batch=max_batch, )
+
+            with self.autocast_smart_context_manager(args):
+                max_batch = 4 if args.resolution > 256 else 8
+                image_logs["reconstruction"] = model.decode_image(
+                    pixel_values=inputs["pixel_values"], max_batch=max_batch)
+                image_logs["ddim-samples-1.0"] = model.log_image(
+                    input_ids=inputs["input_ids"],
+                    guidance_scale=1.0,
+                    height=args.resolution,
+                    width=args.resolution,
+                    max_batch=max_batch, )
+                image_logs["ddim-samples-7.5"] = model.log_image(
+                    input_ids=inputs["input_ids"],
+                    guidance_scale=7.5,
+                    height=args.resolution,
+                    width=args.resolution,
+                    max_batch=max_batch, )
 
         if not state.is_world_process_zero:
             return

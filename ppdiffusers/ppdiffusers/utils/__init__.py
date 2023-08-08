@@ -46,7 +46,8 @@ from .constants import (
     TORCH_SAFETENSORS_WEIGHTS_NAME,
     TORCH_WEIGHTS_NAME,
     WEIGHTS_NAME,
-    get_map_location_default, )
+    get_map_location_default,
+    str2bool, )
 from .deprecation_utils import deprecate
 from .doc_utils import replace_example_docstring
 from .download_utils import (
