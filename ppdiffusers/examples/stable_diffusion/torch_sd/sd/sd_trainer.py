@@ -262,9 +262,10 @@ class StableDiffusionTrainer(Trainer):
 
     def compute_loss(self, model, inputs, return_outputs=False):
         # move eval 
-        model.vae.eval()
-        if not model.model_args.train_text_encoder:
-            model.text_encoder.eval()
+        unwraped_model = unwrap_model(model)
+        unwraped_model.vae.eval()
+        if not unwraped_model.model_args.train_text_encoder:
+            unwraped_model.text_encoder.eval()
         loss = model(**inputs)
         return loss
 
