@@ -769,6 +769,29 @@ def get_crop_param(image, scale, ratio, attempts=10):
     return i, j, h, w
 
 
+
+def _get_image_size(img):
+    if F._is_pil_image(img):
+        return img.size
+    elif F._is_numpy_image(img):
+        return img.shape[:2][::-1]
+    elif F._is_tensor_image(img):
+        if len(img.shape) == 3:
+            return img.shape[1:][::-1]  # chw -> wh
+        elif len(img.shape) == 4:
+            return img.shape[2:][::-1]  # nchw -> wh
+        else:
+            raise ValueError(
+                "The dim for input Tensor should be 3-D or 4-D, but received {}".format(
+                    len(img.shape)
+                )
+            )
+    else:
+        raise TypeError(f"Unexpected type {type(img)}")
+
+
+
+from IPython import embed
 def random_resized_crop(
     image: np.ndarray,
     size: Union[int, List, Tuple],
@@ -790,6 +813,41 @@ def random_resized_crop(
     resample (`int`, *optional*, defaults to `PILImageResampling.BILINEAR`):
         The filter to user for resampling.
     """
-    i, j, h, w = get_crop_param(image, scale, ratio)
-    cropped_img = F.crop(image, i, j, h, w)
-    return resize(cropped_img, size, resample)
+
+    def _dynamic_get_param(image, attempts=10):
+        width, height = _get_image_size(image)
+        area = height * width
+
+        for _ in range(attempts):
+            target_area = np.random.uniform(*scale) * area
+            log_ratio = tuple(math.log(x) for x in ratio)
+            aspect_ratio = math.exp(np.random.uniform(*log_ratio))
+
+            w = int(round(math.sqrt(target_area * aspect_ratio)))
+            h = int(round(math.sqrt(target_area / aspect_ratio)))
+
+            if 0 < w <= width and 0 < h <= height:
+                i = random.randint(0, height - h)
+                j = random.randint(0, width - w)
+                return i, j, h, w
+
+        # Fallback to central crop
+        in_ratio = float(width) / float(height)
+        if in_ratio < min(ratio):
+            w = width
+            h = int(round(w / min(ratio)))
+        elif in_ratio > max(ratio):
+            h = height
+            w = int(round(h * max(ratio)))
+        else:
+            # return whole image
+            w = width
+            h = height
+        i = (height - h) // 2
+        j = (width - w) // 2
+        return i, j, h, w
+    
+    i, j, h, w = _dynamic_get_param(image)
+
+    cropped_img = F.crop(image, i, j, h, w) # pil
+    return F.resize(cropped_img, size, 'bicubic')

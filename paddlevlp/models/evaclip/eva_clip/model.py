@@ -4,20 +4,17 @@ import paddle
 Adapted from https://github.com/openai/CLIP. Originally MIT License, Copyright (c) 2021 OpenAI.
 """
 import os
+import math
 from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 from functools import partial
 import numpy as np
 from .loss import ClipLoss
-try:
-    from .hf_model import HFTextEncoder
-except:
-    HFTextEncoder = None
 from .timm_model import TimmModel
 from .eva_vit_model import EVAVisionTransformer
 from .transformer import LayerNorm, QuickGELU, Attention, VisionTransformer, EVATextTransformer
-from .fusedln import FusedLayerNorm
-# from paddle.nn import LayerNorm as FusedLayerNorm
+# from .fusedln import FusedLayerNorm
+from paddle.nn import LayerNorm as FusedLayerNorm
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel
@@ -77,7 +74,8 @@ class EVACLIP(EVACLIPPretrainedModel):
             gather_with_grad=False,
             cache_labels=True,
             data_world_rank=0,
-            data_world_size=1, ):
+            data_world_size=1, 
+            enable_recompute=False):
         super().__init__(config)
         vision_config = EVAVisionTransformerConfig(**config.vision_config)
         text_config = EVATextTransformerConfig(**config.text_config)
@@ -94,6 +92,10 @@ class EVACLIP(EVACLIPPretrainedModel):
             cache_labels=cache_labels,
             rank=data_world_rank,
             world_size=data_world_size, )
+
+        if enable_recompute:
+            self.visual.set_grad_checkpointing(True)
+            self.text.set_grad_checkpointing(True)
 
     def lock_image_tower(self, unlocked_groups=0, freeze_bn_stats=False):
         self.visual.lock(
@@ -113,7 +115,7 @@ class EVACLIP(EVACLIPPretrainedModel):
 
     @paddle.no_grad()
     def clip_scale(self):
-        share_buffer = self.logit_scale.clip(0, 4.6052)
+        share_buffer = self.logit_scale.clip(0, math.log(100))
         self.logit_scale.copy_(share_buffer, True)
 
     def encode_image(self, image, normalize: bool=False):
@@ -122,16 +124,20 @@ class EVACLIP(EVACLIPPretrainedModel):
             x=features, axis=-1) if normalize else features
         return out
 
-    def encode_text(self, text, normalize: bool=False):
+    def encode_text(self, text, text_features=None, normalize: bool=False):
+        if text_features is not None:
+            # directly use text_features if given
+            return paddle.nn.functional.normalize(x=text_features, axis=-1) if normalize else text_features
         features = self.text(text)
         return paddle.nn.functional.normalize(
             x=features, axis=-1) if normalize else features
 
-    def forward(self, image, input_ids, skiploss=False):
+    def forward(self, image, input_ids, text_emb=None, skiploss=False):
         self.clip_scale()
         text = input_ids
+        text_features = text_emb
         image_features = self.encode_image(image, normalize=True)
-        text_features = self.encode_text(text, normalize=True)
+        text_features = self.encode_text(text, text_features=text_features, normalize=True)
         if skiploss:
             return image_features, text_features, self.logit_scale.exp()
 
