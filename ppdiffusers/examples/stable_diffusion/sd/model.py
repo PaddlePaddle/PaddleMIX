@@ -365,7 +365,11 @@ class StableDiffusionModel(nn.Layer):
             else:
                 try:
                     attention_op = os.getenv("FLAG_XFORMERS_ATTENTION_OP",
-                                             "cutlass").lower()
+                                             "none").lower()
+
+                    if attention_op == "none":
+                        attention_op = None
+
                     self.unet.enable_xformers_memory_efficient_attention(
                         attention_op)
                     if hasattr(self.vae,

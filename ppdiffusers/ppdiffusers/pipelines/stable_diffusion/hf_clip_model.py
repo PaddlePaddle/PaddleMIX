@@ -35,6 +35,7 @@ from paddlenlp.transformers.model_outputs import (
     ModelOutput, )
 from paddlenlp.transformers.model_utils import PretrainedModel
 from ppdiffusers.initializer import normal_, ones_
+from functools import partial
 
 CLIP_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "openai/clip-vit-base-patch32",
@@ -46,17 +47,17 @@ def finfo(dtype: paddle.dtype=None):
     if dtype is None:
         dtype = paddle.get_default_dtype()
 
-    if dtype == paddle.bfloat16:
+    if dtype in [paddle.bfloat16, "bfloat16"]:
         # Numpy do not support `np.finfo(np.uint16)`, so try to construct a finfo object to fetch min value
         class BFloatFInfo:
             min = -3.3895313892515355e38
 
         return BFloatFInfo
-    if dtype == paddle.float32:
+    if dtype in [paddle.float32, "float32"]:
         return np.finfo(np.float32)
-    if dtype == paddle.float16:
+    if dtype in [paddle.float16, "float16"]:
         return np.finfo(np.float16)
-    if dtype == paddle.float64:
+    if dtype in [paddle.float64, "float64"]:
         return np.finfo(np.float64)
 
 
@@ -116,7 +117,20 @@ class TorchLinear(nn.Layer):
             self.weight.shape[1], self.weight.shape[0], self._dtype, name_str)
 
 
-if bool(os.getenv("USE_TORCH_LINEAR", False)):
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if not isinstance(v, str):
+        v = str(v)
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise ValueError("Not supported value: {}".format(v))
+
+
+if str2bool(os.getenv("USE_TORCH_LINEAR", "no")):
     LinearClass = TorchLinear
 else:
     LinearClass = nn.Linear
@@ -274,12 +288,13 @@ class HFCLIPVisionEmbeddings(nn.Layer):
             "position_ids",
             paddle.arange(self.num_positions).expand(
                 (1, -1), dtype="int64"),
-            persistable=True)
+            persistable=False)
 
     def forward(self, pixel_values: paddle.Tensor) -> paddle.Tensor:
         batch_size = pixel_values.shape[0]
+        target_dtype = self.patch_embedding.weight.dtype
         patch_embeds = self.patch_embedding(
-            pixel_values)  # shape = [*, width, grid, grid]
+            pixel_values.cast(target_dtype))  # shape = [*, width, grid, grid]
         patch_embeds = patch_embeds.flatten(2).transpose([0, 2, 1])
 
         class_embeds = self.class_embedding.expand([batch_size, 1, -1])
@@ -302,7 +317,7 @@ class HFCLIPTextEmbeddings(nn.Layer):
             "position_ids",
             paddle.arange(
                 config.max_position_embeddings, dtype="int64").expand((1, -1)),
-            persistable=True, )
+            persistable=False, )
 
     def forward(
             self,
@@ -510,7 +525,6 @@ class HFCLIPPretrainedModel(PretrainedModel):
     config_class = CLIPConfig
     base_model_prefix = "clip"
     supports_gradient_checkpointing = True
-    _keys_to_ignore_on_load_missing = [r"position_ids"]
 
     @paddle.no_grad()
     def _init_weights(self, module):
@@ -577,6 +591,29 @@ class HFCLIPPretrainedModel(PretrainedModel):
     def _set_gradient_checkpointing(self, module, value=False):
         if isinstance(module, HFCLIPEncoder):
             module.gradient_checkpointing = value
+
+    def gradient_checkpointing_enable(self):
+        """
+        Activates gradient checkpointing for the current model.
+
+        Note that in other frameworks this feature can be referred to as "activation checkpointing" or "checkpoint
+        activations".
+        """
+        if not self.supports_gradient_checkpointing:
+            raise ValueError(
+                f"{self.__class__.__name__} does not support gradient checkpointing."
+            )
+        self.apply(partial(self._set_gradient_checkpointing, value=True))
+
+    def gradient_checkpointing_disable(self):
+        """
+        Deactivates gradient checkpointing for the current model.
+
+        Note that in other frameworks this feature can be referred to as "activation checkpointing" or "checkpoint
+        activations".
+        """
+        if self.supports_gradient_checkpointing:
+            self.apply(partial(self._set_gradient_checkpointing, value=False))
 
     def post_init(self):
         self.apply(self._init_weights)
@@ -724,6 +761,23 @@ class HFCLIPEncoder(nn.Layer):
             attentions=all_attentions)
 
 
+# def _make_causal_mask(
+#     input_ids_shape, dtype, past_key_values_length: int = 0
+# ):
+#     """
+#     Make causal mask used for bi-directional self-attention.
+#     """
+#     bsz, tgt_len = input_ids_shape
+#     mask = paddle.full((tgt_len, tgt_len), finfo(dtype).min, )
+#     mask_cond = paddle.arange(mask.shape[1], )
+#     mask = masked_fill(mask, mask_cond < (mask_cond + 1).reshape([mask.shape[-1], 1]), paddle.zeros((1,)))
+#     mask = mask.cast(dtype)
+
+#     if past_key_values_length > 0:
+#         mask = paddle.concat([paddle.zeros(tgt_len, past_key_values_length, dtype=dtype), mask], axis=-1)
+#     return mask[None, None, :, :].expand([bsz, 1, tgt_len, tgt_len + past_key_values_length])
+
+
 class HFCLIPTextTransformer(nn.Layer):
     def __init__(self, config: CLIPTextConfig):
         super().__init__()
@@ -733,6 +787,8 @@ class HFCLIPTextTransformer(nn.Layer):
         self.encoder = HFCLIPEncoder(config)
         self.final_layer_norm = nn.LayerNorm(
             embed_dim, epsilon=config.layer_norm_eps)
+        # For `pooled_output` computation
+        self.eos_token_id = config.eos_token_id
 
     def forward(
             self,
@@ -765,6 +821,7 @@ class HFCLIPTextTransformer(nn.Layer):
         bsz, seq_len = input_shape
         # CLIP's text model uses causal mask, prepare it here.
         # https://github.com/openai/CLIP/blob/cfcffb90e69f37bf2ff1e988237a0fbe41f33c04/clip/model.py#L324
+        # causal_attention_mask = _make_causal_mask(input_shape, hidden_states.dtype, )
         causal_attention_mask = self._build_causal_attention_mask(
             bsz,
             seq_len,
@@ -785,12 +842,34 @@ class HFCLIPTextTransformer(nn.Layer):
         last_hidden_state = encoder_outputs[0]
         last_hidden_state = self.final_layer_norm(last_hidden_state)
 
-        # text_embeds.shape = [batch_size, sequence_length, transformer.width]
-        # take features from the eot embedding (eot_token is the highest number in each sequence)
-        # casting to paddle.int for onnx compatibility: argmax doesn't support int64 inputs with opset 14
-        pooled_output = last_hidden_state[paddle.arange(
-            last_hidden_state.shape[0], dtype=paddle.int32), input_ids.cast(
-                paddle.int32).argmax(-1)]
+        if self.eos_token_id == 2:
+            # The `eos_token_id` was incorrect before PR #24773: Let's keep what have been done here.
+            # A CLIP model with such `eos_token_id` in the config can't work correctly with extra new tokens added
+            # ------------------------------------------------------------
+            # text_embeds.shape = [batch_size, sequence_length, transformer.width]
+            # take features from the eot embedding (eot_token is the highest number in each sequence)
+            # casting to paddle.int32 for onnx compatibility: argmax doesn't support int64 inputs with opset 14
+            pooled_output = last_hidden_state.gather_nd(
+                paddle.stack(
+                    [
+                        paddle.arange(
+                            last_hidden_state.shape[0], dtype="int32"),
+                        input_ids.argmax(
+                            -1, dtype="int32")
+                    ],
+                    axis=-1, ))
+        else:
+            # The config gets updated `eos_token_id` from PR #24773 (so the use of exta new tokens is possible)
+            # We need to get the first position of `eos_token_id` value (`pad_token_ids` might equal to `eos_token_id`)
+            pooled_output = last_hidden_state.gather_nd(
+                paddle.stack(
+                    [
+                        paddle.arange(
+                            last_hidden_state.shape[0], dtype="int32"),
+                        (input_ids == self.eos_token_id).cast("int32").argmax(
+                            axis=-1, dtype="int32"),
+                    ],
+                    axis=-1, ))
 
         if not return_dict:
             return (last_hidden_state, pooled_output) + encoder_outputs[1:]
@@ -1000,7 +1079,7 @@ class HFCLIPModel(HFCLIPPretrainedModel):
         self.text_projection = LinearClass(
             self.text_embed_dim, self.projection_dim, bias_attr=False)
         self.logit_scale = Parameter(
-            paddle.ones((1, )) * self.config.logit_scale_init_value)
+            paddle.to_tensor(self.config.logit_scale_init_value))
 
         # Initialize weights and apply final processing
         self.post_init()

@@ -15,6 +15,15 @@ import itertools
 import os
 
 import paddle
+
+# patch this https://github.com/PaddlePaddle/Paddle/pull/56045
+# def _select_sdp_cuda(head_dim):
+#     if head_dim <= 256:
+#         return "flash_attn"
+#     else:
+#         return "mem_efficient"
+# paddle.nn.functional.flash_attention._select_sdp_cuda = _select_sdp_cuda
+
 from sd import (
     SDDataArguments,
     SDModelArguments,

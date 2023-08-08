@@ -174,8 +174,9 @@ class Attention(nn.Layer):
                         attention_op=attention_op, )
                 except Exception as e:
                     raise e
-            if self.head_dim > 128 and attention_op == "flash":
-                attention_op = "cutlass"
+            # remove this PR: https://github.com/PaddlePaddle/Paddle/pull/56045
+            # if self.head_size > 128 and attention_op == "flash":
+            #     attention_op = "cutlass"
             if is_lora:
                 processor = LoRAXFormersAttnProcessor(
                     hidden_size=self.processor.hidden_size,
@@ -686,7 +687,7 @@ class AttnAddedKVProcessor:
 
 class XFormersAttnAddedKVProcessor:
     def __init__(self, attention_op: Optional[str]=None):
-        assert attention_op in [None, "cutlass", "flash"]
+        assert attention_op in [None, "auto", "cutlass", "flash"]
         self.attention_op = attention_op
 
     def __call__(self,
@@ -761,7 +762,7 @@ class XFormersAttnAddedKVProcessor:
 
 class XFormersAttnProcessor:
     def __init__(self, attention_op: Optional[str]=None):
-        assert attention_op in [None, "cutlass", "flash"]
+        assert attention_op in [None, "auto", "cutlass", "flash"]
         self.attention_op = attention_op
 
     def __call__(self,
@@ -918,7 +919,7 @@ class CustomDiffusionXFormersAttnProcessor(nn.Layer):
             dropout=0.0,
             attention_op: Optional[str]=None, ):
         super().__init__()
-        assert attention_op in [None, "cutlass", "flash"]
+        assert attention_op in [None, "auto", "cutlass", "flash"]
         self.train_kv = train_kv
         self.train_q_out = train_q_out
 

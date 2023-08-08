@@ -25,15 +25,7 @@ __all__ = [
     "SDDataArguments",
 ]
 
-
-def str2bool(v):
-    if v.lower() in ("yes", "true", "t", "y", "1"):
-        return True
-    elif v.lower() in ("no", "false", "f", "n", "0"):
-        return False
-    else:
-        raise ValueError("Unsupported value encountered.")
-
+from ppdiffusers.utils import str2bool
 
 if str2bool(os.getenv("FLAG_FUSED_LINEAR", "True")):
     paddle.nn.Linear = paddle.incubate.nn.FusedLinear

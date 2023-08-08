@@ -32,16 +32,21 @@ logger = get_logger("transformers")
 
 
 def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if not isinstance(v, str):
+        v = str(v)
     if v.lower() in ("yes", "true", "t", "y", "1"):
         return True
     elif v.lower() in ("no", "false", "f", "n", "0"):
         return False
     else:
-        raise ValueError("Unsupported value encountered.")
+        raise ValueError("Not supported value: {}".format(v))
 
 
 if not str2bool(os.getenv("FLAG_SDP", "True")):
     if hasattr(torch.nn.functional, "scaled_dot_product_attention"):
+        torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
         del torch.nn.functional.scaled_dot_product_attention
         print(
             "Removed `torch.nn.functional.scaled_dot_product_attention`, we will use default attention implement."

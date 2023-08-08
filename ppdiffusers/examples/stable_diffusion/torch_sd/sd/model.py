@@ -208,12 +208,8 @@ class StableDiffusionModel(nn.Module):
         return snr
 
     def forward(self, input_ids=None, pixel_values=None, **kwargs):
-        self.vae.eval()
-        if not self.model_args.train_text_encoder:
-            self.text_encoder.eval()
-
         # vae encode
-        latents = self.vae.encode(pixel_values).latent_dist.sample()
+        latents = self.vae.encode(pixel_values, return_dict=False)[0].sample()
         latents = latents * self.vae.config.scaling_factor
 
         # Sample noise that we'll add to the latents
@@ -242,13 +238,15 @@ class StableDiffusionModel(nn.Module):
             noisy_latents = self.add_noise(latents, noise, timesteps)
 
         # text encode
-        encoder_hidden_states = self.text_encoder(input_ids)[0]
+        encoder_hidden_states = self.text_encoder(
+            input_ids, return_dict=False)[0]
 
         # unet
         model_pred = self.unet(
             sample=noisy_latents,
             timestep=timesteps,
-            encoder_hidden_states=encoder_hidden_states).sample
+            encoder_hidden_states=encoder_hidden_states,
+            return_dict=False)[0]
 
         # Get the target for loss depending on the prediction type
         if self.model_args.prediction_type == "epsilon":
@@ -342,8 +340,8 @@ class StableDiffusionModel(nn.Module):
         self.eval()
         if pixel_values.shape[0] > max_batch:
             pixel_values = pixel_values[:max_batch]
-        latents = self.vae.encode(pixel_values).latent_dist.sample()
-        image = self.vae.decode(latents).sample
+        latents = self.vae.encode(pixel_values, return_dict=False)[0].sample()
+        image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clamp(0, 1).permute(0, 2, 3, 1)
         image = (image * 255.0).float().cpu().numpy().round()
         return image
@@ -377,7 +375,8 @@ class StableDiffusionModel(nn.Module):
                     max_length=max_length,
                     return_tensors="pt", )
                 uncond_embeddings = self.text_encoder(
-                    uncond_input.input_ids.to(device=input_ids.device))[0]
+                    uncond_input.input_ids.to(device=input_ids.device),
+                    return_dict=False)[0]
                 text_embeddings = torch.cat(
                     [uncond_embeddings, text_embeddings], dim=0)
 
@@ -398,13 +397,18 @@ class StableDiffusionModel(nn.Module):
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
-                    encoder_hidden_states=text_embeddings).sample
+                    encoder_hidden_states=text_embeddings,
+                    return_dict=False)[0]
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
                 latents = self.eval_scheduler.step(
-                    noise_pred, t, latents, **extra_step_kwargs).prev_sample
+                    noise_pred,
+                    t,
+                    latents,
+                    **extra_step_kwargs,
+                    return_dict=False)[0]
             latents = 1 / self.vae.config.scaling_factor * latents
             image = self.vae.decode(latents).sample
             image = (image / 2 + 0.5).clamp(0, 1).permute(0, 2, 3, 1) * 255.0

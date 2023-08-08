@@ -391,8 +391,9 @@ class SelfAttention1d(nn.Layer):
             self,
             use_memory_efficient_attention_xformers: bool,
             attention_op: Optional[str]=None):
-        if self.head_size > 128 and attention_op == "flash":
-            attention_op = "cutlass"
+        # remove this PR: https://github.com/PaddlePaddle/Paddle/pull/56045
+        # if self.head_size > 128 and attention_op == "flash":
+        #     attention_op = "cutlass"
         if use_memory_efficient_attention_xformers:
             if not is_ppxformers_available():
                 raise NotImplementedError(
