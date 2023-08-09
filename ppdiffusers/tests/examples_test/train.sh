@@ -366,8 +366,8 @@ python train_vae.py \
     --ignore_keys decoder. \
     --vae_config_file config/vae.json \
     --freeze_encoder \
-    --recompute True \
-    --enable_xformers_memory_efficient_attention True \
+    --recompute \
+    --enable_xformers_memory_efficient_attention \
     --input_size 256 256 \
     --max_train_steps 100 \
     --learning_rate 1e-4 \
@@ -387,8 +387,8 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_vae.py \
     --ignore_keys decoder. \
     --vae_config_file config/vae.json \
     --freeze_encoder \
-    --recompute True \
-    --enable_xformers_memory_efficient_attention True \
+    --recompute \
+    --enable_xformers_memory_efficient_attention \
     --input_size 256 256 \
     --max_train_steps 100 \
     --learning_rate 1e-4 \

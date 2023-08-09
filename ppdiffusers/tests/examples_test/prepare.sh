@@ -24,6 +24,11 @@ cp laion400m_demo_data.tar.gz ../stable_diffusion
 cp laion400m_demo_data.tar.gz ../autoencoder/vae
 cd -
 
+cd ../../examples/stable_diffusion
+rm -rf data
+tar -zxvf laion400m_demo_data.tar.gz
+cd -
+
 cd ../../examples/autoencoder/vae
 rm -rf data
 tar -zxvf laion400m_demo_data.tar.gz
