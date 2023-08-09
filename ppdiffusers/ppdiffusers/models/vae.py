@@ -226,7 +226,7 @@ class Decoder(nn.Layer):
         sample = z
         sample = self.conv_in(sample)
 
-        upscale_dtype = self.dtype
+        upscale_dtype = self.up_blocks.dtype
         if self.training and self.gradient_checkpointing and not sample.stop_gradient:
 
             def create_custom_forward(module):
