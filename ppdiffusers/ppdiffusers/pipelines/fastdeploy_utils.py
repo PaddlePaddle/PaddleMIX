@@ -537,11 +537,12 @@ class FastDeployDiffusionPipelineMixin:
 
     @property
     def text_encoder_hidden_states_dim(self):
-        if not hasattr(self, "text_encoder") or self.text_encoder is None:
+        if self.text_encoder is None:
             return 768
-        return self.text_encoder.model.get_output_info(0).shape[2]
+        dim = self.text_encoder.model.get_output_info(0).shape[2]
+        return 768 if dim == -1 else dim
 
-    def change_scheduler(self, scheduler_type="ddim"):
+    def change_scheduler(self, scheduler_type="ddim", inplace=True):
         scheduler_type = scheduler_type.lower()
         if scheduler_type == "pndm":
             scheduler = PNDMScheduler.from_config(
@@ -595,7 +596,9 @@ class FastDeployDiffusionPipelineMixin:
             raise ValueError(
                 f"Scheduler of type {scheduler_type} doesn't exist! Please choose in {self.supported_scheduler}!"
             )
-        self.scheduler = scheduler
+        if inplace:
+            self.scheduler = scheduler
+        return scheduler
 
     def get_timesteps(self, num_inference_steps, strength=1.0):
         if strength >= 1:
@@ -883,7 +886,7 @@ class FastDeployDiffusionPipelineMixin:
                 prompt_embeds=prompt_embeds,
                 negative_prompt_embeds=negative_prompt_embeds,
                 max_embeddings_multiples=max_embeddings_multiples,
-                infer_op=infer_op,
+                infer_op="raw",  # NOTE: we can't use zero copy!
                 **kwargs, )
         elif parse_prompt_type == "raw":
             return self._encode_prompt_raw(
@@ -958,7 +961,7 @@ class FastDeployDiffusionPipelineMixin:
                 prompt=prompt,
                 uncond_prompt=uncond_tokens,
                 max_embeddings_multiples=max_embeddings_multiples,
-                infer_op="raw",  # NOTE: we can't use zero copy!
+                infer_op=infer_op,
                 **kwargs, )
 
         bs_embed, seq_len, _ = prompt_embeds.shape
@@ -1218,6 +1221,8 @@ class FastDeployRuntimeModel:
 
         inputs = {}
         for k, v in kwargs.items():
+            if v is None:
+                continue
             if k == "timestep":
                 v = v.astype("float32")
             inputs[k] = v
