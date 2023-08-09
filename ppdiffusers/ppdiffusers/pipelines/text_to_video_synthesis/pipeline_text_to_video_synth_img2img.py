@@ -21,7 +21,6 @@ EXAMPLE_DOC_STRING = """
 
         >>> pipe = DiffusionPipeline.from_pretrained("cerspense/zeroscope_v2_576w", torch_dtype=torch.float16)
         >>> pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-        >>> pipe.to("cuda")
 
         >>> prompt = "spiderman running in the desert"
         >>> video_frames = pipe(prompt, num_inference_steps=40, height=320, width=576, num_frames=24).frames
@@ -29,7 +28,6 @@ EXAMPLE_DOC_STRING = """
         >>> video_path = export_to_video(video_frames, output_video_path="./video_576_spiderman.mp4")
 
         >>> # let's offload the text-to-image model
-        >>> pipe.to("cpu")
 
         >>> # and load the image-to-image model
         >>> pipe = DiffusionPipeline.from_pretrained(
@@ -137,7 +135,6 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
 
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None,
@@ -150,8 +147,6 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         Args:
              prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -160,10 +155,10 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
                 less than `1`).
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensoroptional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -186,10 +181,10 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 padding='max_length',
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -200,14 +195,13 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 )
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = text_inputs.attention_mask.to(device)
+                attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
-                text_input_ids.to(device), attention_mask=attention_mask)
+                text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype,
-                                         device=device)
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -239,20 +233,19 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.to(
-                dtype=self.text_encoder.dtype, device=device)
+            negative_prompt_embeds = negative_prompt_embeds.cast(
+                dtype=self.text_encoder.dtype)
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
@@ -323,7 +316,7 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                     f'`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}.'
                 )
 
-    def get_timesteps(self, num_inference_steps, strength, device):
+    def get_timesteps(self, num_inference_steps, strength):
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
         t_start = max(num_inference_steps - init_timestep, 0)
@@ -335,9 +328,8 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                         timestep,
                         batch_size,
                         dtype,
-                        device,
                         generator=None):
-        video = video.to(device=device, dtype=dtype)
+        video = video.cast(dtype=dtype)
         bsz, channel, frames, width, height = video.shape
         video = video.transpose(perm=[0, 2, 1, 3, 4]).reshape(
             bsz * frames, channel, width, height)
@@ -366,8 +358,7 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         else:
             init_latents = paddle.concat(x=[init_latents], axis=0)
         shape = init_latents.shape
-        noise = randn_tensor(
-            shape, generator=generator, device=device, dtype=dtype)
+        noise = randn_tensor(shape, generator=generator, dtype=dtype)
         init_latents = self.scheduler.add_noise(init_latents, noise, timestep)
         latents = init_latents
         latents = latents[(None), :].reshape((bsz, frames, latents.shape[
@@ -401,7 +392,7 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         Args:
             prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide image generation. If not defined, you need to pass `prompt_embeds`.
-            video (`List[np.ndarray]` or `torch.FloatTensor`):
+            video (`List[np.ndarray]` or `paddle.Tensor`):
                 `video` frames or tensor representing a video batch to be used as the starting point for the process.
                 Can also accpet video latents as `image`, if passing latents directly, it will not be encoded again.
             strength (`float`, *optional*, defaults to 0.8):
@@ -425,25 +416,25 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
                 A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for video
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`. Latents should be of shape
                 `(batch_size, num_channel, num_frames, height, width)`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs (prompt weighting). If not
                 provided, text embeddings are generated from the `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs (prompt weighting). If
                 not provided, `negative_prompt_embeds` are generated from the `negative_prompt` input argument.
             output_type (`str`, *optional*, defaults to `"np"`):
-                The output format of the generated video. Choose between `torch.FloatTensor` or `np.array`.
+                The output format of the generated video. Choose between `paddle.Tensor` or `np.array`.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.text_to_video_synthesis.TextToVideoSDPipelineOutput`] instead
                 of a plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -467,13 +458,11 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         prompt_embeds = self._encode_prompt(
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             negative_prompt,
@@ -481,13 +470,13 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale)
         video = preprocess_video(video)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps,
-                                                            strength, device)
+                                                            strength)
         latent_timestep = timesteps[:1].tile(
             repeat_times=[batch_size * num_images_per_prompt])
         latents = self.prepare_latents(video, latent_timestep, batch_size,
-                                       prompt_embeds.dtype, device, generator)
+                                       prompt_embeds.dtype, generator)
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
@@ -525,12 +514,8 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                         callback(i, t, latents)
         if output_type == 'latent':
             return TextToVideoSDPipelineOutput(frames=latents)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.unet.to('cpu')
         video_tensor = self.decode_latents(latents)
-        if output_type == 'pt':
+        if output_type == 'pd':
             video = video_tensor
         else:
             video = tensor2vid(video_tensor)

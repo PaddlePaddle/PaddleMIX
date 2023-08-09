@@ -134,7 +134,7 @@ def prepare_mask_and_masked_image(image,
             raise ValueError('Mask should be in [0, 1] range')
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
-        image = image.to(dtype='float32')
+        image = image.cast(dtype='float32')
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(
             f'`mask` is a torch.Tensor but `image` (type: {type(image)} is not')
@@ -151,7 +151,7 @@ def prepare_mask_and_masked_image(image,
         elif isinstance(image, list) and isinstance(image[0], np.ndarray):
             image = np.concatenate([i[(None), :] for i in image], axis=0)
         image = image.transpose(0, 3, 1, 2)
-        image = paddle.to_tensor(data=image).to(dtype='float32') / 127.5 - 1.0
+        image = paddle.to_tensor(data=image).cast(dtype='float32') / 127.5 - 1.0
         if isinstance(mask, (PIL.Image.Image, np.ndarray)):
             mask = [mask]
         if isinstance(mask, list) and isinstance(mask[0], PIL.Image.Image):
@@ -266,7 +266,6 @@ class StableDiffusionControlNetInpaintPipeline(
 
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None,
@@ -279,8 +278,6 @@ class StableDiffusionControlNetInpaintPipeline(
         Args:
              prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -289,10 +286,10 @@ class StableDiffusionControlNetInpaintPipeline(
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
                 less than `1`).
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -315,10 +312,10 @@ class StableDiffusionControlNetInpaintPipeline(
                 padding='max_length',
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -329,14 +326,13 @@ class StableDiffusionControlNetInpaintPipeline(
                 )
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = text_inputs.attention_mask.to(device)
+                attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
-                text_input_ids.to(device), attention_mask=attention_mask)
+                text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype,
-                                         device=device)
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -368,20 +364,19 @@ class StableDiffusionControlNetInpaintPipeline(
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.to(
-                dtype=self.text_encoder.dtype, device=device)
+            negative_prompt_embeds = negative_prompt_embeds.cast(
+                dtype=self.text_encoder.dtype)
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
@@ -390,7 +385,7 @@ class StableDiffusionControlNetInpaintPipeline(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
-    def run_safety_checker(self, image, device, dtype):
+    def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
         else:
@@ -401,10 +396,10 @@ class StableDiffusionControlNetInpaintPipeline(
                 feature_extractor_input = self.image_processor.numpy_to_pil(
                     image)
             safety_checker_input = self.feature_extractor(
-                feature_extractor_input, return_tensors='pt').to(device)
+                feature_extractor_input, return_tensors='pd')
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.to(dtype))
+                clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
     def decode_latents(self, latents):
@@ -430,7 +425,7 @@ class StableDiffusionControlNetInpaintPipeline(
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
 
-    def get_timesteps(self, num_inference_steps, strength, device):
+    def get_timesteps(self, num_inference_steps, strength):
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
         t_start = max(num_inference_steps - init_timestep, 0)
@@ -581,19 +576,18 @@ class StableDiffusionControlNetInpaintPipeline(
                               height,
                               batch_size,
                               num_images_per_prompt,
-                              device,
                               dtype,
                               do_classifier_free_guidance=False,
                               guess_mode=False):
         image = self.control_image_processor.preprocess(
-            image, height=height, width=width).to(dtype='float32')
+            image, height=height, width=width).cast(dtype='float32')
         image_batch_size = image.shape[0]
         if image_batch_size == 1:
             repeat_by = batch_size
         else:
             repeat_by = num_images_per_prompt
         image = image.repeat_interleave(repeats=repeat_by, axis=0)
-        image = image.to(device=device, dtype=dtype)
+        image = image.cast(dtype=dtype)
         if do_classifier_free_guidance and not guess_mode:
             image = paddle.concat(x=[image] * 2)
         return image
@@ -604,7 +598,6 @@ class StableDiffusionControlNetInpaintPipeline(
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None,
                         image=None,
@@ -623,18 +616,17 @@ class StableDiffusionControlNetInpaintPipeline(
                 'Since strength < 1. initial latents are to be initialised as a combination of Image + Noise.However, either the image or the noise timestep has not been provided.'
             )
         if return_image_latents or latents is None and not is_strength_max:
-            image = image.to(device=device, dtype=dtype)
+            image = image.cast(dtype=dtype)
             image_latents = self._encode_vae_image(
                 image=image, generator=generator)
         if latents is None:
-            noise = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            noise = randn_tensor(shape, generator=generator, dtype=dtype)
             latents = noise if is_strength_max else self.scheduler.add_noise(
                 image_latents, noise, timestep)
             latents = (latents * self.scheduler.init_noise_sigma
                        if is_strength_max else latents)
         else:
-            noise = latents.to(device)
+            noise = latents
             latents = noise * self.scheduler.init_noise_sigma
         outputs = latents,
         if return_noise:
@@ -661,14 +653,14 @@ class StableDiffusionControlNetInpaintPipeline(
         return height, width
 
     def prepare_mask_latents(self, mask, masked_image, batch_size, height,
-                             width, dtype, device, generator,
+                             width, dtype, generator,
                              do_classifier_free_guidance):
         mask = paddle.nn.functional.interpolate(
             x=mask,
             size=(height // self.vae_scale_factor,
                   width // self.vae_scale_factor))
-        mask = mask.to(device=device, dtype=dtype)
-        masked_image = masked_image.to(device=device, dtype=dtype)
+        mask = mask.cast(dtype=dtype)
+        masked_image = masked_image.cast(dtype=dtype)
         masked_image_latents = self._encode_vae_image(
             masked_image, generator=generator)
         if mask.shape[0] < batch_size:
@@ -691,8 +683,7 @@ class StableDiffusionControlNetInpaintPipeline(
         masked_image_latents = paddle.concat(
             x=[masked_image_latents] *
             2) if do_classifier_free_guidance else masked_image_latents
-        masked_image_latents = masked_image_latents.to(device=device,
-                                                       dtype=dtype)
+        masked_image_latents = masked_image_latents.cast(dtype=dtype)
         return mask, masked_image_latents
 
     def _encode_vae_image(self,
@@ -749,10 +740,10 @@ class StableDiffusionControlNetInpaintPipeline(
             prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide the image generation. If not defined, one has to pass `prompt_embeds`.
                 instead.
-            image (`torch.FloatTensor`, `PIL.Image.Image`, `List[torch.FloatTensor]`, `List[PIL.Image.Image]`,
-                    `List[List[torch.FloatTensor]]`, or `List[List[PIL.Image.Image]]`):
+            image (`paddle.Tensor`, `PIL.Image.Image`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`,
+                    `List[List[paddle.Tensor]]`, or `List[List[PIL.Image.Image]]`):
                 The ControlNet input condition. ControlNet uses this input condition to generate guidance to Unet. If
-                the type is specified as `Torch.FloatTensor`, it is passed to ControlNet as is. `PIL.Image.Image` can
+                the type is specified as `paddle.Tensor`, it is passed to ControlNet as is. `PIL.Image.Image` can
                 also be accepted as an image. The dimensions of the output image defaults to `image`'s dimensions. If
                 height and/or width are passed, `image` is resized according to them. If multiple ControlNets are
                 specified in init, images must be passed as a list such that each element of the list can be correctly
@@ -789,14 +780,14 @@ class StableDiffusionControlNetInpaintPipeline(
             generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
                 One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
                 to make generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -808,7 +799,7 @@ class StableDiffusionControlNetInpaintPipeline(
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that will be called every `callback_steps` steps during inference. The function will be
-                called with the following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                called with the following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function will be called. If not specified, the callback will be
                 called at every step.
@@ -868,7 +859,6 @@ class StableDiffusionControlNetInpaintPipeline(
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         if isinstance(controlnet, MultiControlNetModel) and isinstance(
                 controlnet_conditioning_scale, float):
@@ -883,7 +873,6 @@ class StableDiffusionControlNetInpaintPipeline(
             'scale', None) if cross_attention_kwargs is not None else None
         prompt_embeds = self._encode_prompt(
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             negative_prompt,
@@ -897,7 +886,6 @@ class StableDiffusionControlNetInpaintPipeline(
                 height=height,
                 batch_size=batch_size * num_images_per_prompt,
                 num_images_per_prompt=num_images_per_prompt,
-                device=device,
                 dtype=controlnet.dtype,
                 do_classifier_free_guidance=do_classifier_free_guidance,
                 guess_mode=guess_mode)
@@ -910,7 +898,6 @@ class StableDiffusionControlNetInpaintPipeline(
                     height=height,
                     batch_size=batch_size * num_images_per_prompt,
                     num_images_per_prompt=num_images_per_prompt,
-                    device=device,
                     dtype=controlnet.dtype,
                     do_classifier_free_guidance=do_classifier_free_guidance,
                     guess_mode=guess_mode)
@@ -920,11 +907,9 @@ class StableDiffusionControlNetInpaintPipeline(
             assert False
         mask, masked_image, init_image = prepare_mask_and_masked_image(
             image, mask_image, height, width, return_image=True)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps, num_inference_steps = self.get_timesteps(
-            num_inference_steps=num_inference_steps,
-            strength=strength,
-            device=device)
+            num_inference_steps=num_inference_steps, strength=strength)
         latent_timestep = timesteps[:1].tile(
             repeat_times=[batch_size * num_images_per_prompt])
         is_strength_max = strength == 1.0
@@ -937,7 +922,6 @@ class StableDiffusionControlNetInpaintPipeline(
             height,
             width,
             prompt_embeds.dtype,
-            device,
             generator,
             latents,
             image=init_image,
@@ -951,8 +935,7 @@ class StableDiffusionControlNetInpaintPipeline(
             latents, noise = latents_outputs
         mask, masked_image_latents = self.prepare_mask_latents(
             mask, masked_image, batch_size * num_images_per_prompt, height,
-            width, prompt_embeds.dtype, device, generator,
-            do_classifier_free_guidance)
+            width, prompt_embeds.dtype, generator, do_classifier_free_guidance)
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         controlnet_keep = []
         for i in range(len(timesteps)):
@@ -1047,7 +1030,7 @@ class StableDiffusionControlNetInpaintPipeline(
             image = self.vae.decode(
                 latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(
-                image, device, prompt_embeds.dtype)
+                image, prompt_embeds.dtype)
         else:
             image = latents
             has_nsfw_concept = None

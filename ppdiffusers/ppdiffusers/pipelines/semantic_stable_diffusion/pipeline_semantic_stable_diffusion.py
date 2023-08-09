@@ -672,8 +672,6 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
 
                     warmup_inds = paddle.to_tensor(warmup_inds)
                     if len(noise_pred_edit_concepts) > warmup_inds.shape[0] > 0:
-                        # concept_weights = concept_weights.to("cpu")  # Offload to cpu
-                        # noise_guidance_edit = noise_guidance_edit.to("cpu")
 
                         concept_weights_tmp = paddle.index_select(
                             concept_weights, warmup_inds, 0)

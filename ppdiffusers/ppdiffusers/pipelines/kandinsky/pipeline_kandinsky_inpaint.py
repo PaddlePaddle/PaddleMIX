@@ -24,7 +24,6 @@ EXAMPLE_DOC_STRING = """
         >>> pipe_prior = KandinskyPriorPipeline.from_pretrained(
         ...     "kandinsky-community/kandinsky-2-1-prior", torch_dtype=torch.float16
         ... )
-        >>> pipe_prior.to("cuda")
 
         >>> prompt = "a hat"
         >>> image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
@@ -32,7 +31,6 @@ EXAMPLE_DOC_STRING = """
         >>> pipe = KandinskyInpaintPipeline.from_pretrained(
         ...     "kandinsky-community/kandinsky-2-1-inpaint", torch_dtype=torch.float16
         ... )
-        >>> pipe.to("cuda")
 
         >>> init_image = load_image(
         ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
@@ -156,7 +154,7 @@ def prepare_mask_and_masked_image(image, mask, height, width):
             raise ValueError('Mask should be in [0, 1] range')
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
-        image = image.to(dtype='float32')
+        image = image.cast(dtype='float32')
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(
             f'`mask` is a torch.Tensor but `image` (type: {type(image)} is not')
@@ -174,7 +172,7 @@ def prepare_mask_and_masked_image(image, mask, height, width):
         elif isinstance(image, list) and isinstance(image[0], np.ndarray):
             image = np.concatenate([i[(None), :] for i in image], axis=0)
         image = image.transpose(0, 3, 1, 2)
-        image = paddle.to_tensor(data=image).to(dtype='float32') / 127.5 - 1.0
+        image = paddle.to_tensor(data=image).cast(dtype='float32') / 127.5 - 1.0
         if isinstance(mask, (PIL.Image.Image, np.ndarray)):
             mask = [mask]
         if isinstance(mask, list) and isinstance(mask[0], PIL.Image.Image):
@@ -232,23 +230,19 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             len(self.movq.config.block_out_channels) - 1)
         self._warn_has_been_called = False
 
-    def prepare_latents(self, shape, dtype, device, generator, latents,
-                        scheduler):
+    def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             if latents.shape != shape:
                 raise ValueError(
                     f'Unexpected latents shape, got {latents.shape}, expected {shape}'
                 )
-            latents = latents.to(device)
         latents = latents * scheduler.init_noise_sigma
         return latents
 
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None):
@@ -260,10 +254,10 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             truncation=True,
             return_attention_mask=True,
             add_special_tokens=True,
-            return_tensors='pt')
+            return_tensors='pd')
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer(
-            prompt, padding='longest', return_tensors='pt').input_ids
+            prompt, padding='longest', return_tensors='pd').input_ids
         if untruncated_ids.shape[-1] >= text_input_ids.shape[
                 -1] and not paddle.equal_all(
                     x=text_input_ids, y=untruncated_ids).item():
@@ -272,8 +266,7 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             logger.warning(
                 f'The following part of your input was truncated because CLIP can only handle sequences up to {self.tokenizer.model_max_length} tokens: {removed_text}'
             )
-        text_input_ids = text_input_ids.to(device)
-        text_mask = text_inputs.attention_mask.to(device)
+        text_mask = text_inputs.attention_mask
         prompt_embeds, text_encoder_hidden_states = self.text_encoder(
             input_ids=text_input_ids, attention_mask=text_mask)
         prompt_embeds = prompt_embeds.repeat_interleave(
@@ -306,9 +299,9 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
                 truncation=True,
                 return_attention_mask=True,
                 add_special_tokens=True,
-                return_tensors='pt')
-            uncond_text_input_ids = uncond_input.input_ids.to(device)
-            uncond_text_mask = uncond_input.attention_mask.to(device)
+                return_tensors='pd')
+            uncond_text_input_ids = uncond_input.input_ids
+            uncond_text_mask = uncond_input.attention_mask
             negative_prompt_embeds, uncond_text_encoder_hidden_states = (
                 self.text_encoder(
                     input_ids=uncond_text_input_ids,
@@ -363,10 +356,10 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
         Args:
             prompt (`str` or `List[str]`):
                 The prompt or prompts to guide the image generation.
-            image (`torch.FloatTensor`, `PIL.Image.Image` or `np.ndarray`):
+            image (`paddle.Tensor`, `PIL.Image.Image` or `np.ndarray`):
                 `Image`, or tensor representing an image batch, that will be used as the starting point for the
                 process.
-            mask_image (`PIL.Image.Image`,`torch.FloatTensor` or `np.ndarray`):
+            mask_image (`PIL.Image.Image`,`paddle.Tensor` or `np.ndarray`):
                 `Image`, or a tensor representing an image batch, to mask `image`. White pixels in the mask will be
                 repainted, while black pixels will be preserved. You can pass a pytorch tensor as mask only if the
                 image you passed is a pytorch tensor, and it should contain one color channel (L) instead of 3, so the
@@ -374,9 +367,9 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
                 image or numpy array, mask should also be a either PIL image or numpy array. If it is a PIL image, it
                 will be converted to a single channel (luminance) before use. If it is a nummpy array, the expected
                 shape is `(H, W)`.
-            image_embeds (`torch.FloatTensor` or `List[torch.FloatTensor]`):
+            image_embeds (`paddle.Tensor` or `List[paddle.Tensor]`):
                 The clip image embeddings for text prompt, that will be used to condition the image generation.
-            negative_image_embeds (`torch.FloatTensor` or `List[torch.FloatTensor]`):
+            negative_image_embeds (`paddle.Tensor` or `List[paddle.Tensor]`):
                 The clip image embeddings for negative text prompt, will be used to condition the image generation.
             negative_prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts not to guide the image generation. Ignored when not using guidance (i.e., ignored
@@ -399,7 +392,7 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
                 One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
                 to make generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
@@ -408,7 +401,7 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
                 (`np.array`) or `"pt"` (`torch.Tensor`).
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -435,11 +428,10 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             raise ValueError(
                 f'`prompt` has to be of type `str` or `list` but is {type(prompt)}'
             )
-        device = self._execution_device
         batch_size = batch_size * num_images_per_prompt
         do_classifier_free_guidance = guidance_scale > 1.0
         prompt_embeds, text_encoder_hidden_states, _ = self._encode_prompt(
-            prompt, device, num_images_per_prompt, do_classifier_free_guidance,
+            prompt, num_images_per_prompt, do_classifier_free_guidance,
             negative_prompt)
         if isinstance(image_embeds, list):
             image_embeds = paddle.concat(x=image_embeds, axis=0)
@@ -453,12 +445,12 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
                 repeats=num_images_per_prompt, axis=0)
             image_embeds = paddle.concat(
                 x=[negative_image_embeds, image_embeds],
-                axis=0).to(dtype=prompt_embeds.dtype, device=device)
+                axis=0).cast(dtype=prompt_embeds.dtype)
         mask_image, image = prepare_mask_and_masked_image(image, mask_image,
                                                           height, width)
-        image = image.to(dtype=prompt_embeds.dtype, device=device)
+        image = image.cast(dtype=prompt_embeds.dtype)
         image = self.movq.encode(image)['latents']
-        mask_image = mask_image.to(dtype=prompt_embeds.dtype, device=device)
+        mask_image = mask_image.cast(dtype=prompt_embeds.dtype)
         image_shape = tuple(image.shape[-2:])
         mask_image = paddle.nn.functional.interpolate(
             x=mask_image, size=image_shape, mode='nearest')
@@ -471,7 +463,7 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
         if do_classifier_free_guidance:
             mask_image = mask_image.tile(repeat_times=[2, 1, 1, 1])
             masked_image = masked_image.tile(repeat_times=[2, 1, 1, 1])
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps_tensor = self.scheduler.timesteps
         num_channels_latents = self.movq.config.latent_channels
         sample_height, sample_width = get_new_h_w(height, width,
@@ -520,7 +512,7 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             if callback is not None and i % callback_steps == 0:
                 callback(i, t, latents)
         image = self.movq.decode(latents, force_not_quantize=True)['sample']
-        if output_type not in ['pt', 'np', 'pil']:
+        if output_type not in ['pd', 'np', 'pil']:
             raise ValueError(
                 f'Only the output types `pt`, `pil` and `np` are supported not output_type={output_type}'
             )

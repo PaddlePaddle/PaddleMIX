@@ -130,14 +130,6 @@ class MultiControlNetModel(ModelMixin):
                 will be automatically derived from the model's weights.
             output_loading_info(`bool`, *optional*, defaults to `False`):
                 Whether or not to also return a dictionary containing missing keys, unexpected keys and error messages.
-            device_map (`str` or `Dict[str, Union[int, str, torch.device]]`, *optional*):
-                A map that specifies where each submodule should go. It doesn't need to be refined to each
-                parameter/buffer name, once a given module name is inside, every submodule of it will be sent to the
-                same device.
-
-                To have Accelerate compute the most optimized `device_map` automatically, set `device_map="auto"`. For
-                more information about each option see [designing a device
-                map](https://hf.co/docs/accelerate/main/en/usage_guides/big_modeling#designing-a-device-map).
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier to maximum memory. Will default to the maximum memory available for each
                 GPU and the available CPU RAM if unset.

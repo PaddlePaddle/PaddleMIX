@@ -187,23 +187,9 @@ class AutoPipelineForText2Image(ConfigMixin):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
                 guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
                 information.
-            device_map (`str` or `Dict[str, Union[int, str, torch.device]]`, *optional*):
-                A map that specifies where each submodule should go. It doesn’t need to be defined for each
-                parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
-                same device.
-
-                Set `device_map="auto"` to have 🤗 Accelerate automatically compute the most optimized `device_map`. For
-                more information about each option see [designing a device
-                map](https://hf.co/docs/accelerate/main/en/usage_guides/big_modeling#designing-a-device-map).
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier for the maximum memory. Will default to the maximum memory available for
                 each GPU and the available CPU RAM if unset.
-            offload_folder (`str` or `os.PathLike`, *optional*):
-                The path to offload weights if device_map contains the value `"disk"`.
-            offload_state_dict (`bool`, *optional*):
-                If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
-                the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
-                when there is some disk offload.
             low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
                 Speed up model loading only loading the pretrained weights and not initializing the weights. This also
                 tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
@@ -420,23 +406,9 @@ class AutoPipelineForImage2Image(ConfigMixin):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
                 guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
                 information.
-            device_map (`str` or `Dict[str, Union[int, str, torch.device]]`, *optional*):
-                A map that specifies where each submodule should go. It doesn’t need to be defined for each
-                parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
-                same device.
-
-                Set `device_map="auto"` to have 🤗 Accelerate automatically compute the most optimized `device_map`. For
-                more information about each option see [designing a device
-                map](https://hf.co/docs/accelerate/main/en/usage_guides/big_modeling#designing-a-device-map).
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier for the maximum memory. Will default to the maximum memory available for
                 each GPU and the available CPU RAM if unset.
-            offload_folder (`str` or `os.PathLike`, *optional*):
-                The path to offload weights if device_map contains the value `"disk"`.
-            offload_state_dict (`bool`, *optional*):
-                If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
-                the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
-                when there is some disk offload.
             low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
                 Speed up model loading only loading the pretrained weights and not initializing the weights. This also
                 tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
@@ -654,23 +626,9 @@ class AutoPipelineForInpainting(ConfigMixin):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
                 guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
                 information.
-            device_map (`str` or `Dict[str, Union[int, str, torch.device]]`, *optional*):
-                A map that specifies where each submodule should go. It doesn’t need to be defined for each
-                parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
-                same device.
-
-                Set `device_map="auto"` to have 🤗 Accelerate automatically compute the most optimized `device_map`. For
-                more information about each option see [designing a device
-                map](https://hf.co/docs/accelerate/main/en/usage_guides/big_modeling#designing-a-device-map).
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier for the maximum memory. Will default to the maximum memory available for
                 each GPU and the available CPU RAM if unset.
-            offload_folder (`str` or `os.PathLike`, *optional*):
-                The path to offload weights if device_map contains the value `"disk"`.
-            offload_state_dict (`bool`, *optional*):
-                If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
-                the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
-                when there is some disk offload.
             low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
                 Speed up model loading only loading the pretrained weights and not initializing the weights. This also
                 tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.

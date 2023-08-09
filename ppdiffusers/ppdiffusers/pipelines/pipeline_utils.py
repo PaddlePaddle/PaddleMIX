@@ -509,7 +509,7 @@ class DiffusionPipeline(ConfigMixin):
     [`DiffusionPipeline`] takes care of storing all components (models, schedulers, processors) for diffusion pipelines
     and handles methods for loading, downloading and saving models as well as a few methods common to all pipelines to:
 
-        - move all PyTorch modules to the device of your choice
+        - move all modules to the device of your choice
         - enabling/disabling the progress bar for the denoising iteration
 
     Class attributes:

@@ -24,7 +24,7 @@ class DiffEditInversionPipelineOutput(BaseOutput):
     Output class for Stable Diffusion pipelines.
 
     Args:
-        latents (`torch.FloatTensor`)
+        latents (`paddle.Tensor
             inverted latents tensor
         images (`List[PIL.Image.Image]` or `np.ndarray`)
             List of denoised PIL images of length `num_timesteps * batch_size` or numpy array of shape `(num_timesteps,
@@ -58,7 +58,6 @@ EXAMPLE_DOC_STRING = """
         >>> pipe = StableDiffusionDiffEditPipeline.from_pretrained(
         ...     "stabilityai/stable-diffusion-2-1", torch_dtype=torch.float16
         ... )
-        >>> pipe = pipe.to("cuda")
 
         >>> pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
         >>> pipeline.inverse_scheduler = DDIMInverseScheduler.from_config(pipeline.scheduler.config)
@@ -94,7 +93,6 @@ EXAMPLE_INVERT_DOC_STRING = """
         >>> pipe = StableDiffusionDiffEditPipeline.from_pretrained(
         ...     "stabilityai/stable-diffusion-2-1", torch_dtype=torch.float16
         ... )
-        >>> pipe = pipe.to("cuda")
 
         >>> pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
         >>> pipeline.inverse_scheduler = DDIMInverseScheduler.from_config(pipeline.scheduler.config)
@@ -329,7 +327,6 @@ class StableDiffusionDiffEditPipeline(
 
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None,
@@ -340,10 +337,8 @@ class StableDiffusionDiffEditPipeline(
         Encodes the prompt into text encoder hidden states.
 
         Args:
-             prompt (`str` or `List[str]`, *optional*):
+            prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -352,10 +347,10 @@ class StableDiffusionDiffEditPipeline(
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
                 less than `1`).
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensoroptional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -378,10 +373,10 @@ class StableDiffusionDiffEditPipeline(
                 padding='max_length',
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -392,14 +387,13 @@ class StableDiffusionDiffEditPipeline(
                 )
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = text_inputs.attention_mask.to(device)
+                attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
-                text_input_ids.to(device), attention_mask=attention_mask)
+                text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype,
-                                         device=device)
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -431,20 +425,19 @@ class StableDiffusionDiffEditPipeline(
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.to(
-                dtype=self.text_encoder.dtype, device=device)
+            negative_prompt_embeds = negative_prompt_embeds.cast(
+                dtype=self.text_encoder.dtype)
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
@@ -453,7 +446,7 @@ class StableDiffusionDiffEditPipeline(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
-    def run_safety_checker(self, image, device, dtype):
+    def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
         else:
@@ -464,10 +457,10 @@ class StableDiffusionDiffEditPipeline(
                 feature_extractor_input = self.image_processor.numpy_to_pil(
                     image)
             safety_checker_input = self.feature_extractor(
-                feature_extractor_input, return_tensors='pt').to(device)
+                feature_extractor_input, return_tensors='pd')
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.to(dtype))
+                clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
     def prepare_extra_step_kwargs(self, generator, eta):
@@ -565,14 +558,14 @@ class StableDiffusionDiffEditPipeline(
                     f'`source_prompt_embeds` and `source_negative_prompt_embeds` must have the same shape when passed directly, but got: `source_prompt_embeds` {source_prompt_embeds.shape} != `source_negative_prompt_embeds` {source_negative_prompt_embeds.shape}.'
                 )
 
-    def get_timesteps(self, num_inference_steps, strength, device):
+    def get_timesteps(self, num_inference_steps, strength):
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
         t_start = max(num_inference_steps - init_timestep, 0)
         timesteps = self.scheduler.timesteps[t_start * self.scheduler.order:]
         return timesteps, num_inference_steps - t_start
 
-    def get_inverse_timesteps(self, num_inference_steps, strength, device):
+    def get_inverse_timesteps(self, num_inference_steps, strength):
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
         t_start = max(num_inference_steps - init_timestep, 0)
@@ -587,7 +580,6 @@ class StableDiffusionDiffEditPipeline(
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None):
         shape = (batch_size, num_channels_latents, height //
@@ -597,24 +589,17 @@ class StableDiffusionDiffEditPipeline(
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
-        else:
-            latents = latents.to(device)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
+
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    def prepare_image_latents(self,
-                              image,
-                              batch_size,
-                              dtype,
-                              device,
-                              generator=None):
+    def prepare_image_latents(self, image, batch_size, dtype, generator=None):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
                 f'`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
             )
-        image = image.to(device=device, dtype=dtype)
+        image = image.cast(dtype=dtype)
         if image.shape[1] == 4:
             latents = image
         else:
@@ -706,10 +691,10 @@ class StableDiffusionDiffEditPipeline(
             target_negative_prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide what to not include in image generation. If not defined, you need to
                 pass `negative_prompt_embeds` instead. Ignored when not using guidance (`guidance_scale < 1`).
-            target_prompt_embeds (`torch.FloatTensor`, *optional*):
+            target_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs (prompt weighting). If not
                 provided, text embeddings are generated from the `prompt` input argument.
-            target_negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            target_negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs (prompt weighting). If
                 not provided, `negative_prompt_embeds` are generated from the `negative_prompt` input argument.
             source_prompt (`str` or `List[str]`, *optional*):
@@ -718,11 +703,11 @@ class StableDiffusionDiffEditPipeline(
             source_negative_prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide semantic mask generation away from using DiffEdit. If not defined, you
                 need to pass `source_negative_prompt_embeds` or `source_image` instead.
-            source_prompt_embeds (`torch.FloatTensor`, *optional*):
+            source_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings to guide the semantic mask generation. Can be used to easily tweak text
                 inputs (prompt weighting). If not provided, text embeddings are generated from `source_prompt` input
                 argument.
-            source_negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            source_negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings to negatively guide the semantic mask generation. Can be used to easily
                 tweak text inputs (prompt weighting). If not provided, text embeddings are generated from
                 `source_negative_prompt` input argument.
@@ -782,13 +767,11 @@ class StableDiffusionDiffEditPipeline(
             batch_size = target_prompt_embeds.shape[0]
         if cross_attention_kwargs is None:
             cross_attention_kwargs = {}
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         target_prompt_embeds = self._encode_prompt(
             target_prompt,
-            device,
             num_maps_per_mask,
             do_classifier_free_guidance,
             target_negative_prompt,
@@ -796,7 +779,6 @@ class StableDiffusionDiffEditPipeline(
             negative_prompt_embeds=target_negative_prompt_embeds)
         source_prompt_embeds = self._encode_prompt(
             source_prompt,
-            device,
             num_maps_per_mask,
             do_classifier_free_guidance,
             source_negative_prompt,
@@ -804,18 +786,14 @@ class StableDiffusionDiffEditPipeline(
             negative_prompt_embeds=source_negative_prompt_embeds)
         image = self.image_processor.preprocess(image).repeat_interleave(
             repeats=num_maps_per_mask, axis=0)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps, _ = self.get_timesteps(num_inference_steps,
-                                          mask_encode_strength, device)
+                                          mask_encode_strength)
         encode_timestep = timesteps[0]
         image_latents = self.prepare_image_latents(
-            image, batch_size * num_maps_per_mask, self.vae.dtype, device,
-            generator)
+            image, batch_size * num_maps_per_mask, self.vae.dtype, generator)
         noise = randn_tensor(
-            image_latents.shape,
-            generator=generator,
-            device=device,
-            dtype=self.vae.dtype)
+            image_latents.shape, generator=generator, dtype=self.vae.dtype)
         image_latents = self.scheduler.add_noise(image_latents, noise,
                                                  encode_timestep)
         latent_model_input = paddle.concat(x=[image_latents] * (
@@ -905,10 +883,10 @@ class StableDiffusionDiffEditPipeline(
             generator (`torch.Generator`, *optional*):
                 A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
                 generation deterministic.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs (prompt weighting). If not
                 provided, text embeddings are generated from the `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs (prompt weighting). If
                 not provided, `negative_prompt_embeds` are generated from the `negative_prompt` input argument.
             decode_latents (`bool`, *optional*, defaults to `False`):
@@ -921,7 +899,7 @@ class StableDiffusionDiffEditPipeline(
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -961,24 +939,22 @@ class StableDiffusionDiffEditPipeline(
             batch_size = prompt_embeds.shape[0]
         if cross_attention_kwargs is None:
             cross_attention_kwargs = {}
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         image = self.image_processor.preprocess(image)
         num_images_per_prompt = 1
         latents = self.prepare_image_latents(image,
                                              batch_size * num_images_per_prompt,
-                                             self.vae.dtype, device, generator)
+                                             self.vae.dtype, generator)
         prompt_embeds = self._encode_prompt(
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds)
-        self.inverse_scheduler.set_timesteps(num_inference_steps, device=device)
+        self.inverse_scheduler.set_timesteps(num_inference_steps)
         timesteps, num_inference_steps = self.get_inverse_timesteps(
-            num_inference_steps, inpaint_strength, device)
+            num_inference_steps, inpaint_strength)
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.inverse_scheduler.order
         inverted_latents = []
@@ -1083,7 +1059,7 @@ class StableDiffusionDiffEditPipeline(
                 repainted, while black pixels are preserved. If `mask_image` is a PIL image, it is converted to a
                 single channel (luminance) before use. If it's a tensor, it should contain one color channel (L)
                 instead of 3, so the expected shape would be `(B, 1, H, W)`.
-            image_latents (`PIL.Image.Image` or `torch.FloatTensor`):
+            image_latents (`PIL.Image.Image` or `paddle.Tensor`):
                 Partially noised image latents from the inversion process to be used as inputs for image generation.
             inpaint_strength (`float`, *optional*, defaults to 0.8):
                 Indicates extent to inpaint the masked area. Must be between 0 and 1. When `strength` is 1, the
@@ -1107,14 +1083,14 @@ class StableDiffusionDiffEditPipeline(
             generator (`torch.Generator`, *optional*):
                 A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs (prompt weighting). If not
                 provided, text embeddings are generated from the `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs (prompt weighting). If
                 not provided, `negative_prompt_embeds` are generated from the `negative_prompt` input argument.
             output_type (`str`, *optional*, defaults to `"pil"`):
@@ -1124,7 +1100,7 @@ class StableDiffusionDiffEditPipeline(
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -1160,13 +1136,11 @@ class StableDiffusionDiffEditPipeline(
             batch_size = prompt_embeds.shape[0]
         if cross_attention_kwargs is None:
             cross_attention_kwargs = {}
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         prompt_embeds = self._encode_prompt(
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             negative_prompt,
@@ -1176,10 +1150,10 @@ class StableDiffusionDiffEditPipeline(
         mask_image = preprocess_mask(mask_image, batch_size)
         latent_height, latent_width = mask_image.shape[-2:]
         mask_image = paddle.concat(x=[mask_image] * num_images_per_prompt)
-        mask_image = mask_image.to(device=device, dtype=prompt_embeds.dtype)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
-        timesteps, num_inference_steps = self.get_timesteps(
-            num_inference_steps, inpaint_strength, device)
+        mask_image = mask_image.cast(dtype=prompt_embeds.dtype)
+        self.scheduler.set_timesteps(num_inference_steps)
+        timesteps, num_inference_steps = self.get_timesteps(num_inference_steps,
+                                                            inpaint_strength)
         if isinstance(image_latents, list) and any(
                 isinstance(l, paddle.Tensor) and l.ndim == 5
                 for l in image_latents):
@@ -1209,8 +1183,7 @@ class StableDiffusionDiffEditPipeline(
         perm_4[1] = 0
         image_latents = x.transpose(perm=perm_4).repeat_interleave(
             repeats=num_images_per_prompt, axis=1)
-        image_latents = image_latents.to(device=device,
-                                         dtype=prompt_embeds.dtype)
+        image_latents = image_latents.cast(dtype=prompt_embeds.dtype)
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         latents = image_latents[0].clone()
         num_warmup_steps = len(
@@ -1244,7 +1217,7 @@ class StableDiffusionDiffEditPipeline(
             image = self.vae.decode(
                 latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(
-                image, device, prompt_embeds.dtype)
+                image, prompt_embeds.dtype)
         else:
             image = latents
             has_nsfw_concept = None

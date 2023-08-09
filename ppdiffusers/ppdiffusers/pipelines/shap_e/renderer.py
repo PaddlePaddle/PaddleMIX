@@ -165,19 +165,19 @@ class VoidNeRFModel(paddle.nn.Layer):
         super().__init__()
         out_70 = paddle.create_parameter(
             shape=(paddle.to_tensor(
-                data=np.array(background)).to(dtype='float32') /
+                data=np.array(background)).cast(dtype='float32') /
                    channel_scale).shape,
-            dtype=(paddle.to_tensor(data=np.array(background)).to(
+            dtype=(paddle.to_tensor(data=np.array(background)).cast(
                 dtype='float32') / channel_scale).numpy().dtype,
             default_initializer=paddle.nn.initializer.Assign(
-                paddle.to_tensor(data=np.array(background)).to(dtype='float32')
-                / channel_scale))
+                paddle.to_tensor(data=np.array(background)).cast(
+                    dtype='float32') / channel_scale))
         out_70.stop_gradient = not True
         background = out_70
         self.register_buffer(name='background', tensor=background)
 
     def forward(self, position):
-        background = self.background[None].to(position.place)
+        background = self.background[None]
         shape = position.shape[:-1]
         ones = [1] * (len(shape) - 1)
         n_channels = background.shape[-1]
@@ -267,7 +267,7 @@ class BoundingBoxVolume(paddle.nn.Layer):
         batch_size, *shape, _ = origin.shape
         ones = [1] * len(shape)
 
-        bbox = self.bbox.reshape([1, *ones, 2, 3]).to(origin.place)
+        bbox = self.bbox.reshape([1, *ones, 2, 3])
 
         def _safe_divide(a, b, epsilon=1e-06):
             return a / paddle.where(
@@ -320,7 +320,7 @@ class StratifiedRaySampler(paddle.nn.Layer):
         ones = [1] * (len(t0.shape) - 1)
         ts = paddle.linspace(
             start=0, stop=1,
-            num=n_samples).reshape([*ones, n_samples]).to(t0.dtype).to(t0.place)
+            num=n_samples).reshape([*ones, n_samples]).cast(t0.dtype)
         if self.depth_mode == 'linear':
             ts = t0 * (1.0 - ts) + t1 * ts
         elif self.depth_mode == 'geometric':
@@ -443,14 +443,13 @@ class MeshDecoder(paddle.nn.Layer):
                     (0, 0, 0) field corner and the (-1, -1, -1) field corner.
         """
         assert len(field.shape) == 3, 'input must be a 3D scalar field'
-        dev = field.place
-        cases = self.cases.to(dev)
-        masks = self.masks.to(dev)
-        min_point = min_point.to(dev)
-        size = size.to(dev)
+        cases = self.cases
+        masks = self.masks
+        min_point = min_point
+        size = size
         grid_size = field.shape
-        grid_size_tensor = paddle.to_tensor(data=grid_size).to(size)
-        bitmasks = (field > 0).to('uint8')
+        grid_size_tensor = paddle.to_tensor(data=grid_size).cast(size.dtype)
+        bitmasks = (field > 0).cast('uint8')
         bitmasks = bitmasks[:-1, :, :] | bitmasks[1:, :, :] << 1
         bitmasks = bitmasks[:, :-1, :] | bitmasks[:, 1:, :] << 2
         bitmasks = bitmasks[:, :, :-1] | bitmasks[:, :, 1:] << 4
@@ -498,8 +497,8 @@ class MeshDecoder(paddle.nn.Layer):
             arr=old_index_to_new_index,
             axis=0,
             indices=selected_tris.reshape([-1])).reshape(selected_tris.shape)
-        v1 = paddle.floor(x=used_edge_midpoints).to('int64')
-        v2 = paddle.ceil(x=used_edge_midpoints).to('int64')
+        v1 = paddle.floor(x=used_edge_midpoints).cast('int64')
+        v2 = paddle.ceil(x=used_edge_midpoints).cast('int64')
         s1 = field[v1[:, (0)], v1[:, (1)], v1[:, (2)]]
         s2 = field[v2[:, (0)], v2[:, (1)], v2[:, (2)]]
         p1 = v1.astype(dtype='float32') / (grid_size_tensor - 1
@@ -735,7 +734,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
         origin, direction = rays[(...), (0), :], rays[(...), (1), :]
         vrange = self.volume.intersect(origin, direction, t0_lower=None)
         ts = sampler.sample(vrange.t0, vrange.t1, n_samples)
-        ts = ts.to(rays.dtype)
+        ts = ts.cast(rays.dtype)
         if prev_model_out is not None:
             ts = (paddle.sort(
                 x=paddle.concat(
@@ -749,8 +748,8 @@ class ShapERenderer(ModelMixin, ConfigMixin):
         directions = paddle.broadcast_to(
             x=direction.unsqueeze(axis=-2), shape=[batch_size, *ts_shape, 3])
         positions = origin.unsqueeze(axis=-2) + ts * directions
-        directions = directions.to(self.mlp.dtype)
-        positions = positions.to(self.mlp.dtype)
+        directions = directions.cast(self.mlp.dtype)
+        positions = positions.cast(self.mlp.dtype)
         optional_directions = directions if render_with_direction else None
         model_out = self.mlp(position=positions,
                              direction=optional_directions,
@@ -775,7 +774,6 @@ class ShapERenderer(ModelMixin, ConfigMixin):
     @paddle.no_grad()
     def decode_to_image(self,
                         latents,
-                        device,
                         size: int=64,
                         ray_batch_size: int=4096,
                         n_coarse_samples=64,
@@ -788,7 +786,6 @@ class ShapERenderer(ModelMixin, ConfigMixin):
                     output=param)
         camera = create_pan_cameras(size)
         rays = camera.camera_rays
-        rays = rays.to(device)
         n_batches = rays.shape[1] // ray_batch_size
         coarse_sampler = StratifiedRaySampler()
         images = []
@@ -811,7 +808,6 @@ class ShapERenderer(ModelMixin, ConfigMixin):
     @paddle.no_grad()
     def decode_to_mesh(self,
                        latents,
-                       device,
                        grid_size: int=128,
                        query_batch_size: int=4096,
                        texture_channels: Tuple=('R', 'G', 'B')):
@@ -822,8 +818,8 @@ class ShapERenderer(ModelMixin, ConfigMixin):
                     projected_params[f'nerstf.{name}'].squeeze(axis=0),
                     output=param)
         query_points = volume_query_points(self.volume, grid_size)
-        query_positions = query_points[None].tile(repeat_times=[1, 1, 1]).to(
-            device=device, dtype=self.mlp.dtype)
+        query_positions = query_points[None].tile(repeat_times=[1, 1, 1]).cast(
+            dtype=self.mlp.dtype)
         fields = []
         for idx in range(0, query_positions.shape[1], query_batch_size):
             query_batch = query_positions[:, idx:idx + query_batch_size]
@@ -861,8 +857,8 @@ class ShapERenderer(ModelMixin, ConfigMixin):
                 for m in raw_meshes
             ],
             axis=0)
-        texture_query_positions = texture_query_positions.to(
-            device=device, dtype=self.mlp.dtype)
+        texture_query_positions = texture_query_positions.cast(
+            dtype=self.mlp.dtype)
         textures = []
         for idx in range(0, texture_query_positions.shape[1], query_batch_size):
             query_batch = texture_query_positions[:, idx:idx + query_batch_size]

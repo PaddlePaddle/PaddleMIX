@@ -18,7 +18,6 @@ EXAMPLE_DOC_STRING = """
         >>> pipe_prior = KandinskyV22PriorPipeline.from_pretrained(
         ...     "kandinsky-community/kandinsky-2-2-prior", torch_dtype=torch.float16
         ... )
-        >>> pipe_prior.to("cuda")
 
         >>> prompt = "A red cartoon frog, 4k"
         >>> image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
@@ -26,7 +25,6 @@ EXAMPLE_DOC_STRING = """
         >>> pipe = KandinskyV22Img2ImgPipeline.from_pretrained(
         ...     "kandinsky-community/kandinsky-2-2-decoder", torch_dtype=torch.float16
         ... )
-        >>> pipe.to("cuda")
 
         >>> init_image = load_image(
         ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
@@ -92,7 +90,7 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
         self.movq_scale_factor = 2**(
             len(self.movq.config.block_out_channels) - 1)
 
-    def get_timesteps(self, num_inference_steps, strength, device):
+    def get_timesteps(self, num_inference_steps, strength):
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
         t_start = max(num_inference_steps - init_timestep, 0)
@@ -105,13 +103,12 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
                         batch_size,
                         num_images_per_prompt,
                         dtype,
-                        device,
                         generator=None):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
                 f'`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
             )
-        image = image.to(device=device, dtype=dtype)
+        image = image.cast(dtype=dtype)
         batch_size = batch_size * num_images_per_prompt
         if image.shape[1] == 4:
             init_latents = image
@@ -132,8 +129,7 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
             init_latents = self.movq.config.scaling_factor * init_latents
         init_latents = paddle.concat(x=[init_latents], axis=0)
         shape = init_latents.shape
-        noise = randn_tensor(
-            shape, generator=generator, device=device, dtype=dtype)
+        noise = randn_tensor(shape, generator=generator, dtype=dtype)
         init_latents = self.scheduler.add_noise(init_latents, noise, timestep)
         latents = init_latents
         return latents
@@ -162,9 +158,9 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
         Function invoked when calling the pipeline for generation.
 
         Args:
-            image_embeds (`torch.FloatTensor` or `List[torch.FloatTensor]`):
+            image_embeds (`paddle.Tensor `List[paddle.Tensor]`):
                 The clip image embeddings for text prompt, that will be used to condition the image generation.
-            image (`torch.FloatTensor`, `PIL.Image.Image`, `np.ndarray`, `List[torch.FloatTensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
+            image (`paddle.TensorPIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image`, or tensor representing an image batch, that will be used as the starting point for the
                 process. Can also accpet image latents as `image`, if passing latents directly, it will not be encoded
                 again.
@@ -174,7 +170,7 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
                 denoising steps depends on the amount of noise initially added. When `strength` is 1, added noise will
                 be maximum and the denoising process will run for the full number of iterations specified in
                 `num_inference_steps`. A value of 1, therefore, essentially ignores `image`.
-            negative_image_embeds (`torch.FloatTensor` or `List[torch.FloatTensor]`):
+            negative_image_embeds (`paddle.Tensor `List[paddle.Tensor]`):
                 The clip image embeddings for negative text prompt, will be used to condition the image generation.
             height (`int`, *optional*, defaults to 512):
                 The height in pixels of the generated image.
@@ -199,7 +195,7 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
                 (`np.array`) or `"pt"` (`torch.Tensor`).
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -211,7 +207,6 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
         Returns:
             [`~pipelines.ImagePipelineOutput`] or `tuple`
         """
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         if isinstance(image_embeds, list):
             image_embeds = paddle.concat(x=image_embeds, axis=0)
@@ -226,7 +221,7 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
                 repeats=num_images_per_prompt, axis=0)
             image_embeds = paddle.concat(
                 x=[negative_image_embeds, image_embeds],
-                axis=0).to(dtype=self.unet.dtype, device=device)
+                axis=0).cast(dtype=self.unet.dtype)
         if not isinstance(image, list):
             image = [image]
         if not all(
@@ -236,20 +231,20 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
             )
         image = paddle.concat(
             x=[prepare_image(i, width, height) for i in image], axis=0)
-        image = image.to(dtype=image_embeds.dtype, device=device)
+        image = image.cast(dtype=image_embeds.dtype)
         latents = self.movq.encode(image)['latents']
         latents = latents.repeat_interleave(
             repeats=num_images_per_prompt, axis=0)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps,
-                                                            strength, device)
+                                                            strength)
         latent_timestep = timesteps[:1].tile(
             repeat_times=[batch_size * num_images_per_prompt])
         height, width = downscale_height_and_width(height, width,
                                                    self.movq_scale_factor)
         latents = self.prepare_latents(latents, latent_timestep, batch_size,
                                        num_images_per_prompt,
-                                       image_embeds.dtype, device, generator)
+                                       image_embeds.dtype, generator)
         for i, t in enumerate(self.progress_bar(timesteps)):
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
@@ -282,7 +277,7 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
                 self,
                 'final_offload_hook') and self.final_offload_hook is not None:
             self.final_offload_hook.offload()
-        if output_type not in ['pt', 'np', 'pil']:
+        if output_type not in ['pd', 'np', 'pil']:
             raise ValueError(
                 f'Only the output types `pt`, `pil` and `np` are supported not output_type={output_type}'
             )

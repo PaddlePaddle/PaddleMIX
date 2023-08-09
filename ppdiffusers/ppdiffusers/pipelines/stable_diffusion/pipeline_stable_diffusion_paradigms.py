@@ -24,10 +24,9 @@ EXAMPLE_DOC_STRING = """
         >>> pipe = StableDiffusionParadigmsPipeline.from_pretrained(
         ...     "runwayml/stable-diffusion-v1-5", scheduler=scheduler, torch_dtype=torch.float16
         ... )
-        >>> pipe = pipe.to("cuda")
 
-        >>> ngpu, batch_per_device = torch.cuda.device_count(), 5
-        >>> pipe.wrapped_unet = torch.nn.DataParallel(pipe.unet, device_ids=[d for d in range(ngpu)])
+        >>> ngpu, batch_per_device = paddle.device.cuda.device_count(), 5
+        >>> pipe.wrapped_unet = paddle.DataParallel(pipe.unet, device_ids=[d for d in range(ngpu)])
 
         >>> prompt = "a photo of an astronaut riding a horse on mars"
         >>> image = pipe(prompt, parallel=ngpu * batch_per_device, num_inference_steps=1000).images[0]
@@ -105,7 +104,6 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
 
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None,
@@ -118,8 +116,6 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
         Args:
              prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -128,10 +124,10 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
                 less than `1`).
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensoroptional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -154,10 +150,10 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 padding='max_length',
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -168,14 +164,13 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 )
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = text_inputs.attention_mask.to(device)
+                attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
-                text_input_ids.to(device), attention_mask=attention_mask)
+                text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype,
-                                         device=device)
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -207,20 +202,19 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.to(
-                dtype=self.text_encoder.dtype, device=device)
+            negative_prompt_embeds = negative_prompt_embeds.cast(
+                dtype=self.text_encoder.dtype)
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
@@ -229,7 +223,7 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
-    def run_safety_checker(self, image, device, dtype):
+    def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
         else:
@@ -240,10 +234,10 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 feature_extractor_input = self.image_processor.numpy_to_pil(
                     image)
             safety_checker_input = self.feature_extractor(
-                feature_extractor_input, return_tensors='pt').to(device)
+                feature_extractor_input, return_tensors='pd')
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.to(dtype))
+                clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
     def prepare_extra_step_kwargs(self, generator, eta):
@@ -304,7 +298,6 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None):
         shape = (batch_size, num_channels_latents, height //
@@ -314,17 +307,15 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
-        else:
-            latents = latents.to(device)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
+
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
     def _cumsum(self, input, dim, debug=False):
         if debug:
             return paddle.cumsum(
-                x=input.cpu().astype(dtype='float32'), axis=dim).to(input.place)
+                x=input.cpu().astype(dtype='float32'), axis=dim)
         else:
             return paddle.cumsum(x=input, axis=dim)
 
@@ -387,14 +378,14 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
                 A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensoroptional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs (prompt weighting). If not
                 provided, text embeddings are generated from the `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs (prompt weighting). If
                 not provided, `negative_prompt_embeds` are generated from the `negative_prompt` input argument.
             output_type (`str`, *optional*, defaults to `"pil"`):
@@ -404,7 +395,7 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -434,21 +425,19 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         prompt_embeds = self._encode_prompt(
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         num_channels_latents = self.unet.config.in_channels
-        latents = self.prepare_latents(
-            batch_size * num_images_per_prompt, num_channels_latents, height,
-            width, prompt_embeds.dtype, device, generator, latents)
+        latents = self.prepare_latents(batch_size * num_images_per_prompt,
+                                       num_channels_latents, height, width,
+                                       prompt_embeds.dtype, generator, latents)
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         extra_step_kwargs.pop('generator', None)
         scheduler = self.scheduler
@@ -462,7 +451,6 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             base_noise = randn_tensor(
                 shape=latents.shape,
                 generator=generator,
-                device=latents.place,
                 dtype=prompt_embeds.dtype)
             noise = self.scheduler._get_variance(scheduler.timesteps[
                 j])**0.5 * base_noise
@@ -470,7 +458,7 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
         inverse_variance_norm = 1.0 / paddle.to_tensor(data=[
             scheduler._get_variance(scheduler.timesteps[j])
             for j in range(len(scheduler.timesteps))
-        ] + [0]).to(noise_array.place)
+        ] + [0])
         latent_dim = noise_array[0, 0].size
         inverse_variance_norm = inverse_variance_norm[:, (None)] / latent_dim
         scaled_tolerance = tolerance**2
@@ -567,7 +555,7 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             image = self.vae.decode(
                 latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(
-                image, device, prompt_embeds.dtype)
+                image, prompt_embeds.dtype)
         else:
             image = latents
             has_nsfw_concept = None
