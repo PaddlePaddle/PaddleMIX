@@ -11,22 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-# unset PADDLE_ELASTIC_JOB_ID
-# unset PADDLE_TRAINER_ENDPOINTS
-# unset DISTRIBUTED_TRAINER_ENDPOINTS
-# unset FLAGS_START_PORT
-# unset PADDLE_ELASTIC_TIMEOUT
-
-export LD_LIBRARY_PATH=/usr/local/cuda/compat:$LD_LIBRARY_PATH
-
+export FLAGS_eager_delete_tensor_gb=0.0
+export FLAGS_fraction_of_gpu_memory_to_use=0.98
 export FLAGS_conv_workspace_size_limit=4096
 export FLAG_USE_EMA=0
 export FLAG_BENCHMARK=1
 export FLAG_RECOMPUTE=1
 export FLAG_XFORMERS=1
+# use flash attention
+export FLAG_XFORMERS_ATTENTION_OP=flash
+# use fused linear
+export FLAG_FUSED_LINEAR=1
 
-export OUTPUT_DIR="bf16_paddle"
+export OUTPUT_DIR="bf16_o2_paddle"
 export BATCH_SIZE=64
 export MAX_ITER=200000
 
@@ -53,4 +50,5 @@ nohup python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_txt2
     --max_grad_norm -1 \
     --disable_tqdm True \
     --bf16 True \
-    --overwrite_output_dir > paddle_sd_bf16_2048.log 2>&1 &
+    --fp16_opt_level O2 \
+    --overwrite_output_dir > paddle_sd_bf16_o2.log 2>&1 &

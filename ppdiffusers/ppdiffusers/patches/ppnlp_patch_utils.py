@@ -23,7 +23,6 @@ import weakref
 from collections import OrderedDict
 from types import FunctionType, MethodType
 from typing import Any, Callable, Dict, List, Optional, Tuple
-
 from ..utils import (
     DIFFUSERS_CACHE,
     FROM_DIFFUSERS,
@@ -41,7 +40,8 @@ from ..utils import (
     is_safetensors_available,
     is_torch_available,
     is_torch_file,
-    smart_load, )
+    smart_load,
+    str2bool, )
 
 logger = get_logger(__name__)
 
@@ -355,6 +355,27 @@ if is_paddle_available() and is_paddlenlp_available():
             memory_efficient_attention, )
         from paddle.nn.functional.flash_attention import flash_attention
 
+        sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 +
+                                                                           64)
+        if sdp_kernel == "mem_efficient":
+            flash_attn_version = 1
+        else:
+            flash_attn_version = 2
+
+        is_support_flash_attention = True
+        flash_attn_error = None
+        try:
+            _ = flash_attention(
+                paddle.ones(
+                    (1, 1, 2, 40), dtype=paddle.float16),
+                paddle.ones(
+                    (1, 1, 2, 40), dtype=paddle.float16),
+                paddle.ones(
+                    (1, 1, 2, 40), dtype=paddle.float16), )
+        except Exception as error:
+            flash_attn_error = error
+            is_support_flash_attention = False
+
         def scaled_dot_product_attention_(
                 query,
                 key,
@@ -364,8 +385,23 @@ if is_paddle_available() and is_paddlenlp_available():
                 is_causal=False,
                 scale=None,
                 training=True,
-                attention_op="cutlass", ):
-            if attn_mask is not None or attention_op == "math":
+                attention_op=None, ):
+
+            if attention_op in [None, "auto"]:
+                head_dim = query.shape[-1]
+                attention_op = "cutlass"
+                if is_support_flash_attention:
+                    if flash_attn_version == 1:
+                        if head_dim <= 128:
+                            attention_op = "flash"
+                    else:
+                        if head_dim <= 256:
+                            attention_op = "flash"
+            else:
+                if attention_op == "flash" and flash_attn_error is not None:
+                    raise OSError(flash_attn_error)
+
+            if attention_op == "math" or attn_mask is not None:
                 if scale is None:
                     scale = 1 / math.sqrt(query.shape[-1])
                 qt = paddle.transpose(query, [0, 2, 1, 3])
@@ -381,7 +417,7 @@ if is_paddle_available() and is_paddlenlp_available():
                         ) == 0 and attn_mask.cast("float32").max() == 1:
                             attn_mask = (attn_mask.cast(s.dtype) - 1) * 10000.0
                         s = s + attn_mask
-                    p = paddle.nn.functional.softmax(s)
+                    p = paddle.nn.functional.softmax(s, axis=-1)
                 if dropout_p > 0.0:
                     p = paddle.nn.functional.dropout(
                         p,
@@ -390,7 +426,7 @@ if is_paddle_available() and is_paddlenlp_available():
                         mode="upscale_in_train")
                 o = paddle.matmul(p, vt)
                 return paddle.transpose(o, [0, 2, 1, 3])
-            elif attention_op is None or attention_op == "cutlass" or training:
+            elif attention_op == "cutlass":
                 if scale is None:
                     scale = 1 / math.sqrt(query.shape[-1])
                 # support fp32, fp16, bfp16
@@ -399,16 +435,10 @@ if is_paddle_available() and is_paddlenlp_available():
                     key,
                     value,
                     None,
-                    p=dropout_p,
+                    p=dropout_p if training else 0.0,
                     scale=scale,
-                    training=training, )
+                    training=True, )  # make sure we use training=True
             elif attention_op == "flash":
-                raw_dtype = query.dtype
-                if raw_dtype == paddle.float32:
-                    query, key, value = (
-                        query.cast(paddle.float16),
-                        key.cast(paddle.float16),
-                        value.cast(paddle.float16), )
                 output = flash_attention(
                     query,
                     key,
@@ -416,8 +446,6 @@ if is_paddle_available() and is_paddlenlp_available():
                     dropout=dropout_p,
                     causal=is_causal,
                     return_softmax=False)[0]
-                if raw_dtype == paddle.float32:
-                    output = output.cast(raw_dtype)
             else:
                 raise ValueError(
                     "ppxformers's attention_op shoulde be in ['cutlass', 'flash', 'math']"
@@ -1499,7 +1527,9 @@ if is_paddle_available() and is_paddlenlp_available():
     for cls_ in [BertModel, RobertaSeriesModelWithTransformation]:
         setattr(cls_, "smart_convert", bert_smart_convert)
 
-    if bool(os.getenv("USE_TORCH_LINEAR", False)):
+    if str2bool(os.getenv("USE_TORCH_LINEAR", "no")):
+        TRANSFORMERS_CLIP_MODEL = []
+    else:
         # NEW TRANSFORMERS CLIP MODEL
         from ..pipelines.stable_diffusion.hf_clip_model import (
             HFCLIPModel,
@@ -1515,8 +1545,6 @@ if is_paddle_available() and is_paddlenlp_available():
             HFCLIPVisionModel,
             HFCLIPVisionModelWithProjection,
         ]
-    else:
-        TRANSFORMERS_CLIP_MODEL = []
     for cls_ in [
             DPTForDepthEstimation,
             BitBackbone,

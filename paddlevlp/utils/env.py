@@ -115,7 +115,7 @@ def setdistenv(args):
         "sharding_degree": args.sharding_parallel_degree,
         "pp_degree": args.pipeline_parallel_degree,
     }
-    strategy.find_unused_parameters = True
+    # strategy.find_unused_parameters = True
 
     # set control in tensor parallel
     strategy.tensor_parallel_configs = {"tensor_init_seed": args.seed}

@@ -809,7 +809,7 @@ class CustomTransformer(paddle.nn.Layer):
             if self.enable_recompute:
                 # q = torch.utils.checkpoint.checkpoint(r, q, k, v, attn_mask)
                 q = paddle.distributed.fleet.utils.recompute(r, q, k, v,
-                                                             attn_mask)
+                                                             attn_mask, use_reentrant=False)
             else:
                 q = r(q, k, v, attn_mask=attn_mask)
         return q
@@ -939,7 +939,7 @@ class Transformer(paddle.nn.Layer):
                 attn_mask: Optional[paddle.Tensor]=None):
         for r in self.resblocks:
             if self.enable_recompute:
-                x = paddle.distributed.fleet.utils.recompute(r, x, attn_mask)
+                x = paddle.distributed.fleet.utils.recompute(r, x, attn_mask, use_reentrant=False)
             else:
                 x = r(x, attn_mask=attn_mask)
         return x

@@ -364,14 +364,22 @@ class StableDiffusionModel(nn.Layer):
                 )
             else:
                 try:
-                    self.unet.enable_xformers_memory_efficient_attention()
+                    attention_op = os.getenv("FLAG_XFORMERS_ATTENTION_OP",
+                                             "none").lower()
+
+                    if attention_op == "none":
+                        attention_op = None
+
+                    self.unet.enable_xformers_memory_efficient_attention(
+                        attention_op)
                     if hasattr(self.vae,
                                "enable_xformers_memory_efficient_attention"):
-                        self.vae.enable_xformers_memory_efficient_attention()
+                        self.vae.enable_xformers_memory_efficient_attention(
+                            attention_op)
                     if hasattr(self.text_encoder,
                                "enable_xformers_memory_efficient_attention"):
                         self.text_encoder.enable_xformers_memory_efficient_attention(
-                        )
+                            attention_op)
                 except Exception as e:
                     logger.warn(
                         "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"

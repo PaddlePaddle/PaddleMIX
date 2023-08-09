@@ -118,12 +118,16 @@ class TorchLinear(nn.Layer):
 
 
 def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if not isinstance(v, str):
+        v = str(v)
     if v.lower() in ("yes", "true", "t", "y", "1"):
         return True
     elif v.lower() in ("no", "false", "f", "n", "0"):
         return False
     else:
-        raise ValueError("Unsupported value encountered.")
+        raise ValueError("Not supported value: {}".format(v))
 
 
 if str2bool(os.getenv("USE_TORCH_LINEAR", "no")):

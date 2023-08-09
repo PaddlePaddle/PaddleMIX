@@ -15,7 +15,8 @@
 import math
 from dataclasses import dataclass, field
 from typing import List, Optional
-
+import os
+import paddle
 from paddlenlp.trainer import TrainingArguments
 
 __all__ = [
@@ -23,16 +24,11 @@ __all__ = [
     "SDModelArguments",
     "SDDataArguments",
 ]
-import os
 
+from ppdiffusers.utils import str2bool
 
-def str2bool(v):
-    if v.lower() in ("yes", "true", "t", "y", "1"):
-        return True
-    elif v.lower() in ("no", "false", "f", "n", "0"):
-        return False
-    else:
-        raise ValueError("Unsupported value encountered.")
+if str2bool(os.getenv("FLAG_FUSED_LINEAR", "True")):
+    paddle.nn.Linear = paddle.incubate.nn.FusedLinear
 
 
 @dataclass

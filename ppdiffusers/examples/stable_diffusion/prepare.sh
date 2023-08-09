@@ -12,10 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+pip install -r requirements.txt
+
 rm -rf CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
 rm -rf CompVis-stable-diffusion-v1-4-paddle-init
 
 wget https://bj.bcebos.com/paddlenlp/models/community/CompVis/CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
 tar -zxvf CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
 
-# pip install -r requirements.txt
+rm -rf laion400m_demo_data.tar.gz
+rm -rf data
+wget https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/laion400m_demo_data.tar.gz
+tar -zxvf laion400m_demo_data.tar.gz
