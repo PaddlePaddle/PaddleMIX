@@ -151,6 +151,10 @@ def check_imports(filename):
         try:
             importlib.import_module(imp)
         except ImportError:
+            if imp == "ligo":
+                imp = "ligo-segments"
+            if imp == "cv2":
+                imp = "opencv-python"
             missing_packages.append(imp)
 
     if len(missing_packages) > 0:
