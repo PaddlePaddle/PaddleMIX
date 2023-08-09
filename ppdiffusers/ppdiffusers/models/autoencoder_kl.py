@@ -242,7 +242,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
     def encode(self, x: paddle.Tensor,
                return_dict: bool=True) -> AutoencoderKLOutput:
         # TODO junnyu, support float16
-        x = x.cast(self.dtype)
+        x = x.cast(self.encoder.conv_in.weight.dtype)
         if self.use_tiling and (x.shape[-1] > self.tile_sample_min_size or
                                 x.shape[-2] > self.tile_sample_min_size):
             return self.tiled_encode(x, return_dict=return_dict)
@@ -280,7 +280,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
     def decode(self, z: paddle.Tensor,
                return_dict: bool=True) -> Union[DecoderOutput, paddle.Tensor]:
         # TODO junnyu, add this to support pure fp16
-        z = z.cast(self.dtype)
+        z = z.cast(self.post_quant_conv.weight.dtype)
         if self.use_slicing and z.shape[0] > 1:
             # split、chunk paddle vs pytorch may have some difference
             decoded_slices = [
@@ -428,7 +428,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`DecoderOutput`] instead of a plain tuple.
         """
-        x = sample.cast(self.dtype)
+        x = sample
         posterior = self.encode(x).latent_dist
         if sample_posterior:
             z = posterior.sample(generator=generator)

@@ -347,8 +347,9 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
             `tuple`. When returning a tuple, the first element is the sample tensor.
 
         """
-        if (isinstance(timestep, int) or isinstance(timestep, paddle.Tensor) or
-                "int" in timestep.dtype):
+        if (isinstance(timestep, int) or
+            (isinstance(timestep, paddle.Tensor) and
+             "int" in str(timestep.dtype))):
             raise ValueError((
                 "Passing integer indices (e.g. from `enumerate(timesteps)`) as timesteps to"
                 " `EulerDiscreteScheduler.step()` is not supported. Make sure to pass"
