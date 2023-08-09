@@ -911,7 +911,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
             time_ids = added_cond_kwargs.get("time_ids")
             time_embeds = self.add_time_proj(time_ids.flatten())
             time_embeds = time_embeds.reshape((text_embeds.shape[0], -1))
-
+            # make sure [text_embeds, time_embeds] has the same dtype
+            time_embeds = time_embeds.cast(text_embeds.dtype)
             add_embeds = paddle.concat([text_embeds, time_embeds], axis=-1)
             add_embeds = add_embeds.cast(emb.dtype)
             aug_emb = self.add_embedding(add_embeds)

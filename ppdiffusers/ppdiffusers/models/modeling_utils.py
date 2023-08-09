@@ -616,6 +616,9 @@ class ModelMixin(nn.Layer):
         with ContextManagers(init_contexts):
             model = cls.from_config(config, **unused_kwargs)
 
+        # NOTE: convert old model state dict!
+        model._convert_deprecated_attention_blocks(state_dict)
+
         # convert weights
         if from_diffusers or is_torch_file(model_file):
             state_dict = convert_pytorch_state_dict_to_paddle(state_dict, model)
@@ -668,8 +671,6 @@ class ModelMixin(nn.Layer):
             resolved_archive_file,
             pretrained_model_name_or_path,
             ignore_mismatched_sizes=False, ):
-        # NOTE: convert model!
-        model._convert_deprecated_attention_blocks(state_dict)
 
         # Retrieve missing & unexpected_keys
         model_state_dict = model.state_dict()
