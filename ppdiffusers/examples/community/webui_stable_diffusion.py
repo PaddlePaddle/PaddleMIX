@@ -52,6 +52,7 @@ import os
 import os.path
 
 from huggingface_hub.file_download import _request_wrapper, hf_raise_for_status
+from time import time
 
 # lark omegaconf
 
@@ -910,6 +911,7 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
             list of `bool`s denoting whether the corresponding generated image likely represents "not-safe-for-work"
             (nsfw) content, according to the `safety_checker`.
         """
+
         self.add_ti_embedding_dir(self.TI_DIR)
         enable_control = image is not None and self.controlnet is not None
         try:
@@ -1046,8 +1048,7 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                         uncond_tensor = reconstruct_cond_batch(
                             negative_prompt_embeds, step)
                         do_batch = cond_tensor.shape[1] == uncond_tensor.shape[
-                            1] and not isinstance(self.controlnet,
-                                                  MultiControlNetModel)
+                            1]
 
                     # expand the latents if we are doing classifier free guidance
                     latent_model_input = paddle.concat(
@@ -1056,21 +1057,28 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                         latent_model_input, t)
 
                     if do_batch:
+
                         encoder_hidden_states = paddle.concat(
                             [uncond_tensor, cond_tensor])
                         control_kwargs = {}
                         if enable_control and starting_control_step < current_control_step < ending_control_step:
+
                             down_block_res_samples, mid_block_res_sample = self.controlnet(
                                 latent_model_input,
                                 t,
                                 encoder_hidden_states=encoder_hidden_states,
-                                controlnet_cond=paddle.concat([image, image]),
+                                controlnet_cond=[
+                                    paddle.concat([im, im]) for im in image
+                                ] if isinstance(image, (list, tuple)) else
+                                paddle.concat([image, image]),
                                 conditioning_scale=controlnet_conditioning_scale,
                                 return_dict=False, )
+
                             control_kwargs[
                                 "down_block_additional_residuals"] = down_block_res_samples
                             control_kwargs[
                                 "mid_block_additional_residual"] = mid_block_res_sample
+
                         noise_pred = self.unet(
                             latent_model_input,
                             t,
@@ -1083,6 +1091,7 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                     else:
                         control_kwargs = {}
                         if enable_control and starting_control_step < current_control_step < ending_control_step:
+
                             down_block_res_samples, mid_block_res_sample = self.controlnet(
                                 latent_model_input,
                                 t,
@@ -1090,10 +1099,12 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                                 controlnet_cond=image,
                                 conditioning_scale=controlnet_conditioning_scale,
                                 return_dict=False, )
+
                             control_kwargs[
                                 "down_block_additional_residuals"] = down_block_res_samples
                             control_kwargs[
                                 "mid_block_additional_residual"] = mid_block_res_sample
+
                         noise_pred = self.unet(
                             latent_model_input,
                             t,
@@ -1104,6 +1115,7 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                         if do_classifier_free_guidance:
                             control_kwargs = {}
                             if enable_control and starting_control_step < current_control_step < ending_control_step:
+
                                 down_block_res_samples, mid_block_res_sample = self.controlnet(
                                     latent_model_input,
                                     t,
@@ -1111,16 +1123,19 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                                     controlnet_cond=image,
                                     conditioning_scale=controlnet_conditioning_scale,
                                     return_dict=False, )
+
                                 control_kwargs[
                                     "down_block_additional_residuals"] = down_block_res_samples
                                 control_kwargs[
                                     "mid_block_additional_residual"] = mid_block_res_sample
+
                             noise_pred_uncond = self.unet(
                                 latent_model_input,
                                 t,
                                 encoder_hidden_states=uncond_tensor,
                                 cross_attention_kwargs=cross_attention_kwargs,
                                 **control_kwargs, ).sample
+
                             noise_pred = noise_pred_uncond + weight * guidance_scale * (
                                 noise_pred - noise_pred_uncond)
 
@@ -1141,6 +1156,7 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                 has_nsfw_concept = None
             elif output_type == "pil":
                 # 8. Post-processing
+
                 image = self.decode_latents(latents)
 
                 # 9. Run safety checker
