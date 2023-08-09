@@ -126,13 +126,13 @@ def parse_arguments():
         "--pretrained_model_name_or_path",
         type=str,
         default="runwayml/stable-diffusion-v1-5",
-        help="Path to the `ppdiffusers` checkpoint to convert (either a local directory or on the bos).",
+        help="Path to the `diffusers` checkpoint to convert (either a local directory or on the bos).",
     )
     parser.add_argument(
         "--controlnet_pretrained_model_name_or_path",
         type=str,
         default="lllyasviel/sd-controlnet-canny",
-        help="Path to the `ppdiffusers` controlnet_pretrained_model_name_or_path  checkpoint to convert (either a local directory or on the bos).",
+        help="Path to the `diffusers` controlnet_pretrained_model_name_or_path  checkpoint to convert (either a local directory or on the bos).",
     )
     parser.add_argument(
         "--inference_steps",
