@@ -193,29 +193,64 @@ class Blip2PretrainedModel(PretrainedModel):
         """
         import os
         from paddlenlp.transformers.utils import (
-            ContextManagers, InitTrackerMeta, adapt_stale_fwd_patch,
-            fn_args_to_dict, is_paddle_support_lazy_init, resolve_cache_dir,
-            weight_name_suffix)
+            ContextManagers,
+            InitTrackerMeta,
+            adapt_stale_fwd_patch,
+            cached_file,
+            cached_file_for_hf_hub,
+            convert_file_size_to_int,
+            dtype_byte_size,
+            fn_args_to_dict,
+            get_checkpoint_shard_files,
+            is_paddle_support_lazy_init,
+            is_safetensors_available,
+            paddlenlp_load,
+            resolve_cache_dir,
+            weight_name_suffix,
+            device_guard, )
         from paddlenlp.transformers.configuration_utils import PretrainedConfig
         from paddlenlp.utils.env import (
             CONFIG_NAME,
-            ENABLE_TORCH_CHECKPOINT,
             LEGACY_CONFIG_NAME,
-            PADDLE_WEIGHT_FILE_NAME,
-            PYTORCH_WEIGHT_FILE_NAME, )
-        from paddlenlp.transformers.model_utils import no_init_weights
-        load_state_as_np = kwargs.pop("load_state_as_np", False)
+            PADDLE_WEIGHTS_INDEX_NAME,
+            PADDLE_WEIGHTS_NAME,
+            PYTORCH_WEIGHTS_NAME,
+            SAFE_WEIGHTS_INDEX_NAME,
+            SAFE_WEIGHTS_NAME, )
+        from paddlenlp.transformers.model_utils import no_init_weights, load_state_dict
         config = kwargs.pop("config", None)
-        force_download = kwargs.pop("force_download", False)
-        ignore_mismatched_sizes = kwargs.pop("ignore_mismatched_sizes", None)
+        state_dict = kwargs.pop("state_dict", None)
         cache_dir = kwargs.pop("cache_dir", None)
-        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", False)
+        force_download = kwargs.pop("force_download", False)
+        ignore_mismatched_sizes = kwargs.pop("ignore_mismatched_sizes", False)
         dtype = kwargs.pop("dtype", None)
+        subfolder = kwargs.pop("subfolder", "")
+        variant = kwargs.pop("variant", None)
+        use_safetensors = kwargs.pop("use_safetensors", None
+                                     if is_safetensors_available() else False)
+
+        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", False)
+        convert_from_torch = kwargs.pop("convert_from_torch", None)
+        load_state_as_np = kwargs.pop("load_state_as_np", None)
+        if load_state_as_np is not None:
+            logger.warning(
+                "`load_state_as_np` is deprecated,  please delete it!")
+
+        model_kwargs = kwargs
+
+        # from_hf_hub defalut enable convert_from_torch
+        if from_hf_hub and convert_from_torch is None:
+            logger.warning(
+                "If you are attempting to load weights from Hugging Face Hub and want to disable the default behavior of considering torch weights,"
+                " you can set ·convert_from_torch=False·. By default, `convert_from_torch` is set to `True`. "
+            )
+            convert_from_torch = True
+        # convert_from_torch defalut is False
+        if convert_from_torch is None:
+            convert_from_torch = False
 
         cache_dir = resolve_cache_dir(pretrained_model_name_or_path,
                                       from_hf_hub, cache_dir)
-
-        model_kwargs = kwargs
         # 1. get the PretrainedConfig to init model
         if not isinstance(config, PretrainedConfig):
             config_path = config if config is not None else pretrained_model_name_or_path
@@ -227,18 +262,20 @@ class Blip2PretrainedModel(PretrainedModel):
                 from_hf_hub=from_hf_hub,
                 subfolder=subfolder,
                 **kwargs, )
+        if not os.path.exists(os.path.join(cache_dir, CONFIG_NAME)):
+            config.save_pretrained(cache_dir)
+
+        # refine options for config
+        convert_from_torch = cls.support_conversion(
+            config) and convert_from_torch
 
         if dtype is None:
             dtype = config.dtype
         else:
             config.dtype = dtype
 
-        if not os.path.exists(os.path.join(cache_dir, CONFIG_NAME)):
-            config.save_pretrained(cache_dir)
-
         init_contexts = []
         if low_cpu_mem_usage:
-            load_state_as_np = True
             # Instantiate model.
             init_contexts.append(no_init_weights(_enable=True))
             if is_paddle_support_lazy_init():
@@ -247,101 +284,98 @@ class Blip2PretrainedModel(PretrainedModel):
         if dtype:
             init_contexts.append(dtype_guard(dtype))
 
-        # 2. resolve model_weight file
-        support_conversion = cls.support_conversion(
-            config) and ENABLE_TORCH_CHECKPOINT
+        # Keep in fp32 modules
+        keep_in_fp32_modules = None
+        use_keep_in_fp32_modules = False
 
-        model_weight_file = cls._resolve_model_file_path(
+        # resolve model_weight file
+        resolved_archive_file, sharded_metadata, is_sharded = cls._resolve_model_file_path(
             pretrained_model_name_or_path,
             cache_dir=cache_dir,
             subfolder=subfolder,
             from_hf_hub=from_hf_hub,
             config=config,
-            support_conversion=support_conversion, )
+            convert_from_torch=convert_from_torch,
+            use_safetensors=use_safetensors,
+            variant=variant, )
 
-        if model_weight_file.endswith(PYTORCH_WEIGHT_FILE_NAME):
-            if support_conversion:
-                # try to get the name-mapping info
+        # load pt weights early so that we know which dtype to init the model under
+        if not is_sharded and state_dict is None:
+            # Time to load the checkpoint
+            if resolved_archive_file.endswith(PYTORCH_WEIGHTS_NAME):
+                if convert_from_torch:
+                    # try to get the name-mapping info
+                    logger.info(
+                        f"Starting to convert pytorch weight file<{resolved_archive_file}> to "
+                        f"paddle weight file<{os.path.join(cache_dir, PADDLE_WEIGHTS_NAME)}> ..."
+                    )
+                    state_dict = cls.convert(resolved_archive_file, config,
+                                             cache_dir)
+                else:
+                    raise ValueError(
+                        f"download the {PYTORCH_WEIGHTS_NAME} weight file, but model<{cls}> "
+                        "don't support conversion from pytorch weight file to paddle weight file "
+                    )
+            else:
+                # 4. loading non-sharded ckpt from the state dict
+                if config.tensor_parallel_degree > 1 and resolved_archive_file.endswith(
+                        "model_state.pdparams"):
+                    state_dict = cls.convert_tensor_parallel(
+                        resolved_archive_file, config)
+                else:
+                    state_dict = load_state_dict(resolved_archive_file)
+
                 logger.info(
-                    f"start to convert pytorch weight file<{model_weight_file}> to "
-                    f"paddle weight file<{os.path.join(cache_dir, PADDLE_WEIGHT_FILE_NAME)}> ..."
-                )
-                model_state_dict = cls.convert(model_weight_file, config,
-                                               cache_dir)
-            else:
-                raise ValueError(
-                    f"download the {PYTORCH_WEIGHT_FILE_NAME} weight file, but model<{cls}> "
-                    "don't support conversion from pytorch weight file to paddle weight file "
-                    "or conversion is been disabled by `ENABLE_TORCH_CHECKPOINT` environment variable"
-                )
+                    "Loaded weights file from disk, setting weights to model.")
 
+        # Check if `_keep_in_fp32_modules` is not None
+        use_keep_in_fp32_modules = (
+            cls._keep_in_fp32_modules is not None) and dtype == "float16"
+
+        if is_sharded:
+            loaded_state_dict_keys = sharded_metadata["all_checkpoint_keys"]
         else:
-            # 4. loading the state dict
-            if config.tensor_parallel_degree > 1 and model_weight_file.endswith(
-                    "model_state.pdparams"):
-                model_state_dict = cls.convert_tensor_parallel(
-                    model_weight_file, config)
-            else:
-                model_state_dict = paddle.load(
-                    model_weight_file, return_numpy=load_state_as_np)
+            loaded_state_dict_keys = [k for k in state_dict.keys()]
+
+        if low_cpu_mem_usage:  # or use_keep_in_fp32_modules:
+            state_dict = None
+
+        # will only support load paddle.Tensor to model.
+        if state_dict is not None:
+            for k in list(state_dict.keys()):
+                if not isinstance(state_dict[k], paddle.Tensor):
+                    with device_guard():
+                        state_dict[k] = paddle.Tensor(
+                            state_dict.pop(k), zero_copy=True)
 
         # 3. init the model
         init_args = config["init_args"] or ()
         with ContextManagers(init_contexts):
             model = cls(config, *init_args, **model_kwargs)
-
-        loaded_state_dict_keys = list(model_state_dict.keys())
         from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
-        interpolate_pos_embed(model, model_state_dict)
-        # TODO(wj-Mcat): load shard checkpoint weight file, refer to: https://github.com/huggingface/transformers/pull/16343
+        interpolate_pos_embed(model, state_dict)
+        if use_keep_in_fp32_modules:
+            # low_cpu_mem_usage = True
+            keep_in_fp32_modules = model._keep_in_fp32_modules
+        else:
+            keep_in_fp32_modules = []
+
         model, missing_keys, unexpected_keys, mismatched_keys = cls._load_pretrained_model(
             model=model,
-            state_dict=model_state_dict,
+            state_dict=state_dict,
             loaded_keys=loaded_state_dict_keys,
+            resolved_archive_file=resolved_archive_file,
+            pretrained_model_name_or_path=pretrained_model_name_or_path,
+            config=config,
             ignore_mismatched_sizes=ignore_mismatched_sizes,
-            dtype=dtype, )
+            low_cpu_mem_usage=low_cpu_mem_usage,
+            dtype=dtype,
+            keep_in_fp32_modules=keep_in_fp32_modules, )
 
-        if len(unexpected_keys) > 0:
-            logger.warning(
-                f"Some weights of the model checkpoint at {pretrained_model_name_or_path} were not used when"
-                f" initializing {model.__class__.__name__}: {unexpected_keys}\n- This IS expected if you are"
-                f" initializing {model.__class__.__name__} from the checkpoint of a model trained on another task or"
-                " with another architecture (e.g. initializing a BertForSequenceClassification model from a"
-                " BertForPreTraining model).\n- This IS NOT expected if you are initializing"
-                f" {model.__class__.__name__} from the checkpoint of a model that you expect to be exactly identical"
-                " (initializing a BertForSequenceClassification model from a BertForSequenceClassification model)."
-            )
-        else:
-            logger.info(
-                f"All model checkpoint weights were used when initializing {model.__class__.__name__}.\n"
-            )
-
-        if len(missing_keys) > 0:
-            logger.warning(
-                f"Some weights of {model.__class__.__name__} were not initialized from the model checkpoint at"
-                f" {pretrained_model_name_or_path} and are newly initialized: {missing_keys}\nYou should probably"
-                " TRAIN this model on a down-stream task to be able to use it for predictions and inference."
-            )
-        elif len(mismatched_keys) == 0:
-            logger.info(
-                f"All the weights of {model.__class__.__name__} were initialized from the model checkpoint at"
-                f" {pretrained_model_name_or_path}.\nIf your task is similar to the task the model of the checkpoint"
-                f" was trained on, you can already use {model.__class__.__name__} for predictions without further"
-                " training.")
-        if len(mismatched_keys) > 0:
-            mismatched_warning = "\n".join([
-                f"- {key}: found shape {shape1} in the checkpoint and {shape2} in the model instantiated"
-                for key, shape1, shape2 in mismatched_keys
-            ])
-            logger.warning(
-                f"Some weights of {model.__class__.__name__} were not initialized from the model checkpoint at"
-                f" {pretrained_model_name_or_path} and are newly initialized because the shapes did not"
-                f" match:\n{mismatched_warning}\nYou should probably TRAIN this model on a down-stream task to be able"
-                " to use it for predictions and inference.")
         if paddle.in_dynamic_mode():
             return model
 
-        return model, model_state_dict
+        return model, state_dict
 
 
 class Blip2ForConditionalGeneration(Blip2PretrainedModel):
@@ -359,8 +393,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         super().__init__(config)
         from paddlevlp.models.blip2.eva_vit import VisionTransformer
         self.visual_encoder = VisionTransformer.from_pretrained(
-            pretrained_model_name_or_path=config.vision_config,
-            mp_degree=config.mp_degree)
+            pretrained_model_name_or_path=config.vision_config, )
         self.freeze_vit = config.freeze_vit
         self.train_stage1 = False
         if self.freeze_vit:
@@ -377,8 +410,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 pretrained_model_name_or_path=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=True,
-                tokenizer_length=len(self.tokenizer),
-                mp_degree=config.mp_degree)
+                tokenizer_length=len(self.tokenizer), )
 
             state_dict = self.Qformer.state_dict()
             for name, param in self.Qformer.named_parameters():
@@ -395,8 +427,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 if "opt" in config.text_config:
                     language_model = OPTForCausalLM.from_pretrained(
                         config.text_config,
-                        load_state_as_np=True,
-                        mp_degree=config.mp_degree)
+                        load_state_as_np=True, )
                 else:
                     raise NotImplementedError
             else:
@@ -416,7 +447,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=False,
                 text_hidden_size=self.language_model.hidden_size,
-                mp_degree=config.mp_degree)
+                ignore_mismatched_sizes=True)
             self.Qformer.cls = None
             self.Qformer.bert.embeddings.word_embeddings = None
             self.Qformer.bert.embeddings.position_embeddings = None

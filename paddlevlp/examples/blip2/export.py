@@ -13,7 +13,8 @@
 # limitations under the License.
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
 from dataclasses import dataclass, field
 import paddle
 import requests
@@ -29,6 +30,7 @@ import argparse
 import os
 import paddle
 
+
 @dataclass
 class DataArguments:
     """
@@ -38,12 +40,14 @@ class DataArguments:
     the command line.
     """
 
-    input_image: str = field( default="http://images.cocodataset.org/val2017/000000039769.jpg",
-        metadata={"help": "The name of input image."}
-    )  # "http://images.cocodataset.org/val2017/000000039769.jpg"
+    input_image: str = field(
+        default="http://images.cocodataset.org/val2017/000000039769.jpg",
+        metadata={"help": "The name of input image."
+                  })  # "http://images.cocodataset.org/val2017/000000039769.jpg"
     prompt: str = field(
-        default=None, metadata={"help": "The prompt of the image to be generated."}
-    )  # "Question: how many cats are there? Answer:"
+        default=None,
+        metadata={"help": "The prompt of the image to be generated."
+                  })  # "Question: how many cats are there? Answer:"
 
 
 @dataclass
@@ -53,50 +57,44 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="Salesforce/blip2-opt-2.7b",
-        metadata={"help": "Path to pretrained model or model identifier"},
-    )
+        default="paddlemix/blip2-caption-opt2.7b",
+        metadata={"help": "Path to pretrained model or model identifier"}, )
     pretrained_model_path: str = field(
         default=None,
         metadata={
-            "help": "The path to pre-trained model that we will use for inference."
-        },)
+            "help":
+            "The path to pre-trained model that we will use for inference."
+        }, )
     fp16: str = field(
         default=True,
-        metadata={
-            "help": "Export with mixed precision."
-        },
-    )
+        metadata={"help": "Export with mixed precision."}, )
 
 
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
-    url = (
-        data_args.input_image
-    )  # "http://images.cocodataset.org/val2017/000000039769.jpg"
+    url = (data_args.input_image
+           )  # "http://images.cocodataset.org/val2017/000000039769.jpg"
     image = Image.open(requests.get(url, stream=True).raw)
 
     prompt = "a photo of "
-    processor = Blip2Processor.from_pretrained(
-        model_args.model_name_or_path
-    )  # "Salesforce/blip2-opt-2.7b"
-    model = Blip2ForConditionalGeneration.from_pretrained(model_args.model_name_or_path)
+    processor = Blip2Processor.from_pretrained(model_args.model_name_or_path)
+    model = Blip2ForConditionalGeneration.from_pretrained(
+        model_args.model_name_or_path)
     model.eval()
-    dtype="float32"
+    dtype = "float32"
     if model_args.fp16:
         decorated = paddle.amp.decorate(
-            models=[model.visual_encoder,model.language_model], optimizers=None, level="O2"
-        )
-        model.visual_encoder,model.language_model= decorated
-        dtype="float16"
+            models=[model.visual_encoder, model.language_model],
+            optimizers=None,
+            level="O2")
+        model.visual_encoder, model.language_model = decorated
+        dtype = "float16"
 
-    shape1 = [None,3,None,None]
-    input_spec = [
-        paddle.static.InputSpec(
-            shape=shape1, dtype='float32'),
-    ]
-    image_encoder = paddle.jit.to_static(model.encode_image, input_spec=input_spec)
+    shape1 = [None, 3, None, None]
+    input_spec = [paddle.static.InputSpec(shape=shape1, dtype='float32'), ]
+    image_encoder = paddle.jit.to_static(
+        model.encode_image, input_spec=input_spec)
     save_path = "blip2_export"
     paddle.jit.save(image_encoder, os.path.join(save_path, 'image_encoder'))
 
@@ -106,7 +104,7 @@ def main():
             'model': 'image_encoder.pdmodel',
             'params': 'image_encoder.pdiparams',
             'input_img_shape': shape1,
-            'output_dtype':dtype
+            'output_dtype': dtype
         }
     }
     msg = '\n---------------Deploy Information---------------\n'
@@ -118,5 +116,7 @@ def main():
         yaml.dump(deploy_info, file)
 
     logger.info(f'The inference model is saved in {save_path}')
+
+
 if __name__ == "__main__":
     main()
