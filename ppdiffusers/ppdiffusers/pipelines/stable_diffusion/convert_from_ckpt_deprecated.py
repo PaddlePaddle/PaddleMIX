@@ -221,7 +221,7 @@ def create_unet_diffusers_config(original_config,
                                  image_size: int,
                                  controlnet=False):
     """
-    Creates a config for the diffusers based on the config of the LDM model.
+    Creates a config for the ppdiffusers based on the config of the LDM model.
     """
     if controlnet:
         unet_params = original_config.model.params.control_stage_config.params
@@ -293,7 +293,7 @@ def create_unet_diffusers_config(original_config,
 
 def create_vae_diffusers_config(original_config, image_size: int):
     """
-    Creates a config for the diffusers based on the config of the LDM model.
+    Creates a config for the ppdiffusers based on the config of the LDM model.
     """
     vae_params = original_config.model.params.first_stage_config.params.ddconfig
     _ = original_config.model.params.first_stage_config.params.embed_dim

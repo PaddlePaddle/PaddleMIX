@@ -8,7 +8,7 @@ from PIL import Image
 from ... import __version__
 from ...models import UNet2DConditionModel, VQModel
 from ...schedulers import DDIMScheduler
-from ...utils import is_accelerate_available, is_accelerate_version, logging, randn_tensor, replace_example_docstring
+from ...utils import logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 from .text_encoder import MultilingualCLIP
 from paddlenlp.transformers import XLMRobertaTokenizer
@@ -16,20 +16,20 @@ logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> from diffusers import KandinskyInpaintPipeline, KandinskyPriorPipeline
-        >>> from diffusers.utils import load_image
-        >>> import torch
+        >>> from ppdiffusers import KandinskyInpaintPipeline, KandinskyPriorPipeline
+        >>> from ppdiffusers.utils import load_image
+        >>> import paddle
         >>> import numpy as np
 
         >>> pipe_prior = KandinskyPriorPipeline.from_pretrained(
-        ...     "kandinsky-community/kandinsky-2-1-prior", torch_dtype=torch.float16
+        ...     "kandinsky-community/kandinsky-2-1-prior", paddle_dtype=paddle.float16
         ... )
 
         >>> prompt = "a hat"
         >>> image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
 
         >>> pipe = KandinskyInpaintPipeline.from_pretrained(
-        ...     "kandinsky-community/kandinsky-2-1-inpaint", torch_dtype=torch.float16
+        ...     "kandinsky-community/kandinsky-2-1-inpaint", paddle_dtype=paddle.float16
         ... )
 
         >>> init_image = load_image(
@@ -94,19 +94,19 @@ def prepare_mask(masks):
 def prepare_mask_and_masked_image(image, mask, height, width):
     """
     Prepares a pair (mask, image) to be consumed by the Kandinsky inpaint pipeline. This means that those inputs will
-    be converted to ``torch.Tensor`` with shapes ``batch x channels x height x width`` where ``channels`` is ``3`` for
+    be converted to ``paddle.Tensor`` with shapes ``batch x channels x height x width`` where ``channels`` is ``3`` for
     the ``image`` and ``1`` for the ``mask``.
 
-    The ``image`` will be converted to ``torch.float32`` and normalized to be in ``[-1, 1]``. The ``mask`` will be
-    binarized (``mask > 0.5``) and cast to ``torch.float32`` too.
+    The ``image`` will be converted to ``paddle.float32`` and normalized to be in ``[-1, 1]``. The ``mask`` will be
+    binarized (``mask > 0.5``) and cast to ``paddle.float32`` too.
 
     Args:
-        image (Union[np.array, PIL.Image, torch.Tensor]): The image to inpaint.
+        image (Union[np.array, PIL.Image, paddle.Tensor]): The image to inpaint.
             It can be a ``PIL.Image``, or a ``height x width x 3`` ``np.array`` or a ``channels x height x width``
-            ``torch.Tensor`` or a ``batch x channels x height x width`` ``torch.Tensor``.
+            ``paddle.Tensor`` or a ``batch x channels x height x width`` ``paddle.Tensor``.
         mask (_type_): The mask to apply to the image, i.e. regions to inpaint.
             It can be a ``PIL.Image``, or a ``height x width`` ``np.array`` or a ``1 x height x width``
-            ``torch.Tensor`` or a ``batch x 1 x height x width`` ``torch.Tensor``.
+            ``paddle.Tensor`` or a ``batch x 1 x height x width`` ``paddle.Tensor``.
         height (`int`, *optional*, defaults to 512):
             The height in pixels of the generated image.
         width (`int`, *optional*, defaults to 512):
@@ -114,13 +114,13 @@ def prepare_mask_and_masked_image(image, mask, height, width):
 
 
     Raises:
-        ValueError: ``torch.Tensor`` images should be in the ``[-1, 1]`` range. ValueError: ``torch.Tensor`` mask
+        ValueError: ``paddle.Tensor`` images should be in the ``[-1, 1]`` range. ValueError: ``paddle.Tensor`` mask
         should be in the ``[0, 1]`` range. ValueError: ``mask`` and ``image`` should have the same spatial dimensions.
-        TypeError: ``mask`` is a ``torch.Tensor`` but ``image`` is not
+        TypeError: ``mask`` is a ``paddle.Tensor`` but ``image`` is not
             (ot the other way around).
 
     Returns:
-        tuple[torch.Tensor]: The pair (mask, image) as ``torch.Tensor`` with 4
+        tuple[paddle.Tensor]: The pair (mask, image) as ``paddle.Tensor`` with 4
             dimensions: ``batch x channels x height x width``.
     """
     if image is None:
@@ -130,7 +130,7 @@ def prepare_mask_and_masked_image(image, mask, height, width):
     if isinstance(image, paddle.Tensor):
         if not isinstance(mask, paddle.Tensor):
             raise TypeError(
-                f'`image` is a torch.Tensor but `mask` (type: {type(mask)} is not'
+                f'`image` is a paddle.Tensor but `mask` (type: {type(mask)} is not'
             )
         if image.ndim == 3:
             assert image.shape[
@@ -157,7 +157,7 @@ def prepare_mask_and_masked_image(image, mask, height, width):
         image = image.cast(dtype='float32')
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(
-            f'`mask` is a torch.Tensor but `image` (type: {type(image)} is not')
+            f'`mask` is a paddle.Tensor but `image` (type: {type(image)} is not')
     else:
         if isinstance(image, (PIL.Image.Image, np.ndarray)):
             image = [image]
@@ -361,8 +361,8 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
                 process.
             mask_image (`PIL.Image.Image`,`paddle.Tensor` or `np.ndarray`):
                 `Image`, or a tensor representing an image batch, to mask `image`. White pixels in the mask will be
-                repainted, while black pixels will be preserved. You can pass a pytorch tensor as mask only if the
-                image you passed is a pytorch tensor, and it should contain one color channel (L) instead of 3, so the
+                repainted, while black pixels will be preserved. You can pass a paddle tensor as mask only if the
+                image you passed is a paddle tensor, and it should contain one color channel (L) instead of 3, so the
                 expected shape would be either `(B, 1, H, W,)`, `(B, H, W)`, `(1, H, W)` or `(H, W)` If image is an PIL
                 image or numpy array, mask should also be a either PIL image or numpy array. If it is a PIL image, it
                 will be converted to a single channel (luminance) before use. If it is a nummpy array, the expected
@@ -389,8 +389,8 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
                 usually at the expense of lower image quality.
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of paddle generator(s).
                 to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
@@ -398,7 +398,7 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
                 tensor will ge generated by sampling using the supplied random `generator`.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between: `"pil"` (`PIL.Image.Image`), `"np"`
-                (`np.array`) or `"pt"` (`torch.Tensor`).
+                (`np.array`) or `"pt"` (`paddle.Tensor`).
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
                 following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
@@ -496,7 +496,7 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
                 return_dict=False)[0]
             if do_classifier_free_guidance:
                 noise_pred, variance_pred = noise_pred.split(
-                    latents.shape[1], dim=1)
+                    noise_pred.shape[1] // latents.shape[1], axis=1)
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
                 _, variance_pred_text = variance_pred.chunk(chunks=2)
                 noise_pred = noise_pred_uncond + guidance_scale * (
@@ -506,7 +506,8 @@ class KandinskyInpaintPipeline(DiffusionPipeline):
             if not (hasattr(self.scheduler.config, 'variance_type') and
                     self.scheduler.config.variance_type in
                     ['learned', 'learned_range']):
-                noise_pred, _ = noise_pred.split(latents.shape[1], dim=1)
+                noise_pred, _ = noise_pred.split(
+                    noise_pred.shape[1] // latents.shape[1], axis=1)
             latents = self.scheduler.step(
                 noise_pred, t, latents, generator=generator).prev_sample
             if callback is not None and i % callback_steps == 0:

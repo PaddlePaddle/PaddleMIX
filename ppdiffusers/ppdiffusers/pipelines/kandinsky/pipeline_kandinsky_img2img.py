@@ -13,19 +13,19 @@ logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> from diffusers import KandinskyImg2ImgPipeline, KandinskyPriorPipeline
-        >>> from diffusers.utils import load_image
-        >>> import torch
+        >>> from ppdiffusers import KandinskyImg2ImgPipeline, KandinskyPriorPipeline
+        >>> from ppdiffusers.utils import load_image
+        >>> import paddle
 
         >>> pipe_prior = KandinskyPriorPipeline.from_pretrained(
-        ...     "kandinsky-community/kandinsky-2-1-prior", torch_dtype=torch.float16
+        ...     "kandinsky-community/kandinsky-2-1-prior", paddle_dtype=paddle.float16
         ... )
 
         >>> prompt = "A red cartoon frog, 4k"
         >>> image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
 
         >>> pipe = KandinskyImg2ImgPipeline.from_pretrained(
-        ...     "kandinsky-community/kandinsky-2-1", torch_dtype=torch.float16
+        ...     "kandinsky-community/kandinsky-2-1", paddle_dtype=paddle.float16
         ... )
 
         >>> init_image = load_image(
@@ -295,12 +295,12 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
                 usually at the expense of lower image quality.
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of paddle generator(s).
                 to make generation deterministic.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between: `"pil"` (`PIL.Image.Image`), `"np"`
-                (`np.array`) or `"pt"` (`torch.Tensor`).
+                (`np.array`) or `"pt"` (`paddle.Tensor`).
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
                 following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
@@ -346,7 +346,7 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
         if not all(
                 isinstance(i, (PIL.Image.Image, paddle.Tensor)) for i in image):
             raise ValueError(
-                f'Input is in incorrect format: {[type(i) for i in image]}. Currently, we only support  PIL image and pytorch tensor'
+                f'Input is in incorrect format: {[type(i) for i in image]}. Currently, we only support  PIL image and pypaddle tensor'
             )
         image = paddle.concat(
             x=[prepare_image(i, width, height) for i in image], axis=0)
@@ -381,7 +381,7 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
                 return_dict=False)[0]
             if do_classifier_free_guidance:
                 noise_pred, variance_pred = noise_pred.split(
-                    latents.shape[1], dim=1)
+                    noise_pred.shape[1] // latents.shape[1], axis=1)
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
                 _, variance_pred_text = variance_pred.chunk(chunks=2)
                 noise_pred = noise_pred_uncond + guidance_scale * (
@@ -391,7 +391,8 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
             if not (hasattr(self.scheduler.config, 'variance_type') and
                     self.scheduler.config.variance_type in
                     ['learned', 'learned_range']):
-                noise_pred, _ = noise_pred.split(latents.shape[1], dim=1)
+                noise_pred, _ = noise_pred.split(
+                    noise_pred.shape[1] // latents.shape[1], axis=1)
             latents = self.scheduler.step(
                 noise_pred, t, latents, generator=generator).prev_sample
             if callback is not None and i % callback_steps == 0:

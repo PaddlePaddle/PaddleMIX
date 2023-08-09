@@ -15,12 +15,12 @@ EXAMPLE_DOC_STRING = """
     Examples:
         ```py
         >>> from PIL import Image
-        >>> import torch
-        >>> from diffusers import DiffusionPipeline
-        >>> from diffusers.utils import export_to_gif, load_image
+        >>> import paddle
+        >>> from ppdiffusers import DiffusionPipeline
+        >>> from ppdiffusers.utils import export_to_gif, load_image
 
         >>> repo = "openai/shap-e-img2img"
-        >>> pipe = DiffusionPipeline.from_pretrained(repo, torch_dtype=torch.float16)
+        >>> pipe = DiffusionPipeline.from_pretrained(repo, paddle_dtype=paddle.float16)
 
         >>> guidance_scale = 3.0
         >>> image_url = "https://hf.co/datasets/diffusers/docs-images/resolve/main/shap-e/corgi.png"
@@ -123,8 +123,8 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
                  image: Union[PIL.Image.Image, List[PIL.Image.Image]],
                  num_images_per_prompt: int=1,
                  num_inference_steps: int=25,
-                 generator: Optional[Union[torch.Generator, List[
-                     torch.Generator]]]=None,
+                 generator: Optional[Union[paddle.Generator, List[
+                     paddle.Generator]]]=None,
                  latents: Optional[paddle.Tensor]=None,
                  guidance_scale: float=4.0,
                  frame_size: int=64,
@@ -142,8 +142,8 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
             num_inference_steps (`int`, *optional*, defaults to 100):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A `paddle.Generator` to make
                 generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
@@ -155,7 +155,7 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
             frame_size (`int`, *optional*, default to 64):
                 The width and height of each image frame of the generated 3D output.
             output_type (`str`, *optional*, defaults to `"pt"`):
-                (`np.array`),`"latent"` (`torch.Tensor`), mesh ([`MeshDecoderOutput`]).
+                (`np.array`),`"latent"` (`paddle.Tensor`), mesh ([`MeshDecoderOutput`]).
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.shap_e.pipeline_shap_e.ShapEPipelineOutput`] instead of a plain
                 tuple.
@@ -176,7 +176,7 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
             batch_size = len(image)
         else:
             raise ValueError(
-                f'`image` has to be of type `PIL.Image.Image`, `torch.Tensor`, `List[PIL.Image.Image]` or `List[torch.Tensor]` but is {type(image)}'
+                f'`image` has to be of type `PIL.Image.Image`, `paddle.Tensor`, `List[PIL.Image.Image]` or `List[paddle.Tensor]` but is {type(image)}'
             )
         batch_size = batch_size * num_images_per_prompt
         do_classifier_free_guidance = guidance_scale > 1.0
@@ -199,7 +199,8 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
             noise_pred = self.prior(
                 scaled_model_input, timestep=t,
                 proj_embedding=image_embeds).predicted_image_embedding
-            noise_pred, _ = noise_pred.split(scaled_model_input.shape[2], dim=2)
+            noise_pred, _ = noise_pred.split(
+                noise_pred.shape[2] // scaled_model_input.shape[2], axis=2)
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred = noise_pred.chunk(chunks=2)
                 noise_pred = noise_pred_uncond + guidance_scale * (
@@ -226,10 +227,7 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
             images = images.cpu().numpy()
             if output_type == 'pil':
                 images = [self.numpy_to_pil(image) for image in images]
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
+
         if not return_dict:
             return images,
         return ShapEPipelineOutput(images=images)

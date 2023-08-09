@@ -5,7 +5,7 @@ import numpy as np
 import PIL
 from ...models import PriorTransformer
 from ...schedulers import UnCLIPScheduler
-from ...utils import BaseOutput, is_accelerate_available, is_accelerate_version, logging, randn_tensor, replace_example_docstring
+from ...utils import BaseOutput, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 import paddlenlp
 from paddlenlp.transformers import XLMRobertaTokenizer
@@ -14,8 +14,8 @@ logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> from diffusers import KandinskyPipeline, KandinskyPriorPipeline
-        >>> import torch
+        >>> from ppdiffusers import KandinskyPipeline, KandinskyPriorPipeline
+        >>> import paddle
 
         >>> pipe_prior = KandinskyPriorPipeline.from_pretrained("kandinsky-community/kandinsky-2-1-prior")
 
@@ -41,15 +41,15 @@ EXAMPLE_DOC_STRING = """
 EXAMPLE_INTERPOLATE_DOC_STRING = """
     Examples:
         ```py
-        >>> from diffusers import KandinskyPriorPipeline, KandinskyPipeline
-        >>> from diffusers.utils import load_image
+        >>> from ppdiffusers import KandinskyPriorPipeline, KandinskyPipeline
+        >>> from ppdiffusers.utils import load_image
         >>> import PIL
 
-        >>> import torch
-        >>> from torchvision import transforms
+        >>> import paddle
+        >>> from paddle.vision import transforms
 
         >>> pipe_prior = KandinskyPriorPipeline.from_pretrained(
-        ...     "kandinsky-community/kandinsky-2-1-prior", torch_dtype=torch.float16
+        ...     "kandinsky-community/kandinsky-2-1-prior", paddle_dtype=paddle.float16
         ... )
 
         >>> img1 = load_image(
@@ -66,7 +66,7 @@ EXAMPLE_INTERPOLATE_DOC_STRING = """
         >>> weights = [0.3, 0.3, 0.4]
         >>> image_emb, zero_image_emb = pipe_prior.interpolate(images_texts, weights)
 
-        >>> pipe = KandinskyPipeline.from_pretrained("kandinsky-community/kandinsky-2-1", torch_dtype=torch.float16)
+        >>> pipe = KandinskyPipeline.from_pretrained("kandinsky-community/kandinsky-2-1", paddle_dtype=paddle.float16)
 
         >>> image = pipe(
         ...     "",
@@ -117,7 +117,8 @@ class KandinskyPriorPipeline(DiffusionPipeline):
         scheduler ([`UnCLIPScheduler`]):
             A scheduler to be used in combination with `prior` to generate image embedding.
     """
-    _exclude_from_cpu_offload = ['prior']
+
+    # _exclude_from_cpu_offload = ['prior']
 
     def __init__(
             self,
@@ -164,8 +165,8 @@ class KandinskyPriorPipeline(DiffusionPipeline):
             num_inference_steps (`int`, *optional*, defaults to 25):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of paddle generator(s).
                 to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
@@ -212,7 +213,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
                 image_emb = self.image_encoder(cond)['image_embeds']
             else:
                 raise ValueError(
-                    f'`images_and_prompts` can only contains elements to be of type `str`, `PIL.Image.Image` or `torch.Tensor`  but is {type(cond)}'
+                    f'`images_and_prompts` can only contains elements to be of type `str`, `PIL.Image.Image` or `paddle.Tensor`  but is {type(cond)}'
                 )
             image_embeddings.append(image_emb * weight)
         image_emb = paddle.concat(x=image_embeddings).sum(axis=0, keepdim=True)
@@ -362,8 +363,8 @@ class KandinskyPriorPipeline(DiffusionPipeline):
             num_inference_steps (`int`, *optional*, defaults to 25):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of paddle generator(s).
                 to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
@@ -377,7 +378,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
                 usually at the expense of lower image quality.
             output_type (`str`, *optional*, defaults to `"pt"`):
                 The output format of the generate image. Choose between: `"np"` (`np.array`) or `"pt"`
-                (`torch.Tensor`).
+                (`paddle.Tensor`).
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.ImagePipelineOutput`] instead of a plain tuple.
 
@@ -445,14 +446,8 @@ class KandinskyPriorPipeline(DiffusionPipeline):
         image_embeddings = latents
         if negative_prompt is None:
             zero_embeds = self.get_zero_embed(latents.shape[0])
-            if hasattr(self, 'final_offload_hook'
-                       ) and self.final_offload_hook is not None:
-                self.final_offload_hook.offload()
         else:
             image_embeddings, zero_embeds = image_embeddings.chunk(chunks=2)
-            if hasattr(self, 'final_offload_hook'
-                       ) and self.final_offload_hook is not None:
-                self.prior_hook.offload()
         if output_type not in ['pd', 'np']:
             raise ValueError(
                 f'Only the output types `pt` and `np` are supported not output_type={output_type}'

@@ -8,15 +8,15 @@ from ...image_processor import VaeImageProcessorLDM3D
 from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import BaseOutput, is_accelerate_available, is_accelerate_version, logging, randn_tensor, replace_example_docstring
+from ...utils import BaseOutput, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from .safety_checker import StableDiffusionSafetyChecker
 logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
-        >>> from diffusers import StableDiffusionPipeline
+        >>> import paddle
+        >>> from ppdiffusers import StableDiffusionPipeline
 
         >>> pipe = StableDiffusionLDM3DPipeline.from_pretrained("Intel/ldm3d")
 
@@ -337,8 +337,8 @@ class StableDiffusionLDM3DPipeline(DiffusionPipeline,
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
@@ -371,8 +371,8 @@ class StableDiffusionLDM3DPipeline(DiffusionPipeline,
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A `paddle.Generator` to make
                 generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
@@ -478,10 +478,7 @@ class StableDiffusionLDM3DPipeline(DiffusionPipeline,
             do_denormalize = [(not has_nsfw) for has_nsfw in has_nsfw_concept]
         rgb, depth = self.image_processor.postprocess(
             image, output_type=output_type, do_denormalize=do_denormalize)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
+
         if not return_dict:
             return (rgb, depth), has_nsfw_concept
         return LDM3DPipelineOutput(

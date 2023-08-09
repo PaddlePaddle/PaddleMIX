@@ -172,7 +172,7 @@ def make_grid(tensor: Union[paddle.Tensor, List[paddle.Tensor]],
         else:
             norm_range(tensor, value_range)
     if not isinstance(tensor, paddle.Tensor):
-        raise TypeError('tensor should be of type torch.Tensor')
+        raise TypeError('tensor should be of type paddle.Tensor')
     if tensor.shape[0] == 1:
         return tensor.squeeze(axis=0)
     nmaps = tensor.shape[0]
@@ -224,9 +224,7 @@ def get_image_num_channels(img: Any) -> int:
 
 def to_tensor(pic) -> paddle.Tensor:
     """Convert a ``PIL Image`` or ``numpy.ndarray`` to tensor.
-    This function does not support torchscript.
-
-    See :class:`~torchvision.transforms.ToTensor` for more details.
+    See :class:`~paddle.vision.transforms.ToTensor` for more details.
 
     Args:
         pic (PIL Image or numpy.ndarray): Image to be converted to tensor.
@@ -300,7 +298,6 @@ def npz_to_video_grid(data_path,
     for i in range(n):
         video = videos[(i), :, :, :, :]
         images = [video[(j), :, :, :] for j in range(t)]
-        # >>>        images = [torchvision.transforms.functional.to_tensor(img) for img in images]
         images = [to_tensor(img) for img in images]
 
         video = paddle.stack(x=images)

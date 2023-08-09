@@ -138,7 +138,6 @@ EXAMPLE_INVERT_DOC_STRING = """
 
         >>> pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
         >>> pipeline.inverse_scheduler = DDIMInverseScheduler.from_config(pipeline.scheduler.config)
-        >>> pipeline.enable_model_cpu_offload()
 
         >>> img_url = "https://github.com/pix2pixzero/pix2pix-zero/raw/main/assets/test_images/cats/cat_6.png"
 

@@ -84,7 +84,7 @@ class MultiControlNetModel(ModelMixin):
                 the main process to avoid race conditions.
             save_function (`Callable`):
                 The function to use to save the state dictionary. Useful on distributed training like TPUs when one
-                need to replace `torch.save` by another method. Can be configured with the environment variable
+                need to replace `paddle.save` by another method. Can be configured with the environment variable
                 `DIFFUSERS_SAVE_MODE`.
             safe_serialization (`bool`, *optional*, defaults to `False`):
                 Whether to save the model using `safetensors` or the traditional PyTorch way (that uses `pickle`).
@@ -123,10 +123,10 @@ class MultiControlNetModel(ModelMixin):
         Parameters:
             pretrained_model_path (`os.PathLike`):
                 A path to a *directory* containing model weights saved using
-                [`~diffusers.pipelines.controlnet.MultiControlNetModel.save_pretrained`], e.g.,
+                [`~ppdiffusers.pipelines.controlnet.MultiControlNetModel.save_pretrained`], e.g.,
                 `./my_model_directory/controlnet`.
-            torch_dtype (`str` or `torch.dtype`, *optional*):
-                Override the default `torch.dtype` and load the model under this dtype. If `"auto"` is passed the dtype
+            paddle_dtype (`str` or `paddle.dtype`, *optional*):
+                Override the default `paddle.dtype` and load the model under this dtype. If `"auto"` is passed the dtype
                 will be automatically derived from the model's weights.
             output_loading_info(`bool`, *optional*, defaults to `False`):
                 Whether or not to also return a dictionary containing missing keys, unexpected keys and error messages.

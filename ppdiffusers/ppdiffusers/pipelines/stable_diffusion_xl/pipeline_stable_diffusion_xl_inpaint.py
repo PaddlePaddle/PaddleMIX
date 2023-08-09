@@ -8,7 +8,7 @@ from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoa
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...models.attention_processor import AttnProcessor2_0, LoRAAttnProcessor2_0, LoRAXFormersAttnProcessor, XFormersAttnProcessor
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import is_accelerate_available, is_accelerate_version, is_invisible_watermark_available, logging, randn_tensor, replace_example_docstring
+from ...utils import is_invisible_watermark_available, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
 if is_invisible_watermark_available():
@@ -18,13 +18,13 @@ logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
-        >>> from diffusers import StableDiffusionXLInpaintPipeline
-        >>> from diffusers.utils import load_image
+        >>> import paddle
+        >>> from ppdiffusers import StableDiffusionXLInpaintPipeline
+        >>> from ppdiffusers.utils import load_image
 
         >>> pipe = StableDiffusionXLInpaintPipeline.from_pretrained(
         ...     "stabilityai/stable-diffusion-xl-base-1.0",
-        ...     torch_dtype=torch.float16,
+        ...     paddle_dtype=paddle.float16,
         ...     variant="fp16",
         ...     use_safetensors=True,
         ... )
@@ -57,7 +57,7 @@ def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
     return noise_cfg
 
 
-def mask_pil_to_torch(mask, height, width):
+def mask_pil_to_paddle(mask, height, width):
     if isinstance(mask, (PIL.Image.Image, np.ndarray)):
         mask = [mask]
     if isinstance(mask, list) and isinstance(mask[0], PIL.Image.Image):
@@ -81,29 +81,29 @@ def prepare_mask_and_masked_image(image,
                                   return_image: bool=False):
     """
     Prepares a pair (image, mask) to be consumed by the Stable Diffusion pipeline. This means that those inputs will be
-    converted to ``torch.Tensor`` with shapes ``batch x channels x height x width`` where ``channels`` is ``3`` for the
+    converted to ``paddle.Tensor`` with shapes ``batch x channels x height x width`` where ``channels`` is ``3`` for the
     ``image`` and ``1`` for the ``mask``.
 
-    The ``image`` will be converted to ``torch.float32`` and normalized to be in ``[-1, 1]``. The ``mask`` will be
-    binarized (``mask > 0.5``) and cast to ``torch.float32`` too.
+    The ``image`` will be converted to ``paddle.float32`` and normalized to be in ``[-1, 1]``. The ``mask`` will be
+    binarized (``mask > 0.5``) and cast to ``paddle.float32`` too.
 
     Args:
-        image (Union[np.array, PIL.Image, torch.Tensor]): The image to inpaint.
+        image (Union[np.array, PIL.Image, paddle.Tensor]): The image to inpaint.
             It can be a ``PIL.Image``, or a ``height x width x 3`` ``np.array`` or a ``channels x height x width``
-            ``torch.Tensor`` or a ``batch x channels x height x width`` ``torch.Tensor``.
+            ``paddle.Tensor`` or a ``batch x channels x height x width`` ``paddle.Tensor``.
         mask (_type_): The mask to apply to the image, i.e. regions to inpaint.
             It can be a ``PIL.Image``, or a ``height x width`` ``np.array`` or a ``1 x height x width``
-            ``torch.Tensor`` or a ``batch x 1 x height x width`` ``torch.Tensor``.
+            ``paddle.Tensor`` or a ``batch x 1 x height x width`` ``paddle.Tensor``.
 
 
     Raises:
-        ValueError: ``torch.Tensor`` images should be in the ``[-1, 1]`` range. ValueError: ``torch.Tensor`` mask
+        ValueError: ``paddle.Tensor`` images should be in the ``[-1, 1]`` range. ValueError: ``paddle.Tensor`` mask
         should be in the ``[0, 1]`` range. ValueError: ``mask`` and ``image`` should have the same spatial dimensions.
-        TypeError: ``mask`` is a ``torch.Tensor`` but ``image`` is not
+        TypeError: ``mask`` is a ``paddle.Tensor`` but ``image`` is not
             (ot the other way around).
 
     Returns:
-        tuple[torch.Tensor]: The pair (mask, masked_image) as ``torch.Tensor`` with 4
+        tuple[paddle.Tensor]: The pair (mask, masked_image) as ``paddle.Tensor`` with 4
             dimensions: ``batch x channels x height x width``.
     """
     if image is None:
@@ -112,7 +112,7 @@ def prepare_mask_and_masked_image(image,
         raise ValueError('`mask_image` input cannot be undefined.')
     if isinstance(image, paddle.Tensor):
         if not isinstance(mask, paddle.Tensor):
-            mask = mask_pil_to_torch(mask, height, width)
+            mask = mask_pil_to_paddle(mask, height, width)
         if image.ndim == 3:
             image = image.unsqueeze(axis=0)
         if mask.ndim == 2:
@@ -132,7 +132,7 @@ def prepare_mask_and_masked_image(image,
         image = image.cast(dtype='float32')
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(
-            f'`mask` is a torch.Tensor but `image` (type: {type(image)} is not')
+            f'`mask` is a paddle.Tensor but `image` (type: {type(image)} is not')
     else:
         if isinstance(image, (PIL.Image.Image, np.ndarray)):
             image = [image]
@@ -147,7 +147,7 @@ def prepare_mask_and_masked_image(image,
             image = np.concatenate([i[(None), :] for i in image], axis=0)
         image = image.transpose(0, 3, 1, 2)
         image = paddle.to_tensor(data=image).cast(dtype='float32') / 127.5 - 1.0
-        mask = mask_pil_to_torch(mask, height, width)
+        mask = mask_pil_to_paddle(mask, height, width)
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
     if image.shape[1] == 4:
@@ -208,12 +208,13 @@ class StableDiffusionXLInpaintPipeline(DiffusionPipeline,
             text_encoder: paddlenlp.transformers.CLIPTextModel,
             text_encoder_2: paddlenlp.transformers.CLIPTextModelWithProjection,
             tokenizer: paddlenlp.transformers.CLIPTokenizer,
-            tokenizer_2: transformers.CLIPTokenizer,
+            tokenizer_2: paddlenlp.transformers.CLIPTokenizer,
             unet: UNet2DConditionModel,
             scheduler: KarrasDiffusionSchedulers,
             requires_aesthetics_score: bool=False,
             force_zeros_for_empty_prompt: bool=True,
             add_watermarker: Optional[bool]=None):
+
         super().__init__()
         self.register_modules(
             vae=vae,
@@ -523,7 +524,7 @@ class StableDiffusionXLInpaintPipeline(DiffusionPipeline,
 
     def _encode_vae_image(self,
                           image: paddle.Tensor,
-                          generator: torch.Generator):
+                          generator: paddle.Generator):
         dtype = image.dtype
         if self.vae.config.force_upcast:
             image = image.astype(dtype='float32')
@@ -636,11 +637,11 @@ class StableDiffusionXLInpaintPipeline(DiffusionPipeline,
     def upcast_vae(self):
         dtype = self.vae.dtype
         self.vae.to(dtype='float32')
-        use_torch_2_0_or_xformers = isinstance(
+        use_xformers = isinstance(
             self.vae.decoder.mid_block.attentions[0].processor,
             (AttnProcessor2_0, XFormersAttnProcessor, LoRAXFormersAttnProcessor,
              LoRAAttnProcessor2_0))
-        if use_torch_2_0_or_xformers:
+        if use_xformers:
             self.vae.post_quant_conv.to(dtype)
             self.vae.decoder.conv_in.to(dtype)
             self.vae.decoder.mid_block.to(dtype)
@@ -664,8 +665,8 @@ class StableDiffusionXLInpaintPipeline(DiffusionPipeline,
             negative_prompt_2: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
@@ -762,8 +763,8 @@ class StableDiffusionXLInpaintPipeline(DiffusionPipeline,
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
                 [`schedulers.DDIMScheduler`], will be ignored for others.
-            generator (`torch.Generator`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator`, *optional*):
+                One or a list of paddle generator(s).
                 to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
@@ -783,8 +784,7 @@ class StableDiffusionXLInpaintPipeline(DiffusionPipeline,
                 called at every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [diffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                `self.processor` in ppdiffusers.cross_attention.
             original_size (`Tuple[int]`, *optional*, defaults to (1024, 1024)):
                 If `original_size` is not the same as `target_size` the image will appear to be down- or upsampled.
                 `original_size` defaults to `(width, height)` if not specified. Part of SDXL's micro-conditioning as

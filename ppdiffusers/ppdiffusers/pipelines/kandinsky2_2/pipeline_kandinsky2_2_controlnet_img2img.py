@@ -11,12 +11,12 @@ logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
+        >>> import paddle
         >>> import numpy as np
 
-        >>> from diffusers import KandinskyV22PriorEmb2EmbPipeline, KandinskyV22ControlnetImg2ImgPipeline
+        >>> from ppdiffusers import KandinskyV22PriorEmb2EmbPipeline, KandinskyV22ControlnetImg2ImgPipeline
         >>> from transformers import pipeline
-        >>> from diffusers.utils import load_image
+        >>> from ppdiffusers.utils import load_image
 
 
         >>> def make_hint(image, depth_estimator):
@@ -24,7 +24,7 @@ EXAMPLE_DOC_STRING = """
         ...     image = np.array(image)
         ...     image = image[:, :, None]
         ...     image = np.concatenate([image, image, image], axis=2)
-        ...     detected_map = torch.from_numpy(image).float() / 255.0
+        ...     detected_map = paddle.to_tensor(image).float() / 255.0
         ...     hint = detected_map.permute(2, 0, 1)
         ...     return hint
 
@@ -32,11 +32,11 @@ EXAMPLE_DOC_STRING = """
         >>> depth_estimator = pipeline("depth-estimation")
 
         >>> pipe_prior = KandinskyV22PriorEmb2EmbPipeline.from_pretrained(
-        ...     "kandinsky-community/kandinsky-2-2-prior", torch_dtype=torch.float16
+        ...     "kandinsky-community/kandinsky-2-2-prior", paddle_dtype=paddle.float16
         ... )
 
         >>> pipe = KandinskyV22ControlnetImg2ImgPipeline.from_pretrained(
-        ...     "kandinsky-community/kandinsky-2-2-controlnet-depth", torch_dtype=torch.float16
+        ...     "kandinsky-community/kandinsky-2-2-controlnet-depth", paddle_dtype=paddle.float16
         ... )
 
         >>> img = load_image(
@@ -132,7 +132,7 @@ class KandinskyV22ControlnetImg2ImgPipeline(DiffusionPipeline):
                         generator=None):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
-                f'`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
             )
         image = image.cast(dtype=dtype)
         batch_size = batch_size * num_images_per_prompt
@@ -216,12 +216,12 @@ class KandinskyV22ControlnetImg2ImgPipeline(DiffusionPipeline):
                 usually at the expense of lower image quality.
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of paddle generator(s).
                 to make generation deterministic.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between: `"pil"` (`PIL.Image.Image`), `"np"`
-                (`np.array`) or `"pt"` (`torch.Tensor`).
+                (`np.array`) or `"pt"` (`paddle.Tensor`).
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
                 following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
@@ -261,7 +261,7 @@ class KandinskyV22ControlnetImg2ImgPipeline(DiffusionPipeline):
         if not all(
                 isinstance(i, (PIL.Image.Image, paddle.Tensor)) for i in image):
             raise ValueError(
-                f'Input is in incorrect format: {[type(i) for i in image]}. Currently, we only support  PIL image and pytorch tensor'
+                f'Input is in incorrect format: {[type(i) for i in image]}. Currently, we only support  PIL image and paddle tensor'
             )
         image = paddle.concat(
             x=[prepare_image(i, width, height) for i in image], axis=0)
@@ -291,7 +291,7 @@ class KandinskyV22ControlnetImg2ImgPipeline(DiffusionPipeline):
                 return_dict=False)[0]
             if do_classifier_free_guidance:
                 noise_pred, variance_pred = noise_pred.split(
-                    latents.shape[1], dim=1)
+                    noise_pred.shape[1] // latents.shape[1], axis=1)
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
                 _, variance_pred_text = variance_pred.chunk(chunks=2)
                 noise_pred = noise_pred_uncond + guidance_scale * (
@@ -301,16 +301,14 @@ class KandinskyV22ControlnetImg2ImgPipeline(DiffusionPipeline):
             if not (hasattr(self.scheduler.config, 'variance_type') and
                     self.scheduler.config.variance_type in
                     ['learned', 'learned_range']):
-                noise_pred, _ = noise_pred.split(latents.shape[1], dim=1)
+                noise_pred, _ = noise_pred.split(
+                    noise_pred.shape[1] // latents.shape[1], axis=1)
             latents = self.scheduler.step(
                 noise_pred, t, latents, generator=generator)[0]
             if callback is not None and i % callback_steps == 0:
                 callback(i, t, latents)
         image = self.movq.decode(latents, force_not_quantize=True)['sample']
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
+
         if output_type not in ['pd', 'np', 'pil']:
             raise ValueError(
                 f'Only the output types `pt`, `pil` and `np` are supported not output_type={output_type}'

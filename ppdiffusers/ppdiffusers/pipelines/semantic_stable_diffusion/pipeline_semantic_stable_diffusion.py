@@ -587,7 +587,6 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                     noise_guidance_edit = paddle.zeros(
                         (len(noise_pred_edit_concepts), *noise_guidance.shape),
                         dtype=noise_guidance.dtype, )
-                    # noise_guidance_edit = torch.zeros_like(noise_guidance)
                     warmup_inds = []
                     for c, noise_pred_edit_concept in enumerate(
                             noise_pred_edit_concepts):
@@ -630,7 +629,6 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                             continue
 
                         noise_guidance_edit_tmp = noise_pred_edit_concept - noise_pred_uncond
-                        # tmp_weights = (noise_pred_text - noise_pred_edit_concept).sum(dim=(1, 2, 3))
                         tmp_weights = (
                             noise_guidance - noise_pred_edit_concept).sum(
                                 (1, 2, 3))
@@ -681,7 +679,6 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                             concept_weights_tmp)
                         concept_weights_tmp = concept_weights_tmp / concept_weights_tmp.sum(
                             0)
-                        # concept_weights_tmp = torch.nan_to_num(concept_weights_tmp)
 
                         noise_guidance_edit_tmp = paddle.index_select(
                             noise_guidance_edit, warmup_inds, 0)

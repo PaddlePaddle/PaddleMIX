@@ -5,7 +5,7 @@ from ...image_processor import VaeImageProcessor
 from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import is_accelerate_available, is_accelerate_version, logging, randn_tensor, replace_example_docstring
+from ...utils import logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
@@ -15,14 +15,14 @@ logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
-        >>> from diffusers import DDPMParallelScheduler
-        >>> from diffusers import StableDiffusionParadigmsPipeline
+        >>> import paddle
+        >>> from ppdiffusers import DDPMParallelScheduler
+        >>> from ppdiffusers import StableDiffusionParadigmsPipeline
 
         >>> scheduler = DDPMParallelScheduler.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="scheduler")
 
         >>> pipe = StableDiffusionParadigmsPipeline.from_pretrained(
-        ...     "runwayml/stable-diffusion-v1-5", scheduler=scheduler, torch_dtype=torch.float16
+        ...     "runwayml/stable-diffusion-v1-5", scheduler=scheduler, paddle_dtype=paddle.float16
         ... )
 
         >>> ngpu, batch_per_device = paddle.device.cuda.device_count(), 5
@@ -333,8 +333,8 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
@@ -375,9 +375,8 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
-                generation deterministic.
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A `paddle.Generator` to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
@@ -403,7 +402,7 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 A kwargs dictionary that if specified is passed along to the [`AttentionProcessor`] as defined in
                 [`self.processor`](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
             debug (`bool`, *optional*, defaults to `False`):
-                Whether or not to run in debug mode. In debug mode, `torch.cumsum` is evaluated using the CPU.
+                Whether or not to run in debug mode. In debug mode, `paddle.cumsum` is evaluated using the CPU.
 
         Examples:
 

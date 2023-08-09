@@ -16,7 +16,7 @@ def sample_pmf(pmf: paddle.Tensor, n_samples: int) -> paddle.Tensor:
     The i-th bin is assumed to have mass pmf[i].
 
     Args:
-        pmf: [batch_size, *shape, n_samples, 1] where (pmf.sum(dim=-2) == 1).all()
+        pmf: [batch_size, *shape, n_samples, 1] where (pmf.sum(axis=-2) == 1).all()
         n_samples: number of samples
 
     Return:
@@ -72,10 +72,10 @@ def integrate_samples(volume_range, ts, density, channels):
     Args:
         volume_range: Specifies the integral range [t0, t1]
         ts: timesteps
-        density: torch.Tensor [batch_size, *shape, n_samples, 1]
-        channels: torch.Tensor [batch_size, *shape, n_samples, n_channels]
+        density: paddle.Tensor [batch_size, *shape, n_samples, 1]
+        channels: paddle.Tensor [batch_size, *shape, n_samples, n_channels]
     returns:
-        channels: integrated rgb output weights: torch.Tensor [batch_size, *shape, n_samples, 1] (density
+        channels: integrated rgb output weights: paddle.Tensor [batch_size, *shape, n_samples, 1] (density
         *transmittance)[i] weight for each rgb output at [..., i, :]. transmittance: transmittance of this volume
     )
     """
@@ -277,9 +277,9 @@ class BoundingBoxVolume(paddle.nn.Layer):
             bbox - origin[(...), (None), :],
             direction[(...), (None), :],
             epsilon=epsilon)
-        t0 = ts.min(dim=-2).values.max(dim=-1,
-                                       keepdim=True).values.clamp(self.min_dist)
-        t1 = ts.max(dim=-2).values.min(dim=-1, keepdim=True).values
+        t0 = ts.min(axis=-2).values.max(
+            axis=-1, keepdim=True).values.clamp(self.min_dist)
+        t1 = ts.max(axis=-2).values.min(axis=-1, keepdim=True).values
         assert t0.shape == t1.shape == (batch_size, *shape, 1)
         if t0_lower is not None:
             assert t0.shape == t0_lower.shape
@@ -404,9 +404,9 @@ class MeshDecoderOutput(BaseOutput):
     A 3D triangle mesh with optional data at the vertices and faces.
 
     Args:
-        verts (`torch.Tensor` of shape `(N, 3)`):
+        verts (`paddle.Tensor` of shape `(N, 3)`):
             array of vertext coordinates
-        faces (`torch.Tensor` of shape `(N, 3)`):
+        faces (`paddle.Tensor` of shape `(N, 3)`):
             array of triangles, pointing to indices in verts.
         vertext_channels (Dict):
             vertext coordinates for each color channel

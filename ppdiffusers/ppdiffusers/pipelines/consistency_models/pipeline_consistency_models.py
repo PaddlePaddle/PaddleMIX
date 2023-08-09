@@ -2,7 +2,7 @@ import paddle
 from typing import Callable, List, Optional, Union
 from ...models import UNet2DModel
 from ...schedulers import CMStochasticIterativeScheduler
-from ...utils import is_accelerate_available, is_accelerate_version, logging, randn_tensor, replace_example_docstring
+from ...utils import logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
@@ -149,7 +149,7 @@ class ConsistencyModelPipeline(DiffusionPipeline):
         Args:
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
-            class_labels (`torch.Tensor` or `List[int]` or `int`, *optional*):
+            class_labels (`paddle.Tensor` or `List[int]` or `int`, *optional*):
                 Optional class labels for conditioning class-conditional consistency models. Not used if the model is
                 not class-conditional.
             num_inference_steps (`int`, *optional*, defaults to 1):

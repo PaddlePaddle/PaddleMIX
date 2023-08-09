@@ -100,7 +100,7 @@ class AutoPipelineForText2Image(ConfigMixin):
     AutoPipeline for text-to-image generation.
 
     [`AutoPipelineForText2Image`] is a generic pipeline class that will be instantiated as one of the text-to-image
-    pipeline class in diffusers.
+    pipeline class in ppdiffusers.
 
     The pipeline type (for example [`StableDiffusionPipeline`]) is automatically selected when created with the
     AutoPipelineForText2Image.from_pretrained(pretrained_model_name_or_path) or
@@ -124,7 +124,7 @@ class AutoPipelineForText2Image(ConfigMixin):
     @classmethod
     def from_pretrained(cls, pretrained_model_or_path, **kwargs):
         """
-        Instantiates a text-to-image Pytorch diffusion pipeline from pretrained pipeline weight.
+        Instantiates a text-to-image Paddle diffusion pipeline from pretrained pipeline weight.
 
         The from_pretrained() method takes care of returning the correct pipeline class instance by:
             1. Detect the pipeline class of the pretrained_model_or_path based on the _class_name property of its
@@ -140,7 +140,7 @@ class AutoPipelineForText2Image(ConfigMixin):
 
         ```
         Some weights of UNet2DConditionModel were not initialized from the model checkpoint at runwayml/stable-diffusion-v1-5 and are newly initialized because the shapes did not match:
-        - conv_in.weight: found shape torch.Size([320, 4, 3, 3]) in the checkpoint and torch.Size([320, 9, 3, 3]) in the model instantiated
+        - conv_in.weight: found shape [320, 4, 3, 3] in the checkpoint and [320, 9, 3, 3] in the model instantiated
         You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
         ```
 
@@ -153,8 +153,8 @@ class AutoPipelineForText2Image(ConfigMixin):
                     - A path to a *directory* (for example `./my_pipeline_directory/`) containing pipeline weights
                       saved using
                     [`~DiffusionPipeline.save_pretrained`].
-            torch_dtype (`str` or `torch.dtype`, *optional*):
-                Override the default `torch.dtype` and load the model with another dtype. If "auto" is passed, the
+            paddle_dtype (`str` or `paddle.dtype`, *optional*):
+                Override the default `paddle.dtype` and load the model with another dtype. If "auto" is passed, the
                 dtype is automatically derived from the model's weights.
             force_download (`bool`, *optional*, defaults to `False`):
                 Whether or not to force the (re-)download of the model weights and configuration files, overriding the
@@ -173,15 +173,12 @@ class AutoPipelineForText2Image(ConfigMixin):
             local_files_only (`bool`, *optional*, defaults to `False`):
                 Whether to only load local model weights and configuration files or not. If set to `True`, the model
                 won't be downloaded from the Hub.
-            use_auth_token (`str` or *bool*, *optional*):
-                The token to use as HTTP bearer authorization for remote files. If `True`, the token generated from
-                `diffusers-cli login` (stored in `~/.huggingface`) is used.
             revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
                 allowed by Git.
             custom_revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id similar to
-                `revision` when loading a custom pipeline from the Hub. It can be a 🤗 Diffusers version when loading a
+                `revision` when loading a custom pipeline from the Hub. It can be a ppdiffusers version when loading a
                 custom pipeline from GitHub, otherwise it defaults to `"main"` when loading from the Hub.
             mirror (`str`, *optional*):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
@@ -190,10 +187,6 @@ class AutoPipelineForText2Image(ConfigMixin):
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier for the maximum memory. Will default to the maximum memory available for
                 each GPU and the available CPU RAM if unset.
-            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
-                Speed up model loading only loading the pretrained weights and not initializing the weights. This also
-                tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
-                Only supported for PyTorch >= 1.9.0. If you are using an older version of PyTorch, setting this
                 argument to `True` will raise an error.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the safetensors weights are downloaded if they're available **and** if the
@@ -217,7 +210,7 @@ class AutoPipelineForText2Image(ConfigMixin):
         Examples:
 
         ```py
-        >>> from diffusers import AutoPipelineForTextToImage
+        >>> from ppdiffusers import AutoPipelineForTextToImage
 
         >>> pipeline = AutoPipelineForTextToImage.from_pretrained("runwayml/stable-diffusion-v1-5")
         >>> print(pipeline.__class__)
@@ -236,7 +229,7 @@ class AutoPipelineForText2Image(ConfigMixin):
     @classmethod
     def from_pipe(cls, pipeline, **kwargs):
         """
-        Instantiates a text-to-image Pytorch diffusion pipeline from another instantiated diffusion pipeline class.
+        Instantiates a text-to-image Paddle diffusion pipeline from another instantiated diffusion pipeline class.
 
         The from_pipe() method takes care of returning the correct pipeline class instance by finding the text-to-image
         pipeline linked to the pipeline class using pattern matching on pipeline class name.
@@ -251,7 +244,7 @@ class AutoPipelineForText2Image(ConfigMixin):
                 an instantiated `DiffusionPipeline` object
 
         ```py
-        >>> from diffusers import AutoPipelineForTextToImage, AutoPipelineForImageToImage
+        >>> from ppdiffusers import AutoPipelineForTextToImage, AutoPipelineForImageToImage
 
         >>> pipe_i2i = AutoPipelineForImage2Image.from_pretrained(
         ...     "runwayml/stable-diffusion-v1-5", requires_safety_checker=False
@@ -319,7 +312,7 @@ class AutoPipelineForImage2Image(ConfigMixin):
     AutoPipeline for image-to-image generation.
 
     [`AutoPipelineForImage2Image`] is a generic pipeline class that will be instantiated as one of the image-to-image
-    pipeline classes in diffusers.
+    pipeline classes in ppdiffusers.
 
     The pipeline type (for example [`StableDiffusionImg2ImgPipeline`]) is automatically selected when created with the
     `AutoPipelineForImage2Image.from_pretrained(pretrained_model_name_or_path)` or
@@ -343,7 +336,7 @@ class AutoPipelineForImage2Image(ConfigMixin):
     @classmethod
     def from_pretrained(cls, pretrained_model_or_path, **kwargs):
         """
-        Instantiates a image-to-image Pytorch diffusion pipeline from pretrained pipeline weight.
+        Instantiates a image-to-image Paddle diffusion pipeline from pretrained pipeline weight.
 
         The from_pretrained() method takes care of returning the correct pipeline class instance by:
             1. Detect the pipeline class of the pretrained_model_or_path based on the _class_name property of its
@@ -359,7 +352,7 @@ class AutoPipelineForImage2Image(ConfigMixin):
 
         ```
         Some weights of UNet2DConditionModel were not initialized from the model checkpoint at runwayml/stable-diffusion-v1-5 and are newly initialized because the shapes did not match:
-        - conv_in.weight: found shape torch.Size([320, 4, 3, 3]) in the checkpoint and torch.Size([320, 9, 3, 3]) in the model instantiated
+        - conv_in.weight: found shape [320, 4, 3, 3] in the checkpoint and [320, 9, 3, 3] in the model instantiated
         You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
         ```
 
@@ -372,8 +365,8 @@ class AutoPipelineForImage2Image(ConfigMixin):
                     - A path to a *directory* (for example `./my_pipeline_directory/`) containing pipeline weights
                       saved using
                     [`~DiffusionPipeline.save_pretrained`].
-            torch_dtype (`str` or `torch.dtype`, *optional*):
-                Override the default `torch.dtype` and load the model with another dtype. If "auto" is passed, the
+            paddle_dtype (`str` or `paddle.dtype`, *optional*):
+                Override the default `paddle.dtype` and load the model with another dtype. If "auto" is passed, the
                 dtype is automatically derived from the model's weights.
             force_download (`bool`, *optional*, defaults to `False`):
                 Whether or not to force the (re-)download of the model weights and configuration files, overriding the
@@ -392,15 +385,12 @@ class AutoPipelineForImage2Image(ConfigMixin):
             local_files_only (`bool`, *optional*, defaults to `False`):
                 Whether to only load local model weights and configuration files or not. If set to `True`, the model
                 won't be downloaded from the Hub.
-            use_auth_token (`str` or *bool*, *optional*):
-                The token to use as HTTP bearer authorization for remote files. If `True`, the token generated from
-                `diffusers-cli login` (stored in `~/.huggingface`) is used.
             revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
                 allowed by Git.
             custom_revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id similar to
-                `revision` when loading a custom pipeline from the Hub. It can be a 🤗 Diffusers version when loading a
+                `revision` when loading a custom pipeline from the Hub. It can be a ppdiffusers version when loading a
                 custom pipeline from GitHub, otherwise it defaults to `"main"` when loading from the Hub.
             mirror (`str`, *optional*):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
@@ -409,11 +399,6 @@ class AutoPipelineForImage2Image(ConfigMixin):
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier for the maximum memory. Will default to the maximum memory available for
                 each GPU and the available CPU RAM if unset.
-            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
-                Speed up model loading only loading the pretrained weights and not initializing the weights. This also
-                tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
-                Only supported for PyTorch >= 1.9.0. If you are using an older version of PyTorch, setting this
-                argument to `True` will raise an error.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the safetensors weights are downloaded if they're available **and** if the
                 safetensors library is installed. If set to `True`, the model is forcibly loaded from safetensors
@@ -436,7 +421,7 @@ class AutoPipelineForImage2Image(ConfigMixin):
         Examples:
 
         ```py
-        >>> from diffusers import AutoPipelineForTextToImage
+        >>> from ppdiffusers import AutoPipelineForTextToImage
 
         >>> pipeline = AutoPipelineForImageToImage.from_pretrained("runwayml/stable-diffusion-v1-5")
         >>> print(pipeline.__class__)
@@ -455,7 +440,7 @@ class AutoPipelineForImage2Image(ConfigMixin):
     @classmethod
     def from_pipe(cls, pipeline, **kwargs):
         """
-        Instantiates a image-to-image Pytorch diffusion pipeline from another instantiated diffusion pipeline class.
+        Instantiates a image-to-image Paddle diffusion pipeline from another instantiated diffusion pipeline class.
 
         The from_pipe() method takes care of returning the correct pipeline class instance by finding the
         image-to-image pipeline linked to the pipeline class using pattern matching on pipeline class name.
@@ -472,7 +457,7 @@ class AutoPipelineForImage2Image(ConfigMixin):
         Examples:
 
         ```py
-        >>> from diffusers import AutoPipelineForTextToImage, AutoPipelineForImageToImage
+        >>> from ppdiffusers import AutoPipelineForTextToImage, AutoPipelineForImageToImage
 
         >>> pipe_t2i = AutoPipelineForText2Image.from_pretrained(
         ...     "runwayml/stable-diffusion-v1-5", requires_safety_checker=False
@@ -540,7 +525,7 @@ class AutoPipelineForInpainting(ConfigMixin):
     AutoPipeline for inpainting generation.
 
     [`AutoPipelineForInpainting`] is a generic pipeline class that will be instantiated as one of the inpainting
-    pipeline class in diffusers.
+    pipeline class in ppdiffusers.
 
     The pipeline type (for example [`IFInpaintingPipeline`]) is automatically selected when created with the
     AutoPipelineForInpainting.from_pretrained(pretrained_model_name_or_path) or
@@ -564,7 +549,7 @@ class AutoPipelineForInpainting(ConfigMixin):
     @classmethod
     def from_pretrained(cls, pretrained_model_or_path, **kwargs):
         """
-        Instantiates a inpainting Pytorch diffusion pipeline from pretrained pipeline weight.
+        Instantiates a inpainting Paddle diffusion pipeline from pretrained pipeline weight.
 
         The from_pretrained() method takes care of returning the correct pipeline class instance by:
             1. Detect the pipeline class of the pretrained_model_or_path based on the _class_name property of its
@@ -579,7 +564,7 @@ class AutoPipelineForInpainting(ConfigMixin):
 
         ```
         Some weights of UNet2DConditionModel were not initialized from the model checkpoint at runwayml/stable-diffusion-v1-5 and are newly initialized because the shapes did not match:
-        - conv_in.weight: found shape torch.Size([320, 4, 3, 3]) in the checkpoint and torch.Size([320, 9, 3, 3]) in the model instantiated
+        - conv_in.weight: found shape [320, 4, 3, 3] in the checkpoint and [320, 9, 3, 3] in the model instantiated
         You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
         ```
 
@@ -592,8 +577,8 @@ class AutoPipelineForInpainting(ConfigMixin):
                     - A path to a *directory* (for example `./my_pipeline_directory/`) containing pipeline weights
                       saved using
                     [`~DiffusionPipeline.save_pretrained`].
-            torch_dtype (`str` or `torch.dtype`, *optional*):
-                Override the default `torch.dtype` and load the model with another dtype. If "auto" is passed, the
+            paddle_dtype (`str` or `paddle.dtype`, *optional*):
+                Override the default `paddle.dtype` and load the model with another dtype. If "auto" is passed, the
                 dtype is automatically derived from the model's weights.
             force_download (`bool`, *optional*, defaults to `False`):
                 Whether or not to force the (re-)download of the model weights and configuration files, overriding the
@@ -612,15 +597,12 @@ class AutoPipelineForInpainting(ConfigMixin):
             local_files_only (`bool`, *optional*, defaults to `False`):
                 Whether to only load local model weights and configuration files or not. If set to `True`, the model
                 won't be downloaded from the Hub.
-            use_auth_token (`str` or *bool*, *optional*):
-                The token to use as HTTP bearer authorization for remote files. If `True`, the token generated from
-                `diffusers-cli login` (stored in `~/.huggingface`) is used.
             revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
                 allowed by Git.
             custom_revision (`str`, *optional*, defaults to `"main"`):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id similar to
-                `revision` when loading a custom pipeline from the Hub. It can be a 🤗 Diffusers version when loading a
+                `revision` when loading a custom pipeline from the Hub. It can be a ppdiffusers version when loading a
                 custom pipeline from GitHub, otherwise it defaults to `"main"` when loading from the Hub.
             mirror (`str`, *optional*):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
@@ -629,11 +611,6 @@ class AutoPipelineForInpainting(ConfigMixin):
             max_memory (`Dict`, *optional*):
                 A dictionary device identifier for the maximum memory. Will default to the maximum memory available for
                 each GPU and the available CPU RAM if unset.
-            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
-                Speed up model loading only loading the pretrained weights and not initializing the weights. This also
-                tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
-                Only supported for PyTorch >= 1.9.0. If you are using an older version of PyTorch, setting this
-                argument to `True` will raise an error.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the safetensors weights are downloaded if they're available **and** if the
                 safetensors library is installed. If set to `True`, the model is forcibly loaded from safetensors
@@ -656,7 +633,7 @@ class AutoPipelineForInpainting(ConfigMixin):
         Examples:
 
         ```py
-        >>> from diffusers import AutoPipelineForTextToImage
+        >>> from ppdiffusers import AutoPipelineForTextToImage
 
         >>> pipeline = AutoPipelineForImageToImage.from_pretrained("runwayml/stable-diffusion-v1-5")
         >>> print(pipeline.__class__)
@@ -675,7 +652,7 @@ class AutoPipelineForInpainting(ConfigMixin):
     @classmethod
     def from_pipe(cls, pipeline, **kwargs):
         """
-        Instantiates a inpainting Pytorch diffusion pipeline from another instantiated diffusion pipeline class.
+        Instantiates a inpainting Paddle diffusion pipeline from another instantiated diffusion pipeline class.
 
         The from_pipe() method takes care of returning the correct pipeline class instance by finding the inpainting
         pipeline linked to the pipeline class using pattern matching on pipeline class name.
@@ -692,7 +669,7 @@ class AutoPipelineForInpainting(ConfigMixin):
         Examples:
 
         ```py
-        >>> from diffusers import AutoPipelineForTextToImage, AutoPipelineForInpainting
+        >>> from ppdiffusers import AutoPipelineForTextToImage, AutoPipelineForInpainting
 
         >>> pipe_t2i = AutoPipelineForText2Image.from_pretrained(
         ...     "DeepFloyd/IF-I-XL-v1.0", requires_safety_checker=False

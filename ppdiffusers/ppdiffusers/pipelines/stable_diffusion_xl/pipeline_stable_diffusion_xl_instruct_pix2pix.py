@@ -8,7 +8,7 @@ from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoa
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...models.attention_processor import AttnProcessor2_0, LoRAAttnProcessor2_0, LoRAXFormersAttnProcessor, XFormersAttnProcessor
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import deprecate, is_accelerate_available, is_accelerate_version, is_invisible_watermark_available, logging, randn_tensor
+from ...utils import deprecate, is_invisible_watermark_available, logging, randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
 if is_invisible_watermark_available():
@@ -337,7 +337,7 @@ class StableDiffusionXLInstructPix2PixPipeline(
                               generator=None):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
-                f'`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
             )
         image = image.cast(dtype=dtype)
         batch_size = batch_size * num_images_per_prompt
@@ -423,11 +423,11 @@ class StableDiffusionXLInstructPix2PixPipeline(
     def upcast_vae(self):
         dtype = self.vae.dtype
         self.vae.to(dtype='float32')
-        use_torch_2_0_or_xformers = isinstance(
+        use_xformers = isinstance(
             self.vae.decoder.mid_block.attentions[0].processor,
             (AttnProcessor2_0, XFormersAttnProcessor, LoRAXFormersAttnProcessor,
              LoRAAttnProcessor2_0))
-        if use_torch_2_0_or_xformers:
+        if use_xformers:
             self.vae.post_quant_conv.to(dtype)
             self.vae.decoder.conv_in.to(dtype)
             self.vae.decoder.mid_block.to(dtype)
@@ -444,8 +444,8 @@ class StableDiffusionXLInstructPix2PixPipeline(
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
@@ -494,8 +494,8 @@ class StableDiffusionXLInstructPix2PixPipeline(
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
                 [`schedulers.DDIMScheduler`], will be ignored for others.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of paddle generator(s).
                 to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
@@ -529,8 +529,7 @@ class StableDiffusionXLInstructPix2PixPipeline(
                 called at every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [diffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                `self.processor` in ppdiffusers.cross_attention.
             guidance_rescale (`float`, *optional*, defaults to 0.7):
                 Guidance rescale factor proposed by [Common Diffusion Noise Schedules and Sample Steps are
                 Flawed](https://arxiv.org/pdf/2305.08891.pdf) `guidance_scale` is defined as `φ` in equation 16. of

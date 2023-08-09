@@ -975,7 +975,7 @@ class GaussianSmoothing(nn.Layer):
             Default value is 2 (spatial).
     """
 
-    # channels=1, kernel_size=kernel_size, sigma=sigma, dim=2
+    # channels=1, kernel_size=kernel_size, sigma=sigma, axis=2
     def __init__(
             self,
             channels: int=1,

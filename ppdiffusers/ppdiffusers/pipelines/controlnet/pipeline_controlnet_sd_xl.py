@@ -3,13 +3,13 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import PIL.Image
-from diffusers.utils.import_utils import is_invisible_watermark_available
+from ppdiffusers.utils.import_utils import is_invisible_watermark_available
 from ...image_processor import VaeImageProcessor
 from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
-from ...models.attention_processor import AttnProcessor2_0, LoRAAttnProcessor2_0, LoRAXFormersAttnProcessor, XFormersAttnProcessor
+from ...models.attention_processor import LoRAXFormersAttnProcessor, XFormersAttnProcessor
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import is_accelerate_available, is_accelerate_version, is_compiled_module, logging, randn_tensor, replace_example_docstring
+from ...utils import is_compiled_module, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion_xl import StableDiffusionXLPipelineOutput
 if is_invisible_watermark_available():
@@ -69,7 +69,7 @@ class StableDiffusionXLControlNetPipeline(
     def __init__(
             self,
             vae: AutoencoderKL,
-            text_encoder: transformers.CLIPTextModel,
+            text_encoder: paddlenlp.transformers.CLIPTextModel,
             text_encoder_2: paddlenlp.transformers.CLIPTextModelWithProjection,
             tokenizer: paddlenlp.transformers.CLIPTokenizer,
             tokenizer_2: paddlenlp.transformers.CLIPTokenizer,
@@ -376,7 +376,7 @@ class StableDiffusionXLControlNetPipeline(
                 not image_is_pil_list and not image_is_tensor_list and
                 not image_is_np_list):
             raise TypeError(
-                f'image must be passed and be one of PIL image, numpy array, torch tensor, list of PIL images, list of numpy arrays or list of torch tensors, but is {type(image)}'
+                f'image must be passed and be one of PIL image, numpy array, paddle tensor, list of PIL images, list of numpy arrays or list of paddle tensors, but is {type(image)}'
             )
         if image_is_pil:
             image_batch_size = 1
@@ -451,11 +451,11 @@ class StableDiffusionXLControlNetPipeline(
     def upcast_vae(self):
         dtype = self.vae.dtype
         self.vae.to(dtype='float32')
-        use_torch_2_0_or_xformers = isinstance(
-            self.vae.decoder.mid_block.attentions[0].processor,
-            (AttnProcessor2_0, XFormersAttnProcessor, LoRAXFormersAttnProcessor,
-             LoRAAttnProcessor2_0))
-        if use_torch_2_0_or_xformers:
+        use_xformers = isinstance(
+            self.vae.decoder.mid_block.attentions[0].processor, (
+                XFormersAttnProcessor,
+                LoRAXFormersAttnProcessor, ))
+        if use_xformers:
             self.vae.post_quant_conv.to(dtype)
             self.vae.decoder.conv_in.to(dtype)
             self.vae.decoder.mid_block.to(dtype)
@@ -536,8 +536,8 @@ class StableDiffusionXLControlNetPipeline(
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
                 [`schedulers.DDIMScheduler`], will be ignored for others.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of paddle generator(s).
                 to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
@@ -564,8 +564,7 @@ class StableDiffusionXLControlNetPipeline(
                 called at every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [diffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                `self.processor` in ppdiffusers.cross_attention.
             controlnet_conditioning_scale (`float` or `List[float]`, *optional*, defaults to 1.0):
                 The outputs of the controlnet are multiplied by `controlnet_conditioning_scale` before they are added
                 to the residual in the original unet. If multiple ControlNets are specified in init, you can set the

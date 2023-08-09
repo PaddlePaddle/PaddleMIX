@@ -163,7 +163,7 @@ def is_safetensors_compatible(filenames, variant=None,
       files to know which safetensors files are needed.
     - The model is safetensors compatible only if there is a matching safetensors file for every default pytorch file.
     Converting default pytorch serialized filenames to safetensors serialized filenames:
-    - For models from the diffusers library, just replace the ".bin" extension with ".safetensors"
+    - For models from the ppdiffusers library, just replace the ".bin" extension with ".safetensors"
     - For models from the transformers library, the filename changes from "pytorch_model" to "model", and the ".bin"
       extension is replaced with ".safetensors"
     """
@@ -307,11 +307,11 @@ def warn_deprecated_model_variant(pretrained_model_name_or_path, use_auth_token,
 
     if set(comp_model_filenames) == set(model_filenames):
         warnings.warn(
-            f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'` even though you can load it via `variant=`{revision}`. Loading model variants via `revision='{revision}'` is deprecated and will be removed in diffusers v1. Please use `variant='{revision}'` instead.",
+            f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'` even though you can load it via `variant=`{revision}`. Loading model variants via `revision='{revision}'` is deprecated and will be removed in ppdiffusers v1. Please use `variant='{revision}'` instead.",
             FutureWarning, )
     else:
         warnings.warn(
-            f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'`. This behavior is deprecated and will be removed in diffusers v1. One should use `variant='{revision}'` instead. However, it appears that {pretrained_model_name_or_path} currently does not have the required variant filenames in the 'main' branch. \n The Diffusers team and community would be very grateful if you could open an issue: https://github.com/huggingface/diffusers/issues/new with the title '{pretrained_model_name_or_path} is missing {revision} files' so that the correct variant file can be added.",
+            f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'`. This behavior is deprecated and will be removed in ppdiffusers v1. One should use `variant='{revision}'` instead. However, it appears that {pretrained_model_name_or_path} currently does not have the required variant filenames in the 'main' branch. \n The ppdiffusers team and community would be very grateful if you could open an issue with the title '{pretrained_model_name_or_path} is missing {revision} files' so that the correct variant file can be added.",
             FutureWarning, )
 
 
@@ -909,9 +909,9 @@ class DiffusionPipeline(ConfigMixin):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id, since we use a
                 git-based system for storing models and other artifacts on huggingface.co, so `revision` can be any
                 identifier allowed by git.
-            custom_revision (`str`, *optional*, defaults to `"main"` when loading from the Hub and to local version of `diffusers` when loading from GitHub):
+            custom_revision (`str`, *optional*, defaults to `"main"` when loading from the Hub and to local version of `ppdiffusers` when loading from GitHub):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id similar to
-                `revision` when loading a custom pipeline from the Hub. It can be a diffusers version when loading a
+                `revision` when loading a custom pipeline from the Hub. It can be a ppdiffusers version when loading a
                 custom pipeline from GitHub.
             mirror (`str`, *optional*):
                 Mirror source to accelerate downloads in China. If you are from China and have an accessibility

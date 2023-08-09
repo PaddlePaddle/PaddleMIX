@@ -9,7 +9,7 @@ from ...image_processor import VaeImageProcessor
 from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import is_accelerate_available, is_accelerate_version, is_compiled_module, logging, randn_tensor, replace_example_docstring
+from ...utils import is_compiled_module, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion import StableDiffusionPipelineOutput
 from ..stable_diffusion.safety_checker import StableDiffusionSafetyChecker
@@ -18,7 +18,7 @@ logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> # !pip install opencv-python transformers accelerate
+        >>> # !pip install opencv-python
         >>> from ppdiffusers import StableDiffusionControlNetPipeline, ControlNetModel, UniPCMultistepScheduler
         >>> from ppdiffusers.utils import load_image
         >>> import numpy as np
@@ -39,9 +39,9 @@ EXAMPLE_DOC_STRING = """
         >>> canny_image = Image.fromarray(image)
 
         >>> # load control net and stable diffusion v1-5
-        >>> controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny", torch_dtype=torch.float16)
+        >>> controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny", paddle_dtype=paddle.float16)
         >>> pipe = StableDiffusionControlNetPipeline.from_pretrained(
-        ...     "runwayml/stable-diffusion-v1-5", controlnet=controlnet, torch_dtype=torch.float16
+        ...     "runwayml/stable-diffusion-v1-5", controlnet=controlnet, paddle_dtype=paddle.float16
         ... )
 
         >>> # speed up diffusion process with faster scheduler and memory optimization
@@ -111,7 +111,7 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
         super().__init__()
         if safety_checker is None and requires_safety_checker:
             logger.warning(
-                f'You have disabled the safety checker for {self.__class__} by passing `safety_checker=None`. Ensure that you abide to the conditions of the Stable Diffusion license and do not expose unfiltered results in services or applications open to the public. Both the diffusers team and Hugging Face strongly recommend to keep the safety filter enabled in all public facing circumstances, disabling it only for use-cases that involve analyzing network behavior or auditing its results. For more information, please have a look at https://github.com/huggingface/diffusers/pull/254 .'
+                f'You have disabled the safety checker for {self.__class__} by passing `safety_checker=None`. Ensure that you abide to the conditions of the Stable Diffusion license and do not expose unfiltered results in services or applications open to the public. Both the ppdiffusers team and Hugging Face strongly recommend to keep the safety filter enabled in all public facing circumstances, disabling it only for use-cases that involve analyzing network behavior or auditing its results. For more information, please have a look at https://github.com/huggingface/ppdiffusers/pull/254 .'
             )
         if safety_checker is not None and feature_extractor is None:
             raise ValueError(
@@ -414,7 +414,7 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                 not image_is_pil_list and not image_is_tensor_list and
                 not image_is_np_list):
             raise TypeError(
-                f'image must be passed and be one of PIL image, numpy array, torch tensor, list of PIL images, list of numpy arrays or list of torch tensors, but is {type(image)}'
+                f'image must be passed and be one of PIL image, numpy array, paddle tensor, list of PIL images, list of numpy arrays or list of paddle tensors, but is {type(image)}'
             )
         if image_is_pil:
             image_batch_size = 1

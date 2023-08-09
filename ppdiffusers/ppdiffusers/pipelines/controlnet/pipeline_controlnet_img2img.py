@@ -9,7 +9,7 @@ from ...image_processor import VaeImageProcessor
 from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import deprecate, is_accelerate_available, is_accelerate_version, is_compiled_module, logging, randn_tensor, replace_example_docstring
+from ...utils import deprecate, is_compiled_module, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion import StableDiffusionPipelineOutput
 from ..stable_diffusion.safety_checker import StableDiffusionSafetyChecker
@@ -18,7 +18,7 @@ logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> # !pip install opencv-python transformers accelerate
+        >>> # !pip install opencv-python 
         >>> from ppdiffusers import StableDiffusionControlNetImg2ImgPipeline, ControlNetModel, UniPCMultistepScheduler
         >>> from ppdiffusers.utils import load_image
         >>> import numpy as np
@@ -40,9 +40,9 @@ EXAMPLE_DOC_STRING = """
         >>> canny_image = Image.fromarray(np_image)
 
         >>> # load control net and stable diffusion v1-5
-        >>> controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny", torch_dtype=torch.float16)
+        >>> controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny", paddle_dtype=paddle.float16)
         >>> pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
-        ...     "runwayml/stable-diffusion-v1-5", controlnet=controlnet, torch_dtype=torch.float16
+        ...     "runwayml/stable-diffusion-v1-5", controlnet=controlnet, paddle_dtype=paddle.float16
         ... )
 
         >>> # speed up diffusion process with faster scheduler and memory optimization
@@ -435,7 +435,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
                 not image_is_pil_list and not image_is_tensor_list and
                 not image_is_np_list):
             raise TypeError(
-                f'image must be passed and be one of PIL image, numpy array, torch tensor, list of PIL images, list of numpy arrays or list of torch tensors, but is {type(image)}'
+                f'image must be passed and be one of PIL image, numpy array, paddle tensor, list of PIL images, list of numpy arrays or list of paddle tensors, but is {type(image)}'
             )
         if image_is_pil:
             image_batch_size = 1
@@ -490,7 +490,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
                         generator=None):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
-                f'`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
             )
         image = image.cast(dtype=dtype)
         batch_size = batch_size * num_images_per_prompt
@@ -637,8 +637,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
                 called at every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [ppdiffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                `self.processor` in ppdiffusers.cross_attention.
             controlnet_conditioning_scale (`float` or `List[float]`, *optional*, defaults to 1.0):
                 The outputs of the controlnet are multiplied by `controlnet_conditioning_scale` before they are added
                 to the residual in the original unet. If multiple ControlNets are specified in init, you can set the

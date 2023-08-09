@@ -15,11 +15,11 @@ logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
-        >>> from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler
-        >>> from diffusers.utils import export_to_video
+        >>> import paddle
+        >>> from ppdiffusers import DiffusionPipeline, DPMSolverMultistepScheduler
+        >>> from ppdiffusers.utils import export_to_video
 
-        >>> pipe = DiffusionPipeline.from_pretrained("cerspense/zeroscope_v2_576w", torch_dtype=torch.float16)
+        >>> pipe = DiffusionPipeline.from_pretrained("cerspense/zeroscope_v2_576w", paddle_dtype=paddle.float16)
         >>> pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
         >>> prompt = "spiderman running in the desert"
@@ -27,14 +27,11 @@ EXAMPLE_DOC_STRING = """
         >>> # safe low-res video
         >>> video_path = export_to_video(video_frames, output_video_path="./video_576_spiderman.mp4")
 
-        >>> # let's offload the text-to-image model
-
         >>> # and load the image-to-image model
         >>> pipe = DiffusionPipeline.from_pretrained(
-        ...     "cerspense/zeroscope_v2_XL", torch_dtype=torch.float16, revision="refs/pr/15"
+        ...     "cerspense/zeroscope_v2_XL", paddle_dtype=paddle.float16, revision="refs/pr/15"
         ... )
         >>> pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-        >>> pipe.enable_model_cpu_offload()
 
         >>> # The VAE consumes A LOT of memory, let's make sure we run it in sliced mode
         >>> pipe.vae.enable_slicing()
@@ -376,8 +373,8 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             guidance_scale: float=15.0,
             negative_prompt: Optional[Union[str, List[str]]]=None,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
@@ -413,8 +410,8 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A `paddle.Generator` to make
                 generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for video
@@ -440,7 +437,7 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the [`AttentionProcessor`] as defined in
-                [`self.processor`](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                [`self.processor`](https://github.com/huggingface/ppdiffusers/blob/main/src/ppdiffusers/models/cross_attention.py).
 
         Examples:
 

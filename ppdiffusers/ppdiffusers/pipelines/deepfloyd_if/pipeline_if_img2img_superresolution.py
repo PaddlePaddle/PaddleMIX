@@ -159,7 +159,7 @@ class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
             logger.warning(
                 f"You have disabled the safety checker for {self.__class__} by passing `safety_checker=None`. Ensure"
                 " that you abide to the conditions of the IF license and do not expose unfiltered"
-                " results in services or applications open to the public. Both the diffusers team and Hugging Face"
+                " results in services or applications open to the public. Both the ppdiffusers team and Hugging Face"
                 " strongly recommend to keep the safety filter enabled in all public facing circumstances, disabling"
                 " it only for use-cases that involve analyzing network behavior or auditing its results. For more"
                 " information, please have a look at https://github.com/huggingface/diffusers/pull/254 ."
@@ -816,8 +816,7 @@ class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
                 called at every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [diffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                `self.processor` in ppdiffusers.cross_attention.
             noise_level (`int`, *optional*, defaults to 250):
                 The amount of noise to add to the upscaled image. Must be in the range `[0, 1000)`
             clean_caption (`bool`, *optional*, defaults to `True`):

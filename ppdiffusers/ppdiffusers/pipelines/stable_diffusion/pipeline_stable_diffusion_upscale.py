@@ -426,7 +426,7 @@ class StableDiffusionUpscalePipeline(DiffusionPipeline):
         >>> from PIL import Image
         >>> from io import BytesIO
         >>> from ppdiffusers import StableDiffusionUpscalePipeline
-        >>> import torch
+        >>> import paddle
 
         >>> # load model and scheduler
         >>> model_id = "stabilityai/stable-diffusion-x4-upscaler"

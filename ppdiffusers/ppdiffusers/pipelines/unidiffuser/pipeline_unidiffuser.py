@@ -333,7 +333,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
         image = image.transpose([0, 2, 3, 1]).cast("float32").numpy()
         return image
 
-    # Modified from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
+    # Modified from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_text_latents(self,
                              batch_size,
                              seq_len,
@@ -356,7 +356,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    # Modified from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
+    # Modified from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_image_vae_latents(self,
                                   batch_size,
                                   num_channels_latents,
@@ -383,7 +383,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    # Modified from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
+    # Modified from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_image_clip_latents(self,
                                    batch_size,
                                    clip_img_dim,

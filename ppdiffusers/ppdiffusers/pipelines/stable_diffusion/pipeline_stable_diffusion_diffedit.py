@@ -40,10 +40,10 @@ EXAMPLE_DOC_STRING = """
         ```py
         >>> import PIL
         >>> import requests
-        >>> import torch
+        >>> import paddle
         >>> from io import BytesIO
 
-        >>> from diffusers import StableDiffusionDiffEditPipeline
+        >>> from ppdiffusers import StableDiffusionDiffEditPipeline
 
 
         >>> def download_image(url):
@@ -56,12 +56,11 @@ EXAMPLE_DOC_STRING = """
         >>> init_image = download_image(img_url).resize((768, 768))
 
         >>> pipe = StableDiffusionDiffEditPipeline.from_pretrained(
-        ...     "stabilityai/stable-diffusion-2-1", torch_dtype=torch.float16
+        ...     "stabilityai/stable-diffusion-2-1", paddle_dtype=paddle.float16
         ... )
 
         >>> pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
         >>> pipeline.inverse_scheduler = DDIMInverseScheduler.from_config(pipeline.scheduler.config)
-        >>> pipeline.enable_model_cpu_offload()
 
         >>> mask_prompt = "A bowl of fruits"
         >>> prompt = "A bowl of pears"
@@ -75,10 +74,10 @@ EXAMPLE_INVERT_DOC_STRING = """
         ```py
         >>> import PIL
         >>> import requests
-        >>> import torch
+        >>> import paddle
         >>> from io import BytesIO
 
-        >>> from diffusers import StableDiffusionDiffEditPipeline
+        >>> from ppdiffusers import StableDiffusionDiffEditPipeline
 
 
         >>> def download_image(url):
@@ -91,12 +90,11 @@ EXAMPLE_INVERT_DOC_STRING = """
         >>> init_image = download_image(img_url).resize((768, 768))
 
         >>> pipe = StableDiffusionDiffEditPipeline.from_pretrained(
-        ...     "stabilityai/stable-diffusion-2-1", torch_dtype=torch.float16
+        ...     "stabilityai/stable-diffusion-2-1", paddle_dtype=paddle.float16
         ... )
 
         >>> pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
         >>> pipeline.inverse_scheduler = DDIMInverseScheduler.from_config(pipeline.scheduler.config)
-        >>> pipeline.enable_model_cpu_offload()
 
         >>> prompt = "A bowl of fruits"
 
@@ -597,7 +595,7 @@ class StableDiffusionDiffEditPipeline(
     def prepare_image_latents(self, image, batch_size, dtype, generator=None):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
-                f'`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
             )
         image = image.cast(dtype=dtype)
         if image.shape[1] == 4:
@@ -675,8 +673,8 @@ class StableDiffusionDiffEditPipeline(
             mask_thresholding_ratio: Optional[float]=3.0,
             num_inference_steps: int=50,
             guidance_scale: float=7.5,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             output_type: Optional[str]='np',
             cross_attention_kwargs: Optional[Dict[str, Any]]=None):
         """
@@ -725,9 +723,8 @@ class StableDiffusionDiffEditPipeline(
             guidance_scale (`float`, *optional*, defaults to 7.5):
                 A higher guidance scale value encourages the model to generate images closely linked to the text
                 `prompt` at the expense of lower image quality. Guidance scale is enabled when `guidance_scale > 1`.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
-                generation deterministic.
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A `paddle.Generator` to make generation deterministic.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generated image. Choose between `PIL.Image` or `np.array`.
             cross_attention_kwargs (`dict`, *optional*):
@@ -828,10 +825,7 @@ class StableDiffusionDiffEditPipeline(
         mask_image = semantic_mask_image.cpu().numpy()
         if output_type == 'pil':
             mask_image = self.image_processor.numpy_to_pil(mask_image)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
+
         return mask_image
 
     @paddle.no_grad()
@@ -844,8 +838,8 @@ class StableDiffusionDiffEditPipeline(
             inpaint_strength: float=0.8,
             guidance_scale: float=7.5,
             negative_prompt: Optional[Union[str, List[str]]]=None,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
             decode_latents: bool=False,
@@ -880,9 +874,8 @@ class StableDiffusionDiffEditPipeline(
             negative_prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide what to not include in image generation. If not defined, you need to
                 pass `negative_prompt_embeds` instead. Ignored when not using guidance (`guidance_scale < 1`).
-            generator (`torch.Generator`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
-                generation deterministic.
+            generator (`paddle.Generator`, *optional*):
+                A `paddle.Generator` to make generation deterministic.
             prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs (prompt weighting). If not
                 provided, text embeddings are generated from the `prompt` input argument.
@@ -1017,10 +1010,7 @@ class StableDiffusionDiffEditPipeline(
                     start_axis=0, stop_axis=1))
         if decode_latents and output_type == 'pil':
             image = self.image_processor.numpy_to_pil(image)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
+
         if not return_dict:
             return latents, image
         return DiffEditInversionPipelineOutput(latents=latents, images=image)
@@ -1038,8 +1028,8 @@ class StableDiffusionDiffEditPipeline(
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
@@ -1080,8 +1070,8 @@ class StableDiffusionDiffEditPipeline(
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator`, *optional*):
+                A `paddle.Generator` to make
                 generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
