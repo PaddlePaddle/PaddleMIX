@@ -149,7 +149,7 @@ class StableDiffusionExtrasMixin:
         lat = 1 / 0.18215 * lat
         image = vae.decode(lat).sample
         image = (image / 2 + 0.5).clip(min=0, max=1)
-        image = image.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
+        image = image.cpu().transpose(perm=[0, 2, 3, 1]).cast("float32").numpy()
         return self.numpy_to_pil(image)
 
 
@@ -255,7 +255,10 @@ class StableDiffusionTilingPipeline(DiffusionPipeline,
         latents_shape = (batch_size, self.unet.config.in_channels, height // 8,
                          width // 8)
         generator = paddle.Generator().manual_seed(seed)
-        latents = paddle.randn(shape=latents_shape, generator=generator)
+        latents = paddle.randn(
+            shape=latents_shape,
+            generator=generator,
+            dtype=self.text_encoder.dtype)
 
         # overwrite latents for specific tiles if provided
         if seed_tiles is not None:
@@ -283,7 +286,9 @@ class StableDiffusionTilingPipeline(DiffusionPipeline,
                             1], row_end - row_init, col_end - col_init
                         latents[:, :, row_init:row_end, col_init:
                                 col_end] = paddle.randn(
-                                    shape=tile_shape, generator=tile_generator)
+                                    shape=tile_shape,
+                                    generator=tile_generator,
+                                    dtype=self.text_encoder.dtype)
 
         # overwrite again for seed reroll regions
         for row_init, row_end, col_init, col_end, seed_reroll in seed_reroll_regions:
@@ -294,7 +299,9 @@ class StableDiffusionTilingPipeline(DiffusionPipeline,
             region_shape = latents_shape[0], latents_shape[
                 1], row_end - row_init, col_end - col_init
             latents[:, :, row_init:row_end, col_init:col_end] = paddle.randn(
-                shape=region_shape, generator=reroll_generator)
+                shape=region_shape,
+                generator=reroll_generator,
+                dtype=self.text_encoder.dtype)
 
         # Prepare scheduler
         accepts_offset = "offset" in set(
@@ -317,7 +324,8 @@ class StableDiffusionTilingPipeline(DiffusionPipeline,
                 return_tensors="pd", ) for col in row
         ] for row in prompt]
         text_embeddings = [[
-            self.text_encoder(col.input_ids)[0] for col in row
+            self.text_encoder(col.input_ids)[0].cast(self.text_encoder.dtype)
+            for col in row
         ] for row in text_input]
 
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
@@ -335,7 +343,7 @@ class StableDiffusionTilingPipeline(DiffusionPipeline,
                         max_length=max_length,
                         return_tensors="pd")
                     uncond_embeddings = self.text_encoder(
-                        uncond_input.input_ids)[0]
+                        uncond_input.input_ids)[0].cast(self.text_encoder.dtype)
 
                     # For classifier free guidance, we need to do two forward passes.
                     # Here we concatenate the unconditional and text embeddings into a single batch
