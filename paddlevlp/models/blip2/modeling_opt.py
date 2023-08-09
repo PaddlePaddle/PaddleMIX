@@ -1098,7 +1098,9 @@ class OPTForCausalLM(OPTPretrainedModel):
 
     def __init__(self, config: OPTConfig, **kwargs):
         super(OPTForCausalLM, self).__init__(config)
-        config.mp_degree = kwargs.get("mp_degree")
+        from paddle.distributed import fleet
+        config.mp_degree = fleet.DistributedStrategy().hybrid_configs[
+            'mp_degree']
         self.opt = OPTModel(config)
         self.lm_head = OPTLMHead(
             hidden_size=self.opt.config.hidden_size,

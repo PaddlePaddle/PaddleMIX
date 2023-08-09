@@ -85,13 +85,6 @@ class PreTrainingArguments(TrainingArguments):
     """
     Arguments pertaining to what training options we are going to use during pretraining.
     """
-
-    pretrained_model_path: str = field(
-        default="https://bj.bcebos.com/v1/paddlenlp/models/community/Salesforce/blip2-opt-2.7b/blip2_pretrained.pdparams",
-        metadata={
-            "help":
-            "The path to pre-trained model that we will use for pretraining."
-        }, )
     weight_decay: float = field(
         default=0.05, metadata={"help": "Weight decay if we apply some."})
     learning_rate: float = field(
@@ -260,6 +253,7 @@ def main():
         eval_processor=eval_processor,
         tokenizer=tokenizer_class)
     # Training
+    checkpoint = None
     if training_args.model_path is not None:
         checkpoint = training_args.model_path
         load_model(
