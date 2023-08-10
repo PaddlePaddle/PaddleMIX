@@ -102,7 +102,7 @@ class PreTrainingArguments(TrainingArguments):
         default="CosineDecayWithWarmup",
         metadata={"help": "The scheduler name to use."})
     per_device_train_batch_size: int = field(
-        default=128,
+        default=32,
         metadata={
             "help": "Batch size per GPU core/CPU for training. (default: 8)"
         })
@@ -125,23 +125,6 @@ class PreTrainingArguments(TrainingArguments):
         default="no",
         metadata={"help": "Evaluation strategy (epoch/steps/no)"})
 
-    fp16_opt_level: str = field(
-        default="O1", metadata={"help": "Mixed Precision Type"})
-    fp16: bool = field(
-        default=True, metadata={"help": "Whether to use mixed Precision"})
-    gradient_checkpointing: bool = field(
-        default=False,
-        metadata={"help": "Forward recompute for saving graphics memory"})
-    tensor_parallel_degree: int = field(
-        default=1,
-        metadata={"help": "Set the number of tensor model parallel"})
-    sharding_parallel_degree: int = field(
-        default=1,
-        metadata={
-            "help": "Set the number of sharding, enable sharding parallel"
-        })
-    pipeline_parallel_degree: int = field(
-        default=1, metadata={"help": "Enable pipeline parallel"})
     fp16_opt_level: str = field(
         default="O1", metadata={"help": "Mixed Precision Type"})
     fp16: bool = field(

@@ -194,29 +194,15 @@ class Blip2PretrainedModel(PretrainedModel):
         import os
         from paddlenlp.transformers.utils import (
             ContextManagers,
-            InitTrackerMeta,
-            adapt_stale_fwd_patch,
-            cached_file,
-            cached_file_for_hf_hub,
-            convert_file_size_to_int,
-            dtype_byte_size,
-            fn_args_to_dict,
-            get_checkpoint_shard_files,
             is_paddle_support_lazy_init,
             is_safetensors_available,
-            paddlenlp_load,
             resolve_cache_dir,
-            weight_name_suffix,
             device_guard, )
         from paddlenlp.transformers.configuration_utils import PretrainedConfig
         from paddlenlp.utils.env import (
             CONFIG_NAME,
-            LEGACY_CONFIG_NAME,
-            PADDLE_WEIGHTS_INDEX_NAME,
             PADDLE_WEIGHTS_NAME,
-            PYTORCH_WEIGHTS_NAME,
-            SAFE_WEIGHTS_INDEX_NAME,
-            SAFE_WEIGHTS_NAME, )
+            PYTORCH_WEIGHTS_NAME, )
         from paddlenlp.transformers.model_utils import no_init_weights, load_state_dict
         config = kwargs.pop("config", None)
         state_dict = kwargs.pop("state_dict", None)
@@ -232,6 +218,7 @@ class Blip2PretrainedModel(PretrainedModel):
         low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", False)
         convert_from_torch = kwargs.pop("convert_from_torch", None)
         load_state_as_np = kwargs.pop("load_state_as_np", None)
+        mp_degree = kwargs.pop("mp_degree", 1)
         if load_state_as_np is not None:
             logger.warning(
                 "`load_state_as_np` is deprecated,  please delete it!")
@@ -266,6 +253,7 @@ class Blip2PretrainedModel(PretrainedModel):
             config.save_pretrained(cache_dir)
 
         # refine options for config
+        config.mp_degree = mp_degree
         convert_from_torch = cls.support_conversion(
             config) and convert_from_torch
 
@@ -393,7 +381,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         super().__init__(config)
         from paddlevlp.models.blip2.eva_vit import VisionTransformer
         self.visual_encoder = VisionTransformer.from_pretrained(
-            pretrained_model_name_or_path=config.vision_config, )
+            pretrained_model_name_or_path=config.vision_config,
+            mp_degree=config.mp_degree)
         self.freeze_vit = config.freeze_vit
         self.train_stage1 = False
         if self.freeze_vit:
@@ -410,7 +399,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 pretrained_model_name_or_path=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=True,
-                tokenizer_length=len(self.tokenizer), )
+                tokenizer_length=len(self.tokenizer),
+                mp_degree=config.mp_degree)
 
             state_dict = self.Qformer.state_dict()
             for name, param in self.Qformer.named_parameters():
@@ -427,13 +417,16 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 if "opt" in config.text_config:
                     language_model = OPTForCausalLM.from_pretrained(
                         config.text_config,
-                        load_state_as_np=True, )
+                        load_state_as_np=True,
+                        mp_degree=config.mp_degree)
                 else:
                     raise NotImplementedError
             else:
                 if "t5" in config.text_config:
                     language_model = T5ForConditionalGeneration(
-                        config.text_config)
+                        config.text_config,
+                        load_state_as_np=True,
+                        mp_degree=config.mp_degree)
                 else:
                     raise NotImplementedError
 
@@ -447,7 +440,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=False,
                 text_hidden_size=self.language_model.hidden_size,
-                ignore_mismatched_sizes=True)
+                ignore_mismatched_sizes=True,
+                mp_degree=config.mp_degree)
             self.Qformer.cls = None
             self.Qformer.bert.embeddings.word_embeddings = None
             self.Qformer.bert.embeddings.position_embeddings = None

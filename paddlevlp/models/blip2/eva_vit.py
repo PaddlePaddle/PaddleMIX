@@ -21,10 +21,12 @@ from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 import numpy as np
 import paddle
 import paddle.nn as nn
+from paddle import _legacy_C_ops
 from paddle.nn.initializer import TruncatedNormal, Constant, Normal
 from paddle.distributed import fleet
 from paddlevlp.models.blip2.configuration import Blip2VisionConfig
 from paddlevlp.models.blip2.modeling import Blip2PretrainedModel
+from paddle.nn.functional.flash_attention import (flash_attention, )
 
 trunc_normal_ = TruncatedNormal(std=.02)
 normal_ = Normal
@@ -38,10 +40,7 @@ def to_2tuple(x):
 
 
 def drop_path(x, drop_prob=0., training=False):
-    """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
-    the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
-    See discussion: https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956 ...
-    """
+
     if drop_prob == 0. or not training:
         return x
     keep_prob = paddle.to_tensor(1 - drop_prob, dtype=x.dtype)
@@ -53,9 +52,6 @@ def drop_path(x, drop_prob=0., training=False):
 
 
 class DropPath(nn.Layer):
-    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
-    """
-
     def __init__(self, drop_prob=None):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
@@ -71,7 +67,8 @@ class Mlp(nn.Layer):
                  out_features=None,
                  act_layer=nn.GELU,
                  drop=0.,
-                 mp_degree=1):
+                 mp_degree=1,
+                 use_fusedlinear=False):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -89,6 +86,12 @@ class Mlp(nn.Layer):
                 has_bias=True,
                 gather_output=True)
         else:
+            if use_fusedlinear:
+                self.use_fusedlinear = True
+                self.fc1 = paddle.incubate.nn.FusedLinear(in_features,
+                                                          hidden_features)
+                self.fc2 = paddle.incubate.nn.FusedLinear(hidden_features,
+                                                          out_features)
             self.fc1 = nn.Linear(in_features, hidden_features)
             self.fc2 = nn.Linear(hidden_features, out_features)
         self.mp_degree = mp_degree
@@ -96,8 +99,20 @@ class Mlp(nn.Layer):
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
+        if getattr("use_fusedlinear", False):
+            if isinstance(self.act, nn.GELU):
+                x = _legacy_C_ops.fused_gemm_epilogue(
+                    x, self.fc1.weight, self.fc1.bias, 'trans_x', False,
+                    'trans_y', False, 'activation', 'gelu')
+            elif isinstance(self.act, nn.ReLU):
+                x = _legacy_C_ops.fused_gemm_epilogue(
+                    x, self.fc1.weight, self.fc1.bias, 'trans_x', False,
+                    'trans_y', False, 'activation', 'relu')
+            else:
+                ValueError
+        else:
+            x = self.fc1(x)
+            x = self.act(x)
         x = self.fc2(x)
         if self.mp_degree > 1:
             with get_rng_state_tracker().rng_state("global_seed"):
@@ -116,8 +131,11 @@ class Attention(nn.Layer):
                  attn_drop=0.,
                  proj_drop=0.,
                  window_size=None,
-                 mp_degree=1):
+                 mp_degree=1,
+                 use_fusedlinear=False,
+                 use_flash_attn=False):
         super().__init__()
+        self.use_flash_attn = use_flash_attn
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim**-0.5
@@ -129,13 +147,20 @@ class Attention(nn.Layer):
                 has_bias=True,
                 gather_output=True)
         else:
-            self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
+            if use_fusedlinear:
+                self.qkv = paddle.incubate.nn.FusedLinear(
+                    dim, dim * 3, bias_attr=qkv_bias)
+            else:
+                self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         if mp_degree > 1:
             self.proj = fleet.meta_parallel.ColumnParallelLinear(
                 dim, dim, weight_attr=None, has_bias=True, gather_output=True)
         else:
-            self.proj = nn.Linear(dim, dim)
+            if use_fusedlinear:
+                self.proj = paddle.incubate.nn.FusedLinear(dim, dim)
+            else:
+                self.proj = nn.Linear(dim, dim)
         self.mp_degree = mp_degree
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -172,32 +197,39 @@ class Attention(nn.Layer):
         self.register_buffer("relative_position_index", relative_position_index)
 
     def forward(self, x, rel_pos_bias=None):
-        # B= paddle.shape(x)[0]
         N, C = x.shape[1:]
-        # if self.q_bias is not None:
-        #     qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
         qkv = self.qkv(x).reshape(
             (-1, N, 3, self.num_heads, C // self.num_heads)).transpose(
                 (2, 0, 3, 1, 4))
-        # print(self.qkv.bias[2100])
         q, k, v = qkv[0], qkv[1], qkv[2]
-
-        attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
-        if hasattr(self, 'relative_position_bias_table'):
-            relative_position_bias = \
-                self.relative_position_bias_table[self.relative_position_index.reshape([-1])].reshape([
-                    self.window_size[0] * self.window_size[1] + 1,
-                    self.window_size[0] * self.window_size[1] + 1, -1])  # Wh*Ww,Wh*Ww,nH
-            relative_position_bias = relative_position_bias.transpose(
-                [2, 0, 1])  # nH, Wh*Ww, Wh*Ww
-            attn = attn + relative_position_bias.unsqueeze(0)
-
-        attn = nn.functional.softmax(attn, axis=-1)
-        if self.mp_degree > 1:
-            with get_rng_state_tracker().rng_state("global_seed"):
-                attn = self.attn_drop(attn)
+        if self.use_flash_attn:
+            x, _ = flash_attention(
+                q,
+                k,
+                v,
+                dropout=self.proj_drop.p,
+                causal=False,
+                return_softmax=False)
+            x = paddle.reshape(x, [0, 0, -1])
         else:
-            attn = self.attn_drop(attn)
+            attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
+            if hasattr(self, 'relative_position_bias_table'):
+                relative_position_bias = \
+                    self.relative_position_bias_table[self.relative_position_index.reshape([-1])].reshape([
+                        self.window_size[0] * self.window_size[1] + 1,
+                        self.window_size[0] * self.window_size[1] + 1, -1])  # Wh*Ww,Wh*Ww,nH
+                relative_position_bias = relative_position_bias.transpose(
+                    [2, 0, 1])  # nH, Wh*Ww, Wh*Ww
+                attn = attn + relative_position_bias.unsqueeze(0)
+
+            attn = nn.functional.softmax(attn, axis=-1)
+            if self.mp_degree > 1:
+                with get_rng_state_tracker().rng_state("global_seed"):
+                    attn = self.attn_drop(attn)
+            else:
+                attn = self.attn_drop(attn)
+
+            x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
 
         x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
         x = self.proj(x)
@@ -224,7 +256,9 @@ class Block(nn.Layer):
                  norm_layer='nn.LayerNorm',
                  epsilon=1e-5,
                  window_size=None,
-                 mp_degree=1):
+                 mp_degree=1,
+                 use_flash_attn=False,
+                 use_fusedlinear=False):
         super().__init__()
         if isinstance(norm_layer, str):
             self.norm1 = eval(norm_layer)(dim, epsilon=epsilon)
@@ -241,7 +275,9 @@ class Block(nn.Layer):
             attn_drop=attn_drop,
             proj_drop=drop,
             window_size=window_size,
-            mp_degree=mp_degree)
+            mp_degree=mp_degree,
+            use_flash_attn=use_flash_attn,
+            use_fusedlinear=use_fusedlinear)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path)
         self.gamma_1 = None
@@ -258,7 +294,8 @@ class Block(nn.Layer):
                        hidden_features=mlp_hidden_dim,
                        act_layer=act_layer,
                        drop=drop,
-                       mp_degree=mp_degree)
+                       mp_degree=mp_degree,
+                       use_fusedlinear=use_fusedlinear)
 
     def forward(self, x, rel_pos_bias=None):
         if self.gamma_1 is not None:
@@ -352,8 +389,9 @@ class VisionTransformer(Blip2PretrainedModel):
 
     def __init__(self, config: Blip2VisionConfig, **kwargs):
         super().__init__(config)
-        from paddle.distributed import fleet
-        mp_degree = fleet.DistributedStrategy().hybrid_configs['mp_degree']
+        mp_degree = config.mp_degree
+        use_flash_attn = config.use_flash_attn
+        use_fusedlinear = config.use_fusedlinear
         self.class_num = config.class_num
         self.num_features = self.embed_dim = config.embed_dim
         _img_size = to_2tuple(config.img_size)
@@ -395,7 +433,9 @@ class VisionTransformer(Blip2PretrainedModel):
                 norm_layer=config.norm_layer,
                 epsilon=config.epsilon,
                 window_size=self.window_size,
-                mp_degree=mp_degree, ) for i in range(config.depth)
+                mp_degree=mp_degree,
+                use_flash_attn=use_flash_attn,
+                use_fusedlinear=use_fusedlinear) for i in range(config.depth)
         ])
 
         self.mp_degree = mp_degree
