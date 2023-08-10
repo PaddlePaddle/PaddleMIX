@@ -11,7 +11,7 @@ __pycache__/
 *.so
 
 # json file
-*.json
+# *.json
 
 # log file
 *.log
