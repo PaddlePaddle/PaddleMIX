@@ -18,9 +18,10 @@ import os
 import time
 import warnings
 from collections import namedtuple
-
+from typing import Any, Callable, cast, Dict, List, Optional, Tuple, Union
 import datasets
 from multiprocess import Pool, RLock
+from PIL import Image
 
 import paddlevlp
 
@@ -62,7 +63,7 @@ class DatasetTuple:
     def __init__(self, splits):
         self.identifier_map, identifiers = self._gen_identifier_map(splits)
         self.tuple_cls = namedtuple("datasets", identifiers)
-        self.tuple = self.tuple_cls(*[None for _ in splits])
+        self.tuple = self.tuple_cls(* [None for _ in splits])
 
     def __getitem__(self, key):
         if isinstance(key, (int, slice)):
@@ -114,11 +115,8 @@ def load_from_hf(path, name=None, splits=None, **kwargs):
     try:
         hf_datasets = load_hf_dataset(path, name=name, split=splits, **kwargs)
     except FileNotFoundError:
-        raise FileNotFoundError(
-            "Couldn't find the dataset script for '"
-            + path
-            + "' on PaddleNLP or HuggingFace"
-        )
+        raise FileNotFoundError("Couldn't find the dataset script for '" + path
+                                + "' on PaddleNLP or HuggingFace")
     else:
         label_list = []
         if isinstance(hf_datasets, DatasetDict):
@@ -134,7 +132,8 @@ def load_from_hf(path, name=None, splits=None, **kwargs):
                 for feature in hf_datasets[i].features.values():
                     if isinstance(feature, ClassLabel):
                         label_list = feature.names
-                datasets[split] = MapDataset(hf_datasets[i], label_list=label_list)
+                datasets[split] = MapDataset(
+                    hf_datasets[i], label_list=label_list)
         else:
             for feature in hf_datasets.features.values():
                 if isinstance(feature, ClassLabel):
@@ -143,9 +142,12 @@ def load_from_hf(path, name=None, splits=None, **kwargs):
     return datasets
 
 
-def load_dataset(
-    path_or_read_func, name=None, data_files=None, splits=None, lazy=None, **kwargs
-):
+def load_dataset(path_or_read_func,
+                 name=None,
+                 data_files=None,
+                 splits=None,
+                 lazy=None,
+                 **kwargs):
     """
     This method will load a dataset, either form PaddleNLP library or from a
     self-defined data loading script, by calling functions in `DatasetBuilder`.
@@ -195,21 +197,19 @@ def load_dataset(
             reader_cls = import_main_class(path_or_read_func)
         except ModuleNotFoundError:
             datasets = load_from_hf(
-                path_or_read_func, name=name, splits=splits, **kwargs
-            )
+                path_or_read_func, name=name, splits=splits, **kwargs)
         else:
             reader_instance = reader_cls(lazy=lazy, name=name, **kwargs)
 
             # Check if selected name and split is valid in this DatasetBuilder
             if hasattr(reader_instance, "BUILDER_CONFIGS"):
                 if name in reader_cls.BUILDER_CONFIGS.keys():
-                    split_names = reader_cls.BUILDER_CONFIGS[name]["splits"].keys()
+                    split_names = reader_cls.BUILDER_CONFIGS[name][
+                        "splits"].keys()
                 else:
                     raise ValueError(
                         'Invalid name "{}". Should be one of {}.'.format(
-                            name, list(reader_cls.BUILDER_CONFIGS.keys())
-                        )
-                    )
+                            name, list(reader_cls.BUILDER_CONFIGS.keys())))
             elif hasattr(reader_instance, "SPLITS"):
                 split_names = reader_instance.SPLITS.keys()
             else:
@@ -225,15 +225,11 @@ def load_dataset(
 
             for split_name in selected_splits:
                 if split_name not in split_names and split_name is not None:
-                    raise ValueError(
-                        'Invalid split "{}". Should be one of {}.'.format(
-                            split_name, list(split_names)
-                        )
-                    )
+                    raise ValueError('Invalid split "{}". Should be one of {}.'.
+                                     format(split_name, list(split_names)))
 
             datasets = reader_instance.read_datasets(
-                data_files=data_files, splits=splits
-            )
+                data_files=data_files, splits=splits)
         return datasets
 
 
@@ -271,11 +267,8 @@ class MapDataset(Dataset):
         Basic function of `MapDataset` to get sample from dataset with a given
         index.
         """
-        return (
-            self._transform(self.new_data[idx])
-            if self._transform_pipline
-            else self.new_data[idx]
-        )
+        return (self._transform(self.new_data[idx])
+                if self._transform_pipline else self.new_data[idx])
 
     def __len__(self):
         """
@@ -297,16 +290,19 @@ class MapDataset(Dataset):
         assert num_workers >= 0, "num_workers should be a non-negative value"
         if num_workers > 1:
             shards = [
-                self._shard(num_shards=num_workers, index=index, contiguous=True)
+                self._shard(
+                    num_shards=num_workers, index=index, contiguous=True)
                 for index in range(num_workers)
             ]
             kwds_per_shard = [
-                dict(self=shards[rank], fn=fn) for rank in range(num_workers)
+                dict(
+                    self=shards[rank], fn=fn) for rank in range(num_workers)
             ]
-            pool = Pool(num_workers, initargs=(RLock(),))
+            pool = Pool(num_workers, initargs=(RLock(), ))
 
             results = [
-                pool.apply_async(self.__class__._filter, kwds=kwds)
+                pool.apply_async(
+                    self.__class__._filter, kwds=kwds)
                 for kwds in kwds_per_shard
             ]
             transformed_shards = [r.get() for r in results]
@@ -322,16 +318,14 @@ class MapDataset(Dataset):
 
     def _filter(self, fn):
         self.new_data = [
-            self.new_data[idx]
-            for idx in range(len(self.new_data))
+            self.new_data[idx] for idx in range(len(self.new_data))
             if fn(self.new_data[idx])
         ]
         return self
 
     def shard(self, num_shards=None, index=None, contiguous=False):
         self.new_data = self._shard(
-            num_shards=num_shards, index=index, contiguous=contiguous
-        ).data
+            num_shards=num_shards, index=index, contiguous=contiguous).data
         return self
 
     def _shard(self, num_shards=None, index=None, contiguous=False):
@@ -365,8 +359,7 @@ class MapDataset(Dataset):
             new_data = [self.new_data[idx] for idx in range(start, end)]
         else:
             new_data = [
-                self.new_data[idx]
-                for idx in range(len(self.new_data))
+                self.new_data[idx] for idx in range(len(self.new_data))
                 if idx % num_shards == index
             ]
 
@@ -394,17 +387,19 @@ class MapDataset(Dataset):
         assert num_workers >= 0, "num_workers should be a non-negative value"
         if num_workers > 1:
             shards = [
-                self._shard(num_shards=num_workers, index=index, contiguous=True)
+                self._shard(
+                    num_shards=num_workers, index=index, contiguous=True)
                 for index in range(num_workers)
             ]
             kwds_per_shard = [
-                dict(self=shards[rank], fn=fn, lazy=False, batched=batched)
+                dict(
+                    self=shards[rank], fn=fn, lazy=False, batched=batched)
                 for rank in range(num_workers)
             ]
-            pool = Pool(num_workers, initargs=(RLock(),))
+            pool = Pool(num_workers, initargs=(RLock(), ))
             results = [
-                pool.apply_async(self.__class__._map, kwds=kwds)
-                for kwds in kwds_per_shard
+                pool.apply_async(
+                    self.__class__._map, kwds=kwds) for kwds in kwds_per_shard
             ]
             transformed_shards = [r.get() for r in results]
             pool.close()
@@ -472,12 +467,11 @@ class IterDataset(IterableDataset):
         num_samples = 0
         if inspect.isfunction(self.data):
             for example in self.data():
-                if (
-                    not self._filter_pipline or self._filter(self._filter_pipline)
-                ) and self._shard_filter(num_samples=num_samples):
+                if (not self._filter_pipline or
+                        self._filter(self._filter_pipline)
+                    ) and self._shard_filter(num_samples=num_samples):
                     yield self._transform(
-                        example
-                    ) if self._transform_pipline else example
+                        example) if self._transform_pipline else example
                 num_samples += 1
         else:
             if inspect.isgenerator(self.data):
@@ -485,12 +479,11 @@ class IterDataset(IterableDataset):
                     "Reciving generator as data source, data can only be iterated once"
                 )
             for example in self.data:
-                if (
-                    not self._filter_pipline or self._filter(self._filter_pipline)
-                ) and self._shard_filter(num_samples=num_samples):
+                if (not self._filter_pipline or
+                        self._filter(self._filter_pipline)
+                    ) and self._shard_filter(num_samples=num_samples):
                     yield self._transform(
-                        example
-                    ) if self._transform_pipline else example
+                        example) if self._transform_pipline else example
                 num_samples += 1
 
     def filter(self, fn):
@@ -584,23 +577,22 @@ class DatasetBuilder:
 
         if data_files is None:
             if splits is None:
-                splits = (
-                    list(self.BUILDER_CONFIGS[self.name]["splits"].keys())
-                    if hasattr(self, "BUILDER_CONFIGS")
-                    else list(self.SPLITS.keys())
-                )
+                splits = (list(self.BUILDER_CONFIGS[self.name]["splits"].keys())
+                          if hasattr(self, "BUILDER_CONFIGS") else
+                          list(self.SPLITS.keys()))
 
             assert (
-                isinstance(splits, str)
-                or (isinstance(splits, list) and isinstance(splits[0], str))
-                or (isinstance(splits, tuple) and isinstance(splits[0], str))
+                isinstance(splits, str) or
+                (isinstance(splits, list) and isinstance(splits[0], str)) or
+                (isinstance(splits, tuple) and isinstance(splits[0], str))
             ), "`splits` should be a string or list of string or a tuple of string."
 
             if isinstance(splits, str):
                 splits = [splits]
             datasets = DatasetTuple(splits)
             parallel_env = dist.ParallelEnv()
-            unique_endpoints = _get_unique_endpoints(parallel_env.trainer_endpoints[:])
+            unique_endpoints = _get_unique_endpoints(
+                parallel_env.trainer_endpoints[:])
             # move register hook to first and register togather
             lock_files = []
             for split in splits:
@@ -632,9 +624,8 @@ class DatasetBuilder:
                 datasets[split] = self.read(filename=filename, split=split)
         else:
             assert (
-                isinstance(data_files, str)
-                or isinstance(data_files, tuple)
-                or isinstance(data_files, list)
+                isinstance(data_files, str) or isinstance(data_files, tuple) or
+                isinstance(data_files, list)
             ), "`data_files` should be a string or tuple or list of strings."
             if isinstance(data_files, str):
                 data_files = [data_files]
@@ -648,16 +639,13 @@ class DatasetBuilder:
                 ), "Number of `splits` and number of `data_files` should be the same if you want to specify the split of loacl data file."
                 for i in range(len(data_files)):
                     datasets[splits[i]] = self.read(
-                        filename=data_files[i], split=splits[i]
-                    )
+                        filename=data_files[i], split=splits[i])
             else:
                 datasets = DatasetTuple(
-                    ["split" + str(i) for i in range(len(data_files))]
-                )
+                    ["split" + str(i) for i in range(len(data_files))])
                 for i in range(len(data_files)):
                     datasets["split" + str(i)] = self.read(
-                        filename=data_files[i], split=default_split
-                    )
+                        filename=data_files[i], split=default_split)
 
         return datasets if len(datasets) > 1 else datasets[0]
 
@@ -712,11 +700,9 @@ class DatasetBuilder:
         if self.lazy:
 
             def generate_examples():
-                generator = (
-                    self._read(filename, split)
-                    if self._read.__code__.co_argcount > 2
-                    else self._read(filename)
-                )
+                generator = (self._read(filename, split)
+                             if self._read.__code__.co_argcount > 2 else
+                             self._read(filename))
                 for example in generator:
                     # We need to check if the example contains label column and confirm its name.
                     # For now we only allow `label` or `labels` to be the name of label column.
@@ -734,26 +720,23 @@ class DatasetBuilder:
                         if isinstance(label_dict, list):
                             for idx, sub_dict in enumerate(label_dict):
                                 example[label_col][idx] = _convert_label_to_id(
-                                    example[label_col][idx], sub_dict
-                                )
+                                    example[label_col][idx], sub_dict)
                         else:
                             example[label_col] = _convert_label_to_id(
-                                example[label_col], label_dict
-                            )
+                                example[label_col], label_dict)
 
                         yield example
                     else:
                         yield example
 
             return IterDataset(
-                generate_examples(), label_list=label_list, vocab_info=vocab_info
-            )
+                generate_examples(),
+                label_list=label_list,
+                vocab_info=vocab_info)
         else:
-            examples = (
-                self._read(filename, split)
-                if self._read.__code__.co_argcount > 2
-                else self._read(filename)
-            )
+            examples = (self._read(filename, split)
+                        if self._read.__code__.co_argcount > 2 else
+                        self._read(filename))
 
             # Then some validation.
             if not isinstance(examples, list):
@@ -762,8 +745,7 @@ class DatasetBuilder:
             if not examples:
                 raise ValueError(
                     "No instances were read from the given filepath {}. "
-                    "Is the path correct?".format(filename)
-                )
+                    "Is the path correct?".format(filename))
 
             # We need to check if the example contains label column and confirm its name.
             # For now we only allow `label` or `labels` to be the name of label column.
@@ -782,14 +764,13 @@ class DatasetBuilder:
                     if isinstance(label_dict, list):
                         for i, sub_dict in enumerate(label_dict):
                             examples[idx][label_col][i] = _convert_label_to_id(
-                                examples[idx][label_col][i], sub_dict
-                            )
+                                examples[idx][label_col][i], sub_dict)
                     else:
                         examples[idx][label_col] = _convert_label_to_id(
-                            examples[idx][label_col], label_dict
-                        )
+                            examples[idx][label_col], label_dict)
 
-            return MapDataset(examples, label_list=label_list, vocab_info=vocab_info)
+            return MapDataset(
+                examples, label_list=label_list, vocab_info=vocab_info)
 
     def _read(self, filename: str, *args):
         """
@@ -838,7 +819,307 @@ class SimpleBuilder(DatasetBuilder):
             return IterDataset(generate_examples)
         else:
             examples = self._read(**kwargs)
-            if hasattr(examples, "__len__") and hasattr(examples, "__getitem__"):
+            if hasattr(examples, "__len__") and hasattr(examples,
+                                                        "__getitem__"):
                 return MapDataset(examples)
             else:
                 return MapDataset(list(examples))
+
+
+def has_file_allowed_extension(filename: str,
+                               extensions: Union[str, Tuple[str, ...]]) -> bool:
+    """Checks if a file is an allowed extension.
+
+    Args:
+        filename (string): path to a file
+        extensions (tuple of strings): extensions to consider (lowercase)
+
+    Returns:
+        bool: True if the filename ends with one of given extensions
+    """
+    return filename.lower().endswith(
+        extensions if isinstance(extensions, str) else tuple(extensions))
+
+
+def find_classes(directory: str) -> Tuple[List[str], Dict[str, int]]:
+    """Finds the class folders in a dataset.
+
+    See :class:`DatasetFolder` for details.
+    """
+    classes = sorted(
+        entry.name for entry in os.scandir(directory) if entry.is_dir())
+    if not classes:
+        raise FileNotFoundError(
+            f"Couldn't find any class folder in {directory}.")
+
+    class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
+    return classes, class_to_idx
+
+
+def make_dataset(
+        directory: str,
+        class_to_idx: Optional[Dict[str, int]]=None,
+        extensions: Optional[Union[str, Tuple[str, ...]]]=None,
+        is_valid_file: Optional[Callable[[str], bool]]=None, ) -> List[Tuple[
+            str, int]]:
+    """Generates a list of samples of a form (path_to_sample, class).
+
+    See :class:`DatasetFolder` for details.
+
+    Note: The class_to_idx parameter is here optional and will use the logic of the ``find_classes`` function
+    by default.
+    """
+    directory = os.path.expanduser(directory)
+
+    if class_to_idx is None:
+        _, class_to_idx = find_classes(directory)
+    elif not class_to_idx:
+        raise ValueError(
+            "'class_to_index' must have at least one entry to collect any samples."
+        )
+
+    both_none = extensions is None and is_valid_file is None
+    both_something = extensions is not None and is_valid_file is not None
+    if both_none or both_something:
+        raise ValueError(
+            "Both extensions and is_valid_file cannot be None or not None at the same time"
+        )
+
+    if extensions is not None:
+
+        def is_valid_file(x: str) -> bool:
+            return has_file_allowed_extension(
+                x, extensions)  # type: ignore[arg-type]
+
+    is_valid_file = cast(Callable[[str], bool], is_valid_file)
+
+    instances = []
+    available_classes = set()
+    for target_class in sorted(class_to_idx.keys()):
+        class_index = class_to_idx[target_class]
+        target_dir = os.path.join(directory, target_class)
+        if not os.path.isdir(target_dir):
+            continue
+        for root, _, fnames in sorted(os.walk(target_dir, followlinks=True)):
+            for fname in sorted(fnames):
+                path = os.path.join(root, fname)
+                if is_valid_file(path):
+                    item = path, class_index
+                    instances.append(item)
+
+                    if target_class not in available_classes:
+                        available_classes.add(target_class)
+
+    empty_classes = set(class_to_idx.keys()) - available_classes
+    if empty_classes:
+        msg = f"Found no valid file for the classes {', '.join(sorted(empty_classes))}. "
+        if extensions is not None:
+            msg += f"Supported extensions are: {extensions if isinstance(extensions, str) else ', '.join(extensions)}"
+        raise FileNotFoundError(msg)
+
+    return instances
+
+
+class DatasetFolder(Dataset):
+    """A generic data loader.
+
+    This default directory structure can be customized by overriding the
+    :meth:`find_classes` method.
+
+    Args:
+        root (string): Root directory path.
+        loader (callable): A function to load a sample given its path.
+        extensions (tuple[string]): A list of allowed extensions.
+            both extensions and is_valid_file should not be passed.
+        transform (callable, optional): A function/transform that takes in
+            a sample and returns a transformed version.
+            E.g, ``transforms.RandomCrop`` for images.
+        target_transform (callable, optional): A function/transform that takes
+            in the target and transforms it.
+        is_valid_file (callable, optional): A function that takes path of a file
+            and check if the file is a valid file (used to check of corrupt files)
+            both extensions and is_valid_file should not be passed.
+
+     Attributes:
+        classes (list): List of the class names sorted alphabetically.
+        class_to_idx (dict): Dict with items (class_name, class_index).
+        samples (list): List of (sample path, class_index) tuples
+        targets (list): The class_index value for each image in the dataset
+    """
+
+    def __init__(
+            self,
+            root: str,
+            loader: Callable[[str], Any],
+            extensions: Optional[Tuple[str, ...]]=None,
+            transform: Optional[Callable]=None,
+            target_transform: Optional[Callable]=None,
+            is_valid_file: Optional[Callable[[str], bool]]=None, ) -> None:
+        # super().__init__(root, transform=transform, target_transform=target_transform)
+        # super().__init__()
+        self.root = root
+        self.transform = transform
+        self.target_transform = target_transform
+
+        classes, class_to_idx = self.find_classes(self.root)
+        samples = self.make_dataset(self.root, class_to_idx, extensions,
+                                    is_valid_file)
+
+        self.loader = loader
+        self.extensions = extensions
+
+        self.classes = classes
+        self.class_to_idx = class_to_idx
+        self.samples = samples
+        self.targets = [s[1] for s in samples]
+
+    @staticmethod
+    def make_dataset(
+            directory: str,
+            class_to_idx: Dict[str, int],
+            extensions: Optional[Tuple[str, ...]]=None,
+            is_valid_file: Optional[Callable[[str], bool]]=None, ) -> List[
+                Tuple[str, int]]:
+        """Generates a list of samples of a form (path_to_sample, class).
+
+        This can be overridden to e.g. read files from a compressed zip file instead of from the disk.
+
+        Args:
+            directory (str): root dataset directory, corresponding to ``self.root``.
+            class_to_idx (Dict[str, int]): Dictionary mapping class name to class index.
+            extensions (optional): A list of allowed extensions.
+                Either extensions or is_valid_file should be passed. Defaults to None.
+            is_valid_file (optional): A function that takes path of a file
+                and checks if the file is a valid file
+                (used to check of corrupt files) both extensions and
+                is_valid_file should not be passed. Defaults to None.
+
+        Raises:
+            ValueError: In case ``class_to_idx`` is empty.
+            ValueError: In case ``extensions`` and ``is_valid_file`` are None or both are not None.
+            FileNotFoundError: In case no valid file was found for any class.
+
+        Returns:
+            List[Tuple[str, int]]: samples of a form (path_to_sample, class)
+        """
+        if class_to_idx is None:
+            # prevent potential bug since make_dataset() would use the class_to_idx logic of the
+            # find_classes() function, instead of using that of the find_classes() method, which
+            # is potentially overridden and thus could have a different logic.
+            raise ValueError("The class_to_idx parameter cannot be None.")
+        return make_dataset(
+            directory,
+            class_to_idx,
+            extensions=extensions,
+            is_valid_file=is_valid_file)
+
+    def find_classes(self, directory: str) -> Tuple[List[str], Dict[str, int]]:
+        """Find the class folders in a dataset structured as follows::
+
+            directory/
+            ├── class_x
+            │   ├── xxx.ext
+            │   ├── xxy.ext
+            │   └── ...
+            │       └── xxz.ext
+            └── class_y
+                ├── 123.ext
+                ├── nsdf3.ext
+                └── ...
+                └── asd932_.ext
+
+        This method can be overridden to only consider
+        a subset of classes, or to adapt to a different dataset directory structure.
+
+        Args:
+            directory(str): Root directory path, corresponding to ``self.root``
+
+        Raises:
+            FileNotFoundError: If ``dir`` has no class folders.
+
+        Returns:
+            (Tuple[List[str], Dict[str, int]]): List of all classes and dictionary mapping each class to an index.
+        """
+        return find_classes(directory)
+
+    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+        """
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (sample, target) where target is class_index of the target class.
+        """
+        path, target = self.samples[index]
+        sample = self.loader(path)
+        if self.transform is not None:
+            sample = self.transform(sample)
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+
+        return sample, target
+
+    def __len__(self) -> int:
+        return len(self.samples)
+
+
+IMG_EXTENSIONS = (".jpg", ".jpeg", ".png", ".ppm", ".bmp", ".pgm", ".tif",
+                  ".tiff", ".webp")
+
+
+def pil_loader(path: str) -> Image.Image:
+    # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
+    with open(path, "rb") as f:
+        img = Image.open(f)
+        return img.convert("RGB")
+
+
+def default_loader(path: str) -> Any:
+    return pil_loader(path)
+
+
+class ImageFolder(DatasetFolder):
+    """A generic data loader where the images are arranged in this way by default: ::
+
+        root/dog/xxx.png
+        root/dog/xxy.png
+        root/dog/[...]/xxz.png
+
+        root/cat/123.png
+        root/cat/nsdf3.png
+        root/cat/[...]/asd932_.png
+
+    This class inherits from :class:`~torchvision.datasets.DatasetFolder` so
+    the same methods can be overridden to customize the dataset.
+
+    Args:
+        root (string): Root directory path.
+        transform (callable, optional): A function/transform that  takes in an PIL image
+            and returns a transformed version. E.g, ``transforms.RandomCrop``
+        target_transform (callable, optional): A function/transform that takes in the
+            target and transforms it.
+        loader (callable, optional): A function to load an image given its path.
+        is_valid_file (callable, optional): A function that takes path of an Image file
+            and check if the file is a valid file (used to check of corrupt files)
+
+     Attributes:
+        classes (list): List of the class names sorted alphabetically.
+        class_to_idx (dict): Dict with items (class_name, class_index).
+        imgs (list): List of (image path, class_index) tuples
+    """
+
+    def __init__(
+            self,
+            root: str,
+            transform: Optional[Callable]=None,
+            target_transform: Optional[Callable]=None,
+            loader: Callable[[str], Any]=default_loader,
+            is_valid_file: Optional[Callable[[str], bool]]=None, ):
+        super().__init__(
+            root,
+            loader,
+            IMG_EXTENSIONS if is_valid_file is None else None,
+            transform=transform,
+            target_transform=target_transform,
+            is_valid_file=is_valid_file, )
+        self.imgs = self.samples

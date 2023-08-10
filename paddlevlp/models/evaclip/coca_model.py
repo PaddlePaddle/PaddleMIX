@@ -15,9 +15,9 @@ from paddlenlp.transformers.model_utils import PretrainedModel
 
 from .loss import CoCaLoss
 from .eva_vit_model import EVAVisionTransformerConfig, EVAVisionTransformer
-from .transformer import (LayerNormFp32, LayerNorm, QuickGELU,
-                          MultimodalTransformerConfig, MultimodalTransformer,
-                          EVATextTransformerConfig, EVATextTransformer)
+from .eva_text_model import (LayerNormFp32, LayerNorm, QuickGELU,
+                             MultimodalTransformerConfig, MultimodalTransformer,
+                             EVATextTransformerConfig, EVATextTransformer)
 from paddlenlp.utils.log import logger
 
 
@@ -42,8 +42,8 @@ class CoCaConfig(PretrainedConfig):
     def from_pretrained(cls,
                         pretrained_model_name_or_path: Union[str, os.PathLike],
                         **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(
-            pretrained_model_name_or_path, **kwargs)
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
+                                                  **kwargs)
 
         if ("model_type" in config_dict and hasattr(cls, "model_type") and
                 config_dict["model_type"] != cls.model_type):
@@ -147,6 +147,6 @@ class CoCa(CoCaPretrainedModel):
 
         logits = self.text_decoder(image_embs, token_embs)
 
-        loss_itc, logits_per_image, logits_per_text, labels = self.loss((
-            image_latent, text_latent, self.logit_scale.exp(), logits, labels))
+        loss_itc, logits_per_image, logits_per_text, labels = self.loss(
+            (image_latent, text_latent, self.logit_scale.exp(), logits, labels))
         return loss_itc, image_latent, text_latent, self.logit_scale.exp()

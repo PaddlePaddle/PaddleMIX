@@ -18,7 +18,6 @@ from paddle.vision.transforms import functional as F
 import re
 from typing import Dict, List, Optional, Tuple, Union
 import paddle
-from IPython import embed
 import numpy as np
 import PIL
 from paddlenlp.transformers.tokenizer_utils_base import (
@@ -56,6 +55,7 @@ class CLIPProcessor(ProcessorMixin):
     image_processor_class = "CLIPImageProcessor"
     text_processor_class = "CLIPTextProcessor"
     tokenizer_class = "SimpleTokenizer"
+
     # tokenizer_class = "AutoTokenizer"
 
     def __init__(self, image_processor, text_processor, tokenizer):
@@ -115,7 +115,7 @@ class CLIPProcessor(ProcessorMixin):
             images, return_tensors=return_tensors, mode=mode)
         # ['image'].shape [32, 3, 224, 224]
 
-        # text_encoding = self.text_processor(text, mode=mode)
+        # text_encoding = self.text_processor(text, mode=mode)  #may use in the future
         text_encoding = text
         text_encoding = self.tokenizer(
             texts=text_encoding,
@@ -128,7 +128,7 @@ class CLIPProcessor(ProcessorMixin):
         for key, value in text_encoding.items():
             shape = value.shape
             if shape[-1] > max_length:
-                text_encoding[key] = value[...,:max_length]
+                text_encoding[key] = value[..., :max_length]
             elif shape[-1] < max_length:
                 if key == 'input_ids':
                     fill_value = value.numpy()[..., -1][-1]
@@ -317,7 +317,6 @@ class CLIPImageProcessor(BaseImageProcessor):
             do_collate: bool=False,
             mode: str="train",
             **kwargs, ) -> None:
-        scale = (1.0, 1.0)
         super().__init__(**kwargs)
         size = size if size is not None else {"height": 384, "width": 384}
         size = get_size_dict(size, default_to_square=True)
@@ -390,29 +389,6 @@ class CLIPImageProcessor(BaseImageProcessor):
         """
         return rescale(image, scale=scale, data_format=data_format, **kwargs)
 
-    # def normalize(
-    #         self,
-    #         image: np.ndarray,
-    #         mean: Union[float, List[float]],
-    #         std: Union[float, List[float]],
-    #         data_format: Optional[Union[str, ChannelDimension]]=None,
-    #         **kwargs, ) -> np.ndarray:
-    #     """
-    #     Normalize an image. image = (image - image_mean) / image_std.
-
-    #     Args:
-    #         image (`np.ndarray`):
-    #             Image to normalize.
-    #         mean (`float` or `List[float]`):
-    #             Image mean.
-    #         std (`float` or `List[float]`):
-    #             Image standard deviation.
-    #         data_format (`str` or `ChannelDimension`, *optional*):
-    #             The channel dimension format of the image. If not provided, it will be the same as the input image.
-    #     """
-    #     return normalize(
-    #         image, mean=mean, std=std, data_format=data_format, **kwargs)
-
     def normalize(
             self,
             image: paddle.Tensor,
@@ -420,7 +396,8 @@ class CLIPImageProcessor(BaseImageProcessor):
             std: Union[float, List[float]],
             data_format: Optional[Union[str, ChannelDimension]]=None,
             **kwargs, ) -> np.ndarray:
-        tensor_normalize = paddle.vision.transforms.Normalize(mean=mean, std=std, data_format=data_format, **kwargs)
+        tensor_normalize = paddle.vision.transforms.Normalize(
+            mean=mean, std=std, data_format=data_format, **kwargs)
         return tensor_normalize(image)
 
     def random_resized_crop(
@@ -580,12 +557,6 @@ class CLIPImageProcessor(BaseImageProcessor):
             raise ValueError(
                 "Random resize crop probability must be specified if do_rand_resize_crop is True."
             )
-        # PIL RGBA images are converted to RGB
-        # if do_convert_rgb:
-        #     images = [convert_to_rgb(image) for image in images]
-
-        # All transformations expect numpy arrays.
-        #images = [to_numpy_array(image) for image in images]
         if do_rand_resize_crop and mode == "train":
             images = [
                 self.random_resized_crop(
@@ -613,72 +584,31 @@ class CLIPImageProcessor(BaseImageProcessor):
         if do_normalize:
             images = [convert_to_rgb(image) for image in images]
             images = [np.array(image, 'float32') for image in images]
-            # images = [
-            #     self.normalize(
-            #         image=image.astype('float32') / 255.,
-            #         mean=image_mean,
-            #         std=image_std) for image in images
-            # ]
-        # [(224, 224, 3)]
-        # images = [
-        #     to_channel_dimension_format(image, data_format) for image in images
-        # ]
-        # [(3, 224, 224)]
-        #return BatchEncoding(data=data, tensor_type=return_tensors)
 
-        batch_images = BatchEncoding(data={"image": images}, tensor_type='pd') # to_tensor [2, 224, 224, 3]
-        batch_images["image"] = batch_images["image"].transpose([0,3,1,2])
-        # normalize = paddle.vision.transforms.Normalize(mean=image_mean, std=image_std, data_format='CHW', to_rgb=False)
-        #image = self.normalize(batch_images["image"] / 255.0, mean=image_mean, std=image_std, data_format='HWC').transpose([0,2,3,1])
-        image = self.normalize(batch_images["image"] / 255.0, mean=image_mean, std=image_std, data_format='CHW')
+        batch_images = BatchEncoding(data={"image": images}, tensor_type='pd')
+        batch_images["image"] = batch_images["image"].transpose([0, 3, 1, 2])
+        image = self.normalize(
+            batch_images["image"] / 255.0,
+            mean=image_mean,
+            std=image_std,
+            data_format='CHW')
         return {"image": image}
 
-
-    def preprocess1111(
-            self,
-            images: ImageInput,
-            do_resize: Optional[bool]=None,
-            size: Optional[Dict[str, int]]=None,
-            resample: PILImageResampling=None,
-            do_rescale: Optional[bool]=None,
-            rescale_factor: Optional[float]=None,
-            do_normalize: Optional[bool]=None,
-            image_mean: Optional[Union[float, List[float]]]=None,
-            image_std: Optional[Union[float, List[float]]]=None,
-            return_tensors: Optional[Union[str, TensorType]]=None,
-            do_convert_rgb: bool=None,
-            do_flip: bool=None,
-            flip_prob: float=None,
-            do_rand_resize_crop: bool=None,
-            scale: Optional[Union[List[float], Tuple[float]]]=None,
-            data_format: ChannelDimension=ChannelDimension.FIRST,
-            mode: str=None,
-            **kwargs, ) -> PIL.Image.Image:
+    def preprocess_fixed(
+            self, images: ImageInput,
+            size: Optional[Dict[str, int]]=None) -> PIL.Image.Image:
         size = size if size is not None else self.size
         size = get_size_dict(size, default_to_square=False)
-        # normalize_t = paddle.vision.transforms.Normalize(mean=image_mean, std=image_std)
-        # transforms_pd = paddle.vision.transforms.Compose([
-        #         paddle.vision.transforms.RandomResizedCrop(224, scale=(1.0, 1.0), interpolation="bicubic"), ###
-        #         #paddle.vision.transforms.Resize(image_size,interpolation="bicubic"),
-        #         #paddle.vision.transforms.CenterCrop(image_size),
-        #         _convert_to_rgb,
-        #         paddle.vision.transforms.ToTensor(data_format='CHW'),
-        #         #normalize_t,
-        #         ])
-        # images = [convert_to_rgb(image) for image in images]
-        # images_tensor = [transforms_pd(img) for img in images]
-        # embed()
-        # images_tensor = paddle.concat(images_tensor)
-        # return {"image": images_tensor}
 
         processor = paddle.vision.transforms.Compose([
-                paddle.vision.transforms.RandomResizedCrop([224, 224], scale=(1.0, 1.0), interpolation="bicubic"), ###
-                #paddle.vision.transforms.Resize([224, 224],interpolation="bicubic"),
-                #paddle.vision.transforms.CenterCrop(224),
-                _convert_to_rgb,
-                paddle.vision.transforms.ToTensor(),
-                paddle.vision.transforms.Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
-            ])
+            paddle.vision.transforms.RandomResizedCrop(
+                [224, 224], scale=(1.0, 1.0), interpolation="bicubic"),  ###
+            _convert_to_rgb,
+            paddle.vision.transforms.ToTensor(),
+            paddle.vision.transforms.Normalize(
+                mean=[0.48145466, 0.4578275, 0.40821073],
+                std=[0.26862954, 0.26130258, 0.27577711])
+        ])
         inputs = []
         for inp in images:
             inputs.append(processor(inp).unsqueeze(0))
@@ -688,3 +618,69 @@ class CLIPImageProcessor(BaseImageProcessor):
 
 def _convert_to_rgb(image):
     return image.convert('RGB')
+
+
+class ResizeMaxSize(paddle.nn.Layer):
+    def __init__(self, max_size, interpolation="bicubic", fn='max', fill=0):
+        super().__init__()
+        if not isinstance(max_size, int):
+            raise TypeError(f'Size should be int. Got {type(max_size)}')
+        self.max_size = max_size
+        self.interpolation = interpolation
+        self.fn = min if fn == 'min' else min
+        self.fill = fill
+
+    def forward(self, img):
+        if isinstance(img, paddle.Tensor):
+            height, width = img.shape[:2]
+        else:
+            width, height = img.size
+        scale = self.max_size / float(max(height, width))
+        if scale != 1.0:
+            new_size = tuple(round(dim * scale) for dim in (height, width))
+            img = paddle.vision.transforms.resize(img, new_size,
+                                                  self.interpolation)
+            pad_h = self.max_size - new_size[0]
+            pad_w = self.max_size - new_size[1]
+            img = paddle.vision.transforms.pad(img,
+                                               padding=[
+                                                   pad_w // 2, pad_h // 2,
+                                                   pad_w - pad_w // 2,
+                                                   pad_h - pad_h // 2
+                                               ],
+                                               fill=self.fill)
+        return img
+
+
+def image_transform(
+        image_size: int,
+        is_train: bool,
+        mean: Optional[Tuple[float, ...]]=(0.48145466, 0.4578275, 0.40821073),
+        std: Optional[Tuple[float, ...]]=(0.26862954, 0.26130258, 0.27577711),
+        resize_longest_max: bool=False,
+        fill_color: int=0):
+    if not isinstance(mean, (list, tuple)):
+        mean = (mean, ) * 3
+    if not isinstance(std, (list, tuple)):
+        std = (std, ) * 3
+    if isinstance(image_size, (list, tuple)) and image_size[0] == image_size[1]:
+        image_size = image_size[0]
+    normalize = paddle.vision.transforms.Normalize(mean=mean, std=std)
+    if is_train:
+        return paddle.vision.transforms.Compose([
+            paddle.vision.transforms.RandomResizedCrop(
+                image_size, scale=(1.0, 1.0), interpolation="bicubic"),
+            _convert_to_rgb, paddle.vision.transforms.ToTensor(), normalize
+        ])
+    else:
+        if resize_longest_max:
+            transforms = [ResizeMaxSize(image_size, fill=fill_color)]
+        else:
+            transforms = [
+                paddle.vision.transforms.Resize(
+                    image_size, interpolation="bicubic"),
+                paddle.vision.transforms.CenterCrop(image_size)
+            ]
+        transforms.extend(
+            [_convert_to_rgb, paddle.vision.transforms.ToTensor(), normalize])
+        return paddle.vision.transforms.Compose(transforms)

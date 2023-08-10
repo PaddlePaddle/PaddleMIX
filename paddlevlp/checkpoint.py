@@ -2,8 +2,7 @@ import paddle
 import os
 
 
-def save(args, model, optimizer, epoch=0, step=0, output_dir="",
-         is_best=False):
+def save(args, model, optimizer, epoch=0, step=0, output_dir="", is_best=False):
     """
     save the state dicts of model and optimizer into an checkpoint.
     """

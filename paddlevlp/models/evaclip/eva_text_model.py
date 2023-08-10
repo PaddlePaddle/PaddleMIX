@@ -2,20 +2,17 @@ import paddle
 import paddle.tensor as tensor
 from paddle import nn
 import paddle.nn.functional as F
+import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.common_ops_import import convert_dtype
 import os
 import logging
 import collections
-from collections import OrderedDict
 import math
 from typing import Callable, Optional, Sequence, Union
-import numpy as np
-from .rope import VisionRotaryEmbedding, VisionRotaryEmbeddingFast
-from .utils import to_2tuple
-from .timm_ext import params_normal_
-from .fusedln import FusedLayerNorm
+from .utils import to_2tuple, params_normal_
+from .modules.fusedln import FusedLayerNorm
 try:
     from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention, LowerTriangularMask
 except:
@@ -23,13 +20,6 @@ except:
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel
-
-from cmath import log
-import math
-import sys
-from functools import reduce
-import numpy as np
-import paddle
 from paddlenlp.utils.log import logger
 
 
@@ -104,40 +94,66 @@ class MultiHeadAttention(paddle.nn.Layer):
             assert self.kdim == embed_dim, "embed_dim should be equal to kdim"
             assert self.vdim == embed_dim, "embed_dim should be equal to vidm"
 
-            self.qkv_proj = fleet.meta_parallel.ColumnParallelLinear(
-                embed_dim,
-                3 * embed_dim,
-                weight_attr=weight_attr,
-                has_bias=True,
-                gather_output=False)
+            if dist.get_world_size() > 1:
+                self.qkv_proj = fleet.meta_parallel.ColumnParallelLinear(
+                    embed_dim,
+                    3 * embed_dim,
+                    weight_attr=weight_attr,
+                    has_bias=True,
+                    gather_output=False)
+            else:
+                self.qkv_proj = paddle.nn.Linear(
+                    embed_dim,
+                    3 * embed_dim,
+                    weight_attr=weight_attr, )
         else:
-            self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
+            if dist.get_world_size() > 1:
+                self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
+                    embed_dim,
+                    embed_dim,
+                    weight_attr=weight_attr,
+                    has_bias=True,
+                    gather_output=False)
+
+                self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
+                    self.kdim,
+                    embed_dim,
+                    weight_attr=weight_attr,
+                    has_bias=True,
+                    gather_output=False)
+
+                self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
+                    self.vdim,
+                    embed_dim,
+                    weight_attr=weight_attr,
+                    has_bias=True,
+                    gather_output=False)
+            else:
+                self.q_proj = paddle.nn.Linear(
+                    embed_dim,
+                    embed_dim,
+                    weight_attr=weight_attr, )
+                self.k_proj = paddle.nn.Linear(
+                    self.kdim,
+                    embed_dim,
+                    weight_attr=weight_attr, )
+                self.v_proj = paddle.nn.Linear(
+                    self.vdim,
+                    embed_dim,
+                    weight_attr=weight_attr, )
+
+        if dist.get_world_size() > 1:
+            self.out_proj = fleet.meta_parallel.RowParallelLinear(
                 embed_dim,
                 embed_dim,
                 weight_attr=weight_attr,
                 has_bias=True,
-                gather_output=False)
-
-            self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
-                self.kdim,
+                input_is_parallel=True)
+        else:
+            self.out_proj = paddle.nn.Linear(
                 embed_dim,
-                weight_attr=weight_attr,
-                has_bias=True,
-                gather_output=False)
-
-            self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
-                self.vdim,
                 embed_dim,
-                weight_attr=weight_attr,
-                has_bias=True,
-                gather_output=False)
-
-        self.out_proj = fleet.meta_parallel.RowParallelLinear(
-            embed_dim,
-            embed_dim,
-            weight_attr=weight_attr,
-            has_bias=True,
-            input_is_parallel=True)
+                weight_attr=weight_attr, )
 
     def _fuse_prepare_qkv(self, query):
         mix_layer = self.qkv_proj(query)
@@ -451,8 +467,11 @@ class Attention(paddle.nn.Layer):
                 default_initializer=paddle.nn.initializer.Assign(init_data))
         else:
             self.head_scale = None
-        self.out_proj = fleet.meta_parallel.ColumnParallelLinear(
-            dim, dim, weight_attr=None, has_bias=True, gather_output=True)
+        if dist.get_world_size() > 1:
+            self.out_proj = fleet.meta_parallel.ColumnParallelLinear(
+                dim, dim, weight_attr=None, has_bias=True, gather_output=True)
+        else:
+            self.out_proj = paddle.nn.Linear(dim, dim)
         self.out_drop = paddle.nn.Dropout(p=proj_drop)
         self.xattn = xattn
         self.xattn_drop = attn_drop
@@ -594,8 +613,11 @@ class CustomAttention(paddle.nn.Layer):
                 default_initializer=paddle.nn.initializer.Assign(init_data))
         else:
             self.head_scale = None
-        self.out_proj = fleet.meta_parallel.ColumnParallelLinear(
-            dim, dim, weight_attr=None, has_bias=True, gather_output=True)
+        if dist.get_world_size() > 1:
+            self.out_proj = fleet.meta_parallel.ColumnParallelLinear(
+                dim, dim, weight_attr=None, has_bias=True, gather_output=True)
+        else:
+            self.out_proj = paddle.nn.Linear(dim, dim)
         self.out_drop = paddle.nn.Dropout(p=proj_drop)
         self.xattn = xattn
         self.xattn_drop = attn_drop
@@ -723,21 +745,28 @@ class CustomResidualAttentionBlock(paddle.nn.Layer):
             )
         self.ln_2 = norm_layer(d_model)
         mlp_width = int(d_model * mlp_ratio)
-        self.mlp = paddle.nn.Sequential(
-            * [('c_fc', fleet.meta_parallel.ColumnParallelLinear(
-                d_model,
-                mlp_width,
-                weight_attr=None,
-                has_bias=True,
-                gather_output=True)), ('ln', norm_layer(mlp_width)
-                                       if scale_fc else paddle.nn.Identity()),
-               ('gelu', act_layer()), ('c_proj',
-                                       fleet.meta_parallel.ColumnParallelLinear(
-                                           mlp_width,
-                                           d_model,
-                                           weight_attr=None,
-                                           has_bias=True,
-                                           gather_output=True))])
+        if dist.get_world_size() > 1:
+            self.mlp = paddle.nn.Sequential(
+                * [('c_fc', fleet.meta_parallel.ColumnParallelLinear(
+                    d_model,
+                    mlp_width,
+                    weight_attr=None,
+                    has_bias=True,
+                    gather_output=True)), ('ln', norm_layer(mlp_width)
+                                           if scale_fc else paddle.nn.Identity()
+                                           ), ('gelu', act_layer()),
+                   ('c_proj', fleet.meta_parallel.ColumnParallelLinear(
+                       mlp_width,
+                       d_model,
+                       weight_attr=None,
+                       has_bias=True,
+                       gather_output=True))])
+        else:
+            self.mlp = paddle.nn.Sequential(* [('c_fc', paddle.nn.Linear(
+                d_model, mlp_width)), (
+                    'ln', norm_layer(mlp_width)
+                    if scale_fc else paddle.nn.Identity()), ('gelu', act_layer(
+                    )), ('c_proj', paddle.nn.Linear(mlp_width, d_model))])
         self.ls_2 = LayerScale(
             d_model,
             ls_init_value) if ls_init_value is not None else paddle.nn.Identity(
@@ -756,62 +785,6 @@ class CustomResidualAttentionBlock(paddle.nn.Layer):
                     self.ln_1_v(v),
                     attn_mask=attn_mask)))
         q = q + self.ls_2(self.mlp(self.ln_2(q)))
-        return q
-
-
-class CustomTransformer(paddle.nn.Layer):
-    def __init__(self,
-                 width: int,
-                 layers: int,
-                 heads: int,
-                 mlp_ratio: float=4.0,
-                 ls_init_value: float=None,
-                 act_layer: Callable=paddle.nn.GELU,
-                 norm_layer: Callable=LayerNorm,
-                 scale_cosine_attn: bool=True,
-                 scale_heads: bool=False,
-                 scale_attn: bool=False,
-                 scale_fc: bool=False,
-                 cross_attn: bool=False,
-                 xattn: bool=False):
-        super().__init__()
-        self.width = width
-        self.layers = layers
-        self.enable_recompute = False
-        self.xattn = xattn
-        self.resblocks = paddle.nn.LayerList(sublayers=[
-            CustomResidualAttentionBlock(
-                width,
-                heads,
-                mlp_ratio,
-                ls_init_value=ls_init_value,
-                act_layer=act_layer,
-                norm_layer=norm_layer,
-                scale_cosine_attn=scale_cosine_attn,
-                scale_heads=scale_heads,
-                scale_attn=scale_attn,
-                scale_fc=scale_fc,
-                cross_attn=cross_attn,
-                xattn=xattn) for _ in range(layers)
-        ])
-
-    def get_cast_dtype(self) -> paddle.dtype:
-        return self.resblocks[0].mlp.c_fc.weight.dtype
-
-    def forward(self,
-                q: paddle.Tensor,
-                k: paddle.Tensor=None,
-                v: paddle.Tensor=None,
-                attn_mask: Optional[paddle.Tensor]=None):
-        if k is None and v is None:
-            k = v = q
-        for r in self.resblocks:
-            if self.enable_recompute:
-                # q = torch.utils.checkpoint.checkpoint(r, q, k, v, attn_mask)
-                q = paddle.distributed.fleet.utils.recompute(r, q, k, v,
-                                                             attn_mask, use_reentrant=False)
-            else:
-                q = r(q, k, v, attn_mask=attn_mask)
         return q
 
 
@@ -841,19 +814,24 @@ class ResidualAttentionBlock(paddle.nn.Layer):
 
         self.ln_2 = norm_layer(d_model)
         mlp_width = int(d_model * mlp_ratio)
-        self.mlp = paddle.nn.Sequential(* [(
-            'c_fc', fleet.meta_parallel.ColumnParallelLinear(
-                d_model,
-                mlp_width,
-                weight_attr=None,
-                has_bias=True,
-                gather_output=True)), ('gelu', act_layer()), (
-                    'c_proj', fleet.meta_parallel.ColumnParallelLinear(
-                        mlp_width,
-                        d_model,
-                        weight_attr=None,
-                        has_bias=True,
-                        gather_output=True))])
+        if dist.get_world_size() > 1:
+            self.mlp = paddle.nn.Sequential(* [(
+                'c_fc', fleet.meta_parallel.ColumnParallelLinear(
+                    d_model,
+                    mlp_width,
+                    weight_attr=None,
+                    has_bias=True,
+                    gather_output=True)), ('gelu', act_layer()), (
+                        'c_proj', fleet.meta_parallel.ColumnParallelLinear(
+                            mlp_width,
+                            d_model,
+                            weight_attr=None,
+                            has_bias=True,
+                            gather_output=True))])
+        else:
+            self.mlp = paddle.nn.Sequential(* [('c_fc', paddle.nn.Linear(
+                d_model, mlp_width)), ('gelu', act_layer()), (
+                    'c_proj', paddle.nn.Linear(mlp_width, d_model))])
         self.ls_2 = LayerScale(
             d_model,
             ls_init_value) if ls_init_value is not None else nn.Identity()
@@ -909,27 +887,22 @@ class ResidualAttentionBlock(paddle.nn.Layer):
 
 class Transformer(paddle.nn.Layer):
     def __init__(self,
-                 width: int,
-                 layers: int,
-                 heads: int,
-                 mlp_ratio: float=4.0,
-                 ls_init_value: float=None,
+                 config,
                  act_layer: Callable=paddle.nn.GELU,
-                 norm_layer: Callable=LayerNorm,
-                 xattn: bool=False):
+                 norm_layer: Callable=LayerNorm):
         super().__init__()
-        self.width = width
-        self.layers = layers
         self.enable_recompute = False
+        self.width = config.width
+        self.layers = config.layers
         self.resblocks = paddle.nn.LayerList(sublayers=[
             ResidualAttentionBlock(
-                width,
-                heads,
-                mlp_ratio,
-                ls_init_value=ls_init_value,
+                config.width,
+                config.heads,
+                mlp_ratio=4.0,
+                ls_init_value=config.ls_init_value,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
-                xattn=xattn) for _ in range(layers)
+                xattn=config.xattn) for _ in range(config.layers)
         ])
 
     def get_cast_dtype(self) -> paddle.dtype:
@@ -939,26 +912,28 @@ class Transformer(paddle.nn.Layer):
                 attn_mask: Optional[paddle.Tensor]=None):
         for r in self.resblocks:
             if self.enable_recompute:
-                x = paddle.distributed.fleet.utils.recompute(r, x, attn_mask, use_reentrant=False)
+                x = paddle.distributed.fleet.utils.recompute(
+                    r, x, attn_mask, use_reentrant=False)
             else:
                 x = r(x, attn_mask=attn_mask)
         return x
 
 
 class AttentionalPooler(paddle.nn.Layer):
-    def __init__(self,
-                 d_model: int,
-                 context_dim: int,
-                 n_head: int=8,
-                 n_queries: int=256,
-                 norm_layer: Callable=LayerNorm):
+    def __init__(self, config, norm_layer: Callable=LayerNorm):
         super().__init__()
-        init_data = paddle.randn(shape=[n_queries, d_model])
+        d_model = config.num_classes
+        context_dim = config.embed_dim
+
+        init_data = paddle.randn(shape=[config.n_queries, d_model])
         self.query = self.create_parameter(
-            shape=[n_queries, d_model],
+            shape=[config.n_queries, d_model],
             default_initializer=paddle.nn.initializer.Assign(init_data))
         self.attn = MultiHeadAttention(
-            d_model, n_head, kdim=context_dim, vdim=context_dim)
+            d_model,
+            config.attn_pooler_heads,
+            kdim=context_dim,
+            vdim=context_dim)
         self.ln_q = norm_layer(d_model)
         self.ln_k = norm_layer(context_dim)
 
@@ -971,169 +946,6 @@ class AttentionalPooler(paddle.nn.Layer):
 
     def _repeat(self, query, N: int):
         return query.unsqueeze(0).repeat_interleave(N, 0)
-
-
-class VisionTransformer(paddle.nn.Layer):
-    def __init__(self,
-                 image_size: int,
-                 patch_size: int,
-                 width: int,
-                 layers: int,
-                 heads: int,
-                 mlp_ratio: float,
-                 ls_init_value: float=None,
-                 patch_dropout: float=0.0,
-                 global_average_pool: bool=False,
-                 attentional_pool: bool=False,
-                 n_queries: int=256,
-                 attn_pooler_heads: int=8,
-                 output_dim: int=512,
-                 act_layer: Callable=paddle.nn.GELU,
-                 norm_layer: Callable=LayerNorm,
-                 xattn: bool=False,
-                 output_tokens: bool=False):
-        super().__init__()
-        self.output_tokens = output_tokens
-        self.image_size = to_2tuple(image_size)
-        self.patch_size = to_2tuple(patch_size)
-        self.grid_size = self.image_size[0] // self.patch_size[
-            0], self.image_size[1] // self.patch_size[1]
-        self.output_dim = output_dim
-        self.conv1 = paddle.nn.Conv2D(
-            in_channels=3,
-            out_channels=width,
-            kernel_size=patch_size,
-            stride=patch_size,
-            bias_attr=False)
-        scale = width**-0.5
-        init_data = scale * paddle.randn(shape=[width])
-        self.class_embedding = self.create_parameter(
-            shape=[width],
-            default_initializer=paddle.nn.initializer.Assign(init_data))
-        init_data = scale * paddle.randn(
-            shape=[self.grid_size[0] * self.grid_size[1] + 1, width])
-        self.positional_embedding = self.create_parameter(
-            shape=[self.grid_size[0] * self.grid_size[1] + 1, width],
-            default_initializer=paddle.nn.initializer.Assign(init_data))
-        self.patch_dropout = PatchDropout(
-            patch_dropout) if patch_dropout > 0.0 else paddle.nn.Identity()
-        self.ln_pre = norm_layer(width)
-        self.transformer = Transformer(
-            width,
-            layers,
-            heads,
-            mlp_ratio,
-            ls_init_value=ls_init_value,
-            act_layer=act_layer,
-            norm_layer=norm_layer,
-            xattn=xattn)
-        self.global_average_pool = global_average_pool
-
-        if attentional_pool:
-            self.attn_pool = AttentionalPooler(
-                output_dim,
-                width,
-                n_head=attn_pooler_heads,
-                n_queries=n_queries)
-            self.ln_post = norm_layer(output_dim)
-            init_data = scale * paddle.randn(shape=[output_dim, output_dim])
-            self.proj = self.create_parameter(
-                shape=[output_dim, output_dim],
-                default_initializer=paddle.nn.initializer.Assign(init_data))
-        else:
-            self.attn_pool = None
-            self.ln_post = norm_layer(width)
-            init_data = scale * paddle.randn(shape=[width, output_dim])
-            self.proj = self.create_parameter(
-                shape=[width, output_dim],
-                default_initializer=paddle.nn.initializer.Assign(init_data))
-
-    def lock(self, unlocked_groups=0, freeze_bn_stats=False):
-        for param in self.parameters():
-            param.stop_gradient = not False
-        if unlocked_groups != 0:
-            groups = [[
-                self.conv1, self.class_embedding, self.positional_embedding,
-                self.ln_pre
-            ], *self.transformer.resblocks[:-1],
-                      [self.transformer.resblocks[-1], self.ln_post], self.proj]
-
-            def _unlock(x):
-                if isinstance(x, Sequence):
-                    for g in x:
-                        _unlock(g)
-                elif isinstance(x, paddle.Tensor):
-                    x.stop_gradient = not True
-                else:
-                    for p in x.parameters():
-                        p.stop_gradient = not True
-
-            _unlock(groups[-unlocked_groups:])
-
-    def get_num_layers(self):
-        return self.transformer.layers
-
-    def set_grad_checkpointing(self, enable=True):
-        self.transformer.enable_recompute = enable
-
-    def no_weight_decay(self):
-        return {'positional_embedding', 'class_embedding'}
-
-    def _global_pool(self, x):
-        if self.global_average_pool:
-            return x.mean(axis=1), x
-        else:
-            return x[:, 0], x[:, 1:]
-
-    def forward(self, x: paddle.Tensor):
-        x = self.conv1(x)
-        x = x.reshape((x.shape[0], x.shape[1], -1))
-        x = x.transpose(perm=[0, 2, 1])
-        if isinstance(x.dtype, paddle.dtype):
-            dtype = x.dtype
-        elif isinstance(x.dtype,
-                        str) and x.dtype not in ['cpu', 'cuda', 'ipu', 'xpu']:
-            dtype = x.dtype
-        elif isinstance(x.dtype, paddle.Tensor):
-            dtype = x.dtype.dtype
-        else:
-            dtype = self.class_embedding.dtype
-        x = paddle.concat(
-            x=[
-                self.class_embedding.cast(dtype) + paddle.zeros(
-                    shape=[x.shape[0], 1, x.shape[-1]], dtype=x.dtype), x
-            ],
-            axis=1)
-        if isinstance(x.dtype, paddle.dtype):
-            dtype = x.dtype
-        elif isinstance(x.dtype,
-                        str) and x.dtype not in ['cpu', 'cuda', 'ipu', 'xpu']:
-            dtype = x.dtype
-        elif isinstance(x.dtype, paddle.Tensor):
-            dtype = x.dtype.dtype
-        else:
-            dtype = self.positional_embedding.dtype
-        x = x + self.positional_embedding.cast(dtype)
-        x = self.patch_dropout(x)
-        x = self.ln_pre(x)
-        x = x.transpose(perm=[1, 0, 2])
-        x = self.transformer(x)
-        x = x.transpose(perm=[1, 0, 2])
-
-        if self.attn_pool is not None:
-            x = self.attn_pool(x)
-            x = self.ln_post(x)
-            pooled, tokens = self._global_pool(x)
-        else:
-            pooled, tokens = self._global_pool(x)
-            pooled = self.ln_post(pooled)
-
-        if self.proj is not None:
-            pooled = pooled @self.proj
-
-        if self.output_tokens:
-            return pooled, tokens
-        return pooled
 
 
 class EVATextTransformerConfig(PretrainedConfig):
@@ -1212,45 +1024,28 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
     def __init__(self, config: EVATextTransformerConfig):
         super().__init__(config)
 
-        context_length = config.context_length
-        vocab_size = config.vocab_size
-        width = config.width
-        heads = config.heads
-        layers = config.layers
-        ls_init_value = config.ls_init_value
-        output_dim = config.output_dim
-        xattn = config.xattn
-        attn_mask = config.attn_mask
-        embed_cls = config.embed_cls
-        pad_id = config.pad_id
-        output_tokens = config.output_tokens
+        self.width = width = config.width
+        self.output_dim = config.output_dim
+        self.pad_id = config.pad_id
+        self.output_tokens = config.output_tokens
         norm_layer = FusedLayerNorm if config.fusedLN else LayerNorm
         act_layer = QuickGELU if config.quick_gelu else paddle.nn.GELU
 
-        self.num_pos = self.context_length = context_length
-        self.vocab_size = vocab_size
-        self.width = width
-        self.heads = heads
-        self.output_dim = output_dim
-        self.token_embedding = fleet.meta_parallel.VocabParallelEmbedding(
-            vocab_size, width)
+        self.num_pos = config.context_length
+        self.heads = config.heads
+        if dist.get_world_size() > 1:
+            self.token_embedding = fleet.meta_parallel.VocabParallelEmbedding(
+                config.vocab_size, width)
+        else:
+            self.token_embedding = paddle.nn.Embedding(config.vocab_size, width)
         self.transformer = Transformer(
-            width=width,
-            layers=layers,
-            heads=heads,
-            ls_init_value=ls_init_value,
-            act_layer=act_layer,
-            norm_layer=norm_layer,
-            xattn=xattn)
-        self.xattn = xattn
+            config, act_layer=act_layer, norm_layer=norm_layer)
         self.ln_final = norm_layer(width)
-        init_data = paddle.empty(shape=[width, output_dim])
+        init_data = paddle.empty(shape=[width, self.output_dim])
         self.text_projection = self.create_parameter(
-            shape=[width, output_dim],
+            shape=[width, self.output_dim],
             default_initializer=paddle.nn.initializer.Assign(init_data))
-        self.output_tokens = output_tokens
-        self.pad_id = pad_id
-        if embed_cls:
+        if config.embed_cls:
             self.cls_emb = self.create_parameter(shape=[width])
             self.num_pos += 1
         else:
@@ -1259,7 +1054,7 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         self.positional_embedding = self.create_parameter(
             shape=[self.num_pos, width],
             default_initializer=paddle.nn.initializer.Assign(init_data))
-        if attn_mask:
+        if config.attn_mask:
             self.register_buffer(
                 'attn_mask', self.build_attention_mask(), persistable=False)
         else:
@@ -1364,7 +1159,6 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         x = x.transpose(perm=[1, 0, 2])
         x = self.transformer(x, attn_mask=attn_mask)
         x = x.transpose(perm=[1, 0, 2])
-        # x = self.ln_final(x)
         if self.cls_emb is not None:
             pooled, tokens = x[:, -1], x[:, :-1]
             pooled = self.ln_final(pooled)
@@ -1448,52 +1242,41 @@ class MultimodalTransformer(MultimodalTransformerPretrainedModel):
 
         super().__init__(config)
         width = config.width
-        layers = config.layers
-        heads = config.heads
-        context_length = config.context_length
-        mlp_ratio = config.mlp_ratio
-        ls_init_value = config.ls_init_value
-        quick_gelu = config.quick_gelu
-        cast_dtype = config.cast_dtype
-        output_dim = config.output_dim
-        xattn = config.xattn
-
-        act_layer = QuickGELU if quick_gelu else nn.GELU
-        norm_layer = LayerNormFp32 if cast_dtype in ('float16', 'bfloat16'
-                                                     ) else LayerNorm
+        self.context_length = config.context_length
+        act_layer = QuickGELU if config.quick_gelu else nn.GELU
+        norm_layer = LayerNormFp32 if config.cast_dtype in (
+            'float16', 'bfloat16') else LayerNorm
 
         self.enable_recompute = False
         self.resblocks = paddle.nn.LayerList(sublayers=[
             ResidualAttentionBlock(
                 width,
-                heads,
-                mlp_ratio,
-                ls_init_value=ls_init_value,
+                config.heads,
+                config.mlp_ratio,
+                ls_init_value=config.ls_init_value,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
-                xattn=xattn) for _ in range(layers)
+                xattn=config.xattn) for _ in range(config.layers)
         ])
 
-        self.context_length = context_length
         self.cross_attn = paddle.nn.LayerList([
             ResidualAttentionBlock(
                 width,
-                heads,
-                mlp_ratio,
-                ls_init_value=ls_init_value,
+                config.heads,
+                config.mlp_ratio,
+                ls_init_value=config.ls_init_value,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
-                is_cross_attention=True, ) for _ in range(layers)
+                is_cross_attention=True, ) for _ in range(config.layers)
         ])
 
         self.register_buffer(
             'attn_mask', self.build_attention_mask(), persistable=False)
 
         self.ln_final = norm_layer(width)
-        #self.text_projection = nn.Parameter(paddle.empty([width, output_dim]))
-        init_data = paddle.empty([width, output_dim])
+        init_data = paddle.empty([width, config.output_dim])
         self.text_projection = self.create_parameter(
-            shape=[width, output_dim],
+            shape=[width, config.output_dim],
             default_initializer=paddle.nn.initializer.Assign(init_data))
 
     def init_parameters(self):
@@ -1503,11 +1286,6 @@ class MultimodalTransformer(MultimodalTransformerPretrainedModel):
         fc_std = (2 * self.transformer.width)**-0.5
 
         for block in self.transformer.resblocks:
-            # nn.init.normal_(block.attn.in_proj_weight, std=attn_std)
-            # nn.init.normal_(block.attn.out_proj.weight, std=proj_std)
-            # nn.init.normal_(block.mlp.c_fc.weight, std=fc_std)
-            # nn.init.normal_(block.mlp.c_proj.weight, std=proj_std)
-            #block.attn.in_proj_weight = paddle.ParamAttr(initializer=paddle.nn.initializer.Normal(std=attn_std))
             block.attn.in_proj_weight = params_normal_(
                 block.attn.in_proj_weight, std=attn_std)
             block.attn.out_proj.weight = params_normal_(
@@ -1526,36 +1304,24 @@ class MultimodalTransformer(MultimodalTransformerPretrainedModel):
             block.mlp.c_proj.weight = params_normal_(
                 block.mlp.c_proj.weight, std=proj_std)
         if self.text_projection is not None:
-            #nn.init.normal_(self.text_projection, std=self.transformer.width ** -0.5)
-            #self.text_projection = paddle.ParamAttr(initializer=paddle.nn.initializer.Normal(std=self.transformer.width ** -0.5))
             self.text_projection = params_normal_(
                 self.text_projection, std=self.transformer.width**-0.5)
 
     def build_attention_mask(self):
         # lazily create causal attention mask, with full attention between the tokens
-        # pytorch uses additive attention mask; fill with -inf
         mask = paddle.empty([self.context_length, self.context_length])
         mask.fill_(float("-inf"))
-        # mask.triu_(1)  # zero out the lower diagonal
         mask = paddle.triu(mask, 1)
         return mask
 
     def forward(self, image_embs, text_embs):
         text_embs = text_embs.transpose([1, 0, 2])  # NLD -> LNDsq
-        # image_embs = image_embs.transpose([1, 0, 2])  # NLD -> LND
         seq_len = text_embs.shape[0]
 
         for resblock, cross_attn in zip(self.resblocks, self.cross_attn):
-            if 0:  #self.enable_recompute and not torch.jit.is_scripting():
-                raise NotImplemented
-                # TODO: handle kwargs https://github.com/pytorch/pytorch/issues/79887#issuecomment-1161758372
-                # text_embs = checkpoint(resblock, text_embs, None, None, self.attn_mask[:seq_len, :seq_len])
-                # text_embs = checkpoint(cross_attn, text_embs, image_embs, image_embs, None)
-            else:
-                text_embs = resblock(
-                    text_embs, attn_mask=self.attn_mask[:seq_len, :seq_len])
-                text_embs = cross_attn(
-                    text_embs, k_x=image_embs, v_x=image_embs)
+            text_embs = resblock(
+                text_embs, attn_mask=self.attn_mask[:seq_len, :seq_len])
+            text_embs = cross_attn(text_embs, k_x=image_embs, v_x=image_embs)
 
         x = text_embs.transpose([1, 0, 2])  # LND -> NLD
         x = self.ln_final(x)
