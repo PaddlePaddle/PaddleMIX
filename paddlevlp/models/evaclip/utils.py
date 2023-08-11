@@ -4,16 +4,27 @@ import collections
 
 
 def params_normal_(tensor, mean=0., std=1.):
+    origin_dtype = paddle.get_default_dtype()
+    paddle.set_default_dtype("float32")
     with paddle.no_grad():
-        tensor.set_value(paddle.normal(mean=mean, std=std, shape=tensor.shape))
+        normal = paddle.normal(mean=mean, std=std, shape=tensor.shape)
+        if origin_dtype != 'float32':
+            normal = normal.astype(origin_dtype)
+        tensor.set_value(normal)
+    paddle.set_default_dtype(origin_dtype)
     return tensor
 
 
 def trunc_normal_(tensor, mean=0., std=1., min=-2, max=2):
+    origin_dtype = paddle.get_default_dtype()
+    paddle.set_default_dtype("float32")
     with paddle.no_grad():
         normal = paddle.normal(mean=mean, std=std, shape=tensor.shape)
         trunc = paddle.clip(normal, min=min, max=max)
+        if origin_dtype != 'float32':
+            trunc = trunc.astype(origin_dtype)
         tensor.set_value(trunc)
+    paddle.set_default_dtype(origin_dtype)
     return tensor
 
 

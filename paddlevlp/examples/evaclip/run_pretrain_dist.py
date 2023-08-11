@@ -178,6 +178,8 @@ class Collator:
 
 
 def main_worker(training_args, model_args, data_args):
+    if training_args.bf16 and training_args.fp16_opt_level == 'O2':
+        paddle.set_default_dtype("bfloat16")
     if model_args.model.startswith("coca"):
         model = CoCa.from_pretrained(
             model_args.model,
@@ -195,6 +197,8 @@ def main_worker(training_args, model_args, data_args):
             gather_with_grad=training_args.gather_with_grad,
             data_world_rank=training_args.data_world_rank,
             data_world_size=training_args.data_world_size)
+    if training_args.bf16 and training_args.fp16_opt_level == 'O2':
+        paddle.set_default_dtype("float32")
 
     training_args.model = model_args.model
     if training_args.pretrained_model_path and training_args.pretrained_model_path != "None" and training_args.resume_from_checkpoint is None:

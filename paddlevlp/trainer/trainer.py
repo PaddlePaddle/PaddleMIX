@@ -16,7 +16,7 @@ import paddle
 from paddlenlp.trainer.trainer import Trainer
 from paddle.io import DataLoader
 from paddlevlp.models.evaclip.utils import clip_grad_norm
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 
 
 class CLIPTrainer(Trainer):
