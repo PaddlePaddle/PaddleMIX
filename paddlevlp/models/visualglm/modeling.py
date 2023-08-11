@@ -23,7 +23,7 @@ from paddle.distributed.fleet.utils import recompute
 from paddle.nn import CrossEntropyLoss
 
 from paddlenlp.transformers.chatglm.configuration import ChatGLMConfig
-from paddlenlp.transformers.chatglm.modeling import ChatGLMForConditionalGeneration
+from paddlenlp.transformers.chatglm.modeling import ChatGLMForCausalLM
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutput,
     BaseModelOutputWithPastAndCrossAttentions,
@@ -1163,7 +1163,7 @@ class VisualGLMModel(VisualGLMPretrainedModel):
         self.qformer = VisualGLMQFormerModel(config.qformer_config)
 
         self.language_projection = nn.Linear(config.qformer_config.hidden_size, config.text_config.hidden_size)
-        self.language_model = ChatGLMForConditionalGeneration(config.text_config)
+        self.language_model = ChatGLMForCausalLM(config.text_config)
 
     def get_input_embeddings(self) -> nn.Layer:
         return self.vision_model.embeddings.patch_embedding
@@ -1413,7 +1413,7 @@ class VisualGLMModel(VisualGLMPretrainedModel):
         )
 
 
-class ChatGLMForConditionalGenerationWithImage(ChatGLMForConditionalGeneration):
+class ChatGLMForConditionalGenerationWithImage(ChatGLMForCausalLM):
     def __init__(self, config: ChatGLMConfig):
         super(ChatGLMForConditionalGenerationWithImage, self).__init__(config)
         self.config = config

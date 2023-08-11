@@ -58,9 +58,9 @@ class SamModel(SamPretrainedModel):
     def __init__(self, config: SamConfig):
         super(SamModel, self).__init__(config)
     
-        prompt_embed_dim = 256
-        image_size = 1024
-        vit_patch_size = 16
+        prompt_embed_dim = config.prompt_embed_dim
+        image_size = config.image_size
+        vit_patch_size = config.vit_patch_size
         image_embedding_size = image_size // vit_patch_size
         assert config.input_type != None, "input_type is None, but it is required."
         self.input_type = config.input_type

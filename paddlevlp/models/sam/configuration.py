@@ -26,6 +26,9 @@ class SamConfig(PretrainedConfig):
     def __init__(
         self,
         modelname = "Sam",
+        prompt_embed_dim = 256,
+        image_size = 1024,
+        vit_patch_size = 16,
         encoder_embed_dim = 768,
         encoder_depth = 12,
         encoder_num_heads = 12,
@@ -34,6 +37,9 @@ class SamConfig(PretrainedConfig):
     ):
         super().__init__()
         self.modelname = modelname
+        self.prompt_embed_dim = prompt_embed_dim
+        self.image_size = image_size
+        self.vit_patch_size = vit_patch_size
         self.encoder_embed_dim = encoder_embed_dim
         self.encoder_depth = encoder_depth
         self.encoder_num_heads = encoder_num_heads

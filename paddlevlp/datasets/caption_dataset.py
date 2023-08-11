@@ -41,7 +41,7 @@ class CaptionDataset(DatasetBuilder):
     SPLITS = {
         "train": META_INFO(
             os.path.join("coco", "images"),
-            os.path.join("coco", "annotations/coco_karpathy_train_debug.json"),
+            os.path.join("coco", "annotations/coco_karpathy_train.json"),
             "",
             "aa31ac474cf6250ebb81d18348a07ed8",
         ),
@@ -83,16 +83,28 @@ class CaptionDataset(DatasetBuilder):
                 img_ids[img_id] = n
                 n += 1
         return img_ids
-
+    def _gen_image_id_eval(self, anno):
+        img_ids = {}
+        n = 0
+        for ann in anno:
+            img_id = ann["image"].split("/")[-1].strip(".jpg").split("_")[-1]
+            if img_id not in img_ids.keys():
+                img_ids[img_id] = n
+                n += 1
+        return img_ids
     def _read(self, filename, *args):
         image_root, anno_path, mode = filename
         annotations = json.load(open(anno_path, "r"))
-        image_ids = self._gen_image_id(annotations)
-
+        if mode== "val" or mode=="test":
+            image_ids = self._gen_image_id_eval(annotations)
+        else:
+            image_ids = self._gen_image_id(annotations)
         for ann in annotations:
             image_path = os.path.join(image_root, ann["image"])
-            yield_data = {"image": image_path, "image_id": image_ids[ann["image_id"]]}
             if mode == "train":
+                yield_data = {"image": image_path, "image_id": image_ids[ann["image_id"]]}
                 # only train mode has text input
                 yield_data["text_input"] = ann["caption"]
+            else:
+                yield_data = {"image": image_path, "image_id": ann["image"].split("/")[-1].strip(".jpg").split("_")[-1]}
             yield yield_data

@@ -134,11 +134,11 @@ class Blip2Processor(ProcessorMixin):
             text_encoding = self.text_processor(text, mode=mode)
             text_encoding = self.tokenizer(
                 text=text_encoding,
-                return_tensors=return_tensors,
-                return_token_type_ids=False,
+                return_tensors="pd",
+                padding="longest",
+                truncation=True,
                 max_length=max_length,
-                padding=True,
-                **kwargs,
+                return_attention_mask=True
             )
         else:
             text_encoding = None

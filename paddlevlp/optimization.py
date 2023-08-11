@@ -65,15 +65,16 @@ class CosineDecayWithWarmup(LRScheduler):
     def step(self):
         self.cur_step += 1
         cur_step_in_epoch = (self.cur_step - 2) % self.step_each_epoch
-        if self.cur_step < self.warmup_steps and self.last_epoch == 0:
+        cur_epoch=(self.cur_step - 2) // self.step_each_epoch
+        if self.cur_step < self.warmup_steps and cur_epoch == 0:
             self.last_lr = self.warmup_start_lr + (
                 self.start_lr - self.warmup_start_lr
             ) * cur_step_in_epoch / max(self.warmup_steps, 1)
         else:
             self.last_lr = (self.start_lr - self.eta_min) * 0.5 * (
-                1.0 + math.cos(math.pi * self.last_epoch / self.T_max)
+                1.0 + math.cos(math.pi * cur_epoch/ self.T_max)
             ) + self.eta_min
-        self.last_epoch += 1
+        self.last_epoch = cur_epoch
 
     def get_lr(self):
         return self.last_lr
@@ -93,7 +94,7 @@ class FilterParamsName(object):
         for n, p in model.named_parameters():
             if p.stop_gradient:
                 continue  # frozen weights
-            if p.ndim < 2 or "bias" in n or "norm" in n.lower():
+            if p.ndim < 2 or "bias" in n or "ln" in n or "bn" in n:
                 p_non_wd.append(p)
                 self.p_non_wd_name.append(n)
             else:
@@ -102,5 +103,5 @@ class FilterParamsName(object):
         logger.info("number of trainable parameters: %d" % num_parameters)
         return p_wd, p_non_wd
 
-    def apply_decay_param_fun(self, name):
+    def _apply_decay_param_fun(self, name):
         return name not in self.p_non_wd_name
