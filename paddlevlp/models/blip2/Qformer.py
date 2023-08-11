@@ -1155,6 +1155,7 @@ class BertLMHeadModel(BertPreTrainedModel):
         config.gradient_checkpointing = False
         self.ln_vision = paddle.nn.LayerNorm(config.encoder_width)
         config.query_length = config.num_query_tokens
+        config.use_fusedlinear = getattr(config, "use_fusedlinear", False)
         self.bert = BertModel(config, add_pooling_layer=False)
         self.cls = BertOnlyMLMHead(config)
 

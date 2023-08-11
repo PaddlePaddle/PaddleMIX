@@ -180,7 +180,6 @@ class MultiHeadAttention(nn.Layer):
                                     [0, 0, self.num_heads, 3 * self.head_dim])
         if not self.use_flash_attn:
             mix_layer = paddle.transpose(mix_layer, [0, 2, 1, 3])
-        mix_layer = paddle.transpose(mix_layer, [0, 2, 1, 3])
         q, k, v = paddle.split(mix_layer, num_or_sections=3, axis=-1)
 
         assert not isinstance(
@@ -209,7 +208,6 @@ class MultiHeadAttention(nn.Layer):
         """
         q = self.q_proj(query)
         q = paddle.reshape(x=q, shape=[0, 0, self.num_heads, self.head_dim])
-        q = paddle.transpose(x=q, perm=[0, 2, 1, 3])
         if not self.use_flash_attn:
             q = paddle.transpose(x=q, perm=[0, 2, 1, 3])
         if isinstance(cache, self.StaticCache):
@@ -248,7 +246,6 @@ class MultiHeadAttention(nn.Layer):
         k = tensor.reshape(x=k, shape=[0, 0, self.num_heads, self.head_dim])
         if not self.use_flash_attn:
             k = tensor.transpose(x=k, perm=[0, 2, 1, 3])
-        k = tensor.transpose(x=k, perm=[0, 2, 1, 3])
         v = tensor.reshape(x=v, shape=[0, 0, self.num_heads, self.head_dim])
         if not self.use_flash_attn:
             v = tensor.transpose(x=v, perm=[0, 2, 1, 3])
@@ -439,7 +436,7 @@ class TransformerDecoderLayer(nn.Layer):
         # self.self_attn(...) --> hidden_states, weights, (cache)
         if use_cache is False:
             tgt, attn_weights = self.self_attn(tgt, tgt, tgt, tgt_mask,
-                                               use_cache, cache)
+                                               use_cache, cache,output_attention=None)
         else:
             tgt, attn_weights, incremental_cache = self.self_attn(
                 tgt, tgt, tgt, tgt_mask, use_cache, cache)
@@ -633,7 +630,7 @@ class OPTLearnedPositionEmbedding(nn.Embedding):
 
         position_ids = paddle.cumsum(
             paddle.cast(attention_mask, "int64"),
-            axis=-1) * attention_mask - 1  #wjm
+            axis=-1) * attention_mask - 1  
 
         # cut positions if `past_key_values_length` is > 0
         position_ids = position_ids[:, past_key_values_length:]
@@ -1138,6 +1135,7 @@ class OPTForCausalLM(OPTPretrainedModel):
     def __init__(self, config: OPTConfig, **kwargs):
         super(OPTForCausalLM, self).__init__(config)
         from paddle.distributed import fleet
+        config.use_fusedlinear = config.get("use_fusedlinear", False)
         config.mp_degree = config.mp_degree
         self.opt = OPTModel(config)
         self.lm_head = OPTLMHead(
@@ -1228,12 +1226,10 @@ class OPTForCausalLM(OPTPretrainedModel):
 
         loss = None
         if labels is not None:
-            # breakpoint()
             logits = logits[:, -labels.shape[1]:, :]
             shift_logits = logits[:, :-1, :]
             shift_labels = labels[:, 1:]
-            # Flatten the tokens
-            # loss_fct = CrossEntropyLoss(reduction=reduction, label_smoothing=0.1)
+
             loss_fct = CrossEntropyLoss(reduction='mean', label_smoothing=None)
             labels = shift_labels.reshape((-1, ))
             valid_index = paddle.where(labels != -100)[0].flatten()

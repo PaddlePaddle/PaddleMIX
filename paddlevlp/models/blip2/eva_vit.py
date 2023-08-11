@@ -99,7 +99,7 @@ class Mlp(nn.Layer):
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
-        if getattr("use_fusedlinear", False):
+        if getattr(self, "use_fusedlinear", False):
             if isinstance(self.act, nn.GELU):
                 x = _legacy_C_ops.fused_gemm_epilogue(
                     x, self.fc1.weight, self.fc1.bias, 'trans_x', False,
@@ -390,8 +390,8 @@ class VisionTransformer(Blip2PretrainedModel):
     def __init__(self, config: Blip2VisionConfig, **kwargs):
         super().__init__(config)
         mp_degree = config.mp_degree
-        use_flash_attn = config.use_flash_attn
-        use_fusedlinear = config.use_fusedlinear
+        use_flash_attn = getattr(config, "use_flash_attn", False)
+        use_fusedlinear = getattr(config, "use_fusedlinear", False)
         self.class_num = config.class_num
         self.num_features = self.embed_dim = config.embed_dim
         _img_size = to_2tuple(config.img_size)

@@ -832,7 +832,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             attention_mask=attention_mask,
             do_sample=False,
             top_p=0.9,
-            decode_strategy="greedy_search",  # align to torch
+            decode_strategy="greedy_search",
             temperature=1,
             num_beams=5,
             max_length=30,
