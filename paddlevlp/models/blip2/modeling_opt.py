@@ -435,8 +435,14 @@ class TransformerDecoderLayer(nn.Layer):
 
         # self.self_attn(...) --> hidden_states, weights, (cache)
         if use_cache is False:
-            tgt, attn_weights = self.self_attn(tgt, tgt, tgt, tgt_mask,
-                                               use_cache, cache,output_attention=None)
+            tgt, attn_weights = self.self_attn(
+                tgt,
+                tgt,
+                tgt,
+                tgt_mask,
+                use_cache,
+                cache,
+                output_attention=None)
         else:
             tgt, attn_weights, incremental_cache = self.self_attn(
                 tgt, tgt, tgt, tgt_mask, use_cache, cache)
@@ -629,8 +635,7 @@ class OPTLearnedPositionEmbedding(nn.Embedding):
             attention_mask = attention_mask == 1.0
 
         position_ids = paddle.cumsum(
-            paddle.cast(attention_mask, "int64"),
-            axis=-1) * attention_mask - 1  
+            paddle.cast(attention_mask, "int64"), axis=-1) * attention_mask - 1
 
         # cut positions if `past_key_values_length` is > 0
         position_ids = position_ids[:, past_key_values_length:]
