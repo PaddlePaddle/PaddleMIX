@@ -468,13 +468,13 @@ class StableDiffusionXLControlNetPipeline(
         return latents
 
     # Copied from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl.StableDiffusionXLPipeline._get_add_time_ids
-
     def _get_add_time_ids(self, original_size, crops_coords_top_left,
                           target_size, dtype):
         add_time_ids = list(original_size + crops_coords_top_left + target_size)
         passed_add_embed_dim = self.unet.config.addition_time_embed_dim * len(
             add_time_ids) + self.text_encoder_2.config.projection_dim
-        expected_add_embed_dim = self.unet.add_embedding.linear_1.in_features
+        expected_add_embed_dim = self.unet.add_embedding.linear_1.weight.shape[
+            0]
         if expected_add_embed_dim != passed_add_embed_dim:
             raise ValueError(
                 f'Model expects an added time embedding vector of length {expected_add_embed_dim}, but a vector of {passed_add_embed_dim} was created. The model has an incorrect config. Please check `unet.config.time_embedding_type` and `text_encoder_2.config.projection_dim`.'
@@ -831,7 +831,8 @@ class StableDiffusionXLControlNetPipeline(
                         callback(i, t, latents)
 
         # make sure the VAE is in float32 mode, as it overflows in float16
-        if self.vae.dtype == 'float16' and self.vae.config.force_upcast:
+        if (self.vae.dtype == paddle.float16 or
+                self.vae.dtype == 'float16') and self.vae.config.force_upcast:
             self.upcast_vae()
             latents = latents.cast(
                 next(iter(self.vae.post_quant_conv.parameters())).dtype)

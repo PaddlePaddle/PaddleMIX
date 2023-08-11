@@ -601,7 +601,7 @@ class StableDiffusionXLInpaintPipeline(DiffusionPipeline,
             image_latents = self.vae.encode(image).latent_dist.sample(
                 generator=generator)
         if self.vae.config.force_upcast:
-            self.vae.to(dtype)
+            self.vae.to(dtype=dtype)
         image_latents = image_latents.cast(dtype)
         image_latents = self.vae.config.scaling_factor * image_latents
         return image_latents
@@ -687,7 +687,8 @@ class StableDiffusionXLInpaintPipeline(DiffusionPipeline,
                                     target_size)
         passed_add_embed_dim = self.unet.config.addition_time_embed_dim * len(
             add_time_ids) + self.text_encoder_2.config.projection_dim
-        expected_add_embed_dim = self.unet.add_embedding.linear_1.in_features
+        expected_add_embed_dim = self.unet.add_embedding.linear_1.weight.shape[
+            0]
         if (expected_add_embed_dim > passed_add_embed_dim and
                 expected_add_embed_dim - passed_add_embed_dim ==
                 self.unet.config.addition_time_embed_dim):
@@ -716,9 +717,9 @@ class StableDiffusionXLInpaintPipeline(DiffusionPipeline,
                 XFormersAttnProcessor,
                 LoRAXFormersAttnProcessor, ))
         if use_xformers:
-            self.vae.post_quant_conv.to(dtype)
-            self.vae.decoder.conv_in.to(dtype)
-            self.vae.decoder.mid_block.to(dtype)
+            self.vae.post_quant_conv.to(dtype=dtype)
+            self.vae.decoder.conv_in.to(dtype=dtype)
+            self.vae.decoder.mid_block.to(dtype=dtype)
 
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
@@ -1108,7 +1109,8 @@ class StableDiffusionXLInpaintPipeline(DiffusionPipeline,
                         callback(i, t, latents)
 
         # make sure the VAE is in float32 mode, as it overflows in float16
-        if self.vae.dtype == 'float16' and self.vae.config.force_upcast:
+        if (self.vae.dtype == paddle.float16 or
+                self.vae.dtype == 'float16') and self.vae.config.force_upcast:
             self.upcast_vae()
             latents = latents.cast(
                 next(iter(self.vae.post_quant_conv.parameters())).dtype)

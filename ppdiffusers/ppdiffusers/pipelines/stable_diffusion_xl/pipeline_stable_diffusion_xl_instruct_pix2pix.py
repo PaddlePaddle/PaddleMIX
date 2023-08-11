@@ -447,7 +447,8 @@ class StableDiffusionXLInstructPix2PixPipeline(
                                     target_size)
         passed_add_embed_dim = self.unet.config.addition_time_embed_dim * len(
             add_time_ids) + self.text_encoder_2.config.projection_dim
-        expected_add_embed_dim = self.unet.add_embedding.linear_1.in_features
+        expected_add_embed_dim = self.unet.add_embedding.linear_1.weight.shape[
+            0]
         if (expected_add_embed_dim > passed_add_embed_dim and
                 expected_add_embed_dim - passed_add_embed_dim ==
                 self.unet.config.addition_time_embed_dim):
@@ -474,9 +475,9 @@ class StableDiffusionXLInstructPix2PixPipeline(
             self.vae.decoder.mid_block.attentions[0].processor,
             (XFormersAttnProcessor, LoRAXFormersAttnProcessor))
         if use_xformers:
-            self.vae.post_quant_conv.to(dtype)
-            self.vae.decoder.conv_in.to(dtype)
-            self.vae.decoder.mid_block.to(dtype)
+            self.vae.post_quant_conv.to(dtype=dtype)
+            self.vae.decoder.conv_in.to(dtype=dtype)
+            self.vae.decoder.mid_block.to(dtype=dtype)
 
     @paddle.no_grad()
     def __call__(
@@ -710,7 +711,7 @@ class StableDiffusionXLInstructPix2PixPipeline(
         add_text_embeds = add_text_embeds.cast('float32')
         add_time_ids = add_time_ids
         # 11. Denoising loop
-        self.unet = self.unet.to('float32')
+        self.unet = self.unet.to(dtype='float32')
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
@@ -725,7 +726,11 @@ class StableDiffusionXLInstructPix2PixPipeline(
                 scaled_latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
                 scaled_latent_model_input = paddle.concat(
-                    x=[scaled_latent_model_input, image_latents], axis=1)
+                    x=[
+                        scaled_latent_model_input,
+                        image_latents.cast(scaled_latent_model_input.dtype)
+                    ],
+                    axis=1)
 
                 # predict the noise residual
                 added_cond_kwargs = {
@@ -790,7 +795,8 @@ class StableDiffusionXLInstructPix2PixPipeline(
                         callback(i, t, latents)
 
         # make sure the VAE is in float32 mode, as it overflows in float16
-        if self.vae.dtype == 'float16' and self.vae.config.force_upcast:
+        if (self.vae.dtype == paddle.float16 or
+                self.vae.dtype == 'float16') and self.vae.config.force_upcast:
             self.upcast_vae()
             latents = latents.cast(
                 next(iter(self.vae.post_quant_conv.parameters())).dtype)

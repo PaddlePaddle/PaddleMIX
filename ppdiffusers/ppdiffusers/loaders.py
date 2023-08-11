@@ -438,22 +438,22 @@ class UNet2DConditionLoadersMixin:
                         rank = value_dict["lora.down.weight"].shape[0]
 
                     if isinstance(attn_processor, LoRACompatibleConv):
-                        in_features = attn_processor.in_channels
-                        out_features = attn_processor.out_channels
-                        kernel_size = attn_processor.kernel_size
+                        in_features = attn_processor._in_channels
+                        out_features = attn_processor._out_channels
+                        kernel_size = attn_processor._kernel_size
 
                         lora = LoRAConv2dLayer(
                             in_features=in_features,
                             out_features=out_features,
                             rank=rank,
                             kernel_size=kernel_size,
-                            stride=attn_processor.stride,
-                            padding=attn_processor.padding,
+                            stride=attn_processor._stride,
+                            padding=attn_processor._padding,
                             network_alpha=mapped_network_alphas.get(key), )
                     elif isinstance(attn_processor, LoRACompatibleLinear):
                         lora = LoRALinearLayer(
-                            attn_processor.in_features,
-                            attn_processor.out_features,
+                            attn_processor.weight.shape[0],
+                            attn_processor.weight.shape[1],
                             rank,
                             mapped_network_alphas.get(key), )
                     else:

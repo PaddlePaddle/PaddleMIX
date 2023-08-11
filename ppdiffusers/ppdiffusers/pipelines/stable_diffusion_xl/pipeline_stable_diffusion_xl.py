@@ -439,10 +439,10 @@ class StableDiffusionXLPipeline(DiffusionPipeline, FromSingleFileMixin,
             self.vae.decoder.mid_block.attentions[0].processor, (
                 XFormersAttnProcessor,
                 LoRAXFormersAttnProcessor, ))
-        # if use_xformers:
-        #     self.vae.post_quant_conv.astype(dtype)
-        #     self.vae.decoder.conv_in.astype(dtype)
-        #     self.vae.decoder.mid_block.astype(dtype)
+        if use_xformers:
+            self.vae.post_quant_conv.to(dtype=dtype)
+            self.vae.decoder.conv_in.to(dtype=dtype)
+            self.vae.decoder.mid_block.to(dtype=dtype)
 
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
@@ -673,7 +673,6 @@ class StableDiffusionXLPipeline(DiffusionPipeline, FromSingleFileMixin,
                     latent_model_input, t)
 
                 # predict the noise residual
-
                 added_cond_kwargs = {
                     'text_embeds': add_text_embeds,
                     'time_ids': add_time_ids
@@ -687,7 +686,6 @@ class StableDiffusionXLPipeline(DiffusionPipeline, FromSingleFileMixin,
                     return_dict=False)[0]
 
                 # perform guidance
-
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
