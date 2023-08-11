@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 from typing import Callable, List, Optional, Union
 from ...models import UNet2DConditionModel, VQModel
@@ -83,6 +97,7 @@ class KandinskyPipeline(DiffusionPipeline):
         self.movq_scale_factor = 2**(
             len(self.movq.config.block_out_channels) - 1)
 
+    # Copied from ppdiffusers.pipelines.unclip.pipeline_unclip.UnCLIPPipeline.prepare_latents
     def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
@@ -100,6 +115,7 @@ class KandinskyPipeline(DiffusionPipeline):
                        do_classifier_free_guidance,
                        negative_prompt=None):
         batch_size = len(prompt) if isinstance(prompt, list) else 1
+        # get prompt text embeddings
         text_inputs = self.tokenizer(
             prompt,
             padding='max_length',
@@ -159,6 +175,9 @@ class KandinskyPipeline(DiffusionPipeline):
                 self.text_encoder(
                     input_ids=uncond_text_input_ids,
                     attention_mask=uncond_text_mask))
+
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
+
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt])
@@ -173,6 +192,12 @@ class KandinskyPipeline(DiffusionPipeline):
                     [batch_size * num_images_per_prompt, seq_len, -1]))
             uncond_text_mask = uncond_text_mask.repeat_interleave(
                 repeats=num_images_per_prompt, axis=0)
+
+            # done duplicates
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
             text_encoder_hidden_states = paddle.concat(x=[
@@ -283,6 +308,8 @@ class KandinskyPipeline(DiffusionPipeline):
         timesteps_tensor = self.scheduler.timesteps
         num_channels_latents = self.unet.config.in_channels
         height, width = get_new_h_w(height, width, self.movq_scale_factor)
+
+        # create initial latent
         latents = self.prepare_latents(
             (batch_size, num_channels_latents, height,
              width), text_encoder_hidden_states.dtype, generator, latents,
@@ -318,6 +345,8 @@ class KandinskyPipeline(DiffusionPipeline):
                 noise_pred, t, latents, generator=generator).prev_sample
             if callback is not None and i % callback_steps == 0:
                 callback(i, t, latents)
+
+        # post-processing
         image = self.movq.decode(latents, force_not_quantize=True)['sample']
         if output_type not in ['pd', 'np', 'pil']:
             raise ValueError(

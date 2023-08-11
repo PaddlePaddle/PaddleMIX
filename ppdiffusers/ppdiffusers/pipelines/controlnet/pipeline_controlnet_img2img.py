@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import paddlenlp
 import inspect
@@ -9,7 +23,7 @@ from ...image_processor import VaeImageProcessor
 from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import deprecate, is_compiled_module, logging, randn_tensor, replace_example_docstring
+from ...utils import deprecate, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion import StableDiffusionPipelineOutput
 from ..stable_diffusion.safety_checker import StableDiffusionSafetyChecker
@@ -158,6 +172,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
             do_normalize=False)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
     def _encode_prompt(self,
                        prompt,
                        num_images_per_prompt,
@@ -190,6 +205,8 @@ class StableDiffusionControlNetImg2ImgPipeline(
             lora_scale (`float`, *optional*):
                 A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
         if prompt is not None and isinstance(prompt, str):
@@ -199,6 +216,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
         else:
             batch_size = prompt_embeds.shape[0]
         if prompt_embeds is None:
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
             text_inputs = self.tokenizer(
@@ -228,10 +246,13 @@ class StableDiffusionControlNetImg2ImgPipeline(
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -249,6 +270,8 @@ class StableDiffusionControlNetImg2ImgPipeline(
                 )
             else:
                 uncond_tokens = negative_prompt
+
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
                                                           self.tokenizer)
@@ -268,6 +291,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder.dtype)
@@ -275,10 +299,15 @@ class StableDiffusionControlNetImg2ImgPipeline(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
@@ -296,6 +325,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
                 clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -303,16 +333,24 @@ class StableDiffusionControlNetImg2ImgPipeline(
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
 
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
+
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
@@ -351,23 +389,30 @@ class StableDiffusionControlNetImg2ImgPipeline(
             raise ValueError(
                 f'Cannot forward both `negative_prompt`: {negative_prompt} and `negative_prompt_embeds`: {negative_prompt_embeds}. Please make sure to only forward one of the two.'
             )
+
         if prompt_embeds is not None and negative_prompt_embeds is not None:
             if prompt_embeds.shape != negative_prompt_embeds.shape:
                 raise ValueError(
                     f'`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}.'
                 )
+
+        # `prompt` needs more sophisticated handling when there are multiple
+        # conditionings.
         if isinstance(self.controlnet, MultiControlNetModel):
             if isinstance(prompt, list):
                 logger.warning(
                     f'You have {len(self.controlnet.nets)} ControlNets and you have passed {len(prompt)} prompts. The conditionings will be fixed across the prompts.'
                 )
-
+        # Check `image`
         if isinstance(self.controlnet, ControlNetModel):
             self.check_image(image, prompt, prompt_embeds)
         elif isinstance(self.controlnet, MultiControlNetModel):
             if not isinstance(image, list):
                 raise TypeError(
                     'For multiple controlnets: `image` must be type `list`')
+
+            # When `image` is a nested list:
+            # (e.g. [[canny_image_1, pose_image_1], [canny_image_2, pose_image_2]]
             elif any(isinstance(i, list) for i in image):
                 raise ValueError(
                     'A single batch of multiple conditionings are supported at the moment.'
@@ -421,6 +466,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
                 raise ValueError(
                     f"control guidance end: {end} can't be larger than 1.0.")
 
+    # Copied from ppdiffusers.pipelines.controlnet.pipeline_controlnet.StableDiffusionControlNetPipeline.check_image
     def check_image(self, image, prompt, prompt_embeds):
         image_is_pil = isinstance(image, PIL.Image.Image)
         image_is_tensor = isinstance(image, paddle.Tensor)
@@ -452,6 +498,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
                 f'If image batch size is not 1, image batch size must be same as prompt batch size. image batch size: {image_batch_size}, prompt batch size: {prompt_batch_size}'
             )
 
+    # Copied from ppdiffusers.pipelines.controlnet.pipeline_controlnet.StableDiffusionControlNetPipeline.prepare_image
     def prepare_control_image(self,
                               image,
                               width,
@@ -467,6 +514,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
         if image_batch_size == 1:
             repeat_by = batch_size
         else:
+            # image batch size is the same as prompt batch size
             repeat_by = num_images_per_prompt
         image = image.repeat_interleave(repeats=repeat_by, axis=0)
         image = image.cast(dtype=dtype)
@@ -474,6 +522,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
             image = paddle.concat(x=[image] * 2)
         return image
 
+    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.get_timesteps
     def get_timesteps(self, num_inference_steps, strength):
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
@@ -481,6 +530,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
         timesteps = self.scheduler.timesteps[t_start * self.scheduler.order:]
         return timesteps, num_inference_steps - t_start
 
+    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.prepare_latents
     def prepare_latents(self,
                         image,
                         timestep,
@@ -513,6 +563,8 @@ class StableDiffusionControlNetImg2ImgPipeline(
             init_latents = self.vae.config.scaling_factor * init_latents
         if batch_size > init_latents.shape[
                 0] and batch_size % init_latents.shape[0] == 0:
+
+            # expand init_latents for batch_size
             deprecation_message = (
                 f'You have passed {batch_size} text prompts (`prompt`), but only {init_latents.shape[0]} initial images (`image`). Initial images are now duplicating to match the number of text prompts. Note that this behavior is deprecated and will be removed in a version 1.0.0. Please make sure to update your script to pass as many initial images as text prompts to suppress this warning.'
             )
@@ -533,6 +585,8 @@ class StableDiffusionControlNetImg2ImgPipeline(
             init_latents = paddle.concat(x=[init_latents], axis=0)
         shape = init_latents.shape
         noise = randn_tensor(shape, generator=generator, dtype=dtype)
+
+        # get latents
         init_latents = self.scheduler.add_noise(init_latents, noise, timestep)
         latents = init_latents
         return latents
@@ -660,8 +714,9 @@ class StableDiffusionControlNetImg2ImgPipeline(
             list of `bool`s denoting whether the corresponding generated image likely represents "not-safe-for-work"
             (nsfw) content, according to the `safety_checker`.
         """
-        controlnet = self.controlnet._orig_mod if is_compiled_module(
-            self.controlnet) else self.controlnet
+        controlnet = self.controlnet
+
+        # align format for control guidance
         if not isinstance(control_guidance_start, list) and isinstance(
                 control_guidance_end, list):
             control_guidance_start = len(control_guidance_end) * [
@@ -679,19 +734,26 @@ class StableDiffusionControlNetImg2ImgPipeline(
             control_guidance_start, control_guidance_end = mult * [
                 control_guidance_start
             ], mult * [control_guidance_end]
+
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(prompt, control_image, callback_steps,
                           negative_prompt, prompt_embeds,
                           negative_prompt_embeds, controlnet_conditioning_scale,
                           control_guidance_start, control_guidance_end)
+
+        # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
-        controlnet = self.controlnet._orig_mod if is_compiled_module(
-            self.controlnet) else self.controlnet
+        controlnet = self.controlnet
         if isinstance(controlnet, MultiControlNetModel) and isinstance(
                 controlnet_conditioning_scale, float):
             controlnet_conditioning_scale = [controlnet_conditioning_scale
@@ -701,6 +763,8 @@ class StableDiffusionControlNetImg2ImgPipeline(
                                   else controlnet.nets[0]
                                   .config.global_pool_conditions)
         guess_mode = guess_mode or global_pool_conditions
+
+        # 3. Encode input prompt
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         prompt_embeds = self._encode_prompt(
@@ -711,7 +775,10 @@ class StableDiffusionControlNetImg2ImgPipeline(
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale)
+        # 4. Prepare image
         image = self.image_processor.preprocess(image).cast(dtype='float32')
+
+        # 5. Prepare controlnet_conditioning_image
         if isinstance(controlnet, ControlNetModel):
             control_image = self.prepare_control_image(
                 image=control_image,
@@ -738,15 +805,21 @@ class StableDiffusionControlNetImg2ImgPipeline(
             control_image = control_images
         else:
             assert False
+
+        # 5. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps,
                                                             strength)
         latent_timestep = timesteps[:1].tile(
             repeat_times=[batch_size * num_images_per_prompt])
+
+        # 6. Prepare latent variables
         latents = self.prepare_latents(image, latent_timestep, batch_size,
                                        num_images_per_prompt,
                                        prompt_embeds.dtype, generator)
+        # 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+        # 7.1 Create tensor stating which controlnets to keep
         controlnet_keep = []
         for i in range(len(timesteps)):
             keeps = [
@@ -756,15 +829,21 @@ class StableDiffusionControlNetImg2ImgPipeline(
             ]
             controlnet_keep.append(keeps[0] if isinstance(
                 controlnet, ControlNetModel) else keeps)
+
+        # 8. Denoising loop
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
+
+                # controlnet(s) inference
                 if guess_mode and do_classifier_free_guidance:
+                    # Infer ControlNet only for the conditional batch.
                     control_model_input = latents
                     control_model_input = self.scheduler.scale_model_input(
                         control_model_input, t)
@@ -788,6 +867,9 @@ class StableDiffusionControlNetImg2ImgPipeline(
                     guess_mode=guess_mode,
                     return_dict=False)
                 if guess_mode and do_classifier_free_guidance:
+                    # Infered ControlNet only for the conditional batch.
+                    # To apply the output of ControlNet to both the unconditional and conditional batches,
+                    # add 0 to the unconditional batch to keep it unchanged.
                     down_block_res_samples = [
                         paddle.concat(x=[paddle.zeros_like(x=d), d])
                         for d in down_block_res_samples
@@ -796,6 +878,8 @@ class StableDiffusionControlNetImg2ImgPipeline(
                         paddle.zeros_like(x=mid_block_res_sample),
                         mid_block_res_sample
                     ])
+
+                # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
@@ -804,17 +888,23 @@ class StableDiffusionControlNetImg2ImgPipeline(
                     down_block_additional_residuals=down_block_res_samples,
                     mid_block_additional_residual=mid_block_res_sample,
                     return_dict=False)[0]
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(
                     noise_pred,
                     t,
                     latents,
                     **extra_step_kwargs,
                     return_dict=False)[0]
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()

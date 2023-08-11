@@ -20,7 +20,7 @@ import PIL
 
 from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
 
-from ...pipeline_utils import DiffusionPipeline
+from ..pipeline_utils import DiffusionPipeline
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging
 from ..fastdeploy_utils import FastDeployDiffusionPipelineMixin, FastDeployRuntimeModel

@@ -1,10 +1,24 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 from typing import Callable, List, Optional, Union
 from ...models import UNet2DModel
 from ...schedulers import CMStochasticIterativeScheduler
 from ...utils import logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
-logger = logging.get_logger(__name__)
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -73,20 +87,29 @@ class ConsistencyModelPipeline(DiffusionPipeline):
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             latents = latents.cast(dtype=dtype)
+
+        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
+    # Follows diffusers.VaeImageProcessor.postprocess
     def postprocess_image(self, sample: paddle.Tensor, output_type: str='pil'):
         if output_type not in ['pd', 'np', 'pil']:
             raise ValueError(
                 f"output_type={output_type} is not supported. Make sure to choose one of ['pd', 'np', or 'pil']"
             )
+
+        # Equivalent to diffusers.VaeImageProcessor.denormalize
         sample = (sample / 2 + 0.5).clip(min=0, max=1)
         if output_type == 'pd':
             return sample
+
+        # Equivalent to diffusers.VaeImageProcessor.pt_to_numpy
         sample = sample.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
         if output_type == 'np':
             return sample
+
+        # Output_type must be 'pil'
         sample = self.numpy_to_pil(sample)
         return sample
 
@@ -100,6 +123,8 @@ class ConsistencyModelPipeline(DiffusionPipeline):
                 class_labels = paddle.to_tensor(
                     data=[class_labels], dtype='int32')
             elif class_labels is None:
+                # Randomly generate batch_size class labels
+                # TODO: should use generator here? int analogue of randn_tensor is not exposed in ...utils
                 class_labels = paddle.randint(
                     low=0,
                     high=self.unet.config.num_class_embeds,
@@ -182,9 +207,15 @@ class ConsistencyModelPipeline(DiffusionPipeline):
                 If `return_dict` is `True`, [`~pipelines.ImagePipelineOutput`] is returned, otherwise a `tuple` is
                 returned where the first element is a list with the generated images.
         """
+        # 0. Prepare call parameters
         img_size = self.unet.config.sample_size
+
+        # 1. Check inputs
         self.check_inputs(num_inference_steps, timesteps, latents, batch_size,
                           img_size, callback_steps)
+
+        # 2. Prepare image latents
+        # Sample image latents x_0 ~ N(0, sigma_0^2 * I)
         sample = self.prepare_latents(
             batch_size=batch_size,
             num_channels=self.unet.config.in_channels,
@@ -193,8 +224,12 @@ class ConsistencyModelPipeline(DiffusionPipeline):
             dtype=self.unet.dtype,
             generator=generator,
             latents=latents)
+
+        # 3. Handle class_labels for class-conditional models
         class_labels = self.prepare_class_labels(
             batch_size, class_labels=class_labels)
+
+        # 4. Prepare timesteps
         if timesteps is not None:
             self.scheduler.set_timesteps(timesteps=timesteps)
             timesteps = self.scheduler.timesteps
@@ -202,6 +237,9 @@ class ConsistencyModelPipeline(DiffusionPipeline):
         else:
             self.scheduler.set_timesteps(num_inference_steps)
             timesteps = self.scheduler.timesteps
+
+        # 5. Denoising loop
+        # Multistep sampling: implements Algorithm 1 in the paper
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 scaled_sample = self.scheduler.scale_model_input(sample, t)
@@ -212,9 +250,13 @@ class ConsistencyModelPipeline(DiffusionPipeline):
                     return_dict=False)[0]
                 sample = self.scheduler.step(
                     model_output, t, sample, generator=generator)[0]
+
+                # call the callback, if provided
                 progress_bar.update()
                 if callback is not None and i % callback_steps == 0:
                     callback(i, t, sample)
+
+        # 6. Post-process image sample
         image = self.postprocess_image(sample, output_type=output_type)
         if not return_dict:
             return image,

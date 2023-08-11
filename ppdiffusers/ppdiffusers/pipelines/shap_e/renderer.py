@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import math
 from dataclasses import dataclass
@@ -79,6 +93,7 @@ def integrate_samples(volume_range, ts, density, channels):
         *transmittance)[i] weight for each rgb output at [..., i, :]. transmittance: transmittance of this volume
     )
     """
+    # 1. Calculate the weights
     _, _, dt = volume_range.partition(ts)
     ddensity = density * dt
     mass = paddle.cumsum(x=ddensity, axis=-2)
@@ -87,7 +102,11 @@ def integrate_samples(volume_range, ts, density, channels):
     Ts = paddle.exp(x=paddle.concat(
         x=[paddle.zeros_like(x=mass[(...), :1, :]), -mass[(...), :-1, :]],
         axis=-2))
+    # This is the probability of light hitting and reflecting off of
+    # something at depth [..., i, :].
     weights = alphas * Ts
+
+    # 2. Integrate channels
     channels = paddle.sum(x=channels * weights, axis=-2)
     return channels, weights, transmittance
 
@@ -277,6 +296,15 @@ class BoundingBoxVolume(paddle.nn.Layer):
             bbox - origin[(...), (None), :],
             direction[(...), (None), :],
             epsilon=epsilon)
+        # Cases to think about:
+        #
+        #   1. t1 <= t0: the ray does not pass through the AABB.
+        #   2. t0 < t1 <= 0: the ray intersects but the BB is behind the origin.
+        #   3. t0 <= 0 <= t1: the ray starts from inside the BB
+        #   4. 0 <= t0 < t1: the ray is not inside and intersects with the BB twice.
+        #
+        # 1 and 4 are clearly handled from t0 < t1 below.
+        # Making t0 at least min_dist (>= 0) takes care of 2 and 3.
         t0 = ts.min(axis=-2).values.max(
             axis=-1, keepdim=True).values.clamp(self.min_dist)
         t1 = ts.max(axis=-2).values.min(axis=-1, keepdim=True).values
@@ -327,11 +355,15 @@ class StratifiedRaySampler(paddle.nn.Layer):
             ts = (t0.clip(min=epsilon).log() *
                   (1.0 - ts) + t1.clip(min=epsilon).log() * ts).exp()
         elif self.depth_mode == 'harmonic':
+            # The original NeRF recommends this interpolation scheme for
+            # spherical scenes, but there could be some weird edge cases when
+            # the observer crosses from the inner to outer volume.
             ts = 1.0 / (1.0 / t0.clip(min=epsilon) *
                         (1.0 - ts) + 1.0 / t1.clip(min=epsilon) * ts)
         mids = 0.5 * (ts[(...), 1:] + ts[(...), :-1])
         upper = paddle.concat(x=[mids, t1], axis=-1)
         lower = paddle.concat(x=[t0, mids], axis=-1)
+        # yiyi notes: add a random seed here for testing, don't forget to remove
         paddle.seed(seed=0)
         t_rand = paddle.rand(shape=ts.shape, dtype=ts.dtype)
         ts = lower + (upper - lower) * t_rand
@@ -449,10 +481,14 @@ class MeshDecoder(paddle.nn.Layer):
         size = size
         grid_size = field.shape
         grid_size_tensor = paddle.to_tensor(data=grid_size).cast(size.dtype)
+
+        # Create bitmasks between 0 and 255 (inclusive) indicating the state
+        # of the eight corners of each cube.
         bitmasks = (field > 0).cast('uint8')
         bitmasks = bitmasks[:-1, :, :] | bitmasks[1:, :, :] << 1
         bitmasks = bitmasks[:, :-1, :] | bitmasks[:, 1:, :] << 2
         bitmasks = bitmasks[:, :, :-1] | bitmasks[:, :, 1:] << 4
+        # Compute corner coordinates across the entire grid.
         corner_coords = paddle.empty(shape=[*grid_size, 3], dtype=field.dtype)
         corner_coords[(range(grid_size[0])), :, :, (0)] = paddle.arange(
             end=grid_size[0]).astype(field.dtype)[:, (None), (None)]
@@ -460,6 +496,10 @@ class MeshDecoder(paddle.nn.Layer):
             end=grid_size[1]).astype(field.dtype)[:, (None)]
         corner_coords[:, :, (range(grid_size[2])), (2)] = paddle.arange(
             end=grid_size[2]).astype(field.dtype)
+        # Compute all vertices across all edges in the grid, even though we will
+        # throw some out later. We have (X-1)*Y*Z + X*(Y-1)*Z + X*Y*(Z-1) vertices.
+        # These are all midpoints, and don't account for interpolation (which is
+        # done later based on the used edge midpoints).
         edge_midpoints = paddle.concat(
             x=[((corner_coords[:-1] + corner_coords[1:]) / 2).reshape(-1, 3),
                ((corner_coords[:, :-1] + corner_coords[:, 1:]) /
@@ -467,6 +507,7 @@ class MeshDecoder(paddle.nn.Layer):
                     (corner_coords[:, :, :-1] + corner_coords[:, :, 1:]) /
                     2).reshape(-1, 3)],
             axis=0)
+        # Create a flat array of [X, Y, Z] indices for each cube.
         cube_indices = paddle.zeros(
             shape=[grid_size[0] - 1, grid_size[1] - 1, grid_size[2] - 1, 3],
             dtype='int64')
@@ -477,26 +518,38 @@ class MeshDecoder(paddle.nn.Layer):
         cube_indices[:, :, (range(grid_size[2] - 1)), (2)] = paddle.arange(
             end=grid_size[2] - 1)
         flat_cube_indices = cube_indices.reshape(-1, 3)
+        # Create a flat array mapping each cube to 12 global edge indices.
         edge_indices = _create_flat_edge_indices(flat_cube_indices, grid_size)
-        flat_bitmasks = bitmasks.reshape(-1).astype(dtype='int64')
+        # Apply the LUT to figure out the triangles.
+        flat_bitmasks = bitmasks.reshape(-1).astype(
+            dtype='int64'
+        )  # must cast to long for indexing to believe this not a mask
         local_tris = cases[flat_bitmasks]
         local_masks = masks[flat_bitmasks]
+        # Compute the global edge indices for the triangles.
         global_tris = paddle.take_along_axis(
             arr=edge_indices,
             axis=1,
             indices=local_tris.reshape(local_tris.shape[0],
                                        -1)).reshape(local_tris.shape)
+        # Select the used triangles for each cube.
         selected_tris = global_tris.reshape(-1, 3)[local_masks.reshape(-1)]
+
+        # Now we have a bunch of indices into the full list of possible vertices,
+        # but we want to reduce this list to only the used vertices.
         used_vertex_indices = paddle.unique(x=selected_tris.reshape([-1]))
         used_edge_midpoints = edge_midpoints[used_vertex_indices]
         old_index_to_new_index = paddle.zeros(
             shape=len(edge_midpoints), dtype='int64')
         old_index_to_new_index[used_vertex_indices] = paddle.arange(
             end=len(used_vertex_indices)).astype('int64')
+        # Rewrite the triangles to use the new indices
         faces = paddle.take_along_axis(
             arr=old_index_to_new_index,
             axis=0,
             indices=selected_tris.reshape([-1])).reshape(selected_tris.shape)
+
+        # Compute the actual interpolated coordinates corresponding to edge midpoints.
         v1 = paddle.floor(x=used_edge_midpoints).cast('int64')
         v2 = paddle.ceil(x=used_edge_midpoints).cast('int64')
         s1 = field[v1[:, (0)], v1[:, (1)], v1[:, (2)]]
@@ -505,6 +558,8 @@ class MeshDecoder(paddle.nn.Layer):
                                            ) * size + min_point
         p2 = v2.astype(dtype='float32') / (grid_size_tensor - 1
                                            ) * size + min_point
+        # The signs of s1 and s2 should be different. We want to find
+        # t such that t*s2 + (1-t)*s1 = 0.
         t = (s1 / (s1 - s2))[:, (None)]
         verts = t * p2 + (1 - t) * p1
         return MeshDecoderOutput(verts=verts, faces=faces, vertex_channels=None)
@@ -527,6 +582,10 @@ class MLPNeRSTFModel(ModelMixin, ConfigMixin):
                  act_fn: str='swish',
                  insert_direction_at: int=4):
         super().__init__()
+
+        # Instantiate the MLP
+
+        # Find out the dimension of encoded position and direction
         dummy = paddle.eye(num_rows=1, num_columns=3)
         d_posenc_pos = encode_position(position=dummy).shape[-1]
         d_posenc_dir = encode_direction(position=dummy).shape[-1]
@@ -541,6 +600,8 @@ class MLPNeRSTFModel(ModelMixin, ConfigMixin):
             for d_in, d_out in zip(input_widths, output_widths)
         ])
         if act_fn == 'swish':
+            # self.activation = swish
+            # yiyi testing:
             self.activation = lambda x: paddle.nn.functional.silu(x=x)
         else:
             raise ValueError(f'Unsupported activation function {act_fn}')
@@ -600,6 +661,8 @@ class MLPNeRSTFModel(ModelMixin, ConfigMixin):
         density = self.density_activation(h_density)
         signed_distance = self.sdf_activation(activation['sdf'])
         channels = self.channel_activation(h_channels)
+
+        # yiyi notes: I think signed_distance is not used
         return MLPNeRFModelOutput(
             density=density,
             signed_distance=signed_distance,
@@ -646,6 +709,8 @@ class ShapEParamsProjModel(ModelMixin, ConfigMixin):
                                                   (256, 256), (256, 256)),
                  d_latent: int=1024):
         super().__init__()
+
+        # check inputs
         if len(param_names) != len(param_shapes):
             raise ValueError(
                 'Must provide same number of `param_names` as `param_shapes`')
@@ -732,10 +797,16 @@ class ShapERenderer(ModelMixin, ConfigMixin):
             - raw model output
         """
         origin, direction = rays[(...), (0), :], rays[(...), (1), :]
+
+        # Integrate over [t[i], t[i + 1]]
+
+        # 1 Intersect the rays with the current volume and sample ts to integrate along.
         vrange = self.volume.intersect(origin, direction, t0_lower=None)
         ts = sampler.sample(vrange.t0, vrange.t1, n_samples)
         ts = ts.cast(rays.dtype)
         if prev_model_out is not None:
+            # Append the previous ts now before fprop because previous
+            # rendering used a different model and we can't reuse the output.
             ts = (paddle.sort(
                 x=paddle.concat(
                     x=[ts, prev_model_out.ts], axis=-2), axis=-2),
@@ -745,6 +816,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
                       axis=-2)).values
         batch_size, *_shape, _t0_dim = vrange.t0.shape
         _, *ts_shape, _ts_dim = ts.shape
+        # 2. Get the points along the ray and query the model
         directions = paddle.broadcast_to(
             x=direction.unsqueeze(axis=-2), shape=[batch_size, *ts_shape, 3])
         positions = origin.unsqueeze(axis=-2) + ts * directions
@@ -756,8 +828,10 @@ class ShapERenderer(ModelMixin, ConfigMixin):
                              ts=ts,
                              nerf_level='coarse'
                              if prev_model_out is None else 'fine')
+        # 3. Integrate the model results
         channels, weights, transmittance = integrate_samples(
             vrange, model_out.ts, model_out.density, model_out.channels)
+        # 4. Clean up results that do not intersect with the volume.
         transmittance = paddle.where(
             condition=vrange.intersected,
             x=transmittance,
@@ -766,6 +840,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
             condition=vrange.intersected,
             x=channels,
             y=paddle.zeros_like(x=channels))
+        # 5. integration to infinity (e.g. [t[-1], math.inf]) that is evaluated by the void_model (i.e. we consider this space to be empty).
         channels = channels + transmittance * self.void(origin)
         weighted_sampler = ImportanceRaySampler(
             vrange, ts=model_out.ts, weights=weights)
@@ -778,12 +853,17 @@ class ShapERenderer(ModelMixin, ConfigMixin):
                         ray_batch_size: int=4096,
                         n_coarse_samples=64,
                         n_fine_samples=128):
+        # project the the paramters from the generated latents
         projected_params = self.params_proj(latents)
+
+        # update the mlp layers of the renderer
         for name, param in self.mlp.state_dict().items():
             if f'nerstf.{name}' in projected_params.keys():
                 paddle.assign(
                     projected_params[f'nerstf.{name}'].squeeze(axis=0),
                     output=param)
+
+        # create cameras object
         camera = create_pan_cameras(size)
         rays = camera.camera_rays
         n_batches = rays.shape[1] // ray_batch_size
@@ -792,8 +872,10 @@ class ShapERenderer(ModelMixin, ConfigMixin):
         for idx in range(n_batches):
             rays_batch = rays[:, idx * ray_batch_size:(idx + 1) *
                               ray_batch_size]
+            # render rays with coarse, stratified samples.
             _, fine_sampler, coarse_model_out = self.render_rays(
                 rays_batch, coarse_sampler, n_coarse_samples)
+            # Then, render with additional importance-weighted ray samples.
             channels, _, _ = self.render_rays(
                 rays_batch,
                 fine_sampler,
@@ -811,12 +893,19 @@ class ShapERenderer(ModelMixin, ConfigMixin):
                        grid_size: int=128,
                        query_batch_size: int=4096,
                        texture_channels: Tuple=('R', 'G', 'B')):
+        # 1. project the the paramters from the generated latents
         projected_params = self.params_proj(latents)
+
+        # 2. update the mlp layers of the renderer
         for name, param in self.mlp.state_dict().items():
             if f'nerstf.{name}' in projected_params.keys():
                 paddle.assign(
                     projected_params[f'nerstf.{name}'].squeeze(axis=0),
                     output=param)
+
+        # 3. decoding with STF rendering
+        # 3.1 query the SDF values at vertices along a regular 128**3 grid
+
         query_points = volume_query_points(self.volume, grid_size)
         query_positions = query_points[None].tile(repeat_times=[1, 1, 1]).cast(
             dtype=self.mlp.dtype)
@@ -829,10 +918,15 @@ class ShapERenderer(ModelMixin, ConfigMixin):
                                  nerf_level='fine',
                                  rendering_mode='stf')
             fields.append(model_out.signed_distance)
+
+        # predicted SDF values
         fields = paddle.concat(x=fields, axis=1)
         fields = fields.astype(dtype='float32')
         assert len(fields.shape) == 3 and fields.shape[
             -1] == 1, f'expected [meta_batch x inner_batch] SDF results, but got {fields.shape}'
+
+        # create grid 128 x 128 x 128
+        # - force a negative border around the SDFs to close off all the models.
         fields = fields.reshape(1, *([grid_size] * 3))
         full_grid = paddle.zeros(
             shape=[1, grid_size + 2, grid_size + 2, grid_size + 2],
@@ -840,6 +934,8 @@ class ShapERenderer(ModelMixin, ConfigMixin):
         full_grid.fill_(value=-1.0)
         full_grid[:, 1:-1, 1:-1, 1:-1] = fields
         fields = full_grid
+
+        # apply a differentiable implementation of Marching Cubes to construct meshs
         raw_meshes = []
         mesh_mask = []
         for field in fields:
@@ -850,6 +946,8 @@ class ShapERenderer(ModelMixin, ConfigMixin):
             raw_meshes.append(raw_mesh)
         mesh_mask = paddle.to_tensor(data=mesh_mask, place=fields.place)
         max_vertices = max(len(m.verts) for m in raw_meshes)
+
+        # 3.2. query the texture color head at each vertex of the resulting mesh.
         texture_query_positions = paddle.stack(
             x=[
                 m.verts[paddle.arange(
@@ -868,9 +966,13 @@ class ShapERenderer(ModelMixin, ConfigMixin):
                                          nerf_level='fine',
                                          rendering_mode='stf')
             textures.append(texture_model_out.channels)
+
+        # predict texture color
         textures = paddle.concat(x=textures, axis=1)
         textures = _convert_srgb_to_linear(textures)
         textures = textures.astype(dtype='float32')
+
+        # 3.3 augument the mesh with texture data
         assert len(textures.shape) == 3 and textures.shape[-1] == len(
             texture_channels
         ), f'expected [meta_batch x inner_batch x texture_channels] field results, but got {textures.shape}'

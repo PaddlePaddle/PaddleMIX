@@ -1,4 +1,19 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
+import paddlenlp
 from typing import List, Optional, Union
 import PIL
 from ...models import PriorTransformer
@@ -200,6 +215,7 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
         return KandinskyPriorPipelineOutput(
             image_embeds=image_emb, negative_image_embeds=zero_image_emb)
 
+    # Copied from ppdiffusers.pipelines.unclip.pipeline_unclip.UnCLIPPipeline.prepare_latents
     def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
@@ -212,6 +228,7 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
         latents = latents * scheduler.init_noise_sigma
         return latents
 
+    # Copied from ppdiffusers.pipelines.kandinsky.pipeline_kandinsky_prior.KandinskyPriorPipeline.get_zero_embed
     def get_zero_embed(self, batch_size=1):
         zero_img = paddle.zeros(shape=[
             1, 3, self.image_encoder.config.image_size,
@@ -221,6 +238,7 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
         zero_image_emb = zero_image_emb.tile(repeat_times=[batch_size, 1])
         return zero_image_emb
 
+    # Copied from ppdiffusers.pipelines.kandinsky.pipeline_kandinsky_prior.KandinskyPriorPipeline._encode_prompt
     def _encode_prompt(self,
                        prompt,
                        num_images_per_prompt,
@@ -285,6 +303,9 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
                 negative_prompt_embeds_text_encoder_output.text_embeds)
             uncond_text_encoder_hidden_states = (
                 negative_prompt_embeds_text_encoder_output.last_hidden_state)
+
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
+
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt])
@@ -300,6 +321,11 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
                     [batch_size * num_images_per_prompt, seq_len, -1]))
             uncond_text_mask = uncond_text_mask.repeat_interleave(
                 repeats=num_images_per_prompt, axis=0)
+            # done duplicates
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
             text_encoder_hidden_states = paddle.concat(x=[
@@ -372,6 +398,9 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
             raise ValueError(
                 f'`negative_prompt` has to be of type `str` or `list` but is {type(negative_prompt)}'
             )
+
+        # if the negative prompt is defined we double the batch size to
+        # directly retrieve the negative prompt embedding
         if negative_prompt is not None:
             prompt = prompt + negative_prompt
             negative_prompt = 2 * negative_prompt
@@ -381,6 +410,8 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
         prompt_embeds, text_encoder_hidden_states, text_mask = (
             self._encode_prompt(prompt, num_images_per_prompt,
                                 do_classifier_free_guidance, negative_prompt))
+
+        # prior
         self.scheduler.set_timesteps(num_inference_steps)
         prior_timesteps_tensor = self.scheduler.timesteps
         embedding_dim = self.prior.config.embedding_dim
@@ -388,6 +419,7 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
                                        prompt_embeds.dtype, generator, latents,
                                        self.scheduler)
         for i, t in enumerate(self.progress_bar(prior_timesteps_tensor)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
             predicted_image_embedding = self.prior(
@@ -416,6 +448,8 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
                 prev_timestep=prev_timestep).prev_sample
         latents = self.prior.post_process_latents(latents)
         image_embeddings = latents
+
+        # if negative prompt has been defined, we retrieve split the image embedding into two
         if negative_prompt is None:
             zero_embeds = self.get_zero_embed(
                 latents.shape[0], device=latents.place)

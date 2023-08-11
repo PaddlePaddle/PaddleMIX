@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 from typing import Callable, List, Optional, Union
 import numpy as np
@@ -7,7 +21,7 @@ from ...models import UNet2DConditionModel, VQModel
 from ...schedulers import DDPMScheduler
 from ...utils import logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
-logger = logging.get_logger(__name__)
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -72,6 +86,7 @@ EXAMPLE_DOC_STRING = """
 """
 
 
+# Copied from ppdiffusers.pipelines.kandinsky2_2.pipeline_kandinsky2_2.downscale_height_and_width
 def downscale_height_and_width(height, width, scale_factor=8):
     new_height = height // scale_factor**2
     if height % scale_factor**2 != 0:
@@ -82,6 +97,7 @@ def downscale_height_and_width(height, width, scale_factor=8):
     return new_height * scale_factor, new_width * scale_factor
 
 
+# Copied from ppdiffusers.pipelines.kandinsky.pipeline_kandinsky_img2img.prepare_image
 def prepare_image(pil_image, w=512, h=512):
     pil_image = pil_image.resize((w, h), resample=Image.BICUBIC, reducing_gap=1)
     arr = np.array(pil_image.convert('RGB'))
@@ -116,6 +132,7 @@ class KandinskyV22ControlnetImg2ImgPipeline(DiffusionPipeline):
         self.movq_scale_factor = 2**(
             len(self.movq.config.block_out_channels) - 1)
 
+    # Copied from ppdiffusers.pipelines.kandinsky.pipeline_kandinsky_img2img.KandinskyImg2ImgPipeline.get_timesteps
     def get_timesteps(self, num_inference_steps, strength):
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
@@ -123,6 +140,7 @@ class KandinskyV22ControlnetImg2ImgPipeline(DiffusionPipeline):
         timesteps = self.scheduler.timesteps[t_start:]
         return timesteps, num_inference_steps - t_start
 
+    # Copied from ppdiffusers.pipelines.kandinsky2_2.pipeline_kandinsky2_2_img2img.KandinskyV22Img2ImgPipeline.prepare_latents
     def prepare_latents(self,
                         image,
                         timestep,
@@ -280,6 +298,7 @@ class KandinskyV22ControlnetImg2ImgPipeline(DiffusionPipeline):
                                        num_images_per_prompt,
                                        image_embeds.dtype, generator)
         for i, t in enumerate(self.progress_bar(timesteps)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
             added_cond_kwargs = {'image_embeds': image_embeds, 'hint': hint}
@@ -303,10 +322,15 @@ class KandinskyV22ControlnetImg2ImgPipeline(DiffusionPipeline):
                     ['learned', 'learned_range']):
                 noise_pred, _ = noise_pred.split(
                     noise_pred.shape[1] // latents.shape[1], axis=1)
+
+            # compute the previous noisy sample x_t -> x_t-1
+
             latents = self.scheduler.step(
                 noise_pred, t, latents, generator=generator)[0]
             if callback is not None and i % callback_steps == 0:
                 callback(i, t, latents)
+
+        # post-processing
         image = self.movq.decode(latents, force_not_quantize=True)['sample']
 
         if output_type not in ['pd', 'np', 'pil']:

@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import inspect
 from collections import OrderedDict
 from ..configuration_utils import ConfigMixin
@@ -44,6 +58,7 @@ SUPPORTED_TASKS_MAPPINGS = [
 
 
 def _get_connected_pipeline(pipeline_cls):
+    # for now connected pipelines can only be loaded from decoder pipelines, such as kandinsky-community/kandinsky-2-2-decoder
     if pipeline_cls in _AUTO_TEXT2IMAGE_DECODER_PIPELINES_MAPPING.values():
         return _get_task_class(
             AUTO_TEXT2IMAGE_PIPELINES_MAPPING,
@@ -253,14 +268,21 @@ class AutoPipelineForText2Image(ConfigMixin):
         >>> pipe_t2i = AutoPipelineForTextToImage.from_pipe(pipe_t2i)
         ```
         """
+
         original_config = dict(pipeline.config)
         original_cls_name = pipeline.__class__.__name__
+
+        # derive the pipeline class to instantiate
         text_2_image_cls = _get_task_class(AUTO_TEXT2IMAGE_PIPELINES_MAPPING,
                                            original_cls_name)
+
+        # define expected module and optional kwargs given the pipeline signature
         expected_modules, optional_kwargs = _get_signature_keys(
             text_2_image_cls)
         pretrained_model_name_or_path = original_config.pop('_name_or_path',
                                                             None)
+
+        # allow users pass modules in `kwargs` to override the original pipeline's components
         passed_class_obj = {
             k: kwargs.pop(k)
             for k in expected_modules if k in kwargs
@@ -270,6 +292,8 @@ class AutoPipelineForText2Image(ConfigMixin):
             for k, v in pipeline.components.items()
             if k in expected_modules and k not in passed_class_obj
         }
+
+        # allow users pass optional kwargs to override the original pipelines config attribute
         passed_pipe_kwargs = {
             k: kwargs.pop(k)
             for k in optional_kwargs if k in kwargs
@@ -279,6 +303,9 @@ class AutoPipelineForText2Image(ConfigMixin):
             for k, v in original_config.items()
             if k in optional_kwargs and k not in passed_pipe_kwargs
         }
+
+        # config that were not expected by original pipeline is stored as private attribute
+        # we will pass them as optional arguments if they can be accepted by the pipeline
         additional_pipe_kwargs = [
             k[1:] for k in original_config.keys()
             if k.startswith('_') and k[1:] in optional_kwargs and k[1:] not in
@@ -290,6 +317,8 @@ class AutoPipelineForText2Image(ConfigMixin):
             ** passed_class_obj, ** original_class_obj, ** passed_pipe_kwargs,
             ** original_pipe_kwargs
         }
+
+        # store unused config as private attribute
         unused_original_config = {
             f"{'' if k.startswith('_') else '_'}{k}": original_config[k]
             for k, v in original_config.items() if k not in text_2_image_kwargs
@@ -468,12 +497,18 @@ class AutoPipelineForImage2Image(ConfigMixin):
         """
         original_config = dict(pipeline.config)
         original_cls_name = pipeline.__class__.__name__
+
+        # derive the pipeline class to instantiate
         image_2_image_cls = _get_task_class(AUTO_IMAGE2IMAGE_PIPELINES_MAPPING,
                                             original_cls_name)
+
+        # define expected module and optional kwargs given the pipeline signature
         expected_modules, optional_kwargs = _get_signature_keys(
             image_2_image_cls)
         pretrained_model_name_or_path = original_config.pop('_name_or_path',
                                                             None)
+
+        # allow users pass modules in `kwargs` to override the original pipeline's components
         passed_class_obj = {
             k: kwargs.pop(k)
             for k in expected_modules if k in kwargs
@@ -483,6 +518,8 @@ class AutoPipelineForImage2Image(ConfigMixin):
             for k, v in pipeline.components.items()
             if k in expected_modules and k not in passed_class_obj
         }
+
+        # allow users pass optional kwargs to override the original pipelines config attribute
         passed_pipe_kwargs = {
             k: kwargs.pop(k)
             for k in optional_kwargs if k in kwargs
@@ -492,6 +529,9 @@ class AutoPipelineForImage2Image(ConfigMixin):
             for k, v in original_config.items()
             if k in optional_kwargs and k not in passed_pipe_kwargs
         }
+
+        # config attribute that were not expected by original pipeline is stored as its private attribute
+        # we will pass them as optional arguments if they can be accepted by the pipeline
         additional_pipe_kwargs = [
             k[1:] for k in original_config.keys()
             if k.startswith('_') and k[1:] in optional_kwargs and k[1:] not in
@@ -503,6 +543,8 @@ class AutoPipelineForImage2Image(ConfigMixin):
             ** passed_class_obj, ** original_class_obj, ** passed_pipe_kwargs,
             ** original_pipe_kwargs
         }
+
+        # store unused config as private attribute
         unused_original_config = {
             f"{'' if k.startswith('_') else '_'}{k}": original_config[k]
             for k, v in original_config.items() if k not in image_2_image_kwargs
@@ -680,11 +722,17 @@ class AutoPipelineForInpainting(ConfigMixin):
         """
         original_config = dict(pipeline.config)
         original_cls_name = pipeline.__class__.__name__
+
+        # derive the pipeline class to instantiate
         inpainting_cls = _get_task_class(AUTO_INPAINT_PIPELINES_MAPPING,
                                          original_cls_name)
+
+        # define expected module and optional kwargs given the pipeline signature
         expected_modules, optional_kwargs = _get_signature_keys(inpainting_cls)
         pretrained_model_name_or_path = original_config.pop('_name_or_path',
                                                             None)
+
+        # allow users pass modules in `kwargs` to override the original pipeline's components
         passed_class_obj = {
             k: kwargs.pop(k)
             for k in expected_modules if k in kwargs
@@ -694,6 +742,8 @@ class AutoPipelineForInpainting(ConfigMixin):
             for k, v in pipeline.components.items()
             if k in expected_modules and k not in passed_class_obj
         }
+
+        # allow users pass optional kwargs to override the original pipelines config attribute
         passed_pipe_kwargs = {
             k: kwargs.pop(k)
             for k in optional_kwargs if k in kwargs
@@ -703,6 +753,9 @@ class AutoPipelineForInpainting(ConfigMixin):
             for k, v in original_config.items()
             if k in optional_kwargs and k not in passed_pipe_kwargs
         }
+
+        # config that were not expected by original pipeline is stored as private attribute
+        # we will pass them as optional arguments if they can be accepted by the pipeline
         additional_pipe_kwargs = [
             k[1:] for k in original_config.keys()
             if k.startswith('_') and k[1:] in optional_kwargs and k[1:] not in
@@ -714,6 +767,8 @@ class AutoPipelineForInpainting(ConfigMixin):
             ** passed_class_obj, ** original_class_obj, ** passed_pipe_kwargs,
             ** original_pipe_kwargs
         }
+
+        # store unused config as private attribute
         unused_original_config = {
             f"{'' if k.startswith('_') else '_'}{k}": original_config[k]
             for k, v in original_config.items() if k not in inpainting_kwargs

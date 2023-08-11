@@ -25,7 +25,7 @@ from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokeni
 
 from ...configuration_utils import FrozenDict
 from ...image_processor import VaeImageProcessor
-from ...loaders import FromCkptMixin, LoraLoaderMixin, TextualInversionLoaderMixin
+from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import (
@@ -94,7 +94,7 @@ def preprocess(image):
 
 class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
                                      TextualInversionLoaderMixin,
-                                     LoraLoaderMixin, FromCkptMixin):
+                                     LoraLoaderMixin, FromSingleFileMixin):
     r"""
     Pipeline for text-guided image to image generation using Stable Diffusion.
 
@@ -104,7 +104,7 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
     In addition the pipeline inherits the following loading methods:
         - *Textual-Inversion*: [`loaders.TextualInversionLoaderMixin.load_textual_inversion`]
         - *LoRA*: [`loaders.LoraLoaderMixin.load_lora_weights`]
-        - *Ckpt*: [`loaders.FromCkptMixin.from_ckpt`]
+        - *Ckpt*: [`loaders.FromSingleFileMixin.from_ckpt`]
     as well as the following saving methods:
         - *LoRA*: [`loaders.LoraLoaderMixin.save_lora_weights`]
 

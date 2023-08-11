@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 from typing import Callable, List, Optional, Union
 from ...models import UNet2DConditionModel, VQModel
@@ -64,6 +78,7 @@ class KandinskyV22Pipeline(DiffusionPipeline):
         self.movq_scale_factor = 2**(
             len(self.movq.config.block_out_channels) - 1)
 
+    # Copied from ppdiffusers.pipelines.unclip.pipeline_unclip.UnCLIPPipeline.prepare_latents
     def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
@@ -161,10 +176,13 @@ class KandinskyV22Pipeline(DiffusionPipeline):
         num_channels_latents = self.unet.config.in_channels
         height, width = downscale_height_and_width(height, width,
                                                    self.movq_scale_factor)
+
+        # create initial latent
         latents = self.prepare_latents(
             (batch_size, num_channels_latents, height, width),
             image_embeds.dtype, generator, latents, self.scheduler)
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
             added_cond_kwargs = {'image_embeds': image_embeds}
@@ -188,10 +206,13 @@ class KandinskyV22Pipeline(DiffusionPipeline):
                     ['learned', 'learned_range']):
                 noise_pred, _ = noise_pred.split(
                     noise_pred.shape[1] // latents.shape[1], axis=1)
+            # compute the previous noisy sample x_t -> x_t-1
             latents = self.scheduler.step(
                 noise_pred, t, latents, generator=generator)[0]
             if callback is not None and i % callback_steps == 0:
                 callback(i, t, latents)
+
+        # post-processing
         image = self.movq.decode(latents, force_not_quantize=True)['sample']
 
         if output_type not in ['pd', 'np', 'pil']:

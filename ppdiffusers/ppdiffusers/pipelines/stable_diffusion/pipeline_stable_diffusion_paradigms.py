@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -100,8 +114,11 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
         self.image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
+
+        # attribute to wrap the unet with torch.nn.DataParallel when running multiple denoising steps on multiple GPUs
         self.wrapped_unet = self.unet
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
     def _encode_prompt(self,
                        prompt,
                        num_images_per_prompt,
@@ -134,6 +151,8 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             lora_scale (`float`, *optional*):
                 A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
         if prompt is not None and isinstance(prompt, str):
@@ -143,6 +162,7 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
         else:
             batch_size = prompt_embeds.shape[0]
         if prompt_embeds is None:
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
             text_inputs = self.tokenizer(
@@ -172,10 +192,13 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -193,6 +216,8 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 )
             else:
                 uncond_tokens = negative_prompt
+
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
                                                           self.tokenizer)
@@ -212,6 +237,7 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder.dtype)
@@ -219,10 +245,15 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
@@ -240,18 +271,26 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.check_inputs
     def check_inputs(self,
                      prompt,
                      height,
@@ -292,6 +331,7 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                     f'`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}.'
                 )
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(self,
                         batch_size,
                         num_channels_latents,
@@ -308,12 +348,14 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             )
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
-
+        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
     def _cumsum(self, input, dim, debug=False):
         if debug:
+            # cumsum_cuda_kernel does not have a deterministic implementation
+            # so perform cumsum on cpu for debugging purposes
             return paddle.cumsum(
                 x=input.cpu().astype(dtype='float32'), axis=dim)
         else:
@@ -413,18 +455,30 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 second element is a list of `bool`s indicating whether the corresponding generated image contains
                 "not-safe-for-work" (nsfw) content.
         """
+        # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
+
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(prompt, height, width, callback_steps,
                           negative_prompt, prompt_embeds,
                           negative_prompt_embeds)
+
+        # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
+
         do_classifier_free_guidance = guidance_scale > 1.0
+
+        # 3. Encode input prompt
         prompt_embeds = self._encode_prompt(
             prompt,
             num_images_per_prompt,
@@ -432,19 +486,30 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds)
+
+        # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
+
+        # 5. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
         latents = self.prepare_latents(batch_size * num_images_per_prompt,
                                        num_channels_latents, height, width,
                                        prompt_embeds.dtype, generator, latents)
+
+        # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         extra_step_kwargs.pop('generator', None)
+
+        # # 7. Denoising loop
         scheduler = self.scheduler
         parallel = min(parallel, len(scheduler.timesteps))
         begin_idx = 0
         end_idx = parallel
         latents_time_evolution_buffer = paddle.stack(x=[latents] * (
             len(scheduler.timesteps) + 1))
+
+        # We must make sure the noise of stochastic schedulers such as DDPM is sampled only once per timestep.
+        # Sampling inside the parallel denoising loop will mess this up, so we pre-sample the noise vectors outside the denoising loop.
         noise_array = paddle.zeros_like(x=latents_time_evolution_buffer)
         for j in range(len(scheduler.timesteps)):
             base_noise = randn_tensor(
@@ -454,6 +519,10 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             noise = self.scheduler._get_variance(scheduler.timesteps[
                 j])**0.5 * base_noise
             noise_array[j] = noise.clone()
+
+        # We specify the error tolerance as a ratio of the scheduler's noise magnitude. We similarly compute the error tolerance
+        # outside of the denoising loop to avoid recomputing it at every step.
+        # We will be dividing the norm of the noise, so we store its inverse here to avoid a division at every step.
         inverse_variance_norm = 1.0 / paddle.to_tensor(data=[
             scheduler._get_variance(scheduler.timesteps[j])
             for j in range(len(scheduler.timesteps))
@@ -464,6 +533,9 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             steps = 0
             while begin_idx < len(scheduler.timesteps):
+                # these have shape (parallel_dim, 2*batch_size, ...)
+                # parallel_len is at most parallel, but could be less if we are at the end of the timesteps
+                # we are processing batch window of timesteps spanning [begin_idx, end_idx)
                 parallel_len = end_idx - begin_idx
                 block_prompt_embeds = paddle.stack(x=[prompt_embeds] *
                                                    parallel_len)
@@ -473,12 +545,17 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                 t_vec = block_t
                 if do_classifier_free_guidance:
                     t_vec = t_vec.tile(repeat_times=[1, 2])
+
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[block_latents] * 2,
                     axis=1) if do_classifier_free_guidance else block_latents
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t_vec)
+
+                # if parallel_len is small, no need to use multiple GPUs
                 net = self.wrapped_unet if parallel_len > 3 else self.unet
+                # predict the noise residual, shape is now [parallel_len * 2 * batch_size * num_images_per_prompt, ...]
                 model_output = net(
                     latent_model_input.flatten(
                         start_axis=0, stop_axis=1),
@@ -507,10 +584,17 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                     sample=block_latents.flatten(
                         start_axis=0, stop_axis=1),
                     **extra_step_kwargs).reshape(block_latents.shape)
+
+                # back to shape (parallel_dim, batch_size, ...)
+                # now we want to add the pre-sampled noise
+                # parallel sampling algorithm requires computing the cumulative drift from the beginning
+                # of the window, so we need to compute cumulative sum of the deltas and the pre-sampled noises.
                 delta = block_latents_denoise - block_latents
                 cumulative_delta = self._cumsum(delta, dim=0, debug=debug)
                 cumulative_noise = self._cumsum(
                     noise_array[begin_idx:end_idx], dim=0, debug=debug)
+
+                # if we are using an ODE-like scheduler (like DDIM), we don't want to add noise
                 if scheduler._is_ode_scheduler:
                     cumulative_noise = 0
                 block_latents_new = latents_time_evolution_buffer[
@@ -523,22 +607,31 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
                     axis=-1).pow(y=2)
                 error_ratio = cur_error * inverse_variance_norm[begin_idx + 1:
                                                                 end_idx + 1]
+                # find the first index of the vector error_ratio that is greater than error tolerance
+                # we can shift the window for the next iteration up to this index
                 # error_ratio = torch.nn.functional.pad(error_ratio, (0, 0, 0, 1), value=1000000000.0)
                 concat_shape = list(error_ratio.shape)
                 concat_shape[-2] = 1
                 error_ratio = paddle.concat(
                     error_ratio,
                     paddle.ones(concat_shape) * 1000000000.0,
-                    axis=-2)
+                    axis=-2
+                )  # handle the case when everything is below ratio, by padding the end of parallel_len dimension
                 # any_error_at_time = torch.max(error_ratio > scaled_tolerance, dim=1).values.int()
                 any_error_at_time = paddle.max(
                     (error_ratio > scaled_tolerance).cast(paddle.int32), axis=1)
                 ind = paddle.argmax(x=any_error_at_time).item()
+
+                # compute the new begin and end idxs for the window
                 new_begin_idx = begin_idx + min(1 + ind, parallel)
                 new_end_idx = min(new_begin_idx + parallel,
                                   len(scheduler.timesteps))
+
+                # store the computed latents for the current window in the global buffer
                 latents_time_evolution_buffer[begin_idx + 1:end_idx +
                                               1] = block_latents_new
+                # initialize the new sliding window latents with the end of the current window,
+                # should be better than random initialization
                 latents_time_evolution_buffer[
                     end_idx:new_end_idx + 1] = latents_time_evolution_buffer[
                         end_idx][None, ]

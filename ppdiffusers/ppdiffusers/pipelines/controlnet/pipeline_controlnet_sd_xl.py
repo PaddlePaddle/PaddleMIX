@@ -1,4 +1,19 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
+import paddlenlp
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
@@ -9,7 +24,7 @@ from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
 from ...models.attention_processor import LoRAXFormersAttnProcessor, XFormersAttnProcessor
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import is_compiled_module, logging, randn_tensor, replace_example_docstring
+from ...utils import logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion_xl import StableDiffusionXLPipelineOutput
 if is_invisible_watermark_available():
@@ -156,6 +171,9 @@ class StableDiffusionXLControlNetPipeline(
             lora_scale (`float`, *optional*):
                 A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
         if prompt is not None and isinstance(prompt, str):
@@ -240,6 +258,7 @@ class StableDiffusionXLControlNetPipeline(
                     return_tensors='pd')
                 negative_prompt_embeds = text_encoder(
                     uncond_input.input_ids, output_hidden_states=True)
+                # We are only ALWAYS interested in the pooled output of the final text encoder
                 negative_pooled_prompt_embeds = negative_prompt_embeds[0]
                 negative_prompt_embeds = negative_prompt_embeds.hidden_states[
                     -2]
@@ -248,11 +267,13 @@ class StableDiffusionXLControlNetPipeline(
                 x=negative_prompt_embeds_list, axis=-1)
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder_2.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder_2.dtype)
@@ -270,7 +291,12 @@ class StableDiffusionXLControlNetPipeline(
         return (prompt_embeds, negative_prompt_embeds, pooled_prompt_embeds,
                 negative_pooled_prompt_embeds)
 
+    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
@@ -335,10 +361,13 @@ class StableDiffusionXLControlNetPipeline(
                     f'`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}.'
                 )
 
+        # Check `image`
         if isinstance(self.controlnet, ControlNetModel):
             self.check_image(image, prompt, prompt_embeds)
         else:
             assert False
+
+        # Check `controlnet_conditioning_scale`
         if isinstance(self.controlnet, ControlNetModel):
             if not isinstance(controlnet_conditioning_scale, float):
                 raise TypeError(
@@ -408,6 +437,7 @@ class StableDiffusionXLControlNetPipeline(
         if image_batch_size == 1:
             repeat_by = batch_size
         else:
+            # image batch size is the same as prompt batch size
             repeat_by = num_images_per_prompt
         image = image.repeat_interleave(repeats=repeat_by, axis=0)
         image = image.cast(dtype=dtype)
@@ -415,6 +445,7 @@ class StableDiffusionXLControlNetPipeline(
             image = paddle.concat(x=[image] * 2)
         return image
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(self,
                         batch_size,
                         num_channels_latents,
@@ -432,8 +463,11 @@ class StableDiffusionXLControlNetPipeline(
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
 
+        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
+
+    # Copied from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl.StableDiffusionXLPipeline._get_add_time_ids
 
     def _get_add_time_ids(self, original_size, crops_coords_top_left,
                           target_size, dtype):
@@ -448,6 +482,7 @@ class StableDiffusionXLControlNetPipeline(
         add_time_ids = paddle.to_tensor(data=[add_time_ids], dtype=dtype)
         return add_time_ids
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_upscale.StableDiffusionUpscalePipeline.upcast_vae
     def upcast_vae(self):
         dtype = self.vae.dtype
         self.vae.to(dtype='float32')
@@ -597,8 +632,9 @@ class StableDiffusionXLControlNetPipeline(
             [`~pipelines.stable_diffusion.StableDiffusionPipelineOutput`] if `return_dict` is True, otherwise a `tuple`
             containing the output images.
         """
-        controlnet = self.controlnet._orig_mod if is_compiled_module(
-            self.controlnet) else self.controlnet
+        controlnet = self.controlnet
+
+        # align format for control guidance
         if not isinstance(control_guidance_start, list) and isinstance(
                 control_guidance_end, list):
             control_guidance_start = len(control_guidance_end) * [
@@ -616,6 +652,7 @@ class StableDiffusionXLControlNetPipeline(
             control_guidance_start, control_guidance_end = mult * [
                 control_guidance_start
             ], mult * [control_guidance_end]
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(prompt, prompt_2, image, callback_steps,
                           negative_prompt, negative_prompt_2, prompt_embeds,
                           negative_prompt_embeds, controlnet_conditioning_scale,
@@ -626,12 +663,18 @@ class StableDiffusionXLControlNetPipeline(
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance
         do_classifier_free_guidance = guidance_scale > 1.0
         global_pool_conditions = (controlnet.config.global_pool_conditions
                                   if isinstance(controlnet, ControlNetModel)
                                   else controlnet.nets[0]
                                   .config.global_pool_conditions)
         guess_mode = guess_mode or global_pool_conditions
+
+        # 3. Encode input prompt
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         (prompt_embeds, negative_prompt_embeds, pooled_prompt_embeds,
@@ -645,6 +688,8 @@ class StableDiffusionXLControlNetPipeline(
              prompt_embeds=prompt_embeds,
              negative_prompt_embeds=negative_prompt_embeds,
              lora_scale=text_encoder_lora_scale))
+
+        # 4. Prepare image
         if isinstance(controlnet, ControlNetModel):
             image = self.prepare_image(
                 image=image,
@@ -658,13 +703,21 @@ class StableDiffusionXLControlNetPipeline(
             height, width = image.shape[-2:]
         else:
             assert False
+
+        # 5. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
+
+        # 6. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
         latents = self.prepare_latents(batch_size * num_images_per_prompt,
                                        num_channels_latents, height, width,
                                        prompt_embeds.dtype, generator, latents)
+
+        # 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+
+        # 7.1 Create tensor stating which controlnets to keep
         controlnet_keep = []
         for i in range(len(timesteps)):
             keeps = [
@@ -675,6 +728,8 @@ class StableDiffusionXLControlNetPipeline(
             controlnet_keep.append(keeps[0] if len(keeps) == 1 else keeps)
         original_size = original_size or image.shape[-2:]
         target_size = target_size or (height, width)
+
+        # 7.2 Prepare added time ids & embeddings
         add_text_embeds = pooled_prompt_embeds
         add_time_ids = self._get_add_time_ids(
             original_size,
@@ -695,11 +750,13 @@ class StableDiffusionXLControlNetPipeline(
             timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
                 if guess_mode and do_classifier_free_guidance:
+                    # Infer ControlNet only for the conditional batch.
                     control_model_input = latents
                     control_model_input = self.scheduler.scale_model_input(
                         control_model_input, t)
@@ -728,6 +785,9 @@ class StableDiffusionXLControlNetPipeline(
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False)
                 if guess_mode and do_classifier_free_guidance:
+                    # Infered ControlNet only for the conditional batch.
+                    # To apply the output of ControlNet to both the unconditional and conditional batches,
+                    # add 0 to the unconditional batch to keep it unchanged.
                     down_block_res_samples = [
                         paddle.concat(x=[paddle.zeros_like(x=d), d])
                         for d in down_block_res_samples
@@ -736,6 +796,8 @@ class StableDiffusionXLControlNetPipeline(
                         paddle.zeros_like(x=mid_block_res_sample),
                         mid_block_res_sample
                     ])
+
+                # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
@@ -745,23 +807,30 @@ class StableDiffusionXLControlNetPipeline(
                     mid_block_additional_residual=mid_block_res_sample,
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False)[0]
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(
                     noise_pred,
                     t,
                     latents,
                     **extra_step_kwargs,
                     return_dict=False)[0]
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
 
+        # make sure the VAE is in float32 mode, as it overflows in float16
         if self.vae.dtype == 'float16' and self.vae.config.force_upcast:
             self.upcast_vae()
             latents = latents.cast(

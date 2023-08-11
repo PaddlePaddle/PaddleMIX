@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -34,6 +48,7 @@ EXAMPLE_DOC_STRING = """
 """
 
 
+# Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.rescale_noise_cfg
 def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
     """
     Rescale `noise_cfg` according to `guidance_rescale`. Based on findings of [Common Diffusion Noise Schedules and
@@ -42,7 +57,9 @@ def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
     std_text = noise_pred_text.std(axis=list(range(1, noise_pred_text.ndim)),
                                    keepdim=True)
     std_cfg = noise_cfg.std(axis=list(range(1, noise_cfg.ndim)), keepdim=True)
+    # rescale the results from guidance (fixes overexposure)
     noise_pred_rescaled = noise_cfg * (std_text / std_cfg)
+    # mix with the original results from guidance by factor guidance_rescale to avoid "plain looking" images
     noise_cfg = guidance_rescale * noise_pred_rescaled + (1 - guidance_rescale
                                                           ) * noise_cfg
     return noise_cfg
@@ -175,6 +192,8 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
             lora_scale (`float`, *optional*):
                 A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
         if prompt is not None and isinstance(prompt, str):
@@ -183,6 +202,8 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
+
+        # Define tokenizers and text encoders
         tokenizers = [self.tokenizer, self.tokenizer_2
                       ] if self.tokenizer is not None else [self.tokenizer_2]
         text_encoders = [
@@ -190,6 +211,7 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
         ] if self.text_encoder is not None else [self.text_encoder_2]
         if prompt_embeds is None:
             prompt_2 = prompt_2 or prompt
+            # textual inversion: procecss multi-vector tokens if necessary
             prompt_embeds_list = []
             prompts = [prompt, prompt_2]
             for prompt, tokenizer, text_encoder in zip(prompts, tokenizers,
@@ -217,10 +239,14 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
                     )
                 prompt_embeds = text_encoder(
                     text_input_ids, output_hidden_states=True)
+
+                # We are only ALWAYS interested in the pooled output of the final text encoder
                 pooled_prompt_embeds = prompt_embeds[0]
                 prompt_embeds = prompt_embeds.hidden_states[-2]
                 prompt_embeds_list.append(prompt_embeds)
             prompt_embeds = paddle.concat(x=prompt_embeds_list, axis=-1)
+
+        # get unconditional embeddings for classifier free guidance
         zero_out_negative_prompt = (negative_prompt is None and
                                     self.config.force_zeros_for_empty_prompt)
         if (do_classifier_free_guidance and negative_prompt_embeds is None and
@@ -259,6 +285,7 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
                     return_tensors='pd')
                 negative_prompt_embeds = text_encoder(
                     uncond_input.input_ids, output_hidden_states=True)
+                # We are only ALWAYS interested in the pooled output of the final text encoder
                 negative_pooled_prompt_embeds = negative_prompt_embeds[0]
                 negative_prompt_embeds = negative_prompt_embeds.hidden_states[
                     -2]
@@ -267,11 +294,13 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
                 x=negative_prompt_embeds_list, axis=-1)
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder_2.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder_2.dtype)
@@ -290,11 +319,17 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
                 negative_pooled_prompt_embeds)
 
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
@@ -364,6 +399,7 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
 
     def get_timesteps(self, num_inference_steps, strength,
                       denoising_start=None):
+        # get the original timestep using init_timestep
         if denoising_start is None:
             init_timestep = min(
                 int(num_inference_steps * strength), num_inference_steps)
@@ -371,6 +407,8 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
         else:
             t_start = 0
         timesteps = self.scheduler.timesteps[t_start * self.scheduler.order:]
+        # Strength is irrelevant if we directly request a timestep to start at;
+        # that is, strength is determined by the denoising_start instead.
         if denoising_start is not None:
             discrete_timestep_cutoff = int(
                 round(self.scheduler.config.num_train_timesteps -
@@ -398,6 +436,7 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
         if image.shape[1] == 4:
             init_latents = image
         else:
+            # make sure the VAE is in float32 mode, as it overflows in float16
             if self.vae.config.force_upcast:
                 image = image.astype(dtype='float32')
                 self.vae.to(dtype='float32')
@@ -420,6 +459,7 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
             init_latents = self.vae.config.scaling_factor * init_latents
         if batch_size > init_latents.shape[
                 0] and batch_size % init_latents.shape[0] == 0:
+            # expand init_latents for batch_size
             additional_image_per_prompt = batch_size // init_latents.shape[0]
             init_latents = paddle.concat(
                 x=[init_latents] * additional_image_per_prompt, axis=0)
@@ -473,6 +513,7 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
             data=[add_neg_time_ids], dtype=dtype)
         return add_time_ids, add_neg_time_ids
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_upscale.StableDiffusionUpscalePipeline.upcast_vae
     def upcast_vae(self):
         dtype = self.vae.dtype
         self.vae.to(dtype='float32')
@@ -646,16 +687,25 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
             [`~pipelines.stable_diffusion.StableDiffusionXLPipelineOutput`] if `return_dict` is True, otherwise a
             `tuple. When returning a tuple, the first element is a list with the generated images.
         """
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(prompt, prompt_2, strength, num_inference_steps,
                           callback_steps, negative_prompt, negative_prompt_2,
                           prompt_embeds, negative_prompt_embeds)
+
+        # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
+
+        # 3. Encode input prompt
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         (prompt_embeds, negative_prompt_embeds, pooled_prompt_embeds,
@@ -671,7 +721,11 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
              pooled_prompt_embeds=pooled_prompt_embeds,
              negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
              lora_scale=text_encoder_lora_scale))
+
+        # 4. Preprocess image
         image = self.image_processor.preprocess(image)
+
+        # 5. Prepare timesteps
 
         def denoising_value_valid(dnv):
             return type(denoising_end) == float and 0 < dnv < 1
@@ -684,15 +738,20 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
         latent_timestep = timesteps[:1].tile(
             repeat_times=[batch_size * num_images_per_prompt])
         add_noise = True if denoising_start is None else False
+
+        # 6. Prepare latent variables
         latents = self.prepare_latents(
             image, latent_timestep, batch_size, num_images_per_prompt,
-            prompt_embeds.dtype, device, generator, add_noise)
+            prompt_embeds.dtype, generator, add_noise)
+        # 7. Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         height, width = latents.shape[-2:]
         height = height * self.vae_scale_factor
         width = width * self.vae_scale_factor
         original_size = original_size or (height, width)
         target_size = target_size or (height, width)
+
+        # 8. Prepare added time ids & embeddings
         add_text_embeds = pooled_prompt_embeds
         add_time_ids, add_neg_time_ids = self._get_add_time_ids(
             original_size,
@@ -712,8 +771,12 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
                 repeat_times=[batch_size * num_images_per_prompt, 1])
             add_time_ids = paddle.concat(
                 x=[add_neg_time_ids, add_time_ids], axis=0)
+
+        # 9. Denoising loop
         num_warmup_steps = max(
             len(timesteps) - num_inference_steps * self.scheduler.order, 0)
+
+        # 9.1 Apply denoising_end
         if (denoising_end is not None and denoising_start is not None and
                 denoising_value_valid(denoising_end) and
                 denoising_value_valid(denoising_start) and
@@ -732,10 +795,13 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
             timesteps = timesteps[:num_inference_steps]
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
+
+                # predict the noise residual
                 added_cond_kwargs = {
                     'text_embeds': add_text_embeds,
                     'time_ids': add_time_ids
@@ -747,6 +813,8 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
                     cross_attention_kwargs=cross_attention_kwargs,
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False)[0]
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
@@ -768,6 +836,8 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
+
+        # make sure the VAE is in float32 mode, as it overflows in float16
         if self.vae.dtype == 'float16' and self.vae.config.force_upcast:
             self.upcast_vae()
             latents = latents.cast(
@@ -778,6 +848,7 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
         else:
             image = latents
             return StableDiffusionXLPipelineOutput(images=image)
+        # apply watermark if available
         if self.watermark is not None:
             image = self.watermark.apply_watermark(image)
         image = self.image_processor.postprocess(image, output_type=output_type)

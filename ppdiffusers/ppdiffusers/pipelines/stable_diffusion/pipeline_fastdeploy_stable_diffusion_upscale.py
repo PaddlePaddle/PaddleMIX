@@ -18,7 +18,7 @@ import numpy as np
 import paddle
 import PIL
 
-from ...pipeline_utils import DiffusionPipeline
+from ..pipeline_utils import DiffusionPipeline
 from ...schedulers import DDPMScheduler
 from ...utils import logging
 from ..fastdeploy_utils import FastDeployDiffusionPipelineMixin, FastDeployRuntimeModel

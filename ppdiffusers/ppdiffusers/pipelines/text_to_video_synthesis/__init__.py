@@ -29,13 +29,12 @@ from ...utils import (
 @dataclass
 class TextToVideoSDPipelineOutput(BaseOutput):
     """
-    Output class for text to video pipelines.
+    Output class for text-to-video pipelines.
 
     Args:
         frames (`List[np.ndarray]` or `paddle.Tensor`)
             List of denoised frames (essentially images) as NumPy arrays of shape `(height, width, num_channels)` or as
-            a `paddle` tensor. NumPy array present the denoised images of the diffusion pipeline. The length of the list
-            denotes the video length i.e., the number of frames.
+            a `paddle` tensor.  The length of the list denotes the video length i.e., the number of frames.
     """
 
     frames: Union[List[np.ndarray], paddle.Tensor]
@@ -48,4 +47,5 @@ except OptionalDependencyNotAvailable:
     from ...utils.dummy_paddle_and_paddlenlp_objects import *
 else:
     from .pipeline_text_to_video_synth import TextToVideoSDPipeline
+    from .pipeline_text_to_video_synth_img2img import VideoToVideoSDPipeline  # noqa: F401
     from .pipeline_text_to_video_zero import TextToVideoZeroPipeline

@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import math
 from dataclasses import dataclass
@@ -85,6 +99,7 @@ class ShapEPipeline(DiffusionPipeline):
             scheduler=scheduler,
             shap_e_renderer=shap_e_renderer)
 
+    # Copied from ppdiffusers.pipelines.unclip.pipeline_unclip.UnCLIPPipeline.prepare_latents
     def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
@@ -99,7 +114,10 @@ class ShapEPipeline(DiffusionPipeline):
     def _encode_prompt(self, prompt, num_images_per_prompt,
                        do_classifier_free_guidance):
         len(prompt) if isinstance(prompt, list) else 1
+
+        # YiYi Notes: set pad_token_id to be 0, not sure why I can't set in the config file
         self.tokenizer.pad_token_id = 0
+        # get prompt text embeddings
         text_inputs = self.tokenizer(
             prompt,
             padding='max_length',
@@ -121,12 +139,19 @@ class ShapEPipeline(DiffusionPipeline):
         prompt_embeds = text_encoder_output.text_embeds
         prompt_embeds = prompt_embeds.repeat_interleave(
             repeats=num_images_per_prompt, axis=0)
+        # in Shap-E it normalize the prompt_embeds and then later rescale it
         prompt_embeds = prompt_embeds / paddle.linalg.norm(
             x=prompt_embeds, axis=-1, keepdim=True)
         if do_classifier_free_guidance:
             negative_prompt_embeds = paddle.zeros_like(x=prompt_embeds)
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
+
+        # Rescale the features to have unit variance
         prompt_embeds = math.sqrt(prompt_embeds.shape[1]) * prompt_embeds
         return prompt_embeds
 
@@ -193,6 +218,9 @@ class ShapEPipeline(DiffusionPipeline):
         do_classifier_free_guidance = guidance_scale > 1.0
         prompt_embeds = self._encode_prompt(prompt, num_images_per_prompt,
                                             do_classifier_free_guidance)
+
+        # prior
+
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_embeddings = self.prior.config.num_embeddings
@@ -200,9 +228,12 @@ class ShapEPipeline(DiffusionPipeline):
         latents = self.prepare_latents(
             (batch_size, num_embeddings * embedding_dim), prompt_embeds.dtype,
             generator, latents, self.scheduler)
+
+        # YiYi notes: for testing only to match ldm, we can directly create a latents with desired shape: batch_size, num_embeddings, embedding_dim
         latents = latents.reshape(latents.shape[0], num_embeddings,
                                   embedding_dim)
         for i, t in enumerate(self.progress_bar(timesteps)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
             scaled_model_input = self.scheduler.scale_model_input(
@@ -210,8 +241,11 @@ class ShapEPipeline(DiffusionPipeline):
             noise_pred = self.prior(
                 scaled_model_input, timestep=t,
                 proj_embedding=prompt_embeds).predicted_image_embedding
+
+            # remove the variance
             noise_pred, _ = noise_pred.split(
-                noise_pred.shape[2] // scaled_model_input.shape[2], axis=2)
+                noise_pred.shape[2] // scaled_model_input.shape[2],
+                axis=2)  # batch_size, num_embeddings, embedding_dim
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred = noise_pred.chunk(chunks=2)
                 noise_pred = noise_pred_uncond + guidance_scale * (
@@ -230,6 +264,7 @@ class ShapEPipeline(DiffusionPipeline):
                 mesh = self.shap_e_renderer.decode_to_mesh(latent[(None), :])
                 images.append(mesh)
         else:
+            # np, pil
             for i, latent in enumerate(latents):
                 image = self.shap_e_renderer.decode_to_image(
                     latent[(None), :], size=frame_size)

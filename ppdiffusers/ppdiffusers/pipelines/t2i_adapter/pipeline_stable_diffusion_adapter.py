@@ -26,8 +26,8 @@ from ...models import AutoencoderKL, MultiAdapter, T2IAdapter, UNet2DConditionMo
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import PIL_INTERPOLATION, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
-from . import StableDiffusionPipelineOutput
-from .safety_checker import StableDiffusionSafetyChecker
+from ..stable_diffusion import StableDiffusionPipelineOutput
+from ..stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 
 logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """

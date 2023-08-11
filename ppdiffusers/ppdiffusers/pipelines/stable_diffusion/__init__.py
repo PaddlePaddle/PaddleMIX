@@ -36,11 +36,11 @@ class StableDiffusionPipelineOutput(BaseOutput):
 
     Args:
         images (`List[PIL.Image.Image]` or `np.ndarray`)
-            List of denoised PIL images of length `batch_size` or numpy array of shape `(batch_size, height, width,
-            num_channels)`. PIL images or numpy array present the denoised images of the diffusion pipeline.
+            List of denoised PIL images of length `batch_size` or NumPy array of shape `(batch_size, height, width,
+            num_channels)`.
         nsfw_content_detected (`List[bool]`)
-            List of flags denoting whether the corresponding generated image likely represents "not-safe-for-work"
-            (nsfw) content, or `None` if safety checking could not be performed.
+            List indicating whether the corresponding generated image contains "not-safe-for-work" (nsfw) content or
+            `None` if safety checking could not be performed.
     """
 
     images: Union[List[PIL.Image.Image], np.ndarray]
@@ -66,8 +66,8 @@ else:
     from .pipeline_stable_diffusion_all_in_one import StableDiffusionPipelineAllinOne
     from .pipeline_stable_diffusion_attend_and_excite import (
         StableDiffusionAttendAndExcitePipeline, )
-    from .pipeline_stable_diffusion_controlnet import StableDiffusionControlNetPipeline
     from .pipeline_stable_diffusion_depth2img import StableDiffusionDepth2ImgPipeline
+    from .pipeline_stable_diffusion_diffedit import StableDiffusionDiffEditPipeline
     from .pipeline_stable_diffusion_image_variation import (
         StableDiffusionImageVariationPipeline, )
     from .pipeline_stable_diffusion_img2img import StableDiffusionImg2ImgPipeline
@@ -77,12 +77,13 @@ else:
     from .pipeline_stable_diffusion_instruct_pix2pix import (
         StableDiffusionInstructPix2PixPipeline, )
     from .pipeline_stable_diffusion_k_diffusion import StableDiffusionKDiffusionPipeline
-    from .pipeline_stable_diffusion_latent_upscale import (
-        StableDiffusionLatentUpscalePipeline, )
+    from .pipeline_stable_diffusion_latent_upscale import StableDiffusionLatentUpscalePipeline
+    from .pipeline_stable_diffusion_ldm3d import StableDiffusionLDM3DPipeline
     from .pipeline_stable_diffusion_mega import StableDiffusionMegaPipeline
     from .pipeline_stable_diffusion_model_editing import (
         StableDiffusionModelEditingPipeline, )
     from .pipeline_stable_diffusion_panorama import StableDiffusionPanoramaPipeline
+    from .pipeline_stable_diffusion_paradigms import StableDiffusionParadigmsPipeline
     from .pipeline_stable_diffusion_pix2pix_zero import (
         StableDiffusionPix2PixZeroPipeline, )
     from .pipeline_stable_diffusion_sag import StableDiffusionSAGPipeline
@@ -100,8 +101,6 @@ except OptionalDependencyNotAvailable:
 else:
     from .pipeline_fastdeploy_cycle_diffusion import FastDeployCycleDiffusionPipeline
     from .pipeline_fastdeploy_stable_diffusion import FastDeployStableDiffusionPipeline
-    from .pipeline_fastdeploy_stable_diffusion_controlnet import (
-        FastDeployStableDiffusionControlNetPipeline, )
     from .pipeline_fastdeploy_stable_diffusion_image_variation import (
         FastDeployStableDiffusionImageVariationPipeline, )
     from .pipeline_fastdeploy_stable_diffusion_img2img import (

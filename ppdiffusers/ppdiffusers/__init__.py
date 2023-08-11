@@ -154,7 +154,7 @@ else:
         IFInpaintingSuperResolutionPipeline,
         IFPipeline,
         IFSuperResolutionPipeline,
-        ImageTextPipelineOutput,
+        # ImageTextPipelineOutput,
         KandinskyCombinedPipeline,
         KandinskyImg2ImgCombinedPipeline,
         KandinskyImg2ImgPipeline,

@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 from dataclasses import dataclass
 from typing import List, Optional, Union
@@ -86,6 +100,7 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
             scheduler=scheduler,
             shap_e_renderer=shap_e_renderer)
 
+    # Copied from ppdiffusers.pipelines.unclip.pipeline_unclip.UnCLIPPipeline.prepare_latents
     def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
@@ -113,6 +128,10 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
             repeats=num_images_per_prompt, axis=0)
         if do_classifier_free_guidance:
             negative_image_embeds = paddle.zeros_like(x=image_embeds)
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             image_embeds = paddle.concat(
                 x=[negative_image_embeds, image_embeds])
         return image_embeds
@@ -182,6 +201,9 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
         do_classifier_free_guidance = guidance_scale > 1.0
         image_embeds = self._encode_image(image, num_images_per_prompt,
                                           do_classifier_free_guidance)
+
+        # prior
+
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_embeddings = self.prior.config.num_embeddings
@@ -189,9 +211,12 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
         latents = self.prepare_latents(
             (batch_size, num_embeddings * embedding_dim), image_embeds.dtype,
             generator, latents, self.scheduler)
+
+        # YiYi notes: for testing only to match ldm, we can directly create a latents with desired shape: batch_size, num_embeddings, embedding_dim
         latents = latents.reshape(latents.shape[0], num_embeddings,
                                   embedding_dim)
         for i, t in enumerate(self.progress_bar(timesteps)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
             scaled_model_input = self.scheduler.scale_model_input(
@@ -199,8 +224,12 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
             noise_pred = self.prior(
                 scaled_model_input, timestep=t,
                 proj_embedding=image_embeds).predicted_image_embedding
+
+            # remove the variance
             noise_pred, _ = noise_pred.split(
-                noise_pred.shape[2] // scaled_model_input.shape[2], axis=2)
+                noise_pred.shape[2] // scaled_model_input.shape[2],
+                axis=2)  # batch_size, num_embeddings, embedding_dim
+
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred = noise_pred.chunk(chunks=2)
                 noise_pred = noise_pred_uncond + guidance_scale * (

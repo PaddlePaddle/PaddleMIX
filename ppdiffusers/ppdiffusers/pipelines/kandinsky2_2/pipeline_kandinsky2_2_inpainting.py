@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 from copy import deepcopy
 from typing import Callable, List, Optional, Union
@@ -5,12 +19,11 @@ import numpy as np
 import PIL
 from packaging import version
 from PIL import Image
-from ... import __version__
 from ...models import UNet2DConditionModel, VQModel
 from ...schedulers import DDPMScheduler
 from ...utils import logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
-logger = logging.get_logger(__name__)
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
@@ -54,6 +67,7 @@ EXAMPLE_DOC_STRING = """
 """
 
 
+# Copied from ppdiffusers.pipelines.kandinsky2_2.pipeline_kandinsky2_2.downscale_height_and_width
 def downscale_height_and_width(height, width, scale_factor=8):
     new_height = height // scale_factor**2
     if height % scale_factor**2 != 0:
@@ -64,6 +78,7 @@ def downscale_height_and_width(height, width, scale_factor=8):
     return new_height * scale_factor, new_width * scale_factor
 
 
+# Copied from ppdiffusers.pipelines.kandinsky.pipeline_kandinsky_inpaint.prepare_mask
 def prepare_mask(masks):
     prepared_masks = []
     for mask in masks:
@@ -129,15 +144,23 @@ def prepare_mask_and_masked_image(image, mask, height, width):
             raise TypeError(
                 f'`image` is a paddle.Tensor but `mask` (type: {type(mask)} is not'
             )
+        # Batch single image
         if image.ndim == 3:
             assert image.shape[
                 0] == 3, 'Image outside a batch should be of shape (3, H, W)'
             image = image.unsqueeze(axis=0)
+
+        # Batch and add channel dim for single mask
         if mask.ndim == 2:
             mask = mask.unsqueeze(axis=0).unsqueeze(axis=0)
+
+        # Batch single mask or add channel dim
         if mask.ndim == 3:
+            # Single batched mask, no channel dim or single mask not batched but channel dim
             if mask.shape[0] == 1:
                 mask = mask.unsqueeze(axis=0)
+
+            # Batched masks no channel dim
             else:
                 mask = mask.unsqueeze(axis=1)
         assert image.ndim == 4 and mask.ndim == 4, 'Image and Mask must have 4 dimensions'
@@ -145,20 +168,30 @@ def prepare_mask_and_masked_image(image, mask, height, width):
             -2:], 'Image and Mask must have the same spatial dimensions'
         assert image.shape[0] == mask.shape[
             0], 'Image and Mask must have the same batch size'
+
+        # Check image is in [-1, 1]
         if image.min() < -1 or image.max() > 1:
             raise ValueError('Image should be in [-1, 1] range')
+
+        # Check mask is in [0, 1]
         if mask.min() < 0 or mask.max() > 1:
             raise ValueError('Mask should be in [0, 1] range')
+
+        # Binarize mask
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
+
+        # Image as float32
         image = image.cast(dtype='float32')
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(
             f'`mask` is a paddle.Tensor but `image` (type: {type(image)} is not')
     else:
+        # preprocess image
         if isinstance(image, (PIL.Image.Image, np.ndarray)):
             image = [image]
         if isinstance(image, list) and isinstance(image[0], PIL.Image.Image):
+            # resize all images w.r.t passed height an width
             image = [
                 i.resize(
                     (width, height), resample=Image.BICUBIC, reducing_gap=1)
@@ -170,6 +203,8 @@ def prepare_mask_and_masked_image(image, mask, height, width):
             image = np.concatenate([i[(None), :] for i in image], axis=0)
         image = image.transpose(0, 3, 1, 2)
         image = paddle.to_tensor(data=image).cast(dtype='float32') / 127.5 - 1.0
+
+        # preprocess mask
         if isinstance(mask, (PIL.Image.Image, np.ndarray)):
             mask = [mask]
         if isinstance(mask, list) and isinstance(mask[0], PIL.Image.Image):
@@ -216,6 +251,7 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
             len(self.movq.config.block_out_channels) - 1)
         self._warn_has_been_called = False
 
+    # Copied from ppdiffusers.pipelines.unclip.pipeline_unclip.UnCLIPPipeline.prepare_latents
     def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
@@ -302,13 +338,6 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
         Returns:
             [`~pipelines.ImagePipelineOutput`] or `tuple`
         """
-        if not self._warn_has_been_called and version.parse(
-                version.parse(__version__).base_version) < version.parse(
-                    '0.22.0.dev0'):
-            logger.warn(
-                "Please note that the expected format of `mask_image` has recently been changed. Before diffusers == 0.19.0, Kandinsky Inpainting pipelines repainted black pixels and preserved black pixels. As of diffusers==0.19.0 this behavior has been inverted. Now white pixels are repainted and black pixels are preserved. This way, Kandinsky's masking behavior is aligned with Stable Diffusion. THIS means that you HAVE to invert the input mask to have the same behavior as before as explained in https://github.com/huggingface/diffusers/pull/4207. This warning will be surpressed after the first inference call and will be removed in diffusers>0.22.0"
-            )
-            self._warn_has_been_called = True
         do_classifier_free_guidance = guidance_scale > 1.0
         if isinstance(image_embeds, list):
             image_embeds = paddle.concat(x=image_embeds, axis=0)
@@ -328,6 +357,8 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
         timesteps_tensor = self.scheduler.timesteps
         mask_image, image = prepare_mask_and_masked_image(image, mask_image,
                                                           height, width)
+
+        # preprocess image and mask
         image = image.cast(dtype=image_embeds.dtype)
         image = self.movq.encode(image)['latents']
         mask_image = mask_image.cast(dtype=image_embeds.dtype)
@@ -346,11 +377,14 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
         num_channels_latents = self.movq.config.latent_channels
         height, width = downscale_height_and_width(height, width,
                                                    self.movq_scale_factor)
+
+        # create initial latent
         latents = self.prepare_latents(
             (batch_size, num_channels_latents, height, width),
             image_embeds.dtype, generator, latents, self.scheduler)
         noise = paddle.clone(x=latents)
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
             latent_model_input = paddle.concat(
@@ -375,7 +409,9 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
                     self.scheduler.config.variance_type in
                     ['learned', 'learned_range']):
                 noise_pred, _ = noise_pred.split(
-                    lnoise_pred.shape[1] // latents.shape[1], axis=1)
+                    noise_pred.shape[1] // latents.shape[1], axis=1)
+
+            # compute the previous noisy sample x_t -> x_t-1
             latents = self.scheduler.step(
                 noise_pred, t, latents, generator=generator)[0]
             init_latents_proper = image[:1]
@@ -390,6 +426,8 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
                                                          ) * latents
             if callback is not None and i % callback_steps == 0:
                 callback(i, t, latents)
+
+        # post-processing
         latents = mask_image[:1] * image[:1] + (1 - mask_image[:1]) * latents
         image = self.movq.decode(latents, force_not_quantize=True)['sample']
 

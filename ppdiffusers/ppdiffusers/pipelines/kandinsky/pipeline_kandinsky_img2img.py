@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 from typing import Callable, List, Optional, Union
 import numpy as np
@@ -105,6 +119,7 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
             len(self.movq.config.block_out_channels) - 1)
 
     def get_timesteps(self, num_inference_steps, strength):
+        # get the original timestep using init_timestep
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
         t_start = max(num_inference_steps - init_timestep, 0)
@@ -132,6 +147,7 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
                        do_classifier_free_guidance,
                        negative_prompt=None):
         batch_size = len(prompt) if isinstance(prompt, list) else 1
+        # get prompt text embeddings
         text_inputs = self.tokenizer(
             prompt,
             padding='max_length',
@@ -191,6 +207,9 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
                 self.text_encoder(
                     input_ids=uncond_text_input_ids,
                     attention_mask=uncond_text_mask))
+
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
+
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt])
@@ -205,6 +224,12 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
                     [batch_size * num_images_per_prompt, seq_len, -1]))
             uncond_text_mask = uncond_text_mask.repeat_interleave(
                 repeats=num_images_per_prompt, axis=0)
+
+            # done duplicates
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
             text_encoder_hidden_states = paddle.concat(x=[
@@ -315,6 +340,7 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
         Returns:
             [`~pipelines.ImagePipelineOutput`] or `tuple`
         """
+        # 1. Define call parameters
         if isinstance(prompt, str):
             batch_size = 1
         elif isinstance(prompt, list):
@@ -325,6 +351,8 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
             )
         batch_size = batch_size * num_images_per_prompt
         do_classifier_free_guidance = guidance_scale > 1.0
+
+        # 2. get text and image embeddings
         prompt_embeds, text_encoder_hidden_states, _ = self._encode_prompt(
             prompt, num_images_per_prompt, do_classifier_free_guidance,
             negative_prompt)
@@ -341,6 +369,8 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
             image_embeds = paddle.concat(
                 x=[negative_image_embeds, image_embeds],
                 axis=0).cast(dtype=prompt_embeds.dtype)
+
+        # 3. pre-processing initial image
         if not isinstance(image, list):
             image = [image]
         if not all(
@@ -354,19 +384,28 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
         latents = self.movq.encode(image)['latents']
         latents = latents.repeat_interleave(
             repeats=num_images_per_prompt, axis=0)
+
+        # 4. set timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps_tensor, num_inference_steps = self.get_timesteps(
             num_inference_steps, strength)
+
+        # the formular to calculate timestep for add_noise is taken from the original kandinsky repo
         latent_timestep = int(self.scheduler.config.num_train_timesteps *
                               strength) - 2
         latent_timestep = paddle.to_tensor(
             data=[latent_timestep] * batch_size, dtype=timesteps_tensor.dtype)
         num_channels_latents = self.unet.config.in_channels
         height, width = get_new_h_w(height, width, self.movq_scale_factor)
+
+        # 5. Create initial latent
         latents = self.prepare_latents(latents, latent_timestep, (
             batch_size, num_channels_latents, height,
             width), text_encoder_hidden_states.dtype, generator, self.scheduler)
+
+        # 6. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
             added_cond_kwargs = {
@@ -393,10 +432,14 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
                     ['learned', 'learned_range']):
                 noise_pred, _ = noise_pred.split(
                     noise_pred.shape[1] // latents.shape[1], axis=1)
+
+            # compute the previous noisy sample x_t -> x_t-1
             latents = self.scheduler.step(
                 noise_pred, t, latents, generator=generator).prev_sample
             if callback is not None and i % callback_steps == 0:
                 callback(i, t, latents)
+
+        # 7. post-processing
         image = self.movq.decode(latents, force_not_quantize=True)['sample']
         if output_type not in ['pd', 'np', 'pil']:
             raise ValueError(
