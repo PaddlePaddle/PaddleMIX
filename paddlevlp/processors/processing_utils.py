@@ -34,6 +34,7 @@ from paddlevlp.utils.log import logger
 PROCESSOR_CONFIG_MAPPING = {
     "image": "image_preprocessor_config.json",
     "text": "text_preprocessor_config.json",
+    "audio": "audio_preprocessor_config.json"
 }
 
 
@@ -442,6 +443,21 @@ class BaseTextProcessor(BaseProcessingMixin):
     def preprocess(self, text, **kwargs) -> BatchEncoding:
         raise NotImplementedError(
             "Each image processor must implement its own preprocess method"
+        )
+        
+class BaseAudioProcessor(BaseProcessingMixin):
+    input_type = "audio"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __call__(self, audios, **kwargs) -> BatchEncoding:
+        """Preprocess an audio or a batch of audios."""
+        return self.preprocess(audios, **kwargs)
+
+    def preprocess(self, audios, **kwargs) -> BatchEncoding:
+        raise NotImplementedError(
+            "Each audios processor must implement its own preprocess method"
         )
 
 
