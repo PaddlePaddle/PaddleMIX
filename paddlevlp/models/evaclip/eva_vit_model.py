@@ -717,7 +717,13 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
 
     def fix_init_weight(self):
         def rescale(param, layer_id):
-            param = param.divide(paddle.to_tensor(math.sqrt(2.0 * layer_id)))
+            origin_dtype = paddle.get_default_dtype()
+            paddle.set_default_dtype("float32")
+            tmp = paddle.to_tensor(math.sqrt(2.0 * layer_id))
+            paddle.set_default_dtype(origin_dtype)
+            if origin_dtype != 'float32':
+                tmp = tmp.astype(origin_dtype)
+            param = param.divide(tmp)
 
         for layer_id, layer in enumerate(self.blocks):
             rescale(layer.attn.proj.weight, layer_id + 1)

@@ -441,7 +441,12 @@ class Attention(paddle.nn.Layer):
         self.head_dim = dim // num_heads
         self.scale = self.head_dim**-0.5
         self.logit_scale_max = logit_scale_max
+        origin_dtype = paddle.get_default_dtype()
+        paddle.set_default_dtype("float32")
         init_data = paddle.randn(shape=[dim, dim * 3]) * self.scale
+        if origin_dtype != 'float32':
+            init_data.astype(origin_dtype)
+        paddle.set_default_dtype(origin_dtype)
         self.in_proj_weight = self.create_parameter(
             shape=[dim, dim * 3],
             default_initializer=paddle.nn.initializer.Assign(init_data))
@@ -587,7 +592,12 @@ class CustomAttention(paddle.nn.Layer):
         self.head_dim = dim // num_heads
         self.scale = self.head_dim**-0.5
         self.logit_scale_max = logit_scale_max
+        origin_dtype = paddle.get_default_dtype()
+        paddle.set_default_dtype("float32")
         init_data = paddle.randn(shape=[dim, dim * 3]) * self.scale
+        if origin_dtype != 'float32':
+            init_data.astype(origin_dtype)
+        paddle.set_default_dtype(origin_dtype)
         self.in_proj_weight = self.create_parameter(
             shape=[dim, dim * 3],
             default_initializer=paddle.nn.initializer.Assign(init_data))
@@ -925,7 +935,13 @@ class AttentionalPooler(paddle.nn.Layer):
         d_model = config.num_classes
         context_dim = config.embed_dim
 
+        origin_dtype = paddle.get_default_dtype()
+        paddle.set_default_dtype("float32")
         init_data = paddle.randn(shape=[config.n_queries, d_model])
+        if origin_dtype != 'float32':
+            init_data.astype(origin_dtype)
+        paddle.set_default_dtype(origin_dtype)
+
         self.query = self.create_parameter(
             shape=[config.n_queries, d_model],
             default_initializer=paddle.nn.initializer.Assign(init_data))
