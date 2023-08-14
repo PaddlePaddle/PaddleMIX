@@ -76,7 +76,6 @@ class CLIPTrainer(Trainer):
 
         if self.args.max_grad_norm > 0.0:
             grad_norms = clip_grad_norm(model, self.args.max_grad_norm)
-
         if self.rank == 0 and self.args.tensorboard:
             self.logstep += 1
             self.writer.add_scalar("train/loss", loss.item(), self.logstep)
