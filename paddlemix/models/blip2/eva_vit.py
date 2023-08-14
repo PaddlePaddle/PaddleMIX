@@ -12,25 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections.abc import Callable
-
-import numpy as np
-import paddle
-import paddle.nn as nn
-from paddle.distributed import fleet
-from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-from paddle.nn.initializer import Constant, Normal, TruncatedNormal
-
-from paddlemix.models.blip2.configuration import Blip2VisionConfig
-from paddlemix.models.blip2.modeling import Blip2PretrainedModel
 # Code was based on https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
 # reference: https://arxiv.org/abs/2010.11929
 from paddlemix.utils.log import logger
+from collections.abc import Callable
+from paddle.distributed import fleet
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+import numpy as np
+import paddle
+import paddle.nn as nn
+from paddle import _legacy_C_ops
+from paddle.nn.initializer import TruncatedNormal, Constant, Normal
+from paddle.distributed import fleet
+from paddlemix.models.blip2.configuration import Blip2VisionConfig
+from paddlemix.models.blip2.modeling import Blip2PretrainedModel
+from paddle.nn.functional.flash_attention import (flash_attention, )
 
-trunc_normal_ = TruncatedNormal(std=0.02)
+trunc_normal_ = TruncatedNormal(std=.02)
 normal_ = Normal
-zeros_ = Constant(value=0.0)
-ones_ = Constant(value=1.0)
+zeros_ = Constant(value=0.)
+ones_ = Constant(value=1.)
 from paddle.distributed.fleet.utils import recompute
 
 
@@ -38,12 +39,9 @@ def to_2tuple(x):
     return tuple([x] * 2)
 
 
-def drop_path(x, drop_prob=0.0, training=False):
-    """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
-    the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
-    See discussion: https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956 ...
-    """
-    if drop_prob == 0.0 or not training:
+def drop_path(x, drop_prob=0., training=False):
+
+    if drop_prob == 0. or not training:
         return x
     keep_prob = paddle.to_tensor(1 - drop_prob, dtype=x.dtype)
     shape = (paddle.shape(x)[0], ) + (1, ) * (x.ndim - 1)
@@ -54,8 +52,6 @@ def drop_path(x, drop_prob=0.0, training=False):
 
 
 class DropPath(nn.Layer):
-    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
-
     def __init__(self, drop_prob=None):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
@@ -65,14 +61,14 @@ class DropPath(nn.Layer):
 
 
 class Mlp(nn.Layer):
-    def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            drop=0.0,
-            mp_degree=1, ):
+    def __init__(self,
+                 in_features,
+                 hidden_features=None,
+                 out_features=None,
+                 act_layer=nn.GELU,
+                 drop=0.,
+                 mp_degree=1,
+                 use_fusedlinear=False):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -82,14 +78,20 @@ class Mlp(nn.Layer):
                 hidden_features,
                 weight_attr=None,
                 has_bias=True,
-                gather_output=True, )
+                gather_output=True)
             self.fc2 = fleet.meta_parallel.ColumnParallelLinear(
                 hidden_features,
                 out_features,
                 weight_attr=None,
                 has_bias=True,
-                gather_output=True, )
+                gather_output=True)
         else:
+            if use_fusedlinear:
+                self.use_fusedlinear = True
+                self.fc1 = paddle.incubate.nn.FusedLinear(in_features,
+                                                          hidden_features)
+                self.fc2 = paddle.incubate.nn.FusedLinear(hidden_features,
+                                                          out_features)
             self.fc1 = nn.Linear(in_features, hidden_features)
             self.fc2 = nn.Linear(hidden_features, out_features)
         self.mp_degree = mp_degree
@@ -97,8 +99,20 @@ class Mlp(nn.Layer):
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
+        if getattr(self, "use_fusedlinear", False):
+            if isinstance(self.act, nn.GELU):
+                x = _legacy_C_ops.fused_gemm_epilogue(
+                    x, self.fc1.weight, self.fc1.bias, 'trans_x', False,
+                    'trans_y', False, 'activation', 'gelu')
+            elif isinstance(self.act, nn.ReLU):
+                x = _legacy_C_ops.fused_gemm_epilogue(
+                    x, self.fc1.weight, self.fc1.bias, 'trans_x', False,
+                    'trans_y', False, 'activation', 'relu')
+            else:
+                ValueError
+        else:
+            x = self.fc1(x)
+            x = self.act(x)
         x = self.fc2(x)
         if self.mp_degree > 1:
             with get_rng_state_tracker().rng_state("global_seed"):
@@ -109,17 +123,19 @@ class Mlp(nn.Layer):
 
 
 class Attention(nn.Layer):
-    def __init__(
-            self,
-            dim,
-            num_heads=8,
-            qkv_bias=False,
-            qk_scale=None,
-            attn_drop=0.0,
-            proj_drop=0.0,
-            window_size=None,
-            mp_degree=1, ):
+    def __init__(self,
+                 dim,
+                 num_heads=8,
+                 qkv_bias=False,
+                 qk_scale=None,
+                 attn_drop=0.,
+                 proj_drop=0.,
+                 window_size=None,
+                 mp_degree=1,
+                 use_fusedlinear=False,
+                 use_flash_attn=False):
         super().__init__()
+        self.use_flash_attn = use_flash_attn
         self.num_heads = num_heads
         head_dim = dim // num_heads
         self.scale = qk_scale or head_dim**-0.5
@@ -131,13 +147,20 @@ class Attention(nn.Layer):
                 has_bias=True,
                 gather_output=True)
         else:
-            self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
+            if use_fusedlinear:
+                self.qkv = paddle.incubate.nn.FusedLinear(
+                    dim, dim * 3, bias_attr=qkv_bias)
+            else:
+                self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
         if mp_degree > 1:
             self.proj = fleet.meta_parallel.ColumnParallelLinear(
                 dim, dim, weight_attr=None, has_bias=True, gather_output=True)
         else:
-            self.proj = nn.Linear(dim, dim)
+            if use_fusedlinear:
+                self.proj = paddle.incubate.nn.FusedLinear(dim, dim)
+            else:
+                self.proj = nn.Linear(dim, dim)
         self.mp_degree = mp_degree
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -155,17 +178,16 @@ class Attention(nn.Layer):
         coords = paddle.stack(paddle.meshgrid(
             [coords_h, coords_w]))  # 2, Wh, Ww
         coords_flatten = paddle.flatten(coords, 1)  # 2, Wh*Ww
-        relative_coords = (
-            coords_flatten[:, :, None] - coords_flatten[:, None, :]
-        )  # 2, Wh*Ww, Wh*Ww
+        relative_coords = coords_flatten[:, :,
+                                         None] - coords_flatten[:,
+                                                                None, :]  # 2, Wh*Ww, Wh*Ww
         relative_coords = relative_coords.transpose(
             [1, 2, 0])  # Wh*Ww, Wh*Ww, 2
         relative_coords[:, :, 0] += window_size[0] - 1  # shift to start from 0
         relative_coords[:, :, 1] += window_size[1] - 1
         relative_coords[:, :, 0] *= 2 * window_size[1] - 1
-        relative_position_index = paddle.zeros(
-            (window_size[0] * window_size[1] + 1, ) * 2,
-            dtype=relative_coords.dtype)
+        relative_position_index = \
+            paddle.zeros((window_size[0] * window_size[1] + 1, ) * 2, dtype=relative_coords.dtype)
         relative_position_index[1:, 1:] = relative_coords.sum(
             -1)  # Wh*Ww, Wh*Ww
         relative_position_index[0, 0:] = self.num_relative_distance - 3
@@ -175,34 +197,39 @@ class Attention(nn.Layer):
         self.register_buffer("relative_position_index", relative_position_index)
 
     def forward(self, x, rel_pos_bias=None):
-        # B= paddle.shape(x)[0]
         N, C = x.shape[1:]
-        # if self.q_bias is not None:
-        #     qkv_bias = torch.cat((self.q_bias, torch.zeros_like(self.v_bias, requires_grad=False), self.v_bias))
-        qkv = (self.qkv(x).reshape(
+        qkv = self.qkv(x).reshape(
             (-1, N, 3, self.num_heads, C // self.num_heads)).transpose(
-                (2, 0, 3, 1, 4)))
-        # print(self.qkv.bias[2100])
+                (2, 0, 3, 1, 4))
         q, k, v = qkv[0], qkv[1], qkv[2]
-
-        attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
-        if hasattr(self, "relative_position_bias_table"):
-            relative_position_bias = self.relative_position_bias_table[
-                self.relative_position_index.reshape([-1])].reshape([
-                    self.window_size[0] * self.window_size[1] + 1,
-                    self.window_size[0] * self.window_size[1] + 1,
-                    -1,
-                ])  # Wh*Ww,Wh*Ww,nH
-            relative_position_bias = relative_position_bias.transpose(
-                [2, 0, 1])  # nH, Wh*Ww, Wh*Ww
-            attn = attn + relative_position_bias.unsqueeze(0)
-
-        attn = nn.functional.softmax(attn, axis=-1)
-        if self.mp_degree > 1:
-            with get_rng_state_tracker().rng_state("global_seed"):
-                attn = self.attn_drop(attn)
+        if self.use_flash_attn:
+            x, _ = flash_attention(
+                q,
+                k,
+                v,
+                dropout=self.proj_drop.p,
+                causal=False,
+                return_softmax=False)
+            x = paddle.reshape(x, [0, 0, -1])
         else:
-            attn = self.attn_drop(attn)
+            attn = (q.matmul(k.transpose((0, 1, 3, 2)))) * self.scale
+            if hasattr(self, 'relative_position_bias_table'):
+                relative_position_bias = \
+                    self.relative_position_bias_table[self.relative_position_index.reshape([-1])].reshape([
+                        self.window_size[0] * self.window_size[1] + 1,
+                        self.window_size[0] * self.window_size[1] + 1, -1])  # Wh*Ww,Wh*Ww,nH
+                relative_position_bias = relative_position_bias.transpose(
+                    [2, 0, 1])  # nH, Wh*Ww, Wh*Ww
+                attn = attn + relative_position_bias.unsqueeze(0)
+
+            attn = nn.functional.softmax(attn, axis=-1)
+            if self.mp_degree > 1:
+                with get_rng_state_tracker().rng_state("global_seed"):
+                    attn = self.attn_drop(attn)
+            else:
+                attn = self.attn_drop(attn)
+
+            x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
 
         x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
         x = self.proj(x)
@@ -215,22 +242,23 @@ class Attention(nn.Layer):
 
 
 class Block(nn.Layer):
-    def __init__(
-            self,
-            dim,
-            num_heads,
-            mlp_ratio=4.0,
-            qkv_bias=False,
-            qk_scale=None,
-            drop=0.0,
-            init_values=0.0,
-            attn_drop=0.0,
-            drop_path=0.0,
-            act_layer=nn.GELU,
-            norm_layer="nn.LayerNorm",
-            epsilon=1e-5,
-            window_size=None,
-            mp_degree=1, ):
+    def __init__(self,
+                 dim,
+                 num_heads,
+                 mlp_ratio=4.,
+                 qkv_bias=False,
+                 qk_scale=None,
+                 drop=0.,
+                 init_values=0.,
+                 attn_drop=0.,
+                 drop_path=0.,
+                 act_layer=nn.GELU,
+                 norm_layer='nn.LayerNorm',
+                 epsilon=1e-5,
+                 window_size=None,
+                 mp_degree=1,
+                 use_flash_attn=False,
+                 use_fusedlinear=False):
         super().__init__()
         if isinstance(norm_layer, str):
             self.norm1 = eval(norm_layer)(dim, epsilon=epsilon)
@@ -247,7 +275,9 @@ class Block(nn.Layer):
             attn_drop=attn_drop,
             proj_drop=drop,
             window_size=window_size,
-            mp_degree=mp_degree, )
+            mp_degree=mp_degree,
+            use_flash_attn=use_flash_attn,
+            use_fusedlinear=use_fusedlinear)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path)
         self.gamma_1 = None
@@ -260,12 +290,12 @@ class Block(nn.Layer):
             raise TypeError(
                 "The norm_layer must be str or paddle.nn.layer.Layer class")
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(
-            in_features=dim,
-            hidden_features=mlp_hidden_dim,
-            act_layer=act_layer,
-            drop=drop,
-            mp_degree=mp_degree, )
+        self.mlp = Mlp(in_features=dim,
+                       hidden_features=mlp_hidden_dim,
+                       act_layer=act_layer,
+                       drop=drop,
+                       mp_degree=mp_degree,
+                       use_fusedlinear=use_fusedlinear)
 
     def forward(self, x, rel_pos_bias=None):
         if self.gamma_1 is not None:
@@ -297,17 +327,16 @@ class RelativePositionBias(nn.Layer):
         coords = paddle.stack(paddle.meshgrid(
             [coords_h, coords_w]))  # 2, Wh, Ww
         coords_flatten = paddle.flatten(coords, 1)  # 2, Wh*Ww
-        relative_coords = (
-            coords_flatten[:, :, None] - coords_flatten[:, None, :]
-        )  # 2, Wh*Ww, Wh*Ww
+        relative_coords = coords_flatten[:, :,
+                                         None] - coords_flatten[:,
+                                                                None, :]  # 2, Wh*Ww, Wh*Ww
         relative_coords = relative_coords.transpose(
             [1, 2, 0])  # Wh*Ww, Wh*Ww, 2
         relative_coords[:, :, 0] += window_size[0] - 1  # shift to start from 0
         relative_coords[:, :, 1] += window_size[1] - 1
         relative_coords[:, :, 0] *= 2 * window_size[1] - 1
-        relative_position_index = paddle.zeros(
-            (window_size[0] * window_size[1] + 1, ) * 2,
-            dtype=relative_coords.dtype)
+        relative_position_index = \
+            paddle.zeros((window_size[0] * window_size[1] + 1,) * 2, dtype=relative_coords.dtype)
         relative_position_index[1:, 1:] = relative_coords.sum(
             -1)  # Wh*Ww, Wh*Ww
         relative_position_index[0, 0:] = self.num_relative_distance - 3
@@ -319,24 +348,23 @@ class RelativePositionBias(nn.Layer):
         # trunc_normal_(self.relative_position_bias_table, std=.02)
 
     def forward(self):
-        relative_position_bias = self.relative_position_bias_table[
-            self.relative_position_index.reshape([-1])].reshape([
+        relative_position_bias = \
+            self.relative_position_bias_table[self.relative_position_index.reshape([-1])].reshape([
                 self.window_size[0] * self.window_size[1] + 1,
-                self.window_size[0] * self.window_size[1] + 1,
-                -1,
-            ])  # Wh*Ww,Wh*Ww,nH
+                self.window_size[0] * self.window_size[1] + 1, -1])  # Wh*Ww,Wh*Ww,nH
         return relative_position_bias.transpose([2, 0, 1])  # nH, Wh*Ww, Wh*Ww
 
 
 class PatchEmbed(nn.Layer):
-    """Image to Patch Embedding"""
+    """ Image to Patch Embedding
+    """
 
     def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
-        num_patches = (img_size[1] // patch_size[1]) * (img_size[0] //
-                                                        patch_size[0])
+        num_patches = (img_size[1] // patch_size[1]) * \
+            (img_size[0] // patch_size[0])
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = num_patches
@@ -346,37 +374,35 @@ class PatchEmbed(nn.Layer):
 
     def forward(self, x):
         B, C, H, W = x.shape
-        assert (
-            H == self.img_size[0] and W == self.img_size[1]
-        ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        assert H == self.img_size[0] and W == self.img_size[1], \
+            f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
 
         x = self.proj(x).flatten(2).transpose((0, 2, 1))
         return x
 
 
 class VisionTransformer(Blip2PretrainedModel):
-    """Vision Transformer with support for patch input"""
-
+    """ Vision Transformer with support for patch input
+    """
     main_input_name = "pixel_values"
     config_class = Blip2VisionConfig
 
     def __init__(self, config: Blip2VisionConfig, **kwargs):
         super().__init__(config)
-        from paddle.distributed import fleet
-
-        mp_degree = fleet.DistributedStrategy().hybrid_configs["mp_degree"]
+        mp_degree = config.mp_degree
+        use_flash_attn = getattr(config, "use_flash_attn", False)
+        use_fusedlinear = getattr(config, "use_fusedlinear", False)
         self.class_num = config.class_num
         self.num_features = self.embed_dim = config.embed_dim
         _img_size = to_2tuple(config.img_size)
         _patch_size = to_2tuple(config.patch_size)
-        self.window_size = (
-            _img_size[0] // _patch_size[0],
-            _img_size[1] // _patch_size[1], )
+        self.window_size = (_img_size[0] // _patch_size[0],
+                            _img_size[1] // _patch_size[1])
         self.patch_embed = PatchEmbed(
             img_size=config.img_size,
             patch_size=config.patch_size,
             in_chans=config.in_chans,
-            embed_dim=config.embed_dim, )
+            embed_dim=config.embed_dim)
         num_patches = self.patch_embed.num_patches
         self.cls_token = self.create_parameter(
             shape=(1, 1, config.embed_dim), default_initializer=zeros_)
@@ -407,7 +433,9 @@ class VisionTransformer(Blip2PretrainedModel):
                 norm_layer=config.norm_layer,
                 epsilon=config.epsilon,
                 window_size=self.window_size,
-                mp_degree=mp_degree, ) for i in range(config.depth)
+                mp_degree=mp_degree,
+                use_flash_attn=use_flash_attn,
+                use_fusedlinear=use_fusedlinear) for i in range(config.depth)
         ])
 
         self.mp_degree = mp_degree
@@ -419,9 +447,9 @@ class VisionTransformer(Blip2PretrainedModel):
     def _init_weights(self, m):
         if isinstance(m, (nn.Linear, fleet.meta_parallel.ColumnParallelLinear)):
             trunc_normal_(m.weight)
-            if (isinstance(m, (nn.Linear,
-                               fleet.meta_parallel.ColumnParallelLinear)) and
-                    m.bias is not None):
+            if isinstance(m,
+                          (nn.Linear, fleet.meta_parallel.ColumnParallelLinear
+                           )) and m.bias is not None:
                 zeros_(m.bias)
         elif isinstance(m, nn.LayerNorm):
             zeros_(m.bias)
@@ -442,14 +470,14 @@ class VisionTransformer(Blip2PretrainedModel):
         else:
             x = self.pos_drop(x)
         rel_pos_bias = self.rel_pos_bias() if hasattr(self,
-                                                      "rel_pos_bias") else None
+                                                      'rel_pos_bias') else None
         for blk in self.blocks:
             if self.gradient_checkpointing and self.training:
 
                 x = recompute(blk, x, rel_pos_bias=rel_pos_bias)
             else:
                 x = blk(x, rel_pos_bias=rel_pos_bias)
-        # x = self.norm(x)
+        #x = self.norm(x)
         return x
 
     def forward(self, x):
@@ -458,8 +486,8 @@ class VisionTransformer(Blip2PretrainedModel):
 
 
 def interpolate_pos_embed(model, checkpoint_model):
-    if "visual_encoder.pos_embed" in checkpoint_model:
-        pos_embed_checkpoint = checkpoint_model["visual_encoder.pos_embed"]
+    if 'visual_encoder.pos_embed' in checkpoint_model:
+        pos_embed_checkpoint = checkpoint_model['visual_encoder.pos_embed']
         embedding_size = pos_embed_checkpoint.shape[-1]
         num_patches = model.visual_encoder.patch_embed.num_patches
         num_extra_tokens = model.visual_encoder.pos_embed.shape[
@@ -482,13 +510,13 @@ def interpolate_pos_embed(model, checkpoint_model):
             pos_tokens = paddle.nn.functional.interpolate(
                 pos_tokens,
                 size=(new_size, new_size),
-                mode="bicubic",
-                align_corners=False, )
+                mode='bicubic',
+                align_corners=False)
             pos_tokens = pos_tokens.transpose((0, 2, 3, 1)).flatten(1, 2)
             new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
-            checkpoint_model["visual_encoder.pos_embed"] = new_pos_embed
-    elif "pos_embed" in checkpoint_model:
-        pos_embed_checkpoint = checkpoint_model["pos_embed"]
+            checkpoint_model['visual_encoder.pos_embed'] = new_pos_embed
+    elif 'pos_embed' in checkpoint_model:
+        pos_embed_checkpoint = checkpoint_model['pos_embed']
         embedding_size = pos_embed_checkpoint.shape[-1]
         num_patches = model.patch_embed.num_patches
         num_extra_tokens = model.pos_embed.shape[-2] - num_patches
@@ -510,8 +538,8 @@ def interpolate_pos_embed(model, checkpoint_model):
             pos_tokens = paddle.nn.functional.interpolate(
                 pos_tokens,
                 size=(new_size, new_size),
-                mode="bicubic",
-                align_corners=False, )
+                mode='bicubic',
+                align_corners=False)
             pos_tokens = pos_tokens.transpose((0, 2, 3, 1)).flatten(1, 2)
             new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
-            checkpoint_model["pos_embed"] = new_pos_embed
+            checkpoint_model['pos_embed'] = new_pos_embed

@@ -12,34 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import sys
-
+import os
 sys.path.insert(
-    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
-import random
-from dataclasses import dataclass, field
-
-import numpy as np
-import paddle
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
 import paddle.distributed as dist
 from paddle.distributed import fleet
+from dataclasses import dataclass, field
+import numpy as np
+import random
+import paddle
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
-from paddlenlp.transformers import (AutoConfig, AutoTokenizer, OPTConfig,
-                                    T5Config)
-
+from paddlenlp.transformers import AutoConfig, OPTConfig, T5Config
 from paddlemix.datasets import load_dataset
-from paddlemix.examples.blip2.utils import load_model
 from paddlemix.models.blip2.configuration import (
     Blip2Config, Blip2QFormerConfig, Blip2VisionConfig)
-from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
-from paddlemix.processors.blip_processing import (
-    Blip2Processor, BlipImageProcessor, BlipTextProcessor)
+from paddlemix.processors.blip_processing import Blip2Processor
 from paddlemix.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlemix.utils.log import logger
+from paddlenlp.transformers import AutoTokenizer
+from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
+from paddlemix.processors.blip_processing import BlipImageProcessor, BlipTextProcessor
+from paddlemix.examples.blip2.utils import load_model
 
 
 class BlipCollator:
@@ -69,7 +66,7 @@ class BlipCollator:
             mode=self.mode, )
 
         # batch.update({'image_id':image_id},)
-        batch.update({"text_input_stage1": text}, )
+        batch.update({'text_input_stage1': text}, )
         return batch
 
 
@@ -89,8 +86,8 @@ class DataArguments:
         }, )
     prompt: str = field(
         default="a photo of ",
-        metadata={"help": "The prompt of the image to be generated."},
-    )  # "Question: how many cats are there? Answer:"
+        metadata={"help": "The prompt of the image to be generated."
+                  })  # "Question: how many cats are there? Answer:"
 
 
 @dataclass
@@ -137,12 +134,12 @@ class PreTrainingArguments(TrainingArguments):
         default=256,
         metadata={
             "help": "Batch size per GPU core/CPU for training. (default: 8)"
-        }, )
+        })
     per_device_eval_batch_size: int = field(
         default=128,
         metadata={
             "help": " Batch size per GPU core/CPU for evaluation. (default:8)"
-        }, )
+        })
     output_dir: str = field(default=".", metadata={"help": "The output path"})
     do_eval: bool = field(
         default=False, metadata={"help": "Whether to evaluation."})
@@ -168,7 +165,7 @@ class PreTrainingArguments(TrainingArguments):
         default=1,
         metadata={
             "help": "Set the number of sharding, enable sharding parallel"
-        }, )
+        })
     pipeline_parallel_degree: int = field(
         default=1, metadata={"help": "Enable pipeline parallel"})
     checkpoint_steps: int = field(
@@ -249,7 +246,7 @@ def main():
         eval_dataset=eval_dataset,
         data_collator=blip_collator,
         processor=processor,
-        tokenizer=tokenizer_class, )
+        tokenizer=tokenizer_class)
     # Training
     checkpoint = None
     if training_args.resume_from_checkpoint is not None:
@@ -264,12 +261,12 @@ def main():
 
 
 def setdistenv(args):
-    if (args.tensor_parallel_degree * args.sharding_parallel_degree *
-            args.pipeline_parallel_degree != 1):
+    if args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree != 1:
         args.use_hybrid_parallel = True
-    args.dp_degree = dist.get_world_size() // (args.tensor_parallel_degree *
-                                               args.sharding_parallel_degree *
-                                               args.pipeline_parallel_degree)
+    args.dp_degree = dist.get_world_size() \
+                   // (args.tensor_parallel_degree \
+                    * args.sharding_parallel_degree * \
+                     args.pipeline_parallel_degree)
     strategy = fleet.DistributedStrategy()
     if args.tensor_parallel_degree > 1:
         strategy.tensor_parallel = True
@@ -289,7 +286,7 @@ def setdistenv(args):
     MICRO_BATCH_SIZE = 32
     strategy.pipeline_configs = {
         "accumulate_steps": BATCH_SIZE // MICRO_BATCH_SIZE,
-        "micro_batch_size": MICRO_BATCH_SIZE,
+        "micro_batch_size": MICRO_BATCH_SIZE
     }
     strategy.find_unused_parameters = True
 
@@ -305,8 +302,7 @@ def setdistenv(args):
     args.dp_rank = hcg.get_data_parallel_rank()
     args.sharding_rank = hcg.get_sharding_parallel_rank()
 
-    args.data_world_rank = (
-        args.dp_rank * args.sharding_parallel_degree + args.sharding_rank)
+    args.data_world_rank = args.dp_rank * args.sharding_parallel_degree + args.sharding_rank
     args.data_world_size = dist.get_world_size() // abs(
         args.tensor_parallel_degree * args.pipeline_parallel_degree)
 
@@ -316,12 +312,12 @@ def setdistenv(args):
 
 def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
     device_id = paddle.device.get_device()
-    assert "gpu" in device_id
+    assert 'gpu' in device_id
 
     random.seed(basic_seed + data_world_rank)
     np.random.seed(basic_seed + data_world_rank)
     paddle.seed(basic_seed + data_world_rank)
-    # TODO add manual_seed
+    #TODO add manual_seed
     # local_seed/ global_seed is used to control dropout in ModelParallel
     local_seed = 1024 + basic_seed + mp_rank * 100 + data_world_rank
     global_seed = 2048 + basic_seed + data_world_rank
