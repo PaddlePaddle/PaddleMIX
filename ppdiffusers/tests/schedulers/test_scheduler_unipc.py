@@ -16,15 +16,19 @@ import tempfile
 
 import paddle
 
-from ppdiffusers import (DEISMultistepScheduler, DPMSolverMultistepScheduler,
-                         DPMSolverSinglestepScheduler, UniPCMultistepScheduler)
+from ppdiffusers import (
+    DEISMultistepScheduler,
+    DPMSolverMultistepScheduler,
+    DPMSolverSinglestepScheduler,
+    UniPCMultistepScheduler,
+)
 
 from .test_schedulers import SchedulerCommonTest
 
 
 class UniPCMultistepSchedulerTest(SchedulerCommonTest):
-    scheduler_classes = (UniPCMultistepScheduler, )
-    forward_default_kwargs = (("num_inference_steps", 25), )
+    scheduler_classes = (UniPCMultistepScheduler,)
+    forward_default_kwargs = (("num_inference_steps", 25),)
 
     def get_scheduler_config(self, **kwargs):
         config = {
@@ -44,47 +48,35 @@ class UniPCMultistepSchedulerTest(SchedulerCommonTest):
         num_inference_steps = kwargs.pop("num_inference_steps", None)
         sample = self.dummy_sample
         residual = 0.1 * sample
-        dummy_past_residuals = [
-            residual + 0.2, residual + 0.15, residual + 0.10
-        ]
+        dummy_past_residuals = [residual + 0.2, residual + 0.15, residual + 0.10]
 
         for scheduler_class in self.scheduler_classes:
             scheduler_config = self.get_scheduler_config(**config)
             scheduler = scheduler_class(**scheduler_config)
             scheduler.set_timesteps(num_inference_steps)
             # copy over dummy past residuals
-            scheduler.model_outputs = dummy_past_residuals[:scheduler.config.
-                                                           solver_order]
+            scheduler.model_outputs = dummy_past_residuals[: scheduler.config.solver_order]
 
             with tempfile.TemporaryDirectory() as tmpdirname:
                 scheduler.save_config(tmpdirname)
                 new_scheduler = scheduler_class.from_pretrained(tmpdirname)
                 new_scheduler.set_timesteps(num_inference_steps)
                 # copy over dummy past residuals
-                new_scheduler.model_outputs = dummy_past_residuals[:
-                                                                   new_scheduler.
-                                                                   config.
-                                                                   solver_order]
+                new_scheduler.model_outputs = dummy_past_residuals[: new_scheduler.config.solver_order]
 
             output, new_output = sample, sample
-            for t in range(time_step,
-                           time_step + scheduler.config.solver_order + 1):
-                output = scheduler.step(residual, t, output,
-                                        **kwargs).prev_sample
-                new_output = new_scheduler.step(residual, t, new_output,
-                                                **kwargs).prev_sample
+            for t in range(time_step, time_step + scheduler.config.solver_order + 1):
+                output = scheduler.step(residual, t, output, **kwargs).prev_sample
+                new_output = new_scheduler.step(residual, t, new_output, **kwargs).prev_sample
 
-                assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
-                        ), "Scheduler outputs are not identical"
+                assert paddle.sum(paddle.abs(output - new_output)) < 1e-5, "Scheduler outputs are not identical"
 
     def check_over_forward(self, time_step=0, **forward_kwargs):
         kwargs = dict(self.forward_default_kwargs)
         num_inference_steps = kwargs.pop("num_inference_steps", None)
         sample = self.dummy_sample
         residual = 0.1 * sample
-        dummy_past_residuals = [
-            residual + 0.2, residual + 0.15, residual + 0.10
-        ]
+        dummy_past_residuals = [residual + 0.2, residual + 0.15, residual + 0.10]
 
         for scheduler_class in self.scheduler_classes:
             scheduler_config = self.get_scheduler_config()
@@ -92,8 +84,7 @@ class UniPCMultistepSchedulerTest(SchedulerCommonTest):
             scheduler.set_timesteps(num_inference_steps)
 
             # copy over dummy past residuals (must be after setting timesteps)
-            scheduler.model_outputs = dummy_past_residuals[:scheduler.config.
-                                                           solver_order]
+            scheduler.model_outputs = dummy_past_residuals[: scheduler.config.solver_order]
 
             with tempfile.TemporaryDirectory() as tmpdirname:
                 scheduler.save_config(tmpdirname)
@@ -102,18 +93,12 @@ class UniPCMultistepSchedulerTest(SchedulerCommonTest):
                 new_scheduler.set_timesteps(num_inference_steps)
 
                 # copy over dummy past residual (must be after setting timesteps)
-                new_scheduler.model_outputs = dummy_past_residuals[:
-                                                                   new_scheduler.
-                                                                   config.
-                                                                   solver_order]
+                new_scheduler.model_outputs = dummy_past_residuals[: new_scheduler.config.solver_order]
 
-            output = scheduler.step(residual, time_step, sample,
-                                    **kwargs).prev_sample
-            new_output = new_scheduler.step(residual, time_step, sample,
-                                            **kwargs).prev_sample
+            output = scheduler.step(residual, time_step, sample, **kwargs).prev_sample
+            new_output = new_scheduler.step(residual, time_step, sample, **kwargs).prev_sample
 
-            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
-                    ), "Scheduler outputs are not identical"
+            assert paddle.sum(paddle.abs(output - new_output)) < 1e-5, "Scheduler outputs are not identical"
 
     def full_loop(self, scheduler=None, **config):
         if scheduler is None:
@@ -148,27 +133,20 @@ class UniPCMultistepSchedulerTest(SchedulerCommonTest):
             sample = self.dummy_sample
             residual = 0.1 * sample
 
-            if num_inference_steps is not None and hasattr(scheduler,
-                                                           "set_timesteps"):
+            if num_inference_steps is not None and hasattr(scheduler, "set_timesteps"):
                 scheduler.set_timesteps(num_inference_steps)
-            elif num_inference_steps is not None and not hasattr(
-                    scheduler, "set_timesteps"):
+            elif num_inference_steps is not None and not hasattr(scheduler, "set_timesteps"):
                 kwargs["num_inference_steps"] = num_inference_steps
 
             # copy over dummy past residuals (must be done after set_timesteps)
-            dummy_past_residuals = [
-                residual + 0.2, residual + 0.15, residual + 0.10
-            ]
-            scheduler.model_outputs = dummy_past_residuals[:scheduler.config.
-                                                           solver_order]
+            dummy_past_residuals = [residual + 0.2, residual + 0.15, residual + 0.10]
+            scheduler.model_outputs = dummy_past_residuals[: scheduler.config.solver_order]
 
             time_step_0 = scheduler.timesteps[5]
             time_step_1 = scheduler.timesteps[6]
 
-            output_0 = scheduler.step(residual, time_step_0, sample,
-                                      **kwargs).prev_sample
-            output_1 = scheduler.step(residual, time_step_1, sample,
-                                      **kwargs).prev_sample
+            output_0 = scheduler.step(residual, time_step_0, sample, **kwargs).prev_sample
+            output_1 = scheduler.step(residual, time_step_1, sample, **kwargs).prev_sample
 
             self.assertEqual(output_0.shape, sample.shape)
             self.assertEqual(output_0.shape, output_1.shape)
@@ -207,7 +185,8 @@ class UniPCMultistepSchedulerTest(SchedulerCommonTest):
                             prediction_type=prediction_type,
                             sample_max_value=threshold,
                             solver_order=order,
-                            solver_type=solver_type, )
+                            solver_type=solver_type,
+                        )
 
     def test_prediction_type(self):
         for prediction_type in ["epsilon", "v_prediction"]:
@@ -220,13 +199,14 @@ class UniPCMultistepSchedulerTest(SchedulerCommonTest):
                     self.check_over_configs(
                         solver_order=order,
                         solver_type=solver_type,
-                        prediction_type=prediction_type, )
+                        prediction_type=prediction_type,
+                    )
                     sample = self.full_loop(
                         solver_order=order,
                         solver_type=solver_type,
-                        prediction_type=prediction_type, )
-                    assert not paddle.isnan(sample).any(
-                    ), "Samples have nan numbers"
+                        prediction_type=prediction_type,
+                    )
+                    assert not paddle.isnan(sample).any(), "Samples have nan numbers"
 
     def test_lower_order_final(self):
         self.check_over_configs(lower_order_final=True)
@@ -234,8 +214,7 @@ class UniPCMultistepSchedulerTest(SchedulerCommonTest):
 
     def test_inference_steps(self):
         for num_inference_steps in [1, 2, 3, 5, 10, 50, 100, 999, 1000]:
-            self.check_over_forward(
-                num_inference_steps=num_inference_steps, time_step=0)
+            self.check_over_forward(num_inference_steps=num_inference_steps, time_step=0)
 
     def test_full_loop_no_noise(self):
         sample = self.full_loop()
@@ -251,8 +230,7 @@ class UniPCMultistepSchedulerTest(SchedulerCommonTest):
 
     def test_fp16_support(self):
         scheduler_class = self.scheduler_classes[0]
-        scheduler_config = self.get_scheduler_config(
-            thresholding=True, dynamic_thresholding_ratio=0)
+        scheduler_config = self.get_scheduler_config(thresholding=True, dynamic_thresholding_ratio=0)
         scheduler = scheduler_class(**scheduler_config)
 
         num_inference_steps = 10
@@ -272,5 +250,4 @@ class UniPCMultistepSchedulerTest(SchedulerCommonTest):
             scheduler = scheduler_class(**scheduler_config)
 
             scheduler.set_timesteps(scheduler.config.num_train_timesteps)
-            assert len(scheduler.timesteps.unique(
-            )) == scheduler.num_inference_steps
+            assert len(scheduler.timesteps.unique()) == scheduler.num_inference_steps

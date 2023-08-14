@@ -22,8 +22,13 @@ import paddle
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
-from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
-                         StableDiffusionUpscalePipeline, UNet2DConditionModel)
+from ppdiffusers import (
+    AutoencoderKL,
+    DDIMScheduler,
+    DDPMScheduler,
+    StableDiffusionUpscalePipeline,
+    UNet2DConditionModel,
+)
 from ppdiffusers.utils import floats_tensor, load_image, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
@@ -39,8 +44,7 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
         batch_size = 1
         num_channels = 3
         sizes = (32, 32)
-        image = floats_tensor(
-            (batch_size, num_channels) + sizes, rng=random.Random(0))
+        image = floats_tensor((batch_size, num_channels) + sizes, rng=random.Random(0))
         return image
 
     @property
@@ -55,15 +59,16 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             down_block_types=(
                 "DownBlock2D",
                 "CrossAttnDownBlock2D",
-                "CrossAttnDownBlock2D", ),
-            up_block_types=("CrossAttnUpBlock2D", "CrossAttnUpBlock2D",
-                            "UpBlock2D"),
+                "CrossAttnDownBlock2D",
+            ),
+            up_block_types=("CrossAttnUpBlock2D", "CrossAttnUpBlock2D", "UpBlock2D"),
             cross_attention_dim=32,
             # SD2-specific config below
             attention_head_dim=8,
             use_linear_projection=True,
             only_cross_attention=(True, True, False),
-            num_class_embeds=100, )
+            num_class_embeds=100,
+        )
         return model
 
     @property
@@ -78,10 +83,9 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
                 "DownEncoderBlock2D",
                 "DownEncoderBlock2D",
             ],
-            up_block_types=[
-                "UpDecoderBlock2D", "UpDecoderBlock2D", "UpDecoderBlock2D"
-            ],
-            latent_channels=4, )
+            up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D", "UpDecoderBlock2D"],
+            latent_channels=4,
+        )
         return model
 
     @property
@@ -99,7 +103,8 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             vocab_size=1000,
             # SD2-specific config below
             hidden_act="gelu",
-            projection_dim=512, )
+            projection_dim=512,
+        )
         return CLIPTextModel(config).eval()
 
     def test_stable_diffusion_upscale(self):
@@ -108,11 +113,9 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
         scheduler = DDIMScheduler(prediction_type="v_prediction")
         vae = self.dummy_vae
         text_encoder = self.dummy_text_encoder
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         image = self.dummy_image.cpu().transpose(perm=[0, 2, 3, 1])[0]
-        low_res_image = Image.fromarray(np.uint8(image)).convert("RGB").resize(
-            (64, 64))
+        low_res_image = Image.fromarray(np.uint8(image)).convert("RGB").resize((64, 64))
         sd_pipe = StableDiffusionUpscalePipeline(
             unet=unet,
             low_res_scheduler=low_res_scheduler,
@@ -120,7 +123,8 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             vae=vae,
             text_encoder=text_encoder,
             tokenizer=tokenizer,
-            max_noise_level=350, )
+            max_noise_level=350,
+        )
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
@@ -131,7 +135,8 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             guidance_scale=6.0,
             noise_level=20,
             num_inference_steps=2,
-            output_type="np", )
+            output_type="np",
+        )
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = sd_pipe(
@@ -142,26 +147,27 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             noise_level=20,
             num_inference_steps=2,
             output_type="np",
-            return_dict=False, )[0]
+            return_dict=False,
+        )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         expected_height_width = low_res_image.size[0] * 4
-        assert image.shape == (1, expected_height_width, expected_height_width,
-                               3)
-        expected_slice = np.array([
-            0.0,
-            0.0,
-            0.3616839,
-            0.0,
-            0.04877859,
-            0.59195685,
-            0.23902711,
-            0.00838843,
-            0.5172206,
-        ])
+        assert image.shape == (1, expected_height_width, expected_height_width, 3)
+        expected_slice = np.array(
+            [
+                0.0,
+                0.0,
+                0.3616839,
+                0.0,
+                0.04877859,
+                0.59195685,
+                0.23902711,
+                0.00838843,
+                0.5172206,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_upscale_batch(self):
         unet = self.dummy_cond_unet_upscale
@@ -169,11 +175,9 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
         scheduler = DDIMScheduler(prediction_type="v_prediction")
         vae = self.dummy_vae
         text_encoder = self.dummy_text_encoder
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         image = self.dummy_image.cpu().transpose(perm=[0, 2, 3, 1])[0]
-        low_res_image = Image.fromarray(np.uint8(image)).convert("RGB").resize(
-            (64, 64))
+        low_res_image = Image.fromarray(np.uint8(image)).convert("RGB").resize((64, 64))
         sd_pipe = StableDiffusionUpscalePipeline(
             unet=unet,
             low_res_scheduler=low_res_scheduler,
@@ -181,7 +185,8 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             vae=vae,
             text_encoder=text_encoder,
             tokenizer=tokenizer,
-            max_noise_level=350, )
+            max_noise_level=350,
+        )
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         output = sd_pipe(
@@ -190,7 +195,8 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             guidance_scale=6.0,
             noise_level=20,
             num_inference_steps=2,
-            output_type="np", )
+            output_type="np",
+        )
         image = output.images
         assert image.shape[0] == 2
         generator = paddle.Generator().manual_seed(0)
@@ -202,7 +208,8 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             guidance_scale=6.0,
             noise_level=20,
             num_inference_steps=2,
-            output_type="np", )
+            output_type="np",
+        )
         image = output.images
         assert image.shape[0] == 2
 
@@ -213,11 +220,9 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
         scheduler = DDIMScheduler(prediction_type="v_prediction")
         vae = self.dummy_vae
         text_encoder = self.dummy_text_encoder
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         image = self.dummy_image.cpu().transpose(perm=[0, 2, 3, 1])[0]
-        low_res_image = Image.fromarray(np.uint8(image)).convert("RGB").resize(
-            (64, 64))
+        low_res_image = Image.fromarray(np.uint8(image)).convert("RGB").resize((64, 64))
         unet = unet.to(dtype=paddle.float16)
         text_encoder = text_encoder.to(dtype=paddle.float16)
         sd_pipe = StableDiffusionUpscalePipeline(
@@ -227,7 +232,8 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             vae=vae,
             text_encoder=text_encoder,
             tokenizer=tokenizer,
-            max_noise_level=350, )
+            max_noise_level=350,
+        )
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
@@ -236,10 +242,10 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             image=low_res_image,
             generator=generator,
             num_inference_steps=2,
-            output_type="np", ).images
+            output_type="np",
+        ).images
         expected_height_width = low_res_image.size[0] * 4
-        assert image.shape == (1, expected_height_width, expected_height_width,
-                               3)
+        assert image.shape == (1, expected_height_width, expected_height_width, 3)
 
 
 @slow
@@ -264,8 +270,7 @@ class StableDiffusionUpscalePipelineIntegrationTests(unittest.TestCase):
         pipe.enable_attention_slicing()
         prompt = "a cat sitting on a park bench"
         generator = paddle.Generator().manual_seed(0)
-        output = pipe(
-            prompt=prompt, image=image, generator=generator, output_type="np")
+        output = pipe(prompt=prompt, image=image, generator=generator, output_type="np")
         image = output.images[0]
         assert image.shape == (512, 512, 3)
         image = image[-3:, -3:, -1]

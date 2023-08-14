@@ -24,13 +24,11 @@ def extract_controlnet_ema_weights(model_path, output_path):
     for k in state_dict.keys():
         if k.startswith("controlnet."):
             flat_ema_key = "model_ema." + "".join(k.split(".")[1:])
-            ema_state_dict[k.replace("controlnet.", "")] = state_dict.get(
-                flat_ema_key)
+            ema_state_dict[k.replace("controlnet.", "")] = state_dict.get(flat_ema_key)
     if len(ema_state_dict) == 0:
         raise ValueError("Can not extract ema weights!")
     os.makedirs(output_path, exist_ok=True)
-    paddle.save(ema_state_dict,
-                os.path.join(output_path, "model_state.ema.pdparams"))
+    paddle.save(ema_state_dict, os.path.join(output_path, "model_state.ema.pdparams"))
     print(f"Save EMA weights to {output_path} !")
 
 
@@ -40,11 +38,13 @@ if __name__ == "__main__":
         "--model_path",
         type=str,
         default="./model_state.pdparams",
-        help="model_state.", )
+        help="model_state.",
+    )
     parser.add_argument(
         "--output_path",
         type=str,
         default="ema_controlnet",
-        help="The model output path.", )
+        help="The model output path.",
+    )
     args = parser.parse_args()
     extract_controlnet_ema_weights(args.model_path, args.output_path)

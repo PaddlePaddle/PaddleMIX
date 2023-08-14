@@ -26,8 +26,7 @@ from paddlemix import VisualGLMForConditionalGeneration, VisualGLMProcessor
 
 def predict(args):
     # load VisualGLM moel and processor
-    model = VisualGLMForConditionalGeneration.from_pretrained(
-        args.pretrained_name_or_path, dtype="float16")
+    model = VisualGLMForConditionalGeneration.from_pretrained(args.pretrained_name_or_path, dtype="float16")
     model.eval()
     processor = VisualGLMProcessor.from_pretrained(args.pretrained_name_or_path)
     print("load processor and model done!")
@@ -70,7 +69,8 @@ if __name__ == "__main__":
         "--pretrained_name_or_path",
         default="THUDM/visualglm-6b",
         type=str,
-        help="The dir name of visualglm checkpoint.", )
+        help="The dir name of visualglm checkpoint.",
+    )
     args = parser.parse_args()
 
     predict(args)

@@ -65,14 +65,15 @@ class PriorTransformer(ModelMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            num_attention_heads: int=32,
-            attention_head_dim: int=64,
-            num_layers: int=20,
-            embedding_dim: int=768,
-            num_embeddings=77,
-            additional_embeddings=4,
-            dropout: float=0.0, ):
+        self,
+        num_attention_heads: int = 32,
+        attention_head_dim: int = 64,
+        num_layers: int = 20,
+        embedding_dim: int = 768,
+        num_embeddings=77,
+        additional_embeddings=4,
+        dropout: float = 0.0,
+    ):
         super().__init__()
         self.num_attention_heads = num_attention_heads
         self.attention_head_dim = attention_head_dim
@@ -90,20 +91,26 @@ class PriorTransformer(ModelMixin, ConfigMixin):
         self.positional_embedding = self.create_parameter(
             (1, num_embeddings + additional_embeddings, inner_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0), )
+            default_initializer=nn.initializer.Constant(0.0),
+        )
         self.prd_embedding = self.create_parameter(
             (1, 1, inner_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0), )
-        self.transformer_blocks = nn.LayerList([
-            BasicTransformerBlock(
-                inner_dim,
-                num_attention_heads,
-                attention_head_dim,
-                dropout=dropout,
-                activation_fn="gelu",
-                attention_bias=True, ) for d in range(num_layers)
-        ])
+            default_initializer=nn.initializer.Constant(0.0),
+        )
+        self.transformer_blocks = nn.LayerList(
+            [
+                BasicTransformerBlock(
+                    inner_dim,
+                    num_attention_heads,
+                    attention_head_dim,
+                    dropout=dropout,
+                    activation_fn="gelu",
+                    attention_bias=True,
+                )
+                for d in range(num_layers)
+            ]
+        )
 
         self.norm_out = nn.LayerNorm(inner_dim)
         self.proj_to_clip_embeddings = nn.Linear(inner_dim, embedding_dim)
@@ -114,29 +121,33 @@ class PriorTransformer(ModelMixin, ConfigMixin):
                     num_embeddings + additional_embeddings,
                     num_embeddings + additional_embeddings,
                 ],
-                NEG_INF, ),
-            1, )
+                NEG_INF,
+            ),
+            1,
+        )
         causal_attention_mask = causal_attention_mask.unsqueeze(0)
-        self.register_buffer(
-            "causal_attention_mask", causal_attention_mask, persistable=False)
+        self.register_buffer("causal_attention_mask", causal_attention_mask, persistable=False)
 
         self.clip_mean = self.create_parameter(
             (1, embedding_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0), )
+            default_initializer=nn.initializer.Constant(0.0),
+        )
         self.clip_std = self.create_parameter(
             (1, embedding_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0), )
+            default_initializer=nn.initializer.Constant(0.0),
+        )
 
     def forward(
-            self,
-            hidden_states,
-            timestep: Union[paddle.Tensor, float, int],
-            proj_embedding: paddle.Tensor,
-            encoder_hidden_states: paddle.Tensor,
-            attention_mask: Optional[paddle.Tensor]=None,
-            return_dict: bool=True, ):
+        self,
+        hidden_states,
+        timestep: Union[paddle.Tensor, float, int],
+        proj_embedding: paddle.Tensor,
+        encoder_hidden_states: paddle.Tensor,
+        attention_mask: Optional[paddle.Tensor] = None,
+        return_dict: bool = True,
+    ):
         """
         Args:
             hidden_states (`paddle.Tensor` of shape `(batch_size, embedding_dim)`):
@@ -168,8 +179,7 @@ class PriorTransformer(ModelMixin, ConfigMixin):
             timesteps = timesteps[None]
 
         # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
-        timesteps = timesteps * paddle.ones(
-            (batch_size, ), dtype=timesteps.dtype)
+        timesteps = timesteps * paddle.ones((batch_size,), dtype=timesteps.dtype)
 
         timesteps_projected = self.time_proj(timesteps)
 
@@ -179,13 +189,10 @@ class PriorTransformer(ModelMixin, ConfigMixin):
         time_embeddings = self.time_embedding(timesteps_projected)
 
         proj_embeddings = self.embedding_proj(proj_embedding)
-        encoder_hidden_states = self.encoder_hidden_states_proj(
-            encoder_hidden_states)
+        encoder_hidden_states = self.encoder_hidden_states_proj(encoder_hidden_states)
         hidden_states = self.proj_in(hidden_states)
-        prd_embedding = self.prd_embedding.cast(hidden_states.dtype).expand(
-            [batch_size, -1, -1])
-        positional_embeddings = self.positional_embedding.cast(
-            hidden_states.dtype)
+        prd_embedding = self.prd_embedding.cast(hidden_states.dtype).expand([batch_size, -1, -1])
+        positional_embeddings = self.positional_embedding.cast(hidden_states.dtype)
 
         hidden_states = paddle.concat(
             [
@@ -195,23 +202,21 @@ class PriorTransformer(ModelMixin, ConfigMixin):
                 hidden_states[:, None, :],
                 prd_embedding,
             ],
-            axis=1, )
+            axis=1,
+        )
 
         hidden_states = hidden_states + positional_embeddings
 
         if attention_mask is not None:
-            attention_mask = (
-                1 - attention_mask.cast(hidden_states.dtype)) * NEG_INF
+            attention_mask = (1 - attention_mask.cast(hidden_states.dtype)) * NEG_INF
             attention_mask = F.pad(
                 attention_mask.unsqueeze(0),
                 (0, self.additional_embeddings),
                 value=0.0,
-                data_format="NCL", ).squeeze(0)
-            attention_mask = (
-                attention_mask[:, None, :] + self.causal_attention_mask
-            ).cast(hidden_states.dtype)
-            attention_mask = attention_mask.repeat_interleave(
-                self.config.num_attention_heads, axis=0)
+                data_format="NCL",
+            ).squeeze(0)
+            attention_mask = (attention_mask[:, None, :] + self.causal_attention_mask).cast(hidden_states.dtype)
+            attention_mask = attention_mask.repeat_interleave(self.config.num_attention_heads, axis=0)
 
         for block in self.transformer_blocks:
             hidden_states = block(hidden_states, attention_mask=attention_mask)
@@ -221,10 +226,9 @@ class PriorTransformer(ModelMixin, ConfigMixin):
         predicted_image_embedding = self.proj_to_clip_embeddings(hidden_states)
 
         if not return_dict:
-            return (predicted_image_embedding, )
+            return (predicted_image_embedding,)
 
-        return PriorTransformerOutput(
-            predicted_image_embedding=predicted_image_embedding)
+        return PriorTransformerOutput(predicted_image_embedding=predicted_image_embedding)
 
     def post_process_latents(self, prior_latents):
         prior_latents = (prior_latents * self.clip_std) + self.clip_mean

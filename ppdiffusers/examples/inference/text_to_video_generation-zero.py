@@ -13,14 +13,14 @@
 # limitations under the License.
 
 import imageio
+
 # pip install imageio[ffmpeg]
 import paddle
 
 from ppdiffusers import TextToVideoZeroPipeline
 
 model_id = "runwayml/stable-diffusion-v1-5"
-pipe = TextToVideoZeroPipeline.from_pretrained(
-    model_id, paddle_dtype=paddle.float16)
+pipe = TextToVideoZeroPipeline.from_pretrained(model_id, paddle_dtype=paddle.float16)
 
 prompt = "A panda is playing guitar on times square"
 result = pipe(prompt=prompt).images

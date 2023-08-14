@@ -24,7 +24,8 @@ original_image = original_image.resize((768, 512))
 pipe = IFImg2ImgPipeline.from_pretrained(
     "DeepFloyd/IF-I-XL-v1.0",
     variant="fp16",
-    paddle_dtype=paddle.float16, )
+    paddle_dtype=paddle.float16,
+)
 pipe.enable_xformers_memory_efficient_attention()
 prompt = "A fantasy landscape in style minecraft"
 prompt_embeds, negative_embeds = pipe.encode_prompt(prompt)
@@ -33,25 +34,26 @@ image = pipe(
     image=original_image,
     prompt_embeds=prompt_embeds,
     negative_prompt_embeds=negative_embeds,
-    output_type="pd", ).images
+    output_type="pd",
+).images
 pipe.to(paddle_device="cpu")
 
 # save intermediate image
 pil_image = pd_to_pil(image)
-pil_image[0].save(
-    "./image_to_image_text_guided_generation-deepfloyd_if-if_stage_I.png")
+pil_image[0].save("./image_to_image_text_guided_generation-deepfloyd_if-if_stage_I.png")
 
 super_res_1_pipe = IFImg2ImgSuperResolutionPipeline.from_pretrained(
     "DeepFloyd/IF-II-L-v1.0",
     text_encoder=None,
     variant="fp16",
-    paddle_dtype=paddle.float16, )
+    paddle_dtype=paddle.float16,
+)
 super_res_1_pipe.enable_xformers_memory_efficient_attention()
 
 image = super_res_1_pipe(
     image=image,
     original_image=original_image,
     prompt_embeds=prompt_embeds,
-    negative_prompt_embeds=negative_embeds, ).images
-image[0].save(
-    "./image_to_image_text_guided_generation-deepfloyd_if-if_stage_II.png")
+    negative_prompt_embeds=negative_embeds,
+).images
+image[0].save("./image_to_image_text_guided_generation-deepfloyd_if-if_stage_II.png")

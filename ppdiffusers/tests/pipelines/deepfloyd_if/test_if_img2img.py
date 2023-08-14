@@ -20,20 +20,19 @@ import paddle
 from ppdiffusers import IFImg2ImgPipeline
 from ppdiffusers.utils import floats_tensor
 
-from ..pipeline_params import (TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
-                               TEXT_GUIDED_IMAGE_VARIATION_PARAMS)
+from ..pipeline_params import (
+    TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
+    TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
+)
 from ..test_pipelines_common import PipelineTesterMixin
 from . import IFPipelineTesterMixin
 
 
-class IFImg2ImgPipelineFastTests(PipelineTesterMixin, IFPipelineTesterMixin,
-                                 unittest.TestCase):
+class IFImg2ImgPipelineFastTests(PipelineTesterMixin, IFPipelineTesterMixin, unittest.TestCase):
     pipeline_class = IFImg2ImgPipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS - {"width", "height"}
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS
-    required_optional_params = PipelineTesterMixin.required_optional_params - {
-        "latents"
-    }
+    required_optional_params = PipelineTesterMixin.required_optional_params - {"latents"}
 
     def get_dummy_components(self):
         return self._get_dummy_components()
@@ -58,8 +57,7 @@ class IFImg2ImgPipelineFastTests(PipelineTesterMixin, IFPipelineTesterMixin,
         self._test_save_load_optional_components()
 
     def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(
-            expected_max_diff=1e-3)
+        self._test_xformers_attention_forwardGenerator_pass(expected_max_diff=1e-3)
 
     def test_save_load_float16(self):
         # Due to non-determinism in save load of the hf-internal-testing/tiny-random-t5 text encoder
@@ -75,4 +73,6 @@ class IFImg2ImgPipelineFastTests(PipelineTesterMixin, IFPipelineTesterMixin,
         self._test_save_load_local()
 
     def test_inference_batch_single_identical(self):
-        self._test_inference_batch_single_identical(expected_max_diff=1e-2, )
+        self._test_inference_batch_single_identical(
+            expected_max_diff=1e-2,
+        )

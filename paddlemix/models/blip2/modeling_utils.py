@@ -13,14 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
 
 import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-
-from paddlemix.utils.log import logger
 
 
 def disabled_train(self, mode=True):
@@ -51,9 +48,9 @@ def tile(x, dim, n_tile):
     repeat_idx[dim] = n_tile
     x = x.repeat(*(repeat_idx))
     order_index = paddle.to_tensor(
-        np.concatenate(
-            [init_dim * np.arange(n_tile) + i for i in range(init_dim)]),
-        dtype="int64", )
+        np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)]),
+        dtype="int64",
+    )
     return paddle.index_select(x, dim, order_index)
 
 
@@ -80,8 +77,7 @@ class CrossEntropyLoss(nn.Layer):
     def __init__(self, reduction="mean", label_smoothing=None):
         super().__init__()
         if label_smoothing is not None:
-            assert (label_smoothing >= 0 and
-                    label_smoothing <= 1), "label_smoothing must be in [0, 1]"
+            assert label_smoothing >= 0 and label_smoothing <= 1, "label_smoothing must be in [0, 1]"
         self.epsilon = label_smoothing
         self.reduction = reduction
 
@@ -127,16 +123,12 @@ class GatherLayer(paddle.autograd.PyLayer):
 
     @staticmethod
     def forward(ctx, x):
-        output = [
-            paddle.zeros_like(x)
-            for _ in range(paddle.distributed.get_world_size())
-        ]
+        output = [paddle.zeros_like(x) for _ in range(paddle.distributed.get_world_size())]
         paddle.distributed.all_gather(output, x)
         return tuple(output)
 
     @staticmethod
     def backward(ctx, *grads):
-        # print(grads)
         all_gradients = paddle.stack(grads)
         paddle.distributed.all_reduce(all_gradients)
         return all_gradients[paddle.distributed.get_rank()]

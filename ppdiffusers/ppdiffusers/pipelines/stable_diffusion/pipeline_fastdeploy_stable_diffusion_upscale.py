@@ -21,24 +21,23 @@ import PIL
 from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import DDPMScheduler
 from ...utils import logging
-from ..fastdeploy_utils import (FastDeployDiffusionPipelineMixin,
-                                FastDeployRuntimeModel)
+from ..fastdeploy_utils import FastDeployDiffusionPipelineMixin, FastDeployRuntimeModel
 from ..pipeline_utils import ImagePipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
-class FastDeployStableDiffusionUpscalePipeline(
-        DiffusionPipeline, FastDeployDiffusionPipelineMixin):
+class FastDeployStableDiffusionUpscalePipeline(DiffusionPipeline, FastDeployDiffusionPipelineMixin):
     def __init__(
-            self,
-            vae: FastDeployRuntimeModel,
-            text_encoder: FastDeployRuntimeModel,
-            tokenizer: Any,
-            unet: FastDeployRuntimeModel,
-            low_res_scheduler: DDPMScheduler,
-            scheduler: Any,
-            max_noise_level: int=350, ):
+        self,
+        vae: FastDeployRuntimeModel,
+        text_encoder: FastDeployRuntimeModel,
+        tokenizer: Any,
+        unet: FastDeployRuntimeModel,
+        low_res_scheduler: DDPMScheduler,
+        scheduler: Any,
+        max_noise_level: int = 350,
+    ):
         super().__init__(
             vae=vae,
             text_encoder=text_encoder,
@@ -49,18 +48,19 @@ class FastDeployStableDiffusionUpscalePipeline(
             safety_checker=None,
             feature_extractor=None,
             watermarker=None,
-            max_noise_level=max_noise_level, )
+            max_noise_level=max_noise_level,
+        )
         self.post_init(vae_scaling_factor=0.08333)
 
     def check_inputs(self, prompt, image, noise_level, callback_steps):
         if not isinstance(prompt, str) and not isinstance(prompt, list):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
-        if (not isinstance(image, paddle.Tensor) and
-                not isinstance(image, PIL.Image.Image) and
-                not isinstance(image, list)):
+        if (
+            not isinstance(image, paddle.Tensor)
+            and not isinstance(image, PIL.Image.Image)
+            and not isinstance(image, list)
+        ):
             raise ValueError(
                 f"`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or `list` but is {type(image)}"
             )
@@ -83,39 +83,38 @@ class FastDeployStableDiffusionUpscalePipeline(
 
         # check noise level
         if noise_level > self.config.max_noise_level:
-            raise ValueError(
-                f"`noise_level` has to be <= {self.config.max_noise_level} but is {noise_level}"
-            )
+            raise ValueError(f"`noise_level` has to be <= {self.config.max_noise_level} but is {noise_level}")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
     def __call__(
-            self,
-            prompt: Union[str, List[str]],
-            image: Union[paddle.Tensor, PIL.Image.Image, List[PIL.Image.Image]],
-            num_inference_steps: int=75,
-            guidance_scale: float=9.0,
-            noise_level: int=20,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            parse_prompt_type: Optional[str]="lpw",
-            max_embeddings_multiples: Optional[int]=3,
-            prompt_embeds: Optional[np.ndarray]=None,
-            negative_prompt_embeds: Optional[np.ndarray]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            infer_op_dict: Dict[str, str]=None, ):
+        self,
+        prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, PIL.Image.Image, List[PIL.Image.Image]],
+        num_inference_steps: int = 75,
+        guidance_scale: float = 9.0,
+        noise_level: int = 20,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        parse_prompt_type: Optional[str] = "lpw",
+        max_embeddings_multiples: Optional[int] = 3,
+        prompt_embeds: Optional[np.ndarray] = None,
+        negative_prompt_embeds: Optional[np.ndarray] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        infer_op_dict: Dict[str, str] = None,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -204,7 +203,8 @@ class FastDeployStableDiffusionUpscalePipeline(
             negative_prompt_embeds=negative_prompt_embeds,
             parse_prompt_type=parse_prompt_type,
             max_embeddings_multiples=max_embeddings_multiples,
-            infer_op=infer_op_dict.get("text_encoder", None), )
+            infer_op=infer_op_dict.get("text_encoder", None),
+        )
 
         # 4. Preprocess image
         image = self.image_processor.preprocess(image)
@@ -215,13 +215,11 @@ class FastDeployStableDiffusionUpscalePipeline(
 
         # 5. Add noise to image
         noise_level = paddle.to_tensor([noise_level], dtype="int64")
-        noise = paddle.randn(
-            image.shape, generator=generator, dtype=text_embeddings.dtype)
+        noise = paddle.randn(image.shape, generator=generator, dtype=text_embeddings.dtype)
         image = self.low_res_scheduler.add_noise(image, noise, noise_level)
 
         batch_multiplier = 2 if do_classifier_free_guidance else 1
-        image = paddle.concat([image] * batch_multiplier *
-                              num_images_per_prompt)
+        image = paddle.concat([image] * batch_multiplier * num_images_per_prompt)
         noise_level = paddle.concat([noise_level] * image.shape[0])
 
         # 6. Prepare latent variables
@@ -231,7 +229,8 @@ class FastDeployStableDiffusionUpscalePipeline(
             height,
             width,
             generator,
-            latents, )
+            latents,
+        )
         NUM_UNET_INPUT_CHANNELS = self.unet_num_latent_channels
         NUM_LATENT_CHANNELS = self.vae_decoder_num_latent_channels
 
@@ -243,27 +242,24 @@ class FastDeployStableDiffusionUpscalePipeline(
                 f" {NUM_UNET_INPUT_CHANNELS} but received `num_channels_latents`: {NUM_LATENT_CHANNELS} +"
                 f" `num_channels_image`: {num_channels_image} "
                 f" = {NUM_LATENT_CHANNELS+num_channels_image}. Please verify the config of"
-                " `pipeline.unet` or your `image` input.")
+                " `pipeline.unet` or your `image` input."
+            )
 
         # 8. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 9. Denoising loop
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         is_scheduler_support_step_index = self.is_scheduler_support_step_index()
 
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = (paddle.concat([latents] * 2) if
-                                      do_classifier_free_guidance else latents)
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
                 if is_scheduler_support_step_index:
-                    latent_model_input = self.scheduler.scale_model_input(
-                        latent_model_input, t, step_index=i)
+                    latent_model_input = self.scheduler.scale_model_input(latent_model_input, t, step_index=i)
                 else:
-                    latent_model_input = self.scheduler.scale_model_input(
-                        latent_model_input, t)
+                    latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 unet_inputs = dict(
                     sample=paddle.concat(
@@ -272,16 +268,15 @@ class FastDeployStableDiffusionUpscalePipeline(
                     timestep=t,
                     encoder_hidden_states=prompt_embeds,
                     infer_op=infer_op_dict.get("unet", None),
-                    output_shape=latent_model_input.shape, )
+                    output_shape=latent_model_input.shape,
+                )
                 # predict the noise residual
                 noise_pred_unet = self.unet(**unet_inputs)[0]
 
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred_unet.chunk(
-                        2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
+                    noise_pred_uncond, noise_pred_text = noise_pred_unet.chunk(2)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
                 else:
                     noise_pred = noise_pred_unet
 
@@ -293,16 +288,14 @@ class FastDeployStableDiffusionUpscalePipeline(
                         latents,
                         step_index=i,
                         return_pred_original_sample=False,
-                        **extra_step_kwargs, )
+                        **extra_step_kwargs,
+                    )
                 else:
-                    scheduler_output = self.scheduler.step(
-                        noise_pred, t, latents, **extra_step_kwargs)
+                    scheduler_output = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)
                 latents = scheduler_output.prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -313,16 +306,18 @@ class FastDeployStableDiffusionUpscalePipeline(
         if not output_type == "latent":
             image = self._decode_vae_latents(
                 latents / self.vae_scaling_factor,
-                infer_op=infer_op_dict.get("vae_decoder", None), )
+                infer_op=infer_op_dict.get("vae_decoder", None),
+            )
         else:
             image = latents
 
         do_denormalize = [True] * image.shape[0]
 
-        image = self.image_processor.postprocess(
-            image, output_type=output_type, do_denormalize=do_denormalize)
+        image = self.image_processor.postprocess(image, output_type=output_type, do_denormalize=do_denormalize)
 
         if not return_dict:
-            return (image, )
+            return (image,)
 
-        return ImagePipelineOutput(images=image, )
+        return ImagePipelineOutput(
+            images=image,
+        )

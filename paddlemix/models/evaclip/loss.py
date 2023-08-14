@@ -20,10 +20,7 @@ from paddle.nn import functional as F
 from paddlemix.models.common.distributed_utils import allgather
 
 
-def gather_features_cat_group_bk(image_features,
-                                 text_features,
-                                 group,
-                                 gather_with_grad=False):
+def gather_features_cat_group_bk(image_features, text_features, group, gather_with_grad=False):
     if group.world_size <= 1:
         return image_features, text_features
     features = paddle.concat([image_features, text_features], axis=-1)
@@ -37,10 +34,7 @@ def gather_features_cat_group_bk(image_features,
     return image_features, text_features
 
 
-def gather_features_cat_group(image_features,
-                              text_features,
-                              group,
-                              gather_with_grad=False):
+def gather_features_cat_group(image_features, text_features, group, gather_with_grad=False):
     if group.world_size <= 1:
         return image_features, text_features
     if gather_with_grad:
@@ -57,34 +51,35 @@ def gather_features_cat_group(image_features,
 
 
 def gather_features(
-        image_features,
-        text_features,
-        local_loss=False,
-        gather_with_grad=False,
-        rank=0,
-        world_size=1,
-        use_horovod=False, ):
+    image_features,
+    text_features,
+    local_loss=False,
+    gather_with_grad=False,
+    rank=0,
+    world_size=1,
+    use_horovod=False,
+):
     hcg = paddle.distributed.fleet.get_hybrid_communicate_group()
     shardinggroup = hcg.get_sharding_parallel_group()
     dpgroup = hcg.get_data_parallel_group()
     if gather_with_grad:
         if shardinggroup.nranks > 1:
             image_features, text_features = gather_features_cat_group(
-                image_features, text_features, shardinggroup, gather_with_grad)
+                image_features, text_features, shardinggroup, gather_with_grad
+            )
         if dpgroup.nranks > 1:
             image_features, text_features = gather_features_cat_group(
-                image_features, text_features, dpgroup, gather_with_grad)
+                image_features, text_features, dpgroup, gather_with_grad
+            )
         all_image_features = image_features
         all_text_features = text_features
     else:
         image_features_bk = image_features
         text_features_bk = text_features
         if shardinggroup.nranks > 1:
-            image_features, text_features = gather_features_cat_group(
-                image_features, text_features, shardinggroup)
+            image_features, text_features = gather_features_cat_group(image_features, text_features, shardinggroup)
         if dpgroup.nranks > 1:
-            image_features, text_features = gather_features_cat_group(
-                image_features, text_features, dpgroup)
+            image_features, text_features = gather_features_cat_group(image_features, text_features, dpgroup)
         if not local_loss:
             dp_rank = hcg.get_data_parallel_rank()
             sharding_rank = hcg.get_sharding_parallel_rank()
@@ -104,13 +99,14 @@ def gather_features(
 
 
 def gather_features_bk(
-        image_features,
-        text_features,
-        local_loss=False,
-        gather_with_grad=False,
-        rank=0,
-        world_size=1,
-        use_horovod=False, ):
+    image_features,
+    text_features,
+    local_loss=False,
+    gather_with_grad=False,
+    rank=0,
+    world_size=1,
+    use_horovod=False,
+):
 
     # We gather tensors from all gpus
     if gather_with_grad:
@@ -137,14 +133,15 @@ def gather_features_bk(
 
 class ClipLoss(nn.Layer):
     def __init__(
-            self,
-            local_loss=False,
-            gather_with_grad=False,
-            cache_labels=False,
-            visual_loss=True,
-            text_loss=False,
-            rank=0,
-            world_size=1, ):
+        self,
+        local_loss=False,
+        gather_with_grad=False,
+        cache_labels=False,
+        visual_loss=True,
+        text_loss=False,
+        rank=0,
+        world_size=1,
+    ):
         super().__init__()
         self.local_loss = local_loss
         self.gather_with_grad = gather_with_grad
@@ -163,18 +160,18 @@ class ClipLoss(nn.Layer):
                 self.local_loss,
                 self.gather_with_grad,
                 self.rank,
-                self.world_size, )
+                self.world_size,
+            )
 
             if self.local_loss:
-                logits_per_image = logit_scale * image_features @all_text_features.T
-                logits_per_text = logit_scale * text_features @all_image_features.T
+                logits_per_image = logit_scale * image_features @ all_text_features.T
+                logits_per_text = logit_scale * text_features @ all_image_features.T
             else:
-                logits_per_image = (logit_scale * all_image_features
-                                    @all_text_features.T)
+                logits_per_image = logit_scale * all_image_features @ all_text_features.T
                 logits_per_text = logits_per_image.T
         else:
-            logits_per_image = logit_scale * image_features @text_features.T
-            logits_per_text = logit_scale * text_features @image_features.T
+            logits_per_image = logit_scale * image_features @ text_features.T
+            logits_per_text = logit_scale * text_features @ image_features.T
 
         # calculated ground-truth and cache if enabled
         num_logits = logits_per_image.shape[0]

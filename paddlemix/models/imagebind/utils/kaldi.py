@@ -45,13 +45,10 @@ def _get_epsilon(device, dtype):
 
 def _next_power_of_2(x: int) -> int:
     """Returns the smallest power of 2 that is greater than x"""
-    return 1 if x == 0 else 2**(x - 1).bit_length()
+    return 1 if x == 0 else 2 ** (x - 1).bit_length()
 
 
-def _get_strided(waveform: paddle.Tensor,
-                 window_size: int,
-                 window_shift: int,
-                 snip_edges: bool) -> paddle.Tensor:
+def _get_strided(waveform: paddle.Tensor, window_size: int, window_shift: int, snip_edges: bool) -> paddle.Tensor:
     """Given a waveform (1D tensor of size ``num_samples``), it returns a 2D tensor (m, ``window_size``)
     representing how the window is shifted along the waveform. Each row is a frame.
 
@@ -90,15 +87,12 @@ def _get_strided(waveform: paddle.Tensor,
     return waveform.as_strided(sizes, strides)
 
 
-def _feature_window_function(window_type: str,
-                             window_size: int,
-                             blackman_coeff: float,
-                             device: str,
-                             dtype: int) -> paddle.Tensor:
+def _feature_window_function(
+    window_type: str, window_size: int, blackman_coeff: float, device: str, dtype: int
+) -> paddle.Tensor:
     """Returns a window function with the given type and size"""
     if window_type == HANNING:
-        return paddle.hann_window(
-            window_size, periodic=False, device=device, dtype=dtype)
+        return paddle.hann_window(window_size, periodic=False, device=device, dtype=dtype)
     elif window_type == HAMMING:
         return paddle.hamming_window(
             window_size,
@@ -106,82 +100,79 @@ def _feature_window_function(window_type: str,
             alpha=0.54,
             beta=0.46,
             device=device,
-            dtype=dtype, )
+            dtype=dtype,
+        )
     elif window_type == POVEY:
-        return paddle.hann_window(
-            window_size, periodic=False, device=device, dtype=dtype).pow(y=0.85)
+        return paddle.hann_window(window_size, periodic=False, device=device, dtype=dtype).pow(y=0.85)
     elif window_type == RECTANGULAR:
         return paddle.ones(shape=window_size, dtype=dtype)
 
     elif window_type == BLACKMAN:
         a = 2 * math.pi / (window_size - 1)
         window_function = paddle.arange(end=window_size).astype(dtype)
-        return (blackman_coeff - 0.5 * paddle.cos(x=a * window_function) +
-                (0.5 - blackman_coeff) * paddle.cos(x=2 * a * window_function))
+        return (
+            blackman_coeff
+            - 0.5 * paddle.cos(x=a * window_function)
+            + (0.5 - blackman_coeff) * paddle.cos(x=2 * a * window_function)
+        )
     else:
         raise Exception("Invalid window type " + window_type)
 
 
-def _get_log_energy(strided_input: paddle.Tensor,
-                    epsilon: paddle.Tensor,
-                    energy_floor: float) -> paddle.Tensor:
+def _get_log_energy(strided_input: paddle.Tensor, epsilon: paddle.Tensor, energy_floor: float) -> paddle.Tensor:
     """Returns the log energy of size (m) for a strided_input (m,*)"""
     device, dtype = strided_input.place, strided_input.dtype
-    log_energy = paddle.maximum(
-        x=strided_input.pow(y=2).sum(axis=1), y=epsilon).log()
+    log_energy = paddle.maximum(x=strided_input.pow(y=2).sum(axis=1), y=epsilon).log()
     if energy_floor == 0.0:
         return log_energy
     return paddle.maximum(
         x=log_energy,
-        y=paddle.to_tensor(
-            data=math.log(energy_floor), dtype=dtype, place=device), )
+        y=paddle.to_tensor(data=math.log(energy_floor), dtype=dtype, place=device),
+    )
 
 
 def _get_waveform_and_window_properties(
-        waveform: paddle.Tensor,
-        channel: int,
-        sample_frequency: float,
-        frame_shift: float,
-        frame_length: float,
-        round_to_power_of_two: bool,
-        preemphasis_coefficient: float, ) -> Tuple[paddle.Tensor, int, int,
-                                                   int]:
+    waveform: paddle.Tensor,
+    channel: int,
+    sample_frequency: float,
+    frame_shift: float,
+    frame_length: float,
+    round_to_power_of_two: bool,
+    preemphasis_coefficient: float,
+) -> Tuple[paddle.Tensor, int, int, int]:
     """Gets the waveform and window properties"""
     channel = max(channel, 0)
-    assert channel < waveform.shape[0], "Invalid channel {} for size {}".format(
-        channel, waveform.shape[0])
+    assert channel < waveform.shape[0], "Invalid channel {} for size {}".format(channel, waveform.shape[0])
     waveform = waveform[(channel), :]
     window_shift = int(sample_frequency * frame_shift * MILLISECONDS_TO_SECONDS)
     window_size = int(sample_frequency * frame_length * MILLISECONDS_TO_SECONDS)
-    padded_window_size = (_next_power_of_2(window_size)
-                          if round_to_power_of_two else window_size)
-    assert (2 <= window_size <= len(waveform)
-            ), "choose a window size {} that is [2, {}]".format(window_size,
-                                                                len(waveform))
+    padded_window_size = _next_power_of_2(window_size) if round_to_power_of_two else window_size
+    assert 2 <= window_size <= len(waveform), "choose a window size {} that is [2, {}]".format(
+        window_size, len(waveform)
+    )
     assert 0 < window_shift, "`window_shift` must be greater than 0"
     assert (
         padded_window_size % 2 == 0
     ), "the padded `window_size` must be divisible by two. use `round_to_power_of_two` or change `frame_length`"
-    assert (0.0 <= preemphasis_coefficient <= 1.0
-            ), "`preemphasis_coefficient` must be between [0,1]"
+    assert 0.0 <= preemphasis_coefficient <= 1.0, "`preemphasis_coefficient` must be between [0,1]"
     assert sample_frequency > 0, "`sample_frequency` must be greater than zero"
     return waveform, window_shift, window_size, padded_window_size
 
 
 def _get_window(
-        waveform: paddle.Tensor,
-        padded_window_size: int,
-        window_size: int,
-        window_shift: int,
-        window_type: str,
-        blackman_coeff: float,
-        snip_edges: bool,
-        raw_energy: bool,
-        energy_floor: float,
-        dither: float,
-        remove_dc_offset: bool,
-        preemphasis_coefficient: float, ) -> Tuple[paddle.Tensor,
-                                                   paddle.Tensor]:
+    waveform: paddle.Tensor,
+    padded_window_size: int,
+    window_size: int,
+    window_shift: int,
+    window_type: str,
+    blackman_coeff: float,
+    snip_edges: bool,
+    raw_energy: bool,
+    energy_floor: float,
+    dither: float,
+    remove_dc_offset: bool,
+    preemphasis_coefficient: float,
+) -> Tuple[paddle.Tensor, paddle.Tensor]:
     """Gets a window and its log energy
 
     Returns:
@@ -189,30 +180,25 @@ def _get_window(
     """
     device, dtype = waveform.place, waveform.dtype
     epsilon = _get_epsilon(device, dtype)
-    strided_input = _get_strided(waveform, window_size, window_shift,
-                                 snip_edges)
+    strided_input = _get_strided(waveform, window_size, window_shift, snip_edges)
     if dither != 0.0:
-        x = paddle.maximum(
-            x=epsilon, y=paddle.rand(
-                shape=strided_input.shape, dtype=dtype))
+        x = paddle.maximum(x=epsilon, y=paddle.rand(shape=strided_input.shape, dtype=dtype))
         rand_gauss = paddle.sqrt(x=-2 * x.log()) * paddle.cos(x=2 * math.pi * x)
         strided_input = strided_input + rand_gauss * dither
     if remove_dc_offset:
         row_means = paddle.mean(x=strided_input, axis=1).unsqueeze(axis=1)
         strided_input = strided_input - row_means
     if raw_energy:
-        signal_log_energy = _get_log_energy(strided_input, epsilon,
-                                            energy_floor)
+        signal_log_energy = _get_log_energy(strided_input, epsilon, energy_floor)
     if preemphasis_coefficient != 0.0:
         offset_strided_input = paddle.pad_from_torch(
-            strided_input.unsqueeze(axis=0), (1, 0),
-            mode="replicate").squeeze(axis=0)
+            strided_input.unsqueeze(axis=0), (1, 0), mode="replicate"
+        ).squeeze(axis=0)
 
-        strided_input = (strided_input - preemphasis_coefficient *
-                         offset_strided_input[:, :-1])
-    window_function = _feature_window_function(window_type, window_size,
-                                               blackman_coeff, device,
-                                               dtype).unsqueeze(axis=0)
+        strided_input = strided_input - preemphasis_coefficient * offset_strided_input[:, :-1]
+    window_function = _feature_window_function(window_type, window_size, blackman_coeff, device, dtype).unsqueeze(
+        axis=0
+    )
     strided_input = strided_input * window_function
     if padded_window_size != window_size:
         padding_right = padded_window_size - window_size
@@ -220,15 +206,14 @@ def _get_window(
             strided_input.unsqueeze(axis=0),
             (0, padding_right),
             mode="constant",
-            value=0, ).squeeze(axis=0)
+            value=0,
+        ).squeeze(axis=0)
     if not raw_energy:
-        signal_log_energy = _get_log_energy(strided_input, epsilon,
-                                            energy_floor)
+        signal_log_energy = _get_log_energy(strided_input, epsilon, energy_floor)
     return strided_input, signal_log_energy
 
 
-def _subtract_column_mean(tensor: paddle.Tensor,
-                          subtract_mean: bool) -> paddle.Tensor:
+def _subtract_column_mean(tensor: paddle.Tensor, subtract_mean: bool) -> paddle.Tensor:
     if subtract_mean:
         col_means = paddle.mean(x=tensor, axis=0).unsqueeze(axis=0)
         tensor = tensor - col_means
@@ -236,22 +221,23 @@ def _subtract_column_mean(tensor: paddle.Tensor,
 
 
 def spectrogram(
-        waveform: paddle.Tensor,
-        blackman_coeff: float=0.42,
-        channel: int=-1,
-        dither: float=0.0,
-        energy_floor: float=1.0,
-        frame_length: float=25.0,
-        frame_shift: float=10.0,
-        min_duration: float=0.0,
-        preemphasis_coefficient: float=0.97,
-        raw_energy: bool=True,
-        remove_dc_offset: bool=True,
-        round_to_power_of_two: bool=True,
-        sample_frequency: float=16000.0,
-        snip_edges: bool=True,
-        subtract_mean: bool=False,
-        window_type: str=POVEY, ) -> paddle.Tensor:
+    waveform: paddle.Tensor,
+    blackman_coeff: float = 0.42,
+    channel: int = -1,
+    dither: float = 0.0,
+    energy_floor: float = 1.0,
+    frame_length: float = 25.0,
+    frame_shift: float = 10.0,
+    min_duration: float = 0.0,
+    preemphasis_coefficient: float = 0.97,
+    raw_energy: bool = True,
+    remove_dc_offset: bool = True,
+    round_to_power_of_two: bool = True,
+    sample_frequency: float = 16000.0,
+    snip_edges: bool = True,
+    subtract_mean: bool = False,
+    window_type: str = POVEY,
+) -> paddle.Tensor:
     """Create a spectrogram from a raw audio signal. This matches the input/output of Kaldi's
     compute-spectrogram-feats.
 
@@ -288,18 +274,15 @@ def spectrogram(
     """
     device, dtype = waveform.place, waveform.dtype
     epsilon = _get_epsilon(device, dtype)
-    (
+    (waveform, window_shift, window_size, padded_window_size,) = _get_waveform_and_window_properties(
         waveform,
-        window_shift,
-        window_size,
-        padded_window_size, ) = _get_waveform_and_window_properties(
-            waveform,
-            channel,
-            sample_frequency,
-            frame_shift,
-            frame_length,
-            round_to_power_of_two,
-            preemphasis_coefficient, )
+        channel,
+        sample_frequency,
+        frame_shift,
+        frame_length,
+        round_to_power_of_two,
+        preemphasis_coefficient,
+    )
     if len(waveform) < min_duration * sample_frequency:
         return paddle.empty(shape=[0])
     strided_input, signal_log_energy = _get_window(
@@ -314,7 +297,8 @@ def spectrogram(
         energy_floor,
         dither,
         remove_dc_offset,
-        preemphasis_coefficient, )
+        preemphasis_coefficient,
+    )
     fft = paddle.fft.rfft(x=strided_input)
     power_spectrum = paddle.maximum(x=fft.abs().pow(y=2.0), y=epsilon).log()
     power_spectrum[:, (0)] = signal_log_energy
@@ -339,12 +323,13 @@ def mel_scale(freq: paddle.Tensor) -> paddle.Tensor:
 
 
 def vtln_warp_freq(
-        vtln_low_cutoff: float,
-        vtln_high_cutoff: float,
-        low_freq: float,
-        high_freq: float,
-        vtln_warp_factor: float,
-        freq: paddle.Tensor, ) -> paddle.Tensor:
+    vtln_low_cutoff: float,
+    vtln_high_cutoff: float,
+    low_freq: float,
+    high_freq: float,
+    vtln_warp_factor: float,
+    freq: paddle.Tensor,
+) -> paddle.Tensor:
     """This computes a VTLN warping function that is not the same as HTK's one,
     but has similar inputs (this function has the advantage of never producing
     empty bins).
@@ -381,11 +366,8 @@ def vtln_warp_freq(
     Returns:
         Tensor: Freq after vtln warp
     """
-    assert (vtln_low_cutoff > low_freq
-            ), "be sure to set the vtln_low option higher than low_freq"
-    assert (
-        vtln_high_cutoff < high_freq
-    ), "be sure to set the vtln_high option lower than high_freq [or negative]"
+    assert vtln_low_cutoff > low_freq, "be sure to set the vtln_low option higher than low_freq"
+    assert vtln_high_cutoff < high_freq, "be sure to set the vtln_high option lower than high_freq [or negative]"
     l = vtln_low_cutoff * max(1.0, vtln_warp_factor)
     h = vtln_high_cutoff * min(1.0, vtln_warp_factor)
     scale = 1.0 / vtln_warp_factor
@@ -395,9 +377,9 @@ def vtln_warp_freq(
     scale_left = (Fl - low_freq) / (l - low_freq)
     scale_right = (high_freq - Fh) / (high_freq - h)
     res = paddle.empty_like(x=freq)
-    outside_low_high_freq = paddle.less_than(
-        x=freq, y=paddle.to_tensor(low_freq)) | paddle.greater_than(
-            x=freq, y=paddle.to_tensor(high_freq))
+    outside_low_high_freq = paddle.less_than(x=freq, y=paddle.to_tensor(low_freq)) | paddle.greater_than(
+        x=freq, y=paddle.to_tensor(high_freq)
+    )
     before_l = paddle.less_than(x=freq, y=paddle.to_tensor(l))
     before_h = paddle.less_than(x=freq, y=paddle.to_tensor(h))
     after_h = paddle.greater_equal(x=freq, y=paddle.to_tensor(h))
@@ -409,12 +391,13 @@ def vtln_warp_freq(
 
 
 def vtln_warp_mel_freq(
-        vtln_low_cutoff: float,
-        vtln_high_cutoff: float,
-        low_freq,
-        high_freq: float,
-        vtln_warp_factor: float,
-        mel_freq: paddle.Tensor, ) -> paddle.Tensor:
+    vtln_low_cutoff: float,
+    vtln_high_cutoff: float,
+    low_freq,
+    high_freq: float,
+    vtln_warp_factor: float,
+    mel_freq: paddle.Tensor,
+) -> paddle.Tensor:
     """
     Args:
         vtln_low_cutoff (float): Lower frequency cutoffs for VTLN
@@ -434,18 +417,21 @@ def vtln_warp_mel_freq(
             low_freq,
             high_freq,
             vtln_warp_factor,
-            inverse_mel_scale(mel_freq), ))
+            inverse_mel_scale(mel_freq),
+        )
+    )
 
 
 def get_mel_banks(
-        num_bins: int,
-        window_length_padded: int,
-        sample_freq: float,
-        low_freq: float,
-        high_freq: float,
-        vtln_low: float,
-        vtln_high: float,
-        vtln_warp_factor: float, ) -> Tuple[paddle.Tensor, paddle.Tensor]:
+    num_bins: int,
+    window_length_padded: int,
+    sample_freq: float,
+    low_freq: float,
+    high_freq: float,
+    vtln_low: float,
+    vtln_high: float,
+    vtln_warp_factor: float,
+) -> Tuple[paddle.Tensor, paddle.Tensor]:
     """
     Returns:
         (Tensor, Tensor): The tuple consists of ``bins`` (which is
@@ -459,10 +445,8 @@ def get_mel_banks(
     if high_freq <= 0.0:
         high_freq += nyquist
     assert (
-        0.0 <= low_freq < nyquist and 0.0 < high_freq <= nyquist and
-        low_freq < high_freq
-    ), "Bad values in options: low-freq {} and high-freq {} vs. nyquist {}".format(
-        low_freq, high_freq, nyquist)
+        0.0 <= low_freq < nyquist and 0.0 < high_freq <= nyquist and low_freq < high_freq
+    ), "Bad values in options: low-freq {} and high-freq {} vs. nyquist {}".format(low_freq, high_freq, nyquist)
     fft_bin_width = sample_freq / window_length_padded
     mel_low_freq = mel_scale_scalar(low_freq)
     mel_high_freq = mel_scale_scalar(high_freq)
@@ -472,72 +456,69 @@ def get_mel_banks(
         vtln_high += nyquist
 
     assert (
-        vtln_warp_factor == 1.0 or low_freq < vtln_low < high_freq and
-        0.0 < vtln_high < high_freq and vtln_low < vtln_high
+        vtln_warp_factor == 1.0
+        or low_freq < vtln_low < high_freq
+        and 0.0 < vtln_high < high_freq
+        and vtln_low < vtln_high
     ), "Bad values in options: vtln-low {} and vtln-high {}, versus low-freq {} and high-freq {}".format(
-        vtln_low, vtln_high, low_freq, high_freq)
+        vtln_low, vtln_high, low_freq, high_freq
+    )
 
     bin = paddle.arange(end=num_bins).unsqueeze(axis=1)
     left_mel = mel_low_freq + bin * mel_freq_delta
     center_mel = mel_low_freq + (bin + 1.0) * mel_freq_delta
     right_mel = mel_low_freq + (bin + 2.0) * mel_freq_delta
     if vtln_warp_factor != 1.0:
-        left_mel = vtln_warp_mel_freq(vtln_low, vtln_high, low_freq, high_freq,
-                                      vtln_warp_factor, left_mel)
-        center_mel = vtln_warp_mel_freq(vtln_low, vtln_high, low_freq,
-                                        high_freq, vtln_warp_factor, center_mel)
-        right_mel = vtln_warp_mel_freq(vtln_low, vtln_high, low_freq, high_freq,
-                                       vtln_warp_factor, right_mel)
+        left_mel = vtln_warp_mel_freq(vtln_low, vtln_high, low_freq, high_freq, vtln_warp_factor, left_mel)
+        center_mel = vtln_warp_mel_freq(vtln_low, vtln_high, low_freq, high_freq, vtln_warp_factor, center_mel)
+        right_mel = vtln_warp_mel_freq(vtln_low, vtln_high, low_freq, high_freq, vtln_warp_factor, right_mel)
     center_freqs = inverse_mel_scale(center_mel)
-    mel = mel_scale(fft_bin_width * paddle.arange(end=num_fft_bins)).unsqueeze(
-        axis=0)
+    mel = mel_scale(fft_bin_width * paddle.arange(end=num_fft_bins)).unsqueeze(axis=0)
     up_slope = (mel - left_mel) / (center_mel - left_mel)
     down_slope = (right_mel - mel) / (right_mel - center_mel)
     if vtln_warp_factor == 1.0:
-        bins = paddle.maximum(
-            x=paddle.zeros(shape=[1]),
-            y=paddle.minimum(
-                x=up_slope, y=down_slope))
+        bins = paddle.maximum(x=paddle.zeros(shape=[1]), y=paddle.minimum(x=up_slope, y=down_slope))
     else:
         bins = paddle.zeros_like(x=up_slope)
-        up_idx = paddle.greater_than(
-            x=mel, y=paddle.to_tensor(left_mel)) & paddle.less_equal(
-                x=mel, y=paddle.to_tensor(center_mel))
-        down_idx = paddle.greater_than(
-            x=mel, y=paddle.to_tensor(center_mel)) & paddle.less_than(
-                x=mel, y=paddle.to_tensor(right_mel))
+        up_idx = paddle.greater_than(x=mel, y=paddle.to_tensor(left_mel)) & paddle.less_equal(
+            x=mel, y=paddle.to_tensor(center_mel)
+        )
+        down_idx = paddle.greater_than(x=mel, y=paddle.to_tensor(center_mel)) & paddle.less_than(
+            x=mel, y=paddle.to_tensor(right_mel)
+        )
         bins[up_idx] = up_slope[up_idx]
         bins[down_idx] = down_slope[down_idx]
     return bins, center_freqs
 
 
 def fbank(
-        waveform: paddle.Tensor,
-        blackman_coeff: float=0.42,
-        channel: int=-1,
-        dither: float=0.0,
-        energy_floor: float=1.0,
-        frame_length: float=25.0,
-        frame_shift: float=10.0,
-        high_freq: float=0.0,
-        htk_compat: bool=False,
-        low_freq: float=20.0,
-        min_duration: float=0.0,
-        num_mel_bins: int=23,
-        preemphasis_coefficient: float=0.97,
-        raw_energy: bool=True,
-        remove_dc_offset: bool=True,
-        round_to_power_of_two: bool=True,
-        sample_frequency: float=16000.0,
-        snip_edges: bool=True,
-        subtract_mean: bool=False,
-        use_energy: bool=False,
-        use_log_fbank: bool=True,
-        use_power: bool=True,
-        vtln_high: float=-500.0,
-        vtln_low: float=100.0,
-        vtln_warp: float=1.0,
-        window_type: str=POVEY, ) -> paddle.Tensor:
+    waveform: paddle.Tensor,
+    blackman_coeff: float = 0.42,
+    channel: int = -1,
+    dither: float = 0.0,
+    energy_floor: float = 1.0,
+    frame_length: float = 25.0,
+    frame_shift: float = 10.0,
+    high_freq: float = 0.0,
+    htk_compat: bool = False,
+    low_freq: float = 20.0,
+    min_duration: float = 0.0,
+    num_mel_bins: int = 23,
+    preemphasis_coefficient: float = 0.97,
+    raw_energy: bool = True,
+    remove_dc_offset: bool = True,
+    round_to_power_of_two: bool = True,
+    sample_frequency: float = 16000.0,
+    snip_edges: bool = True,
+    subtract_mean: bool = False,
+    use_energy: bool = False,
+    use_log_fbank: bool = True,
+    use_power: bool = True,
+    vtln_high: float = -500.0,
+    vtln_low: float = 100.0,
+    vtln_warp: float = 1.0,
+    window_type: str = POVEY,
+) -> paddle.Tensor:
     """Create a fbank from a raw audio signal. This matches the input/output of Kaldi's
     compute-fbank-feats.
 
@@ -586,18 +567,15 @@ def fbank(
         where m is calculated in _get_strided
     """
     device, dtype = waveform.place, waveform.dtype
-    (
+    (waveform, window_shift, window_size, padded_window_size,) = _get_waveform_and_window_properties(
         waveform,
-        window_shift,
-        window_size,
-        padded_window_size, ) = _get_waveform_and_window_properties(
-            waveform,
-            channel,
-            sample_frequency,
-            frame_shift,
-            frame_length,
-            round_to_power_of_two,
-            preemphasis_coefficient, )
+        channel,
+        sample_frequency,
+        frame_shift,
+        frame_length,
+        round_to_power_of_two,
+        preemphasis_coefficient,
+    )
     if len(waveform) < min_duration * sample_frequency:
         return paddle.empty(shape=[0], dtype=dtype)
 
@@ -613,7 +591,8 @@ def fbank(
         energy_floor,
         dither,
         remove_dc_offset,
-        preemphasis_coefficient, )
+        preemphasis_coefficient,
+    )
     spectrum = paddle.fft.rfft(x=strided_input).abs()
     if use_power:
         spectrum = spectrum.pow(y=2.0)
@@ -625,59 +604,56 @@ def fbank(
         high_freq,
         vtln_low,
         vtln_high,
-        vtln_warp, )
+        vtln_warp,
+    )
     mel_energies = mel_energies
-    mel_energies = paddle.pad_from_torch(
-        mel_energies, (0, 1), mode="constant", value=0)
+    mel_energies = paddle.pad_from_torch(mel_energies, (0, 1), mode="constant", value=0)
     mel_energies = paddle.mm(input=spectrum, mat2=mel_energies.T)
     if use_log_fbank:
-        mel_energies = paddle.maximum(
-            x=mel_energies, y=_get_epsilon(device, dtype)).log()
+        mel_energies = paddle.maximum(x=mel_energies, y=_get_epsilon(device, dtype)).log()
     if use_energy:
         signal_log_energy = signal_log_energy.unsqueeze(axis=1)
         if htk_compat:
-            mel_energies = paddle.concat(
-                x=(mel_energies, signal_log_energy), axis=1)
+            mel_energies = paddle.concat(x=(mel_energies, signal_log_energy), axis=1)
         else:
-            mel_energies = paddle.concat(
-                x=(signal_log_energy, mel_energies), axis=1)
+            mel_energies = paddle.concat(x=(signal_log_energy, mel_energies), axis=1)
     mel_energies = _subtract_column_mean(mel_energies, subtract_mean)
     return mel_energies
 
 
 def _get_lifter_coeffs(num_ceps: int, cepstral_lifter: float) -> paddle.Tensor:
     i = paddle.arange(end=num_ceps)
-    return 1.0 + 0.5 * cepstral_lifter * paddle.sin(x=math.pi * i /
-                                                    cepstral_lifter)
+    return 1.0 + 0.5 * cepstral_lifter * paddle.sin(x=math.pi * i / cepstral_lifter)
 
 
 def mfcc(
-        waveform: paddle.Tensor,
-        blackman_coeff: float=0.42,
-        cepstral_lifter: float=22.0,
-        channel: int=-1,
-        dither: float=0.0,
-        energy_floor: float=1.0,
-        frame_length: float=25.0,
-        frame_shift: float=10.0,
-        high_freq: float=0.0,
-        htk_compat: bool=False,
-        low_freq: float=20.0,
-        num_ceps: int=13,
-        min_duration: float=0.0,
-        num_mel_bins: int=23,
-        preemphasis_coefficient: float=0.97,
-        raw_energy: bool=True,
-        remove_dc_offset: bool=True,
-        round_to_power_of_two: bool=True,
-        sample_frequency: float=16000.0,
-        snip_edges: bool=True,
-        subtract_mean: bool=False,
-        use_energy: bool=False,
-        vtln_high: float=-500.0,
-        vtln_low: float=100.0,
-        vtln_warp: float=1.0,
-        window_type: str=POVEY, ) -> paddle.Tensor:
+    waveform: paddle.Tensor,
+    blackman_coeff: float = 0.42,
+    cepstral_lifter: float = 22.0,
+    channel: int = -1,
+    dither: float = 0.0,
+    energy_floor: float = 1.0,
+    frame_length: float = 25.0,
+    frame_shift: float = 10.0,
+    high_freq: float = 0.0,
+    htk_compat: bool = False,
+    low_freq: float = 20.0,
+    num_ceps: int = 13,
+    min_duration: float = 0.0,
+    num_mel_bins: int = 23,
+    preemphasis_coefficient: float = 0.97,
+    raw_energy: bool = True,
+    remove_dc_offset: bool = True,
+    round_to_power_of_two: bool = True,
+    sample_frequency: float = 16000.0,
+    snip_edges: bool = True,
+    subtract_mean: bool = False,
+    use_energy: bool = False,
+    vtln_high: float = -500.0,
+    vtln_low: float = 100.0,
+    vtln_warp: float = 1.0,
+    window_type: str = POVEY,
+) -> paddle.Tensor:
     """Create a mfcc from a raw audio signal. This matches the input/output of Kaldi's
     compute-mfcc-feats.
 
@@ -725,11 +701,11 @@ def mfcc(
         Tensor: A mfcc identical to what Kaldi would output. The shape is (m, ``num_ceps``)
         where m is calculated in _get_strided
     """
-    assert (num_ceps <= num_mel_bins
-            ), "num_ceps cannot be larger than num_mel_bins: %d vs %d" % (
-                num_ceps,
-                num_mel_bins, )
-    device, dtype = waveform.place, waveform.dtype
+    assert num_ceps <= num_mel_bins, "num_ceps cannot be larger than num_mel_bins: %d vs %d" % (
+        num_ceps,
+        num_mel_bins,
+    )
+    # device, dtype = waveform.place, waveform.dtype
     feature = fbank(
         waveform=waveform,
         blackman_coeff=blackman_coeff,
@@ -756,17 +732,17 @@ def mfcc(
         vtln_high=vtln_high,
         vtln_low=vtln_low,
         vtln_warp=vtln_warp,
-        window_type=window_type, )
+        window_type=window_type,
+    )
     if use_energy:
         signal_log_energy = feature[:, (num_mel_bins if htk_compat else 0)]
         mel_offset = int(not htk_compat)
-        feature = feature[:, mel_offset:num_mel_bins + mel_offset]
+        feature = feature[:, mel_offset : num_mel_bins + mel_offset]
 
     dct_matrix = _get_dct_matrix(num_ceps, num_mel_bins)
     feature = feature.matmul(y=dct_matrix)
     if cepstral_lifter != 0.0:
-        lifter_coeffs = _get_lifter_coeffs(num_ceps, cepstral_lifter).unsqueeze(
-            axis=0)
+        lifter_coeffs = _get_lifter_coeffs(num_ceps, cepstral_lifter).unsqueeze(axis=0)
 
         feature *= lifter_coeffs
     if use_energy:

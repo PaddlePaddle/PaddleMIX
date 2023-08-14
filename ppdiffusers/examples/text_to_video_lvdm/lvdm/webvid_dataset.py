@@ -38,16 +38,17 @@ class WebVidDataset(paddle.io.Dataset):
     """
 
     def __init__(
-            self,
-            data_root,
-            resolution,
-            video_length,
-            subset_split,
-            frame_stride,
-            spatial_transform="",
-            load_method="decord",
-            annotation_path=None,
-            tokenizer=None, ):
+        self,
+        data_root,
+        resolution,
+        video_length,
+        subset_split,
+        frame_stride,
+        spatial_transform="",
+        load_method="decord",
+        annotation_path=None,
+        tokenizer=None,
+    ):
         self.annotation_path = annotation_path
         self.data_root = data_root
         self.resolution = resolution
@@ -57,9 +58,7 @@ class WebVidDataset(paddle.io.Dataset):
         self.spatial_transform = spatial_transform
         self.load_method = load_method
         assert self.load_method in ["decord", "readvideo", "videoclips"]
-        assert self.subset_split in [
-            "train", "test", "all", "results_10M_train"
-        ]
+        assert self.subset_split in ["train", "test", "all", "results_10M_train"]
         self.exts = ["avi", "mp4", "webm"]
         if isinstance(self.resolution, int):
             self.resolution = [self.resolution, self.resolution]
@@ -67,22 +66,23 @@ class WebVidDataset(paddle.io.Dataset):
         self.max_resolution = max(self.resolution)
         if self.spatial_transform == "center_crop_resize":
             print("Spatial transform: center crop and then resize")
-            self.video_transform = paddle.vision.transforms.Compose([
-                paddle.vision.transforms.Resize(resolution),
-                CenterCropVideo(resolution),
-            ])
-            self.video_transform_step1 = paddle.vision.transforms.Compose([
-                paddle.vision.transforms.Resize(resolution),
-            ])
-            self.video_transform_step2 = paddle.vision.transforms.Compose(
-                [CenterCropVideo(resolution)])
+            self.video_transform = paddle.vision.transforms.Compose(
+                [
+                    paddle.vision.transforms.Resize(resolution),
+                    CenterCropVideo(resolution),
+                ]
+            )
+            self.video_transform_step1 = paddle.vision.transforms.Compose(
+                [
+                    paddle.vision.transforms.Resize(resolution),
+                ]
+            )
+            self.video_transform_step2 = paddle.vision.transforms.Compose([CenterCropVideo(resolution)])
         elif self.spatial_transform == "resize":
             print("Spatial transform: resize with no crop")
-            self.video_transform = paddle.vision.transforms.Resize(
-                (resolution, resolution))
+            self.video_transform = paddle.vision.transforms.Resize((resolution, resolution))
         elif self.spatial_transform == "random_crop":
-            self.video_transform = paddle.vision.transforms.Compose(
-                [RandomCropVideo(resolution)])
+            self.video_transform = paddle.vision.transforms.Compose([RandomCropVideo(resolution)])
         elif self.spatial_transform == "":
             self.video_transform = None
         else:
@@ -96,7 +96,8 @@ class WebVidDataset(paddle.io.Dataset):
                 truncation=True,
                 max_length=tokenizer.model_max_length,
                 return_tensors="pd",
-                return_overflowing_tokens=False, ).input_ids[0]
+                return_overflowing_tokens=False,
+            ).input_ids[0]
         else:
             self.text_processing = None
 
@@ -111,12 +112,9 @@ class WebVidDataset(paddle.io.Dataset):
                 self.annotations = fp.read().splitlines()
         else:
             self.annotations = sum(
-                [
-                    glob.glob(
-                        os.path.join(data_folder, "**", f"*.{ext}"),
-                        recursive=True) for ext in self.exts
-                ],
-                [], )
+                [glob.glob(os.path.join(data_folder, "**", f"*.{ext}"), recursive=True) for ext in self.exts],
+                [],
+            )
         print(f"Number of videos = {len(self.annotations)}")
 
     def get_annotation(self, index):
@@ -140,7 +138,8 @@ class WebVidDataset(paddle.io.Dataset):
                     video_path,
                     ctx=cpu(0),
                     width=self.max_resolution,
-                    height=self.max_resolution, )
+                    height=self.max_resolution,
+                )
                 if len(video_reader) < self.video_length:
                     index += 1
                     continue
@@ -155,23 +154,20 @@ class WebVidDataset(paddle.io.Dataset):
         rand_idx = random.randint(0, len(all_frames) - self.video_length)
         frame_indices = list(range(rand_idx, rand_idx + self.video_length))
         frames = video_reader.get_batch(frame_indices)
-        assert (frames.shape[0] == self.video_length
-                ), f"{len(frames)}, self.video_length={self.video_length}"
-        frames = (paddle.to_tensor(data=frames.asnumpy())
-                  .astype(dtype="float32").transpose(perm=[0, 3, 1, 2]))
+        assert frames.shape[0] == self.video_length, f"{len(frames)}, self.video_length={self.video_length}"
+        frames = paddle.to_tensor(data=frames.asnumpy()).astype(dtype="float32").transpose(perm=[0, 3, 1, 2])
         if self.video_transform is not None:
             if self.spatial_transform == "center_crop_resize":
                 temp_frames = rearrange(frames, "c t h w -> (c t) h w")
                 temp_frames = self.video_transform_step1(temp_frames)
-                frames = rearrange(
-                    temp_frames, "(c t) h w -> c t h w", c=frames.shape[0])
+                frames = rearrange(temp_frames, "(c t) h w -> c t h w", c=frames.shape[0])
                 frames = self.video_transform_step2(frames)
             else:
                 frames = self.video_transform(frames)
         frames = frames.transpose(perm=[1, 0, 2, 3]).astype(dtype="float32")
-        assert (frames.shape[2] == self.resolution[0] and
-                frames.shape[3] == self.resolution[1]
-                ), f"frames={frames.shape}, self.resolution={self.resolution}"
+        assert (
+            frames.shape[2] == self.resolution[0] and frames.shape[3] == self.resolution[1]
+        ), f"frames={frames.shape}, self.resolution={self.resolution}"
         frames = (frames / 255 - 0.5) * 2
         data = {"video": frames, "caption": caption}
 
@@ -181,7 +177,9 @@ class WebVidDataset(paddle.io.Dataset):
                 "input_ids": self.text_processing(data["caption"]),
             }
         else:
-            tensor_out = {"pixel_values": data["video"], }
+            tensor_out = {
+                "pixel_values": data["video"],
+            }
         return tensor_out
 
     def get_data_readvideo(self, index):
@@ -215,9 +213,9 @@ def main():
         subset_split=subset_split,
         frame_stride=frame_stride,
         spatial_transform=spatial_transform,
-        annotation_path=annotation_path, )
-    dataloader = paddle.io.data.DataLoader(
-        dataset, batch_size=2, shuffle=False, num_workers=0)
+        annotation_path=annotation_path,
+    )
+    dataloader = paddle.io.data.DataLoader(dataset, batch_size=2, shuffle=False, num_workers=0)
     starttime = time.time()
     for id, data in enumerate(dataloader):
         endtime = time.time()
@@ -227,7 +225,8 @@ def main():
             endtime - starttime,
             " shape:",
             data["video"].shape,
-            data["caption"], )
+            data["caption"],
+        )
         starttime = endtime
     return
 

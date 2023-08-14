@@ -16,8 +16,7 @@ from ppdiffusers import UniDiffuserPipeline
 from ppdiffusers.utils import load_image
 
 pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser")
-image = load_image(
-    "https://bj.bcebos.com/v1/paddlenlp/models/community/thu-ml/data/space.jpg")
+image = load_image("https://bj.bcebos.com/v1/paddlenlp/models/community/thu-ml/data/space.jpg")
 result = pipe(mode="i2t", image=image, prompt=None)
 text = result.texts[0]
 with open("image_to_text_generation-unidiffuser-result.txt", "w") as f:

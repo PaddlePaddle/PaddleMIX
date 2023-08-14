@@ -30,13 +30,11 @@ from ..test_pipelines_common import to_np
 class IFPipelineTesterMixin:
     def _get_dummy_components(self):
         paddle.seed(0)
-        text_encoder = T5EncoderModel.from_pretrained(
-            "hf-internal-testing/tiny-random-t5")
+        text_encoder = T5EncoderModel.from_pretrained("hf-internal-testing/tiny-random-t5")
         text_encoder.eval()
 
         paddle.seed(0)
-        tokenizer = AutoTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-t5")
+        tokenizer = AutoTokenizer.from_pretrained("hf-internal-testing/tiny-random-t5")
 
         paddle.seed(0)
         unet = UNet2DConditionModel(
@@ -48,9 +46,7 @@ class IFPipelineTesterMixin:
                 "SimpleCrossAttnDownBlock2D",
             ],
             mid_block_type="UNetMidBlock2DSimpleCrossAttn",
-            up_block_types=[
-                "SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"
-            ],
+            up_block_types=["SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"],
             in_channels=3,
             out_channels=6,
             cross_attention_dim=32,
@@ -60,9 +56,9 @@ class IFPipelineTesterMixin:
             addition_embed_type_num_heads=2,
             cross_attention_norm="group_norm",
             resnet_time_scale_shift="scale_shift",
-            act_fn="gelu", )
-        unet.set_attn_processor(
-            AttnAddedKVProcessor())  # For reproducibility tests
+            act_fn="gelu",
+        )
+        unet.set_attn_processor(AttnAddedKVProcessor())  # For reproducibility tests
 
         paddle.seed(0)
         scheduler = DDPMScheduler(
@@ -74,7 +70,8 @@ class IFPipelineTesterMixin:
             dynamic_thresholding_ratio=0.95,
             sample_max_value=1.0,
             prediction_type="epsilon",
-            variance_type="learned_range", )
+            variance_type="learned_range",
+        )
 
         paddle.seed(0)
         watermarker = IFWatermarker()
@@ -91,13 +88,11 @@ class IFPipelineTesterMixin:
 
     def _get_superresolution_dummy_components(self):
         paddle.seed(0)
-        text_encoder = T5EncoderModel.from_pretrained(
-            "hf-internal-testing/tiny-random-t5")
+        text_encoder = T5EncoderModel.from_pretrained("hf-internal-testing/tiny-random-t5")
         text_encoder.eval()
 
         paddle.seed(0)
-        tokenizer = AutoTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-t5")
+        tokenizer = AutoTokenizer.from_pretrained("hf-internal-testing/tiny-random-t5")
 
         paddle.seed(0)
         unet = UNet2DConditionModel(
@@ -109,9 +104,7 @@ class IFPipelineTesterMixin:
                 "SimpleCrossAttnDownBlock2D",
             ],
             mid_block_type="UNetMidBlock2DSimpleCrossAttn",
-            up_block_types=[
-                "SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"
-            ],
+            up_block_types=["SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"],
             in_channels=6,
             out_channels=6,
             cross_attention_dim=32,
@@ -125,9 +118,9 @@ class IFPipelineTesterMixin:
             class_embed_type="timestep",
             mid_block_scale_factor=1.414,
             time_embedding_act_fn="gelu",
-            time_embedding_dim=32, )
-        unet.set_attn_processor(
-            AttnAddedKVProcessor())  # For reproducibility tests
+            time_embedding_dim=32,
+        )
+        unet.set_attn_processor(AttnAddedKVProcessor())  # For reproducibility tests
 
         paddle.seed(0)
         scheduler = DDPMScheduler(
@@ -139,14 +132,16 @@ class IFPipelineTesterMixin:
             dynamic_thresholding_ratio=0.95,
             sample_max_value=1.0,
             prediction_type="epsilon",
-            variance_type="learned_range", )
+            variance_type="learned_range",
+        )
 
         paddle.seed(0)
         image_noising_scheduler = DDPMScheduler(
             num_train_timesteps=1000,
             beta_schedule="squaredcos_cap_v2",
             beta_start=0.0001,
-            beta_end=0.02, )
+            beta_end=0.02,
+        )
 
         paddle.seed(0)
         watermarker = IFWatermarker()
@@ -226,8 +221,7 @@ class IFPipelineTesterMixin:
             pipe_loaded = self.pipeline_class.from_pretrained(tmpdir)
             pipe_loaded.set_progress_bar_config(disable=None)
 
-        pipe_loaded.unet.set_attn_processor(
-            AttnAddedKVProcessor())  # For reproducibility tests
+        pipe_loaded.unet.set_attn_processor(AttnAddedKVProcessor())  # For reproducibility tests
 
         for optional_component in pipe._optional_components:
             self.assertTrue(
@@ -278,8 +272,7 @@ class IFPipelineTesterMixin:
             pipe_loaded = self.pipeline_class.from_pretrained(tmpdir)
             pipe_loaded.set_progress_bar_config(disable=None)
 
-        pipe_loaded.unet.set_attn_processor(
-            AttnAddedKVProcessor())  # For reproducibility tests
+        pipe_loaded.unet.set_attn_processor(AttnAddedKVProcessor())  # For reproducibility tests
 
         inputs = self.get_dummy_inputs()
         output_loaded = pipe_loaded(**inputs)[0]

@@ -15,22 +15,14 @@
 from typing import Optional
 
 import paddle
-import paddle.nn.functional as F
 from paddle import Tensor, nn
 
 from .layers import MultiHeadAttention
-from .utils import (MLP, _get_activation_fn, _get_clones,
-                    gen_encoder_output_proposals, gen_sineembed_for_position,
-                    sigmoid_focal_loss)
+from .utils import _get_activation_fn, _get_clones
 
 
 class TextTransformer(nn.Layer):
-    def __init__(self,
-                 num_layers,
-                 d_model=256,
-                 nheads=8,
-                 dim_feedforward=2048,
-                 dropout=0.1):
+    def __init__(self, num_layers, d_model=256, nheads=8, dim_feedforward=2048, dropout=0.1):
         super().__init__()
         self.num_layers = num_layers
         self.d_model = d_model
@@ -42,12 +34,11 @@ class TextTransformer(nn.Layer):
             d_model=d_model,
             nhead=nheads,
             dim_feedforward=dim_feedforward,
-            dropout=dropout, )
+            dropout=dropout,
+        )
         self.layers = _get_clones(single_encoder_layer, num_layers)
 
-    def forward(self,
-                memory_text: paddle.Tensor,
-                text_attention_mask: paddle.Tensor):
+    def forward(self, memory_text: paddle.Tensor, text_attention_mask: paddle.Tensor):
         """
 
         Args:
@@ -74,13 +65,14 @@ class TextTransformer(nn.Layer):
 
 class TransformerEncoderLayer(nn.Layer):
     def __init__(
-            self,
-            d_model,
-            nhead,
-            dim_feedforward=2048,
-            dropout=0.1,
-            activation="relu",
-            normalize_before=False, ):
+        self,
+        d_model,
+        nhead,
+        dim_feedforward=2048,
+        dropout=0.1,
+        activation="relu",
+        normalize_before=False,
+    ):
         super().__init__()
         self.self_attn = MultiHeadAttention(d_model, nhead, dropout=dropout)
         # Implementation of Feedforward model
@@ -101,11 +93,12 @@ class TransformerEncoderLayer(nn.Layer):
         return tensor if pos is None else tensor + pos
 
     def forward(
-            self,
-            src,
-            src_mask: Optional[Tensor]=None,
-            src_key_padding_mask: Optional[Tensor]=None,
-            pos: Optional[Tensor]=None, ):
+        self,
+        src,
+        src_mask: Optional[Tensor] = None,
+        src_key_padding_mask: Optional[Tensor] = None,
+        pos: Optional[Tensor] = None,
+    ):
         # repeat attn mask
         if src_mask.dim() == 3 and src_mask.shape[0] == src.shape[1]:
             # bs, num_q, num_k

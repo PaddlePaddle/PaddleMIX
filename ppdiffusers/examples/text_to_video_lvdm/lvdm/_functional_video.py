@@ -30,16 +30,13 @@ def crop(clip, i, j, h, w):
     """
     if len(clip.shape) != 4:
         raise ValueError("clip should be a 4D tensor")
-    return clip[(...), i:i + h, j:j + w]
+    return clip[(...), i : i + h, j : j + w]
 
 
 def resize(clip, target_size, interpolation_mode):
     if len(target_size) != 2:
-        raise ValueError(
-            f"target size should be tuple (height, width), instead got {target_size}"
-        )
-    return paddle.nn.functional.interpolate(
-        x=clip, size=target_size, mode=interpolation_mode, align_corners=False)
+        raise ValueError(f"target size should be tuple (height, width), instead got {target_size}")
+    return paddle.nn.functional.interpolate(x=clip, size=target_size, mode=interpolation_mode, align_corners=False)
 
 
 def resized_crop(clip, i, j, h, w, size, interpolation_mode="bilinear"):
@@ -85,8 +82,7 @@ def to_tensor(clip):
     """
     _is_tensor_video_clip(clip)
     if not clip.dtype == "uint8":
-        raise TypeError("clip tensor should have data type uint8. Got %s" %
-                        str(clip.dtype))
+        raise TypeError("clip tensor should have data type uint8. Got %s" % str(clip.dtype))
     return clip.astype(dtype="float32").transpose(perm=[3, 0, 1, 2]) / 255.0
 
 
@@ -105,8 +101,7 @@ def normalize(clip, mean, std, inplace=False):
         clip = clip.clone()
     mean = paddle.to_tensor(data=mean, place=clip.place).astype(clip.dtype)
     std = paddle.to_tensor(data=std, place=clip.place).astype(clip.dtype)
-    clip = clip.substract(mean[:, (None), (None), (None)]).divide(std[:, (
-        None), (None), (None)])
+    clip = clip.substract(mean[:, (None), (None), (None)]).divide(std[:, (None), (None), (None)])
     return clip
 
 

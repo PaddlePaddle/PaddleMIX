@@ -16,8 +16,7 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
-from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
-                                    CLIPTokenizer)
+from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 
 from ...loaders import TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -48,8 +47,7 @@ EXAMPLE_DOC_STRING = """
 """
 
 
-class StableDiffusionModelEditingPipeline(DiffusionPipeline,
-                                          TextualInversionLoaderMixin):
+class StableDiffusionModelEditingPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
     r"""
     Pipeline for text-to-image model editing using "Editing Implicit Assumptions in Text-to-Image Diffusion Models".
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
@@ -80,22 +78,22 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
     _optional_components = ["safety_checker", "feature_extractor"]
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            scheduler: SchedulerMixin,
-            safety_checker: StableDiffusionSafetyChecker,
-            feature_extractor: CLIPImageProcessor,
-            requires_safety_checker: bool=True,
-            with_to_k: bool=True,
-            with_augs: list=AUGS_CONST, ):
+        self,
+        vae: AutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: UNet2DConditionModel,
+        scheduler: SchedulerMixin,
+        safety_checker: StableDiffusionSafetyChecker,
+        feature_extractor: CLIPImageProcessor,
+        requires_safety_checker: bool = True,
+        with_to_k: bool = True,
+        with_augs: list = AUGS_CONST,
+    ):
         super().__init__()
 
         if isinstance(scheduler, PNDMScheduler):
-            logger.error(
-                "PNDMScheduler for this pipeline is currently not supported.")
+            logger.error("PNDMScheduler for this pipeline is currently not supported.")
 
         if safety_checker is None and requires_safety_checker:
             logger.warning(
@@ -120,8 +118,9 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
             unet=unet,
             scheduler=scheduler,
             safety_checker=safety_checker,
-            feature_extractor=feature_extractor, )
-        self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+            feature_extractor=feature_extractor,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
         self.with_to_k = with_to_k
@@ -147,18 +146,12 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
                 append_ca(net[1])
 
         # get projection matrices
-        self.ca_clip_layers = [
-            l for l in ca_layers if l.to_v.in_features == 768
-        ]
+        self.ca_clip_layers = [l for l in ca_layers if l.to_v.in_features == 768]
         self.projection_matrices = [l.to_v for l in self.ca_clip_layers]
         self.og_matrices = [copy.deepcopy(l.to_v) for l in self.ca_clip_layers]
         if self.with_to_k:
-            self.projection_matrices = self.projection_matrices + [
-                l.to_k for l in self.ca_clip_layers
-            ]
-            self.og_matrices = self.og_matrices + [
-                copy.deepcopy(l.to_k) for l in self.ca_clip_layers
-            ]
+            self.projection_matrices = self.projection_matrices + [l.to_k for l in self.ca_clip_layers]
+            self.og_matrices = self.og_matrices + [copy.deepcopy(l.to_k) for l in self.ca_clip_layers]
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.enable_vae_slicing
     def enable_vae_slicing(self):
@@ -179,13 +172,14 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
     def _encode_prompt(
-            self,
-            prompt,
-            num_images_per_prompt,
-            do_classifier_free_guidance,
-            negative_prompt=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None, ):
+        self,
+        prompt,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt=None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+    ):
         r"""
         Encodes the prompt into text encoder hidden states.
         Args:
@@ -224,29 +218,31 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
                 padding="max_length",
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_input_ids = text_inputs.input_ids
-            untruncated_ids = self.tokenizer(
-                prompt, padding="longest", return_tensors="pd").input_ids
+            untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                    -1] and not paddle.equal_all(text_input_ids,
-                                                 untruncated_ids):
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+                text_input_ids, untruncated_ids
+            ):
                 removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
+                    untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1]
+                )
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
-                    f" {self.tokenizer.model_max_length} tokens: {removed_text}")
+                    f" {self.tokenizer.model_max_length} tokens: {removed_text}"
+                )
 
-            if (hasattr(self.text_encoder.config, "use_attention_mask") and
-                    self.text_encoder.config.use_attention_mask):
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
 
             prompt_embeds = self.text_encoder(
                 text_input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             prompt_embeds = prompt_embeds[0]
 
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
@@ -254,8 +250,7 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape(
-            [bs_embed * num_images_per_prompt, seq_len, -1])
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
@@ -265,21 +260,22 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
             elif type(prompt) is not type(negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}.")
+                    f" {type(prompt)}."
+                )
             elif isinstance(negative_prompt, str):
                 uncond_tokens = [negative_prompt]
             elif batch_size != len(negative_prompt):
                 raise ValueError(
                     f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                     f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`.")
+                    " the batch size of `prompt`."
+                )
             else:
                 uncond_tokens = negative_prompt
 
             # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
-                uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
-                                                          self.tokenizer)
+                uncond_tokens = self.maybe_convert_prompt(uncond_tokens, self.tokenizer)
 
             max_length = prompt_embeds.shape[1]
             uncond_input = self.tokenizer(
@@ -287,47 +283,43 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
 
-            if (hasattr(self.text_encoder.config, "use_attention_mask") and
-                    self.text_encoder.config.use_attention_mask):
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
 
             negative_prompt_embeds = self.text_encoder(
                 uncond_input.input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             negative_prompt_embeds = negative_prompt_embeds[0]
 
         if do_classifier_free_guidance:
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds.cast(
-                dtype=self.text_encoder.dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=self.text_encoder.dtype)
 
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                [1, num_images_per_prompt, 1])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
+            negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            prompt_embeds = paddle.concat(
-                [negative_prompt_embeds, prompt_embeds])
+            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
 
         return prompt_embeds
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is not None:
-            safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors="pd")
+            safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image,
-                clip_input=safety_checker_input.pixel_values.cast(dtype))
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype)
+            )
         else:
             has_nsfw_concept = None
         return image, has_nsfw_concept
@@ -348,54 +340,50 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.check_inputs
     def check_inputs(
-            self,
-            prompt,
-            height,
-            width,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        height,
+        width,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two.")
+                " only forward one of the two."
+            )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -408,23 +396,26 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
                 raise ValueError(
                     "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}.")
+                    f" {negative_prompt_embeds.shape}."
+                )
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(
-            self,
-            batch_size,
-            num_channels_latents,
-            height,
-            width,
-            dtype,
-            generator,
-            latents=None, ):
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
         shape = (
             batch_size,
             num_channels_latents,
             height // self.vae_scale_factor,
-            width // self.vae_scale_factor, )
+            width // self.vae_scale_factor,
+        )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -440,11 +431,12 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
 
     @paddle.no_grad()
     def edit_model(
-            self,
-            source_prompt: str,
-            destination_prompt: str,
-            lamb: float=0.1,
-            restart_params: bool=True, ):
+        self,
+        source_prompt: str,
+        destination_prompt: str,
+        lamb: float = 0.1,
+        restart_params: bool = True,
+    ):
         r"""
         Apply model editing via closed-form solution (see Eq. 5 in the TIME paper https://arxiv.org/abs/2303.08084)
         Args:
@@ -467,20 +459,17 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
                 l.to_v = copy.deepcopy(self.og_matrices[idx_])
                 self.projection_matrices[idx_] = l.to_v
                 if self.with_to_k:
-                    l.to_k = copy.deepcopy(self.og_matrices[num_ca_clip_layers +
-                                                            idx_])
+                    l.to_k = copy.deepcopy(self.og_matrices[num_ca_clip_layers + idx_])
                     self.projection_matrices[num_ca_clip_layers + idx_] = l.to_k
 
         # set up sentences
         old_texts = [source_prompt]
         new_texts = [destination_prompt]
         # add augmentations
-        base = old_texts[0] if old_texts[0][0:1] != "A" else "a" + old_texts[0][
-            1:]
+        base = old_texts[0] if old_texts[0][0:1] != "A" else "a" + old_texts[0][1:]
         for aug in self.with_augs:
             old_texts.append(aug + base)
-        base = new_texts[0] if new_texts[0][0:1] != "A" else "a" + new_texts[0][
-            1:]
+        base = new_texts[0] if new_texts[0][0:1] != "A" else "a" + new_texts[0][1:]
         for aug in self.with_augs:
             new_texts.append(aug + base)
 
@@ -492,7 +481,8 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
                 padding="max_length",
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_embeddings = self.text_encoder(text_input.input_ids)[0]
             old_emb, new_emb = text_embeddings
             old_embs.append(old_emb)
@@ -504,12 +494,12 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
             tokens_a = self.tokenizer(old_text).input_ids
             tokens_b = self.tokenizer(new_text).input_ids
             tokens_a = [
-                self.tokenizer.encode("a ")["input_ids"][1]
-                if self.tokenizer.decode(t) == "an" else t for t in tokens_a
+                self.tokenizer.encode("a ")["input_ids"][1] if self.tokenizer.decode(t) == "an" else t
+                for t in tokens_a
             ]
             tokens_b = [
-                self.tokenizer.encode("a ")["input_ids"][1]
-                if self.tokenizer.decode(t) == "an" else t for t in tokens_b
+                self.tokenizer.encode("a ")["input_ids"][1] if self.tokenizer.decode(t) == "an" else t
+                for t in tokens_b
             ]
             num_orig_tokens = len(tokens_a)
             idxs_replace = []
@@ -529,8 +519,7 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
 
         # prepare batch: for each pair of setences, old context and new values
         contexts, valuess = [], []
-        for old_emb, new_emb, idxs_replace in zip(old_embs, new_embs,
-                                                  idxs_replaces):
+        for old_emb, new_emb, idxs_replace in zip(old_embs, new_embs, idxs_replaces):
             context = old_emb.detach()
             values = []
             with paddle.no_grad():
@@ -545,52 +534,47 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
             mat1 = lamb * self.projection_matrices[layer_num].weight
 
             # mat2 = \lambda I + \sum{k k^T}
-            mat2 = lamb * paddle.eye(self.projection_matrices[layer_num]
-                                     .weight.shape[1])
+            mat2 = lamb * paddle.eye(self.projection_matrices[layer_num].weight.shape[1])
 
             # aggregate sums for mat1, mat2
             for context, values in zip(contexts, valuess):
-                context_vector = context.reshape(
-                    [context.shape[0], context.shape[1], 1])
-                context_vector_T = context.reshape(
-                    [context.shape[0], 1, context.shape[1]])
-                value_vector = values[layer_num].reshape([
-                    values[layer_num].shape[0], values[layer_num].shape[1], 1
-                ])
-                for_mat1 = (value_vector @context_vector_T).sum(axis=0)
-                for_mat2 = (context_vector @context_vector_T).sum(axis=0)
+                context_vector = context.reshape([context.shape[0], context.shape[1], 1])
+                context_vector_T = context.reshape([context.shape[0], 1, context.shape[1]])
+                value_vector = values[layer_num].reshape([values[layer_num].shape[0], values[layer_num].shape[1], 1])
+                for_mat1 = (value_vector @ context_vector_T).sum(axis=0)
+                for_mat2 = (context_vector @ context_vector_T).sum(axis=0)
                 mat1 += for_mat1
                 mat2 += for_mat2
 
             # update projection matrix
-            mat = mat1 @paddle.inverse(mat2)
-            self.projection_matrices[
-                layer_num].weight = paddle.create_parameter(
-                    shape=mat.shape,
-                    dtype=mat.dtype,
-                    default_initializer=paddle.nn.initializer.Assign(mat), )
+            mat = mat1 @ paddle.inverse(mat2)
+            self.projection_matrices[layer_num].weight = paddle.create_parameter(
+                shape=mat.shape,
+                dtype=mat.dtype,
+                default_initializer=paddle.nn.initializer.Assign(mat),
+            )
 
     @paddle.no_grad()
     def __call__(
-            self,
-            prompt: Union[str, List[str]]=None,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: int=1,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None, ):
+        self,
+        prompt: Union[str, List[str]] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: int = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
         Args:
@@ -668,7 +652,8 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
             callback_steps,
             negative_prompt,
             prompt_embeds,
-            negative_prompt_embeds, )
+            negative_prompt_embeds,
+        )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -690,7 +675,8 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds, )
+            negative_prompt_embeds=negative_prompt_embeds,
+        )
 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
@@ -705,43 +691,38 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
             width,
             prompt_embeds.dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 7. Denoising loop
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = (paddle.concat([latents] * 2) if
-                                      do_classifier_free_guidance else latents)
-                latent_model_input = self.scheduler.scale_model_input(
-                    latent_model_input, t)
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
-                    cross_attention_kwargs=cross_attention_kwargs, ).sample
+                    cross_attention_kwargs=cross_attention_kwargs,
+                ).sample
 
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
+                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -754,8 +735,7 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
             image = self.decode_latents(latents)
 
             # 9. Run safety checker
-            image, has_nsfw_concept = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
 
             # 10. Convert to PIL
             image = self.numpy_to_pil(image)
@@ -764,11 +744,9 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline,
             image = self.decode_latents(latents)
 
             # 9. Run safety checker
-            image, has_nsfw_concept = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
 
         if not return_dict:
             return (image, has_nsfw_concept)
 
-        return StableDiffusionPipelineOutput(
-            images=image, nsfw_content_detected=has_nsfw_concept)
+        return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

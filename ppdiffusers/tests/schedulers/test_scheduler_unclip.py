@@ -21,7 +21,7 @@ from .test_schedulers import SchedulerCommonTest
 
 # UnCLIPScheduler is a modified DDPMScheduler with a subset of the configuration.
 class UnCLIPSchedulerTest(SchedulerCommonTest):
-    scheduler_classes = (UnCLIPScheduler, )
+    scheduler_classes = (UnCLIPScheduler,)
 
     def get_scheduler_config(self, **kwargs):
         config = {
@@ -61,36 +61,27 @@ class UnCLIPSchedulerTest(SchedulerCommonTest):
                 if prev_timestep is not None and prev_timestep >= time_step:
                     continue
 
-                self.check_over_forward(
-                    time_step=time_step, prev_timestep=prev_timestep)
+                self.check_over_forward(time_step=time_step, prev_timestep=prev_timestep)
 
     def test_variance_fixed_small_log(self):
         scheduler_class = self.scheduler_classes[0]
-        scheduler_config = self.get_scheduler_config(
-            variance_type="fixed_small_log")
+        scheduler_config = self.get_scheduler_config(variance_type="fixed_small_log")
         scheduler = scheduler_class(**scheduler_config)
 
-        assert paddle.sum(paddle.abs(scheduler._get_variance(0) -
-                                     1.0000e-10)) < 1e-5
-        assert paddle.sum(
-            paddle.abs(scheduler._get_variance(487) - 0.0549625)) < 1e-5
-        assert paddle.sum(
-            paddle.abs(scheduler._get_variance(999) - 0.9994987)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(0) - 1.0000e-10)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(487) - 0.0549625)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(999) - 0.9994987)) < 1e-5
 
     def test_variance_learned_range(self):
         scheduler_class = self.scheduler_classes[0]
-        scheduler_config = self.get_scheduler_config(
-            variance_type="learned_range")
+        scheduler_config = self.get_scheduler_config(variance_type="learned_range")
         scheduler = scheduler_class(**scheduler_config)
 
         predicted_variance = 0.5
 
-        assert (scheduler._get_variance(
-            1, predicted_variance=predicted_variance) - -10.1712790 < 1e-5)
-        assert (scheduler._get_variance(
-            487, predicted_variance=predicted_variance) - -5.7998052 < 1e-5)
-        assert (scheduler._get_variance(
-            999, predicted_variance=predicted_variance) - -0.0010011 < 1e-5)
+        assert scheduler._get_variance(1, predicted_variance=predicted_variance) - -10.1712790 < 1e-5
+        assert scheduler._get_variance(487, predicted_variance=predicted_variance) - -5.7998052 < 1e-5
+        assert scheduler._get_variance(999, predicted_variance=predicted_variance) - -0.0010011 < 1e-5
 
     def test_full_loop(self):
         scheduler_class = self.scheduler_classes[0]
@@ -108,8 +99,7 @@ class UnCLIPSchedulerTest(SchedulerCommonTest):
             residual = model(sample, t)
 
             # 2. predict previous mean of sample x_t-1
-            pred_prev_sample = scheduler.step(
-                residual, t, sample, generator=generator).prev_sample
+            pred_prev_sample = scheduler.step(residual, t, sample, generator=generator).prev_sample
 
             sample = pred_prev_sample
 
@@ -143,11 +133,8 @@ class UnCLIPSchedulerTest(SchedulerCommonTest):
 
             # 2. predict previous mean of sample x_t-1
             pred_prev_sample = scheduler.step(
-                residual,
-                t,
-                sample,
-                prev_timestep=prev_timestep,
-                generator=generator).prev_sample
+                residual, t, sample, prev_timestep=prev_timestep, generator=generator
+            ).prev_sample
 
             sample = pred_prev_sample
 

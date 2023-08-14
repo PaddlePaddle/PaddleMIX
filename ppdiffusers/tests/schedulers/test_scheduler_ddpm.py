@@ -20,7 +20,7 @@ from .test_schedulers import SchedulerCommonTest
 
 
 class DDPMSchedulerTest(SchedulerCommonTest):
-    scheduler_classes = (DDPMScheduler, )
+    scheduler_classes = (DDPMScheduler,)
 
     def get_scheduler_config(self, **kwargs):
         config = {
@@ -40,8 +40,7 @@ class DDPMSchedulerTest(SchedulerCommonTest):
             self.check_over_configs(num_train_timesteps=timesteps)
 
     def test_betas(self):
-        for beta_start, beta_end in zip([0.0001, 0.001, 0.01, 0.1],
-                                        [0.002, 0.02, 0.2, 2]):
+        for beta_start, beta_end in zip([0.0001, 0.001, 0.01, 0.1], [0.002, 0.02, 0.2, 2]):
             self.check_over_configs(beta_start=beta_start, beta_end=beta_end)
 
     def test_schedules(self):
@@ -63,7 +62,8 @@ class DDPMSchedulerTest(SchedulerCommonTest):
                 self.check_over_configs(
                     thresholding=True,
                     prediction_type=prediction_type,
-                    sample_max_value=threshold, )
+                    sample_max_value=threshold,
+                )
 
     def test_prediction_type(self):
         for prediction_type in ["epsilon", "sample", "v_prediction"]:
@@ -79,10 +79,8 @@ class DDPMSchedulerTest(SchedulerCommonTest):
         scheduler = scheduler_class(**scheduler_config)
 
         assert paddle.sum(paddle.abs(scheduler._get_variance(0) - 0.0)) < 1e-5
-        assert paddle.sum(paddle.abs(scheduler._get_variance(487) -
-                                     0.00979)) < 1e-5
-        assert paddle.sum(paddle.abs(scheduler._get_variance(999) -
-                                     0.02)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(487) - 0.00979)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(999) - 0.02)) < 1e-5
 
     def test_full_loop_no_noise(self):
         scheduler_class = self.scheduler_classes[0]
@@ -100,8 +98,7 @@ class DDPMSchedulerTest(SchedulerCommonTest):
             residual = model(sample, t)
 
             # 2. predict previous mean of sample x_t-1
-            pred_prev_sample = scheduler.step(
-                residual, t, sample, generator=generator).prev_sample
+            pred_prev_sample = scheduler.step(residual, t, sample, generator=generator).prev_sample
 
             # if t > 0:
             #     noise = self.dummy_sample_deter
@@ -118,8 +115,7 @@ class DDPMSchedulerTest(SchedulerCommonTest):
 
     def test_full_loop_with_v_prediction(self):
         scheduler_class = self.scheduler_classes[0]
-        scheduler_config = self.get_scheduler_config(
-            prediction_type="v_prediction")
+        scheduler_config = self.get_scheduler_config(prediction_type="v_prediction")
         scheduler = scheduler_class(**scheduler_config)
 
         num_trained_timesteps = len(scheduler)
@@ -133,8 +129,7 @@ class DDPMSchedulerTest(SchedulerCommonTest):
             residual = model(sample, t)
 
             # 2. predict previous mean of sample x_t-1
-            pred_prev_sample = scheduler.step(
-                residual, t, sample, generator=generator).prev_sample
+            pred_prev_sample = scheduler.step(residual, t, sample, generator=generator).prev_sample
 
             # if t > 0:
             #     noise = self.dummy_sample_deter
@@ -178,13 +173,10 @@ class DDPMSchedulerTest(SchedulerCommonTest):
 
         timesteps = [100, 87, 50, 51, 0]
 
-        with self.assertRaises(
-                ValueError,
-                msg="`custom_timesteps` must be in descending order."):
+        with self.assertRaises(ValueError, msg="`custom_timesteps` must be in descending order."):
             scheduler.set_timesteps(timesteps=timesteps)
 
-    def test_custom_timesteps_passing_both_num_inference_steps_and_timesteps(
-            self):
+    def test_custom_timesteps_passing_both_num_inference_steps_and_timesteps(self):
         scheduler_class = self.scheduler_classes[0]
         scheduler_config = self.get_scheduler_config()
         scheduler = scheduler_class(**scheduler_config)
@@ -193,11 +185,10 @@ class DDPMSchedulerTest(SchedulerCommonTest):
         num_inference_steps = len(timesteps)
 
         with self.assertRaises(
-                ValueError,
-                msg="Can only pass one of `num_inference_steps` or `custom_timesteps`.",
+            ValueError,
+            msg="Can only pass one of `num_inference_steps` or `custom_timesteps`.",
         ):
-            scheduler.set_timesteps(
-                num_inference_steps=num_inference_steps, timesteps=timesteps)
+            scheduler.set_timesteps(num_inference_steps=num_inference_steps, timesteps=timesteps)
 
     def test_custom_timesteps_too_large(self):
         scheduler_class = self.scheduler_classes[0]
@@ -207,7 +198,7 @@ class DDPMSchedulerTest(SchedulerCommonTest):
         timesteps = [scheduler.config.num_train_timesteps]
 
         with self.assertRaises(
-                ValueError,
-                msg="`timesteps` must start before `self.config.train_timesteps`: {scheduler.config.num_train_timesteps}}",
+            ValueError,
+            msg="`timesteps` must start before `self.config.train_timesteps`: {scheduler.config.num_train_timesteps}}",
         ):
             scheduler.set_timesteps(timesteps=timesteps)

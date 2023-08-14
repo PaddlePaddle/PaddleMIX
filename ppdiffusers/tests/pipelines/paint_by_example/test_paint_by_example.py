@@ -22,14 +22,20 @@ import paddle
 from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionConfig
 from PIL import Image
 
-from ppdiffusers import (AutoencoderKL, PaintByExamplePipeline, PNDMScheduler,
-                         UNet2DConditionModel)
+from ppdiffusers import (
+    AutoencoderKL,
+    PaintByExamplePipeline,
+    PNDMScheduler,
+    UNet2DConditionModel,
+)
 from ppdiffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
 from ppdiffusers.utils import floats_tensor, load_image, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..pipeline_params import (IMAGE_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
-                               IMAGE_GUIDED_IMAGE_INPAINTING_PARAMS)
+from ..pipeline_params import (
+    IMAGE_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
+    IMAGE_GUIDED_IMAGE_INPAINTING_PARAMS,
+)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -48,7 +54,8 @@ class PaintByExamplePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             out_channels=4,
             down_block_types=("DownBlock2D", "CrossAttnDownBlock2D"),
             up_block_types=("CrossAttnUpBlock2D", "UpBlock2D"),
-            cross_attention_dim=32, )
+            cross_attention_dim=32,
+        )
         scheduler = PNDMScheduler(skip_prk_steps=True)
         paddle.seed(0)
         vae = AutoencoderKL(
@@ -57,7 +64,8 @@ class PaintByExamplePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             out_channels=3,
             down_block_types=["DownEncoderBlock2D", "DownEncoderBlock2D"],
             up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D"],
-            latent_channels=4, )
+            latent_channels=4,
+        )
         paddle.seed(0)
         config = CLIPVisionConfig(
             hidden_size=32,
@@ -67,7 +75,8 @@ class PaintByExamplePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             num_attention_heads=4,
             num_hidden_layers=5,
             image_size=32,
-            patch_size=4, )
+            patch_size=4,
+        )
         image_encoder = PaintByExampleImageEncoder(config, proj_size=32)
         feature_extractor = CLIPImageProcessor(crop_size=32, size=32)
         components = {
@@ -93,13 +102,9 @@ class PaintByExamplePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     def get_dummy_inputs(self, seed=0):
         image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed))
         image = image.cpu().transpose(perm=[0, 2, 3, 1])[0]
-        init_image = Image.fromarray(np.uint8(image)).convert("RGB").resize(
-            (64, 64))
-        mask_image = (
-            Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
-                (64, 64)))
-        example_image = Image.fromarray(np.uint8(image)).convert("RGB").resize(
-            (32, 32))
+        init_image = Image.fromarray(np.uint8(image)).convert("RGB").resize((64, 64))
+        mask_image = Image.fromarray(np.uint8(image + 4)).convert("RGB").resize((64, 64))
+        example_image = Image.fromarray(np.uint8(image)).convert("RGB").resize((32, 32))
         generator = paddle.Generator().manual_seed(seed)
 
         inputs = {
@@ -122,17 +127,19 @@ class PaintByExamplePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([
-            0.82595694,
-            0.51862055,
-            0.5474039,
-            0.2411496,
-            0.20220888,
-            0.3430622,
-            0.3558151,
-            0.06606945,
-            0.4550809,
-        ])
+        expected_slice = np.array(
+            [
+                0.82595694,
+                0.51862055,
+                0.5474039,
+                0.2411496,
+                0.20220888,
+                0.3430622,
+                0.3558151,
+                0.06606945,
+                0.4550809,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_paint_by_example_image_tensor(self):
@@ -172,8 +179,7 @@ class PaintByExamplePipelineIntegrationTests(unittest.TestCase):
         example_image = load_image(
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/paint_by_example/panda.jpg"
         )
-        pipe = PaintByExamplePipeline.from_pretrained(
-            "Fantasy-Studio/Paint-by-Example")
+        pipe = PaintByExamplePipeline.from_pretrained("Fantasy-Studio/Paint-by-Example")
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(seed=321)
         output = pipe(
@@ -183,12 +189,10 @@ class PaintByExamplePipelineIntegrationTests(unittest.TestCase):
             generator=generator,
             guidance_scale=5.0,
             num_inference_steps=50,
-            output_type="np", )
+            output_type="np",
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 512, 512, 3)
-        expected_slice = np.array([
-            0.4834, 0.4811, 0.4874, 0.5122, 0.5081, 0.5144, 0.5291, 0.529,
-            0.5374
-        ])
+        expected_slice = np.array([0.4834, 0.4811, 0.4874, 0.5122, 0.5081, 0.5144, 0.5291, 0.529, 0.5374])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.02

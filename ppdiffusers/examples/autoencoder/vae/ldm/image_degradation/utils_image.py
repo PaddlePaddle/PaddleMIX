@@ -71,14 +71,12 @@ def cubic(x):
     absx = paddle.abs(x)
     absx2 = absx**2
     absx3 = absx**3
-    return (1.5 * absx3 - 2.5 * absx2 + 1) * (
-        (absx <= 1).astype(absx.dtype)) + (
-            -0.5 * absx3 + 2.5 * absx2 - 4 * absx + 2) * ((
-                (absx > 1) * (absx <= 2)).astype(absx.dtype))
+    return (1.5 * absx3 - 2.5 * absx2 + 1) * ((absx <= 1).astype(absx.dtype)) + (
+        -0.5 * absx3 + 2.5 * absx2 - 4 * absx + 2
+    ) * (((absx > 1) * (absx <= 2)).astype(absx.dtype))
 
 
-def calculate_weights_indices(in_length, out_length, scale, kernel,
-                              kernel_width, antialiasing):
+def calculate_weights_indices(in_length, out_length, scale, kernel, kernel_width, antialiasing):
     if (scale < 1) and (antialiasing):
         # Use a modified kernel to simultaneously interpolate and antialias- larger kernel width
         kernel_width = kernel_width / scale
@@ -102,14 +100,13 @@ def calculate_weights_indices(in_length, out_length, scale, kernel,
 
     # The indices of the input pixels involved in computing the k-th output
     # pixel are in row k of the indices matrix.
-    indices = left.reshape([out_length, 1]).expand(
-        [out_length, P]) + paddle.linspace(0, P - 1, P).reshape([1, P]).expand(
-            [out_length, P])
+    indices = left.reshape([out_length, 1]).expand([out_length, P]) + paddle.linspace(0, P - 1, P).reshape(
+        [1, P]
+    ).expand([out_length, P])
 
     # The weights used to compute the k-th output pixel are in row k of the
     # weights matrix.
-    distance_to_center = u.reshape([out_length, 1]).expand(
-        [out_length, P]) - indices
+    distance_to_center = u.reshape([out_length, 1]).expand([out_length, P]) - indices
     # apply cubic kernel
     if (scale < 1) and (antialiasing):
         weights = scale * cubic(distance_to_center * scale)
@@ -158,13 +155,15 @@ def imresize_np(img, scale, antialiasing=True):
 
     # get weights and indices
     weights_H, indices_H, sym_len_Hs, sym_len_He = calculate_weights_indices(
-        in_H, out_H, scale, kernel, kernel_width, antialiasing)
+        in_H, out_H, scale, kernel, kernel_width, antialiasing
+    )
     weights_W, indices_W, sym_len_Ws, sym_len_We = calculate_weights_indices(
-        in_W, out_W, scale, kernel, kernel_width, antialiasing)
+        in_W, out_W, scale, kernel, kernel_width, antialiasing
+    )
     # process H dimension
     # symmetric copying
     img_aug = paddle.zeros([in_H + sym_len_Hs + sym_len_He, in_W, in_C])
-    img_aug[sym_len_Hs:sym_len_Hs + in_H] = img
+    img_aug[sym_len_Hs : sym_len_Hs + in_H] = img
 
     sym_patch = img[:sym_len_Hs, :, :]
     inv_idx = paddle.arange(sym_patch.shape[0] - 1, -1, -1).astype("int64")
@@ -174,20 +173,19 @@ def imresize_np(img, scale, antialiasing=True):
     sym_patch = img[-sym_len_He:, :, :]
     inv_idx = paddle.arange(sym_patch.shape[0] - 1, -1, -1).astype("int64")
     sym_patch_inv = sym_patch.index_select(inv_idx, axis=0)
-    img_aug[sym_len_Hs + in_H:sym_len_Hs + in_H + sym_len_He] = sym_patch_inv
+    img_aug[sym_len_Hs + in_H : sym_len_Hs + in_H + sym_len_He] = sym_patch_inv
 
     out_1 = paddle.zeros([out_H, in_W, in_C])
     kernel_width = weights_H.shape[1]
     for i in range(out_H):
         idx = int(indices_H[i][0])
         for j in range(out_C):
-            out_1[i, :, j] = (img_aug[idx:idx + kernel_width, :, j]
-                              .transpose([1, 0]).mv(weights_H[i]))
+            out_1[i, :, j] = img_aug[idx : idx + kernel_width, :, j].transpose([1, 0]).mv(weights_H[i])
 
     # process W dimension
     # symmetric copying
     out_1_aug = paddle.zeros([out_H, in_W + sym_len_Ws + sym_len_We, in_C])
-    out_1_aug[:, sym_len_Ws:sym_len_Ws + in_W] = out_1
+    out_1_aug[:, sym_len_Ws : sym_len_Ws + in_W] = out_1
 
     sym_patch = out_1[:, :sym_len_Ws, :]
     inv_idx = paddle.arange(sym_patch.shape[1] - 1, -1, -1).astype("int64")
@@ -197,16 +195,14 @@ def imresize_np(img, scale, antialiasing=True):
     sym_patch = out_1[:, -sym_len_We:, :]
     inv_idx = paddle.arange(sym_patch.shape[1] - 1, -1, -1).astype("int64")
     sym_patch_inv = sym_patch.index_select(inv_idx, axis=1)
-    out_1_aug[:, sym_len_Ws + in_W:sym_len_Ws + in_W +
-              sym_len_We] = sym_patch_inv
+    out_1_aug[:, sym_len_Ws + in_W : sym_len_Ws + in_W + sym_len_We] = sym_patch_inv
 
     out_2 = paddle.zeros([out_H, out_W, in_C])
     kernel_width = weights_W.shape[1]
     for i in range(out_W):
         idx = int(indices_W[i][0])
         for j in range(out_C):
-            out_2[:, i, j] = out_1_aug[:, idx:idx + kernel_width, j].mv(
-                weights_W[i])
+            out_2[:, i, j] = out_1_aug[:, idx : idx + kernel_width, j].mv(weights_W[i])
     if need_squeeze:
         out_2 = out_2.squeeze()
 

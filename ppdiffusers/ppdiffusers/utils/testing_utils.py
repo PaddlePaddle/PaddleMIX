@@ -31,10 +31,16 @@ import PIL.Image
 import PIL.ImageOps
 import requests
 
-from .import_utils import (BACKENDS_MAPPING, is_compel_available,
-                           is_fastdeploy_available, is_note_seq_available,
-                           is_opencv_available, is_paddle_available,
-                           is_paddle_version, is_torch_available)
+from .import_utils import (
+    BACKENDS_MAPPING,
+    is_compel_available,
+    is_fastdeploy_available,
+    is_note_seq_available,
+    is_opencv_available,
+    is_paddle_available,
+    is_paddle_version,
+    is_torch_available,
+)
 from .logging import get_logger
 
 global_rng = random.Random()
@@ -51,7 +57,8 @@ if is_paddle_available():
         if paddle_device not in available_backends:
             raise ValueError(
                 f"unknown paddle backend for ppdiffusers tests: {paddle_device}. Available backends are:"
-                f" {available_backends}")
+                f" {available_backends}"
+            )
         logger.info(f"paddle_device overrode to {paddle_device}")
     else:
         paddle_device = "gpu" if paddle.is_compiled_with_cuda() else "cpu"
@@ -74,25 +81,19 @@ def paddle_all_close(a, b, *args, **kwargs):
     if not is_paddle_available():
         raise ValueError("Paddle needs to be installed to use this function.")
     if not paddle.allclose(a, b, *args, **kwargs):
-        assert (
-            False
-        ), f"Max diff is absolute {(a - b).abs().max()}. Diff tensor is {(a - b).abs()}."
+        assert False, f"Max diff is absolute {(a - b).abs().max()}. Diff tensor is {(a - b).abs()}."
     return True
 
 
-def print_tensor_test(tensor,
-                      filename="test_corrections.txt",
-                      expected_tensor_name="expected_slice"):
+def print_tensor_test(tensor, filename="test_corrections.txt", expected_tensor_name="expected_slice"):
     test_name = os.environ.get("PYTEST_CURRENT_TEST")
     if not paddle.is_tensor(tensor):
         tensor = paddle.to_tensor(tensor)
 
-    tensor_str = str(tensor.detach().cpu().flatten().cast("float32")).replace(
-        "\n", "")
+    tensor_str = str(tensor.detach().cpu().flatten().cast("float32")).replace("\n", "")
     # format is usually:
     # expected_slice = np.array([-0.5713, -0.3018, -0.9814, 0.04663, -0.879, 0.76, -1.734, 0.1044, 1.161])
-    output_str = tensor_str.replace("tensor",
-                                    f"{expected_tensor_name} = np.array")
+    output_str = tensor_str.replace("tensor", f"{expected_tensor_name} = np.array")
     test_file, test_class, test_fn = test_name.split("::")
     test_fn = test_fn.split()[0]
     with open(filename, "a") as f:
@@ -182,27 +183,27 @@ def require_paddle_2_5(test_case):
     """
     return unittest.skipUnless(
         is_paddle_available() and is_paddle_version(">=", "2.5.0"),
-        "test requires Paddle 2.5", )(test_case)
+        "test requires Paddle 2.5",
+    )(test_case)
 
 
 def require_paddle(test_case):
     """
     Decorator marking a test that requires Paddle. These tests are skipped when Paddle isn't installed.
     """
-    return unittest.skipUnless(is_paddle_available(),
-                               "test requires Paddle")(test_case)
+    return unittest.skipUnless(is_paddle_available(), "test requires Paddle")(test_case)
 
 
 def require_torch(test_case):
     """Decorator marking a test that requires TORCH."""
-    return unittest.skipUnless(is_torch_available(),
-                               "test requires TORCH")(test_case)
+    return unittest.skipUnless(is_torch_available(), "test requires TORCH")(test_case)
 
 
 def require_paddle_gpu(test_case):
     """Decorator marking a test that requires CUDA and Paddle."""
-    return unittest.skipUnless(is_paddle_available() and paddle_device == "gpu",
-                               "test requires Paddle+CUDA")(test_case)
+    return unittest.skipUnless(is_paddle_available() and paddle_device == "gpu", "test requires Paddle+CUDA")(
+        test_case
+    )
 
 
 def require_compel(test_case):
@@ -210,38 +211,32 @@ def require_compel(test_case):
     Decorator marking a test that requires compel: https://github.com/damian0815/compel. These tests are skipped when
     the library is not installed.
     """
-    return unittest.skipUnless(is_compel_available(),
-                               "test requires compel")(test_case)
+    return unittest.skipUnless(is_compel_available(), "test requires compel")(test_case)
 
 
 def require_fastdeploy(test_case):
     """
     Decorator marking a test that requires fastdeploy. These tests are skipped when fastdeploy isn't installed.
     """
-    return unittest.skipUnless(is_fastdeploy_available(),
-                               "test requires fastdeploy")(test_case)
+    return unittest.skipUnless(is_fastdeploy_available(), "test requires fastdeploy")(test_case)
 
 
 def require_note_seq(test_case):
     """
     Decorator marking a test that requires note_seq. These tests are skipped when note_seq isn't installed.
     """
-    return unittest.skipUnless(is_note_seq_available(),
-                               "test requires note_seq")(test_case)
+    return unittest.skipUnless(is_note_seq_available(), "test requires note_seq")(test_case)
 
 
-def load_numpy(arry: Union[str, np.ndarray],
-               local_path: Optional[str]=None) -> np.ndarray:
+def load_numpy(arry: Union[str, np.ndarray], local_path: Optional[str] = None) -> np.ndarray:
     if isinstance(arry, str):
         # local_path = "/home/patrick_huggingface_co/"
         if local_path is not None:
             # local_path can be passed to correct images of tests
             return os.path.join(
                 local_path,
-                "/".join([
-                    arry.split("/")[-5], arry.split("/")[-2],
-                    arry.split("/")[-1]
-                ]), )
+                "/".join([arry.split("/")[-5], arry.split("/")[-2], arry.split("/")[-1]]),
+            )
         elif arry.startswith("http://") or arry.startswith("https://"):
             response = requests.get(arry)
             response.raise_for_status()
@@ -257,7 +252,8 @@ def load_numpy(arry: Union[str, np.ndarray],
     else:
         raise ValueError(
             "Incorrect format used for numpy ndarray. Should be an url linking to an image, a local path, or a"
-            " ndarray.")
+            " ndarray."
+        )
 
     return arry
 
@@ -320,20 +316,17 @@ def preprocess_image(image: PIL.Image, batch_size: int):
     return 2.0 * image - 1.0
 
 
-def export_to_video(video_frames: List[np.ndarray],
-                    output_video_path: str=None) -> str:
+def export_to_video(video_frames: List[np.ndarray], output_video_path: str = None) -> str:
     if is_opencv_available():
         import cv2
     else:
-        raise ImportError(BACKENDS_MAPPING["opencv"][1].format(
-            "export_to_video"))
+        raise ImportError(BACKENDS_MAPPING["opencv"][1].format("export_to_video"))
     if output_video_path is None:
         output_video_path = tempfile.NamedTemporaryFile(suffix=".mp4").name
 
-    fourcc = cv2.VideoWriter_fourcc(* "mp4v")
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     h, w, c = video_frames[0].shape
-    video_writer = cv2.VideoWriter(
-        output_video_path, fourcc, fps=8, frameSize=(w, h))
+    video_writer = cv2.VideoWriter(output_video_path, fourcc, fps=8, frameSize=(w, h))
     for i in range(len(video_frames)):
         img = cv2.cvtColor(video_frames[i], cv2.COLOR_RGB2BGR)
         video_writer.write(img)
@@ -344,7 +337,8 @@ def load_hf_numpy(path) -> np.ndarray:
     if not path.startswith("http://") or path.startswith("https://"):
         path = os.path.join(
             "https://huggingface.co/datasets/fusing/diffusers-testing/resolve/main",
-            urllib.parse.quote(path), )
+            urllib.parse.quote(path),
+        )
 
     return load_numpy(path)
 
@@ -353,7 +347,8 @@ def load_ppnlp_numpy(path) -> np.ndarray:
     if not path.startswith("http://") or path.startswith("https://"):
         path = os.path.join(
             "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/diffusers-testing",
-            urllib.parse.quote(path), )
+            urllib.parse.quote(path),
+        )
     return load_numpy(path)
 
 
@@ -444,9 +439,7 @@ def pytest_terminal_summary_main(tr, id):
             f.write("slowest durations\n")
             for i, rep in enumerate(dlist):
                 if rep.duration < durations_min:
-                    f.write(
-                        f"{len(dlist)-i} durations < {durations_min} secs were omitted"
-                    )
+                    f.write(f"{len(dlist)-i} durations < {durations_min} secs were omitted")
                     break
                 f.write(f"{rep.duration:02.2f}s {rep.when:<8} {rep.nodeid}\n")
 
@@ -460,8 +453,7 @@ def pytest_terminal_summary_main(tr, id):
             msg = tr._getfailureheadline(rep)
             tr.write_sep("_", msg, red=True, bold=True)
             # chop off the optional leading extra frames, leaving only the last one
-            longrepr = re.sub(r".*_ _ _ (_ ){10,}_ _ ", "", rep.longreprtext, 0,
-                              re.M | re.S)
+            longrepr = re.sub(r".*_ _ _ (_ ){10,}_ _ ", "", rep.longreprtext, 0, re.M | re.S)
             tr._tw.line(longrepr)
             # note: not printing out any rep.sections to keep the report short
 
@@ -496,9 +488,7 @@ def pytest_terminal_summary_main(tr, id):
         tr.summary_warnings()  # normal warnings
         tr.summary_warnings()  # final warnings
 
-    tr.reportchars = (
-        "wPpsxXEf"  # emulate -rA (used in summary_passes() and short_test_summary())
-    )
+    tr.reportchars = "wPpsxXEf"  # emulate -rA (used in summary_passes() and short_test_summary())
     with open(report_files["passes"], "w") as f:
         tr._tw = create_terminal_writer(config, f)
         tr.summary_passes()

@@ -20,14 +20,16 @@ from .common import LayerNorm2d
 
 
 class MaskDecoder(paddle.nn.Layer):
-    def __init__(self,
-                 *,
-                 transformer_dim: int,
-                 transformer: paddle.nn.Layer,
-                 num_multimask_outputs: int=3,
-                 activation: Type[paddle.nn.Layer]=paddle.nn.GELU,
-                 iou_head_depth: int=3,
-                 iou_head_hidden_dim: int=256) -> None:
+    def __init__(
+        self,
+        *,
+        transformer_dim: int,
+        transformer: paddle.nn.Layer,
+        num_multimask_outputs: int = 3,
+        activation: Type[paddle.nn.Layer] = paddle.nn.GELU,
+        iou_head_depth: int = 3,
+        iou_head_hidden_dim: int = 256
+    ) -> None:
         """
         Predicts masks given an image and prompt embeddings, using a
         tranformer architecture.
@@ -50,36 +52,39 @@ class MaskDecoder(paddle.nn.Layer):
         self.num_multimask_outputs = num_multimask_outputs
         self.iou_token = paddle.nn.Embedding(1, transformer_dim)
         self.num_mask_tokens = num_multimask_outputs + 1
-        self.mask_tokens = paddle.nn.Embedding(self.num_mask_tokens,
-                                               transformer_dim)
+        self.mask_tokens = paddle.nn.Embedding(self.num_mask_tokens, transformer_dim)
         self.output_upscaling = paddle.nn.Sequential(
             paddle.nn.Conv2DTranspose(
                 in_channels=transformer_dim,
                 out_channels=transformer_dim // 4,
                 kernel_size=2,
-                stride=2, ),
+                stride=2,
+            ),
             LayerNorm2d(transformer_dim // 4),
             activation(),
             paddle.nn.Conv2DTranspose(
                 in_channels=transformer_dim // 4,
                 out_channels=transformer_dim // 8,
                 kernel_size=2,
-                stride=2, ),
-            activation(), )
-        self.output_hypernetworks_mlps = paddle.nn.LayerList(sublayers=[
-            MLP(transformer_dim, transformer_dim, transformer_dim // 8, 3)
-            for i in range(self.num_mask_tokens)
-        ])
-        self.iou_prediction_head = MLP(transformer_dim, iou_head_hidden_dim,
-                                       self.num_mask_tokens, iou_head_depth)
+                stride=2,
+            ),
+            activation(),
+        )
+        self.output_hypernetworks_mlps = paddle.nn.LayerList(
+            sublayers=[
+                MLP(transformer_dim, transformer_dim, transformer_dim // 8, 3) for i in range(self.num_mask_tokens)
+            ]
+        )
+        self.iou_prediction_head = MLP(transformer_dim, iou_head_hidden_dim, self.num_mask_tokens, iou_head_depth)
 
     def forward(
-            self,
-            image_embeddings: paddle.Tensor,
-            image_pe: paddle.Tensor,
-            sparse_prompt_embeddings: paddle.Tensor,
-            dense_prompt_embeddings: paddle.Tensor,
-            multimask_output: bool, ) -> Tuple[paddle.Tensor, paddle.Tensor]:
+        self,
+        image_embeddings: paddle.Tensor,
+        image_pe: paddle.Tensor,
+        sparse_prompt_embeddings: paddle.Tensor,
+        dense_prompt_embeddings: paddle.Tensor,
+        multimask_output: bool,
+    ) -> Tuple[paddle.Tensor, paddle.Tensor]:
         """
         Predict masks given image and prompt embeddings.
 
@@ -99,7 +104,8 @@ class MaskDecoder(paddle.nn.Layer):
             image_embeddings=image_embeddings,
             image_pe=image_pe,
             sparse_prompt_embeddings=sparse_prompt_embeddings,
-            dense_prompt_embeddings=dense_prompt_embeddings, )
+            dense_prompt_embeddings=dense_prompt_embeddings,
+        )
 
         if multimask_output:
             mask_slice = slice(1, None)
@@ -111,28 +117,24 @@ class MaskDecoder(paddle.nn.Layer):
         return masks, iou_pred
 
     def predict_masks(
-            self,
-            image_embeddings: paddle.Tensor,
-            image_pe: paddle.Tensor,
-            sparse_prompt_embeddings: paddle.Tensor,
-            dense_prompt_embeddings: paddle.Tensor, ) -> Tuple[paddle.Tensor,
-                                                               paddle.Tensor]:
+        self,
+        image_embeddings: paddle.Tensor,
+        image_pe: paddle.Tensor,
+        sparse_prompt_embeddings: paddle.Tensor,
+        dense_prompt_embeddings: paddle.Tensor,
+    ) -> Tuple[paddle.Tensor, paddle.Tensor]:
         """Predicts masks. See 'forward' for more details."""
-        output_tokens = paddle.concat(
-            x=[self.iou_token.weight, self.mask_tokens.weight], axis=0)
-        output_tokens = output_tokens.unsqueeze(axis=0).expand(
-            shape=[sparse_prompt_embeddings.shape[0], -1, -1])
-        tokens = paddle.concat(
-            x=(output_tokens, sparse_prompt_embeddings), axis=1)
-        src = paddle.repeat_interleave(
-            image_embeddings, tokens.shape[0], axis=0)
+        output_tokens = paddle.concat(x=[self.iou_token.weight, self.mask_tokens.weight], axis=0)
+        output_tokens = output_tokens.unsqueeze(axis=0).expand(shape=[sparse_prompt_embeddings.shape[0], -1, -1])
+        tokens = paddle.concat(x=(output_tokens, sparse_prompt_embeddings), axis=1)
+        src = paddle.repeat_interleave(image_embeddings, tokens.shape[0], axis=0)
         src = src + dense_prompt_embeddings
         pos_src = paddle.repeat_interleave(image_pe, tokens.shape[0], axis=0)
         b, c, h, w = src.shape
         hs, src = self.transformer(src, pos_src, tokens)
 
         iou_token_out = hs[:, (0), :]
-        mask_tokens_out = hs[:, 1:1 + self.num_mask_tokens, :]
+        mask_tokens_out = hs[:, 1 : 1 + self.num_mask_tokens, :]
         x = src
         perm_0 = list(range(x.ndim))
         perm_0[1] = 2
@@ -142,37 +144,37 @@ class MaskDecoder(paddle.nn.Layer):
         upscaled_embedding = self.output_upscaling(src)
         hyper_in_list: List[paddle.Tensor] = []
         for i in range(self.num_mask_tokens):
-            hyper_in_list.append(self.output_hypernetworks_mlps[i](
-                mask_tokens_out[:, (i), :]))
+            hyper_in_list.append(self.output_hypernetworks_mlps[i](mask_tokens_out[:, (i), :]))
         hyper_in = paddle.stack(x=hyper_in_list, axis=1)
         b, c, h, w = upscaled_embedding.shape
 
-        masks = (hyper_in @upscaled_embedding.reshape([b, c, h * w])).reshape(
-            [b, -1, h, w])
+        masks = (hyper_in @ upscaled_embedding.reshape([b, c, h * w])).reshape([b, -1, h, w])
         iou_pred = self.iou_prediction_head(iou_token_out)
         return masks, iou_pred
 
 
 class MLP(paddle.nn.Layer):
     def __init__(
-            self,
-            input_dim: int,
-            hidden_dim: int,
-            output_dim: int,
-            num_layers: int,
-            sigmoid_output: bool=False, ) -> None:
+        self,
+        input_dim: int,
+        hidden_dim: int,
+        output_dim: int,
+        num_layers: int,
+        sigmoid_output: bool = False,
+    ) -> None:
         super().__init__()
         self.num_layers = num_layers
         h = [hidden_dim] * (num_layers - 1)
-        self.layers = paddle.nn.LayerList(sublayers=(paddle.nn.Linear(
-            in_features=n,
-            out_features=k) for n, k in zip([input_dim] + h, h + [output_dim])))
+        self.layers = paddle.nn.LayerList(
+            sublayers=(
+                paddle.nn.Linear(in_features=n, out_features=k) for n, k in zip([input_dim] + h, h + [output_dim])
+            )
+        )
         self.sigmoid_output = sigmoid_output
 
     def forward(self, x):
         for i, layer in enumerate(self.layers):
-            x = (paddle.nn.functional.relu(x=layer(x))
-                 if i < self.num_layers - 1 else layer(x))
+            x = paddle.nn.functional.relu(x=layer(x)) if i < self.num_layers - 1 else layer(x)
         if self.sigmoid_output:
             x = paddle.nn.functional.sigmoid(x=x)
         return x

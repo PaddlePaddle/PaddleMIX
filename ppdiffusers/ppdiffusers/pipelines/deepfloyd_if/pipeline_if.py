@@ -19,14 +19,19 @@ import urllib.parse as ul
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
-from paddlenlp.transformers import (CLIPImageProcessor, T5EncoderModel,
-                                    T5Tokenizer)
+from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
 
 from ...loaders import LoraLoaderMixin
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
-from ...utils import (BACKENDS_MAPPING, is_bs4_available, is_ftfy_available,
-                      logging, randn_tensor, replace_example_docstring)
+from ...utils import (
+    BACKENDS_MAPPING,
+    is_bs4_available,
+    is_ftfy_available,
+    logging,
+    randn_tensor,
+    replace_example_docstring,
+)
 from ..pipeline_utils import DiffusionPipeline
 from . import IFPipelineOutput
 from .safety_checker import IFSafetyChecker
@@ -101,8 +106,8 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
     watermarker: Optional[IFWatermarker]
 
     bad_punct_regex = re.compile(
-        r"[" + "#®•©™&@·º½¾¿¡§~" + "\)" + "\(" + "\]" + "\[" + "\}" + "\{" +
-        "\|" + "\\" + "\/" + "\*" + r"]{1,}")  # noqa
+        r"[" + "#®•©™&@·º½¾¿¡§~" + "\)" + "\(" + "\]" + "\[" + "\}" + "\{" + "\|" + "\\" + "\/" + "\*" + r"]{1,}"
+    )  # noqa
 
     _optional_components = [
         "tokenizer",
@@ -113,15 +118,16 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
     ]
 
     def __init__(
-            self,
-            tokenizer: T5Tokenizer,
-            text_encoder: T5EncoderModel,
-            unet: UNet2DConditionModel,
-            scheduler: DDPMScheduler,
-            safety_checker: Optional[IFSafetyChecker],
-            feature_extractor: Optional[CLIPImageProcessor],
-            watermarker: Optional[IFWatermarker],
-            requires_safety_checker: bool=True, ):
+        self,
+        tokenizer: T5Tokenizer,
+        text_encoder: T5EncoderModel,
+        unet: UNet2DConditionModel,
+        scheduler: DDPMScheduler,
+        safety_checker: Optional[IFSafetyChecker],
+        feature_extractor: Optional[CLIPImageProcessor],
+        watermarker: Optional[IFWatermarker],
+        requires_safety_checker: bool = True,
+    ):
         super().__init__()
 
         if safety_checker is None and requires_safety_checker:
@@ -147,19 +153,21 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             scheduler=scheduler,
             safety_checker=safety_checker,
             feature_extractor=feature_extractor,
-            watermarker=watermarker, )
+            watermarker=watermarker,
+        )
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     @paddle.no_grad()
     def encode_prompt(
-            self,
-            prompt,
-            do_classifier_free_guidance=True,
-            num_images_per_prompt=1,
-            negative_prompt=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            clean_caption: bool=False, ):
+        self,
+        prompt,
+        do_classifier_free_guidance=True,
+        num_images_per_prompt=1,
+        negative_prompt=None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        clean_caption: bool = False,
+    ):
         r"""
         Encodes the prompt into text encoder hidden states.
 
@@ -186,7 +194,8 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             if type(prompt) is not type(negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}.")
+                    f" {type(prompt)}."
+                )
 
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
@@ -199,31 +208,31 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         max_length = 77
 
         if prompt_embeds is None:
-            prompt = self._text_preprocessing(
-                prompt, clean_caption=clean_caption)
+            prompt = self._text_preprocessing(prompt, clean_caption=clean_caption)
             text_inputs = self.tokenizer(
                 prompt,
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
                 add_special_tokens=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_input_ids = text_inputs.input_ids
-            untruncated_ids = self.tokenizer(
-                prompt, padding="longest", return_tensors="pd").input_ids
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                    -1] and not paddle.equal_all(text_input_ids,
-                                                 untruncated_ids):
-                removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, max_length - 1:-1])
+            untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+                text_input_ids, untruncated_ids
+            ):
+                removed_text = self.tokenizer.batch_decode(untruncated_ids[:, max_length - 1 : -1])
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
-                    f" {max_length} tokens: {removed_text}")
+                    f" {max_length} tokens: {removed_text}"
+                )
 
             attention_mask = text_inputs.attention_mask
             prompt_embeds = self.text_encoder(
                 text_input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             prompt_embeds = prompt_embeds[0]
 
         if self.text_encoder is not None:
@@ -238,8 +247,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape(
-            [bs_embed * num_images_per_prompt, seq_len, -1])
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
@@ -252,12 +260,12 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                 raise ValueError(
                     f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                     f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`.")
+                    " the batch size of `prompt`."
+                )
             else:
                 uncond_tokens = negative_prompt
 
-            uncond_tokens = self._text_preprocessing(
-                uncond_tokens, clean_caption=clean_caption)
+            uncond_tokens = self._text_preprocessing(uncond_tokens, clean_caption=clean_caption)
             max_length = prompt_embeds.shape[1]
             uncond_input = self.tokenizer(
                 uncond_tokens,
@@ -266,12 +274,14 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                 truncation=True,
                 return_attention_mask=True,
                 add_special_tokens=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             attention_mask = uncond_input.attention_mask
 
             negative_prompt_embeds = self.text_encoder(
                 uncond_input.input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             negative_prompt_embeds = negative_prompt_embeds[0]
 
         if do_classifier_free_guidance:
@@ -281,10 +291,8 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             if dtype is not None:
                 negative_prompt_embeds = negative_prompt_embeds.cast(dtype)
 
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                [1, num_images_per_prompt, 1])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
+            negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
@@ -296,11 +304,11 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
 
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is not None:
-            safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors="pd")
+            safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, nsfw_detected, watermark_detected = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.cast(dtype), )
+                clip_input=safety_checker_input.pixel_values.cast(dtype),
+            )
         else:
             nsfw_detected = None
             watermark_detected = None
@@ -314,46 +322,44 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     def check_inputs(
-            self,
-            prompt,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two.")
+                " only forward one of the two."
+            )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -366,10 +372,10 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                 raise ValueError(
                     "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}.")
+                    f" {negative_prompt_embeds.shape}."
+                )
 
-    def prepare_intermediate_images(self, batch_size, num_channels, height,
-                                    width, dtype, generator):
+    def prepare_intermediate_images(self, batch_size, num_channels, height, width, dtype, generator):
         shape = (batch_size, num_channels, height, width)
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -377,8 +383,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                 f" size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
 
-        intermediate_images = randn_tensor(
-            shape, generator=generator, dtype=dtype)
+        intermediate_images = randn_tensor(shape, generator=generator, dtype=dtype)
 
         # scale the initial noise by the standard deviation required by the scheduler
         intermediate_images = intermediate_images * self.scheduler.init_noise_sigma
@@ -386,14 +391,12 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
 
     def _text_preprocessing(self, text, clean_caption=False):
         if clean_caption and not is_bs4_available():
-            logger.warn(BACKENDS_MAPPING["bs4"][-1].format(
-                "Setting `clean_caption=True`"))
+            logger.warn(BACKENDS_MAPPING["bs4"][-1].format("Setting `clean_caption=True`"))
             logger.warn("Setting `clean_caption` to False...")
             clean_caption = False
 
         if clean_caption and not is_ftfy_available():
-            logger.warn(BACKENDS_MAPPING["ftfy"][-1].format(
-                "Setting `clean_caption=True`"))
+            logger.warn(BACKENDS_MAPPING["ftfy"][-1].format("Setting `clean_caption=True`"))
             logger.warn("Setting `clean_caption` to False...")
             clean_caption = False
 
@@ -419,11 +422,13 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         caption = re.sub(
             r"\b((?:https?:(?:\/{1,3}|[a-zA-Z0-9%])|[a-zA-Z0-9.\-]+[.](?:com|co|ru|net|org|edu|gov|it)[\w/-]*\b\/?(?!@)))",  # noqa
             "",
-            caption, )  # regex for urls
+            caption,
+        )  # regex for urls
         caption = re.sub(
             r"\b((?:www:(?:\/{1,3}|[a-zA-Z0-9%])|[a-zA-Z0-9.\-]+[.](?:com|co|ru|net|org|edu|gov|it)[\w/-]*\b\/?(?!@)))",  # noqa
             "",
-            caption, )  # regex for urls
+            caption,
+        )  # regex for urls
         # html:
         caption = BeautifulSoup(caption, features="html.parser").text
 
@@ -450,7 +455,8 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         caption = re.sub(
             r"[\u002D\u058A\u05BE\u1400\u1806\u2010-\u2015\u2E17\u2E1A\u2E3A\u2E3B\u2E40\u301C\u3030\u30A0\uFE31\uFE32\uFE58\uFE63\uFF0D]+",  # noqa
             "-",
-            caption, )
+            caption,
+        )
 
         # кавычки к одному стандарту
         caption = re.sub(r"[`´«»“”¨]", '"', caption)
@@ -477,15 +483,13 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         # "123456.."
         caption = re.sub(r"\b\d{6,}\b", "", caption)
         # filenames:
-        caption = re.sub(r"[\S]+\.(?:png|jpg|jpeg|bmp|webp|eps|pdf|apk|mp4)",
-                         "", caption)
+        caption = re.sub(r"[\S]+\.(?:png|jpg|jpeg|bmp|webp|eps|pdf|apk|mp4)", "", caption)
 
         #
         caption = re.sub(r"[\"\']{2,}", r'"', caption)  # """AUSVERKAUFT"""
         caption = re.sub(r"[\.]{2,}", r" ", caption)  # """AUSVERKAUFT"""
 
-        caption = re.sub(self.bad_punct_regex, r" ",
-                         caption)  # ***AUSVERKAUFT***, #AUSVERKAUFT
+        caption = re.sub(self.bad_punct_regex, r" ", caption)  # ***AUSVERKAUFT***, #AUSVERKAUFT
         caption = re.sub(r"\s+\.\s+", r" ", caption)  # " . "
 
         # this-is-my-cute-cat / this_is_my_cute_cat
@@ -503,13 +507,10 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         caption = re.sub(r"(worldwide\s+)?(free\s+)?shipping", "", caption)
         caption = re.sub(r"(free\s)?download(\sfree)?", "", caption)
         caption = re.sub(r"\bclick\b\s(?:for|on)\s\w+", "", caption)
-        caption = re.sub(
-            r"\b(?:png|jpg|jpeg|bmp|webp|eps|pdf|apk|mp4)(\simage[s]?)?", "",
-            caption)
+        caption = re.sub(r"\b(?:png|jpg|jpeg|bmp|webp|eps|pdf|apk|mp4)(\simage[s]?)?", "", caption)
         caption = re.sub(r"\bpage\s+\d+\b", "", caption)
 
-        caption = re.sub(r"\b\d*[a-zA-Z]+\d+[a-zA-Z]+\d+[a-zA-Z\d]*\b", r" ",
-                         caption)  # j2d1a2a...
+        caption = re.sub(r"\b\d*[a-zA-Z]+\d+[a-zA-Z]+\d+[a-zA-Z\d]*\b", r" ", caption)  # j2d1a2a...
 
         caption = re.sub(r"\b\d+\.?\d*[xх×]\d+\.?\d*\b", "", caption)
 
@@ -529,26 +530,26 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
-            self,
-            prompt: Union[str, List[str]]=None,
-            num_inference_steps: int=100,
-            timesteps: List[int]=None,
-            guidance_scale: float=7.0,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: int=1,
-            clean_caption: bool=True,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None, ):
+        self,
+        prompt: Union[str, List[str]] = None,
+        num_inference_steps: int = 100,
+        timesteps: List[int] = None,
+        guidance_scale: float = 7.0,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: int = 1,
+        clean_caption: bool = True,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+    ):
         """
         Function invoked when calling the pipeline for generation.
 
@@ -625,7 +626,8 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             callback_steps,
             negative_prompt,
             prompt_embeds,
-            negative_prompt_embeds, )
+            negative_prompt_embeds,
+        )
 
         # 2. Define call parameters
         height = height or self.unet.config.sample_size
@@ -651,11 +653,11 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             negative_prompt=negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
-            clean_caption=clean_caption, )
+            clean_caption=clean_caption,
+        )
 
         if do_classifier_free_guidance:
-            prompt_embeds = paddle.concat(
-                [negative_prompt_embeds, prompt_embeds])
+            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
 
         # 4. Prepare timesteps
         if timesteps is not None:
@@ -673,19 +675,19 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             height,
             width,
             prompt_embeds.dtype,
-            generator, )
+            generator,
+        )
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 7. Denoising loop
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-                model_input = (paddle.concat([intermediate_images] * 2)
-                               if do_classifier_free_guidance else
-                               intermediate_images)
+                model_input = (
+                    paddle.concat([intermediate_images] * 2) if do_classifier_free_guidance else intermediate_images
+                )
                 model_input = self.scheduler.scale_model_input(model_input, t)
 
                 # predict the noise residual
@@ -694,7 +696,8 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                     t,
                     encoder_hidden_states=prompt_embeds,
                     cross_attention_kwargs=cross_attention_kwargs,
-                    return_dict=False, )[0]
+                    return_dict=False,
+                )[0]
 
                 # perform guidance
                 if do_classifier_free_guidance:
@@ -704,27 +707,28 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                             model_input.shape[1],
                             noise_pred_uncond.shape[1] - model_input.shape[1],
                         ],
-                        axis=1, )
+                        axis=1,
+                    )
                     noise_pred_text, predicted_variance = noise_pred_text.split(
                         [
                             model_input.shape[1],
                             noise_pred_text.shape[1] - model_input.shape[1],
                         ],
-                        axis=1, )
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
-                    noise_pred = paddle.concat(
-                        [noise_pred, predicted_variance], axis=1)
+                        axis=1,
+                    )
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                    noise_pred = paddle.concat([noise_pred, predicted_variance], axis=1)
                 if self.scheduler.config.variance_type not in [
-                        "learned",
-                        "learned_range",
+                    "learned",
+                    "learned_range",
                 ]:
                     noise_pred, _ = noise_pred.split(
                         [
                             model_input.shape[1],
                             noise_pred_uncond.shape[1] - model_input.shape[1],
                         ],
-                        axis=1, )
+                        axis=1,
+                    )
 
                 # compute the previous noisy sample x_t -> x_t-1
                 intermediate_images = self.scheduler.step(
@@ -732,12 +736,11 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                     t,
                     intermediate_images,
                     **extra_step_kwargs,
-                    return_dict=False, )[0]
+                    return_dict=False,
+                )[0]
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, intermediate_images)
@@ -750,16 +753,14 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             image = image.cpu().transpose([0, 2, 3, 1]).cast("float32").numpy()
 
             # 9. Run safety checker
-            image, nsfw_detected, watermark_detected = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, nsfw_detected, watermark_detected = self.run_safety_checker(image, prompt_embeds.dtype)
 
             # 10. Convert to PIL
             image = self.numpy_to_pil(image)
 
             # 11. Apply watermark
             if self.watermarker is not None:
-                image = self.watermarker.apply_watermark(
-                    image, self.unet.config.sample_size)
+                image = self.watermarker.apply_watermark(image, self.unet.config.sample_size)
         elif output_type == "pd":
             nsfw_detected = None
             watermark_detected = None
@@ -770,8 +771,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             image = image.cpu().transpose([0, 2, 3, 1]).cast("float32").numpy()
 
             # 9. Run safety checker
-            image, nsfw_detected, watermark_detected = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, nsfw_detected, watermark_detected = self.run_safety_checker(image, prompt_embeds.dtype)
 
         if not return_dict:
             return (image, nsfw_detected, watermark_detected)
@@ -779,4 +779,5 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         return IFPipelineOutput(
             images=image,
             nsfw_detected=nsfw_detected,
-            watermark_detected=watermark_detected, )
+            watermark_detected=watermark_detected,
+        )

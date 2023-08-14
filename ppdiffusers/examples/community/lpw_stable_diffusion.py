@@ -19,17 +19,18 @@ from typing import Callable, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
-                                    CLIPTokenizer)
+from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 from paddlemix.utils.tools import compare_version
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipelines.stable_diffusion import (
-    StableDiffusionPipeline, StableDiffusionPipelineOutput)
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
-    StableDiffusionSafetyChecker
-from ppdiffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
-                                    PNDMScheduler)
+    StableDiffusionPipeline,
+    StableDiffusionPipelineOutput,
+)
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
+    StableDiffusionSafetyChecker,
+)
+from ppdiffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from ppdiffusers.utils import logging
 
 if compare_version(PIL.__version__, "9.1.0") >= 0:
@@ -55,7 +56,8 @@ re_attention = re.compile(
 [^\\()\[\]:]+|
 :
 """,
-    re.X, )
+    re.X,
+)
 
 
 def parse_prompt_attention(text):
@@ -144,9 +146,7 @@ def parse_prompt_attention(text):
     return res
 
 
-def get_prompts_with_weights(pipe: StableDiffusionPipeline,
-                             prompt: List[str],
-                             max_length: int):
+def get_prompts_with_weights(pipe: StableDiffusionPipeline, prompt: List[str], max_length: int):
     r"""
     Tokenize a list of prompts and return its tokens with weights of each token.
     No padding, starting or ending token is included.
@@ -176,32 +176,20 @@ def get_prompts_with_weights(pipe: StableDiffusionPipeline,
         tokens.append(text_token)
         weights.append(text_weight)
     if truncated:
-        logger.warning(
-            "Prompt was truncated. Try to shorten the prompt or increase max_embeddings_multiples"
-        )
+        logger.warning("Prompt was truncated. Try to shorten the prompt or increase max_embeddings_multiples")
     return tokens, weights
 
 
-def pad_tokens_and_weights(tokens,
-                           weights,
-                           max_length,
-                           bos,
-                           eos,
-                           pad,
-                           no_boseos_middle=True,
-                           chunk_length=77):
+def pad_tokens_and_weights(tokens, weights, max_length, bos, eos, pad, no_boseos_middle=True, chunk_length=77):
     r"""
     Pad the tokens (with starting and ending tokens) and weights (with 1.0) to max_length.
     """
     max_embeddings_multiples = (max_length - 2) // (chunk_length - 2)
-    weights_length = (max_length if no_boseos_middle else
-                      max_embeddings_multiples * chunk_length)
+    weights_length = max_length if no_boseos_middle else max_embeddings_multiples * chunk_length
     for i in range(len(tokens)):
-        tokens[i] = ([bos] + tokens[i] + [eos] + [pad] *
-                     (max_length - 2 - len(tokens[i])))
+        tokens[i] = [bos] + tokens[i] + [eos] + [pad] * (max_length - 2 - len(tokens[i]))
         if no_boseos_middle:
-            weights[i] = [1.0] + weights[i] + [1.0] * (max_length - 1 -
-                                                       len(weights[i]))
+            weights[i] = [1.0] + weights[i] + [1.0] * (max_length - 1 - len(weights[i]))
         else:
             w = []
             if len(weights[i]) == 0:
@@ -209,8 +197,7 @@ def pad_tokens_and_weights(tokens,
             else:
                 for j in range(max_embeddings_multiples):
                     w.append(1.0)  # weight for starting token in this chunk
-                    w += weights[i][j * (chunk_length - 2):min(
-                        len(weights[i]), (j + 1) * (chunk_length - 2))]
+                    w += weights[i][j * (chunk_length - 2) : min(len(weights[i]), (j + 1) * (chunk_length - 2))]
                     w.append(1.0)  # weight for ending token in this chunk
                 w += [1.0] * (weights_length - len(w))
             weights[i] = w[:]
@@ -219,10 +206,11 @@ def pad_tokens_and_weights(tokens,
 
 
 def get_unweighted_text_embeddings(
-        pipe: StableDiffusionPipeline,
-        text_input: paddle.Tensor,
-        chunk_length: int,
-        no_boseos_middle: Optional[bool]=True, ):
+    pipe: StableDiffusionPipeline,
+    text_input: paddle.Tensor,
+    chunk_length: int,
+    no_boseos_middle: Optional[bool] = True,
+):
     """
     When the length of tokens is a multiple of the capacity of the text encoder,
     it should be split into chunks and sent to the text encoder individually.
@@ -232,8 +220,7 @@ def get_unweighted_text_embeddings(
         text_embeddings = []
         for i in range(max_embeddings_multiples):
             # extract the i-th chunk
-            text_input_chunk = text_input[:, i * (chunk_length - 2):(i + 1) * (
-                chunk_length - 2) + 2].clone()
+            text_input_chunk = text_input[:, i * (chunk_length - 2) : (i + 1) * (chunk_length - 2) + 2].clone()
 
             # cover the head and the tail by the starting and the ending tokens
             text_input_chunk[:, 0] = text_input[0, 0]
@@ -259,14 +246,15 @@ def get_unweighted_text_embeddings(
 
 
 def get_weighted_text_embeddings(
-        pipe: StableDiffusionPipeline,
-        prompt: Union[str, List[str]],
-        uncond_prompt: Optional[Union[str, List[str]]]=None,
-        max_embeddings_multiples: Optional[int]=1,
-        no_boseos_middle: Optional[bool]=False,
-        skip_parsing: Optional[bool]=False,
-        skip_weighting: Optional[bool]=False,
-        **kwargs, ):
+    pipe: StableDiffusionPipeline,
+    prompt: Union[str, List[str]],
+    uncond_prompt: Optional[Union[str, List[str]]] = None,
+    max_embeddings_multiples: Optional[int] = 1,
+    no_boseos_middle: Optional[bool] = False,
+    skip_parsing: Optional[bool] = False,
+    skip_weighting: Optional[bool] = False,
+    **kwargs,
+):
     r"""
     Prompts can be assigned with local weights using brackets. For example,
     prompt 'A (very beautiful) masterpiece' highlights the words 'very beautiful',
@@ -290,24 +278,19 @@ def get_weighted_text_embeddings(
         skip_weighting (`bool`, *optional*, defaults to `False`):
             Skip the weighting. When the parsing is skipped, it is forced True.
     """
-    max_length = (pipe.tokenizer.model_max_length - 2
-                  ) * max_embeddings_multiples + 2
+    max_length = (pipe.tokenizer.model_max_length - 2) * max_embeddings_multiples + 2
     if isinstance(prompt, str):
         prompt = [prompt]
 
     if not skip_parsing:
-        prompt_tokens, prompt_weights = get_prompts_with_weights(pipe, prompt,
-                                                                 max_length - 2)
+        prompt_tokens, prompt_weights = get_prompts_with_weights(pipe, prompt, max_length - 2)
         if uncond_prompt is not None:
             if isinstance(uncond_prompt, str):
                 uncond_prompt = [uncond_prompt]
-            uncond_tokens, uncond_weights = get_prompts_with_weights(
-                pipe, uncond_prompt, max_length - 2)
+            uncond_tokens, uncond_weights = get_prompts_with_weights(pipe, uncond_prompt, max_length - 2)
     else:
         prompt_tokens = [
-            token[1:-1]
-            for token in pipe.tokenizer(
-                prompt, max_length=max_length, truncation=True).input_ids
+            token[1:-1] for token in pipe.tokenizer(prompt, max_length=max_length, truncation=True).input_ids
         ]
         prompt_weights = [[1.0] * len(token) for token in prompt_tokens]
         if uncond_prompt is not None:
@@ -315,33 +298,26 @@ def get_weighted_text_embeddings(
                 uncond_prompt = [uncond_prompt]
             uncond_tokens = [
                 token[1:-1]
-                for token in pipe.tokenizer(
-                    uncond_prompt, max_length=max_length, truncation=True)
-                .input_ids
+                for token in pipe.tokenizer(uncond_prompt, max_length=max_length, truncation=True).input_ids
             ]
             uncond_weights = [[1.0] * len(token) for token in uncond_tokens]
 
     # round up the longest length of tokens to a multiple of (model_max_length - 2)
     max_length = max([len(token) for token in prompt_tokens])
     if uncond_prompt is not None:
-        max_length = max(max_length,
-                         max([len(token) for token in uncond_tokens]))
+        max_length = max(max_length, max([len(token) for token in uncond_tokens]))
 
     max_embeddings_multiples = min(
         max_embeddings_multiples,
-        (max_length - 1) // (pipe.tokenizer.model_max_length - 2) + 1, )
+        (max_length - 1) // (pipe.tokenizer.model_max_length - 2) + 1,
+    )
     max_embeddings_multiples = max(1, max_embeddings_multiples)
-    max_length = (pipe.tokenizer.model_max_length - 2
-                  ) * max_embeddings_multiples + 2
+    max_length = (pipe.tokenizer.model_max_length - 2) * max_embeddings_multiples + 2
 
     # pad the length of tokens and weights
     # support bert tokenizer
-    bos = (pipe.tokenizer.bos_token_id
-           if pipe.tokenizer.bos_token_id is not None else
-           pipe.tokenizer.cls_token_id)
-    eos = (pipe.tokenizer.eos_token_id
-           if pipe.tokenizer.eos_token_id is not None else
-           pipe.tokenizer.sep_token_id)
+    bos = pipe.tokenizer.bos_token_id if pipe.tokenizer.bos_token_id is not None else pipe.tokenizer.cls_token_id
+    eos = pipe.tokenizer.eos_token_id if pipe.tokenizer.eos_token_id is not None else pipe.tokenizer.sep_token_id
     pad = pipe.tokenizer.pad_token_id
     prompt_tokens, prompt_weights = pad_tokens_and_weights(
         prompt_tokens,
@@ -351,7 +327,8 @@ def get_weighted_text_embeddings(
         eos,
         pad,
         no_boseos_middle=no_boseos_middle,
-        chunk_length=pipe.tokenizer.model_max_length, )
+        chunk_length=pipe.tokenizer.model_max_length,
+    )
     prompt_tokens = paddle.to_tensor(prompt_tokens, dtype=paddle.int64)
     if uncond_prompt is not None:
         uncond_tokens, uncond_weights = pad_tokens_and_weights(
@@ -362,7 +339,8 @@ def get_weighted_text_embeddings(
             eos,
             pad,
             no_boseos_middle=no_boseos_middle,
-            chunk_length=pipe.tokenizer.model_max_length, )
+            chunk_length=pipe.tokenizer.model_max_length,
+        )
         uncond_tokens = paddle.to_tensor(uncond_tokens, dtype=paddle.int64)
 
     # get the embeddings
@@ -370,32 +348,28 @@ def get_weighted_text_embeddings(
         pipe,
         prompt_tokens,
         pipe.tokenizer.model_max_length,
-        no_boseos_middle=no_boseos_middle, )
-    prompt_weights = paddle.to_tensor(
-        prompt_weights, dtype=text_embeddings.dtype)
+        no_boseos_middle=no_boseos_middle,
+    )
+    prompt_weights = paddle.to_tensor(prompt_weights, dtype=text_embeddings.dtype)
     if uncond_prompt is not None:
         uncond_embeddings = get_unweighted_text_embeddings(
             pipe,
             uncond_tokens,
             pipe.tokenizer.model_max_length,
-            no_boseos_middle=no_boseos_middle, )
-        uncond_weights = paddle.to_tensor(
-            uncond_weights, dtype=uncond_embeddings.dtype)
+            no_boseos_middle=no_boseos_middle,
+        )
+        uncond_weights = paddle.to_tensor(uncond_weights, dtype=uncond_embeddings.dtype)
 
     # assign weights to the prompts and normalize in the sense of mean
     # TODO: should we normalize by chunk or in a whole (current implementation)?
     if (not skip_parsing) and (not skip_weighting):
         previous_mean = text_embeddings.mean(axis=[-2, -1])
         text_embeddings *= prompt_weights.unsqueeze(-1)
-        text_embeddings *= (
-            (previous_mean / text_embeddings.mean(axis=[-2, -1])).unsqueeze(-1)
-            .unsqueeze(-1))
+        text_embeddings *= (previous_mean / text_embeddings.mean(axis=[-2, -1])).unsqueeze(-1).unsqueeze(-1)
         if uncond_prompt is not None:
             previous_mean = uncond_embeddings.mean(axis=[-2, -1])
             uncond_embeddings *= uncond_weights.unsqueeze(-1)
-            uncond_embeddings *= (
-                (previous_mean / uncond_embeddings.mean(axis=[-2, -1]))
-                .unsqueeze(-1).unsqueeze(-1))
+            uncond_embeddings *= (previous_mean / uncond_embeddings.mean(axis=[-2, -1])).unsqueeze(-1).unsqueeze(-1)
 
     if uncond_prompt is not None:
         return text_embeddings, uncond_embeddings
@@ -416,8 +390,7 @@ def preprocess_mask(mask, scale_factor=8):
     mask = mask.convert("L")
     w, h = mask.size
     w, h = map(lambda x: x - x % 32, (w, h))  # resize to integer multiple of 32
-    mask = mask.resize(
-        (w // scale_factor, h // scale_factor), resample=Resampling.NEAREST)
+    mask = mask.resize((w // scale_factor, h // scale_factor), resample=Resampling.NEAREST)
     mask = np.array(mask).astype(np.float32) / 255.0
     mask = np.tile(mask, (4, 1, 1))
     mask = mask[None].transpose(0, 1, 2, 3)  # what does this step do?
@@ -454,16 +427,16 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
     """
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            scheduler: Union[DDIMScheduler, PNDMScheduler,
-                             LMSDiscreteScheduler],
-            safety_checker: StableDiffusionSafetyChecker,
-            feature_extractor: CLIPFeatureExtractor,
-            requires_safety_checker: Optional[bool]=True, ):
+        self,
+        vae: AutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: UNet2DConditionModel,
+        scheduler: Union[DDIMScheduler, PNDMScheduler, LMSDiscreteScheduler],
+        safety_checker: StableDiffusionSafetyChecker,
+        feature_extractor: CLIPFeatureExtractor,
+        requires_safety_checker: Optional[bool] = True,
+    ):
         super().__init__(
             vae=vae,
             text_encoder=text_encoder,
@@ -472,7 +445,8 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
             scheduler=scheduler,
             safety_checker=safety_checker,
             feature_extractor=feature_extractor,
-            requires_safety_checker=requires_safety_checker, )
+            requires_safety_checker=requires_safety_checker,
+        )
         self.__init__additional__()
 
     def __init__additional__(self):
@@ -480,10 +454,10 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
             setattr(
                 self,
                 "vae_scale_factor",
-                2**(len(self.vae.config.block_out_channels) - 1), )
+                2 ** (len(self.vae.config.block_out_channels) - 1),
+            )
 
-    def enable_attention_slicing(self,
-                                 slice_size: Optional[Union[str, int]]="auto"):
+    def enable_attention_slicing(self, slice_size: Optional[Union[str, int]] = "auto"):
         r"""
         Enable sliced attention computation.
         When this option is enabled, the attention module will split the input tensor in slices, to compute attention
@@ -510,34 +484,31 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
 
     def check_inputs(self, prompt, height, width, strength, callback_steps):
         if not isinstance(prompt, str) and not isinstance(prompt, list):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if strength < 0 or strength > 1:
-            raise ValueError(
-                f"The value of strength should in [0.0, 1.0] but is {strength}")
+            raise ValueError(f"The value of strength should in [0.0, 1.0] but is {strength}")
 
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
     def _encode_prompt(
-            self,
-            prompt: Union[str, List[str]],
-            num_images_per_prompt: int,
-            do_classifier_free_guidance: bool,
-            negative_prompt: Union[str, List[str]],
-            max_embeddings_multiples: Optional[int]=3,
-            **kwargs, ):
+        self,
+        prompt: Union[str, List[str]],
+        num_images_per_prompt: int,
+        do_classifier_free_guidance: bool,
+        negative_prompt: Union[str, List[str]],
+        max_embeddings_multiples: Optional[int] = 3,
+        **kwargs,
+    ):
         r"""
         Encodes the prompt into text encoder hidden states.
 
@@ -564,28 +535,25 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
             raise ValueError(
                 f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                 f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                " the batch size of `prompt`.")
+                " the batch size of `prompt`."
+            )
 
         text_embeddings, uncond_embeddings = get_weighted_text_embeddings(
             pipe=self,
             prompt=prompt,
-            uncond_prompt=negative_prompt
-            if do_classifier_free_guidance else None,
+            uncond_prompt=negative_prompt if do_classifier_free_guidance else None,
             max_embeddings_multiples=max_embeddings_multiples,
-            **kwargs, )
+            **kwargs,
+        )
         bs_embed, seq_len, _ = text_embeddings.shape
         text_embeddings = text_embeddings.tile([1, num_images_per_prompt, 1])
-        text_embeddings = text_embeddings.reshape(
-            [bs_embed * num_images_per_prompt, seq_len, -1])
+        text_embeddings = text_embeddings.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
 
         if do_classifier_free_guidance:
             seq_len = uncond_embeddings.shape[1]
-            uncond_embeddings = uncond_embeddings.tile(
-                [1, num_images_per_prompt, 1])
-            uncond_embeddings = uncond_embeddings.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
-            text_embeddings = paddle.concat(
-                [uncond_embeddings, text_embeddings])
+            uncond_embeddings = uncond_embeddings.tile([1, num_images_per_prompt, 1])
+            uncond_embeddings = uncond_embeddings.reshape([batch_size * num_images_per_prompt, seq_len, -1])
+            text_embeddings = paddle.concat([uncond_embeddings, text_embeddings])
 
         return text_embeddings
 
@@ -602,29 +570,20 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
             timesteps = self.scheduler.timesteps[t_start:]
             return timesteps, num_inference_steps - t_start
 
-    def prepare_latents(self,
-                        image,
-                        timestep,
-                        batch_size,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(self, image, timestep, batch_size, height, width, dtype, generator, latents=None):
         if image is None:
             shape = (
                 batch_size,
                 self.unet.in_channels,
                 height // self.vae_scale_factor,
-                width // self.vae_scale_factor, )
+                width // self.vae_scale_factor,
+            )
 
             if latents is None:
                 latents = paddle.randn(shape, generator=generator, dtype=dtype)
             else:
                 if latents.shape != shape:
-                    raise ValueError(
-                        f"Unexpected latents shape, got {latents.shape}, expected {shape}"
-                    )
+                    raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {shape}")
 
             # scale the initial noise by the standard deviation required by the scheduler
             latents = latents * self.scheduler.init_noise_sigma
@@ -644,27 +603,28 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            prompt: Union[str, List[str]],
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            image: Union[paddle.Tensor, PIL.Image.Image]=None,
-            mask_image: Union[paddle.Tensor, PIL.Image.Image]=None,
-            height: Optional[int]=512,
-            width: Optional[int]=512,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[int]=7.5,
-            strength: Optional[int]=0.8,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[int]=0.0,
-            generator: Optional[paddle.Generator]=None,
-            latents: Optional[paddle.Tensor]=None,
-            max_embeddings_multiples: Optional[int]=3,
-            output_type: Optional[str]="pil",
-            return_dict: Optional[bool]=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            is_cancelled_callback: Optional[Callable[[], bool]]=None,
-            callback_steps: Optional[int]=1,
-            **kwargs, ):
+        self,
+        prompt: Union[str, List[str]],
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        image: Union[paddle.Tensor, PIL.Image.Image] = None,
+        mask_image: Union[paddle.Tensor, PIL.Image.Image] = None,
+        height: Optional[int] = 512,
+        width: Optional[int] = 512,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[int] = 7.5,
+        strength: Optional[int] = 0.8,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[int] = 0.0,
+        generator: Optional[paddle.Generator] = None,
+        latents: Optional[paddle.Tensor] = None,
+        max_embeddings_multiples: Optional[int] = 3,
+        output_type: Optional[str] = "pil",
+        return_dict: Optional[bool] = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        is_cancelled_callback: Optional[Callable[[], bool]] = None,
+        callback_steps: Optional[int] = 1,
+        **kwargs,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
         Args:
@@ -753,7 +713,8 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
             num_images_per_prompt,
             do_classifier_free_guidance,
             negative_prompt,
-            max_embeddings_multiples, )
+            max_embeddings_multiples,
+        )
         dtype = text_embeddings.dtype
 
         # 4. Preprocess image and mask
@@ -765,17 +726,14 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
             mask_image = preprocess_mask(mask_image, self.vae_scale_factor)
         if mask_image is not None:
             mask_image = mask_image.astype(dtype=dtype)
-            mask = paddle.concat([mask_image] * batch_size *
-                                 num_images_per_prompt)
+            mask = paddle.concat([mask_image] * batch_size * num_images_per_prompt)
         else:
             mask = None
 
         # 5. set timesteps
         self.scheduler.set_timesteps(num_inference_steps)
-        timesteps, num_inference_steps = self.get_timesteps(
-            num_inference_steps, strength, image is None)
-        latent_timestep = timesteps[:1].tile(
-            [batch_size * num_images_per_prompt])
+        timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength, image is None)
+        latent_timestep = timesteps[:1].tile([batch_size * num_images_per_prompt])
 
         # 6. Prepare latent variables
         latents, init_latents_orig, noise = self.prepare_latents(
@@ -786,7 +744,8 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
             width,
             dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -794,46 +753,37 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
         # 8. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = (paddle.concat([latents] * 2)
-                                  if do_classifier_free_guidance else latents)
-            latent_model_input = self.scheduler.scale_model_input(
-                latent_model_input, t)
+            latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
             # predict the noise residual
-            noise_pred = self.unet(
-                latent_model_input, t,
-                encoder_hidden_states=text_embeddings).sample
+            noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=text_embeddings).sample
 
             # perform guidance
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                noise_pred = noise_pred_uncond + guidance_scale * (
-                    noise_pred_text - noise_pred_uncond)
+                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.scheduler.step(noise_pred, t, latents,
-                                          **extra_step_kwargs).prev_sample
+            latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
             if mask is not None:
                 # masking
-                init_latents_proper = self.scheduler.add_noise(
-                    init_latents_orig, noise, t)
+                init_latents_proper = self.scheduler.add_noise(init_latents_orig, noise, t)
                 latents = (init_latents_proper * mask) + (latents * (1 - mask))
 
             # call the callback, if provided
             if i % callback_steps == 0:
                 if callback is not None:
                     callback(i, t, latents)
-                if is_cancelled_callback is not None and is_cancelled_callback(
-                ):
+                if is_cancelled_callback is not None and is_cancelled_callback():
                     return None
 
         # 9. Post-processing
         image = self.decode_latents(latents)
 
         # 10. Run safety checker
-        image, has_nsfw_concept = self.run_safety_checker(image,
-                                                          text_embeddings.dtype)
+        image, has_nsfw_concept = self.run_safety_checker(image, text_embeddings.dtype)
 
         # 11. Convert to PIL
         if output_type == "pil":
@@ -842,28 +792,28 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
         if not return_dict:
             return image, has_nsfw_concept
 
-        return StableDiffusionPipelineOutput(
-            images=image, nsfw_content_detected=has_nsfw_concept)
+        return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)
 
     def text2img(
-            self,
-            prompt: Union[str, List[str]],
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            height: Optional[int]=512,
-            width: Optional[int]=512,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[int]=0.0,
-            generator: Optional[paddle.Generator]=None,
-            latents: Optional[paddle.Tensor]=None,
-            max_embeddings_multiples: Optional[int]=3,
-            output_type: Optional[str]="pil",
-            return_dict: Optional[bool]=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            is_cancelled_callback: Optional[Callable[[], bool]]=None,
-            callback_steps: Optional[int]=1,
-            **kwargs, ):
+        self,
+        prompt: Union[str, List[str]],
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        height: Optional[int] = 512,
+        width: Optional[int] = 512,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[int] = 0.0,
+        generator: Optional[paddle.Generator] = None,
+        latents: Optional[paddle.Tensor] = None,
+        max_embeddings_multiples: Optional[int] = 3,
+        output_type: Optional[str] = "pil",
+        return_dict: Optional[bool] = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        is_cancelled_callback: Optional[Callable[[], bool]] = None,
+        callback_steps: Optional[int] = 1,
+        **kwargs,
+    ):
         r"""
         Function for text-to-image generation.
         Args:
@@ -936,26 +886,28 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
             return_dict=return_dict,
             callback=callback,
             callback_steps=callback_steps,
-            **kwargs, )
+            **kwargs,
+        )
 
     def img2img(
-            self,
-            prompt: Union[str, List[str]],
-            image: Union[paddle.Tensor, PIL.Image.Image],
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            strength: Optional[float]=0.8,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[float]=0.0,
-            generator: Optional[paddle.Generator]=None,
-            max_embeddings_multiples: Optional[int]=3,
-            output_type: Optional[str]="pil",
-            return_dict: Optional[bool]=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            is_cancelled_callback: Optional[Callable[[], bool]]=None,
-            callback_steps: Optional[int]=1,
-            **kwargs, ):
+        self,
+        prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, PIL.Image.Image],
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        strength: Optional[float] = 0.8,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[float] = 0.0,
+        generator: Optional[paddle.Generator] = None,
+        max_embeddings_multiples: Optional[int] = 3,
+        output_type: Optional[str] = "pil",
+        return_dict: Optional[bool] = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        is_cancelled_callback: Optional[Callable[[], bool]] = None,
+        callback_steps: Optional[int] = 1,
+        **kwargs,
+    ):
         r"""
         Function for image-to-image generation.
         Args:
@@ -1029,27 +981,29 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
             callback=callback,
             is_cancelled_callback=is_cancelled_callback,
             callback_steps=callback_steps,
-            **kwargs, )
+            **kwargs,
+        )
 
     def inpaint(
-            self,
-            prompt: Union[str, List[str]],
-            image: Union[paddle.Tensor, PIL.Image.Image],
-            mask_image: Union[paddle.Tensor, PIL.Image.Image],
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            strength: Optional[float]=0.8,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[float]=0.0,
-            generator: Optional[paddle.Generator]=None,
-            max_embeddings_multiples: Optional[int]=3,
-            output_type: Optional[str]="pil",
-            return_dict: Optional[bool]=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            is_cancelled_callback: Optional[Callable[[], bool]]=None,
-            callback_steps: Optional[int]=1,
-            **kwargs, ):
+        self,
+        prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, PIL.Image.Image],
+        mask_image: Union[paddle.Tensor, PIL.Image.Image],
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        strength: Optional[float] = 0.8,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[float] = 0.0,
+        generator: Optional[paddle.Generator] = None,
+        max_embeddings_multiples: Optional[int] = 3,
+        output_type: Optional[str] = "pil",
+        return_dict: Optional[bool] = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        is_cancelled_callback: Optional[Callable[[], bool]] = None,
+        callback_steps: Optional[int] = 1,
+        **kwargs,
+    ):
         r"""
         Function for inpaint.
         Args:
@@ -1124,4 +1078,5 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
             return_dict=return_dict,
             callback=callback,
             callback_steps=callback_steps,
-            **kwargs, )
+            **kwargs,
+        )

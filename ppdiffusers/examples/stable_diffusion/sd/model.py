@@ -21,8 +21,13 @@ import paddle.nn.functional as F
 from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
 
-from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
-                         UNet2DConditionModel, is_ppxformers_available)
+from ppdiffusers import (
+    AutoencoderKL,
+    DDIMScheduler,
+    DDPMScheduler,
+    UNet2DConditionModel,
+    is_ppxformers_available,
+)
 from ppdiffusers.initializer import reset_initialized_parameter, zeros_
 from ppdiffusers.models.attention import AttentionBlock
 from ppdiffusers.models.ema import LitEma
@@ -37,30 +42,31 @@ class StableDiffusionModel(nn.Layer):
         self.model_args = model_args
         tokenizer_name_or_path = (
             model_args.tokenizer_name
-            if model_args.tokenizer_name is not None else
-            os.path.join(model_args.pretrained_model_name_or_path, "tokenizer"))
+            if model_args.tokenizer_name is not None
+            else os.path.join(model_args.pretrained_model_name_or_path, "tokenizer")
+        )
         vae_name_or_path = (
             model_args.vae_name_or_path
-            if model_args.vae_name_or_path is not None else
-            os.path.join(model_args.pretrained_model_name_or_path, "vae"))
+            if model_args.vae_name_or_path is not None
+            else os.path.join(model_args.pretrained_model_name_or_path, "vae")
+        )
         text_encoder_name_or_path = (
             model_args.text_encoder_name_or_path
-            if model_args.text_encoder_name_or_path is not None else
-            os.path.join(model_args.pretrained_model_name_or_path,
-                         "text_encoder"))
+            if model_args.text_encoder_name_or_path is not None
+            else os.path.join(model_args.pretrained_model_name_or_path, "text_encoder")
+        )
         unet_name_or_path = (
             model_args.unet_name_or_path
-            if model_args.unet_name_or_path is not None else
-            os.path.join(model_args.pretrained_model_name_or_path, "unet"))
+            if model_args.unet_name_or_path is not None
+            else os.path.join(model_args.pretrained_model_name_or_path, "unet")
+        )
         # init model and tokenizer
         tokenizer_kwargs = {}
         if model_args.model_max_length is not None:
             tokenizer_kwargs["model_max_length"] = model_args.model_max_length
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path,
-                                                       **tokenizer_kwargs)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path, **tokenizer_kwargs)
         self.vae = AutoencoderKL.from_pretrained(vae_name_or_path)
-        self.text_encoder = CLIPTextModel.from_pretrained(
-            text_encoder_name_or_path)
+        self.text_encoder = CLIPTextModel.from_pretrained(text_encoder_name_or_path)
         try:
             self.unet = UNet2DConditionModel.from_pretrained(unet_name_or_path)
         except Exception:
@@ -88,9 +94,9 @@ class StableDiffusionModel(nn.Layer):
             beta_end=0.012,
             beta_schedule="scaled_linear",
             num_train_timesteps=1000,
-            prediction_type=self.model_args.prediction_type, )
-        self.register_buffer("alphas_cumprod",
-                             self.noise_scheduler.alphas_cumprod)
+            prediction_type=self.model_args.prediction_type,
+        )
+        self.register_buffer("alphas_cumprod", self.noise_scheduler.alphas_cumprod)
         self.eval_scheduler = DDIMScheduler(
             beta_start=0.00085,
             beta_end=0.012,
@@ -99,7 +105,8 @@ class StableDiffusionModel(nn.Layer):
             clip_sample=False,
             set_alpha_to_one=False,
             steps_offset=1,
-            prediction_type=self.model_args.prediction_type, )
+            prediction_type=self.model_args.prediction_type,
+        )
         self.eval_scheduler.set_timesteps(self.model_args.num_inference_steps)
         self.use_ema = False
         self.model_ema = None
@@ -109,7 +116,7 @@ class StableDiffusionModel(nn.Layer):
         Computes SNR as per https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L847-L849
         """
         sqrt_alphas_cumprod = self.alphas_cumprod**0.5
-        sqrt_one_minus_alphas_cumprod = (1.0 - self.alphas_cumprod)**0.5
+        sqrt_one_minus_alphas_cumprod = (1.0 - self.alphas_cumprod) ** 0.5
 
         # Expand the tensors.
         # Adapted from https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L1026
@@ -118,15 +125,13 @@ class StableDiffusionModel(nn.Layer):
             sqrt_alphas_cumprod = sqrt_alphas_cumprod[..., None]
         alpha = sqrt_alphas_cumprod.expand(timesteps.shape)
 
-        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[
-            timesteps].cast("float32")
+        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[timesteps].cast("float32")
         while len(sqrt_one_minus_alphas_cumprod.shape) < len(timesteps.shape):
-            sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[...,
-                                                                          None]
+            sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[..., None]
         sigma = sqrt_one_minus_alphas_cumprod.expand(timesteps.shape)
 
         # Compute SNR.
-        snr = (alpha / sigma)**2
+        snr = (alpha / sigma) ** 2
         return snr
 
     def forward(self, input_ids=None, pixel_values=None, **kwargs):
@@ -143,14 +148,14 @@ class StableDiffusionModel(nn.Layer):
         if self.model_args.noise_offset:
             # https://www.crosslabs.org//blog/diffusion-with-offset-noise
             noise += self.model_args.noise_offset * paddle.randn(
-                (latents.shape[0], latents.shape[1], 1, 1), dtype=noise.dtype)
+                (latents.shape[0], latents.shape[1], 1, 1), dtype=noise.dtype
+            )
         if self.model_args.input_perturbation:
-            new_noise = noise + self.model_args.input_perturbation * paddle.randn(
-                noise.shape, dtype=noise.dtype)
+            new_noise = noise + self.model_args.input_perturbation * paddle.randn(noise.shape, dtype=noise.dtype)
 
-        timesteps = paddle.randint(
-            0, self.noise_scheduler.config.num_train_timesteps,
-            (latents.shape[0], )).cast("int64")
+        timesteps = paddle.randint(0, self.noise_scheduler.config.num_train_timesteps, (latents.shape[0],)).cast(
+            "int64"
+        )
         # Add noise to the latents according to the noise magnitude at each timestep
         # (this is the forward diffusion process)
         if self.model_args.input_perturbation:
@@ -165,7 +170,8 @@ class StableDiffusionModel(nn.Layer):
         model_pred = self.unet(
             sample=noisy_latents,
             timestep=timesteps,
-            encoder_hidden_states=encoder_hidden_states, ).sample
+            encoder_hidden_states=encoder_hidden_states,
+        ).sample
 
         # Get the target for loss depending on the prediction type
         if self.model_args.prediction_type == "epsilon":
@@ -173,64 +179,58 @@ class StableDiffusionModel(nn.Layer):
         elif self.model_args.prediction_type == "v_prediction":
             target = self.get_velocity(latents, noise, timesteps)
         else:
-            raise ValueError(
-                f"Unknown prediction type {self.model_args.prediction_type}")
+            raise ValueError(f"Unknown prediction type {self.model_args.prediction_type}")
 
         # compute loss
         if self.model_args.snr_gamma is None:
-            loss = (F.mse_loss(
-                model_pred.cast("float32"),
-                target.cast("float32"),
-                reduction="none").mean([1, 2, 3]).mean())
+            loss = (
+                F.mse_loss(model_pred.cast("float32"), target.cast("float32"), reduction="none").mean([1, 2, 3]).mean()
+            )
         else:
             # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
             # Since we predict the noise instead of x_0, the original formulation is slightly changed.
             # This is discussed in Section 4.2 of the same paper.
             snr = self.compute_snr(timesteps)
-            mse_loss_weights = (paddle.stack(
-                [snr, self.model_args.snr_gamma * paddle.ones_like(timesteps)],
-                axis=1, ).min(axis=1)[0] / snr)
+            mse_loss_weights = (
+                paddle.stack([snr, self.model_args.snr_gamma * paddle.ones_like(timesteps)], axis=1,).min(
+                    axis=1
+                )[0]
+                / snr
+            )
             # We first calculate the original loss. Then we mean over the non-batch dimensions and
             # rebalance the sample-wise losses with their respective loss weights.
             # Finally, we take the mean of the rebalanced loss.
-            loss = F.mse_loss(
-                model_pred.cast("float32"),
-                target.cast("float32"),
-                reduction="none")
+            loss = F.mse_loss(model_pred.cast("float32"), target.cast("float32"), reduction="none")
             loss = loss.mean(list(range(1, len(loss.shape)))) * mse_loss_weights
             loss = loss.mean()
         return loss
 
     def add_noise(
-            self,
-            original_samples: paddle.Tensor,
-            noise: paddle.Tensor,
-            timesteps: paddle.Tensor, ) -> paddle.Tensor:
-        sqrt_alpha_prod = self.alphas_cumprod[timesteps]**0.5
+        self,
+        original_samples: paddle.Tensor,
+        noise: paddle.Tensor,
+        timesteps: paddle.Tensor,
+    ) -> paddle.Tensor:
+        sqrt_alpha_prod = self.alphas_cumprod[timesteps] ** 0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()
         while len(sqrt_alpha_prod.shape) < len(original_samples.shape):
             sqrt_alpha_prod = sqrt_alpha_prod.unsqueeze(-1)
 
-        sqrt_one_minus_alpha_prod = (1 - self.alphas_cumprod[timesteps])**0.5
+        sqrt_one_minus_alpha_prod = (1 - self.alphas_cumprod[timesteps]) ** 0.5
         sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.flatten()
-        while len(sqrt_one_minus_alpha_prod.shape) < len(
-                original_samples.shape):
+        while len(sqrt_one_minus_alpha_prod.shape) < len(original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
-        noisy_samples = (sqrt_alpha_prod * original_samples +
-                         sqrt_one_minus_alpha_prod * noise)
+        noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
         return noisy_samples
 
-    def get_velocity(self,
-                     sample: paddle.Tensor,
-                     noise: paddle.Tensor,
-                     timesteps: paddle.Tensor) -> paddle.Tensor:
-        sqrt_alpha_prod = self.alphas_cumprod[timesteps]**0.5
+    def get_velocity(self, sample: paddle.Tensor, noise: paddle.Tensor, timesteps: paddle.Tensor) -> paddle.Tensor:
+        sqrt_alpha_prod = self.alphas_cumprod[timesteps] ** 0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()
         while len(sqrt_alpha_prod.shape) < len(sample.shape):
             sqrt_alpha_prod = sqrt_alpha_prod.unsqueeze(-1)
 
-        sqrt_one_minus_alpha_prod = (1 - self.alphas_cumprod[timesteps])**0.5
+        sqrt_one_minus_alpha_prod = (1 - self.alphas_cumprod[timesteps]) ** 0.5
         sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.flatten()
         while len(sqrt_one_minus_alpha_prod.shape) < len(sample.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
@@ -285,20 +285,19 @@ class StableDiffusionModel(nn.Layer):
 
     @paddle.no_grad()
     def log_image(
-            self,
-            input_ids=None,
-            height=256,
-            width=256,
-            eta=0.0,
-            guidance_scale=7.5,
-            max_batch=8,
-            **kwargs, ):
+        self,
+        input_ids=None,
+        height=256,
+        width=256,
+        eta=0.0,
+        guidance_scale=7.5,
+        max_batch=8,
+        **kwargs,
+    ):
         self.eval()
         with self.ema_scope():
             if height % 8 != 0 or width % 8 != 0:
-                raise ValueError(
-                    f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-                )
+                raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
             # only log max_batch image
             if input_ids.shape[0] > max_batch:
                 input_ids = input_ids[:max_batch]
@@ -311,34 +310,25 @@ class StableDiffusionModel(nn.Layer):
                     padding="max_length",
                     truncation=True,
                     max_length=max_length,
-                    return_tensors="pd", )
+                    return_tensors="pd",
+                )
                 uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0]
-                text_embeddings = paddle.concat(
-                    [uncond_embeddings, text_embeddings], axis=0)
+                text_embeddings = paddle.concat([uncond_embeddings, text_embeddings], axis=0)
 
-            latents = paddle.randn((input_ids.shape[0], self.unet.in_channels,
-                                    height // 8, width // 8))
+            latents = paddle.randn((input_ids.shape[0], self.unet.in_channels, height // 8, width // 8))
             latents = latents * self.eval_scheduler.init_noise_sigma
-            accepts_eta = "eta" in set(
-                inspect.signature(self.eval_scheduler.step).parameters.keys())
+            accepts_eta = "eta" in set(inspect.signature(self.eval_scheduler.step).parameters.keys())
             extra_step_kwargs = {}
             if accepts_eta:
                 extra_step_kwargs["eta"] = eta
             for t in self.eval_scheduler.timesteps:
-                latent_model_input = (paddle.concat([latents] * 2) if
-                                      do_classifier_free_guidance else latents)
-                latent_model_input = self.eval_scheduler.scale_model_input(
-                    latent_model_input, t)
-                noise_pred = self.unet(
-                    latent_model_input,
-                    t,
-                    encoder_hidden_states=text_embeddings).sample
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = self.eval_scheduler.scale_model_input(latent_model_input, t)
+                noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=text_embeddings).sample
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
-                latents = self.eval_scheduler.step(
-                    noise_pred, t, latents, **extra_step_kwargs).prev_sample
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                latents = self.eval_scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
             latents = 1 / self.vae.config.scaling_factor * latents
             image = self.vae.decode(latents).sample
             image = (image / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1]) * 255.0
@@ -347,8 +337,7 @@ class StableDiffusionModel(nn.Layer):
     def set_recompute(self, use_recompute=False):
         if use_recompute:
             self.unet.enable_gradient_checkpointing()
-            if self.model_args.train_text_encoder and hasattr(
-                    self.text_encoder, "gradient_checkpointing_enable"):
+            if self.model_args.train_text_encoder and hasattr(self.text_encoder, "gradient_checkpointing_enable"):
                 self.text_encoder.gradient_checkpointing_enable()
 
     def gradient_checkpointing_enable(self):
@@ -362,26 +351,21 @@ class StableDiffusionModel(nn.Layer):
                 )
             else:
                 try:
-                    attention_op = os.getenv("FLAG_XFORMERS_ATTENTION_OP",
-                                             "none").lower()
+                    attention_op = os.getenv("FLAG_XFORMERS_ATTENTION_OP", "none").lower()
 
                     if attention_op == "none":
                         attention_op = None
 
-                    self.unet.enable_xformers_memory_efficient_attention(
-                        attention_op)
-                    if hasattr(self.vae,
-                               "enable_xformers_memory_efficient_attention"):
-                        self.vae.enable_xformers_memory_efficient_attention(
-                            attention_op)
-                    if hasattr(self.text_encoder,
-                               "enable_xformers_memory_efficient_attention"):
-                        self.text_encoder.enable_xformers_memory_efficient_attention(
-                            attention_op)
+                    self.unet.enable_xformers_memory_efficient_attention(attention_op)
+                    if hasattr(self.vae, "enable_xformers_memory_efficient_attention"):
+                        self.vae.enable_xformers_memory_efficient_attention(attention_op)
+                    if hasattr(self.text_encoder, "enable_xformers_memory_efficient_attention"):
+                        self.text_encoder.enable_xformers_memory_efficient_attention(attention_op)
                 except Exception as e:
                     logger.warn(
                         "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
-                        f" correctly and a GPU is available: {e}")
+                        f" correctly and a GPU is available: {e}"
+                    )
 
     def set_ema(self, use_ema=False):
         self.use_ema = use_ema

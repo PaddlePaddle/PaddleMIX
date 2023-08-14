@@ -14,17 +14,9 @@
 
 from __future__ import annotations
 
-import copy
-import gc
-import inspect
 import os
-import sys
 import unittest
 from argparse import ArgumentTypeError
-
-import numpy as np
-import paddle
-import yaml
 
 
 def strtobool(v):
@@ -47,9 +39,7 @@ def get_bool_from_env(key, default_value=False):
     try:
         value = strtobool(value)
     except ValueError:
-        raise ValueError(
-            f"If set, {key} must be yes, no, true, false, 0 or 1 (case insensitive)."
-        )
+        raise ValueError(f"If set, {key} must be yes, no, true, false, 0 or 1 (case insensitive).")
     return value
 
 

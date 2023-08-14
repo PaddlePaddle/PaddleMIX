@@ -18,15 +18,12 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
-                                    CLIPTokenizer)
+from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 # from ...loaders import TextualInversionLoaderMixin
-from ...models import (AutoencoderKL, MultiAdapter, T2IAdapter,
-                       UNet2DConditionModel)
+from ...models import AutoencoderKL, MultiAdapter, T2IAdapter, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import (PIL_INTERPOLATION, logging, randn_tensor,
-                      replace_example_docstring)
+from ...utils import PIL_INTERPOLATION, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
@@ -81,8 +78,7 @@ def resize(images: PIL.Image.Image, img_size: int) -> PIL.Image.Image:
     else:
         h = int(round(img_size / 8 / coef) * 8)
 
-    images = images.resize(
-        (w, h), resample=PIL_INTERPOLATION["bicubic"], reducing_gap=None)
+    images = images.resize((w, h), resample=PIL_INTERPOLATION["bicubic"], reducing_gap=None)
 
     return images
 
@@ -95,12 +91,8 @@ def preprocess(image):
     if isinstance(image[0], PIL.Image.Image):
         w, h = image[0].size
         w, h = (x - x % 8 for x in (w, h))
-        image = [
-            np.array(i.resize(
-                (w, h), resample=PIL_INTERPOLATION["lanczos"])) for i in image
-        ]
-        image = [(i[None, ..., None] if i.ndim == 2 else i[None, ...])
-                 for i in image]
+        image = [np.array(i.resize((w, h), resample=PIL_INTERPOLATION["lanczos"])) for i in image]
+        image = [(i[None, ..., None] if i.ndim == 2 else i[None, ...]) for i in image]
         image = np.concatenate(image, axis=0)
         image = np.array(image).astype(np.float32) / 255.0
         image = image.transpose(0, 3, 1, 2)
@@ -155,17 +147,18 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
     _optional_components = ["safety_checker", "feature_extractor"]
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            adapter: Union[T2IAdapter, MultiAdapter, List[T2IAdapter]],
-            scheduler: KarrasDiffusionSchedulers,
-            safety_checker: StableDiffusionSafetyChecker,
-            feature_extractor: CLIPFeatureExtractor,
-            adapter_weights: Optional[List[float]]=None,
-            requires_safety_checker: bool=True, ):
+        self,
+        vae: AutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: UNet2DConditionModel,
+        adapter: Union[T2IAdapter, MultiAdapter, List[T2IAdapter]],
+        scheduler: KarrasDiffusionSchedulers,
+        safety_checker: StableDiffusionSafetyChecker,
+        feature_extractor: CLIPFeatureExtractor,
+        adapter_weights: Optional[List[float]] = None,
+        requires_safety_checker: bool = True,
+    ):
         super().__init__()
         if safety_checker is None and requires_safety_checker:
             logger.warning(
@@ -185,8 +178,9 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             adapter=adapter,
             scheduler=scheduler,
             safety_checker=safety_checker,
-            feature_extractor=feature_extractor, )
-        self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+            feature_extractor=feature_extractor,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     def enable_vae_slicing(self):
@@ -206,13 +200,14 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
         self.vae.disable_slicing()
 
     def _encode_prompt(
-            self,
-            prompt,
-            num_images_per_prompt,
-            do_classifier_free_guidance,
-            negative_prompt=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None, ):
+        self,
+        prompt,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt=None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+    ):
         """
         Encodes the prompt into text encoder hidden states.
 
@@ -249,32 +244,29 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 padding="max_length",
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_input_ids = text_inputs.input_ids
-            untruncated_ids = self.tokenizer(
-                prompt, padding="longest", return_tensors="pd").input_ids
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                    -1] and not paddle.equal_all(text_input_ids,
-                                                 untruncated_ids):
+            untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+                text_input_ids, untruncated_ids
+            ):
                 removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
+                    untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1]
+                )
                 logger.warning(
                     f"The following part of your input was truncated because CLIP can only handle sequences up to {self.tokenizer.model_max_length} tokens: {removed_text}"
                 )
-            if (hasattr(self.text_encoder.config, "use_attention_mask") and
-                    self.text_encoder.config.use_attention_mask):
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
-            prompt_embeds = self.text_encoder(
-                text_input_ids, attention_mask=attention_mask)
+            prompt_embeds = self.text_encoder(text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.astype(self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
-        prompt_embeds = prompt_embeds.tile(
-            repeat_times=[1, num_images_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape(
-            [bs_embed * num_images_per_prompt, seq_len, -1])
+        prompt_embeds = prompt_embeds.tile(repeat_times=[1, num_images_per_prompt, 1])
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -300,34 +292,28 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
-                return_tensors="pd", )
-            if (hasattr(self.text_encoder.config, "use_attention_mask") and
-                    self.text_encoder.config.use_attention_mask):
+                return_tensors="pd",
+            )
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
-            negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids, attention_mask=attention_mask)
+            negative_prompt_embeds = self.text_encoder(uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.astype(
-                self.text_encoder.dtype)
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                repeat_times=[1, num_images_per_prompt, 1])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                (batch_size * num_images_per_prompt, seq_len, -1))
-            prompt_embeds = paddle.concat(
-                x=[negative_prompt_embeds, prompt_embeds])
+            negative_prompt_embeds = negative_prompt_embeds.astype(self.text_encoder.dtype)
+            negative_prompt_embeds = negative_prompt_embeds.tile(repeat_times=[1, num_images_per_prompt, 1])
+            negative_prompt_embeds = negative_prompt_embeds.reshape((batch_size * num_images_per_prompt, seq_len, -1))
+            prompt_embeds = paddle.concat(x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is not None:
-            safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors="pd")
+            safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image,
-                clip_input=safety_checker_input.pixel_values.astype(dtype))
+                images=image, clip_input=safety_checker_input.pixel_values.astype(dtype)
+            )
         else:
             has_nsfw_concept = None
         return image, has_nsfw_concept
@@ -336,37 +322,36 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents).sample
         image = (image / 2 + 0.5).clip(min=0, max=1)
-        image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
-            dtype="float32").numpy()
+        image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(dtype="float32").numpy()
         return image
 
     def prepare_extra_step_kwargs(self, generator, eta):
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     def check_inputs(
-            self,
-            prompt,
-            height,
-            width,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        height,
+        width,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
-        if (callback_steps is None or callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
+        if (
+            callback_steps is None
+            or callback_steps is not None
+            and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type {type(callback_steps)}."
             )
@@ -378,11 +363,8 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `negative_prompt`: {negative_prompt} and `negative_prompt_embeds`: {negative_prompt_embeds}. Please make sure to only forward one of the two."
@@ -394,19 +376,21 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 )
 
     def prepare_latents(
-            self,
-            batch_size,
-            num_channels_latents,
-            height,
-            width,
-            dtype,
-            generator,
-            latents=None, ):
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
         shape = (
             batch_size,
             num_channels_latents,
             height // self.vae_scale_factor,
-            width // self.vae_scale_factor, )
+            width // self.vae_scale_factor,
+        )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
@@ -438,28 +422,27 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
-            self,
-            prompt: Union[str, List[str]]=None,
-            image: Union[paddle.Tensor, PIL.Image.Image, List[
-                PIL.Image.Image]]=None,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: int=1,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None,
-            adapter_conditioning_scale: Union[float, List[float]]=1.0, ):
+        self,
+        prompt: Union[str, List[str]] = None,
+        image: Union[paddle.Tensor, PIL.Image.Image, List[PIL.Image.Image]] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: int = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        adapter_conditioning_scale: Union[float, List[float]] = 1.0,
+    ):
         """
         Function invoked when calling the pipeline for generation.
 
@@ -550,13 +533,13 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             callback_steps,
             negative_prompt,
             prompt_embeds,
-            negative_prompt_embeds, )
+            negative_prompt_embeds,
+        )
         is_multi_adapter = isinstance(self.adapter, MultiAdapter)
         if is_multi_adapter:
             adapter_input = [preprocess(img) for img in image]
             n, c, h, w = adapter_input[0].shape
-            adapter_input = paddle.stack(
-                x=[x.reshape([n * c, h, w]) for x in adapter_input])
+            adapter_input = paddle.stack(x=[x.reshape([n * c, h, w]) for x in adapter_input])
         else:
             adapter_input = preprocess(image)
         adapter_input = adapter_input.astype(self.adapter.dtype)
@@ -573,7 +556,8 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds, )
+            negative_prompt_embeds=negative_prompt_embeds,
+        )
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_channels_latents = self.unet.in_channels
@@ -584,43 +568,35 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             width,
             prompt_embeds.dtype,
             generator,
-            latents, )
+            latents,
+        )
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         adapter_state = self.adapter(adapter_input)
         for k, v in enumerate(adapter_state):
             adapter_state[k] = v * adapter_conditioning_scale
         if num_images_per_prompt > 1:
             for k, v in enumerate(adapter_state):
-                adapter_state[k] = v.tile(
-                    repeat_times=[num_images_per_prompt, 1, 1, 1])
+                adapter_state[k] = v.tile(repeat_times=[num_images_per_prompt, 1, 1, 1])
         if do_classifier_free_guidance:
             for k, v in enumerate(adapter_state):
                 adapter_state[k] = paddle.concat(x=[v] * 2, axis=0)
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-                latent_model_input = (paddle.concat(x=[latents] * 2) if
-                                      do_classifier_free_guidance else latents)
-                latent_model_input = self.scheduler.scale_model_input(
-                    latent_model_input, t)
+                latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
                     cross_attention_kwargs=cross_attention_kwargs,
-                    down_block_additional_residuals=[
-                        state.clone() for state in adapter_state
-                    ], ).sample
+                    down_block_additional_residuals=[state.clone() for state in adapter_state],
+                ).sample
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(
-                        chunks=2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
-                latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
-                if (i == len(timesteps) - 1 or i + 1 > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -629,14 +605,11 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             has_nsfw_concept = None
         elif output_type == "pil":
             image = self.decode_latents(latents)
-            image, has_nsfw_concept = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
             image = self.numpy_to_pil(image)
         else:
             image = self.decode_latents(latents)
-            image, has_nsfw_concept = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
         if not return_dict:
             return image, has_nsfw_concept
-        return StableDiffusionPipelineOutput(
-            images=image, nsfw_content_detected=has_nsfw_concept)
+        return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

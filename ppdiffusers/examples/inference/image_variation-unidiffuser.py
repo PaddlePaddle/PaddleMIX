@@ -16,8 +16,7 @@ from ppdiffusers import UniDiffuserPipeline
 from ppdiffusers.utils import load_image
 
 pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser")
-image = load_image(
-    "https://bj.bcebos.com/v1/paddlenlp/models/community/thu-ml/data/space.jpg")
+image = load_image("https://bj.bcebos.com/v1/paddlenlp/models/community/thu-ml/data/space.jpg")
 result = pipe(mode="i2t2i", image=image, prompt=None)
 image = result.images[0]
 image.save("image_variation-unidiffuser-result.png")

@@ -63,8 +63,11 @@ def setup_fast_ln():
                     "--expt-relaxed-constexpr",
                     "--expt-extended-lambda",
                     "--use_fast_math",
-                ] + gencode_flags,
-            }, ), )
+                ]
+                + gencode_flags,
+            },
+        ),
+    )
 
 
 def setup_fused_ln():
@@ -75,7 +78,9 @@ def setup_fused_ln():
     setup(
         name="fused_ln",
         ext_modules=CUDAExtension(
-            sources=["fused_ln/layer_norm_cuda.cu", ],
+            sources=[
+                "fused_ln/layer_norm_cuda.cu",
+            ],
             extra_compile_args={
                 "cxx": ["-O3"],
                 "nvcc": [
@@ -91,8 +96,11 @@ def setup_fused_ln():
                     "--expt-extended-lambda",
                     "--use_fast_math",
                     "-maxrregcount=50",
-                ] + gencode_flags,
-            }, ), )
+                ]
+                + gencode_flags,
+            },
+        ),
+    )
 
 
 run(setup_fast_ln)

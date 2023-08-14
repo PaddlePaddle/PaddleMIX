@@ -20,11 +20,14 @@ import numpy as np
 import paddle
 
 from ppdiffusers import RePaintPipeline, RePaintScheduler, UNet2DModel
-from ppdiffusers.utils.testing_utils import (load_image, load_numpy, nightly,
-                                             require_paddle_gpu)
+from ppdiffusers.utils.testing_utils import (
+    load_image,
+    load_numpy,
+    nightly,
+    require_paddle_gpu,
+)
 
-from ..pipeline_params import (IMAGE_INPAINTING_BATCH_PARAMS,
-                               IMAGE_INPAINTING_PARAMS)
+from ..pipeline_params import IMAGE_INPAINTING_BATCH_PARAMS, IMAGE_INPAINTING_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -49,7 +52,8 @@ class RepaintPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             in_channels=3,
             out_channels=3,
             down_block_types=("DownBlock2D", "AttnDownBlock2D"),
-            up_block_types=("AttnUpBlock2D", "UpBlock2D"), )
+            up_block_types=("AttnUpBlock2D", "UpBlock2D"),
+        )
         scheduler = RePaintScheduler()
         components = {"unet": unet, "scheduler": scheduler}
         return components
@@ -80,17 +84,19 @@ class RepaintPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image = sd_pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        expected_slice = np.array([
-            0.08341709,
-            0.54262626,
-            0.549711,
-            0.00903523,
-            0.0,
-            1.0,
-            0.05136755,
-            0.5604646,
-            0.6273578,
-        ])
+        expected_slice = np.array(
+            [
+                0.08341709,
+                0.54262626,
+                0.549711,
+                0.00903523,
+                0.0,
+                1.0,
+                0.05136755,
+                0.5604646,
+                0.6273578,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     # RePaint can hardly be made deterministic since the scheduler is currently always
@@ -133,7 +139,8 @@ class RepaintPipelineNightlyTests(unittest.TestCase):
             jump_length=10,
             jump_n_sample=10,
             generator=generator,
-            output_type="np", )
+            output_type="np",
+        )
         image = output.images[0]
         assert image.shape == (256, 256, 3)
         assert np.abs(expected_image - image).mean() < 0.01

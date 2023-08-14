@@ -41,7 +41,8 @@ plt.plot(
     linewidth=3,
     color="r",
     marker="o",
-    markerfacecolor="blue", )
+    markerfacecolor="blue",
+)
 plt.plot(
     clip_pt,
     fid_pt,
@@ -49,7 +50,8 @@ plt.plot(
     linewidth=3,
     color="b",
     marker="o",
-    markerfacecolor="red", )
+    markerfacecolor="red",
+)
 plt.xlabel("CLIP Score")
 plt.ylabel("FID@1k")
 plt.title("12W Globel Step Pareto Curves - DDIM")

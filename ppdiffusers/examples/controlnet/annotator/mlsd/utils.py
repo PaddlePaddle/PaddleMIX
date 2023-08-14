@@ -17,6 +17,7 @@ import math
 import cv2
 import numpy as np
 import paddle
+
 """
 M-LSD
 Copyright 2021-present NAVER Corp.
@@ -48,11 +49,7 @@ def zeros_(tensor):
     return _no_grad_fill_(tensor, 0)
 
 
-def kaiming_normal_(tensor,
-                    a=0,
-                    mode="fan_in",
-                    nonlinearity="leaky_relu",
-                    reverse=False):
+def kaiming_normal_(tensor, a=0, mode="fan_in", nonlinearity="leaky_relu", reverse=False):
     """
     Modified tensor inspace using kaiming_normal_
     Args:
@@ -100,13 +97,11 @@ def _calculate_gain(nonlinearity, param=None):
     elif nonlinearity == "leaky_relu":
         if param is None:
             negative_slope = 0.01
-        elif (not isinstance(param, bool) and isinstance(param, int) or
-              isinstance(param, float)):
+        elif not isinstance(param, bool) and isinstance(param, int) or isinstance(param, float):
             # True/False are instances of int, hence check above
             negative_slope = param
         else:
-            raise ValueError("negative_slope {} not a valid number".format(
-                param))
+            raise ValueError("negative_slope {} not a valid number".format(param))
         return math.sqrt(2.0 / (1 + negative_slope**2))
     elif nonlinearity == "selu":
         return 3.0 / 4
@@ -119,8 +114,7 @@ def _calculate_correct_fan(tensor, mode, reverse=False):
     mode = mode.lower()
     valid_modes = ["fan_in", "fan_out"]
     if mode not in valid_modes:
-        raise ValueError("Mode {} not supported, please use one of {}".format(
-            mode, valid_modes))
+        raise ValueError("Mode {} not supported, please use one of {}".format(mode, valid_modes))
 
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor, reverse)
 
@@ -137,9 +131,7 @@ def _calculate_fan_in_and_fan_out(tensor, reverse=False):
         Tuple[fan_in, fan_out]
     """
     if tensor.ndim < 2:
-        raise ValueError(
-            "Fan in and fan out can not be computed for tensor with fewer than 2 dimensions"
-        )
+        raise ValueError("Fan in and fan out can not be computed for tensor with fewer than 2 dimensions")
 
     if reverse:
         num_input_fmaps, num_output_fmaps = tensor.shape[0], tensor.shape[1]
@@ -168,8 +160,8 @@ def deccode_output_score_and_ptss(tpMap, topk_n=200, ksize=5):
     center = tpMap[:, (0), :, :]
     heat = paddle.nn.functional.sigmoid(x=center).unsqueeze(0)
     hmax = paddle.nn.functional.max_pool2d(
-        kernel_size=(ksize, ksize), stride=1, padding=(ksize - 1) // 2,
-        x=heat).squeeze(0)
+        kernel_size=(ksize, ksize), stride=1, padding=(ksize - 1) // 2, x=heat
+    ).squeeze(0)
     keep = (hmax == heat).astype(dtype="float32")
     heat = heat * keep
     heat = heat.reshape([-1])
@@ -185,21 +177,16 @@ def deccode_output_score_and_ptss(tpMap, topk_n=200, ksize=5):
     return ptss, scores, displacement
 
 
-def pred_lines(image,
-               model,
-               input_shape=[512, 512],
-               score_thr=0.1,
-               dist_thr=20.0):
+def pred_lines(image, model, input_shape=[512, 512], score_thr=0.1, dist_thr=20.0):
     h, w, _ = image.shape
     h_ratio, w_ratio = [h / input_shape[0], w / input_shape[1]]
     resized_image = np.concatenate(
         [
-            cv2.resize(
-                image, (input_shape[1], input_shape[0]),
-                interpolation=cv2.INTER_AREA),
+            cv2.resize(image, (input_shape[1], input_shape[0]), interpolation=cv2.INTER_AREA),
             np.ones([input_shape[0], input_shape[1], 1]),
         ],
-        axis=-1, )
+        axis=-1,
+    )
     resized_image = resized_image.transpose((2, 0, 1))
     batch_image = np.expand_dims(resized_image, axis=0).astype("float32")
     batch_image = batch_image / 127.5 - 1.0
@@ -208,14 +195,13 @@ def pred_lines(image,
     pts, pts_score, vmap = deccode_output_score_and_ptss(outputs, 200, 3)
     start = vmap[:, :, :2]
     end = vmap[:, :, 2:]
-    dist_map = np.sqrt(np.sum((start - end)**2, axis=-1))
+    dist_map = np.sqrt(np.sum((start - end) ** 2, axis=-1))
     segments_list = []
     for center, score in zip(pts, pts_score):
         y, x = center
         distance = dist_map[y, x]
         if score > score_thr and distance > dist_thr:
-            disp_x_start, disp_y_start, disp_x_end, disp_y_end = vmap[(y), (
-                x), :]
+            disp_x_start, disp_y_start, disp_x_end, disp_y_end = vmap[(y), (x), :]
             x_start = x + disp_x_start
             y_start = y + disp_y_start
             x_end = x + disp_x_end

@@ -32,41 +32,36 @@ TOME_PREFIX = "ToMe"
 
 
 def scatter_reduce(
-        input: paddle.Tensor,
-        dim: int,
-        index: paddle.Tensor,
-        src: paddle.Tensor,
-        reduce: str="mean",
-        include_self: bool=True, ) -> paddle.Tensor:
+    input: paddle.Tensor,
+    dim: int,
+    index: paddle.Tensor,
+    src: paddle.Tensor,
+    reduce: str = "mean",
+    include_self: bool = True,
+) -> paddle.Tensor:
     # reduce "sum", "prod", "mean",
     # TODO support "amax", "amin" and include_self = False
     if reduce in ["sum", "assign", "add"]:
         if reduce == "sum":
             reduce = "add"
-        input.put_along_axis_(
-            indices=index, values=src, axis=dim, reduce=reduce)
+        input.put_along_axis_(indices=index, values=src, axis=dim, reduce=reduce)
     elif reduce == "mean":
         # compute sum first
         input.put_along_axis_(indices=index, values=src, axis=dim, reduce="add")
         # compute div secondly
         input_div = paddle.ones_like(input).put_along_axis(
             indices=index,
-            values=paddle.to_tensor(
-                1.0, dtype=input.dtype),
+            values=paddle.to_tensor(1.0, dtype=input.dtype),
             axis=dim,
-            reduce="add", )
+            reduce="add",
+        )
         input = input / input_div
     elif reduce in ["prod", "mul", "multiply"]:
-        input = paddle.put_along_axis(
-            input.cpu(),
-            indices=index.cpu(),
-            values=src.cpu(),
-            axis=dim,
-            reduce="mul")._to(device=paddle.get_device())
-    else:
-        raise NotImplementedError(
-            "only support mode in ['add', 'sum', 'prod', 'mul', 'multiply', 'mean', 'assign']!"
+        input = paddle.put_along_axis(input.cpu(), indices=index.cpu(), values=src.cpu(), axis=dim, reduce="mul")._to(
+            device=paddle.get_device()
         )
+    else:
+        raise NotImplementedError("only support mode in ['add', 'sum', 'prod', 'mul', 'multiply', 'mean', 'assign']!")
     return input
 
 
@@ -75,18 +70,19 @@ paddle.scatter_reduce = scatter_reduce
 paddle.Tensor.scatter_reduce = scatter_reduce
 
 
-def do_nothing(x: paddle.Tensor, mode: str=None):
+def do_nothing(x: paddle.Tensor, mode: str = None):
     return x
 
 
 def bipartite_soft_matching_random2d(
-        metric: paddle.Tensor,
-        w: int,
-        h: int,
-        sx: int,
-        sy: int,
-        r: int,
-        no_rand: bool=False, ) -> Tuple[Callable, Callable]:
+    metric: paddle.Tensor,
+    w: int,
+    h: int,
+    sx: int,
+    sy: int,
+    r: int,
+    no_rand: bool = False,
+) -> Tuple[Callable, Callable]:
     """
     Partitions the tokens into src and dst and merges r tokens from src to dst.
     Dst tokens are partitioned by choosing one randomy in each (sx, sy) region.
@@ -112,24 +108,23 @@ def bipartite_soft_matching_random2d(
         if no_rand:
             rand_idx = paddle.zeros((hsy, wsx, 1), dtype=paddle.int64)
         else:
-            rand_idx = paddle.randint(
-                sy * sx, shape=(hsy, wsx, 1), dtype=paddle.int64)
+            rand_idx = paddle.randint(sy * sx, shape=(hsy, wsx, 1), dtype=paddle.int64)
 
         # The image might not divide sx and sy, so we need to work on a view of the top left if the idx buffer instead
         idx_buffer_view = paddle.zeros([hsy, wsx, sy * sx], dtype=paddle.int64)
         idx_buffer_view.put_along_axis_(
             axis=2,
             indices=rand_idx,
-            values=-paddle.ones_like(
-                rand_idx, dtype=rand_idx.dtype), )
-        idx_buffer_view = (idx_buffer_view.reshape([hsy, wsx, sy, sx])
-                           .transpose([0, 2, 1, 3])
-                           .reshape([hsy * sy, wsx * sx]))
+            values=-paddle.ones_like(rand_idx, dtype=rand_idx.dtype),
+        )
+        idx_buffer_view = (
+            idx_buffer_view.reshape([hsy, wsx, sy, sx]).transpose([0, 2, 1, 3]).reshape([hsy * sy, wsx * sx])
+        )
 
         # Image is not divisible by sx or sy so we need to move it into a new buffer
         if (hsy * sy) < h or (wsx * sx) < w:
             idx_buffer = paddle.zeros([h, w], dtype=paddle.int64)
-            idx_buffer[:(hsy * sy), :(wsx * sx)] = idx_buffer_view
+            idx_buffer[: (hsy * sy), : (wsx * sx)] = idx_buffer_view
         else:
             idx_buffer = idx_buffer_view
 
@@ -147,10 +142,8 @@ def bipartite_soft_matching_random2d(
         def split(x):
             C = x.shape[-1]
 
-            src = x.take_along_axis(
-                indices=a_idx.expand([B, N - num_dst, C]), axis=1)
-            dst = x.take_along_axis(
-                indices=b_idx.expand([B, num_dst, C]), axis=1)
+            src = x.take_along_axis(indices=a_idx.expand([B, N - num_dst, C]), axis=1)
+            dst = x.take_along_axis(indices=b_idx.expand([B, num_dst, C]), axis=1)
             return src, dst
 
         # Cosine similarity between A and B
@@ -178,12 +171,10 @@ def bipartite_soft_matching_random2d(
         src, dst = split(x)
         n, t1, c = src.shape
 
-        unm = src.take_along_axis(
-            indices=unm_idx.expand([n, t1 - r, c]), axis=-2)
+        unm = src.take_along_axis(indices=unm_idx.expand([n, t1 - r, c]), axis=-2)
         src = src.take_along_axis(indices=src_idx.expand([n, r, c]), axis=-2)
 
-        dst = scatter_reduce(
-            dst, -2, dst_idx.expand([n, r, c]), src, reduce=mode)
+        dst = scatter_reduce(dst, -2, dst_idx.expand([n, r, c]), src, reduce=mode)
 
         return paddle.concat([unm, dst], axis=1)
 
@@ -200,25 +191,27 @@ def bipartite_soft_matching_random2d(
         out.put_along_axis_(
             indices=b_idx.expand([B, num_dst, c]),
             values=dst,
-            axis=-2, )
+            axis=-2,
+        )
         out.put_along_axis_(
-            indices=a_idx.expand([B, a_idx.shape[1], 1]).take_along_axis(
-                indices=unm_idx, axis=1).expand([B, unm_len, c]),
+            indices=a_idx.expand([B, a_idx.shape[1], 1])
+            .take_along_axis(indices=unm_idx, axis=1)
+            .expand([B, unm_len, c]),
             values=unm,
-            axis=-2, )
+            axis=-2,
+        )
         out.put_along_axis_(
-            indices=a_idx.expand([B, a_idx.shape[1], 1]).take_along_axis(
-                indices=src_idx, axis=1).expand([B, r, c]),
+            indices=a_idx.expand([B, a_idx.shape[1], 1]).take_along_axis(indices=src_idx, axis=1).expand([B, r, c]),
             values=src,
-            axis=-2, )
+            axis=-2,
+        )
 
         return out
 
     return merge, unmerge
 
 
-def compute_merge(x: paddle.Tensor,
-                  tome_info: Dict[str, Any]) -> Tuple[Callable, ...]:
+def compute_merge(x: paddle.Tensor, tome_info: Dict[str, Any]) -> Tuple[Callable, ...]:
     original_h, original_w = tome_info["size"]
     original_tokens = original_h * original_w
     downsample = int(math.ceil(math.sqrt(original_tokens // x.shape[1])))
@@ -232,8 +225,7 @@ def compute_merge(x: paddle.Tensor,
         # If the batch size is odd, then it's not possible for promted and unprompted images to be in the same
         # batch, which causes artifacts with use_rand, so force it to be off.
         use_rand = False if x.shape[0] % 2 == 1 else args["use_rand"]
-        m, u = bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"],
-                                                r, not use_rand)
+        m, u = bipartite_soft_matching_random2d(x, w, h, args["sx"], args["sy"], r, not use_rand)
     else:
         m, u = (do_nothing, do_nothing)
 
@@ -255,31 +247,27 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
         _parent = block_class
 
         def forward(
-                self: BasicTransformerBlock,
-                hidden_states,
-                attention_mask=None,
-                encoder_hidden_states=None,
-                encoder_attention_mask=None,
-                timestep=None,
-                cross_attention_kwargs=None,
-                class_labels=None, ) -> paddle.Tensor:
+            self: BasicTransformerBlock,
+            hidden_states,
+            attention_mask=None,
+            encoder_hidden_states=None,
+            encoder_attention_mask=None,
+            timestep=None,
+            cross_attention_kwargs=None,
+            class_labels=None,
+        ) -> paddle.Tensor:
             # (1) ToMe
-            m_a, m_c, m_m, u_a, u_c, u_m = compute_merge(hidden_states,
-                                                         self._tome_info)
+            m_a, m_c, m_m, u_a, u_c, u_m = compute_merge(hidden_states, self._tome_info)
 
             if self.use_ada_layer_norm:
                 norm_hidden_states = self.norm1(hidden_states, timestep)
             elif self.use_ada_layer_norm_zero:
-                (
-                    norm_hidden_states,
-                    gate_msa,
-                    shift_mlp,
-                    scale_mlp,
-                    gate_mlp, ) = self.norm1(
-                        hidden_states,
-                        timestep,
-                        class_labels,
-                        hidden_dtype=hidden_states.dtype, )
+                (norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp,) = self.norm1(
+                    hidden_states,
+                    timestep,
+                    class_labels,
+                    hidden_dtype=hidden_states.dtype,
+                )
             else:
                 norm_hidden_states = self.norm1(hidden_states)
 
@@ -287,15 +275,13 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
             norm_hidden_states = m_a(norm_hidden_states)
 
             # 1. Self-Attention
-            cross_attention_kwargs = (cross_attention_kwargs
-                                      if cross_attention_kwargs is not None else
-                                      {})
+            cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
             attn_output = self.attn1(
                 norm_hidden_states,
-                encoder_hidden_states=encoder_hidden_states
-                if self.only_cross_attention else None,
+                encoder_hidden_states=encoder_hidden_states if self.only_cross_attention else None,
                 attention_mask=attention_mask,
-                **cross_attention_kwargs, )
+                **cross_attention_kwargs,
+            )
             if self.use_ada_layer_norm_zero:
                 attn_output = gate_msa.unsqueeze(1) * attn_output
 
@@ -303,9 +289,9 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
             hidden_states = u_a(attn_output) + hidden_states
 
             if self.attn2 is not None:
-                norm_hidden_states = (self.norm2(hidden_states, timestep)
-                                      if self.use_ada_layer_norm else
-                                      self.norm2(hidden_states))
+                norm_hidden_states = (
+                    self.norm2(hidden_states, timestep) if self.use_ada_layer_norm else self.norm2(hidden_states)
+                )
                 # (4) ToMe m_c
                 norm_hidden_states = m_c(norm_hidden_states)
 
@@ -314,7 +300,8 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
                     norm_hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
                     attention_mask=encoder_attention_mask,
-                    **cross_attention_kwargs, )
+                    **cross_attention_kwargs,
+                )
                 # (5) ToMe u_c
                 hidden_states = u_c(attn_output) + hidden_states
 
@@ -322,9 +309,7 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
             norm_hidden_states = self.norm3(hidden_states)
 
             if self.use_ada_layer_norm_zero:
-                norm_hidden_states = (
-                    norm_hidden_states *
-                    (1 + scale_mlp[:, None]) + shift_mlp[:, None])
+                norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
 
             # (6) ToMe m_m
             norm_hidden_states = m_m(norm_hidden_states)
@@ -353,8 +338,7 @@ def hook_tome_model(model: nn.Layer):
 
 
 @patch_to([DiffusionPipeline, nn.Layer])
-def remove_tome(model_or_pipe: Union[nn.Layer, DiffusionPipeline],
-                only_return_self: bool=True):
+def remove_tome(model_or_pipe: Union[nn.Layer, DiffusionPipeline], only_return_self: bool = True):
     """Removes a patch from a ToMeXXX module if it was already patched."""
     model_list = []
     if isinstance(model_or_pipe, DiffusionPipeline):
@@ -385,15 +369,16 @@ def remove_tome(model_or_pipe: Union[nn.Layer, DiffusionPipeline],
 
 @patch_to([DiffusionPipeline, nn.Layer])
 def apply_tome(
-        model_or_pipe: Union[nn.Layer, DiffusionPipeline],
-        ratio: float=0.5,
-        max_downsample: int=1,
-        sx: int=2,
-        sy: int=2,
-        use_rand: bool=True,
-        merge_attn: bool=True,
-        merge_crossattn: bool=False,
-        merge_mlp: bool=False, ):
+    model_or_pipe: Union[nn.Layer, DiffusionPipeline],
+    ratio: float = 0.5,
+    max_downsample: int = 1,
+    sx: int = 2,
+    sy: int = 2,
+    use_rand: bool = True,
+    merge_attn: bool = True,
+    merge_crossattn: bool = False,
+    merge_mlp: bool = False,
+):
     """
     Patches a stable diffusion model_or_pipe with ToMe.
     Apply this to the highest level stable diffusion object (i.e., it should have a .unet).

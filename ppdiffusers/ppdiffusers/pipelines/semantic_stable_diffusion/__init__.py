@@ -42,5 +42,4 @@ class SemanticStableDiffusionPipelineOutput(BaseOutput):
 
 
 if is_paddle_available() and is_paddlenlp_available():
-    from .pipeline_semantic_stable_diffusion import \
-        SemanticStableDiffusionPipeline
+    from .pipeline_semantic_stable_diffusion import SemanticStableDiffusionPipeline

@@ -21,8 +21,13 @@ import PIL
 
 from ...models import UNet2DModel, VQModel
 from ...schedulers import (
-    DDIMScheduler, DPMSolverMultistepScheduler, EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler, LMSDiscreteScheduler, PNDMScheduler)
+    DDIMScheduler,
+    DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+)
 from ...utils import PIL_INTERPOLATION, randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
@@ -55,27 +60,32 @@ class LDMSuperResolutionPipeline(DiffusionPipeline):
     """
 
     def __init__(
-            self,
-            vqvae: VQModel,
-            unet: UNet2DModel,
-            scheduler: Union[DDIMScheduler, PNDMScheduler, LMSDiscreteScheduler,
-                             EulerDiscreteScheduler,
-                             EulerAncestralDiscreteScheduler,
-                             DPMSolverMultistepScheduler, ], ):
+        self,
+        vqvae: VQModel,
+        unet: UNet2DModel,
+        scheduler: Union[
+            DDIMScheduler,
+            PNDMScheduler,
+            LMSDiscreteScheduler,
+            EulerDiscreteScheduler,
+            EulerAncestralDiscreteScheduler,
+            DPMSolverMultistepScheduler,
+        ],
+    ):
         super().__init__()
         self.register_modules(vqvae=vqvae, unet=unet, scheduler=scheduler)
 
     @paddle.no_grad()
     def __call__(
-            self,
-            image: Union[paddle.Tensor, PIL.Image.Image]=None,
-            batch_size: Optional[int]=1,
-            num_inference_steps: Optional[int]=100,
-            eta: Optional[float]=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True, ) -> Union[Tuple, ImagePipelineOutput]:
+        self,
+        image: Union[paddle.Tensor, PIL.Image.Image] = None,
+        batch_size: Optional[int] = 1,
+        num_inference_steps: Optional[int] = 100,
+        eta: Optional[float] = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+    ) -> Union[Tuple, ImagePipelineOutput]:
         """
         Args:
             image (`paddle.Tensor` or `PIL.Image.Image`):
@@ -107,25 +117,20 @@ class LDMSuperResolutionPipeline(DiffusionPipeline):
         elif isinstance(image, paddle.Tensor):
             batch_size = image.shape[0]
         else:
-            raise ValueError(
-                f"`image` has to be of type `PIL.Image.Image` or `paddle.Tensor` but is {type(image)}"
-            )
+            raise ValueError(f"`image` has to be of type `PIL.Image.Image` or `paddle.Tensor` but is {type(image)}")
         if isinstance(image, PIL.Image.Image):
             image = preprocess(image)
         height, width = image.shape[-2:]
         # in_channels should be 6: 3 for latents, 3 for low resolution image
-        latents_shape = (batch_size, self.unet.config.in_channels // 2, height,
-                         width)
+        latents_shape = (batch_size, self.unet.config.in_channels // 2, height, width)
         latents_dtype = self.unet.dtype
-        latents = randn_tensor(
-            latents_shape, generator=generator, dtype=latents_dtype)
+        latents = randn_tensor(latents_shape, generator=generator, dtype=latents_dtype)
         image = image.cast(latents_dtype)
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps_tensor = self.scheduler.timesteps
         # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_kwargs = {}
         if accepts_eta:
             extra_kwargs["eta"] = eta
@@ -136,8 +141,7 @@ class LDMSuperResolutionPipeline(DiffusionPipeline):
             # predict the noise residual
             noise_pred = self.unet(latents_input, t).sample
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.scheduler.step(noise_pred, t, latents,
-                                          **extra_kwargs).prev_sample
+            latents = self.scheduler.step(noise_pred, t, latents, **extra_kwargs).prev_sample
 
         # decode the image latents with the VQVAE
         image = self.vqvae.decode(latents).sample
@@ -147,5 +151,5 @@ class LDMSuperResolutionPipeline(DiffusionPipeline):
         if output_type == "pil":
             image = self.numpy_to_pil(image)
         if not return_dict:
-            return (image, )
+            return (image,)
         return ImagePipelineOutput(images=image)

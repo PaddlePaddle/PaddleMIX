@@ -22,30 +22,18 @@ from paddlemix.utils.downloader import get_weights_path_from_url, is_url
 from paddlemix.utils.log import logger
 
 LLM_LIST = {
-    "facebook/opt-2.7b":
-    "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-2.7b/model_state.pdparams",
-    "t5-small":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-small/model_state.pdparams",
-    "t5-base":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-base/model_state.pdparams",
-    "t5-large":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-large/model_state.pdparams",
-    "t5-3b":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-3b/model_state.pdparams",
-    "t5-11b":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-11b/model_state.pdparams",
-    "t5-v1_1-base":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-v1_1-base/model_state.pdparams",
-    "t5-v1_1-large":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-v1_1-large/model_state.pdparams",
-    "facebook/llama-7b":
-    "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-7b/model_state.pdparams",
-    "facebook/llama-13b":
-    "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-13b/model_state.pdparams",
-    "facebook/llama-30b":
-    "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-30b/model_state.pdparams",
-    "facebook/llama-65b":
-    "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-65b/model_state.pdparams",
+    "facebook/opt-2.7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-2.7b/model_state.pdparams",
+    "t5-small": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-small/model_state.pdparams",
+    "t5-base": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-base/model_state.pdparams",
+    "t5-large": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-large/model_state.pdparams",
+    "t5-3b": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-3b/model_state.pdparams",
+    "t5-11b": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-11b/model_state.pdparams",
+    "t5-v1_1-base": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-v1_1-base/model_state.pdparams",
+    "t5-v1_1-large": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-v1_1-large/model_state.pdparams",
+    "facebook/llama-7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-7b/model_state.pdparams",
+    "facebook/llama-13b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-13b/model_state.pdparams",
+    "facebook/llama-30b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-30b/model_state.pdparams",
+    "facebook/llama-65b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-65b/model_state.pdparams",
 }
 
 
@@ -75,18 +63,17 @@ class BlipCollator:
             max_length=32,
             return_tensors="pd",
             return_attention_mask=True,
-            mode=self.mode, )
+            mode=self.mode,
+        )
         batch.update({"image_id": image_id})
         return batch
 
 
 def coco_caption_eval(coco_gt_root, results_file, split):
-    urls = {
-        "val":
-        "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json",
-        "test":
-        "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json",
-    }
+    # urls = {
+    #     "val": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json",
+    #     "test": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json",
+    # }
     filenames = {
         "val": "coco_karpathy_val_gt.json",
         "test": "coco_karpathy_test_gt.json",
@@ -109,11 +96,7 @@ def coco_caption_eval(coco_gt_root, results_file, split):
     return coco_eval
 
 
-def load_model(args,
-               model,
-               optimizer=None,
-               ckpt_dir="",
-               load_language_model=True):
+def load_model(args, model, optimizer=None, ckpt_dir="", load_language_model=True):
     """
     load the saved checkpoint file and update the state dicts of model and optimizer.
     """
@@ -178,22 +161,21 @@ def load_model(args,
         def col_split_modeldict(model_dict):
             if len(model_dict.shape) == 2:
                 subbatch = model_dict.shape[1] // mp_size
-                return model_dict[:, mp_rank * subbatch:(mp_rank + 1) *
-                                  subbatch]
+                return model_dict[:, mp_rank * subbatch : (mp_rank + 1) * subbatch]
             elif len(model_dict.shape) == 1:
                 subbatch = model_dict.shape[0] // mp_size
-                return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
+                return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
 
         def row_split_modeldict(model_dict):
             if len(model_dict.shape) == 2:
                 subbatch = model_dict.shape[0] // mp_size
-                return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
+                return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
             else:
                 return model_dict
 
         def emb_split_modeldict(model_dict):
             subbatch = model_dict.shape[0] // mp_size
-            return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
+            return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
 
         model_dict = paddle.load(ckpt_dir)
         for whole_key in model_dict.keys():
@@ -206,16 +188,13 @@ def load_model(args,
             if key in all_list:
                 if key in collinear_list:
                     col_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = col_split_modeldict(model_dict[
-                        whole_key])
+                    model_dict[whole_key] = col_split_modeldict(model_dict[whole_key])
                 elif key in rowlinear_list:
                     row_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = row_split_modeldict(model_dict[
-                        whole_key])
+                    model_dict[whole_key] = row_split_modeldict(model_dict[whole_key])
                 else:
                     emb_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = emb_split_modeldict(model_dict[
-                        whole_key])
+                    model_dict[whole_key] = emb_split_modeldict(model_dict[whole_key])
 
         param_state_dict = model_dict
         import numpy as np
@@ -227,13 +206,11 @@ def load_model(args,
             if key in param_state_dict.keys():
 
                 if isinstance(param_state_dict[key], np.ndarray):
-                    param_state_dict[key] = paddle.to_tensor(param_state_dict[
-                        key])
+                    param_state_dict[key] = paddle.to_tensor(param_state_dict[key])
                 if value.dtype == param_state_dict[key].dtype:
                     model_weight[key] = param_state_dict[key]
                 else:
-                    model_weight[key] = param_state_dict[key].astype(
-                        value.dtype)
+                    model_weight[key] = param_state_dict[key].astype(value.dtype)
                 if value.shape != param_state_dict[key].shape:
                     logger.info("Unmatched key: {}".format(key))
                     print(value.shape, param_state_dict[key].shape, key)

@@ -15,20 +15,22 @@
 Processor class for Sam.
 """
 
-import re
 from copy import deepcopy
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
-import PIL
 from paddle.nn import functional as F
 from paddle.vision.transforms.functional import resize
 
 from .base_processing import ProcessorMixin
 from .image_transform_utils import to_pil_image
-from .image_utils import (IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD,
-                          get_preprocess_shape, valid_images)
+from .image_utils import (
+    IMAGENET_STANDARD_MEAN,
+    IMAGENET_STANDARD_STD,
+    get_preprocess_shape,
+    valid_images,
+)
 from .processing_utils import BaseImageProcessor, BaseTextProcessor
 
 __all__ = [
@@ -52,17 +54,17 @@ class SamProcessor(ProcessorMixin):
         self.encode_size = self.image_processor.size
 
     def __call__(
-            self,
-            images,
-            input_type,
-            point_coords=None,
-            point_labels=None,
-            box=None,
-            **kwargs, ):
+        self,
+        images,
+        input_type,
+        point_coords=None,
+        point_labels=None,
+        box=None,
+        **kwargs,
+    ):
 
         if images is None or input_type is None:
-            raise ValueError(
-                "You have to specify either images and input_type.")
+            raise ValueError("You have to specify either images and input_type.")
 
         if input_type == "boxs" and box is None:
             raise ValueError("You have to specify either box.")
@@ -78,20 +80,21 @@ class SamProcessor(ProcessorMixin):
             self.original_size,
             point_coords=point_coords,
             point_labels=point_labels,
-            box=box, )
+            box=box,
+        )
 
         return image_seg, prompt
 
-    def postprocess_masks(self, low_res_masks, mask_threshold: float=0.0):
+    def postprocess_masks(self, low_res_masks, mask_threshold: float = 0.0):
 
         masks = F.interpolate(
             paddle.to_tensor(low_res_masks),
             (self.encode_size, self.encode_size),
             mode="bilinear",
-            align_corners=False, )
-        masks = masks[..., :self.input_size[0], :self.input_size[1]]
-        masks = F.interpolate(
-            masks, self.original_size, mode="bilinear", align_corners=False)
+            align_corners=False,
+        )
+        masks = masks[..., : self.input_size[0], : self.input_size[1]]
+        masks = F.interpolate(masks, self.original_size, mode="bilinear", align_corners=False)
         masks = masks > mask_threshold
 
         return masks
@@ -108,28 +111,26 @@ class SamPromptProcessor(BaseTextProcessor):
     """
 
     def __init__(
-            self,
-            size: int=1024,
-            **kwargs, ):
+        self,
+        size: int = 1024,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.size = size
 
-    def apply_coords(self, coords: np.ndarray,
-                     original_size: Tuple[int, ...]) -> np.ndarray:
+    def apply_coords(self, coords: np.ndarray, original_size: Tuple[int, ...]) -> np.ndarray:
         """
         Expects a numpy array of length 2 in the final dimension. Requires the
         original image size in (H, W) format.
         """
         old_h, old_w = original_size
-        new_h, new_w = get_preprocess_shape(original_size[0], original_size[1],
-                                            self.size)
+        new_h, new_w = get_preprocess_shape(original_size[0], original_size[1], self.size)
         coords = deepcopy(coords).astype(float)
         coords[..., 0] = coords[..., 0] * (new_w / old_w)
         coords[..., 1] = coords[..., 1] * (new_h / old_h)
         return coords
 
-    def apply_boxes(self, boxes: np.ndarray,
-                    original_size: Tuple[int, ...]) -> np.ndarray:
+    def apply_boxes(self, boxes: np.ndarray, original_size: Tuple[int, ...]) -> np.ndarray:
         """
         Expects a numpy array shape Bx4. Requires the original image size
         in (H, W) format.
@@ -138,17 +139,23 @@ class SamPromptProcessor(BaseTextProcessor):
         return boxes.reshape([-1, 4])
 
     def __call__(
-            self,
-            original_size,
-            point_coords=None,
-            point_labels=None,
-            box=None,
-            **kwargs, ):
-        coords_paddle, labels_paddle, box_paddle, mask_input_paddle = (
+        self,
+        original_size,
+        point_coords=None,
+        point_labels=None,
+        box=None,
+        **kwargs,
+    ):
+        # coords_paddle, labels_paddle, box_paddle, mask_input_paddle = (
+        #     None,
+        #     None,
+        #     None,
+        #     None,
+        # )
+        coords_paddle, box_paddle = (
             None,
             None,
-            None,
-            None, )
+        )
         if point_coords is not None:
             point_coords = self.apply_coords(point_coords, original_size)
             coords_paddle = paddle.to_tensor(point_coords).cast("float32")
@@ -171,22 +178,22 @@ class SamImageProcessor(BaseImageProcessor):
     model_input_names = ["pixel_values"]
 
     def __init__(
-            self,
-            size: List[int]=None,
-            image_mean: Optional[Union[float, List[float]]]=None,
-            image_std: Optional[Union[float, List[float]]]=None,
-            image_format: str="RGB",
-            original_size: List[int]=None,
-            input_size: List[int]=None,
-            **kwargs, ) -> None:
+        self,
+        size: List[int] = None,
+        image_mean: Optional[Union[float, List[float]]] = None,
+        image_std: Optional[Union[float, List[float]]] = None,
+        image_format: str = "RGB",
+        original_size: List[int] = None,
+        input_size: List[int] = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         size = size if size is not None else 1024
 
         self.size = size
         self.image_format = image_format
 
-        self.image_mean = (image_mean if image_mean is not None else
-                           IMAGENET_STANDARD_MEAN)
+        self.image_mean = image_mean if image_mean is not None else IMAGENET_STANDARD_MEAN
         self.image_std = image_std if image_std is not None else IMAGENET_STANDARD_STD
 
         self.original_size = original_size
@@ -196,19 +203,19 @@ class SamImageProcessor(BaseImageProcessor):
         """
         Expects a numpy array with shape HxWxC in uint8 format.
         """
-        target_size = get_preprocess_shape(image.shape[0], image.shape[1],
-                                           self.size)
+        target_size = get_preprocess_shape(image.shape[0], image.shape[1], self.size)
 
         return np.array(resize(to_pil_image(image), target_size))
 
     def preprocess(
-            self,
-            images,
-            size: Optional[Dict[str, int]]=None,
-            image_mean: Optional[Union[float, List[float]]]=None,
-            image_std: Optional[Union[float, List[float]]]=None,
-            image_format: str="RGB",
-            **kwargs, ):
+        self,
+        images,
+        size: Optional[Dict[str, int]] = None,
+        image_mean: Optional[Union[float, List[float]]] = None,
+        image_std: Optional[Union[float, List[float]]] = None,
+        image_format: str = "RGB",
+        **kwargs,
+    ):
         """
         Preprocess an image or batch of images.
 
@@ -221,13 +228,11 @@ class SamImageProcessor(BaseImageProcessor):
         if not isinstance(images, (list, tuple)):
             images = [images]
 
-        if isinstance(images[0], str):
-            images = [load_image(image) for image in images]
+        # if isinstance(images[0], str):
+        #     images = [load_image(image) for image in images]
 
         if not valid_images(images):
-            raise ValueError(
-                "Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, "
-                "paddle.Tensor.")
+            raise ValueError("Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
 
         assert image_format in [
             "RGB",
@@ -248,9 +253,8 @@ class SamImageProcessor(BaseImageProcessor):
         self.input_size = tuple(input_image_paddle.shape[-2:])
 
         input_image_paddle = (
-            input_image_paddle - paddle.to_tensor(self.image_mean).reshape(
-                [-1, 1, 1])) / paddle.to_tensor(self.image_std).reshape(
-                    [-1, 1, 1])
+            input_image_paddle - paddle.to_tensor(self.image_mean).reshape([-1, 1, 1])
+        ) / paddle.to_tensor(self.image_std).reshape([-1, 1, 1])
 
         # Pad
         h, w = input_image_paddle.shape[-2:]

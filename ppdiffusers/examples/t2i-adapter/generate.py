@@ -17,22 +17,28 @@ import random
 
 import numpy as np
 import paddle
-from adapter import (DataArguments, Fill50kDataset, GenerateArguments,
-                     TextImagePair)
+from adapter import DataArguments, Fill50kDataset, GenerateArguments, TextImagePair
 from annotator.canny import CannyDetector
 from annotator.util import HWC3
 from paddlenlp.trainer import PdArgumentParser
 from PIL import Image
 from tqdm import tqdm
 
-from ppdiffusers import (ControlNetModel, DDIMScheduler,
-                         EulerAncestralDiscreteScheduler, LMSDiscreteScheduler,
-                         PNDMScheduler, StableDiffusionAdapterPipeline,
-                         StableDiffusionControlNetPipeline, T2IAdapter)
+from ppdiffusers import (
+    ControlNetModel,
+    DDIMScheduler,
+    EulerAncestralDiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+    StableDiffusionAdapterPipeline,
+    StableDiffusionControlNetPipeline,
+    T2IAdapter,
+)
 
 DEFAULT_NEGATIVE_PROMPT = (
     "longbody, lowres, bad anatomy, bad hands, missing fingers, extra digit, "
-    "fewer digits, cropped, worst quality, low quality")
+    "fewer digits, cropped, worst quality, low quality"
+)
 
 
 class CannyProcessor:
@@ -79,31 +85,34 @@ def set_seed(seed: int):
 
 
 def generate_images(
-        use_controlnet=False,
-        adapter_model_name_or_path=None,
-        sd_model_name_or_path=None,
-        batch_size=16,
-        test_dataset=None,
-        save_path="output",
-        guidance_scales=[3, 4, 5, 6, 7, 8],
-        num_inference_steps=50,
-        scheduler_type="ddim",
-        device="gpu",
-        max_generation_limits=1000,
-        use_text_cond=True,
-        use_default_neg_text_cond=True,
-        generate_control_image_processor_type=None,
-        eta=0.0, ):
+    use_controlnet=False,
+    adapter_model_name_or_path=None,
+    sd_model_name_or_path=None,
+    batch_size=16,
+    test_dataset=None,
+    save_path="output",
+    guidance_scales=[3, 4, 5, 6, 7, 8],
+    num_inference_steps=50,
+    scheduler_type="ddim",
+    device="gpu",
+    max_generation_limits=1000,
+    use_text_cond=True,
+    use_default_neg_text_cond=True,
+    generate_control_image_processor_type=None,
+    eta=0.0,
+):
     # set pipe
     paddle.set_device(device)
     if use_controlnet:
         controlnet = ControlNetModel.from_pretrained(adapter_model_name_or_path)
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
-            sd_model_name_or_path, controlnet=controlnet, safety_checker=None)
+            sd_model_name_or_path, controlnet=controlnet, safety_checker=None
+        )
     else:
         adapter = T2IAdapter.from_pretrained(adapter_model_name_or_path)
         pipe = StableDiffusionAdapterPipeline.from_pretrained(
-            sd_model_name_or_path, adapter=adapter, safety_checker=None)
+            sd_model_name_or_path, adapter=adapter, safety_checker=None
+        )
     pipe.set_progress_bar_config(disable=True)
 
     # set scheduler
@@ -117,17 +126,14 @@ def generate_images(
             set_alpha_to_one=False,
             steps_offset=1,
             # Make sure the scheduler compatible with PNDM
-            skip_prk_steps=True, )
+            skip_prk_steps=True,
+        )
     elif scheduler_type == "lms":
-        scheduler = LMSDiscreteScheduler(
-            beta_start=beta_start,
-            beta_end=beta_end,
-            beta_schedule="scaled_linear")
+        scheduler = LMSDiscreteScheduler(beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear")
     elif scheduler_type == "euler-ancestral":
         scheduler = EulerAncestralDiscreteScheduler(
-            beta_start=beta_start,
-            beta_end=beta_end,
-            beta_schedule="scaled_linear")
+            beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear"
+        )
     elif scheduler_type == "ddim":
         scheduler = DDIMScheduler(
             beta_start=beta_start,
@@ -136,7 +142,8 @@ def generate_images(
             # Make sure the scheduler compatible with DDIM
             clip_sample=False,
             set_alpha_to_one=False,
-            steps_offset=1, )
+            steps_offset=1,
+        )
     else:
         raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
     pipe.scheduler = scheduler
@@ -158,24 +165,21 @@ def generate_images(
         write_file = open(os.path.join(save_path, "caption.txt"), "w")
         i = 0
         for data in tqdm(test_dataset):
-            if (generate_control_image_processor_type ==
-                    "canny"):  # Canny mode needs to manually process the control image
-                data["adapter_cond"] = canny_processor.process_data_load(data[
-                    "pixel_values"])
+            if (
+                generate_control_image_processor_type == "canny"
+            ):  # Canny mode needs to manually process the control image
+                data["adapter_cond"] = canny_processor.process_data_load(data["pixel_values"])
             images = pipe(
                 data["input_ids"] if use_text_cond else "",
-                negative_prompt=DEFAULT_NEGATIVE_PROMPT
-                if use_default_neg_text_cond else "",
+                negative_prompt=DEFAULT_NEGATIVE_PROMPT if use_default_neg_text_cond else "",
                 image=data["adapter_cond"],
                 guidance_scale=float(cfg),
                 eta=eta,
-                num_inference_steps=num_inference_steps, )[0]
-            data["adapter_cond"].save(
-                os.path.join(cond_save_path, "{:05d}_000.png".format(i)))
-            data["pixel_values"].save(
-                os.path.join(origin_save_path, "{:05d}_000.png".format(i)))
-            write_file.write("{:05d}_000".format(i) + "\t" + data["input_ids"]
-                             .strip() + "\n")
+                num_inference_steps=num_inference_steps,
+            )[0]
+            data["adapter_cond"].save(os.path.join(cond_save_path, "{:05d}_000.png".format(i)))
+            data["pixel_values"].save(os.path.join(origin_save_path, "{:05d}_000.png".format(i)))
+            write_file.write("{:05d}_000".format(i) + "\t" + data["input_ids"].strip() + "\n")
             for image in images:
                 path = os.path.join(new_save_path, "{:05d}_000.png".format(i))
                 image.save(path)
@@ -198,7 +202,8 @@ if __name__ == "__main__":
             tokenizer=None,
             file_path=generate_args.file,
             do_image_processing=False,
-            do_text_processing=False, )
+            do_text_processing=False,
+        )
 
     else:
         test_dataset = TextImagePair(
@@ -210,7 +215,8 @@ if __name__ == "__main__":
             interpolation="lanczos",
             data_format=generate_args.generate_data_format,
             control_image_processor=None,
-            do_image_processing=False, )
+            do_image_processing=False,
+        )
 
     generate_images(
         use_controlnet=generate_args.use_controlnet,
@@ -226,5 +232,5 @@ if __name__ == "__main__":
         max_generation_limits=generate_args.max_generation_limits,
         use_text_cond=generate_args.use_text_cond,
         use_default_neg_text_cond=generate_args.use_default_neg_text_cond,
-        generate_control_image_processor_type=generate_args.
-        generate_control_image_processor_type, )
+        generate_control_image_processor_type=generate_args.generate_control_image_processor_type,
+    )

@@ -24,7 +24,7 @@ from .attention_processor import Attention
 from .embeddings import CombinedTimestepLabelEmbeddings
 
 
-def drop_path(input, drop_prob: float=0.0, training: bool=False):
+def drop_path(input, drop_prob: float = 0.0, training: bool = False):
     """
     Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
 
@@ -37,8 +37,7 @@ def drop_path(input, drop_prob: float=0.0, training: bool=False):
     if drop_prob == 0.0 or not training:
         return input
     keep_prob = 1 - drop_prob
-    shape = (input.shape[0], ) + (1, ) * (
-        input.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
+    shape = (input.shape[0],) + (1,) * (input.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
     random_tensor = keep_prob + paddle.rand(shape, dtype=input.dtype)
     random_tensor = paddle.floor(random_tensor)  # binarize
     output = (input / keep_prob) * random_tensor
@@ -48,7 +47,7 @@ def drop_path(input, drop_prob: float=0.0, training: bool=False):
 class DropPath(nn.Layer):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks)."""
 
-    def __init__(self, drop_prob: Optional[float]=None) -> None:
+    def __init__(self, drop_prob: Optional[float] = None) -> None:
         super().__init__()
         self.drop_prob = drop_prob
 
@@ -61,12 +60,13 @@ class DropPath(nn.Layer):
 
 class Mlp(nn.Layer):
     def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            drop=0.0, ):
+        self,
+        in_features,
+        hidden_features=None,
+        out_features=None,
+        act_layer=nn.GELU,
+        drop=0.0,
+    ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -103,22 +103,21 @@ class AttentionBlock(nn.Layer):
     # IMPORTANT;TODO(Patrick, William) - this class will be deprecated soon. Do not use it anymore
 
     def __init__(
-            self,
-            channels: int,
-            num_head_channels: Optional[int]=None,
-            norm_num_groups: int=32,
-            rescale_output_factor: float=1.0,
-            eps: float=1e-5, ):
+        self,
+        channels: int,
+        num_head_channels: Optional[int] = None,
+        norm_num_groups: int = 32,
+        rescale_output_factor: float = 1.0,
+        eps: float = 1e-5,
+    ):
         super().__init__()
         self.channels = channels
 
-        self.num_heads = (channels // num_head_channels
-                          if num_head_channels is not None else 1)
+        self.num_heads = channels // num_head_channels if num_head_channels is not None else 1
         self.head_size = self.channels // self.num_heads
         self.scale = 1 / math.sqrt(self.channels / self.num_heads)
 
-        self.group_norm = nn.GroupNorm(
-            num_channels=channels, num_groups=norm_num_groups, epsilon=eps)
+        self.group_norm = nn.GroupNorm(num_channels=channels, num_groups=norm_num_groups, epsilon=eps)
 
         # define q,k,v as linear layers
         self.query = nn.Linear(channels, channels)
@@ -132,10 +131,7 @@ class AttentionBlock(nn.Layer):
         self._use_2_5_attn = True
         self._attention_op = None
 
-    def reshape_heads_to_batch_dim(self,
-                                   tensor,
-                                   transpose=True,
-                                   merge_head_and_batch=False):
+    def reshape_heads_to_batch_dim(self, tensor, transpose=True, merge_head_and_batch=False):
         tensor = tensor.reshape([0, 0, self.num_heads, self.head_size])
         # currently we donot use `unmerge_head_and_batch`
         if transpose or merge_head_and_batch:
@@ -145,15 +141,11 @@ class AttentionBlock(nn.Layer):
             tensor = tensor.flatten(0, 1)
         return tensor
 
-    def reshape_batch_dim_to_heads(self,
-                                   tensor,
-                                   transpose=True,
-                                   unmerge_head_and_batch=False):
+    def reshape_batch_dim_to_heads(self, tensor, transpose=True, unmerge_head_and_batch=False):
         # currently we donot use `unmerge_head_and_batch`
         if unmerge_head_and_batch:
             seq_len = tensor.shape[1]
-            tensor = tensor.reshape(
-                [-1, self.num_heads, seq_len, self.head_size])
+            tensor = tensor.reshape([-1, self.num_heads, seq_len, self.head_size])
 
         if transpose or unmerge_head_and_batch:
             tensor = tensor.transpose([0, 2, 1, 3])
@@ -162,9 +154,10 @@ class AttentionBlock(nn.Layer):
         return tensor
 
     def set_use_memory_efficient_attention_xformers(
-            self,
-            use_memory_efficient_attention_xformers: bool,
-            attention_op: Optional[str]=None, ):
+        self,
+        use_memory_efficient_attention_xformers: bool,
+        attention_op: Optional[str] = None,
+    ):
         # remove this PR: https://github.com/PaddlePaddle/Paddle/pull/56045
         # if self.head_size > 128 and attention_op == "flash":
         #     attention_op = "cutlass"
@@ -176,18 +169,15 @@ class AttentionBlock(nn.Layer):
             else:
                 try:
                     _ = F.scaled_dot_product_attention_(
-                        paddle.ones(
-                            (1, 1, 2, 40), dtype=paddle.float16),
-                        paddle.ones(
-                            (1, 1, 2, 40), dtype=paddle.float16),
-                        paddle.ones(
-                            (1, 1, 2, 40), dtype=paddle.float16),
-                        attention_op=attention_op, )
+                        paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                        paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                        paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                        attention_op=attention_op,
+                    )
                 except Exception as e:
                     raise e
 
-        self._use_memory_efficient_attention_xformers = (
-            use_memory_efficient_attention_xformers)
+        self._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
         self._attention_op = attention_op
 
     def forward(self, hidden_states):
@@ -197,8 +187,7 @@ class AttentionBlock(nn.Layer):
         # norm
         hidden_states = self.group_norm(hidden_states)
 
-        hidden_states = hidden_states.reshape(
-            [batch, channel, height * width]).transpose([0, 2, 1])
+        hidden_states = hidden_states.reshape([batch, channel, height * width]).transpose([0, 2, 1])
 
         # proj to q, k, v
         query_proj = self.query(hidden_states)
@@ -206,14 +195,14 @@ class AttentionBlock(nn.Layer):
         value_proj = self.value(hidden_states)
 
         query_proj = self.reshape_heads_to_batch_dim(
-            query_proj,
-            transpose=not self._use_memory_efficient_attention_xformers)
+            query_proj, transpose=not self._use_memory_efficient_attention_xformers
+        )
         key_proj = self.reshape_heads_to_batch_dim(
-            key_proj,
-            transpose=not self._use_memory_efficient_attention_xformers)
+            key_proj, transpose=not self._use_memory_efficient_attention_xformers
+        )
         value_proj = self.reshape_heads_to_batch_dim(
-            value_proj,
-            transpose=not self._use_memory_efficient_attention_xformers)
+            value_proj, transpose=not self._use_memory_efficient_attention_xformers
+        )
 
         if self._use_memory_efficient_attention_xformers:
             hidden_states = F.scaled_dot_product_attention_(
@@ -224,25 +213,22 @@ class AttentionBlock(nn.Layer):
                 scale=self.scale,
                 dropout_p=0.0,
                 training=self.training,
-                attention_op=self._attention_op, )
+                attention_op=self._attention_op,
+            )
         else:
-            attention_scores = (paddle.matmul(
-                query_proj, key_proj, transpose_y=True) * self.scale)
-            attention_probs = F.softmax(
-                attention_scores.cast("float32"),
-                axis=-1).cast(attention_scores.dtype)
+            attention_scores = paddle.matmul(query_proj, key_proj, transpose_y=True) * self.scale
+            attention_probs = F.softmax(attention_scores.cast("float32"), axis=-1).cast(attention_scores.dtype)
             hidden_states = paddle.matmul(attention_probs, value_proj)
 
         # reshape hidden_states
         hidden_states = self.reshape_batch_dim_to_heads(
-            hidden_states,
-            transpose=not self._use_memory_efficient_attention_xformers)
+            hidden_states, transpose=not self._use_memory_efficient_attention_xformers
+        )
 
         # compute next hidden_states
         hidden_states = self.proj_attn(hidden_states)
 
-        hidden_states = hidden_states.transpose([0, 2, 1]).reshape(
-            [batch, channel, height, width])
+        hidden_states = hidden_states.transpose([0, 2, 1]).reshape([batch, channel, height, width])
 
         # res connect and rescale
         hidden_states = (hidden_states + residual) / self.rescale_output_factor
@@ -271,31 +257,29 @@ class BasicTransformerBlock(nn.Layer):
     """
 
     def __init__(
-            self,
-            dim: int,
-            num_attention_heads: int,
-            attention_head_dim: int,
-            dropout=0.0,
-            cross_attention_dim: Optional[int]=None,
-            activation_fn: str="geglu",
-            num_embeds_ada_norm: Optional[int]=None,
-            attention_bias: bool=False,
-            only_cross_attention: bool=False,
-            double_self_attention: bool=False,
-            upcast_attention: bool=False,
-            norm_elementwise_affine: bool=True,
-            norm_type: str="layer_norm",
-            final_dropout: bool=False, ):
+        self,
+        dim: int,
+        num_attention_heads: int,
+        attention_head_dim: int,
+        dropout=0.0,
+        cross_attention_dim: Optional[int] = None,
+        activation_fn: str = "geglu",
+        num_embeds_ada_norm: Optional[int] = None,
+        attention_bias: bool = False,
+        only_cross_attention: bool = False,
+        double_self_attention: bool = False,
+        upcast_attention: bool = False,
+        norm_elementwise_affine: bool = True,
+        norm_type: str = "layer_norm",
+        final_dropout: bool = False,
+    ):
         super().__init__()
         self.only_cross_attention = only_cross_attention
 
-        self.use_ada_layer_norm_zero = (
-            num_embeds_ada_norm is not None) and norm_type == "ada_norm_zero"
-        self.use_ada_layer_norm = (
-            num_embeds_ada_norm is not None) and norm_type == "ada_norm"
+        self.use_ada_layer_norm_zero = (num_embeds_ada_norm is not None) and norm_type == "ada_norm_zero"
+        self.use_ada_layer_norm = (num_embeds_ada_norm is not None) and norm_type == "ada_norm"
 
-        if norm_type in ("ada_norm", "ada_norm_zero"
-                         ) and num_embeds_ada_norm is None:
+        if norm_type in ("ada_norm", "ada_norm_zero") and num_embeds_ada_norm is None:
             raise ValueError(
                 f"`norm_type` is set to {norm_type}, but `num_embeds_ada_norm` is not defined. Please make sure to"
                 f" define `num_embeds_ada_norm` if setting `norm_type` to {norm_type}."
@@ -320,22 +304,21 @@ class BasicTransformerBlock(nn.Layer):
             dim_head=attention_head_dim,
             dropout=dropout,
             bias=attention_bias,
-            cross_attention_dim=cross_attention_dim
-            if only_cross_attention else None,
-            upcast_attention=upcast_attention, )
+            cross_attention_dim=cross_attention_dim if only_cross_attention else None,
+            upcast_attention=upcast_attention,
+        )
 
         # 2. Cross-Attn
         if cross_attention_dim is not None or double_self_attention:
             # We currently only use AdaLayerNormZero for self attention where there will only be one attention block.
             # I.e. the number of returned modulation chunks from AdaLayerZero would not make sense if returned during
             # the second cross attention block.
-            self.norm2 = (AdaLayerNorm(dim, num_embeds_ada_norm)
-                          if self.use_ada_layer_norm else
-                          nn.LayerNorm(dim, **norm_kwargs))
+            self.norm2 = (
+                AdaLayerNorm(dim, num_embeds_ada_norm) if self.use_ada_layer_norm else nn.LayerNorm(dim, **norm_kwargs)
+            )
             self.attn2 = Attention(
                 query_dim=dim,
-                cross_attention_dim=cross_attention_dim
-                if not double_self_attention else None,
+                cross_attention_dim=cross_attention_dim if not double_self_attention else None,
                 heads=num_attention_heads,
                 dim_head=attention_head_dim,
                 dropout=dropout,
@@ -352,46 +335,45 @@ class BasicTransformerBlock(nn.Layer):
             dim,
             dropout=dropout,
             activation_fn=activation_fn,
-            final_dropout=final_dropout, )
+            final_dropout=final_dropout,
+        )
 
     def forward(
-            self,
-            hidden_states,
-            attention_mask=None,
-            encoder_hidden_states=None,
-            encoder_attention_mask=None,
-            timestep=None,
-            cross_attention_kwargs=None,
-            class_labels=None, ):
+        self,
+        hidden_states,
+        attention_mask=None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+        timestep=None,
+        cross_attention_kwargs=None,
+        class_labels=None,
+    ):
         # Notice that normalization is always applied before the real computation in the following blocks.
         # 1. Self-Attention
         if self.use_ada_layer_norm:
             norm_hidden_states = self.norm1(hidden_states, timestep)
         elif self.use_ada_layer_norm_zero:
             norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(
-                hidden_states,
-                timestep,
-                class_labels,
-                hidden_dtype=hidden_states.dtype)
+                hidden_states, timestep, class_labels, hidden_dtype=hidden_states.dtype
+            )
         else:
             norm_hidden_states = self.norm1(hidden_states)
 
-        cross_attention_kwargs = (cross_attention_kwargs if
-                                  cross_attention_kwargs is not None else {})
+        cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
         attn_output = self.attn1(
             norm_hidden_states,
-            encoder_hidden_states=encoder_hidden_states
-            if self.only_cross_attention else None,
+            encoder_hidden_states=encoder_hidden_states if self.only_cross_attention else None,
             attention_mask=attention_mask,
-            **cross_attention_kwargs, )
+            **cross_attention_kwargs,
+        )
         if self.use_ada_layer_norm_zero:
             attn_output = gate_msa.unsqueeze(1) * attn_output
         hidden_states = attn_output + hidden_states
 
         if self.attn2 is not None:
-            norm_hidden_states = (self.norm2(hidden_states, timestep)
-                                  if self.use_ada_layer_norm else
-                                  self.norm2(hidden_states))
+            norm_hidden_states = (
+                self.norm2(hidden_states, timestep) if self.use_ada_layer_norm else self.norm2(hidden_states)
+            )
             # TODO (Birch-San): Here we should prepare the encoder_attention mask correctly
             # prepare attention mask here
 
@@ -400,15 +382,15 @@ class BasicTransformerBlock(nn.Layer):
                 norm_hidden_states,
                 encoder_hidden_states=encoder_hidden_states,
                 attention_mask=encoder_attention_mask,
-                **cross_attention_kwargs, )
+                **cross_attention_kwargs,
+            )
             hidden_states = attn_output + hidden_states
 
         # 3. Feed-forward
         norm_hidden_states = self.norm3(hidden_states)
 
         if self.use_ada_layer_norm_zero:
-            norm_hidden_states = (norm_hidden_states *
-                                  (1 + scale_mlp[:, None]) + shift_mlp[:, None])
+            norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
 
         ff_output = self.ff(norm_hidden_states)
 
@@ -434,13 +416,14 @@ class FeedForward(nn.Layer):
     """
 
     def __init__(
-            self,
-            dim: int,
-            dim_out: Optional[int]=None,
-            mult: int=4,
-            dropout: float=0.0,
-            activation_fn: str="geglu",
-            final_dropout: bool=False, ):
+        self,
+        dim: int,
+        dim_out: Optional[int] = None,
+        mult: int = 4,
+        dropout: float = 0.0,
+        activation_fn: str = "geglu",
+        final_dropout: bool = False,
+    ):
         super().__init__()
         inner_dim = int(dim * mult)
         dim_out = dim_out if dim_out is not None else dim
@@ -476,7 +459,7 @@ class GELU(nn.Layer):
     GELU activation function with tanh approximation support with `approximate="tanh"`.
     """
 
-    def __init__(self, dim_in: int, dim_out: int, approximate: str="none"):
+    def __init__(self, dim_in: int, dim_out: int, approximate: str = "none"):
         super().__init__()
         self.proj = nn.Linear(dim_in, dim_out)
         self.approximate = approximate
@@ -552,22 +535,17 @@ class AdaLayerNormZero(nn.Layer):
     def __init__(self, embedding_dim, num_embeddings):
         super().__init__()
 
-        self.emb = CombinedTimestepLabelEmbeddings(num_embeddings,
-                                                   embedding_dim)
+        self.emb = CombinedTimestepLabelEmbeddings(num_embeddings, embedding_dim)
 
         self.silu = nn.Silu()
-        self.linear = nn.Linear(
-            embedding_dim, 6 * embedding_dim, bias_attr=True)
+        self.linear = nn.Linear(embedding_dim, 6 * embedding_dim, bias_attr=True)
         # elementwise_affine=False
         norm_kwargs = {"weight_attr": False, "bias_attr": False}
         self.norm = nn.LayerNorm(embedding_dim, epsilon=1e-6, **norm_kwargs)
 
     def forward(self, x, timestep, class_labels, hidden_dtype=None):
-        emb = self.linear(
-            self.silu(
-                self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)))
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(
-            6, axis=1)
+        emb = self.linear(self.silu(self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)))
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
         x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
         return x, gate_msa, shift_mlp, scale_mlp, gate_mlp
 
@@ -578,12 +556,13 @@ class AdaGroupNorm(nn.Layer):
     """
 
     def __init__(
-            self,
-            embedding_dim: int,
-            out_dim: int,
-            num_groups: int,
-            act_fn: Optional[str]=None,
-            eps: float=1e-5, ):
+        self,
+        embedding_dim: int,
+        out_dim: int,
+        num_groups: int,
+        act_fn: Optional[str] = None,
+        eps: float = 1e-5,
+    ):
         super().__init__()
         self.num_groups = num_groups
         self.eps = eps
@@ -600,8 +579,7 @@ class AdaGroupNorm(nn.Layer):
         self.linear = nn.Linear(embedding_dim, out_dim * 2)
         # elementwise_affine=False
         norm_kwargs = {"weight_attr": False, "bias_attr": False}
-        self.group_norm = nn.GroupNorm(
-            num_groups, out_dim, epsilon=eps, **norm_kwargs)
+        self.group_norm = nn.GroupNorm(num_groups, out_dim, epsilon=eps, **norm_kwargs)
         self.group_norm.weight = None
         self.group_norm.bias = None
 

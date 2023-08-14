@@ -33,13 +33,13 @@ class EMAModelTests(unittest.TestCase):
     generator = paddle.Generator().manual_seed(0)
 
     def get_models(self, decay=0.9999):
-        unet = UNet2DConditionModel.from_pretrained(
-            self.model_id, subfolder="unet")
+        unet = UNet2DConditionModel.from_pretrained(self.model_id, subfolder="unet")
         ema_unet = EMAModel(
             unet.parameters(),
             decay=decay,
             model_cls=UNet2DConditionModel,
-            model_config=unet.config, )
+            model_config=unet.config,
+        )
         return unet, ema_unet
 
     def get_dummy_inputs(self):
@@ -48,21 +48,23 @@ class EMAModelTests(unittest.TestCase):
                 self.batch_size,
                 self.num_in_channels,
                 self.latent_height,
-                self.latent_width, ),
-            generator=self.generator, )
-        timesteps = paddle.randint(
-            0, 1000, shape=(self.batch_size, ), generator=self.generator)
+                self.latent_width,
+            ),
+            generator=self.generator,
+        )
+        timesteps = paddle.randint(0, 1000, shape=(self.batch_size,), generator=self.generator)
         encoder_hidden_states = paddle.randn(
             (self.batch_size, self.prompt_length, self.text_encoder_hidden_dim),
-            generator=self.generator, )
+            generator=self.generator,
+        )
         return noisy_latents, timesteps, encoder_hidden_states
 
     def simulate_backprop(self, unet):
         updated_state_dict = {}
         for k, param in unet.state_dict().items():
-            updated_param = paddle.randn(
-                param.shape, dtype=param.dtype) + (param * paddle.randn(
-                    param.shape, dtype=param.dtype))
+            updated_param = paddle.randn(param.shape, dtype=param.dtype) + (
+                param * paddle.randn(param.shape, dtype=param.dtype)
+            )
             updated_state_dict.update({k: updated_param})
         unet.load_dict(updated_state_dict)
         return unet
@@ -131,8 +133,7 @@ class EMAModelTests(unittest.TestCase):
         ema_unet.step(unet_step_two.parameters())
         step_two_shadow_params = ema_unet.shadow_params
 
-        for step_one, step_two in zip(step_one_shadow_params,
-                                      step_two_shadow_params):
+        for step_one, step_two in zip(step_one_shadow_params, step_two_shadow_params):
             assert not paddle.allclose(step_one, step_two)
 
     def test_zero_decay(self):
@@ -148,23 +149,19 @@ class EMAModelTests(unittest.TestCase):
         ema_unet.step(unet_step_two.parameters())
         step_two_shadow_params = ema_unet.shadow_params
 
-        for step_one, step_two in zip(step_one_shadow_params,
-                                      step_two_shadow_params):
+        for step_one, step_two in zip(step_one_shadow_params, step_two_shadow_params):
             assert paddle.allclose(step_one, step_two)
 
     def test_serialization(self):
         unet, ema_unet = self.get_models()
-        noisy_latents, timesteps, encoder_hidden_states = self.get_dummy_inputs(
-        )
+        noisy_latents, timesteps, encoder_hidden_states = self.get_dummy_inputs()
 
         with tempfile.TemporaryDirectory() as tmpdir:
             ema_unet.save_pretrained(tmpdir)
-            loaded_unet = UNet2DConditionModel.from_pretrained(
-                tmpdir, model_cls=UNet2DConditionModel)
+            loaded_unet = UNet2DConditionModel.from_pretrained(tmpdir, model_cls=UNet2DConditionModel)
 
         # Since no EMA step has been performed the outputs should match.
         output = unet(noisy_latents, timesteps, encoder_hidden_states).sample
-        output_loaded = loaded_unet(noisy_latents, timesteps,
-                                    encoder_hidden_states).sample
+        output_loaded = loaded_unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
         assert paddle.allclose(output, output_loaded, atol=1e-4)

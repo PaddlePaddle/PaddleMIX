@@ -19,9 +19,13 @@ import numpy as np
 import paddle
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
-from ppdiffusers import (AutoencoderKL, ControlNetModel, DDIMScheduler,
-                         StableDiffusionControlNetPipeline,
-                         UNet2DConditionModel)
+from ppdiffusers import (
+    AutoencoderKL,
+    ControlNetModel,
+    DDIMScheduler,
+    StableDiffusionControlNetPipeline,
+    UNet2DConditionModel,
+)
 from ppdiffusers.utils import load_image, load_numpy, randn_tensor, slow
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
@@ -30,8 +34,7 @@ from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
 
 
-class StableDiffusionControlNetPipelineFastTests(PipelineTesterMixin,
-                                                 unittest.TestCase):
+class StableDiffusionControlNetPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionControlNetPipeline
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
@@ -46,7 +49,8 @@ class StableDiffusionControlNetPipelineFastTests(PipelineTesterMixin,
             out_channels=4,
             down_block_types=("DownBlock2D", "CrossAttnDownBlock2D"),
             up_block_types=("CrossAttnUpBlock2D", "UpBlock2D"),
-            cross_attention_dim=32, )
+            cross_attention_dim=32,
+        )
         paddle.seed(0)
         controlnet = ControlNetModel(
             block_out_channels=(32, 64),
@@ -54,14 +58,16 @@ class StableDiffusionControlNetPipelineFastTests(PipelineTesterMixin,
             in_channels=4,
             down_block_types=("DownBlock2D", "CrossAttnDownBlock2D"),
             cross_attention_dim=32,
-            conditioning_embedding_out_channels=(16, 32), )
+            conditioning_embedding_out_channels=(16, 32),
+        )
         paddle.seed(0)
         scheduler = DDIMScheduler(
             beta_start=0.00085,
             beta_end=0.012,
             beta_schedule="scaled_linear",
             clip_sample=False,
-            set_alpha_to_one=False, )
+            set_alpha_to_one=False,
+        )
         paddle.seed(0)
         vae = AutoencoderKL(
             block_out_channels=[32, 64],
@@ -69,7 +75,8 @@ class StableDiffusionControlNetPipelineFastTests(PipelineTesterMixin,
             out_channels=3,
             down_block_types=["DownEncoderBlock2D", "DownEncoderBlock2D"],
             up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D"],
-            latent_channels=4, )
+            latent_channels=4,
+        )
         paddle.seed(0)
         text_encoder_config = CLIPTextConfig(
             bos_token_id=0,
@@ -80,10 +87,10 @@ class StableDiffusionControlNetPipelineFastTests(PipelineTesterMixin,
             num_attention_heads=4,
             num_hidden_layers=5,
             pad_token_id=1,
-            vocab_size=1000, )
+            vocab_size=1000,
+        )
         text_encoder = CLIPTextModel(text_encoder_config).eval()
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
 
         components = {
             "unet": unet,
@@ -106,8 +113,10 @@ class StableDiffusionControlNetPipelineFastTests(PipelineTesterMixin,
                 1,
                 3,
                 32 * controlnet_embedder_scale_factor,
-                32 * controlnet_embedder_scale_factor, ),
-            generator=generator, )
+                32 * controlnet_embedder_scale_factor,
+            ),
+            generator=generator,
+        )
 
         inputs = {
             "prompt": "A painting of a squirrel eating a burger",
@@ -128,8 +137,7 @@ class StableDiffusionControlNetPipelineFastTests(PipelineTesterMixin,
         reason="XFormers attention is only available with CUDA and `xformers` installed",
     )
     def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(
-            expected_max_diff=1e-2)
+        self._test_xformers_attention_forwardGenerator_pass(expected_max_diff=1e-2)
 
     def test_inference_batch_single_identical(self):
         self._test_inference_batch_single_identical(expected_max_diff=2e-3)
@@ -144,13 +152,11 @@ class StableDiffusionControlNetPipelineSlowTests(unittest.TestCase):
         paddle.device.cuda.empty_cache()
 
     def test_canny(self):
-        controlnet = ControlNetModel.from_pretrained(
-            "lllyasviel/sd-controlnet-canny")
+        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny")
 
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5",
-            safety_checker=None,
-            controlnet=controlnet)
+            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
+        )
         pipe.set_progress_bar_config(disable=None)
 
         generator = paddle.Generator().manual_seed(0)
@@ -172,13 +178,11 @@ class StableDiffusionControlNetPipelineSlowTests(unittest.TestCase):
         assert np.abs(expected_image - image).max() < 5e-3
 
     def test_depth(self):
-        controlnet = ControlNetModel.from_pretrained(
-            "lllyasviel/sd-controlnet-depth")
+        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-depth")
 
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5",
-            safety_checker=None,
-            controlnet=controlnet)
+            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
+        )
         pipe.set_progress_bar_config(disable=None)
 
         generator = paddle.Generator().manual_seed(0)
@@ -200,13 +204,11 @@ class StableDiffusionControlNetPipelineSlowTests(unittest.TestCase):
         assert np.abs(expected_image - image).max() < 5e-3
 
     def test_hed(self):
-        controlnet = ControlNetModel.from_pretrained(
-            "lllyasviel/sd-controlnet-hed")
+        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-hed")
 
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5",
-            safety_checker=None,
-            controlnet=controlnet)
+            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
+        )
         pipe.set_progress_bar_config(disable=None)
 
         generator = paddle.Generator().manual_seed(0)
@@ -228,13 +230,11 @@ class StableDiffusionControlNetPipelineSlowTests(unittest.TestCase):
         assert np.abs(expected_image - image).max() < 5e-3
 
     def test_mlsd(self):
-        controlnet = ControlNetModel.from_pretrained(
-            "lllyasviel/sd-controlnet-mlsd")
+        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-mlsd")
 
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5",
-            safety_checker=None,
-            controlnet=controlnet)
+            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
+        )
         pipe.set_progress_bar_config(disable=None)
 
         generator = paddle.Generator().manual_seed(0)
@@ -256,13 +256,11 @@ class StableDiffusionControlNetPipelineSlowTests(unittest.TestCase):
         assert np.abs(expected_image - image).max() < 5e-3
 
     def test_normal(self):
-        controlnet = ControlNetModel.from_pretrained(
-            "lllyasviel/sd-controlnet-normal")
+        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-normal")
 
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5",
-            safety_checker=None,
-            controlnet=controlnet)
+            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
+        )
         pipe.set_progress_bar_config(disable=None)
 
         generator = paddle.Generator().manual_seed(0)
@@ -284,13 +282,11 @@ class StableDiffusionControlNetPipelineSlowTests(unittest.TestCase):
         assert np.abs(expected_image - image).max() < 5e-3
 
     def test_openpose(self):
-        controlnet = ControlNetModel.from_pretrained(
-            "lllyasviel/sd-controlnet-openpose")
+        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-openpose")
 
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5",
-            safety_checker=None,
-            controlnet=controlnet)
+            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
+        )
         pipe.set_progress_bar_config(disable=None)
 
         generator = paddle.Generator().manual_seed(0)
@@ -312,13 +308,11 @@ class StableDiffusionControlNetPipelineSlowTests(unittest.TestCase):
         assert np.abs(expected_image - image).max() < 5e-3
 
     def test_scribble(self):
-        controlnet = ControlNetModel.from_pretrained(
-            "lllyasviel/sd-controlnet-scribble")
+        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-scribble")
 
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5",
-            safety_checker=None,
-            controlnet=controlnet)
+            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
+        )
         pipe.set_progress_bar_config(disable=None)
 
         generator = paddle.Generator().manual_seed(5)
@@ -340,13 +334,11 @@ class StableDiffusionControlNetPipelineSlowTests(unittest.TestCase):
         assert np.abs(expected_image - image).max() < 5e-3
 
     def test_seg(self):
-        controlnet = ControlNetModel.from_pretrained(
-            "lllyasviel/sd-controlnet-seg")
+        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-seg")
 
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5",
-            safety_checker=None,
-            controlnet=controlnet)
+            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
+        )
         pipe.set_progress_bar_config(disable=None)
 
         generator = paddle.Generator().manual_seed(5)

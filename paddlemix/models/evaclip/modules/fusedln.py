@@ -55,17 +55,19 @@ def check_normalized_shape(normalized_shape):
 
 class FusedLayerNorm(OriginLayerNorm):
     def __init__(
-            self,
-            normalized_shape,
-            epsilon=1e-05,
-            weight_attr=None,
-            bias_attr=None,
-            name=None, ):
+        self,
+        normalized_shape,
+        epsilon=1e-05,
+        weight_attr=None,
+        bias_attr=None,
+        name=None,
+    ):
         super().__init__(
             normalized_shape=normalized_shape,
             epsilon=epsilon,
             weight_attr=weight_attr,
-            bias_attr=bias_attr, )
+            bias_attr=bias_attr,
+        )
         check_normalized_shape(self._normalized_shape)
 
     def forward(self, input):
@@ -74,17 +76,19 @@ class FusedLayerNorm(OriginLayerNorm):
 
 class FastLayerNorm(OriginLayerNorm):
     def __init__(
-            self,
-            normalized_shape,
-            epsilon=1e-05,
-            weight_attr=None,
-            bias_attr=None,
-            name=None, ):
+        self,
+        normalized_shape,
+        epsilon=1e-05,
+        weight_attr=None,
+        bias_attr=None,
+        name=None,
+    ):
         super().__init__(
             normalized_shape=normalized_shape,
             epsilon=epsilon,
             weight_attr=weight_attr,
-            bias_attr=bias_attr, )
+            bias_attr=bias_attr,
+        )
         check_normalized_shape(self._normalized_shape)
 
     def forward(self, input):
@@ -105,21 +109,19 @@ class FusedLinearWithGradAdd(paddle.autograd.PyLayer):
 
         if bias is None:
             if hasattr(weight, "main_grad"):
-                weight.main_grad, _ = _C_ops.fused_linear_param_grad_add(
-                    x, y_grad, weight.main_grad, None, True)
+                weight.main_grad, _ = _C_ops.fused_linear_param_grad_add(x, y_grad, weight.main_grad, None, True)
                 return x_grad, None
             else:
-                weight_grad, _ = _C_ops.fused_linear_param_grad_add(
-                    x, y_grad, None, None, False)
+                weight_grad, _ = _C_ops.fused_linear_param_grad_add(x, y_grad, None, None, False)
                 return x_grad, weight_grad
 
         if hasattr(weight, "main_grad") and hasattr(bias, "main_grad"):
             weight.main_grad, bias.main_grad = _C_ops.fused_linear_param_grad_add(
-                x, y_grad, weight.main_grad, bias.main_grad, True)
+                x, y_grad, weight.main_grad, bias.main_grad, True
+            )
             return x_grad, None, None
         else:
-            weight_grad, bias_grad = _C_ops.fused_linear_param_grad_add(
-                x, y_grad, None, None, False)
+            weight_grad, bias_grad = _C_ops.fused_linear_param_grad_add(x, y_grad, None, None, False)
             return x_grad, weight_grad, bias_grad
 
 

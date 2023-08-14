@@ -18,12 +18,22 @@ from typing import List, Optional, Union
 import numpy as np
 import PIL
 
-from ...utils import (BaseOutput, OptionalDependencyNotAvailable,
-                      is_paddle_available, is_paddlenlp_available)
-from .timesteps import (fast27_timesteps, smart27_timesteps, smart50_timesteps,
-                        smart100_timesteps, smart185_timesteps,
-                        super27_timesteps, super40_timesteps,
-                        super100_timesteps)
+from ...utils import (
+    BaseOutput,
+    OptionalDependencyNotAvailable,
+    is_paddle_available,
+    is_paddlenlp_available,
+)
+from .timesteps import (
+    fast27_timesteps,
+    smart27_timesteps,
+    smart50_timesteps,
+    smart100_timesteps,
+    smart185_timesteps,
+    super27_timesteps,
+    super40_timesteps,
+    super100_timesteps,
+)
 
 
 @dataclass
@@ -55,11 +65,11 @@ except OptionalDependencyNotAvailable:
 else:
     from .pipeline_if import IFPipeline
     from .pipeline_if_img2img import IFImg2ImgPipeline
-    from .pipeline_if_img2img_superresolution import \
-        IFImg2ImgSuperResolutionPipeline
+    from .pipeline_if_img2img_superresolution import IFImg2ImgSuperResolutionPipeline
     from .pipeline_if_inpainting import IFInpaintingPipeline
-    from .pipeline_if_inpainting_superresolution import \
-        IFInpaintingSuperResolutionPipeline
+    from .pipeline_if_inpainting_superresolution import (
+        IFInpaintingSuperResolutionPipeline,
+    )
     from .pipeline_if_superresolution import IFSuperResolutionPipeline
     from .safety_checker import IFSafetyChecker
     from .watermark import IFWatermarker

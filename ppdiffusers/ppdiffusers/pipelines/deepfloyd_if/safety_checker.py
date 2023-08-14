@@ -15,8 +15,11 @@
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddlenlp.transformers import (CLIPConfig, CLIPVisionModelWithProjection,
-                                    PretrainedModel)
+from paddlenlp.transformers import (
+    CLIPConfig,
+    CLIPVisionModelWithProjection,
+    PretrainedModel,
+)
 
 from ...utils import logging
 
@@ -46,7 +49,8 @@ class IFSafetyChecker(PretrainedModel):
         if any(nsfw_detected):
             logger.warning(
                 "Potential NSFW content was detected in one or more images. A black image will be returned instead."
-                " Try again with a different prompt and/or seed.")
+                " Try again with a different prompt and/or seed."
+            )
 
         for idx, nsfw_detected_ in enumerate(nsfw_detected):
             if nsfw_detected_:
@@ -60,7 +64,8 @@ class IFSafetyChecker(PretrainedModel):
         if any(watermark_detected):
             logger.warning(
                 "Potential watermarked content was detected in one or more images. A black image will be returned instead."
-                " Try again with a different prompt and/or seed.")
+                " Try again with a different prompt and/or seed."
+            )
 
         for idx, watermark_detected_ in enumerate(watermark_detected):
             if watermark_detected_:

@@ -59,10 +59,7 @@ to_4tuple = _ntuple(4)
 to_ntuple = _ntuple
 
 
-def clip_grad_norm_(parameters,
-                    max_norm,
-                    norm_type,
-                    error_if_nonfinite: bool=False):
+def clip_grad_norm_(parameters, max_norm, norm_type, error_if_nonfinite: bool = False):
     r"""Clips gradient norm of an iterable of parameters.
 
     The norm is computed over all gradients together, as if they were
@@ -90,19 +87,16 @@ def clip_grad_norm_(parameters,
         return paddle.to_tensor([0.0])
     if norm_type == float("inf"):
         norms = [g.detach().abs().max() for g in grads]
-        total_norm = norms[0] if len(norms) == 1 else paddle.max(
-            paddle.stack(norms))
+        total_norm = norms[0] if len(norms) == 1 else paddle.max(paddle.stack(norms))
     else:
-        total_norm = paddle.norm(
-            paddle.stack([paddle.norm(g.detach(), norm_type) for g in grads]),
-            norm_type)
-    if error_if_nonfinite and paddle.logical_or(total_norm.isnan(),
-                                                total_norm.isinf()):
+        total_norm = paddle.norm(paddle.stack([paddle.norm(g.detach(), norm_type) for g in grads]), norm_type)
+    if error_if_nonfinite and paddle.logical_or(total_norm.isnan(), total_norm.isinf()):
         raise RuntimeError(
             f"The total norm of order {norm_type} for gradients from "
             "`parameters` is non-finite, so it cannot be clipped. To disable "
             "this error and scale the gradients by the non-finite norm anyway, "
-            "set `error_if_nonfinite=False`")
+            "set `error_if_nonfinite=False`"
+        )
     clip_coef = max_norm / (total_norm + 1e-6)
     # Note: multiplying by the clamped coef is redundant when the coef is clamped to 1, but doing so
     # avoids a `if clip_coef < 1:` conditional which can require a CPU <=> device synchronization
@@ -111,15 +105,10 @@ def clip_grad_norm_(parameters,
     for g in grads:
         clipg = paddle.multiply(g, clip_coef_clamped)
         g.set_value(clipg)
-    total_norm_clip = paddle.norm(
-        paddle.stack([paddle.norm(g.detach(), norm_type) for g in grads]),
-        norm_type)
+    total_norm_clip = paddle.norm(paddle.stack([paddle.norm(g.detach(), norm_type) for g in grads]), norm_type)
     return total_norm_clip
 
 
-def clip_grad_norm(model,
-                   max_norm,
-                   norm_type=2.0,
-                   error_if_nonfinite: bool=False):
+def clip_grad_norm(model, max_norm, norm_type=2.0, error_if_nonfinite: bool = False):
     parameters = model.parameters()
     return clip_grad_norm_(parameters, max_norm, norm_type, error_if_nonfinite)

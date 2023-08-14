@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import shutil
 
 import paddle
 
@@ -25,21 +26,17 @@ def save(args, model, optimizer, epoch=0, step=0, output_dir="", is_best=False):
         return
 
     if output_dir and isinstance(output_dir, str):
-        output_dir = os.path.join(output_dir,
-                                  "epoch_%d_step_%d" % (epoch, step))
+        output_dir = os.path.join(output_dir, "epoch_%d_step_%d" % (epoch, step))
         if not os.path.exists(output_dir):
             os.makedirs(output_dir, exist_ok=True)
         print("Save model to %s" % output_dir)
 
-        save_dir = "{}/mp_{:0>2d}_sharding_{:0>2d}".format(
-            output_dir, args.mp_rank, args.sharding_rank)
+        save_dir = "{}/mp_{:0>2d}_sharding_{:0>2d}".format(output_dir, args.mp_rank, args.sharding_rank)
 
         # if args.sharding_stage == 3:
         #     model.get_all_parameters(convert2cpu=False)
-        paddle.save(model.state_dict(),
-                    os.path.join(save_dir, "model.pdparams"))
-        paddle.save(optimizer.state_dict(),
-                    os.path.join(save_dir, "model_state.pdopt"))
+        paddle.save(model.state_dict(), os.path.join(save_dir, "model.pdparams"))
+        paddle.save(optimizer.state_dict(), os.path.join(save_dir, "model_state.pdopt"))
         if is_best:
             shutil.copyfile("model.pdparams", "model_best.pdparams")
         meta_dict = {
@@ -60,19 +57,15 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
     if ckpt_dir and isinstance(ckpt_dir, str) and os.path.isdir(ckpt_dir):
         print("Try to load checkpoint from %s " % ckpt_dir)
 
-        load_dir = "{}/mp_{:0>2d}_sharding_{:0>2d}".format(
-            ckpt_dir, args.mp_rank, args.sharding_rank)
+        load_dir = "{}/mp_{:0>2d}_sharding_{:0>2d}".format(ckpt_dir, args.mp_rank, args.sharding_rank)
         model_path = os.path.join(load_dir, "model.pdparams")
         opt_path = os.path.join(load_dir, "model_state.pdopt")
-        meta_path = os.path.join(load_dir, "meta_state.pdopt")
+        # meta_path = os.path.join(load_dir, "meta_state.pdopt")
 
         if os.path.exists(model_path):
             model_dict = paddle.load(model_path)
             for name, param in model.state_dict().items():
-                assert (
-                    name in model_dict.keys()
-                ), "No param named `{}` was found in checkpoint file.".format(
-                    name)
+                assert name in model_dict.keys(), "No param named `{}` was found in checkpoint file.".format(name)
 
                 if param.dtype != model_dict[name].dtype:
                     model_dict[name] = model_dict[name].cast(param.dtype)
@@ -125,9 +118,7 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         ]
         rowlinear_list = []
         all_list = collinear_list + rowlinear_list + embedding_list
-        skip_list = [
-            "visual.patch_embed.proj.weight", "visual.patch_embed.proj.bias"
-        ]
+        skip_list = ["visual.patch_embed.proj.weight", "visual.patch_embed.proj.bias"]
 
         col_list = []
         row_list = []
@@ -148,22 +139,21 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         def col_split_modeldict(model_dict):
             if len(model_dict.shape) == 2:
                 subbatch = model_dict.shape[1] // mp_size
-                return model_dict[:, mp_rank * subbatch:(mp_rank + 1) *
-                                  subbatch]
+                return model_dict[:, mp_rank * subbatch : (mp_rank + 1) * subbatch]
             elif len(model_dict.shape) == 1:
                 subbatch = model_dict.shape[0] // mp_size
-                return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
+                return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
 
         def row_split_modeldict(model_dict):
             if len(model_dict.shape) == 2:
                 subbatch = model_dict.shape[0] // mp_size
-                return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
+                return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
             else:
                 return model_dict
 
         def emb_split_modeldict(model_dict):
             subbatch = model_dict.shape[0] // mp_size
-            return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
+            return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
 
         model_dict = paddle.load(ckpt_dir)
         modelkeys = list(model_dict.keys())
@@ -180,28 +170,22 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
             if key in all_list:
                 if key in collinear_list:
                     col_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = col_split_modeldict(model_dict[
-                        whole_key])
+                    model_dict[whole_key] = col_split_modeldict(model_dict[whole_key])
                 elif key in rowlinear_list:
                     row_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = row_split_modeldict(model_dict[
-                        whole_key])
+                    model_dict[whole_key] = row_split_modeldict(model_dict[whole_key])
                 else:
                     emb_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = emb_split_modeldict(model_dict[
-                        whole_key])
+                    model_dict[whole_key] = emb_split_modeldict(model_dict[whole_key])
 
         if args.context_length != 77:
-            model_dict["text.positional_embedding"] = model_dict[
-                "text.positional_embedding"][:args.context_length, :]
+            model_dict["text.positional_embedding"] = model_dict["text.positional_embedding"][: args.context_length, :]
 
-        print("cast state_dict to default dtype:{}".format(
-            paddle.get_default_dtype()))
+        print("cast state_dict to default dtype:{}".format(paddle.get_default_dtype()))
         for key, value in model_dict.items():
             if "freqs_cos" in key or "freqs_sin" in key:
                 continue
-            model_dict[key] = paddle.cast(
-                value, dtype=paddle.get_default_dtype())
+            model_dict[key] = paddle.cast(value, dtype=paddle.get_default_dtype())
         model.set_state_dict(model_dict)
         del model_dict
     else:

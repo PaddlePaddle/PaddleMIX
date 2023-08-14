@@ -52,20 +52,21 @@ class KeyPointDetector(Detector):
     """
 
     def __init__(
-            self,
-            model_dir,
-            device="CPU",
-            run_mode="paddle",
-            batch_size=1,
-            trt_min_shape=1,
-            trt_max_shape=1280,
-            trt_opt_shape=640,
-            trt_calib_mode=False,
-            cpu_threads=1,
-            enable_mkldnn=False,
-            output_dir="output",
-            threshold=0.5,
-            use_dark=True, ):
+        self,
+        model_dir,
+        device="CPU",
+        run_mode="paddle",
+        batch_size=1,
+        trt_min_shape=1,
+        trt_max_shape=1280,
+        trt_opt_shape=640,
+        trt_calib_mode=False,
+        cpu_threads=1,
+        enable_mkldnn=False,
+        output_dir="output",
+        threshold=0.5,
+        use_dark=True,
+    ):
         super(KeyPointDetector, self).__init__(
             model_dir=model_dir,
             device=device,
@@ -78,7 +79,8 @@ class KeyPointDetector(Detector):
             cpu_threads=cpu_threads,
             enable_mkldnn=enable_mkldnn,
             output_dir=output_dir,
-            threshold=threshold, )
+            threshold=threshold,
+        )
         self.use_dark = use_dark
 
     def set_config(self, model_dir):
@@ -105,8 +107,7 @@ class KeyPointDetector(Detector):
         np_heatmap = result["heatmap"]
         np_masks = result["masks"]
         # postprocess output of predictor
-        if KEYPOINT_SUPPORT_MODELS[
-                self.pred_config.arch] == "keypoint_bottomup":
+        if KEYPOINT_SUPPORT_MODELS[self.pred_config.arch] == "keypoint_bottomup":
             results = {}
             h, w = inputs["im_shape"][0]
             preds = [np_heatmap]
@@ -118,8 +119,7 @@ class KeyPointDetector(Detector):
             results["keypoint"] = kpts
             results["score"] = scores
             return results
-        elif KEYPOINT_SUPPORT_MODELS[
-                self.pred_config.arch] == "keypoint_topdown":
+        elif KEYPOINT_SUPPORT_MODELS[self.pred_config.arch] == "keypoint_topdown":
             results = {}
             imshape = inputs["im_shape"][:, ::-1]
             center = np.round(imshape / 2.0)
@@ -130,8 +130,7 @@ class KeyPointDetector(Detector):
             results["score"] = scores
             return results
         else:
-            raise ValueError("Unsupported arch: {}, expect {}".format(
-                self.pred_config.arch, KEYPOINT_SUPPORT_MODELS))
+            raise ValueError("Unsupported arch: {}, expect {}".format(self.pred_config.arch, KEYPOINT_SUPPORT_MODELS))
 
     def predict(self, repeats=1):
         """
@@ -162,11 +161,7 @@ class KeyPointDetector(Detector):
         result = dict(heatmap=np_heatmap, masks=np_masks)
         return result
 
-    def predict_image(self,
-                      image_list,
-                      run_benchmark=False,
-                      repeats=1,
-                      visual=True):
+    def predict_image(self, image_list, run_benchmark=False, repeats=1, visual=True):
         results = []
         batch_loop_cnt = math.ceil(float(len(image_list)) / self.batch_size)
         for i in range(batch_loop_cnt):
@@ -222,7 +217,8 @@ class KeyPointDetector(Detector):
                         batch_image_list,
                         result,
                         visual_thresh=self.threshold,
-                        save_dir=self.output_dir, )
+                        save_dir=self.output_dir,
+                    )
 
             results.append(result)
         results = self.merge_batch_result(results)
@@ -245,7 +241,7 @@ class KeyPointDetector(Detector):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         out_path = os.path.join(self.output_dir, video_name)
-        fourcc = cv2.VideoWriter_fourcc(* "mp4v")
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         writer = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
         index = 1
         while 1:
@@ -257,8 +253,7 @@ class KeyPointDetector(Detector):
             results = self.predict_image([frame[:, :, ::-1]], visual=False)
             im_results = {}
             im_results["keypoint"] = [results["keypoint"], results["score"]]
-            im = visualize_pose(
-                frame, im_results, visual_thresh=self.threshold, returnimg=True)
+            im = visualize_pose(frame, im_results, visual_thresh=self.threshold, returnimg=True)
             writer.write(im)
             if camera_id != -1:
                 cv2.imshow("Mask Detection", im)
@@ -315,8 +310,7 @@ class PredictConfig_KeyPoint:
         for support_model in KEYPOINT_SUPPORT_MODELS:
             if support_model in yml_conf["arch"]:
                 return True
-        raise ValueError("Unsupported arch: {}, expect {}".format(yml_conf[
-            "arch"], KEYPOINT_SUPPORT_MODELS))
+        raise ValueError("Unsupported arch: {}, expect {}".format(yml_conf["arch"], KEYPOINT_SUPPORT_MODELS))
 
     def print_config(self):
         print("-----------  Model Configuration -----------")
@@ -332,14 +326,10 @@ def visualize(image_list, results, visual_thresh=0.6, save_dir="output"):
     for i, image_file in enumerate(image_list):
         skeletons = results["keypoint"]
         scores = results["score"]
-        skeleton = skeletons[i:i + 1]
-        score = scores[i:i + 1]
+        skeleton = skeletons[i : i + 1]
+        score = scores[i : i + 1]
         im_results["keypoint"] = [skeleton, score]
-        visualize_pose(
-            image_file,
-            im_results,
-            visual_thresh=visual_thresh,
-            save_dir=save_dir)
+        visualize_pose(image_file, im_results, visual_thresh=visual_thresh, save_dir=save_dir)
 
 
 def main():
@@ -356,7 +346,8 @@ def main():
         enable_mkldnn=FLAGS.enable_mkldnn,
         threshold=FLAGS.threshold,
         output_dir=FLAGS.output_dir,
-        use_dark=FLAGS.use_dark, )
+        use_dark=FLAGS.use_dark,
+    )
 
     # predict from video file or camera video stream
     if FLAGS.video_file is not None or FLAGS.camera_id != -1:
@@ -385,8 +376,7 @@ def main():
                 "shape": "dynamic_shape",
                 "data_num": perf_info["img_num"],
             }
-            det_log = PaddleInferBenchmark(detector.config, model_info,
-                                           data_info, perf_info, mems)
+            det_log = PaddleInferBenchmark(detector.config, model_info, data_info, perf_info, mems)
             det_log("KeyPoint")
 
 
@@ -396,8 +386,7 @@ if __name__ == "__main__":
     FLAGS = parser.parse_args()
     print_arguments(FLAGS)
     FLAGS.device = FLAGS.device.upper()
-    assert FLAGS.device in ["CPU", "GPU", "XPU"
-                            ], "device should be CPU, GPU or XPU"
+    assert FLAGS.device in ["CPU", "GPU", "XPU"], "device should be CPU, GPU or XPU"
     assert not FLAGS.use_gpu, "use_gpu has been deprecated, please use --device"
 
     main()

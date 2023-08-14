@@ -11,19 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import base64
-import gzip
-import io
+
 import logging
 import os
-import random
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
-import paddle
 import paddle.vision.datasets as datasets
 from easydict import EasyDict as edict
-from paddle.io import DataLoader, Dataset, IterableDataset, get_worker_info
-from PIL import Image
+from paddle.io import DataLoader
 
 from .dataset import ImageFolder
 
@@ -39,8 +33,7 @@ def get_classification(args, preprocess_fns):
     for data_path in data_paths:
         data_path = data_path.rstrip("/")
         logging.info(f"adding classification dataset: {data_path}")
-        dataset = datasets.ImageFolder(
-            f"{data_path}/images", transform=preprocess_fn)
+        dataset = datasets.ImageFolder(f"{data_path}/images", transform=preprocess_fn)
 
         dataset = ImageFolder(f"{data_path}/images", transform=preprocess_fn)
 
@@ -48,7 +41,8 @@ def get_classification(args, preprocess_fns):
             dataset,
             batch_size=args.per_device_eval_batch_size,  # hard code
             num_workers=args.dataloader_num_workers,
-            shuffle=False, )
+            shuffle=False,
+        )
 
         classname_filename = f"{data_path}/labels.txt"
         template_filename = f"{data_path}/templates.txt"
@@ -56,7 +50,8 @@ def get_classification(args, preprocess_fns):
         result[f"{os.path.basename(data_path)}"] = edict(
             dataloader=dataloader,
             classname_filename=classname_filename,
-            template_filename=template_filename, )
+            template_filename=template_filename,
+        )
 
     return result
 

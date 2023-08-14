@@ -14,7 +14,6 @@
 
 import argparse
 import os
-import sys
 
 import paddle
 import yaml
@@ -30,24 +29,28 @@ def parse_args():
         choices=["SamVitL", "SamVitB", "SamVitH"],
         required=True,
         help="The model type.",
-        type=str, )
+        type=str,
+    )
     parser.add_argument(
         "--input_type",
         choices=["boxs", "points", "points_grid"],
         required=True,
         help="The model type.",
-        type=str, )
+        type=str,
+    )
     parser.add_argument(
         "--save_dir",
         help="The directory for saving the exported inference model",
         type=str,
-        default="./output/inference_model", )
+        default="./output/inference_model",
+    )
     parser.add_argument(
         "--input_img_shape",
         nargs="+",
         help="Export the model with fixed input shape, e.g., `--input_img_shape 1 3 512 1024`.",
         type=int,
-        default=[1, 3, 1024, 1024], )
+        default=[1, 3, 1024, 1024],
+    )
 
     return parser.parse_args()
 
@@ -56,11 +59,9 @@ def main(args):
 
     os.environ["PADDLESEG_EXPORT_STAGE"] = "True"
 
-    model = SamModel.from_pretrained(
-        args.model_type, input_type=args.input_type)
+    model = SamModel.from_pretrained(args.model_type, input_type=args.input_type)
 
-    shape = ([None, 3, None, None]
-             if args.input_img_shape is None else args.input_img_shape)
+    shape = [None, 3, None, None] if args.input_img_shape is None else args.input_img_shape
     if args.input_type == "points":
         shape2 = [1, 1, 2]
     elif args.input_type == "boxs":
@@ -69,10 +70,8 @@ def main(args):
         shape2 = [64, 1, 2]
 
     input_spec = [
-        paddle.static.InputSpec(
-            shape=shape, dtype="float32"),
-        paddle.static.InputSpec(
-            shape=shape2, dtype="int32"),
+        paddle.static.InputSpec(shape=shape, dtype="float32"),
+        paddle.static.InputSpec(shape=shape2, dtype="int32"),
     ]
     model.eval()
     model = paddle.jit.to_static(model, input_spec=input_spec)

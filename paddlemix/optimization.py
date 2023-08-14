@@ -42,15 +42,16 @@ class CosineDecayWithWarmup(LRScheduler):
     """
 
     def __init__(
-            self,
-            learning_rate,
-            epochs,
-            eta_min=0.0,
-            warmup_steps=0,
-            warmup_start_lr=0.0,
-            last_epoch=-1,
-            step_each_epoch=1,
-            **kwargs, ):
+        self,
+        learning_rate,
+        epochs,
+        eta_min=0.0,
+        warmup_steps=0,
+        warmup_start_lr=0.0,
+        last_epoch=-1,
+        step_each_epoch=1,
+        **kwargs,
+    ):
         self.start_lr = learning_rate
         self.T_max = epochs
         self.eta_min = eta_min
@@ -70,12 +71,13 @@ class CosineDecayWithWarmup(LRScheduler):
         cur_step_in_epoch = (self.cur_step - 2) % self.step_each_epoch
         cur_epoch = (self.cur_step - 2) // self.step_each_epoch
         if self.cur_step < self.warmup_steps and cur_epoch == 0:
-            self.last_lr = self.warmup_start_lr + (
-                self.start_lr - self.warmup_start_lr) * cur_step_in_epoch / max(
-                    self.warmup_steps, 1)
+            self.last_lr = self.warmup_start_lr + (self.start_lr - self.warmup_start_lr) * cur_step_in_epoch / max(
+                self.warmup_steps, 1
+            )
         else:
             self.last_lr = (self.start_lr - self.eta_min) * 0.5 * (
-                1.0 + math.cos(math.pi * cur_epoch / self.T_max)) + self.eta_min
+                1.0 + math.cos(math.pi * cur_epoch / self.T_max)
+            ) + self.eta_min
         self.last_epoch = cur_epoch
 
     def get_lr(self):
@@ -164,11 +166,8 @@ def get_parameters(args, model, assigner, tower):
     skip = set()
     if tower == "visual":
         lr = args.visual_lr if args.visual_lr is not None else args.learning_rate
-        weight_decay = (args.visual_wd
-                        if args.visual_wd is not None else args.weight_decay)
-        filter_parameters = [[name, param]
-                             for name, param in model.named_parameters()
-                             if "visual." in name]
+        weight_decay = args.visual_wd if args.visual_wd is not None else args.weight_decay
+        filter_parameters = [[name, param] for name, param in model.named_parameters() if "visual." in name]
         if hasattr(model, "visual"):
             if hasattr(model.visual, "no_weight_decay"):
                 skip = set.union(skip, model.visual.no_weight_decay())
@@ -176,9 +175,7 @@ def get_parameters(args, model, assigner, tower):
     elif tower == "text":
         lr = args.text_lr if args.text_lr is not None else args.learning_rate
         weight_decay = args.text_wd if args.text_wd is not None else args.weight_decay
-        filter_parameters = [[name, param]
-                             for name, param in model.named_parameters()
-                             if "text." in name]
+        filter_parameters = [[name, param] for name, param in model.named_parameters() if "text." in name]
         if hasattr(model, "text"):
             if hasattr(model.text, "no_weight_decay"):
                 skip = set.union(skip, model.text.no_weight_decay())
@@ -187,8 +184,7 @@ def get_parameters(args, model, assigner, tower):
         lr = args.learning_rate
         weight_decay = args.weight_decay
         exclude = lambda n: "visual." not in n and "text." not in n
-        filter_parameters = [[n, p] for n, p in model.named_parameters()
-                             if exclude(n)]
+        filter_parameters = [[n, p] for n, p in model.named_parameters() if exclude(n)]
         if hasattr(model, "no_weight_decay"):
             skip = set.union(skip, model.no_weight_decay())
     get_num_layer = assigner.get_layer_id if assigner is not None else None
@@ -236,11 +232,8 @@ def get_parameters(args, model, assigner, tower):
     if is_master(args):
         logging.info(f"Tower = {tower}")
         logging.info(f"Skip weight decay name marked in tower-{tower}: {skip}")
-        logging.info(
-            f"Num of parameters group in tower-{tower}: {len(parameter_group_vars.values())}"
-        )
-        logging.info(
-            f"Param groups = {json.dumps(parameter_group_names, indent=2)}")
+        logging.info(f"Num of parameters group in tower-{tower}: {len(parameter_group_vars.values())}")
+        logging.info(f"Param groups = {json.dumps(parameter_group_names, indent=2)}")
     return list(parameter_group_vars.values())
 
 
@@ -250,20 +243,19 @@ def get_assigner(args, model):
     if visual_ld < 1.0:
         visual_num_layers = model.visual.get_num_layers()
         assigner_visual = LayerDecayValueAssigner(
-            list(visual_ld**(visual_num_layers + 1 - i)
-                 for i in range(visual_num_layers + 2)))
+            list(visual_ld ** (visual_num_layers + 1 - i) for i in range(visual_num_layers + 2))
+        )
     else:
         assigner_visual = None
     if text_ld < 1.0 and hasattr(model, "text"):
         text_num_layers = model.text.get_num_layers()
         assigner_text = LayerDecayValueAssigner(
-            list(text_ld**(text_num_layers + 1 - i)
-                 for i in range(text_num_layers + 2)))
+            list(text_ld ** (text_num_layers + 1 - i) for i in range(text_num_layers + 2))
+        )
     else:
         assigner_text = None
     if assigner_visual is not None:
-        logging.info("Assigned visual values = %s" %
-                     str(assigner_visual.values))
+        logging.info("Assigned visual values = %s" % str(assigner_visual.values))
     if assigner_text is not None:
         logging.info("Assigned text values = %s" % str(assigner_text.values))
     return assigner_visual, assigner_text
@@ -286,8 +278,7 @@ def get_all_parameters(args, model):
 
 def print_optim(optimizer):
     for param_group in optimizer._param_groups:
-        print(param_group["group"], param_group["learning_rate"],
-              param_group["lr_scale"])
+        print(param_group["group"], param_group["learning_rate"], param_group["lr_scale"])
 
 
 def create_optimizer(args, model, lr_scheduler=None, return_params=False):

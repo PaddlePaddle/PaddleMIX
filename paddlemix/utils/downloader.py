@@ -30,15 +30,18 @@ from huggingface_hub import get_hf_file_metadata, hf_hub_url
 from huggingface_hub.utils import EntryNotFoundError
 from tqdm.auto import tqdm
 
-from .env import (DOWNLOAD_SERVER, FAILED_STATUS, HF_CACHE_HOME, MODEL_HOME,
-                  SUCCESS_STATUS)
+from .env import (
+    DOWNLOAD_SERVER,
+    FAILED_STATUS,
+    HF_CACHE_HOME,
+    MODEL_HOME,
+    SUCCESS_STATUS,
+)
 from .log import logger
 
 __all__ = ["get_weights_path_from_url", "resolve_cache_dir"]
 
-COMMUNITY_MODEL_PREFIX = os.getenv(
-    "COMMUNITY_MODEL_PREFIX",
-    "https://bj.bcebos.com/paddlenlp/models/community")
+COMMUNITY_MODEL_PREFIX = os.getenv("COMMUNITY_MODEL_PREFIX", "https://bj.bcebos.com/paddlenlp/models/community")
 WEIGHTS_HOME = osp.expanduser("~/.cache/paddle/hapi/weights")
 DOWNLOAD_RETRY_LIMIT = 3
 DOWNLOAD_CHECK = False
@@ -111,11 +114,12 @@ def get_path_from_url(url, root_dir, md5sum=None, check_exist=True):
 
 
 def get_path_from_url_with_filelock(
-        url: str,
-        root_dir: str,
-        md5sum: Optional[str]=None,
-        check_exist: bool=True,
-        timeout: float=-1, ) -> str:
+    url: str,
+    root_dir: str,
+    md5sum: Optional[str] = None,
+    check_exist: bool = True,
+    timeout: float = -1,
+) -> str:
     """construct `get_path_from_url` for `model_utils` to enable downloading multiprocess-safe
 
     Args:
@@ -140,8 +144,7 @@ def get_path_from_url_with_filelock(
     os.makedirs(os.path.dirname(lock_file_path), exist_ok=True)
 
     with FileLock(lock_file_path, timeout=timeout):
-        result = get_path_from_url(
-            url=url, root_dir=root_dir, md5sum=md5sum, check_exist=check_exist)
+        result = get_path_from_url(url=url, root_dir=root_dir, md5sum=md5sum, check_exist=check_exist)
     return result
 
 
@@ -161,15 +164,13 @@ def _download(url, path, md5sum=None):
         if retry_cnt < DOWNLOAD_RETRY_LIMIT:
             retry_cnt += 1
         else:
-            raise RuntimeError("Download from {} failed. "
-                               "Retry limit reached".format(url))
+            raise RuntimeError("Download from {} failed. " "Retry limit reached".format(url))
 
         logger.info("Downloading {} from {}".format(fname, url))
 
         req = requests.get(url, stream=True)
         if req.status_code != 200:
-            raise RuntimeError("Downloading from {} failed with code "
-                               "{}!".format(url, req.status_code))
+            raise RuntimeError("Downloading from {} failed with code " "{}!".format(url, req.status_code))
 
         # For protecting download interupted, download to
         # tmp_fullname firstly, move tmp_fullname to fullname
@@ -178,11 +179,7 @@ def _download(url, path, md5sum=None):
         total_size = req.headers.get("content-length")
         with open(tmp_fullname, "wb") as f:
             if total_size:
-                with tqdm(
-                        total=int(total_size),
-                        unit="B",
-                        unit_scale=True,
-                        unit_divisor=1024) as pbar:
+                with tqdm(total=int(total_size), unit="B", unit_scale=True, unit_divisor=1024) as pbar:
                     for chunk in req.iter_content(chunk_size=1024):
                         f.write(chunk)
                         pbar.update(len(chunk))
@@ -207,8 +204,7 @@ def _md5check(fullname, md5sum=None):
     calc_md5sum = md5.hexdigest()
 
     if calc_md5sum != md5sum:
-        logger.info("File {} md5 check failed, {}(calc) != "
-                    "{}(base)".format(fullname, calc_md5sum, md5sum))
+        logger.info("File {} md5 check failed, {}(calc) != " "{}(base)".format(fullname, calc_md5sum, md5sum))
         return False
     return True
 
@@ -425,10 +421,11 @@ def url_file_exists(url: str) -> bool:
 
 
 def hf_file_exists(
-        repo_id: str,
-        filename: str,
-        token: Union[bool, str, None]=None,
-        subfolder: Optional[str]=None, ) -> bool:
+    repo_id: str,
+    filename: str,
+    token: Union[bool, str, None] = None,
+    subfolder: Optional[str] = None,
+) -> bool:
     """Check whether the HF file exists
 
     Args:
@@ -447,16 +444,18 @@ def hf_file_exists(
     try:
         _ = get_hf_file_metadata(
             url=url,
-            token=token, )
+            token=token,
+        )
         return True
     except EntryNotFoundError:
         return False
 
 
 def resolve_cache_dir(
-        pretrained_model_name_or_path: str,
-        from_hf_hub: bool,
-        cache_dir: Optional[str]=None, ) -> str:
+    pretrained_model_name_or_path: str,
+    from_hf_hub: bool,
+    cache_dir: Optional[str] = None,
+) -> str:
     """resolve cache dir for PretrainedModel and PretrainedConfig
 
     Args:

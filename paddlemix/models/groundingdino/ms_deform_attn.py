@@ -24,17 +24,17 @@ from paddlenlp.utils.initializer import constant_, xavier_uniform_
 # helpers
 def _is_power_of_2(n):
     if (not isinstance(n, int)) or (n < 0):
-        raise ValueError("invalid input for _is_power_of_2: {} (type: {})".
-                         format(n, type(n)))
+        raise ValueError("invalid input for _is_power_of_2: {} (type: {})".format(n, type(n)))
     return (n & (n - 1) == 0) and n != 0
 
 
 def deformable_attention_core_func(
-        value,
-        value_spatial_shapes,
-        value_level_start_index,
-        sampling_locations,
-        attention_weights, ):
+    value,
+    value_spatial_shapes,
+    value_level_start_index,
+    sampling_locations,
+    attention_weights,
+):
     """
     Args:
         value (Tensor): [bs, value_length, n_head, c]
@@ -49,44 +49,46 @@ def deformable_attention_core_func(
     bs, _, n_head, c = value.shape
     _, Len_q, _, n_levels, n_points, _ = sampling_locations.shape
 
-    value_list = value.split(
-        value_spatial_shapes.prod(1).split(n_levels), axis=1)
+    value_list = value.split(value_spatial_shapes.prod(1).split(n_levels), axis=1)
     sampling_grids = 2 * sampling_locations - 1
     sampling_value_list = []
     for level, (h, w) in enumerate(value_spatial_shapes):
         # N_, H_*W_, M_, D_ -> N_, H_*W_, M_*D_ -> N_, M_*D_, H_*W_ -> N_*M_, D_, H_, W_
-        value_l_ = (value_list[level].flatten(2).transpose([0, 2, 1])
-                    .reshape([bs * n_head, c, h, w]))
+        value_l_ = value_list[level].flatten(2).transpose([0, 2, 1]).reshape([bs * n_head, c, h, w])
         # N_, Lq_, M_, P_, 2 -> N_, M_, Lq_, P_, 2 -> N_*M_, Lq_, P_, 2
-        sampling_grid_l_ = (sampling_grids[:, :, :, level].transpose(
-            [0, 2, 1, 3, 4]).flatten(0, 1))
+        sampling_grid_l_ = sampling_grids[:, :, :, level].transpose([0, 2, 1, 3, 4]).flatten(0, 1)
         # N_*M_, D_, Lq_, P_
         sampling_value_l_ = F.grid_sample(
             value_l_,
             sampling_grid_l_,
             mode="bilinear",
             padding_mode="zeros",
-            align_corners=False, )
+            align_corners=False,
+        )
         sampling_value_list.append(sampling_value_l_)
     # (N_, Lq_, M_, L_, P_) -> (N_, M_, Lq_, L_, P_) -> (N_*M_, 1, Lq_, L_*P_)
     attention_weights = attention_weights.transpose([0, 2, 1, 3, 4]).reshape(
-        [bs * n_head, 1, Len_q, n_levels * n_points])
-    output = ((paddle.stack(
-        sampling_value_list, axis=-2).flatten(-2) * attention_weights).sum(-1)
-              .reshape([bs, n_head * c, Len_q]))
+        [bs * n_head, 1, Len_q, n_levels * n_points]
+    )
+    output = (
+        (paddle.stack(sampling_value_list, axis=-2).flatten(-2) * attention_weights)
+        .sum(-1)
+        .reshape([bs, n_head * c, Len_q])
+    )
 
     return output.transpose([0, 2, 1])
 
 
 class MSDeformableAttention(nn.Layer):
     def __init__(
-            self,
-            embed_dim=256,
-            num_heads=8,
-            num_levels=4,
-            num_points=4,
-            lr_mult=0.1,
-            batch_first=False, ):
+        self,
+        embed_dim=256,
+        num_heads=8,
+        num_levels=4,
+        num_points=4,
+        lr_mult=0.1,
+        batch_first=False,
+    ):
         """
         Multi-Scale Deformable Attention Module
         """
@@ -98,14 +100,14 @@ class MSDeformableAttention(nn.Layer):
         self.total_points = num_heads * num_levels * num_points
 
         self.head_dim = embed_dim // num_heads
-        assert (self.head_dim * num_heads == self.embed_dim
-                ), "embed_dim must be divisible by num_heads"
+        assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
 
         self.sampling_offsets = nn.Linear(
             embed_dim,
             self.total_points * 2,
             weight_attr=ParamAttr(learning_rate=lr_mult),
-            bias_attr=ParamAttr(learning_rate=lr_mult), )
+            bias_attr=ParamAttr(learning_rate=lr_mult),
+        )
 
         self.attention_weights = nn.Linear(embed_dim, self.total_points)
         self.value_proj = nn.Linear(embed_dim, embed_dim)
@@ -124,16 +126,11 @@ class MSDeformableAttention(nn.Layer):
     def _reset_parameters(self):
         # sampling_offsets
         constant_(self.sampling_offsets.weight)
-        thetas = paddle.arange(
-            self.num_heads,
-            dtype=paddle.float32) * (2.0 * math.pi / self.num_heads)
+        thetas = paddle.arange(self.num_heads, dtype=paddle.float32) * (2.0 * math.pi / self.num_heads)
         grid_init = paddle.stack([thetas.cos(), thetas.sin()], -1)
         grid_init = grid_init / grid_init.abs().max(-1, keepdim=True)
-        grid_init = grid_init.reshape([self.num_heads, 1, 1, 2]).tile(
-            [1, self.num_levels, self.num_points, 1])
-        scaling = paddle.arange(
-            1, self.num_points + 1,
-            dtype=paddle.float32).reshape([1, 1, -1, 1])
+        grid_init = grid_init.reshape([self.num_heads, 1, 1, 2]).tile([1, self.num_levels, self.num_points, 1])
+        scaling = paddle.arange(1, self.num_points + 1, dtype=paddle.float32).reshape([1, 1, -1, 1])
         grid_init *= scaling
         self.sampling_offsets.bias.set_value(grid_init.flatten())
         # attention_weights
@@ -146,13 +143,14 @@ class MSDeformableAttention(nn.Layer):
         constant_(self.output_proj.bias)
 
     def forward(
-            self,
-            query,
-            reference_points,
-            value,
-            value_spatial_shapes,
-            value_level_start_index,
-            value_mask=None, ):
+        self,
+        query,
+        reference_points,
+        value,
+        value_spatial_shapes,
+        value_level_start_index,
+        value_mask=None,
+    ):
         """
         Args:
             query (Tensor): [bs, query_length, C]
@@ -182,34 +180,37 @@ class MSDeformableAttention(nn.Layer):
         value = value.reshape([bs, Len_v, self.num_heads, self.head_dim])
 
         sampling_offsets = self.sampling_offsets(query).reshape(
-            [bs, Len_q, self.num_heads, self.num_levels, self.num_points, 2])
+            [bs, Len_q, self.num_heads, self.num_levels, self.num_points, 2]
+        )
         attention_weights = self.attention_weights(query).reshape(
-            [bs, Len_q, self.num_heads, self.num_levels * self.num_points])
+            [bs, Len_q, self.num_heads, self.num_levels * self.num_points]
+        )
         attention_weights = F.softmax(attention_weights).reshape(
-            [bs, Len_q, self.num_heads, self.num_levels, self.num_points])
+            [bs, Len_q, self.num_heads, self.num_levels, self.num_points]
+        )
 
         if reference_points.shape[-1] == 2:
-            offset_normalizer = value_spatial_shapes.flip([1]).reshape(
-                [1, 1, 1, self.num_levels, 1, 2])
+            offset_normalizer = value_spatial_shapes.flip([1]).reshape([1, 1, 1, self.num_levels, 1, 2])
             sampling_locations = (
-                reference_points.reshape([bs, Len_q, 1, self.num_levels, 1, 2])
-                + sampling_offsets / offset_normalizer)
+                reference_points.reshape([bs, Len_q, 1, self.num_levels, 1, 2]) + sampling_offsets / offset_normalizer
+            )
         elif reference_points.shape[-1] == 4:
             sampling_locations = (
-                reference_points[:, :, None, :, None, :2] + sampling_offsets /
-                self.num_points * reference_points[:, :, None, :, None, 2:] *
-                0.5)
+                reference_points[:, :, None, :, None, :2]
+                + sampling_offsets / self.num_points * reference_points[:, :, None, :, None, 2:] * 0.5
+            )
         else:
             raise ValueError(
-                "Last dim of reference_points must be 2 or 4, but get {} instead.".
-                format(reference_points.shape[-1]))
+                "Last dim of reference_points must be 2 or 4, but get {} instead.".format(reference_points.shape[-1])
+            )
 
         output = self.ms_deformable_attn_core(
             value,
             value_spatial_shapes.astype("int64"),
             value_level_start_index.astype("int64"),
             sampling_locations,
-            attention_weights, )
+            attention_weights,
+        )
         output = self.output_proj(output)
 
         if not self.batch_first:

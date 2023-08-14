@@ -22,17 +22,29 @@ import paddle
 import PIL
 from paddle.vision.transforms import functional as F
 from paddlenlp.transformers.tokenizer_utils_base import (
-    BatchEncoding, PreTokenizedInput, TensorType, TextInput)
+    BatchEncoding,
+    PreTokenizedInput,
+    TensorType,
+    TextInput,
+)
 
 from .base_processing import ProcessorMixin
 from .image_transform_utils import (
-    convert_to_rgb, normalize, random_horizontal_flip, random_resized_crop,
-    rescale, resize, to_channel_dimension_format)
-from .image_utils import (IMAGENET_STANDARD_MEAN, IMAGENET_STANDARD_STD,
-                          ChannelDimension, ImageInput, PILImageResampling,
-                          load_image, to_numpy_array, valid_images)
-from .processing_utils import (BaseImageProcessor, BaseTextProcessor,
-                               get_size_dict)
+    convert_to_rgb,
+    random_horizontal_flip,
+    random_resized_crop,
+    rescale,
+)
+from .image_utils import (
+    IMAGENET_STANDARD_MEAN,
+    IMAGENET_STANDARD_STD,
+    ChannelDimension,
+    ImageInput,
+    PILImageResampling,
+    load_image,
+    valid_images,
+)
+from .processing_utils import BaseImageProcessor, BaseTextProcessor, get_size_dict
 
 __all__ = [
     "CLIPProcessor",
@@ -61,14 +73,14 @@ class CLIPProcessor(ProcessorMixin):
         super().__init__(image_processor, text_processor, tokenizer)
 
     def __call__(
-            self,
-            images=None,
-            text: Union[TextInput, PreTokenizedInput, List[TextInput], List[
-                PreTokenizedInput]]=None,
-            return_tensors: Optional[Union[str, TensorType]]=None,
-            max_length=77,
-            mode="train",
-            **kwargs, ) -> BatchEncoding:
+        self,
+        images=None,
+        text: Union[TextInput, PreTokenizedInput, List[TextInput], List[PreTokenizedInput]] = None,
+        return_tensors: Optional[Union[str, TensorType]] = None,
+        max_length=77,
+        mode="train",
+        **kwargs,
+    ) -> BatchEncoding:
         """
         Main method to prepare for the model one or several sequences(s) and image(s). This method forwards the `text`
         and `kwargs` arguments to Bert's [`~BertTokenizerFast.__call__`] if `text` is not `None` to encode
@@ -109,18 +121,17 @@ class CLIPProcessor(ProcessorMixin):
             raise ValueError("You have to specify either images or text.")
 
         # images PIL list
-        encoding_image_processor = self.image_processor(
-            images, return_tensors=return_tensors, mode=mode)
+        encoding_image_processor = self.image_processor(images, return_tensors=return_tensors, mode=mode)
 
-        text_encoding = self.text_processor(
-            text, mode=mode)  # text preprocessor before tokenizer
+        text_encoding = self.text_processor(text, mode=mode)  # text preprocessor before tokenizer
         text_encoding = self.tokenizer(
             text=text_encoding,
             return_tensors=return_tensors,
             return_token_type_ids=False,
             max_length=max_length,
             padding=True,
-            **kwargs, )
+            **kwargs,
+        )
 
         for key, value in text_encoding.items():
             shape = value.shape
@@ -133,8 +144,7 @@ class CLIPProcessor(ProcessorMixin):
                     fill_value = 0
                 newshape = shape
                 newshape[-1] = max_length - shape[-1]
-                padtensor = paddle.full(
-                    shape=newshape, fill_value=fill_value, dtype=value.dtype)
+                padtensor = paddle.full(shape=newshape, fill_value=fill_value, dtype=value.dtype)
                 newvalue = paddle.concat([value, padtensor], axis=-1)
                 text_encoding[key] = newvalue
 
@@ -163,8 +173,7 @@ class CLIPProcessor(ProcessorMixin):
     def model_input_names(self):
         tokenizer_input_names = self.tokenizer.model_input_names
         image_processor_input_names = self.image_processor.model_input_names
-        return list(
-            dict.fromkeys(tokenizer_input_names + image_processor_input_names))
+        return list(dict.fromkeys(tokenizer_input_names + image_processor_input_names))
 
 
 class CLIPTextProcessor(BaseTextProcessor):
@@ -181,19 +190,21 @@ class CLIPTextProcessor(BaseTextProcessor):
     """
 
     def __init__(
-            self,
-            prompt: str="",
-            max_words: int=77,
-            **kwargs, ):
+        self,
+        prompt: str = "",
+        max_words: int = 77,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
         self.prompt = prompt
         self.max_words = max_words
 
     def __call__(
-            self,
-            text,
-            mode: str="train",
-            **kwargs, ):
+        self,
+        text,
+        mode: str = "train",
+        **kwargs,
+    ):
         """
         Preprocess the text before tokenization.
 
@@ -218,18 +229,20 @@ class CLIPTextProcessor(BaseTextProcessor):
         caption = re.sub(
             r"([.!\"()*#:;~])",
             " ",
-            caption.lower(), )
+            caption.lower(),
+        )
         caption = re.sub(
             r"\s{2,}",
             " ",
-            caption, )
+            caption,
+        )
         caption = caption.rstrip("\n")
         caption = caption.strip(" ")
 
         # truncate caption
         caption_words = caption.split(" ")
         if len(caption_words) > self.max_words:
-            caption = " ".join(caption_words[:self.max_words])
+            caption = " ".join(caption_words[: self.max_words])
 
         return caption
 
@@ -280,23 +293,24 @@ class CLIPImageProcessor(BaseImageProcessor):
     model_input_names = ["pixel_values"]
 
     def __init__(
-            self,
-            do_resize: bool=True,
-            size: Dict[str, int]=None,
-            resample: PILImageResampling=PILImageResampling.BICUBIC,
-            do_rescale: bool=True,
-            rescale_factor: Union[int, float]=1 / 255,
-            do_normalize: bool=True,
-            image_mean: Optional[Union[float, List[float]]]=None,
-            image_std: Optional[Union[float, List[float]]]=None,
-            do_convert_rgb: bool=True,
-            do_flip: bool=False,
-            flip_prob: float=0.5,
-            do_rand_resize_crop: bool=False,
-            scale: Optional[Union[List[float], Tuple[float]]]=(0.9, 1.0),
-            do_collate: bool=False,
-            mode: str="train",
-            **kwargs, ) -> None:
+        self,
+        do_resize: bool = True,
+        size: Dict[str, int] = None,
+        resample: PILImageResampling = PILImageResampling.BICUBIC,
+        do_rescale: bool = True,
+        rescale_factor: Union[int, float] = 1 / 255,
+        do_normalize: bool = True,
+        image_mean: Optional[Union[float, List[float]]] = None,
+        image_std: Optional[Union[float, List[float]]] = None,
+        do_convert_rgb: bool = True,
+        do_flip: bool = False,
+        flip_prob: float = 0.5,
+        do_rand_resize_crop: bool = False,
+        scale: Optional[Union[List[float], Tuple[float]]] = (0.9, 1.0),
+        do_collate: bool = False,
+        mode: str = "train",
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         size = size if size is not None else {"height": 384, "width": 384}
         size = get_size_dict(size, default_to_square=True)
@@ -307,8 +321,7 @@ class CLIPImageProcessor(BaseImageProcessor):
         self.do_rescale = do_rescale
         self.rescale_factor = rescale_factor
         self.do_normalize = do_normalize
-        self.image_mean = (image_mean if image_mean is not None else
-                           IMAGENET_STANDARD_MEAN)
+        self.image_mean = image_mean if image_mean is not None else IMAGENET_STANDARD_MEAN
         self.image_std = image_std if image_std is not None else IMAGENET_STANDARD_STD
         self.do_convert_rgb = do_convert_rgb
         self.do_flip = do_flip
@@ -318,12 +331,13 @@ class CLIPImageProcessor(BaseImageProcessor):
         self.do_collate = do_collate
 
     def resize(
-            self,
-            image: np.ndarray,
-            size: Dict[str, int],
-            resample: PILImageResampling=PILImageResampling.BICUBIC,
-            data_format: Optional[Union[str, ChannelDimension]]=None,
-            **kwargs, ) -> np.ndarray:
+        self,
+        image: np.ndarray,
+        size: Dict[str, int],
+        resample: PILImageResampling = PILImageResampling.BICUBIC,
+        data_format: Optional[Union[str, ChannelDimension]] = None,
+        **kwargs,
+    ) -> np.ndarray:
         """
         Resize an image.
 
@@ -348,14 +362,16 @@ class CLIPImageProcessor(BaseImageProcessor):
             size=output_size,
             resample=resample,
             data_format=data_format,
-            **kwargs, )
+            **kwargs,
+        )
 
     def rescale(
-            self,
-            image: np.ndarray,
-            scale: Union[int, float],
-            data_format: Optional[Union[str, ChannelDimension]]=None,
-            **kwargs, ):
+        self,
+        image: np.ndarray,
+        scale: Union[int, float],
+        data_format: Optional[Union[str, ChannelDimension]] = None,
+        **kwargs,
+    ):
         """
         Rescale an image by a scale factor. image = image * scale.
 
@@ -370,23 +386,24 @@ class CLIPImageProcessor(BaseImageProcessor):
         return rescale(image, scale=scale, data_format=data_format, **kwargs)
 
     def normalize(
-            self,
-            image: paddle.Tensor,
-            mean: Union[float, List[float]],
-            std: Union[float, List[float]],
-            data_format: Optional[Union[str, ChannelDimension]]=None,
-            **kwargs, ) -> np.ndarray:
-        tensor_normalize = paddle.vision.transforms.Normalize(
-            mean=mean, std=std, data_format=data_format, **kwargs)
+        self,
+        image: paddle.Tensor,
+        mean: Union[float, List[float]],
+        std: Union[float, List[float]],
+        data_format: Optional[Union[str, ChannelDimension]] = None,
+        **kwargs,
+    ) -> np.ndarray:
+        tensor_normalize = paddle.vision.transforms.Normalize(mean=mean, std=std, data_format=data_format, **kwargs)
         return tensor_normalize(image)
 
     def random_resized_crop(
-            self,
-            image: np.ndarray,
-            size: Union[int, List, Tuple],
-            scale: float,
-            resample: PILImageResampling=PILImageResampling.BICUBIC,
-            **kwargs, ) -> np.ndarray:
+        self,
+        image: np.ndarray,
+        size: Union[int, List, Tuple],
+        scale: float,
+        resample: PILImageResampling = PILImageResampling.BICUBIC,
+        **kwargs,
+    ) -> np.ndarray:
         """
         Crop the input data to random size and aspect ratio.
         A crop of random size (default: of 0.08 to 1.0) of the original size and a random
@@ -404,13 +421,9 @@ class CLIPImageProcessor(BaseImageProcessor):
                 Resampling filter to use when resiizing the image.
         """
         size = list(size.values())
-        return random_resized_crop(
-            image, size=size, scale=scale, resample=resample, **kwargs)
+        return random_resized_crop(image, size=size, scale=scale, resample=resample, **kwargs)
 
-    def random_horizontal_flip(self,
-                               image: np.ndarray,
-                               flip_prob: float,
-                               **kwargs) -> np.ndarray:
+    def random_horizontal_flip(self, image: np.ndarray, flip_prob: float, **kwargs) -> np.ndarray:
         """
         Horizontally flip the input data randomly with a given probability.
 
@@ -423,25 +436,26 @@ class CLIPImageProcessor(BaseImageProcessor):
         return random_horizontal_flip(image, flip_prob=flip_prob, **kwargs)
 
     def preprocess(
-            self,
-            images: ImageInput,
-            do_resize: Optional[bool]=None,
-            size: Optional[Dict[str, int]]=None,
-            resample: PILImageResampling=None,
-            do_rescale: Optional[bool]=None,
-            rescale_factor: Optional[float]=None,
-            do_normalize: Optional[bool]=None,
-            image_mean: Optional[Union[float, List[float]]]=None,
-            image_std: Optional[Union[float, List[float]]]=None,
-            return_tensors: Optional[Union[str, TensorType]]=None,
-            do_convert_rgb: bool=None,
-            do_flip: bool=None,
-            flip_prob: float=None,
-            do_rand_resize_crop: bool=None,
-            scale: Optional[Union[List[float], Tuple[float]]]=None,
-            data_format: ChannelDimension=ChannelDimension.FIRST,
-            mode: str=None,
-            **kwargs, ) -> PIL.Image.Image:
+        self,
+        images: ImageInput,
+        do_resize: Optional[bool] = None,
+        size: Optional[Dict[str, int]] = None,
+        resample: PILImageResampling = None,
+        do_rescale: Optional[bool] = None,
+        rescale_factor: Optional[float] = None,
+        do_normalize: Optional[bool] = None,
+        image_mean: Optional[Union[float, List[float]]] = None,
+        image_std: Optional[Union[float, List[float]]] = None,
+        return_tensors: Optional[Union[str, TensorType]] = None,
+        do_convert_rgb: bool = None,
+        do_flip: bool = None,
+        flip_prob: float = None,
+        do_rand_resize_crop: bool = None,
+        scale: Optional[Union[List[float], Tuple[float]]] = None,
+        data_format: ChannelDimension = ChannelDimension.FIRST,
+        mode: str = None,
+        **kwargs,
+    ) -> PIL.Image.Image:
         """
         Preprocess an image or batch of images.
 
@@ -489,19 +503,15 @@ class CLIPImageProcessor(BaseImageProcessor):
         do_resize = do_resize if do_resize is not None else self.do_resize
         resample = resample if resample is not None else self.resample
         do_rescale = do_rescale if do_rescale is not None else self.do_rescale
-        rescale_factor = (rescale_factor if rescale_factor is not None else
-                          self.rescale_factor)
+        rescale_factor = rescale_factor if rescale_factor is not None else self.rescale_factor
         do_normalize = do_normalize if do_normalize is not None else self.do_normalize
         image_mean = image_mean if image_mean is not None else self.image_mean
         image_std = image_std if image_std is not None else self.image_std
-        do_convert_rgb = (do_convert_rgb if do_convert_rgb is not None else
-                          self.do_convert_rgb)
+        do_convert_rgb = do_convert_rgb if do_convert_rgb is not None else self.do_convert_rgb
         do_flip = do_flip if do_flip is not None else self.do_flip
         flip_prob = flip_prob if flip_prob is not None else self.flip_prob
         scale = scale if scale is not None else self.scale
-        do_rand_resize_crop = (do_rand_resize_crop
-                               if do_rand_resize_crop is not None else
-                               self.do_rand_resize_crop)
+        do_rand_resize_crop = do_rand_resize_crop if do_rand_resize_crop is not None else self.do_rand_resize_crop
 
         size = size if size is not None else self.size
         size = get_size_dict(size, default_to_square=False)
@@ -513,54 +523,34 @@ class CLIPImageProcessor(BaseImageProcessor):
             images = [load_image(image) for image in images]
 
         if not valid_images(images):
-            raise ValueError(
-                "Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, "
-                "paddle.Tensor.")
+            raise ValueError("Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
 
         if do_resize and size is None or resample is None:
-            raise ValueError(
-                "Size and resample must be specified if do_resize is True.")
+            raise ValueError("Size and resample must be specified if do_resize is True.")
 
         if do_rescale and rescale_factor is None:
-            raise ValueError(
-                "Rescale factor must be specified if do_rescale is True.")
+            raise ValueError("Rescale factor must be specified if do_rescale is True.")
 
         if do_normalize and (image_mean is None or image_std is None):
-            raise ValueError(
-                "Image mean and std must be specified if do_normalize is True.")
+            raise ValueError("Image mean and std must be specified if do_normalize is True.")
 
         if do_flip and flip_prob is None:
-            raise ValueError(
-                "Flip probability must be specified if do_flip is True.")
+            raise ValueError("Flip probability must be specified if do_flip is True.")
 
         if do_rand_resize_crop and scale is None:
-            raise ValueError(
-                "Random resize crop probability must be specified if do_rand_resize_crop is True."
-            )
+            raise ValueError("Random resize crop probability must be specified if do_rand_resize_crop is True.")
         if do_rand_resize_crop and mode == "train":
             images = [
-                self.random_resized_crop(
-                    image=image, size=size, scale=scale, resample=resample)
-                for image in images
+                self.random_resized_crop(image=image, size=size, scale=scale, resample=resample) for image in images
             ]
         elif do_resize and mode != "train":
-            images = [
-                self.resize(
-                    image=image, size=size, resample=resample)
-                for image in images
-            ]
+            images = [self.resize(image=image, size=size, resample=resample) for image in images]
 
         if do_flip and mode == "train":
-            images = [
-                self.random_horizontal_flip(
-                    image=image, flip_prob=flip_prob) for image in images
-            ]
+            images = [self.random_horizontal_flip(image=image, flip_prob=flip_prob) for image in images]
 
         if do_rescale:
-            images = [
-                self.rescale(
-                    image=image, scale=rescale_factor) for image in images
-            ]
+            images = [self.rescale(image=image, scale=rescale_factor) for image in images]
         if do_normalize:
             images = [convert_to_rgb(image) for image in images]
             images = [np.array(image, "float32") for image in images]
@@ -571,24 +561,25 @@ class CLIPImageProcessor(BaseImageProcessor):
             batch_images["image"] / 255.0,
             mean=image_mean,
             std=image_std,
-            data_format="CHW", )
+            data_format="CHW",
+        )
         return {"image": image}
 
-    def preprocess_fixed(
-            self, images: ImageInput,
-            size: Optional[Dict[str, int]]=None) -> PIL.Image.Image:
+    def preprocess_fixed(self, images: ImageInput, size: Optional[Dict[str, int]] = None) -> PIL.Image.Image:
         size = size if size is not None else self.size
         size = get_size_dict(size, default_to_square=False)
 
-        processor = paddle.vision.transforms.Compose([
-            paddle.vision.transforms.RandomResizedCrop(
-                [224, 224], scale=(1.0, 1.0), interpolation="bicubic"),
-            _convert_to_rgb,
-            paddle.vision.transforms.ToTensor(),
-            paddle.vision.transforms.Normalize(
-                mean=[0.48145466, 0.4578275, 0.40821073],
-                std=[0.26862954, 0.26130258, 0.27577711], ),
-        ])
+        processor = paddle.vision.transforms.Compose(
+            [
+                paddle.vision.transforms.RandomResizedCrop([224, 224], scale=(1.0, 1.0), interpolation="bicubic"),
+                _convert_to_rgb,
+                paddle.vision.transforms.ToTensor(),
+                paddle.vision.transforms.Normalize(
+                    mean=[0.48145466, 0.4578275, 0.40821073],
+                    std=[0.26862954, 0.26130258, 0.27577711],
+                ),
+            ]
+        )
         inputs = []
         for inp in images:
             inputs.append(processor(inp).unsqueeze(0))
@@ -618,8 +609,7 @@ class ResizeMaxSize(paddle.nn.Layer):
         scale = self.max_size / float(max(height, width))
         if scale != 1.0:
             new_size = tuple(round(dim * scale) for dim in (height, width))
-            img = paddle.vision.transforms.resize(img, new_size,
-                                                  self.interpolation)
+            img = paddle.vision.transforms.resize(img, new_size, self.interpolation)
             pad_h = self.max_size - new_size[0]
             pad_w = self.max_size - new_size[1]
             img = paddle.vision.transforms.pad(
@@ -630,41 +620,42 @@ class ResizeMaxSize(paddle.nn.Layer):
                     pad_w - pad_w // 2,
                     pad_h - pad_h // 2,
                 ],
-                fill=self.fill, )
+                fill=self.fill,
+            )
         return img
 
 
 def image_transform(
-        image_size: int,
-        is_train: bool,
-        mean: Optional[Tuple[float, ...]]=(0.48145466, 0.4578275, 0.40821073),
-        std: Optional[Tuple[float, ...]]=(0.26862954, 0.26130258, 0.27577711),
-        resize_longest_max: bool=False,
-        fill_color: int=0, ):
+    image_size: int,
+    is_train: bool,
+    mean: Optional[Tuple[float, ...]] = (0.48145466, 0.4578275, 0.40821073),
+    std: Optional[Tuple[float, ...]] = (0.26862954, 0.26130258, 0.27577711),
+    resize_longest_max: bool = False,
+    fill_color: int = 0,
+):
     if not isinstance(mean, (list, tuple)):
-        mean = (mean, ) * 3
+        mean = (mean,) * 3
     if not isinstance(std, (list, tuple)):
-        std = (std, ) * 3
+        std = (std,) * 3
     if isinstance(image_size, (list, tuple)) and image_size[0] == image_size[1]:
         image_size = image_size[0]
     normalize = paddle.vision.transforms.Normalize(mean=mean, std=std)
     if is_train:
-        return paddle.vision.transforms.Compose([
-            paddle.vision.transforms.RandomResizedCrop(
-                image_size, scale=(1.0, 1.0), interpolation="bicubic"),
-            _convert_to_rgb,
-            paddle.vision.transforms.ToTensor(),
-            normalize,
-        ])
+        return paddle.vision.transforms.Compose(
+            [
+                paddle.vision.transforms.RandomResizedCrop(image_size, scale=(1.0, 1.0), interpolation="bicubic"),
+                _convert_to_rgb,
+                paddle.vision.transforms.ToTensor(),
+                normalize,
+            ]
+        )
     else:
         if resize_longest_max:
             transforms = [ResizeMaxSize(image_size, fill=fill_color)]
         else:
             transforms = [
-                paddle.vision.transforms.Resize(
-                    image_size, interpolation="bicubic"),
+                paddle.vision.transforms.Resize(image_size, interpolation="bicubic"),
                 paddle.vision.transforms.CenterCrop(image_size),
             ]
-        transforms.extend(
-            [_convert_to_rgb, paddle.vision.transforms.ToTensor(), normalize])
+        transforms.extend([_convert_to_rgb, paddle.vision.transforms.ToTensor(), normalize])
         return paddle.vision.transforms.Compose(transforms)

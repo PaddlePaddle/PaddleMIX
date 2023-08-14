@@ -13,9 +13,7 @@
 # limitations under the License.
 
 import os
-import sys
 from dataclasses import dataclass, field
-from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,7 +21,7 @@ import paddle
 import paddle.nn.functional as F
 import requests
 from paddlenlp.trainer import PdArgumentParser
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
 from paddlemix.models.sam.modeling import SamModel
@@ -45,9 +43,7 @@ def show_mask(mask, ax, random_color=False):
 def show_box(box, ax, label):
     x0, y0 = box[0], box[1]
     w, h = box[2] - box[0], box[3] - box[1]
-    ax.add_patch(
-        plt.Rectangle(
-            (x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2))
+    ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2))
     ax.text(x0, y0, label)
 
 
@@ -61,8 +57,7 @@ class DataArguments:
     """
 
     input_image: str = field(metadata={"help": "The name of input image."})
-    prompt: str = field(
-        default=None, metadata={"help": "The prompt of the image to be det."})
+    prompt: str = field(default=None, metadata={"help": "The prompt of the image to be det."})
 
 
 @dataclass
@@ -73,22 +68,28 @@ class ModelArguments:
 
     dino_model_name_or_path: str = field(
         default="GroundingDino/groundingdino-swint-ogc",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     sam_model_name_or_path: str = field(
         default="Sam/SamVitH-1024",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     box_threshold: float = field(
         default=0.3,
-        metadata={"help": "box threshold."}, )
+        metadata={"help": "box threshold."},
+    )
     text_threshold: float = field(
         default=0.25,
-        metadata={"help": "text threshold."}, )
+        metadata={"help": "text threshold."},
+    )
     output_dir: str = field(
         default="grounded_sam_output",
-        metadata={"help": "output directory."}, )
+        metadata={"help": "output directory."},
+    )
     visual: bool = field(
         default=True,
-        metadata={"help": "save visual image."}, )
+        metadata={"help": "save visual image."},
+    )
 
 
 def main():
@@ -96,32 +97,26 @@ def main():
     model_args, data_args = parser.parse_args_into_dataclasses()
     url = data_args.input_image
     # bulid dino processor
-    dino_processor = GroudingDinoProcessor.from_pretrained(
-        model_args.dino_model_name_or_path)
+    dino_processor = GroudingDinoProcessor.from_pretrained(model_args.dino_model_name_or_path)
 
     # bulid dino model
     logger.info("dino_model: {}".format(model_args.dino_model_name_or_path))
-    dino_model = GroundingDinoModel.from_pretrained(
-        model_args.dino_model_name_or_path)
+    dino_model = GroundingDinoModel.from_pretrained(model_args.dino_model_name_or_path)
     dino_model.eval()
     # buidl sam processor
-    sam_processor = SamProcessor.from_pretrained(
-        model_args.sam_model_name_or_path)
+    sam_processor = SamProcessor.from_pretrained(model_args.sam_model_name_or_path)
     # bulid model
     logger.info("SamModel: {}".format(model_args.sam_model_name_or_path))
-    sam_model = SamModel.from_pretrained(
-        model_args.sam_model_name_or_path, input_type="boxs")
+    sam_model = SamModel.from_pretrained(model_args.sam_model_name_or_path, input_type="boxs")
 
     # read image
     if os.path.isfile(url):
         # read image
         image_pil = Image.open(url).convert("RGB")
     else:
-        image_pil = Image.open(requests.get(url, stream=True).raw).convert(
-            "RGB")
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
     # preprocess image text_prompt
-    image_tensor, mask, tokenized_out = dino_processor(
-        images=image_pil, text=data_args.prompt)
+    image_tensor, mask, tokenized_out = dino_processor(images=image_pil, text=data_args.prompt)
 
     with paddle.no_grad():
         outputs = dino_model(
@@ -129,9 +124,9 @@ def main():
             mask,
             input_ids=tokenized_out["input_ids"],
             attention_mask=tokenized_out["attention_mask"],
-            text_self_attention_masks=tokenized_out[
-                "text_self_attention_masks"],
-            position_ids=tokenized_out["position_ids"], )
+            text_self_attention_masks=tokenized_out["text_self_attention_masks"],
+            position_ids=tokenized_out["position_ids"],
+        )
 
     logits = F.sigmoid(outputs["pred_logits"])[0]  # (nq, 256)
     boxes = outputs["pred_boxes"][0]  # (nq, 4)
@@ -167,8 +162,7 @@ def main():
         x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
         boxes.append([x0, y0, x1, y1])
     boxes = np.array(boxes)
-    image_seg, prompt = sam_processor(
-        image_pil, input_type="boxs", box=boxes, point_coords=None)
+    image_seg, prompt = sam_processor(image_pil, input_type="boxs", box=boxes, point_coords=None)
     seg_masks = sam_model(img=image_seg, prompt=prompt)
     seg_masks = sam_processor.postprocess_masks(seg_masks)
 
@@ -190,7 +184,8 @@ def main():
             os.path.join(model_args.output_dir, "mask_pred.jpg"),
             bbox_inches="tight",
             dpi=300,
-            pad_inches=0.0, )
+            pad_inches=0.0,
+        )
 
     logger.info("finish!")
 

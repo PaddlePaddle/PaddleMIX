@@ -22,14 +22,19 @@ import numpy as np
 import paddle
 import paddle.nn.functional as F
 import PIL
-from paddlenlp.transformers import (CLIPImageProcessor, T5EncoderModel,
-                                    T5Tokenizer)
+from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
 
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
-from ...utils import (BACKENDS_MAPPING, PIL_INTERPOLATION, is_bs4_available,
-                      is_ftfy_available, logging, randn_tensor,
-                      replace_example_docstring)
+from ...utils import (
+    BACKENDS_MAPPING,
+    PIL_INTERPOLATION,
+    is_bs4_available,
+    is_ftfy_available,
+    logging,
+    randn_tensor,
+    replace_example_docstring,
+)
 from ..pipeline_utils import DiffusionPipeline
 from . import IFPipelineOutput
 from .safety_checker import IFSafetyChecker
@@ -57,8 +62,7 @@ def resize(images: PIL.Image.Image, img_size: int) -> PIL.Image.Image:
     else:
         h = int(round(img_size / 8 / coef) * 8)
 
-    images = images.resize(
-        (w, h), resample=PIL_INTERPOLATION["bicubic"], reducing_gap=None)
+    images = images.resize((w, h), resample=PIL_INTERPOLATION["bicubic"], reducing_gap=None)
 
     return images
 
@@ -132,8 +136,8 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
     watermarker: Optional[IFWatermarker]
 
     bad_punct_regex = re.compile(
-        r"[" + "#®•©™&@·º½¾¿¡§~" + "\)" + "\(" + "\]" + "\[" + "\}" + "\{" +
-        "\|" + "\\" + "\/" + "\*" + r"]{1,}")  # noqa
+        r"[" + "#®•©™&@·º½¾¿¡§~" + "\)" + "\(" + "\]" + "\[" + "\}" + "\{" + "\|" + "\\" + "\/" + "\*" + r"]{1,}"
+    )  # noqa
 
     _optional_components = [
         "tokenizer",
@@ -144,16 +148,17 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
     ]
 
     def __init__(
-            self,
-            tokenizer: T5Tokenizer,
-            text_encoder: T5EncoderModel,
-            unet: UNet2DConditionModel,
-            scheduler: DDPMScheduler,
-            image_noising_scheduler: DDPMScheduler,
-            safety_checker: Optional[IFSafetyChecker],
-            feature_extractor: Optional[CLIPImageProcessor],
-            watermarker: Optional[IFWatermarker],
-            requires_safety_checker: bool=True, ):
+        self,
+        tokenizer: T5Tokenizer,
+        text_encoder: T5EncoderModel,
+        unet: UNet2DConditionModel,
+        scheduler: DDPMScheduler,
+        image_noising_scheduler: DDPMScheduler,
+        safety_checker: Optional[IFSafetyChecker],
+        feature_extractor: Optional[CLIPImageProcessor],
+        watermarker: Optional[IFWatermarker],
+        requires_safety_checker: bool = True,
+    ):
         super().__init__()
 
         if safety_checker is None and requires_safety_checker:
@@ -185,20 +190,19 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             image_noising_scheduler=image_noising_scheduler,
             safety_checker=safety_checker,
             feature_extractor=feature_extractor,
-            watermarker=watermarker, )
+            watermarker=watermarker,
+        )
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     # Copied from ppdiffusers.pipelines.deepfloyd_if.pipeline_if.IFPipeline._text_preprocessing
     def _text_preprocessing(self, text, clean_caption=False):
         if clean_caption and not is_bs4_available():
-            logger.warn(BACKENDS_MAPPING["bs4"][-1].format(
-                "Setting `clean_caption=True`"))
+            logger.warn(BACKENDS_MAPPING["bs4"][-1].format("Setting `clean_caption=True`"))
             logger.warn("Setting `clean_caption` to False...")
             clean_caption = False
 
         if clean_caption and not is_ftfy_available():
-            logger.warn(BACKENDS_MAPPING["ftfy"][-1].format(
-                "Setting `clean_caption=True`"))
+            logger.warn(BACKENDS_MAPPING["ftfy"][-1].format("Setting `clean_caption=True`"))
             logger.warn("Setting `clean_caption` to False...")
             clean_caption = False
 
@@ -225,11 +229,13 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         caption = re.sub(
             r"\b((?:https?:(?:\/{1,3}|[a-zA-Z0-9%])|[a-zA-Z0-9.\-]+[.](?:com|co|ru|net|org|edu|gov|it)[\w/-]*\b\/?(?!@)))",  # noqa
             "",
-            caption, )  # regex for urls
+            caption,
+        )  # regex for urls
         caption = re.sub(
             r"\b((?:www:(?:\/{1,3}|[a-zA-Z0-9%])|[a-zA-Z0-9.\-]+[.](?:com|co|ru|net|org|edu|gov|it)[\w/-]*\b\/?(?!@)))",  # noqa
             "",
-            caption, )  # regex for urls
+            caption,
+        )  # regex for urls
         # html:
         caption = BeautifulSoup(caption, features="html.parser").text
 
@@ -256,7 +262,8 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         caption = re.sub(
             r"[\u002D\u058A\u05BE\u1400\u1806\u2010-\u2015\u2E17\u2E1A\u2E3A\u2E3B\u2E40\u301C\u3030\u30A0\uFE31\uFE32\uFE58\uFE63\uFF0D]+",  # noqa
             "-",
-            caption, )
+            caption,
+        )
 
         # кавычки к одному стандарту
         caption = re.sub(r"[`´«»“”¨]", '"', caption)
@@ -283,15 +290,13 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         # "123456.."
         caption = re.sub(r"\b\d{6,}\b", "", caption)
         # filenames:
-        caption = re.sub(r"[\S]+\.(?:png|jpg|jpeg|bmp|webp|eps|pdf|apk|mp4)",
-                         "", caption)
+        caption = re.sub(r"[\S]+\.(?:png|jpg|jpeg|bmp|webp|eps|pdf|apk|mp4)", "", caption)
 
         #
         caption = re.sub(r"[\"\']{2,}", r'"', caption)  # """AUSVERKAUFT"""
         caption = re.sub(r"[\.]{2,}", r" ", caption)  # """AUSVERKAUFT"""
 
-        caption = re.sub(self.bad_punct_regex, r" ",
-                         caption)  # ***AUSVERKAUFT***, #AUSVERKAUFT
+        caption = re.sub(self.bad_punct_regex, r" ", caption)  # ***AUSVERKAUFT***, #AUSVERKAUFT
         caption = re.sub(r"\s+\.\s+", r" ", caption)  # " . "
 
         # this-is-my-cute-cat / this_is_my_cute_cat
@@ -309,13 +314,10 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         caption = re.sub(r"(worldwide\s+)?(free\s+)?shipping", "", caption)
         caption = re.sub(r"(free\s)?download(\sfree)?", "", caption)
         caption = re.sub(r"\bclick\b\s(?:for|on)\s\w+", "", caption)
-        caption = re.sub(
-            r"\b(?:png|jpg|jpeg|bmp|webp|eps|pdf|apk|mp4)(\simage[s]?)?", "",
-            caption)
+        caption = re.sub(r"\b(?:png|jpg|jpeg|bmp|webp|eps|pdf|apk|mp4)(\simage[s]?)?", "", caption)
         caption = re.sub(r"\bpage\s+\d+\b", "", caption)
 
-        caption = re.sub(r"\b\d*[a-zA-Z]+\d+[a-zA-Z]+\d+[a-zA-Z\d]*\b", r" ",
-                         caption)  # j2d1a2a...
+        caption = re.sub(r"\b\d*[a-zA-Z]+\d+[a-zA-Z]+\d+[a-zA-Z\d]*\b", r" ", caption)  # j2d1a2a...
 
         caption = re.sub(r"\b\d+\.?\d*[xх×]\d+\.?\d*\b", "", caption)
 
@@ -335,14 +337,15 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
     @paddle.no_grad()
     # Copied from ppdiffusers.pipelines.deepfloyd_if.pipeline_if.IFPipeline.encode_prompt
     def encode_prompt(
-            self,
-            prompt,
-            do_classifier_free_guidance=True,
-            num_images_per_prompt=1,
-            negative_prompt=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            clean_caption: bool=False, ):
+        self,
+        prompt,
+        do_classifier_free_guidance=True,
+        num_images_per_prompt=1,
+        negative_prompt=None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        clean_caption: bool = False,
+    ):
         r"""
         Encodes the prompt into text encoder hidden states.
 
@@ -369,7 +372,8 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             if type(prompt) is not type(negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}.")
+                    f" {type(prompt)}."
+                )
 
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
@@ -382,31 +386,31 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         max_length = 77
 
         if prompt_embeds is None:
-            prompt = self._text_preprocessing(
-                prompt, clean_caption=clean_caption)
+            prompt = self._text_preprocessing(prompt, clean_caption=clean_caption)
             text_inputs = self.tokenizer(
                 prompt,
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
                 add_special_tokens=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_input_ids = text_inputs.input_ids
-            untruncated_ids = self.tokenizer(
-                prompt, padding="longest", return_tensors="pd").input_ids
+            untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                    -1] and not paddle.equal_all(text_input_ids,
-                                                 untruncated_ids):
-                removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, max_length - 1:-1])
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+                text_input_ids, untruncated_ids
+            ):
+                removed_text = self.tokenizer.batch_decode(untruncated_ids[:, max_length - 1 : -1])
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
-                    f" {max_length} tokens: {removed_text}")
+                    f" {max_length} tokens: {removed_text}"
+                )
             attention_mask = text_inputs.attention_mask
             prompt_embeds = self.text_encoder(
                 text_input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             prompt_embeds = prompt_embeds[0]
 
         if self.text_encoder is not None:
@@ -421,8 +425,7 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape(
-            [bs_embed * num_images_per_prompt, seq_len, -1])
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
@@ -435,12 +438,12 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
                 raise ValueError(
                     f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                     f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`.")
+                    " the batch size of `prompt`."
+                )
             else:
                 uncond_tokens = negative_prompt
 
-            uncond_tokens = self._text_preprocessing(
-                uncond_tokens, clean_caption=clean_caption)
+            uncond_tokens = self._text_preprocessing(uncond_tokens, clean_caption=clean_caption)
             max_length = prompt_embeds.shape[1]
             uncond_input = self.tokenizer(
                 uncond_tokens,
@@ -449,12 +452,14 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
                 truncation=True,
                 return_attention_mask=True,
                 add_special_tokens=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             attention_mask = uncond_input.attention_mask
 
             negative_prompt_embeds = self.text_encoder(
                 uncond_input.input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             negative_prompt_embeds = negative_prompt_embeds[0]
 
         if do_classifier_free_guidance:
@@ -464,10 +469,8 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             if dtype is not None:
                 negative_prompt_embeds = negative_prompt_embeds.cast(dtype)
 
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                [1, num_images_per_prompt, 1])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
+            negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
@@ -480,11 +483,11 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
     # Copied from ppdiffusers.pipelines.deepfloyd_if.pipeline_if.IFPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is not None:
-            safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors="pd")
+            safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, nsfw_detected, watermark_detected = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.cast(dtype), )
+                clip_input=safety_checker_input.pixel_values.cast(dtype),
+            )
         else:
             nsfw_detected = None
             watermark_detected = None
@@ -498,50 +501,48 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     def check_inputs(
-            self,
-            prompt,
-            image,
-            original_image,
-            mask_image,
-            batch_size,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        image,
+        original_image,
+        mask_image,
+        batch_size,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two.")
+                " only forward one of the two."
+            )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -554,7 +555,8 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
                 raise ValueError(
                     "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}.")
+                    f" {negative_prompt_embeds.shape}."
+                )
 
         # image
 
@@ -563,12 +565,15 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         else:
             check_image_type = image
 
-        if (not isinstance(check_image_type, paddle.Tensor) and
-                not isinstance(check_image_type, PIL.Image.Image) and
-                not isinstance(check_image_type, np.ndarray)):
+        if (
+            not isinstance(check_image_type, paddle.Tensor)
+            and not isinstance(check_image_type, PIL.Image.Image)
+            and not isinstance(check_image_type, np.ndarray)
+        ):
             raise ValueError(
                 "`image` has to be of type `paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, or List[...] but is"
-                f" {type(check_image_type)}")
+                f" {type(check_image_type)}"
+            )
 
         if isinstance(image, list):
             image_batch_size = len(image)
@@ -582,9 +587,7 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             assert False
 
         if batch_size != image_batch_size:
-            raise ValueError(
-                f"image batch size: {image_batch_size} must be same as prompt batch size {batch_size}"
-            )
+            raise ValueError(f"image batch size: {image_batch_size} must be same as prompt batch size {batch_size}")
 
         # original_image
 
@@ -593,12 +596,15 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         else:
             check_image_type = original_image
 
-        if (not isinstance(check_image_type, paddle.Tensor) and
-                not isinstance(check_image_type, PIL.Image.Image) and
-                not isinstance(check_image_type, np.ndarray)):
+        if (
+            not isinstance(check_image_type, paddle.Tensor)
+            and not isinstance(check_image_type, PIL.Image.Image)
+            and not isinstance(check_image_type, np.ndarray)
+        ):
             raise ValueError(
                 "`original_image` has to be of type `paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, or List[...] but is"
-                f" {type(check_image_type)}")
+                f" {type(check_image_type)}"
+            )
 
         if isinstance(original_image, list):
             image_batch_size = len(original_image)
@@ -623,12 +629,15 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         else:
             check_image_type = mask_image
 
-        if (not isinstance(check_image_type, paddle.Tensor) and
-                not isinstance(check_image_type, PIL.Image.Image) and
-                not isinstance(check_image_type, np.ndarray)):
+        if (
+            not isinstance(check_image_type, paddle.Tensor)
+            and not isinstance(check_image_type, PIL.Image.Image)
+            and not isinstance(check_image_type, np.ndarray)
+        ):
             raise ValueError(
                 "`mask_image` has to be of type `paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, or List[...] but is"
-                f" {type(check_image_type)}")
+                f" {type(check_image_type)}"
+            )
 
         if isinstance(mask_image, list):
             image_batch_size = len(mask_image)
@@ -647,8 +656,7 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             )
 
     # Copied from ppdiffusers.pipelines.deepfloyd_if.pipeline_if_img2img.IFImg2ImgPipeline.preprocess_image with preprocess_image -> preprocess_original_image
-    def preprocess_original_image(self,
-                                  image: PIL.Image.Image) -> paddle.Tensor:
+    def preprocess_original_image(self, image: PIL.Image.Image) -> paddle.Tensor:
         if not isinstance(image, list):
             image = [image]
 
@@ -676,21 +684,16 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             image = numpy_to_pd(image)  # to pd
 
         elif isinstance(image[0], np.ndarray):
-            image = (np.concatenate(
-                image, axis=0) if image[0].ndim == 4 else np.stack(
-                    image, axis=0))
+            image = np.concatenate(image, axis=0) if image[0].ndim == 4 else np.stack(image, axis=0)
             image = numpy_to_pd(image)
 
         elif isinstance(image[0], paddle.Tensor):
-            image = (paddle.concat(
-                image, axis=0) if image[0].ndim == 4 else paddle.stack(
-                    image, axis=0))
+            image = paddle.concat(image, axis=0) if image[0].ndim == 4 else paddle.stack(image, axis=0)
 
         return image
 
     # Copied from ppdiffusers.pipelines.deepfloyd_if.pipeline_if_superresolution.IFSuperResolutionPipeline.preprocess_image
-    def preprocess_image(self, image: PIL.Image.Image,
-                         num_images_per_prompt) -> paddle.Tensor:
+    def preprocess_image(self, image: PIL.Image.Image, num_images_per_prompt) -> paddle.Tensor:
         if not isinstance(image, paddle.Tensor) and not isinstance(image, list):
             image = [image]
 
@@ -713,8 +716,7 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             elif dims == 4:
                 image = paddle.concat(image, axis=0)
             else:
-                raise ValueError(
-                    f"Image must have 3 or 4 dimensions, instead got {dims}")
+                raise ValueError(f"Image must have 3 or 4 dimensions, instead got {dims}")
 
         image = image.cast(self.unet.dtype)
 
@@ -728,10 +730,9 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             mask_image = [mask_image]
 
         if isinstance(mask_image[0], paddle.Tensor):
-            mask_image = (paddle.concat(
-                mask_image, axis=0)
-                          if mask_image[0].ndim == 4 else paddle.stack(
-                              mask_image, axis=0))
+            mask_image = (
+                paddle.concat(mask_image, axis=0) if mask_image[0].ndim == 4 else paddle.stack(mask_image, axis=0)
+            )
 
             if mask_image.ndim == 2:
                 # Batch and add channel dim for single mask
@@ -767,8 +768,7 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             mask_image = paddle.to_tensor(mask_image)
 
         elif isinstance(mask_image[0], np.ndarray):
-            mask_image = np.concatenate(
-                [m[None, None, :] for m in mask_image], axis=0)
+            mask_image = np.concatenate([m[None, None, :] for m in mask_image], axis=0)
 
             mask_image[mask_image < 0.5] = 0
             mask_image[mask_image >= 0.5] = 1
@@ -779,8 +779,7 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
     # Copied from ppdiffusers.pipelines.deepfloyd_if.pipeline_if_img2img.IFImg2ImgPipeline.get_timesteps
     def get_timesteps(self, num_inference_steps, strength):
         # get the original timestep using init_timestep
-        init_timestep = min(
-            int(num_inference_steps * strength), num_inference_steps)
+        init_timestep = min(int(num_inference_steps * strength), num_inference_steps)
 
         t_start = max(num_inference_steps - init_timestep, 0)
         timesteps = self.scheduler.timesteps[t_start:]
@@ -789,14 +788,15 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
 
     # Copied from ppdiffusers.pipelines.deepfloyd_if.pipeline_if_inpainting.IFInpaintingPipeline.prepare_intermediate_images
     def prepare_intermediate_images(
-            self,
-            image,
-            timestep,
-            batch_size,
-            num_images_per_prompt,
-            dtype,
-            mask_image,
-            generator=None, ):
+        self,
+        image,
+        timestep,
+        batch_size,
+        num_images_per_prompt,
+        dtype,
+        mask_image,
+        generator=None,
+    ):
         image_batch_size, channels, height, width = image.shape
 
         batch_size = batch_size * num_images_per_prompt
@@ -821,32 +821,43 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
-            self,
-            image: Union[PIL.Image.Image, np.ndarray, paddle.Tensor],
-            original_image: Union[PIL.Image.Image, paddle.Tensor, np.ndarray,
-                                  List[PIL.Image.Image], List[
-                                      paddle.Tensor], List[np.ndarray], ]=None,
-            mask_image: Union[PIL.Image.Image, paddle.Tensor, np.ndarray, List[
-                PIL.Image.Image], List[paddle.Tensor], List[np.ndarray], ]=None,
-            strength: float=0.8,
-            prompt: Union[str, List[str]]=None,
-            num_inference_steps: int=100,
-            timesteps: List[int]=None,
-            guidance_scale: float=4.0,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: int=1,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None,
-            noise_level: int=0,
-            clean_caption: bool=True, ):
+        self,
+        image: Union[PIL.Image.Image, np.ndarray, paddle.Tensor],
+        original_image: Union[
+            PIL.Image.Image,
+            paddle.Tensor,
+            np.ndarray,
+            List[PIL.Image.Image],
+            List[paddle.Tensor],
+            List[np.ndarray],
+        ] = None,
+        mask_image: Union[
+            PIL.Image.Image,
+            paddle.Tensor,
+            np.ndarray,
+            List[PIL.Image.Image],
+            List[paddle.Tensor],
+            List[np.ndarray],
+        ] = None,
+        strength: float = 0.8,
+        prompt: Union[str, List[str]] = None,
+        num_inference_steps: int = 100,
+        timesteps: List[int] = None,
+        guidance_scale: float = 4.0,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: int = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        noise_level: int = 0,
+        clean_caption: bool = True,
+    ):
         """
         Function invoked when calling the pipeline for generation.
 
@@ -948,7 +959,8 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             callback_steps,
             negative_prompt,
             prompt_embeds,
-            negative_prompt_embeds, )
+            negative_prompt_embeds,
+        )
 
         # 2. Define call parameters
 
@@ -965,11 +977,11 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             negative_prompt=negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
-            clean_caption=clean_caption, )
+            clean_caption=clean_caption,
+        )
 
         if do_classifier_free_guidance:
-            prompt_embeds = paddle.concat(
-                [negative_prompt_embeds, prompt_embeds])
+            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
 
         dtype = prompt_embeds.dtype
 
@@ -982,8 +994,7 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             self.scheduler.set_timesteps(num_inference_steps)
             timesteps = self.scheduler.timesteps
 
-        timesteps, num_inference_steps = self.get_timesteps(num_inference_steps,
-                                                            strength)
+        timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength)
 
         # 5. prepare original image
         original_image = self.preprocess_original_image(original_image)
@@ -994,16 +1005,13 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         mask_image = mask_image.cast(dtype)
 
         if mask_image.shape[0] == 1:
-            mask_image = mask_image.repeat_interleave(
-                batch_size * num_images_per_prompt, axis=0)
+            mask_image = mask_image.repeat_interleave(batch_size * num_images_per_prompt, axis=0)
         else:
-            mask_image = mask_image.repeat_interleave(
-                num_images_per_prompt, axis=0)
+            mask_image = mask_image.repeat_interleave(num_images_per_prompt, axis=0)
 
         # 6. Prepare intermediate images
         noise_timestep = timesteps[0:1]
-        noise_timestep = noise_timestep.tile(
-            (batch_size * num_images_per_prompt, ))
+        noise_timestep = noise_timestep.tile((batch_size * num_images_per_prompt,))
 
         intermediate_images = self.prepare_intermediate_images(
             original_image,
@@ -1012,21 +1020,19 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             num_images_per_prompt,
             dtype,
             mask_image,
-            generator, )
+            generator,
+        )
 
         # 7. Prepare upscaled image and noise level
         _, _, height, width = original_image.shape
 
         image = self.preprocess_image(image, num_images_per_prompt)
 
-        upscaled = F.interpolate(
-            image, (height, width), mode="bilinear", align_corners=True)
+        upscaled = F.interpolate(image, (height, width), mode="bilinear", align_corners=True)
 
         noise_level = paddle.to_tensor([noise_level] * upscaled.shape[0])
-        noise = randn_tensor(
-            upscaled.shape, generator=generator, dtype=upscaled.dtype)
-        upscaled = self.image_noising_scheduler.add_noise(
-            upscaled, noise, timesteps=noise_level)
+        noise = randn_tensor(upscaled.shape, generator=generator, dtype=upscaled.dtype)
+        upscaled = self.image_noising_scheduler.add_noise(upscaled, noise, timesteps=noise_level)
 
         if do_classifier_free_guidance:
             noise_level = paddle.concat([noise_level] * 2)
@@ -1035,19 +1041,15 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 9. Denoising loop
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 model_input = paddle.concat(
-                    [
-                        intermediate_images,
-                        upscaled.cast(intermediate_images.dtype)
-                    ],
-                    axis=1, )
+                    [intermediate_images, upscaled.cast(intermediate_images.dtype)],
+                    axis=1,
+                )
 
-                model_input = (paddle.concat([model_input] * 2)
-                               if do_classifier_free_guidance else model_input)
+                model_input = paddle.concat([model_input] * 2) if do_classifier_free_guidance else model_input
                 model_input = self.scheduler.scale_model_input(model_input, t)
 
                 # predict the noise residual
@@ -1056,7 +1058,8 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
                     t,
                     encoder_hidden_states=prompt_embeds,
                     class_labels=noise_level,
-                    cross_attention_kwargs=cross_attention_kwargs, ).sample
+                    cross_attention_kwargs=cross_attention_kwargs,
+                ).sample
 
                 # perform guidance
                 if do_classifier_free_guidance:
@@ -1064,37 +1067,31 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
                     noise_pred_uncond, _ = noise_pred_uncond.split(
                         [
                             model_input.shape[1] // 2,
-                            noise_pred_uncond.shape[1] - model_input.shape[1] //
-                            2,
+                            noise_pred_uncond.shape[1] - model_input.shape[1] // 2,
                         ],
-                        axis=1, )
+                        axis=1,
+                    )
                     noise_pred_text, predicted_variance = noise_pred_text.split(
                         [
                             model_input.shape[1] // 2,
-                            noise_pred_text.shape[1] - model_input.shape[1] //
-                            2,
+                            noise_pred_text.shape[1] - model_input.shape[1] // 2,
                         ],
-                        axis=1, )
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
-                    noise_pred = paddle.concat(
-                        [noise_pred, predicted_variance], axis=1)
+                        axis=1,
+                    )
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                    noise_pred = paddle.concat([noise_pred, predicted_variance], axis=1)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 prev_intermediate_images = intermediate_images
 
                 intermediate_images = self.scheduler.step(
-                    noise_pred, t, intermediate_images,
-                    **extra_step_kwargs).prev_sample
+                    noise_pred, t, intermediate_images, **extra_step_kwargs
+                ).prev_sample
 
-                intermediate_images = (
-                    1 - mask_image
-                ) * prev_intermediate_images + mask_image * intermediate_images
+                intermediate_images = (1 - mask_image) * prev_intermediate_images + mask_image * intermediate_images
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, intermediate_images)
@@ -1107,16 +1104,14 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             image = image.cpu().transpose([0, 2, 3, 1]).cast("float32").numpy()
 
             # 11. Run safety checker
-            image, nsfw_detected, watermark_detected = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, nsfw_detected, watermark_detected = self.run_safety_checker(image, prompt_embeds.dtype)
 
             # 12. Convert to PIL
             image = self.numpy_to_pil(image)
 
             # 13. Apply watermark
             if self.watermarker is not None:
-                self.watermarker.apply_watermark(image,
-                                                 self.unet.config.sample_size)
+                self.watermarker.apply_watermark(image, self.unet.config.sample_size)
         elif output_type == "pd":
             nsfw_detected = None
             watermark_detected = None
@@ -1127,8 +1122,7 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             image = image.cpu().transpose([0, 2, 3, 1]).cast("float32").numpy()
 
             # 11. Run safety checker
-            image, nsfw_detected, watermark_detected = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, nsfw_detected, watermark_detected = self.run_safety_checker(image, prompt_embeds.dtype)
 
         if not return_dict:
             return (image, nsfw_detected, watermark_detected)
@@ -1136,4 +1130,5 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         return IFPipelineOutput(
             images=image,
             nsfw_detected=nsfw_detected,
-            watermark_detected=watermark_detected, )
+            watermark_detected=watermark_detected,
+        )

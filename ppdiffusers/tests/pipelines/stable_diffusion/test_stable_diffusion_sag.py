@@ -20,8 +20,12 @@ import numpy as np
 import paddle
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
-from ppdiffusers import (AutoencoderKL, DDIMScheduler,
-                         StableDiffusionSAGPipeline, UNet2DConditionModel)
+from ppdiffusers import (
+    AutoencoderKL,
+    DDIMScheduler,
+    StableDiffusionSAGPipeline,
+    UNet2DConditionModel,
+)
 from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
@@ -29,8 +33,7 @@ from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
 
 
-class StableDiffusionSAGPipelineFastTests(PipelineTesterMixin,
-                                          unittest.TestCase):
+class StableDiffusionSAGPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionSAGPipeline
     test_cpu_offload = False
     params = TEXT_TO_IMAGE_PARAMS
@@ -46,13 +49,15 @@ class StableDiffusionSAGPipelineFastTests(PipelineTesterMixin,
             out_channels=4,
             down_block_types=("DownBlock2D", "CrossAttnDownBlock2D"),
             up_block_types=("CrossAttnUpBlock2D", "UpBlock2D"),
-            cross_attention_dim=32, )
+            cross_attention_dim=32,
+        )
         scheduler = DDIMScheduler(
             beta_start=0.00085,
             beta_end=0.012,
             beta_schedule="scaled_linear",
             clip_sample=False,
-            set_alpha_to_one=False, )
+            set_alpha_to_one=False,
+        )
         paddle.seed(0)
         vae = AutoencoderKL(
             block_out_channels=[32, 64],
@@ -60,7 +65,8 @@ class StableDiffusionSAGPipelineFastTests(PipelineTesterMixin,
             out_channels=3,
             down_block_types=["DownEncoderBlock2D", "DownEncoderBlock2D"],
             up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D"],
-            latent_channels=4, )
+            latent_channels=4,
+        )
         paddle.seed(0)
         text_encoder_config = CLIPTextConfig(
             bos_token_id=0,
@@ -71,10 +77,10 @@ class StableDiffusionSAGPipelineFastTests(PipelineTesterMixin,
             num_attention_heads=4,
             num_hidden_layers=5,
             pad_token_id=1,
-            vocab_size=1000, )
+            vocab_size=1000,
+        )
         text_encoder = CLIPTextModel(text_encoder_config).eval()
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         components = {
             "unet": unet,
             "scheduler": scheduler,
@@ -109,8 +115,7 @@ class StableDiffusionPipelineIntegrationTests(unittest.TestCase):
         paddle.device.cuda.empty_cache()
 
     def test_stable_diffusion_1(self):
-        sag_pipe = StableDiffusionSAGPipeline.from_pretrained(
-            "CompVis/stable-diffusion-v1-4")
+        sag_pipe = StableDiffusionSAGPipeline.from_pretrained("CompVis/stable-diffusion-v1-4")
         sag_pipe.set_progress_bar_config(disable=None)
         prompt = "."
         generator = paddle.Generator().manual_seed(0)
@@ -120,26 +125,28 @@ class StableDiffusionPipelineIntegrationTests(unittest.TestCase):
             guidance_scale=7.5,
             sag_scale=1.0,
             num_inference_steps=20,
-            output_type="np", )
+            output_type="np",
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 512, 512, 3)
-        expected_slice = np.array([
-            0.7477613,
-            0.76045597,
-            0.7464366,
-            0.778965,
-            0.75718963,
-            0.7487634,
-            0.77530396,
-            0.77426934,
-            0.7749926,
-        ])
+        expected_slice = np.array(
+            [
+                0.7477613,
+                0.76045597,
+                0.7464366,
+                0.778965,
+                0.75718963,
+                0.7487634,
+                0.77530396,
+                0.77426934,
+                0.7749926,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05
 
     def test_stable_diffusion_2(self):
-        sag_pipe = StableDiffusionSAGPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-2-1-base")
+        sag_pipe = StableDiffusionSAGPipeline.from_pretrained("stabilityai/stable-diffusion-2-1-base")
         sag_pipe.set_progress_bar_config(disable=None)
         prompt = "."
         generator = paddle.Generator().manual_seed(0)
@@ -149,19 +156,22 @@ class StableDiffusionPipelineIntegrationTests(unittest.TestCase):
             guidance_scale=7.5,
             sag_scale=1.0,
             num_inference_steps=20,
-            output_type="np", )
+            output_type="np",
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 512, 512, 3)
-        expected_slice = np.array([
-            0.8771595,
-            0.8521123,
-            0.8644101,
-            0.8680052,
-            0.8700466,
-            0.8897612,
-            0.87766427,
-            0.8636212,
-            0.86829203,
-        ])
+        expected_slice = np.array(
+            [
+                0.8771595,
+                0.8521123,
+                0.8644101,
+                0.8680052,
+                0.8700466,
+                0.8897612,
+                0.87766427,
+                0.8636212,
+                0.86829203,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05

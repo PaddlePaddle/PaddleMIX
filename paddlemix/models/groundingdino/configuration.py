@@ -17,6 +17,8 @@ from typing import Union
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
+from paddlemix.utils.log import logger
+
 __all__ = ["GroundingDinoConfig"]
 
 
@@ -25,50 +27,51 @@ class GroundingDinoConfig(PretrainedConfig):
     model_type = "groundingdino"
 
     def __init__(
-            self,
-            modelname="groundingdino",
-            backbone="swin_T_224_1k",
-            position_embedding="sine",
-            pe_temperatureH=20,
-            pe_temperatureW=20,
-            return_interm_indices=[1, 2, 3],
-            backbone_freeze_keywords=None,
-            enc_layers=6,
-            dec_layers=6,
-            pre_norm=False,
-            dim_feedforward=2048,
-            hidden_dim=256,
-            dropout=0.0,
-            nheads=8,
-            num_queries=900,
-            query_dim=4,
-            num_patterns=0,
-            num_feature_levels=4,
-            enc_n_points=4,
-            dec_n_points=4,
-            two_stage_type="standard",
-            two_stage_bbox_embed_share=False,
-            two_stage_class_embed_share=False,
-            transformer_activation="relu",
-            dec_pred_bbox_embed_share=True,
-            dn_box_noise_scale=1.0,
-            dn_label_noise_ratio=0.5,
-            dn_label_coef=1.0,
-            dn_bbox_coef=1.0,
-            embed_init_tgt=True,
-            dn_labelbook_size=2000,
-            max_text_len=256,
-            text_encoder_type="bert-base-uncased",
-            use_text_enhancer=True,
-            use_fusion_layer=True,
-            use_checkpoint=False,
-            use_transformer_ckpt=False,
-            use_text_cross_attention=True,
-            text_dropout=0.0,
-            fusion_dropout=0.0,
-            fusion_droppath=0.1,
-            sub_sentence_present=True,
-            **kwargs, ):
+        self,
+        modelname="groundingdino",
+        backbone="swin_T_224_1k",
+        position_embedding="sine",
+        pe_temperatureH=20,
+        pe_temperatureW=20,
+        return_interm_indices=[1, 2, 3],
+        backbone_freeze_keywords=None,
+        enc_layers=6,
+        dec_layers=6,
+        pre_norm=False,
+        dim_feedforward=2048,
+        hidden_dim=256,
+        dropout=0.0,
+        nheads=8,
+        num_queries=900,
+        query_dim=4,
+        num_patterns=0,
+        num_feature_levels=4,
+        enc_n_points=4,
+        dec_n_points=4,
+        two_stage_type="standard",
+        two_stage_bbox_embed_share=False,
+        two_stage_class_embed_share=False,
+        transformer_activation="relu",
+        dec_pred_bbox_embed_share=True,
+        dn_box_noise_scale=1.0,
+        dn_label_noise_ratio=0.5,
+        dn_label_coef=1.0,
+        dn_bbox_coef=1.0,
+        embed_init_tgt=True,
+        dn_labelbook_size=2000,
+        max_text_len=256,
+        text_encoder_type="bert-base-uncased",
+        use_text_enhancer=True,
+        use_fusion_layer=True,
+        use_checkpoint=False,
+        use_transformer_ckpt=False,
+        use_text_cross_attention=True,
+        text_dropout=0.0,
+        fusion_dropout=0.0,
+        fusion_droppath=0.1,
+        sub_sentence_present=True,
+        **kwargs,
+    ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
         self.modelname = modelname
@@ -115,14 +118,10 @@ class GroundingDinoConfig(PretrainedConfig):
         self.sub_sentence_present = sub_sentence_present
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
-                                                  **kwargs)
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
 
-        if ("model_type" in config_dict and hasattr(cls, "model_type") and
-                config_dict["model_type"] != cls.model_type):
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."

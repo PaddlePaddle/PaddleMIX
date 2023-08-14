@@ -19,26 +19,31 @@ import unittest
 import paddle
 
 from ppdiffusers import (
-    IFImg2ImgPipeline, IFImg2ImgSuperResolutionPipeline, IFInpaintingPipeline,
-    IFInpaintingSuperResolutionPipeline, IFPipeline, IFSuperResolutionPipeline)
+    IFImg2ImgPipeline,
+    IFImg2ImgSuperResolutionPipeline,
+    IFInpaintingPipeline,
+    IFInpaintingSuperResolutionPipeline,
+    IFPipeline,
+    IFSuperResolutionPipeline,
+)
 from ppdiffusers.models.attention_processor import AttnAddedKVProcessor
-from ppdiffusers.utils.testing_utils import (floats_tensor, load_numpy,
-                                             require_paddle_gpu, slow)
+from ppdiffusers.utils.testing_utils import (
+    floats_tensor,
+    load_numpy,
+    require_paddle_gpu,
+    slow,
+)
 
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
-from ..test_pipelines_common import (PipelineTesterMixin,
-                                     assert_mean_pixel_difference)
+from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
 from . import IFPipelineTesterMixin
 
 
-class IFPipelineFastTests(PipelineTesterMixin, IFPipelineTesterMixin,
-                          unittest.TestCase):
+class IFPipelineFastTests(PipelineTesterMixin, IFPipelineTesterMixin, unittest.TestCase):
     pipeline_class = IFPipeline
     params = TEXT_TO_IMAGE_PARAMS - {"width", "height", "latents"}
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
-    required_optional_params = PipelineTesterMixin.required_optional_params - {
-        "latents"
-    }
+    required_optional_params = PipelineTesterMixin.required_optional_params - {"latents"}
 
     def get_dummy_components(self):
         return self._get_dummy_components()
@@ -69,11 +74,12 @@ class IFPipelineFastTests(PipelineTesterMixin, IFPipelineTesterMixin,
         self._test_save_load_local()
 
     def test_inference_batch_single_identical(self):
-        self._test_inference_batch_single_identical(expected_max_diff=1e-2, )
+        self._test_inference_batch_single_identical(
+            expected_max_diff=1e-2,
+        )
 
     def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(
-            expected_max_diff=1e-3)
+        self._test_xformers_attention_forwardGenerator_pass(expected_max_diff=1e-3)
 
 
 @slow
@@ -88,24 +94,21 @@ class IFPipelineSlowTests(unittest.TestCase):
     def test_all(self):
         # if
 
-        pipe_1 = IFPipeline.from_pretrained(
-            "DeepFloyd/IF-I-XL-v1.0",
-            variant="fp16",
-            paddle_dtype=paddle.float16)
+        pipe_1 = IFPipeline.from_pretrained("DeepFloyd/IF-I-XL-v1.0", variant="fp16", paddle_dtype=paddle.float16)
 
         pipe_2 = IFSuperResolutionPipeline.from_pretrained(
             "DeepFloyd/IF-II-L-v1.0",
             variant="fp16",
             paddle_dtype=paddle.float16,
             text_encoder=None,
-            tokenizer=None, )
+            tokenizer=None,
+        )
 
         # pre compute text embeddings and remove T5 to save memory
 
         pipe_1.text_encoder
 
-        prompt_embeds, negative_prompt_embeds = pipe_1.encode_prompt(
-            "anime turtle")
+        prompt_embeds, negative_prompt_embeds = pipe_1.encode_prompt("anime turtle")
 
         del pipe_1.tokenizer
         del pipe_1.text_encoder
@@ -136,8 +139,7 @@ class IFPipelineSlowTests(unittest.TestCase):
         pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
         pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
 
-        self._test_if_img2img(pipe_1, pipe_2, prompt_embeds,
-                              negative_prompt_embeds)
+        self._test_if_img2img(pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds)
 
         pipe_1.remove_all_hooks()
         pipe_2.remove_all_hooks()
@@ -153,8 +155,7 @@ class IFPipelineSlowTests(unittest.TestCase):
         pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
         pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
 
-        self._test_if_inpainting(pipe_1, pipe_2, prompt_embeds,
-                                 negative_prompt_embeds)
+        self._test_if_inpainting(pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds)
 
     def _test_if(self, pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds):
         # pipeline 1
@@ -165,7 +166,8 @@ class IFPipelineSlowTests(unittest.TestCase):
             negative_prompt_embeds=negative_prompt_embeds,
             num_inference_steps=2,
             generator=generator,
-            output_type="np", )
+            output_type="np",
+        )
 
         image = output.images[0]
 
@@ -191,7 +193,8 @@ class IFPipelineSlowTests(unittest.TestCase):
             image=image,
             generator=generator,
             num_inference_steps=2,
-            output_type="np", )
+            output_type="np",
+        )
 
         image = output.images[0]
 
@@ -205,8 +208,7 @@ class IFPipelineSlowTests(unittest.TestCase):
         )
         assert_mean_pixel_difference(image, expected_image)
 
-    def _test_if_img2img(self, pipe_1, pipe_2, prompt_embeds,
-                         negative_prompt_embeds):
+    def _test_if_img2img(self, pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds):
         # pipeline 1
 
         image = floats_tensor((1, 3, 64, 64), rng=random.Random(0))
@@ -219,7 +221,8 @@ class IFPipelineSlowTests(unittest.TestCase):
             image=image,
             num_inference_steps=2,
             generator=generator,
-            output_type="np", )
+            output_type="np",
+        )
 
         image = output.images[0]
 
@@ -247,7 +250,8 @@ class IFPipelineSlowTests(unittest.TestCase):
             original_image=original_image,
             generator=generator,
             num_inference_steps=2,
-            output_type="np", )
+            output_type="np",
+        )
 
         image = output.images[0]
 
@@ -261,8 +265,7 @@ class IFPipelineSlowTests(unittest.TestCase):
         )
         assert_mean_pixel_difference(image, expected_image)
 
-    def _test_if_inpainting(self, pipe_1, pipe_2, prompt_embeds,
-                            negative_prompt_embeds):
+    def _test_if_inpainting(self, pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds):
         # pipeline 1
 
         image = floats_tensor((1, 3, 64, 64), rng=random.Random(0))
@@ -276,7 +279,8 @@ class IFPipelineSlowTests(unittest.TestCase):
             mask_image=mask_image,
             num_inference_steps=2,
             generator=generator,
-            output_type="np", )
+            output_type="np",
+        )
 
         image = output.images[0]
 
@@ -306,7 +310,8 @@ class IFPipelineSlowTests(unittest.TestCase):
             original_image=original_image,
             generator=generator,
             num_inference_steps=2,
-            output_type="np", )
+            output_type="np",
+        )
 
         image = output.images[0]
 

@@ -40,9 +40,7 @@ def reorder_image(img, input_order="HWC"):
     """
 
     if input_order not in ["HWC", "CHW"]:
-        raise ValueError(
-            f"Wrong input_order {input_order}. Supported input_orders are "
-            "'HWC' and 'CHW'")
+        raise ValueError(f"Wrong input_order {input_order}. Supported input_orders are " "'HWC' and 'CHW'")
     if len(img.shape) == 2:
         img = img[..., None]
     if input_order == "CHW":
@@ -68,12 +66,9 @@ def calculate_psnr(img, img2, crop_border, input_order="HWC", **kwargs):
         float: psnr result.
     """
 
-    assert (img.shape == img2.shape
-            ), f"Image shapes are different: {img.shape}, {img2.shape}."
+    assert img.shape == img2.shape, f"Image shapes are different: {img.shape}, {img2.shape}."
     if input_order not in ["HWC", "CHW"]:
-        raise ValueError(
-            f"Wrong input_order {input_order}. Supported input_orders are "
-            '"HWC" and "CHW"')
+        raise ValueError(f"Wrong input_order {input_order}. Supported input_orders are " '"HWC" and "CHW"')
     img = reorder_image(img, input_order=input_order)
     img2 = reorder_image(img2, input_order=input_order)
     img = img.astype(np.float64)
@@ -83,7 +78,7 @@ def calculate_psnr(img, img2, crop_border, input_order="HWC", **kwargs):
         img = img[crop_border:-crop_border, crop_border:-crop_border, ...]
         img2 = img2[crop_border:-crop_border, crop_border:-crop_border, ...]
 
-    mse = np.mean((img - img2)**2)
+    mse = np.mean((img - img2) ** 2)
     if mse == 0:
         return float("inf")
     return 20.0 * np.log10(255.0 / np.sqrt(mse))
@@ -102,8 +97,8 @@ def _ssim(img, img2):
         float: ssim result.
     """
 
-    c1 = (0.01 * 255)**2
-    c2 = (0.03 * 255)**2
+    c1 = (0.01 * 255) ** 2
+    c2 = (0.03 * 255) ** 2
 
     img = img.astype(np.float64)
     img2 = img2.astype(np.float64)
@@ -119,8 +114,7 @@ def _ssim(img, img2):
     sigma2_sq = cv2.filter2D(img2**2, -1, window)[5:-5, 5:-5] - mu2_sq
     sigma12 = cv2.filter2D(img * img2, -1, window)[5:-5, 5:-5] - mu1_mu2
 
-    ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / (
-        (mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
+    ssim_map = ((2 * mu1_mu2 + c1) * (2 * sigma12 + c2)) / ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
     return ssim_map.mean()
 
 
@@ -149,12 +143,9 @@ def calculate_ssim(img, img2, crop_border, input_order="HWC", **kwargs):
         float: ssim result.
     """
 
-    assert (img.shape == img2.shape
-            ), f"Image shapes are different: {img.shape}, {img2.shape}."
+    assert img.shape == img2.shape, f"Image shapes are different: {img.shape}, {img2.shape}."
     if input_order not in ["HWC", "CHW"]:
-        raise ValueError(
-            f"Wrong input_order {input_order}. Supported input_orders are "
-            '"HWC" and "CHW"')
+        raise ValueError(f"Wrong input_order {input_order}. Supported input_orders are " '"HWC" and "CHW"')
     img = reorder_image(img, input_order=input_order)
     img2 = reorder_image(img2, input_order=input_order)
     img = img.astype(np.float64)

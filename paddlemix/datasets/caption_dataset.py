@@ -33,25 +33,27 @@ class CaptionDataset(DatasetBuilder):
     """
 
     URL = "https://bj.bcebos.com/paddlemix/datasets/coco.tar.gz"
-    META_INFO = collections.namedtuple(
-        "META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
+    META_INFO = collections.namedtuple("META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
     MD5 = ""
     SPLITS = {
         "train": META_INFO(
             os.path.join("coco", "images"),
             os.path.join("coco", "annotations/coco_karpathy_train.json"),
             "",
-            "aa31ac474cf6250ebb81d18348a07ed8", ),
+            "aa31ac474cf6250ebb81d18348a07ed8",
+        ),
         "val": META_INFO(
             os.path.join("coco", "images"),
             os.path.join("coco", "annotations/coco_karpathy_val.json"),
             "",
-            "b273847456ef5580e33713b1f7de52a0", ),
+            "b273847456ef5580e33713b1f7de52a0",
+        ),
         "test": META_INFO(
             os.path.join("coco", "images"),
             os.path.join("coco", "annotations/coco_karpathy_test.json"),
             "",
-            "3ff34b0ef2db02d01c37399f6a2a6cd1", ),
+            "3ff34b0ef2db02d01c37399f6a2a6cd1",
+        ),
     }
 
     def _get_data(self, mode, **kwargs):
@@ -108,7 +110,6 @@ class CaptionDataset(DatasetBuilder):
             else:
                 yield_data = {
                     "image": image_path,
-                    "image_id": ann["image"].split("/")[-1].strip(".jpg")
-                    .split("_")[-1],
+                    "image_id": ann["image"].split("/")[-1].strip(".jpg").split("_")[-1],
                 }
             yield yield_data

@@ -33,7 +33,7 @@ def mkdir(path):
 def partition_list(arr, m):
     """split the list 'arr' into m pieces"""
     n = int(math.ceil(len(arr) / float(m)))
-    return [arr[i:i + n] for i in range(0, len(arr), n)]
+    return [arr[i : i + n] for i in range(0, len(arr), n)]
 
 
 def preprocess(im_path, transforms):
@@ -47,20 +47,21 @@ def preprocess(im_path, transforms):
 
 
 def predict(
-        model,
-        model_path,
-        transforms,
-        image_list,
-        image_dir=None,
-        save_dir="output",
-        aug_pred=False,
-        scales=1.0,
-        flip_horizontal=True,
-        flip_vertical=False,
-        is_slide=False,
-        stride=None,
-        crop_size=None,
-        custom_color=None, ):
+    model,
+    model_path,
+    transforms,
+    image_list,
+    image_dir=None,
+    save_dir="output",
+    aug_pred=False,
+    scales=1.0,
+    flip_horizontal=True,
+    flip_vertical=False,
+    is_slide=False,
+    stride=None,
+    crop_size=None,
+    custom_color=None,
+):
     """
     predict and visualize the image_list.
 
@@ -112,7 +113,8 @@ def predict(
                     flip_vertical=flip_vertical,
                     is_slide=is_slide,
                     stride=stride,
-                    crop_size=crop_size, )
+                    crop_size=crop_size,
+                )
             else:
                 pred, _ = infer.inference(
                     model,
@@ -120,7 +122,8 @@ def predict(
                     trans_info=data["trans_info"],
                     is_slide=is_slide,
                     stride=stride,
-                    crop_size=crop_size, )
+                    crop_size=crop_size,
+                )
             pred = paddle.squeeze(pred)
             pred = pred.numpy().astype("uint8")
 
@@ -133,16 +136,14 @@ def predict(
                 im_file = im_file[1:]
 
             # save added image
-            added_image = utils.visualize.visualize(
-                im_path, pred, color_map, weight=0.6)
+            added_image = utils.visualize.visualize(im_path, pred, color_map, weight=0.6)
             added_image_path = os.path.join(added_saved_dir, im_file)
             mkdir(added_image_path)
             cv2.imwrite(added_image_path, added_image)
 
             # save pseudo color prediction
             pred_mask = utils.visualize.get_pseudo_color_map(pred, color_map)
-            pred_saved_path = os.path.join(
-                pred_saved_dir, os.path.splitext(im_file)[0] + ".png")
+            pred_saved_path = os.path.join(pred_saved_dir, os.path.splitext(im_file)[0] + ".png")
             mkdir(pred_saved_path)
             pred_mask.save(pred_saved_path)
 
@@ -151,21 +152,22 @@ def predict(
 
 
 def quick_predict(
-        model,
-        model_path,
-        transforms,
-        image_list,
-        image_dir=None,
-        save_dir="output",
-        aug_pred=False,
-        scales=1.0,
-        flip_horizontal=True,
-        flip_vertical=False,
-        is_slide=False,
-        stride=None,
-        crop_size=None,
-        custom_color=None,
-        skip_save=True, ):
+    model,
+    model_path,
+    transforms,
+    image_list,
+    image_dir=None,
+    save_dir="output",
+    aug_pred=False,
+    scales=1.0,
+    flip_horizontal=True,
+    flip_vertical=False,
+    is_slide=False,
+    stride=None,
+    crop_size=None,
+    custom_color=None,
+    skip_save=True,
+):
     """
     predict and visualize the image_list.
 
@@ -218,7 +220,8 @@ def quick_predict(
                     flip_vertical=flip_vertical,
                     is_slide=is_slide,
                     stride=stride,
-                    crop_size=crop_size, )
+                    crop_size=crop_size,
+                )
             else:
                 pred, _ = infer.inference(
                     model,
@@ -226,7 +229,8 @@ def quick_predict(
                     trans_info=data["trans_info"],
                     is_slide=is_slide,
                     stride=stride,
-                    crop_size=crop_size, )
+                    crop_size=crop_size,
+                )
             pred = paddle.squeeze(pred)
             pred = pred.numpy().astype("uint8")
 
@@ -241,8 +245,7 @@ def quick_predict(
 
             # save added image
             if not skip_save:
-                added_image = utils.visualize.visualize(
-                    im_path, pred, color_map, weight=0.6)
+                added_image = utils.visualize.visualize(im_path, pred, color_map, weight=0.6)
                 added_image_path = os.path.join(added_saved_dir, im_file)
                 mkdir(added_image_path)
                 cv2.imwrite(added_image_path, added_image)
@@ -250,8 +253,7 @@ def quick_predict(
             # save pseudo color prediction
             pred_mask = utils.visualize.get_pseudo_color_map(pred, color_map)
             if not skip_save:
-                pred_saved_path = os.path.join(
-                    pred_saved_dir, os.path.splitext(im_file)[0] + ".png")
+                pred_saved_path = os.path.join(pred_saved_dir, os.path.splitext(im_file)[0] + ".png")
                 mkdir(pred_saved_path)
                 pred_mask.save(pred_saved_path)
 

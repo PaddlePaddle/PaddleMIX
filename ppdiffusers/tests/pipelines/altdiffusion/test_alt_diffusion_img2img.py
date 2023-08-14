@@ -22,11 +22,17 @@ import paddle
 from paddlenlp.transformers import XLMRobertaTokenizer
 
 import ppdiffusers  # noqa F401
-from ppdiffusers import (AltDiffusionImg2ImgPipeline, AutoencoderKL,
-                         PNDMScheduler, UNet2DConditionModel)
+from ppdiffusers import (
+    AltDiffusionImg2ImgPipeline,
+    AutoencoderKL,
+    PNDMScheduler,
+    UNet2DConditionModel,
+)
 from ppdiffusers.image_processor import VaeImageProcessor
 from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
-    RobertaSeriesConfig, RobertaSeriesModelWithTransformation)
+    RobertaSeriesConfig,
+    RobertaSeriesModelWithTransformation,
+)
 from ppdiffusers.utils import floats_tensor, load_image, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
@@ -42,8 +48,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         batch_size = 1
         num_channels = 3
         sizes = 32, 32
-        image = floats_tensor(
-            (batch_size, num_channels) + sizes, rng=random.Random(0))
+        image = floats_tensor((batch_size, num_channels) + sizes, rng=random.Random(0))
         return image
 
     @property
@@ -57,7 +62,8 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             out_channels=4,
             down_block_types=("DownBlock2D", "CrossAttnDownBlock2D"),
             up_block_types=("CrossAttnUpBlock2D", "UpBlock2D"),
-            cross_attention_dim=32, )
+            cross_attention_dim=32,
+        )
         return model
 
     @property
@@ -69,7 +75,8 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             out_channels=3,
             down_block_types=["DownEncoderBlock2D", "DownEncoderBlock2D"],
             up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D"],
-            latent_channels=4, )
+            latent_channels=4,
+        )
         return model
 
     @property
@@ -83,7 +90,8 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             num_attention_heads=4,
             num_hidden_layers=5,
             pad_token_id=1,
-            vocab_size=5006, )
+            vocab_size=5006,
+        )
         return RobertaSeriesModelWithTransformation(config)
 
     @property
@@ -106,8 +114,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         scheduler = PNDMScheduler(skip_prk_steps=True)
         vae = self.dummy_vae
         bert = self.dummy_text_encoder
-        tokenizer = XLMRobertaTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-xlm-roberta")
+        tokenizer = XLMRobertaTokenizer.from_pretrained("hf-internal-testing/tiny-xlm-roberta")
         tokenizer.model_max_length = 77
         init_image = self.dummy_image
         alt_pipe = AltDiffusionImg2ImgPipeline(
@@ -117,9 +124,9 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             text_encoder=bert,
             tokenizer=tokenizer,
             safety_checker=None,
-            feature_extractor=self.dummy_extractor, )
-        alt_pipe.image_processor = VaeImageProcessor(
-            vae_scale_factor=alt_pipe.vae_scale_factor)
+            feature_extractor=self.dummy_extractor,
+        )
+        alt_pipe.image_processor = VaeImageProcessor(vae_scale_factor=alt_pipe.vae_scale_factor)
         alt_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
@@ -129,7 +136,8 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             guidance_scale=6.0,
             num_inference_steps=2,
             output_type="np",
-            image=init_image, )
+            image=init_image,
+        )
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = alt_pipe(
@@ -139,24 +147,26 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             num_inference_steps=2,
             output_type="np",
             image=init_image,
-            return_dict=False, )[0]
+            return_dict=False,
+        )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        expected_slice = np.array([
-            0.48931587,
-            0.40102208,
-            0.49653798,
-            0.4203022,
-            0.34621224,
-            0.50789315,
-            0.41116416,
-            0.4933398,
-            0.5465742,
-        ])
+        expected_slice = np.array(
+            [
+                0.48931587,
+                0.40102208,
+                0.49653798,
+                0.4203022,
+                0.34621224,
+                0.50789315,
+                0.41116416,
+                0.4933398,
+                0.5465742,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.005
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.005
 
     def test_stable_diffusion_img2img_fp16(self):
         """Test that stable diffusion img2img works with fp16"""
@@ -164,8 +174,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         scheduler = PNDMScheduler(skip_prk_steps=True)
         vae = self.dummy_vae
         bert = self.dummy_text_encoder
-        tokenizer = XLMRobertaTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-xlm-roberta")
+        tokenizer = XLMRobertaTokenizer.from_pretrained("hf-internal-testing/tiny-xlm-roberta")
         tokenizer.model_max_length = 77
         init_image = self.dummy_image
         unet = unet.to(dtype=paddle.float16)
@@ -178,9 +187,9 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             text_encoder=bert,
             tokenizer=tokenizer,
             safety_checker=None,
-            feature_extractor=self.dummy_extractor, )
-        alt_pipe.image_processor = VaeImageProcessor(
-            vae_scale_factor=alt_pipe.vae_scale_factor)
+            feature_extractor=self.dummy_extractor,
+        )
+        alt_pipe.image_processor = VaeImageProcessor(vae_scale_factor=alt_pipe.vae_scale_factor)
         alt_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
@@ -189,7 +198,8 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             generator=generator,
             num_inference_steps=2,
             output_type="np",
-            image=init_image, ).images
+            image=init_image,
+        ).images
         assert image.shape == (1, 32, 32, 3)
 
     def test_stable_diffusion_img2img_pipeline_multiple_of_8(self):
@@ -198,8 +208,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         )
         init_image = init_image.resize((760, 504))
         model_id = "BAAI/AltDiffusion"
-        pipe = AltDiffusionImg2ImgPipeline.from_pretrained(
-            model_id, safety_checker=None)
+        pipe = AltDiffusionImg2ImgPipeline.from_pretrained(model_id, safety_checker=None)
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
         prompt = "A fantasy landscape, trending on artstation"
@@ -210,21 +219,24 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             strength=0.75,
             guidance_scale=7.5,
             generator=generator,
-            output_type="np", )
+            output_type="np",
+        )
         image = output.images[0]
         image_slice = image[255:258, 383:386, -1]
         assert image.shape == (504, 760, 3)
-        expected_slice = np.array([
-            0.3251649,
-            0.3340174,
-            0.3418343,
-            0.32628638,
-            0.33462793,
-            0.3300547,
-            0.31628466,
-            0.3470268,
-            0.34273332,
-        ])
+        expected_slice = np.array(
+            [
+                0.3251649,
+                0.3340174,
+                0.3418343,
+                0.32628638,
+                0.33462793,
+                0.3300547,
+                0.31628466,
+                0.3470268,
+                0.34273332,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
 
 
@@ -245,8 +257,7 @@ class AltDiffusionImg2ImgPipelineIntegrationTests(unittest.TestCase):
         #     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/img2img/fantasy_landscape_alt.npy"
         # )
         model_id = "BAAI/AltDiffusion"
-        pipe = AltDiffusionImg2ImgPipeline.from_pretrained(
-            model_id, safety_checker=None)
+        pipe = AltDiffusionImg2ImgPipeline.from_pretrained(model_id, safety_checker=None)
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
         prompt = "A fantasy landscape, trending on artstation"
@@ -257,19 +268,22 @@ class AltDiffusionImg2ImgPipelineIntegrationTests(unittest.TestCase):
             strength=0.75,
             guidance_scale=7.5,
             generator=generator,
-            output_type="np", )
+            output_type="np",
+        )
         image = output.images
         assert image.shape == (1, 512, 768, 3)
         image_slice = image[0, -3:, -3:, -1]
-        expected_slice = np.array([
-            0.09987255930900574,
-            0.09875822067260742,
-            0.12803134322166443,
-            0.10067081451416016,
-            0.1142435073852539,
-            0.11815103888511658,
-            0.14216548204421997,
-            0.16465380787849426,
-            0.15393462777137756,
-        ])
+        expected_slice = np.array(
+            [
+                0.09987255930900574,
+                0.09875822067260742,
+                0.12803134322166443,
+                0.10067081451416016,
+                0.1142435073852539,
+                0.11815103888511658,
+                0.14216548204421997,
+                0.16465380787849426,
+                0.15393462777137756,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01

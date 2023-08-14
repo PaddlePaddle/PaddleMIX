@@ -12,22 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import json
 import os
 import tempfile
-import unittest.mock as mock
-
-from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from requests.exceptions import HTTPError
 
 
 class ConfigTester(object):
-    def __init__(self,
-                 parent,
-                 config_class=None,
-                 has_text_modality=True,
-                 **kwargs):
+    def __init__(self, parent, config_class=None, has_text_modality=True, **kwargs):
         self.parent = parent
         self.config_class = config_class
         self.has_text_modality = has_text_modality

@@ -21,14 +21,26 @@ import numpy as np
 import PIL
 from paddlenlp.transformers.tokenizer_utils_base import TensorType
 
-from .image_processing_utils import (BaseImageProcessor, BatchFeature,
-                                     get_size_dict)
-from .image_transforms import (convert_to_rgb, normalize, rescale, resize,
-                               to_channel_dimension_format)
-from .image_utils import (ChannelDimension, ImageInput, PILImageResampling,
-                          is_batched, to_numpy_array, valid_images)
+from .image_processing_utils import BaseImageProcessor, BatchFeature, get_size_dict
+from .image_transforms import (
+    convert_to_rgb,
+    normalize,
+    rescale,
+    resize,
+    to_channel_dimension_format,
+)
+from .image_utils import (
+    ChannelDimension,
+    ImageInput,
+    PILImageResampling,
+    is_batched,
+    to_numpy_array,
+    valid_images,
+)
 
-__all__ = ["MiniGPT4ImageProcessor", ]
+__all__ = [
+    "MiniGPT4ImageProcessor",
+]
 
 
 class MiniGPT4ImageProcessor(BaseImageProcessor):
@@ -69,17 +81,18 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
     model_input_names = ["pixel_values"]
 
     def __init__(
-            self,
-            do_resize: bool=True,
-            size: Dict[str, int]=None,
-            resample: PILImageResampling=PILImageResampling.BICUBIC,
-            do_rescale: bool=True,
-            rescale_factor: Union[int, float]=1 / 255,
-            do_normalize: bool=True,
-            image_mean: Optional[Union[float, List[float]]]=None,
-            image_std: Optional[Union[float, List[float]]]=None,
-            do_convert_rgb: bool=True,
-            **kwargs, ) -> None:
+        self,
+        do_resize: bool = True,
+        size: Dict[str, int] = None,
+        resample: PILImageResampling = PILImageResampling.BICUBIC,
+        do_rescale: bool = True,
+        rescale_factor: Union[int, float] = 1 / 255,
+        do_normalize: bool = True,
+        image_mean: Optional[Union[float, List[float]]] = None,
+        image_std: Optional[Union[float, List[float]]] = None,
+        do_convert_rgb: bool = True,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         default_image_mean = [0.48145466, 0.4578275, 0.40821073]
         default_image_std = [0.26862954, 0.26130258, 0.27577711]
@@ -97,12 +110,13 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
         self.do_convert_rgb = do_convert_rgb
 
     def resize(
-            self,
-            image: np.ndarray,
-            size: Dict[str, int],
-            resample: PILImageResampling=PILImageResampling.BICUBIC,
-            data_format: Optional[Union[str, ChannelDimension]]=None,
-            **kwargs, ) -> np.ndarray:
+        self,
+        image: np.ndarray,
+        size: Dict[str, int],
+        resample: PILImageResampling = PILImageResampling.BICUBIC,
+        data_format: Optional[Union[str, ChannelDimension]] = None,
+        **kwargs,
+    ) -> np.ndarray:
         """
         Resize an image.
 
@@ -127,14 +141,16 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
             size=output_size,
             resample=resample,
             data_format=data_format,
-            **kwargs, )
+            **kwargs,
+        )
 
     def rescale(
-            self,
-            image: np.ndarray,
-            scale: Union[int, float],
-            data_format: Optional[Union[str, ChannelDimension]]=None,
-            **kwargs, ):
+        self,
+        image: np.ndarray,
+        scale: Union[int, float],
+        data_format: Optional[Union[str, ChannelDimension]] = None,
+        **kwargs,
+    ):
         """
         Rescale an image by a scale factor. image = image * scale.
 
@@ -149,12 +165,13 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
         return rescale(image, scale=scale, data_format=data_format, **kwargs)
 
     def normalize(
-            self,
-            image: np.ndarray,
-            mean: Union[float, List[float]],
-            std: Union[float, List[float]],
-            data_format: Optional[Union[str, ChannelDimension]]=None,
-            **kwargs, ) -> np.ndarray:
+        self,
+        image: np.ndarray,
+        mean: Union[float, List[float]],
+        std: Union[float, List[float]],
+        data_format: Optional[Union[str, ChannelDimension]] = None,
+        **kwargs,
+    ) -> np.ndarray:
         """
         Normalize an image. image = (image - image_mean) / image_std.
 
@@ -168,24 +185,24 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
             data_format (`str` or `ChannelDimension`, *optional*):
                 The channel dimension format of the image. If not provided, it will be the same as the input image.
         """
-        return normalize(
-            image, mean=mean, std=std, data_format=data_format, **kwargs)
+        return normalize(image, mean=mean, std=std, data_format=data_format, **kwargs)
 
     def preprocess(
-            self,
-            images: ImageInput,
-            do_resize: Optional[bool]=None,
-            size: Optional[Dict[str, int]]=None,
-            resample: PILImageResampling=None,
-            do_rescale: Optional[bool]=None,
-            rescale_factor: Optional[float]=None,
-            do_normalize: Optional[bool]=None,
-            image_mean: Optional[Union[float, List[float]]]=None,
-            image_std: Optional[Union[float, List[float]]]=None,
-            return_tensors: Optional[Union[str, TensorType]]=None,
-            do_convert_rgb: bool=None,
-            data_format: ChannelDimension=ChannelDimension.FIRST,
-            **kwargs, ) -> PIL.Image.Image:
+        self,
+        images: ImageInput,
+        do_resize: Optional[bool] = None,
+        size: Optional[Dict[str, int]] = None,
+        resample: PILImageResampling = None,
+        do_rescale: Optional[bool] = None,
+        rescale_factor: Optional[float] = None,
+        do_normalize: Optional[bool] = None,
+        image_mean: Optional[Union[float, List[float]]] = None,
+        image_std: Optional[Union[float, List[float]]] = None,
+        return_tensors: Optional[Union[str, TensorType]] = None,
+        do_convert_rgb: bool = None,
+        data_format: ChannelDimension = ChannelDimension.FIRST,
+        **kwargs,
+    ) -> PIL.Image.Image:
         """
         Preprocess an image or batch of images.
 
@@ -227,13 +244,11 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
         do_resize = do_resize if do_resize is not None else self.do_resize
         resample = resample if resample is not None else self.resample
         do_rescale = do_rescale if do_rescale is not None else self.do_rescale
-        rescale_factor = (rescale_factor if rescale_factor is not None else
-                          self.rescale_factor)
+        rescale_factor = rescale_factor if rescale_factor is not None else self.rescale_factor
         do_normalize = do_normalize if do_normalize is not None else self.do_normalize
         image_mean = image_mean if image_mean is not None else self.image_mean
         image_std = image_std if image_std is not None else self.image_std
-        do_convert_rgb = (do_convert_rgb if do_convert_rgb is not None else
-                          self.do_convert_rgb)
+        do_convert_rgb = do_convert_rgb if do_convert_rgb is not None else self.do_convert_rgb
 
         size = size if size is not None else self.size
         size = get_size_dict(size, default_to_square=False)
@@ -242,21 +257,16 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
             images = [images]
 
         if not valid_images(images):
-            raise ValueError(
-                "Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, "
-                "paddle.Tensor.")
+            raise ValueError("Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
 
         if do_resize and size is None or resample is None:
-            raise ValueError(
-                "Size and resample must be specified if do_resize is True.")
+            raise ValueError("Size and resample must be specified if do_resize is True.")
 
         if do_rescale and rescale_factor is None:
-            raise ValueError(
-                "Rescale factor must be specified if do_rescale is True.")
+            raise ValueError("Rescale factor must be specified if do_rescale is True.")
 
         if do_normalize and (image_mean is None or image_std is None):
-            raise ValueError(
-                "Image mean and std must be specified if do_normalize is True.")
+            raise ValueError("Image mean and std must be specified if do_normalize is True.")
 
         # PIL RGBA images are converted to RGB
         if do_convert_rgb:
@@ -266,28 +276,15 @@ class MiniGPT4ImageProcessor(BaseImageProcessor):
         images = [to_numpy_array(image) for image in images]
 
         if do_resize:
-            images = [
-                self.resize(
-                    image=image, size=size, resample=resample)
-                for image in images
-            ]
+            images = [self.resize(image=image, size=size, resample=resample) for image in images]
 
         if do_rescale:
-            images = [
-                self.rescale(
-                    image=image, scale=rescale_factor) for image in images
-            ]
+            images = [self.rescale(image=image, scale=rescale_factor) for image in images]
 
         if do_normalize:
-            images = [
-                self.normalize(
-                    image=image, mean=image_mean, std=image_std)
-                for image in images
-            ]
+            images = [self.normalize(image=image, mean=image_mean, std=image_std) for image in images]
 
-        images = [
-            to_channel_dimension_format(image, data_format) for image in images
-        ]
+        images = [to_channel_dimension_format(image, data_format) for image in images]
 
         data = {"pixel_values": images}
         return BatchFeature(data=data, tensor_type=return_tensors)

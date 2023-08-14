@@ -19,7 +19,10 @@ from paddlenlp.transformers import AutoTokenizer
 
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
-    Blip2Processor, BlipImageProcessor, BlipTextProcessor)
+    Blip2Processor,
+    BlipImageProcessor,
+    BlipTextProcessor,
+)
 from paddlemix.utils.log import logger
 
 from .apptask import AppTask
@@ -41,23 +44,18 @@ class Blip2CaptionTask(AppTask):
         Construct the tokenizer for the predictor.
         """
         # bulid processor
-        tokenizer_class = AutoTokenizer.from_pretrained(
-            self._text_model, use_fast=False)
-        image_processor = BlipImageProcessor.from_pretrained(
-            os.path.join(model, "processor", "eval"))
-        text_processor_class = BlipTextProcessor.from_pretrained(
-            os.path.join(model, "processor", "eval"))
+        tokenizer_class = AutoTokenizer.from_pretrained(self._text_model, use_fast=False)
+        image_processor = BlipImageProcessor.from_pretrained(os.path.join(model, "processor", "eval"))
+        text_processor_class = BlipTextProcessor.from_pretrained(os.path.join(model, "processor", "eval"))
 
-        self._processor = Blip2Processor(image_processor, text_processor_class,
-                                         tokenizer_class)
+        self._processor = Blip2Processor(image_processor, text_processor_class, tokenizer_class)
 
     def _construct_model(self, model):
         """
         Construct the inference model for the predictor.
         """
         # bulid model
-        model_instance = Blip2ForConditionalGeneration.from_pretrained(
-            model, cache_dir=self._model_dir)
+        model_instance = Blip2ForConditionalGeneration.from_pretrained(model, cache_dir=self._model_dir)
 
         self._model = model_instance
         self._model.eval()
@@ -65,7 +63,7 @@ class Blip2CaptionTask(AppTask):
     def _preprocess(self, inputs):
         """ """
         image = inputs.get("image", None)
-        assert image is not None, f"The image is None"
+        assert image is not None, "The image is None"
 
         prompt = "describe the image"
 
@@ -74,7 +72,8 @@ class Blip2CaptionTask(AppTask):
             text=prompt,
             return_tensors="pd",
             return_attention_mask=True,
-            mode="test", )
+            mode="test",
+        )
 
         inputs["blip2_input"] = blip2_input
 
@@ -97,8 +96,7 @@ class Blip2CaptionTask(AppTask):
         """
         The model output is tag ids, this function will convert the model output to raw text.
         """
-        generated_text = self._processor.batch_decode(
-            inputs["result"], skip_special_tokens=True)[0].strip()
+        generated_text = self._processor.batch_decode(inputs["result"], skip_special_tokens=True)[0].strip()
         logger.info("Generate text: {}".format(generated_text))
 
         inputs.pop("result", None)
@@ -111,10 +109,7 @@ class Blip2CaptionTask(AppTask):
         lemma = nltk.wordnet.WordNetLemmatizer()
 
         nltk.download(["punkt", "averaged_perceptron_tagger", "wordnet"])
-        tags_list = [
-            word for (word, pos) in nltk.pos_tag(nltk.word_tokenize(caption))
-            if pos[0] == "N"
-        ]
+        tags_list = [word for (word, pos) in nltk.pos_tag(nltk.word_tokenize(caption)) if pos[0] == "N"]
         tags_lemma = [lemma.lemmatize(w) for w in tags_list]
         tags = ", ".join(map(str, tags_lemma))
 

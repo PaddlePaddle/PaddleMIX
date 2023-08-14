@@ -21,21 +21,19 @@ import paddle
 def broadcat(tensors, dim=-1):
     num_tensors = len(tensors)
     shape_lens = set(list(map(lambda t: len(t.shape), tensors)))
-    assert len(
-        shape_lens) == 1, "tensors must all have the same number of dimensions"
+    assert len(shape_lens) == 1, "tensors must all have the same number of dimensions"
     shape_len = list(shape_lens)[0]
     dim = dim + shape_len if dim < 0 else dim
     dims = list(zip(*map(lambda t: list(t.shape), tensors)))
     expandable_dims = [(i, val) for i, val in enumerate(dims) if i != dim]
-    assert all([*map(lambda t: len(set(t[1])) <= 2, expandable_dims)
-                ]), "invalid dimensions for broadcastable concatentation"
+    assert all(
+        [*map(lambda t: len(set(t[1])) <= 2, expandable_dims)]
+    ), "invalid dimensions for broadcastable concatentation"
     max_dims = list(map(lambda t: (t[0], max(t[1])), expandable_dims))
-    expanded_dims = list(
-        map(lambda t: (t[0], (t[1], ) * num_tensors), max_dims))
+    expanded_dims = list(map(lambda t: (t[0], (t[1],) * num_tensors), max_dims))
     expanded_dims.insert(dim, (dim, dims[dim]))
     expandable_shapes = list(zip(*map(lambda t: t[1], expanded_dims)))
-    tensors = list(
-        map(lambda t: t[0].expand(shape=t[1]), zip(tensors, expandable_shapes)))
+    tensors = list(map(lambda t: t[0].expand(shape=t[1]), zip(tensors, expandable_shapes)))
     return paddle.concat(x=tensors, axis=dim)
 
 
@@ -48,25 +46,23 @@ def rotate_half(x):
 
 class VisionRotaryEmbedding(paddle.nn.Layer):
     def __init__(
-            self,
-            dim,
-            pt_seq_len,
-            ft_seq_len=None,
-            custom_freqs=None,
-            freqs_for="lang",
-            theta=10000,
-            max_freq=10,
-            num_freqs=1, ):
+        self,
+        dim,
+        pt_seq_len,
+        ft_seq_len=None,
+        custom_freqs=None,
+        freqs_for="lang",
+        theta=10000,
+        max_freq=10,
+        num_freqs=1,
+    ):
         super().__init__()
         if custom_freqs:
             freqs = custom_freqs
         elif freqs_for == "lang":
-            freqs = 1.0 / theta**(paddle.arange(
-                start=0, end=dim,
-                step=2)[:dim // 2].astype(dtype="float32") / dim)
+            freqs = 1.0 / theta ** (paddle.arange(start=0, end=dim, step=2)[: dim // 2].astype(dtype="float32") / dim)
         elif freqs_for == "pixel":
-            freqs = paddle.linspace(
-                start=1.0, stop=max_freq / 2, num=dim // 2) * pi
+            freqs = paddle.linspace(start=1.0, stop=max_freq / 2, num=dim // 2) * pi
         elif freqs_for == "constant":
             freqs = paddle.ones(shape=num_freqs).astype(dtype="float32")
         else:
@@ -92,33 +88,32 @@ class VisionRotaryEmbedding(paddle.nn.Layer):
         t_left, t, t_right = (
             t[(...), :start_index],
             t[(...), start_index:end_index],
-            t[(...), end_index:], )
+            t[(...), end_index:],
+        )
         t = t * self.freqs_cos + rotate_half(t) * self.freqs_sin
         return paddle.concat(x=(t_left, t, t_right), axis=-1)
 
 
 class VisionRotaryEmbeddingFast(paddle.nn.Layer):
     def __init__(
-            self,
-            dim,
-            pt_seq_len,
-            ft_seq_len=None,
-            custom_freqs=None,
-            freqs_for="lang",
-            theta=10000,
-            max_freq=10,
-            num_freqs=1,
-            patch_dropout=0.0, ):
+        self,
+        dim,
+        pt_seq_len,
+        ft_seq_len=None,
+        custom_freqs=None,
+        freqs_for="lang",
+        theta=10000,
+        max_freq=10,
+        num_freqs=1,
+        patch_dropout=0.0,
+    ):
         super().__init__()
         if custom_freqs:
             freqs = custom_freqs
         elif freqs_for == "lang":
-            freqs = 1.0 / theta**(paddle.arange(
-                start=0, end=dim,
-                step=2)[:dim // 2].astype(dtype="float32") / dim)
+            freqs = 1.0 / theta ** (paddle.arange(start=0, end=dim, step=2)[: dim // 2].astype(dtype="float32") / dim)
         elif freqs_for == "pixel":
-            freqs = paddle.linspace(
-                start=1.0, stop=max_freq / 2, num=dim // 2) * pi
+            freqs = paddle.linspace(start=1.0, stop=max_freq / 2, num=dim // 2) * pi
         elif freqs_for == "constant":
             freqs = paddle.ones(shape=num_freqs).astype(dtype="float32")
         else:

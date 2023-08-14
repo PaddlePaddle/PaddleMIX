@@ -17,8 +17,7 @@ import paddle
 from ppdiffusers import LVDMTextToVideoPipeline
 
 # 加载模型和scheduler
-pipe = LVDMTextToVideoPipeline.from_pretrained(
-    "westfish/lvdm_text2video_orig_webvid_2m")
+pipe = LVDMTextToVideoPipeline.from_pretrained("westfish/lvdm_text2video_orig_webvid_2m")
 
 # 执行pipeline进行推理
 seed = 2013
@@ -36,4 +35,5 @@ samples = pipe(
     save_name="ddim_lvdm_text_to_video_ucf",
     encoder_type="2d",
     scale_factor=0.18215,
-    shift_factor=0, )
+    shift_factor=0,
+)

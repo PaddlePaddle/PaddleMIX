@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import paddle
+
 """ CLIP tokenizer
 
 Copied from https://github.com/openai/CLIP. Originally MIT License, Copyright (c) 2021 OpenAI.
@@ -31,9 +32,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 @lru_cache()
 def default_bpe():
-    return os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "bpe_simple_vocab_16e6.txt.gz")
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "bpe_simple_vocab_16e6.txt.gz")
 
 
 @lru_cache()
@@ -47,9 +46,9 @@ def bytes_to_unicode():
     To avoid that, we want lookup tables between utf-8 bytes and unicode strings.
     And avoids mapping to whitespace/control characters the bpe code barfs on.
     """
-    bs = (list(range(ord("!"), ord("~") + 1)) +
-          list(range(ord("¡"), ord("¬") + 1)) +
-          list(range(ord("®"), ord("ÿ") + 1)))
+    bs = (
+        list(range(ord("!"), ord("~") + 1)) + list(range(ord("¡"), ord("¬") + 1)) + list(range(ord("®"), ord("ÿ") + 1))
+    )
     cs = bs[:]
     n = 0
     for b in range(2**8):
@@ -87,11 +86,11 @@ def whitespace_clean(text):
 
 
 class SimpleTokenizer(object):
-    def __init__(self, bpe_path: str=default_bpe(), special_tokens=None):
+    def __init__(self, bpe_path: str = default_bpe(), special_tokens=None):
         self.byte_encoder = bytes_to_unicode()
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
         merges = gzip.open(bpe_path).read().decode("utf-8").split("\n")
-        merges = merges[1:49152 - 256 - 2 + 1]
+        merges = merges[1 : 49152 - 256 - 2 + 1]
         """Class Method: *.split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
         merges = [tuple(merge.split()) for merge in merges]
         vocab = list(bytes_to_unicode().values())
@@ -101,8 +100,7 @@ class SimpleTokenizer(object):
         if not special_tokens:
             special_tokens = ["<start_of_text>", "<end_of_text>"]
         else:
-            special_tokens = ["<start_of_text>", "<end_of_text>"
-                              ] + special_tokens
+            special_tokens = ["<start_of_text>", "<end_of_text>"] + special_tokens
         vocab.extend(special_tokens)
         self.encoder = dict(zip(vocab, range(len(vocab))))
         self.decoder = {v: k for k, v in self.encoder.items()}
@@ -110,22 +108,21 @@ class SimpleTokenizer(object):
         self.cache = {t: t for t in special_tokens}
         special = "|".join(special_tokens)
         self.pat = re.compile(
-            special +
-            "|'s|'t|'re|'ve|'m|'ll|'d|[\\p{L}]+|[\\p{N}]|[^\\s\\p{L}\\p{N}]+",
-            re.IGNORECASE, )
+            special + "|'s|'t|'re|'ve|'m|'ll|'d|[\\p{L}]+|[\\p{N}]|[^\\s\\p{L}\\p{N}]+",
+            re.IGNORECASE,
+        )
         self.vocab_size = len(self.encoder)
         self.all_special_ids = [self.encoder[t] for t in special_tokens]
 
     def bpe(self, token):
         if token in self.cache:
             return self.cache[token]
-        word = tuple(token[:-1]) + (token[-1] + "</w>", )
+        word = tuple(token[:-1]) + (token[-1] + "</w>",)
         pairs = get_pairs(word)
         if not pairs:
             return token + "</w>"
         while True:
-            bigram = min(
-                pairs, key=lambda pair: self.bpe_ranks.get(pair, float("inf")))
+            bigram = min(pairs, key=lambda pair: self.bpe_ranks.get(pair, float("inf")))
             if bigram not in self.bpe_ranks:
                 break
             first, second = bigram
@@ -139,8 +136,7 @@ class SimpleTokenizer(object):
                 except:
                     new_word.extend(word[i:])
                     break
-                if word[i] == first and i < len(word) - 1 and word[i +
-                                                                   1] == second:
+                if word[i] == first and i < len(word) - 1 and word[i + 1] == second:
                     new_word.append(first + second)
                     i += 2
                 else:
@@ -162,30 +158,26 @@ class SimpleTokenizer(object):
         for token in re.findall(self.pat, text):
             token = "".join(self.byte_encoder[b] for b in token.encode("utf-8"))
             """Class Method: *.split, not convert, please check whether it is torch.Tensor.*/Optimizer.*/nn.Module.*, and convert manually"""
-            bpe_tokens.extend(self.encoder[bpe_token]
-                              for bpe_token in self.bpe(token).split(" "))
+            bpe_tokens.extend(self.encoder[bpe_token] for bpe_token in self.bpe(token).split(" "))
         return bpe_tokens
 
     def decode(self, tokens):
         text = "".join([self.decoder[token] for token in tokens])
-        text = (bytearray([self.byte_decoder[c] for c in text]).decode(
-            "utf-8", errors="replace").replace("</w>", " "))
+        text = bytearray([self.byte_decoder[c] for c in text]).decode("utf-8", errors="replace").replace("</w>", " ")
         return text
 
     def __call__(self, text, max_length=77, return_tensors=True, **kwargs):
         texts = text
         sot_token = self.encoder["<start_of_text>"]
         eot_token = self.encoder["<end_of_text>"]
-        all_tokens = [([sot_token] + _tokenizer.encode(text) + [eot_token])
-                      for text in texts]
+        all_tokens = [([sot_token] + _tokenizer.encode(text) + [eot_token]) for text in texts]
         if return_tensors:
-            result = paddle.zeros(
-                shape=[len(all_tokens), max_length], dtype="int64")
+            result = paddle.zeros(shape=[len(all_tokens), max_length], dtype="int64")
             for i, tokens in enumerate(all_tokens):
                 if len(tokens) > max_length:
                     tokens = tokens[:max_length]
                     tokens[-1] = eot_token
-                result[(i), :len(tokens)] = paddle.to_tensor(data=tokens)
+                result[(i), : len(tokens)] = paddle.to_tensor(data=tokens)
             return {"input_ids": result}
         else:
             result = []
@@ -204,8 +196,7 @@ class SimpleTokenizer(object):
 _tokenizer = SimpleTokenizer()
 
 
-def tokenize(texts: Union[str, List[str]],
-             context_length: int=77) -> paddle.Tensor:
+def tokenize(texts: Union[str, List[str]], context_length: int = 77) -> paddle.Tensor:
     """
     Returns the tokenized representation of given input string(s)
 
@@ -224,15 +215,13 @@ def tokenize(texts: Union[str, List[str]],
         texts = [texts]
     sot_token = _tokenizer.encoder["<start_of_text>"]
     eot_token = _tokenizer.encoder["<end_of_text>"]
-    all_tokens = [([sot_token] + _tokenizer.encode(text) + [eot_token])
-                  for text in texts]
-    result = paddle.zeros(
-        shape=[len(all_tokens), context_length], dtype="int64")
+    all_tokens = [([sot_token] + _tokenizer.encode(text) + [eot_token]) for text in texts]
+    result = paddle.zeros(shape=[len(all_tokens), context_length], dtype="int64")
     for i, tokens in enumerate(all_tokens):
         if len(tokens) > context_length:
             tokens = tokens[:context_length]
             tokens[-1] = eot_token
-        result[(i), :len(tokens)] = paddle.to_tensor(data=tokens)
+        result[(i), : len(tokens)] = paddle.to_tensor(data=tokens)
     return result
 
 
@@ -244,8 +233,7 @@ class HFTokenizer:
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
-    def __call__(self, texts: Union[str, List[str]],
-                 context_length: int=77) -> paddle.Tensor:
+    def __call__(self, texts: Union[str, List[str]], context_length: int = 77) -> paddle.Tensor:
         if isinstance(texts, str):
             texts = [texts]
         texts = [whitespace_clean(basic_clean(text)) for text in texts]
@@ -254,5 +242,6 @@ class HFTokenizer:
             return_tensors="pt",
             max_length=context_length,
             padding="max_length",
-            truncation=True, ).input_ids
+            truncation=True,
+        ).input_ids
         return input_ids

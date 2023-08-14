@@ -19,9 +19,6 @@ from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
-import paddle.nn as nn
-from paddlenlp.transformers import PretrainedModel, PretrainedTokenizer
-from tqdm import trange
 
 from ...configuration_utils import FrozenDict
 from ...models import LVDMAutoencoderKL, LVDMUNet3DModel
@@ -49,34 +46,29 @@ class LVDMUncondPipeline(DiffusionPipeline):
     """
 
     def __init__(
-            self,
-            vae: LVDMAutoencoderKL,
-            unet: LVDMUNet3DModel,
-            scheduler: Union[DDIMScheduler, PNDMScheduler,
-                             LMSDiscreteScheduler], ):
+        self,
+        vae: LVDMAutoencoderKL,
+        unet: LVDMUNet3DModel,
+        scheduler: Union[DDIMScheduler, PNDMScheduler, LMSDiscreteScheduler],
+    ):
         super().__init__()
-        if (hasattr(scheduler.config, "steps_offset") and
-                scheduler.config.steps_offset != 1):
+        if hasattr(scheduler.config, "steps_offset") and scheduler.config.steps_offset != 1:
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
                 "to update the config accordingly as leaving `steps_offset` might led to incorrect results"
                 " in future versions. If you have downloaded this checkpoint from the Hugging Face Hub,"
                 " it would be very nice if you could open a Pull request for the `scheduler/scheduler_config.json`"
-                " file")
-            deprecate(
-                "steps_offset!=1",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False)
+                " file"
+            )
+            deprecate("steps_offset!=1", "1.0.0", deprecation_message, standard_warn=False)
             new_config = dict(scheduler.config)
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
         self.register_modules(vae=vae, unet=unet, scheduler=scheduler)
 
-    def enable_attention_slicing(self,
-                                 slice_size: Optional[Union[str, int]]="auto"):
+    def enable_attention_slicing(self, slice_size: Optional[Union[str, int]] = "auto"):
         r"""
         Enable sliced attention computation.
 
@@ -113,8 +105,7 @@ class LVDMUncondPipeline(DiffusionPipeline):
 
         if isinstance("uint8", paddle.dtype):
             dtype = "uint8"
-        elif isinstance("uint8",
-                        str) and "uint8" not in ["cpu", "cuda", "ipu", "xpu"]:
+        elif isinstance("uint8", str) and "uint8" not in ["cpu", "cuda", "ipu", "xpu"]:
             dtype = "uint8"
         elif isinstance("uint8", paddle.Tensor):
             dtype = "uint8".dtype
@@ -127,25 +118,25 @@ class LVDMUncondPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            batch_size: int=1,
-            num_frames: Optional[int]=16,
-            height: Optional[int]=256,
-            width: Optional[int]=256,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            eta: Optional[float]=0.0,
-            num_inference_steps: Optional[int]=50,
-            latents: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            save_dir=None,
-            save_name=None,
-            scale_factor: Optional[float]=0.33422927,
-            shift_factor: Optional[float]=1.4606637,
-            **kwargs, ) -> Union[Tuple, VideoPipelineOutput]:
+        self,
+        batch_size: int = 1,
+        num_frames: Optional[int] = 16,
+        height: Optional[int] = 256,
+        width: Optional[int] = 256,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        eta: Optional[float] = 0.0,
+        num_inference_steps: Optional[int] = 50,
+        latents: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        save_dir=None,
+        save_name=None,
+        scale_factor: Optional[float] = 0.33422927,
+        shift_factor: Optional[float] = 1.4606637,
+        **kwargs,
+    ) -> Union[Tuple, VideoPipelineOutput]:
         r"""
         Args:
             height (`int`, *optional*, defaults to 256):
@@ -188,16 +179,15 @@ class LVDMUncondPipeline(DiffusionPipeline):
         """
 
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         # get the initial random noise unless the user supplied it
         latents_shape = [
@@ -211,12 +201,11 @@ class LVDMUncondPipeline(DiffusionPipeline):
         if latents is None:
             latents = randn_tensor(
                 latents_shape,
-                generator=generator, )
+                generator=generator,
+            )
         else:
             if latents.shape != latents_shape:
-                raise ValueError(
-                    f"Unexpected latents shape, got {latents.shape}, expected {latents_shape}"
-                )
+                raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {latents_shape}")
         # set timesteps
         self.scheduler.set_timesteps(num_inference_steps)
 
@@ -231,30 +220,26 @@ class LVDMUncondPipeline(DiffusionPipeline):
         # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
             latent_model_input = latents
-            latent_model_input = self.scheduler.scale_model_input(
-                latent_model_input, t)
+            latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
             t_tensor = paddle.expand(
                 t,
-                [latent_model_input.shape[0], ], )
+                [
+                    latent_model_input.shape[0],
+                ],
+            )
             # predict the noise residual
             noise_pred = self.unet(latent_model_input, t_tensor).sample
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.scheduler.step(
-                noise_pred,
-                t,
-                latents,
-                generator=generator,
-                **extra_step_kwargs).prev_sample
+            latents = self.scheduler.step(noise_pred, t, latents, generator=generator, **extra_step_kwargs).prev_sample
 
             # call the callback, if provided
             if callback is not None and i % callback_steps == 0:
@@ -281,10 +266,9 @@ class LVDMUncondPipeline(DiffusionPipeline):
             videos_frames.append(video_frames)
 
         if not save_name:
-            save_name = f"defaul_video"
+            save_name = "default_video"
         if not save_dir:
             save_dir = "."
         os.makedirs(save_dir, exist_ok=True)
-        save_results(
-            all_videos, save_dir=save_dir, save_name=save_name, save_fps=8)
+        save_results(all_videos, save_dir=save_dir, save_name=save_name, save_fps=8)
         return VideoPipelineOutput(frames=videos_frames, samples=sampled_videos)

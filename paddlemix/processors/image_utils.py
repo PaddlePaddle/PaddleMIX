@@ -49,15 +49,19 @@ def to_numpy(obj):
         return obj
 
 
-if version.parse(version.parse(PIL.__version__).base_version) >= version.parse(
-        "9.1.0"):
+if version.parse(version.parse(PIL.__version__).base_version) >= version.parse("9.1.0"):
     PILImageResampling = PIL.Image.Resampling
 else:
     PILImageResampling = PIL.Image
 
-ImageInput = Union["PIL.Image.Image", np.ndarray, "paddle.Tensor",
-                   List["PIL.Image.Image"], List[np.ndarray],
-                   List["paddle.Tensor"], ]  # noqa
+ImageInput = Union[
+    "PIL.Image.Image",
+    np.ndarray,
+    "paddle.Tensor",
+    List["PIL.Image.Image"],
+    List[np.ndarray],
+    List["paddle.Tensor"],
+]  # noqa
 
 
 class TensorType(ExplicitEnum):
@@ -76,8 +80,7 @@ class ChannelDimension(ExplicitEnum):
 
 
 def is_valid_image(img):
-    return (isinstance(img, PIL.Image.Image) or isinstance(img, np.ndarray) or
-            is_paddle_tensor(img))
+    return isinstance(img, PIL.Image.Image) or isinstance(img, np.ndarray) or is_paddle_tensor(img)
 
 
 def valid_images(imgs):
@@ -98,7 +101,7 @@ def is_batched(img):
     return False
 
 
-def make_list_of_images(images, expected_ndims: int=3) -> List[ImageInput]:
+def make_list_of_images(images, expected_ndims: int = 3) -> List[ImageInput]:
     """
     Ensure that the input is a list of images. If the input is a single image, it is converted to a list of length 1.
     If the input is a batch of images, it is converted to a list of images.
@@ -127,11 +130,12 @@ def make_list_of_images(images, expected_ndims: int=3) -> List[ImageInput]:
         else:
             raise ValueError(
                 f"Invalid image shape. Expected either {expected_ndims + 1} or {expected_ndims} dimensions, but got"
-                f" {images.ndim} dimensions.")
+                f" {images.ndim} dimensions."
+            )
         return images
     raise ValueError(
-        "Invalid image type. Expected either PIL.Image.Image, numpy.ndarray, paddle.Tensor "
-        f"but got {type(images)}.")
+        "Invalid image type. Expected either PIL.Image.Image, numpy.ndarray, paddle.Tensor " f"but got {type(images)}."
+    )
 
 
 def to_numpy_array(img) -> np.ndarray:
@@ -159,8 +163,7 @@ def infer_channel_dimension_format(image: np.ndarray) -> ChannelDimension:
     elif image.ndim == 4:
         first_dim, last_dim = 1, 3
     else:
-        raise ValueError(
-            f"Unsupported number of image dimensions: {image.ndim}")
+        raise ValueError(f"Unsupported number of image dimensions: {image.ndim}")
 
     if image.shape[first_dim] in (1, 3):
         return ChannelDimension.FIRST
@@ -188,8 +191,7 @@ def get_channel_dimension_axis(image: np.ndarray) -> int:
     raise ValueError(f"Unsupported data format: {channel_dim}")
 
 
-def get_image_size(image: np.ndarray,
-                   channel_dim: ChannelDimension=None) -> Tuple[int, int]:
+def get_image_size(image: np.ndarray, channel_dim: ChannelDimension = None) -> Tuple[int, int]:
     """
     Returns the (height, width) dimensions of the image.
 
@@ -213,37 +215,44 @@ def get_image_size(image: np.ndarray,
         raise ValueError(f"Unsupported data format: {channel_dim}")
 
 
-def is_valid_annotation_coco_detection(
-        annotation: Dict[str, Union[List, Tuple]]) -> bool:
-    if (isinstance(annotation, dict) and "image_id" in annotation and
-            "annotations" in annotation and
-            isinstance(annotation["annotations"], (list, tuple)) and (
-                # an image can have no annotations
-                len(annotation["annotations"]) == 0 or
-                isinstance(annotation["annotations"][0], dict))):
+def is_valid_annotation_coco_detection(annotation: Dict[str, Union[List, Tuple]]) -> bool:
+    if (
+        isinstance(annotation, dict)
+        and "image_id" in annotation
+        and "annotations" in annotation
+        and isinstance(annotation["annotations"], (list, tuple))
+        and (
+            # an image can have no annotations
+            len(annotation["annotations"]) == 0
+            or isinstance(annotation["annotations"][0], dict)
+        )
+    ):
         return True
     return False
 
 
-def is_valid_annotation_coco_panoptic(
-        annotation: Dict[str, Union[List, Tuple]]) -> bool:
-    if (isinstance(annotation, dict) and "image_id" in annotation and
-            "segments_info" in annotation and "file_name" in annotation and
-            isinstance(annotation["segments_info"], (list, tuple)) and (
-                # an image can have no segments
-                len(annotation["segments_info"]) == 0 or
-                isinstance(annotation["segments_info"][0], dict))):
+def is_valid_annotation_coco_panoptic(annotation: Dict[str, Union[List, Tuple]]) -> bool:
+    if (
+        isinstance(annotation, dict)
+        and "image_id" in annotation
+        and "segments_info" in annotation
+        and "file_name" in annotation
+        and isinstance(annotation["segments_info"], (list, tuple))
+        and (
+            # an image can have no segments
+            len(annotation["segments_info"]) == 0
+            or isinstance(annotation["segments_info"][0], dict)
+        )
+    ):
         return True
     return False
 
 
-def valid_coco_detection_annotations(
-        annotations: Iterable[Dict[str, Union[List, Tuple]]]) -> bool:
+def valid_coco_detection_annotations(annotations: Iterable[Dict[str, Union[List, Tuple]]]) -> bool:
     return all(is_valid_annotation_coco_detection(ann) for ann in annotations)
 
 
-def valid_coco_panoptic_annotations(
-        annotations: Iterable[Dict[str, Union[List, Tuple]]]) -> bool:
+def valid_coco_panoptic_annotations(annotations: Iterable[Dict[str, Union[List, Tuple]]]) -> bool:
     return all(is_valid_annotation_coco_panoptic(ann) for ann in annotations)
 
 
@@ -280,8 +289,7 @@ def load_image(image: Union[str, "PIL.Image.Image"]) -> "PIL.Image.Image":
     return image
 
 
-def get_preprocess_shape(oldh: int, oldw: int,
-                         long_side_length: int) -> Tuple[int, int]:
+def get_preprocess_shape(oldh: int, oldw: int, long_side_length: int) -> Tuple[int, int]:
     """
     Compute the output size given input size and target long side length.
     """

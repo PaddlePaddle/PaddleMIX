@@ -14,28 +14,27 @@
 import contextlib
 import inspect
 import json
-import math
 import os
 import sys
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
-import numpy as np
 import paddle
 import paddle.amp.auto_cast as autocast
 import paddle.nn as nn
 from paddle.distributed import fleet
-from paddle.io import DataLoader, Dataset, DistributedBatchSampler
+from paddle.io import DataLoader, Dataset
 from paddlenlp.trainer.trainer import Trainer
-from paddlenlp.trainer.trainer_callback import (DefaultFlowCallback,
-                                                ProgressCallback)
+from paddlenlp.trainer.trainer_callback import DefaultFlowCallback, ProgressCallback
 from paddlenlp.trainer.trainer_utils import (  # set_hyrbid_parallel_seed,
-    EvalLoopOutput, EvalPrediction, IterableDatasetShard, ShardingOption,
-    find_batch_size, has_length, speed_metrics)
+    EvalLoopOutput,
+    IterableDatasetShard,
+    ShardingOption,
+    has_length,
+    speed_metrics,
+)
 from paddlenlp.transformers.model_utils import unwrap_model
 from paddlenlp.utils import device_guard
-from paddlenlp.utils.batch_sampler import \
-    DistributedBatchSampler as NlpDistributedBatchSampler
 from paddlenlp.utils.import_utils import is_datasets_available
 from paddlenlp.utils.log import logger
 
@@ -72,9 +71,7 @@ def paddlenlp_load(path, return_numpy=False):
 
 
 def is_dp_group_support_in_group_sharded_parallel():
-    return "dp_group" in set(
-        inspect.signature(paddle.distributed.sharding.group_sharded_parallel)
-        .parameters.keys())
+    return "dp_group" in set(inspect.signature(paddle.distributed.sharding.group_sharded_parallel).parameters.keys())
 
 
 __all__ = ["BLIP2Trainer"]
@@ -91,22 +88,21 @@ class BLIP2Trainer(Trainer):
 
     """
 
-    from paddlenlp.trainer.trainer_utils import (log_metrics, metrics_format,
-                                                 save_metrics, save_state)
+    from paddlenlp.trainer.trainer_utils import (
+        log_metrics,
+        metrics_format,
+        save_metrics,
+        save_state,
+    )
 
-    def __init__(self,
-                 processor=None,
-                 eval_processor=None,
-                 eval_collator=None,
-                 **kwargs):
+    def __init__(self, processor=None, eval_processor=None, eval_collator=None, **kwargs):
         super().__init__(**kwargs)
         self.processor = processor
         self.eval_processor = eval_processor
         self.eval_collator = eval_collator
 
     def create_optimizer_and_scheduler(self, num_training_steps: int):
-        self.lr_scheduler = self.create_scheduler(num_training_steps //
-                                                  self.args.num_train_epochs)
+        self.lr_scheduler = self.create_scheduler(num_training_steps // self.args.num_train_epochs)
         param_filter = FilterParamsName()
         p_wd, p_non_wd = param_filter(self.model)
         self.optimizer = paddle.optimizer.AdamW(
@@ -115,22 +111,22 @@ class BLIP2Trainer(Trainer):
             weight_decay=float(self.args.weight_decay),
             beta1=self.args.adam_beta1,
             beta2=self.args.adam_beta2,
-            apply_decay_param_fun=param_filter._apply_decay_param_fun, )
+            apply_decay_param_fun=param_filter._apply_decay_param_fun,
+        )
 
     def create_scheduler(self, num_training_steps):
-        lr_sched_func = getattr(paddlemix.optimization,
-                                self.args.lr_scheduler_name)
+        lr_sched_func = getattr(paddlemix.optimization, self.args.lr_scheduler_name)
         lr_sched = lr_sched_func(
             learning_rate=self.args.learning_rate,
             epochs=self.args.num_train_epochs,
             warmup_start_lr=self.args.warmup_start_lr,
             eta_min=self.args.eta_min,
             warmup_steps=self.args.warmup_steps,
-            step_each_epoch=num_training_steps, )
+            step_each_epoch=num_training_steps,
+        )
         return lr_sched
 
-    def get_eval_dataloader(self,
-                            eval_dataset: Optional[Dataset]=None) -> DataLoader:
+    def get_eval_dataloader(self, eval_dataset: Optional[Dataset] = None) -> DataLoader:
         """
         Returns the evaluation [`~paddle.io.DataLoader`].
 
@@ -145,10 +141,8 @@ class BLIP2Trainer(Trainer):
             raise ValueError("Trainer: evaluation requires an eval_dataset.")
         eval_dataset = eval_dataset if eval_dataset is not None else self.eval_dataset
 
-        if is_datasets_available() and isinstance(eval_dataset,
-                                                  datasets.Dataset):
-            eval_dataset = self._remove_unused_columns(
-                eval_dataset, description="evaluation")
+        if is_datasets_available() and isinstance(eval_dataset, datasets.Dataset):
+            eval_dataset = self._remove_unused_columns(eval_dataset, description="evaluation")
 
         if self._is_iterable_dataset(eval_dataset):
             if self.args.dataset_world_size > 1:
@@ -157,13 +151,15 @@ class BLIP2Trainer(Trainer):
                     batch_size=self.args.per_device_eval_batch_size,
                     drop_last=self.args.dataloader_drop_last,
                     num_processes=self.args.dataset_world_size,
-                    process_index=self.args.dataset_rank, )
+                    process_index=self.args.dataset_rank,
+                )
 
             return DataLoader(
                 eval_dataset,
                 batch_size=self.args.per_device_eval_batch_size,
                 collate_fn=self.eval_collator,
-                num_workers=self.args.dataloader_num_workers, )
+                num_workers=self.args.dataloader_num_workers,
+            )
 
         eval_sampler = self._get_eval_sampler(eval_dataset)
 
@@ -171,7 +167,8 @@ class BLIP2Trainer(Trainer):
             eval_dataset,
             batch_sampler=eval_sampler,
             collate_fn=self.eval_collator,
-            num_workers=self.args.dataloader_num_workers, )
+            num_workers=self.args.dataloader_num_workers,
+        )
 
     def _wrap_model(self, model, training=True):
 
@@ -191,50 +188,43 @@ class BLIP2Trainer(Trainer):
                 decorated = paddle.amp.decorate(
                     models=[model.visual_encoder, model.language_model],
                     optimizers=self.optimizer,
-                    level="O2", )
+                    level="O2",
+                )
                 model.visual_encoder, model.language_model = decorated[0]
             else:
-                decorated = paddle.amp.decorate(
-                    models=[model.visual_encoder],
-                    optimizers=self.optimizer,
-                    level="O2")
+                decorated = paddle.amp.decorate(models=[model.visual_encoder], optimizers=self.optimizer, level="O2")
                 model.visual_encoder = decorated[0][0]
             self.optimizer.set_state_dict(decorated[1].state_dict())
 
         # Multi-gpu training
         if self.args.world_size > 1 and not self.args.use_hybrid_parallel:
             model = paddle.DataParallel(model)
-            assert (
-                self.args.tensor_parallel_degree < 2
-            ), "tensor_parallel_degree = {}, pelease init optimizer.".format(
-                self.args.tensor_parallel_degree)
+            assert self.args.tensor_parallel_degree < 2, "tensor_parallel_degree = {}, pelease init optimizer.".format(
+                self.args.tensor_parallel_degree
+            )
         in_pipeline_parallel_mode = self.args.pipeline_parallel_degree > 1
         in_sharding_parallel_mode = self.sharding is not None
         in_tensor_parallel_model = self.args.tensor_parallel_degree > 1
         if in_pipeline_parallel_mode:
             if self.args.amp_master_grad:
-                mix_precision_utils.MixPrecisionLayer(
-                    model, dtype=self.amp_dtype)  # return value has no use
+                mix_precision_utils.MixPrecisionLayer(model, dtype=self.amp_dtype)  # return value has no use
             # hack for pipeline model mini batch to batch
             # need batter solution @ZHUI
             # make batch_fn compatible for fleet.distributed_model decorate.
             prepare_pipeline_inputs_func = (
-                model._prepare_pipeline_inputs_func
-                if hasattr(model, "_prepare_pipeline_inputs_func") else None)
+                model._prepare_pipeline_inputs_func if hasattr(model, "_prepare_pipeline_inputs_func") else None
+            )
             model = fleet.distributed_model(model)
             if prepare_pipeline_inputs_func is not None:
                 model._prepare_pipeline_inputs_func = prepare_pipeline_inputs_func
             else:
 
                 def _prepare_pipeline_inputs_func(inputs):
-                    first_stage_keys = [
-                        "input_ids", "attention_mask", "position_ids"
-                    ]
+                    first_stage_keys = ["input_ids", "attention_mask", "position_ids"]
                     last_stage_keys = ["labels"]
 
                     def get_expected_keys(inputs, keys):
-                        ret = tuple(
-                            [inputs.pop(k) for k in keys if k in inputs])
+                        ret = tuple([inputs.pop(k) for k in keys if k in inputs])
                         if len(ret) == 1:
                             ret = ret[0]
                         return ret
@@ -246,10 +236,7 @@ class BLIP2Trainer(Trainer):
                         ]
 
                     keys = list(inputs[0].keys())
-                    inputs_batch = {
-                        key: [data.pop(key) for data in inputs]
-                        for key in keys
-                    }
+                    inputs_batch = {key: [data.pop(key) for data in inputs] for key in keys}
                     return [
                         get_expected_keys(inputs_batch, first_stage_keys),
                         get_expected_keys(inputs_batch, last_stage_keys),
@@ -260,12 +247,9 @@ class BLIP2Trainer(Trainer):
                 )
                 model._prepare_pipeline_inputs_func = _prepare_pipeline_inputs_func
 
-            assert (
-                self.optimizer is not None
-            ), "Pipeline mode need decorate optimizer, pelease init optimizer."
+            assert self.optimizer is not None, "Pipeline mode need decorate optimizer, pelease init optimizer."
             if self.args.amp_master_grad:
-                self.optimizer = mix_precision_utils.MixPrecisionOptimizer(
-                    self.optimizer)
+                self.optimizer = mix_precision_utils.MixPrecisionOptimizer(self.optimizer)
             self.optimizer = fleet.distributed_optimizer(self.optimizer)
 
         # No pipeline mode, sharding only
@@ -274,31 +258,25 @@ class BLIP2Trainer(Trainer):
             if self.args.tensor_parallel_degree > 1:
                 hcg = fleet.get_hybrid_communicate_group()
                 assert (
-                    ShardingOption.SHARD_GRAD_OP in self.args.sharding or
-                    ShardingOption.SHARD_OP in self.args.sharding
+                    ShardingOption.SHARD_GRAD_OP in self.args.sharding or ShardingOption.SHARD_OP in self.args.sharding
                 ), "Only support tensor parallel + sharding stage1/stage2 hybrid parallel now."
-                model = paddle.distributed.fleet.meta_parallel.TensorParallel(
-                    model, hcg, strategy=None)
+                model = paddle.distributed.fleet.meta_parallel.TensorParallel(model, hcg, strategy=None)
 
             if ShardingOption.SHARD_OP in self.args.sharding:
                 model = fleet.distributed_model(model)
                 self.optimizer = fleet.distributed_optimizer(self.optimizer)
             else:
                 # sync params (broadcast) buffers in dp group
-                if (not is_dp_group_support_in_group_sharded_parallel() and
-                        self.args.data_parallel_degree > 1):
+                if not is_dp_group_support_in_group_sharded_parallel() and self.args.data_parallel_degree > 1:
                     try:
-                        from paddle.fluid.dygraph.parallel import \
-                            sync_params_buffers
+                        from paddle.fluid.dygraph.parallel import sync_params_buffers
                     except ImportError:
                         # fix for new api in paddlepaddle v2.5
-                        from paddle.distributed.parallel import \
-                            sync_params_buffers
+                        from paddle.distributed.parallel import sync_params_buffers
 
                     hcg = fleet.get_hybrid_communicate_group()
                     dp_group = hcg.get_data_parallel_group()
-                    sync_params_buffers(
-                        model, comm_group=dp_group, src_rank=dp_group.ranks[0])
+                    sync_params_buffers(model, comm_group=dp_group, src_rank=dp_group.ranks[0])
 
                 cpu_offload = ShardingOption.OFFLOAD in self.args.sharding
                 assert self.optimizer is not None, "optimizer is empty!"
@@ -324,23 +302,19 @@ class BLIP2Trainer(Trainer):
                     scaler=None,
                     group=self.sharding_group,
                     offload=cpu_offload,
-                    **extra_kwargs, )
+                    **extra_kwargs,
+                )
                 self.optimizer = optimizer
 
         # pure tesnor parallel mode, no pipeline_parallel, no sharding.
-        if (not in_pipeline_parallel_mode and not in_sharding_parallel_mode and
-                in_tensor_parallel_model):
+        if not in_pipeline_parallel_mode and not in_sharding_parallel_mode and in_tensor_parallel_model:
             if self.args.amp_master_grad:
-                mix_precision_utils.MixPrecisionLayer(
-                    model, dtype=self.amp_dtype)  # return value has no use
+                mix_precision_utils.MixPrecisionLayer(model, dtype=self.amp_dtype)  # return value has no use
 
             model = fleet.distributed_model(model)
-            assert (
-                self.optimizer is not None
-            ), "Tensor parallel mode need decorate optimizer, pelease init optimizer."
+            assert self.optimizer is not None, "Tensor parallel mode need decorate optimizer, pelease init optimizer."
             if self.args.amp_master_grad:
-                self.optimizer = mix_precision_utils.MixPrecisionOptimizer(
-                    self.optimizer)
+                self.optimizer = mix_precision_utils.MixPrecisionOptimizer(self.optimizer)
             self.optimizer = fleet.distributed_optimizer(self.optimizer)
         return model
 
@@ -350,19 +324,20 @@ class BLIP2Trainer(Trainer):
         arguments, depending on the situation.
         """
         if self.enable_autocast_context_manager:
-            ctx_manager = autocast(True, )
+            ctx_manager = autocast(
+                True,
+            )
         else:
-            ctx_manager = (contextlib.nullcontext()
-                           if sys.version_info >= (3, 7) else
-                           contextlib.suppress())
+            ctx_manager = contextlib.nullcontext() if sys.version_info >= (3, 7) else contextlib.suppress()
 
         return ctx_manager
 
     def evaluate(
-            self,
-            eval_dataset: Optional[Dataset]=None,
-            ignore_keys: Optional[List[str]]=None,
-            metric_key_prefix: str="eval", ) -> Dict[str, float]:
+        self,
+        eval_dataset: Optional[Dataset] = None,
+        ignore_keys: Optional[List[str]] = None,
+        metric_key_prefix: str = "eval",
+    ) -> Dict[str, float]:
         """
         Run evaluation and returns metrics.
 
@@ -398,30 +373,34 @@ class BLIP2Trainer(Trainer):
             eval_dataloader,
             description="Evaluation",
             ignore_keys=ignore_keys,
-            metric_key_prefix=metric_key_prefix, )
+            metric_key_prefix=metric_key_prefix,
+        )
 
-        total_batch_size = self.args.eval_batch_size * self.args.dataset_world_size
-        output.metrics.update(speed_metrics(
-            metric_key_prefix,
-            start_time, ))
+        # total_batch_size = self.args.eval_batch_size * self.args.dataset_world_size
+        output.metrics.update(
+            speed_metrics(
+                metric_key_prefix,
+                start_time,
+            )
+        )
 
         self.log(output.metrics)
 
-        self.control = self.callback_handler.on_evaluate(
-            self.args, self.state, self.control, output.metrics)
+        self.control = self.callback_handler.on_evaluate(self.args, self.state, self.control, output.metrics)
 
         self._memory_tracker.stop_and_update_metrics(output.metrics)
 
         return output.metrics
 
     def evaluation_loop(
-            self,
-            dataloader: DataLoader,
-            description: str,
-            prediction_loss_only: Optional[bool]=None,
-            ignore_keys: Optional[List[str]]=None,
-            metric_key_prefix: str="eval",
-            max_eval_iters: Optional[int]=-1, ) -> EvalLoopOutput:
+        self,
+        dataloader: DataLoader,
+        description: str,
+        prediction_loss_only: Optional[bool] = None,
+        ignore_keys: Optional[List[str]] = None,
+        metric_key_prefix: str = "eval",
+        max_eval_iters: Optional[int] = -1,
+    ) -> EvalLoopOutput:
         """
         Prediction/evaluation loop, shared by `Trainer.evaluate()` and `Trainer.predict()`.
 
@@ -429,17 +408,13 @@ class BLIP2Trainer(Trainer):
         """
         args = self.args
 
-        prediction_loss_only = (prediction_loss_only
-                                if prediction_loss_only is not None else
-                                args.prediction_loss_only)
+        prediction_loss_only = prediction_loss_only if prediction_loss_only is not None else args.prediction_loss_only
 
         model = self.model
 
         if isinstance(dataloader, paddle.io.DataLoader):
             batch_size = dataloader.batch_sampler.batch_size
-        elif isinstance(
-                dataloader,
-                paddle.fluid.dataloader.dataloader_iter._DataLoaderIterBase):
+        elif isinstance(dataloader, paddle.fluid.dataloader.dataloader_iter._DataLoaderIterBase):
             # support for inner dataloader
             batch_size = dataloader._batch_sampler.batch_size
             # alias for inner dataloader
@@ -460,8 +435,7 @@ class BLIP2Trainer(Trainer):
                 logger.info(f"  Total prediction steps = {max_eval_iters}")
 
         logger.info(f"  Pre device batch size = {batch_size}")
-        logger.info(
-            f"  Total Batch size = {batch_size * self.args.dataset_world_size}")
+        logger.info(f"  Total Batch size = {batch_size * self.args.dataset_world_size}")
 
         model.eval()
 
@@ -474,8 +448,7 @@ class BLIP2Trainer(Trainer):
             # Prediction step
             eval_output = self.prediction_step(model, inputs)
             results.extend(eval_output)
-            self.control = self.callback_handler.on_prediction_step(
-                args, self.state, self.control)
+            self.control = self.callback_handler.on_prediction_step(args, self.state, self.control)
             if max_eval_iters > 0 and step >= max_eval_iters - 1:
                 break
         if results is not None:
@@ -483,15 +456,13 @@ class BLIP2Trainer(Trainer):
         else:
             metrics = None
 
-        return EvalLoopOutput(
-            predictions=None, label_ids=None, metrics=metrics, num_samples=None)
+        return EvalLoopOutput(predictions=None, label_ids=None, metrics=metrics, num_samples=None)
 
     def prediction_step(
-            self,
-            model: nn.Layer,
-            inputs: Dict[str, Union[paddle.Tensor, Any]], ) -> Tuple[Optional[
-                paddle.Tensor], Optional[paddle.Tensor], Optional[
-                    paddle.Tensor]]:
+        self,
+        model: nn.Layer,
+        inputs: Dict[str, Union[paddle.Tensor, Any]],
+    ) -> Tuple[Optional[paddle.Tensor], Optional[paddle.Tensor], Optional[paddle.Tensor]]:
         """
         Perform an evaluation step on `model` using `inputs`.
 
@@ -517,11 +488,11 @@ class BLIP2Trainer(Trainer):
                 text=[""] * inputs["pixel_values"].shape[0],
                 return_tensors="pd",
                 return_attention_mask=True,
-                mode="test", )
+                mode="test",
+            )
             model_inputs.update(inputs)
             generated_ids, scores = model.generate(**model_inputs)
-            generated_text = self.processor.batch_decode(
-                generated_ids, skip_special_tokens=True)
+            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
             generated_text = [text.strip() for text in generated_text]
             for caption, img_id in zip(generated_text, inputs["image_id"]):
                 results.append({"caption": caption, "image_id": int(img_id)})
@@ -533,23 +504,19 @@ class BLIP2Trainer(Trainer):
             result_dir=self.args.output_dir + "/result",
             filename="{}_epoch{}".format("eval", "eval"),
             remove_duplicate="image_id",
-            world_size=self.args.world_size, )
+            world_size=self.args.world_size,
+        )
 
         metrics = self._report_metrics(eval_result_file=eval_result_file)
 
         return metrics
 
     @staticmethod
-    def save_result(result,
-                    result_dir,
-                    filename,
-                    remove_duplicate="",
-                    world_size=1):
+    def save_result(result, result_dir, filename, remove_duplicate="", world_size=1):
         import logging
 
         rank_id_curr_node = int(os.environ.get("PADDLE_RANK_IN_NODE", 0))
-        result_file = os.path.join(result_dir, "%s_rank%d.json" %
-                                   (filename, rank_id_curr_node))
+        result_file = os.path.join(result_dir, "%s_rank%d.json" % (filename, rank_id_curr_node))
         if not os.path.exists(result_dir):
             os.mkdir(result_dir)
         json.dump(result, open(result_file, "w"))
@@ -558,13 +525,11 @@ class BLIP2Trainer(Trainer):
         if world_size > 1:
             paddle.distributed.barrier()
         if rank_id_curr_node == 0:
-            logging.warning("rank %d starts merging results." %
-                            rank_id_curr_node)
+            logging.warning("rank %d starts merging results." % rank_id_curr_node)
             result = []
             # for rank in range(get_world_size()):
             for rank in range(int(os.environ.get("PADDLE_TRAINERS_NUM", 1))):
-                result_file = os.path.join(result_dir,
-                                           "%s_rank%d.json" % (filename, rank))
+                result_file = os.path.join(result_dir, "%s_rank%d.json" % (filename, rank))
                 res = json.load(open(result_file, "r"))
                 result += res
 
@@ -582,8 +547,7 @@ class BLIP2Trainer(Trainer):
         else:
             while not os.path.exists(final_result_file):
                 time.sleep(0.5)
-                logging.warning("rank %d waits rank0 to merge results." %
-                                rank_id_curr_node)
+                logging.warning("rank %d waits rank0 to merge results." % rank_id_curr_node)
 
         # combine results from all processes
         return final_result_file

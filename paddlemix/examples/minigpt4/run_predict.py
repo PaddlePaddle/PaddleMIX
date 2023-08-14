@@ -25,8 +25,7 @@ from paddlemix import MiniGPT4ForConditionalGeneration, MiniGPT4Processor
 
 def predict(args):
     # load MiniGPT4 moel and processor
-    model = MiniGPT4ForConditionalGeneration.from_pretrained(
-        args.pretrained_name_or_path)
+    model = MiniGPT4ForConditionalGeneration.from_pretrained(args.pretrained_name_or_path)
     model.eval()
     processor = MiniGPT4Processor.from_pretrained(args.pretrained_name_or_path)
     print("load processor and model done!")
@@ -61,7 +60,8 @@ if __name__ == "__main__":
         "--pretrained_name_or_path",
         default="your directory of minigpt4",
         type=str,
-        help="The dir name of minigpt4 checkpoint.", )
+        help="The dir name of minigpt4 checkpoint.",
+    )
     args = parser.parse_args()
 
     predict(args)

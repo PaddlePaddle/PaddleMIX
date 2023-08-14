@@ -18,23 +18,31 @@ import time
 
 import torch
 
-torch.nn.functional.scaled_dot_product_attention_ = (
-    torch.nn.functional.scaled_dot_product_attention)
+torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
 delattr(torch.nn.functional, "scaled_dot_product_attention")
 
 import cv2
 import numpy as np
 from diffusers import (
-    ControlNetModel, DDIMScheduler, DDPMScheduler, DEISMultistepScheduler,
-    DPMSolverMultistepScheduler, DPMSolverSinglestepScheduler,
-    EulerAncestralDiscreteScheduler, EulerDiscreteScheduler,
-    HeunDiscreteScheduler, KDPM2AncestralDiscreteScheduler,
-    KDPM2DiscreteScheduler, LMSDiscreteScheduler, PNDMScheduler,
+    ControlNetModel,
+    DDIMScheduler,
+    DDPMScheduler,
+    DEISMultistepScheduler,
+    DPMSolverMultistepScheduler,
+    DPMSolverSinglestepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    HeunDiscreteScheduler,
+    KDPM2AncestralDiscreteScheduler,
+    KDPM2DiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
     StableDiffusionControlNetImg2ImgPipeline,
-    StableDiffusionControlNetInpaintPipeline, StableDiffusionControlNetPipeline,
-    UniPCMultistepScheduler)
-from diffusers.models.attention_processor import (AttnProcessor,
-                                                  AttnProcessor2_0)
+    StableDiffusionControlNetInpaintPipeline,
+    StableDiffusionControlNetPipeline,
+    UniPCMultistepScheduler,
+)
+from diffusers.models.attention_processor import AttnProcessor, AttnProcessor2_0
 from diffusers.utils import load_image
 from PIL import Image
 from tqdm.auto import trange
@@ -67,46 +75,40 @@ def change_scheduler(self, scheduler_type="ddim"):
     self.orginal_scheduler_config = self.scheduler.config
     scheduler_type = scheduler_type.lower()
     if scheduler_type == "pndm":
-        scheduler = PNDMScheduler.from_config(
-            self.orginal_scheduler_config, skip_prk_steps=True)
+        scheduler = PNDMScheduler.from_config(self.orginal_scheduler_config, skip_prk_steps=True)
     elif scheduler_type == "lms":
-        scheduler = LMSDiscreteScheduler.from_config(
-            self.orginal_scheduler_config)
+        scheduler = LMSDiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "heun":
-        scheduler = HeunDiscreteScheduler.from_config(
-            self.orginal_scheduler_config)
+        scheduler = HeunDiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "euler":
-        scheduler = EulerDiscreteScheduler.from_config(
-            self.orginal_scheduler_config)
+        scheduler = EulerDiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "euler-ancestral":
-        scheduler = EulerAncestralDiscreteScheduler.from_config(
-            self.orginal_scheduler_config)
+        scheduler = EulerAncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "dpm-multi":
-        scheduler = DPMSolverMultistepScheduler.from_config(
-            self.orginal_scheduler_config)
+        scheduler = DPMSolverMultistepScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "dpm-single":
-        scheduler = DPMSolverSinglestepScheduler.from_config(
-            self.orginal_scheduler_config)
+        scheduler = DPMSolverSinglestepScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "kdpm2-ancestral":
-        scheduler = KDPM2AncestralDiscreteScheduler.from_config(
-            self.orginal_scheduler_config)
+        scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "kdpm2":
-        scheduler = KDPM2DiscreteScheduler.from_config(
-            self.orginal_scheduler_config)
+        scheduler = KDPM2DiscreteScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "unipc-multi":
-        scheduler = UniPCMultistepScheduler.from_config(
-            self.orginal_scheduler_config)
+        scheduler = UniPCMultistepScheduler.from_config(self.orginal_scheduler_config)
     elif scheduler_type == "ddim":
         scheduler = DDIMScheduler.from_config(
             self.orginal_scheduler_config,
             steps_offset=1,
             clip_sample=False,
-            set_alpha_to_one=False, )
+            set_alpha_to_one=False,
+        )
     elif scheduler_type == "ddpm":
-        scheduler = DDPMScheduler.from_config(self.orginal_scheduler_config, )
+        scheduler = DDPMScheduler.from_config(
+            self.orginal_scheduler_config,
+        )
     elif scheduler_type == "deis-multi":
         scheduler = DEISMultistepScheduler.from_config(
-            self.orginal_scheduler_config, )
+            self.orginal_scheduler_config,
+        )
     else:
         raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
     return scheduler
@@ -131,12 +133,14 @@ def parse_arguments():
         "--inference_steps",
         type=int,
         default=50,
-        help="The number of unet inference steps.", )
+        help="The number of unet inference steps.",
+    )
     parser.add_argument(
         "--benchmark_steps",
         type=int,
         default=10,
-        help="The number of performance benchmark steps.", )
+        help="The number of performance benchmark steps.",
+    )
     parser.add_argument(
         "--task_name",
         type=str,
@@ -157,20 +161,17 @@ def parse_arguments():
             "raw",
             "lpw",
         ],
-        help="The parse_prompt_type can be one of [raw, lpw]. ", )
+        help="The parse_prompt_type can be one of [raw, lpw]. ",
+    )
     parser.add_argument(
         "--channels_last",
         type=strtobool,
         default=False,
-        help="Wheter to use channels_last", )
-    parser.add_argument(
-        "--use_fp16",
-        type=strtobool,
-        default=True,
-        help="Wheter to use FP16 mode")
+        help="Wheter to use channels_last",
+    )
+    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
     parser.add_argument("--tf32", type=strtobool, default=True, help="tf32")
-    parser.add_argument(
-        "--compile", type=strtobool, default=False, help="compile")
+    parser.add_argument("--compile", type=strtobool, default=False, help="compile")
     parser.add_argument(
         "--attention_type",
         type=str,
@@ -179,12 +180,9 @@ def parse_arguments():
             "raw",
             "sdp",
         ],
-        help="attention_type.", )
-    parser.add_argument(
-        "--device_id",
-        type=int,
-        default=0,
-        help="The selected gpu id. -1 means use cpu")
+        help="attention_type.",
+    )
+    parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
         "--scheduler",
         type=str,
@@ -204,21 +202,22 @@ def parse_arguments():
             "kdpm2-ancestral",
             "kdpm2",
         ],
-        help="The scheduler type of stable diffusion.", )
-    parser.add_argument(
-        "--height", type=int, default=512, help="Height of input image")
-    parser.add_argument(
-        "--width", type=int, default=512, help="Width of input image")
+        help="The scheduler type of stable diffusion.",
+    )
+    parser.add_argument("--height", type=int, default=512, help="Height of input image")
+    parser.add_argument("--width", type=int, default=512, help="Width of input image")
     parser.add_argument(
         "--low_threshold",
         type=int,
         default=100,
-        help="The value of Canny low threshold.", )
+        help="The value of Canny low threshold.",
+    )
     parser.add_argument(
         "--high_threshold",
         type=int,
         default=200,
-        help="The value of Canny high threshold.", )
+        help="The value of Canny high threshold.",
+    )
     return parser.parse_args()
 
 
@@ -272,14 +271,16 @@ def main(args):
     seed = 1024
     torch_dtype = torch.float16 if args.use_fp16 else torch.float32
     controlnet = ControlNetModel.from_pretrained(
-        args.controlnet_pretrained_model_name_or_path, torch_dtype=torch_dtype)
+        args.controlnet_pretrained_model_name_or_path, torch_dtype=torch_dtype
+    )
     pipe = StableDiffusionControlNetPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
         controlnet=controlnet,
         safety_checker=None,
         feature_extractor=None,
         requires_safety_checker=False,
-        torch_dtype=torch_dtype, )
+        torch_dtype=torch_dtype,
+    )
     scheduler = change_scheduler(pipe, args.scheduler)
     pipe.scheduler = scheduler
     if args.device_id >= 0:
@@ -291,11 +292,9 @@ def main(args):
         args.attention_type = [args.attention_type]
 
     for attention_type in args.attention_type:
-        attn_prrocessor_cls = (AttnProcessor
-                               if attention_type == "raw" else AttnProcessor2_0)
+        attn_prrocessor_cls = AttnProcessor if attention_type == "raw" else AttnProcessor2_0
         if attention_type == "sdp":
-            torch.nn.functional.scaled_dot_product_attention = (
-                torch.nn.functional.scaled_dot_product_attention_)
+            torch.nn.functional.scaled_dot_product_attention = torch.nn.functional.scaled_dot_product_attention_
         set_attn_processor(pipe.unet, attn_prrocessor_cls())
         set_attn_processor(pipe.vae, attn_prrocessor_cls())
         set_attn_processor(pipe.controlnet, attn_prrocessor_cls())
@@ -306,24 +305,20 @@ def main(args):
 
         if args.compile:
             print("Run torch compile")
-            pipe.unet = torch.compile(
-                pipe.unet, mode="reduce-overhead", fullgraph=True)
-            pipe.controlnet = torch.compile(
-                pipe.controlnet, mode="reduce-overhead", fullgraph=True)
+            pipe.unet = torch.compile(pipe.unet, mode="reduce-overhead", fullgraph=True)
+            pipe.controlnet = torch.compile(pipe.controlnet, mode="reduce-overhead", fullgraph=True)
 
         width = args.width
         height = args.height
         pipe.set_progress_bar_config(disable=True)
 
-        folder = (f"torch_attn_{attention_type}_fp16"
-                  if args.use_fp16 else f"torch_attn_{attention_type}_fp32")
+        folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
         os.makedirs(folder, exist_ok=True)
         if args.task_name in ["text2img_control", "all"]:
             init_image = load_image(
                 "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
             )
-            controlnet_cond = get_canny_image(init_image, args).resize(
-                (width, height))
+            controlnet_cond = get_canny_image(init_image, args).resize((width, height))
             # text2img
             prompt = "bird"
             time_costs = []
@@ -334,7 +329,8 @@ def main(args):
                 height=height,
                 width=width,
                 image=controlnet_cond,
-                controlnet_conditioning_scale=1.0, )
+                controlnet_conditioning_scale=1.0,
+            )
             print("==> Test text2img_control performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -345,7 +341,8 @@ def main(args):
                     height=height,
                     width=width,
                     image=controlnet_cond,
-                    controlnet_conditioning_scale=1.0, ).images
+                    controlnet_conditioning_scale=1.0,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -356,13 +353,11 @@ def main(args):
             images[0].save(f"{folder}/text2img_control.png")
 
         if args.task_name in ["img2img_control", "all"]:
-            pipe_img2img = StableDiffusionControlNetImg2ImgPipeline(
-                **pipe.components)
+            pipe_img2img = StableDiffusionControlNetImg2ImgPipeline(**pipe.components)
             pipe_img2img.set_progress_bar_config(disable=True)
             img_url = "sketch-mountains-input.png"
             init_image = load_image(img_url).resize((width, height))
-            controlnet_cond = get_canny_image(init_image, args).resize(
-                (width, height))
+            controlnet_cond = get_canny_image(init_image, args).resize((width, height))
             prompt = "A fantasy landscape, trending on artstation"
             time_costs = []
             # warmup
@@ -373,7 +368,8 @@ def main(args):
                 height=height,
                 width=width,
                 control_image=controlnet_cond,
-                controlnet_conditioning_scale=1.0, )
+                controlnet_conditioning_scale=1.0,
+            )
             print("==> Test img2img_control performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -385,7 +381,8 @@ def main(args):
                     height=height,
                     width=width,
                     control_image=controlnet_cond,
-                    controlnet_conditioning_scale=1.0, ).images
+                    controlnet_conditioning_scale=1.0,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -396,15 +393,15 @@ def main(args):
             images[0].save(f"{folder}/img2img_control.png")
 
         if args.task_name in ["inpaint_legacy_control", "all"]:
-            pipe_inpaint = StableDiffusionControlNetInpaintPipeline(
-                **pipe.components)
+            pipe_inpaint = StableDiffusionControlNetInpaintPipeline(**pipe.components)
             pipe_inpaint.set_progress_bar_config(disable=True)
-            img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+            img_url = (
+                "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+            )
             mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
             init_image = load_image(img_url).resize((width, height))
             mask_image = load_image(mask_url).resize((width, height))
-            controlnet_cond = get_canny_image(init_image, args).resize(
-                (width, height))
+            controlnet_cond = get_canny_image(init_image, args).resize((width, height))
             prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
             time_costs = []
             task_name = "inpaint_legacy_control"
@@ -416,7 +413,8 @@ def main(args):
                 height=height,
                 width=width,
                 control_image=controlnet_cond,
-                controlnet_conditioning_scale=1.0, )
+                controlnet_conditioning_scale=1.0,
+            )
             print(f"==> Test {task_name} performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -429,7 +427,8 @@ def main(args):
                     height=height,
                     width=width,
                     control_image=controlnet_cond,
-                    controlnet_conditioning_scale=1.0, ).images
+                    controlnet_conditioning_scale=1.0,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")

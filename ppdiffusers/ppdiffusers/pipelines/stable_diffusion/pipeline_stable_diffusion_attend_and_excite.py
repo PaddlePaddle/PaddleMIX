@@ -21,8 +21,7 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 from paddle.nn import functional as F
-from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
-                                    CLIPTokenizer)
+from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 
 from ...loaders import TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -100,8 +99,7 @@ class AttentionStore:
         attention_maps = self.get_average_attention()
         for location in from_where:
             for item in attention_maps[location]:
-                cross_maps = item.reshape(
-                    [-1, self.attn_res[0], self.attn_res[1], item.shape[-1]])
+                cross_maps = item.reshape([-1, self.attn_res[0], self.attn_res[1], item.shape[-1]])
                 out.append(cross_maps)
         out = paddle.concat(out, axis=0)
         out = out.sum(0) / out.shape[0]
@@ -132,21 +130,19 @@ class AttendExciteAttnProcessor:
         self.place_in_unet = place_in_unet
 
     def __call__(
-            self,
-            attn: Attention,
-            hidden_states,
-            encoder_hidden_states=None,
-            attention_mask=None, ):
+        self,
+        attn: Attention,
+        hidden_states,
+        encoder_hidden_states=None,
+        attention_mask=None,
+    ):
         batch_size, sequence_length, _ = hidden_states.shape
-        attention_mask = attn.prepare_attention_mask(
-            attention_mask, sequence_length, batch_size)
+        attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
 
         query = attn.to_q(hidden_states)
 
         is_cross = encoder_hidden_states is not None
-        encoder_hidden_states = (encoder_hidden_states
-                                 if encoder_hidden_states is not None else
-                                 hidden_states)
+        encoder_hidden_states = encoder_hidden_states if encoder_hidden_states is not None else hidden_states
         key = attn.to_k(encoder_hidden_states)
         value = attn.to_v(encoder_hidden_states)
 
@@ -160,8 +156,7 @@ class AttendExciteAttnProcessor:
         if not attention_probs.stop_gradient:
             # TODO must flatten （0, 1)
             # [bs, num_heads, q_len, k_len] -> [bs*num_heads, q_len, k_len]
-            self.attnstore(
-                attention_probs.flatten(0, 1), is_cross, self.place_in_unet)
+            self.attnstore(attention_probs.flatten(0, 1), is_cross, self.place_in_unet)
 
         hidden_states = paddle.matmul(attention_probs, value)
         hidden_states = attn.batch_to_head_dim(hidden_states)
@@ -174,8 +169,7 @@ class AttendExciteAttnProcessor:
         return hidden_states
 
 
-class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
-                                             TextualInversionLoaderMixin):
+class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline, TextualInversionLoaderMixin):
     r"""
     Pipeline for text-to-image generation using Stable Diffusion and Attend and Excite.
 
@@ -205,15 +199,16 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
     _optional_components = ["safety_checker", "feature_extractor"]
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            scheduler: KarrasDiffusionSchedulers,
-            safety_checker: StableDiffusionSafetyChecker,
-            feature_extractor: CLIPImageProcessor,
-            requires_safety_checker: bool=True, ):
+        self,
+        vae: AutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: UNet2DConditionModel,
+        scheduler: KarrasDiffusionSchedulers,
+        safety_checker: StableDiffusionSafetyChecker,
+        feature_extractor: CLIPImageProcessor,
+        requires_safety_checker: bool = True,
+    ):
         super().__init__()
 
         if safety_checker is None and requires_safety_checker:
@@ -239,19 +234,21 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
             unet=unet,
             scheduler=scheduler,
             safety_checker=safety_checker,
-            feature_extractor=feature_extractor, )
-        self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+            feature_extractor=feature_extractor,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
     def _encode_prompt(
-            self,
-            prompt,
-            num_images_per_prompt,
-            do_classifier_free_guidance,
-            negative_prompt=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None, ):
+        self,
+        prompt,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt=None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+    ):
         r"""
         Encodes the prompt into text encoder hidden states.
 
@@ -291,29 +288,31 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                 padding="max_length",
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_input_ids = text_inputs.input_ids
-            untruncated_ids = self.tokenizer(
-                prompt, padding="longest", return_tensors="pd").input_ids
+            untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                    -1] and not paddle.equal_all(text_input_ids,
-                                                 untruncated_ids):
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+                text_input_ids, untruncated_ids
+            ):
                 removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
+                    untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1]
+                )
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
-                    f" {self.tokenizer.model_max_length} tokens: {removed_text}")
+                    f" {self.tokenizer.model_max_length} tokens: {removed_text}"
+                )
 
-            if (hasattr(self.text_encoder.config, "use_attention_mask") and
-                    self.text_encoder.config.use_attention_mask):
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
 
             prompt_embeds = self.text_encoder(
                 text_input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             prompt_embeds = prompt_embeds[0]
 
         prompt_embeds = prompt_embeds.cast(self.text_encoder.dtype)
@@ -321,8 +320,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape(
-            [bs_embed * num_images_per_prompt, seq_len, -1])
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
@@ -332,21 +330,22 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
             elif type(prompt) is not type(negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}.")
+                    f" {type(prompt)}."
+                )
             elif isinstance(negative_prompt, str):
                 uncond_tokens = [negative_prompt]
             elif batch_size != len(negative_prompt):
                 raise ValueError(
                     f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                     f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`.")
+                    " the batch size of `prompt`."
+                )
             else:
                 uncond_tokens = negative_prompt
 
             # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
-                uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
-                                                          self.tokenizer)
+                uncond_tokens = self.maybe_convert_prompt(uncond_tokens, self.tokenizer)
 
             max_length = prompt_embeds.shape[1]
             uncond_input = self.tokenizer(
@@ -354,47 +353,43 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
 
-            if (hasattr(self.text_encoder.config, "use_attention_mask") and
-                    self.text_encoder.config.use_attention_mask):
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
 
             negative_prompt_embeds = self.text_encoder(
                 uncond_input.input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             negative_prompt_embeds = negative_prompt_embeds[0]
 
         if do_classifier_free_guidance:
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds.cast(
-                self.text_encoder.dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(self.text_encoder.dtype)
 
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                [1, num_images_per_prompt, 1])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
+            negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            prompt_embeds = paddle.concat(
-                [negative_prompt_embeds, prompt_embeds])
+            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
 
         return prompt_embeds
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is not None:
-            safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors="pd")
+            safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image,
-                clip_input=safety_checker_input.pixel_values.cast(dtype))
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype)
+            )
         else:
             has_nsfw_concept = None
         return image, has_nsfw_concept
@@ -415,54 +410,50 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     def check_inputs(
-            self,
-            prompt,
-            indices,
-            height,
-            width,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        indices,
+        height,
+        width,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two.")
+                " only forward one of the two."
+            )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -475,22 +466,19 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                 raise ValueError(
                     "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}.")
+                    f" {negative_prompt_embeds.shape}."
+                )
 
-        indices_is_list_ints = isinstance(indices, list) and isinstance(
-            indices[0], int)
-        indices_is_list_list_ints = (isinstance(indices, list) and
-                                     isinstance(indices[0], list) and
-                                     isinstance(indices[0][0], int))
+        indices_is_list_ints = isinstance(indices, list) and isinstance(indices[0], int)
+        indices_is_list_list_ints = (
+            isinstance(indices, list) and isinstance(indices[0], list) and isinstance(indices[0][0], int)
+        )
 
         if not indices_is_list_ints and not indices_is_list_list_ints:
-            raise TypeError(
-                "`indices` must be a list of ints or a list of a list of ints")
+            raise TypeError("`indices` must be a list of ints or a list of a list of ints")
 
-        if (indices is None) or (indices is not None and
-                                 not isinstance(indices, List)):
-            raise ValueError(
-                f"`indices` has to be a list but is {type(indices)}")
+        if (indices is None) or (indices is not None and not isinstance(indices, List)):
+            raise ValueError(f"`indices` has to be a list but is {type(indices)}")
 
         if indices_is_list_ints:
             indices_batch_size = 1
@@ -511,19 +499,21 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(
-            self,
-            batch_size,
-            num_channels_latents,
-            height,
-            width,
-            dtype,
-            generator,
-            latents=None, ):
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
         shape = (
             batch_size,
             num_channels_latents,
             height // self.vae_scale_factor,
-            width // self.vae_scale_factor, )
+            width // self.vae_scale_factor,
+        )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -539,8 +529,9 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
 
     @staticmethod
     def _compute_max_attention_per_index(
-            attention_maps: paddle.Tensor,
-            indices: List[int], ) -> List[paddle.Tensor]:
+        attention_maps: paddle.Tensor,
+        indices: List[int],
+    ) -> List[paddle.Tensor]:
         """Computes the maximum attention value for each of the tokens we wish to alter."""
         attention_for_text = attention_maps[:, :, 1:-1]
         attention_for_text *= 100
@@ -554,38 +545,35 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
         for i in indices:
             image = attention_for_text[:, :, i]
             smoothing = GaussianSmoothing()
-            input = F.pad(image.unsqueeze(0).unsqueeze(0), (1, 1, 1, 1),
-                          mode="reflect")
+            input = F.pad(image.unsqueeze(0).unsqueeze(0), (1, 1, 1, 1), mode="reflect")
             image = smoothing(input).squeeze(0).squeeze(0)
             # paddle.max donot support float16
             max_indices_list.append(image.max())
         return max_indices_list
 
     def _aggregate_and_get_max_attention_per_token(
-            self,
-            indices: List[int], ):
+        self,
+        indices: List[int],
+    ):
         """Aggregates the attention for each token and computes the max activation value for each token to alter."""
         attention_maps = self.attention_store.aggregate_attention(
-            from_where=("up", "down", "mid"), )
+            from_where=("up", "down", "mid"),
+        )
         max_attention_per_index = self._compute_max_attention_per_index(
             attention_maps=attention_maps,
-            indices=indices, )
+            indices=indices,
+        )
         return max_attention_per_index
 
     @staticmethod
-    def _compute_loss(
-            max_attention_per_index: List[paddle.Tensor]) -> paddle.Tensor:
+    def _compute_loss(max_attention_per_index: List[paddle.Tensor]) -> paddle.Tensor:
         """Computes the attend-and-excite loss using the maximum attention value for each token."""
-        losses = [
-            max(0, 1.0 - curr_max) for curr_max in max_attention_per_index
-        ]
+        losses = [max(0, 1.0 - curr_max) for curr_max in max_attention_per_index]
         loss = max(losses)
         return loss
 
     @staticmethod
-    def _update_latent(latents: paddle.Tensor,
-                       loss: paddle.Tensor,
-                       step_size: float) -> paddle.Tensor:
+    def _update_latent(latents: paddle.Tensor, loss: paddle.Tensor, step_size: float) -> paddle.Tensor:
         """Update the latent according to the computed loss."""
         loss.stop_gradient = False
         grad_cond = paddle.autograd.grad(loss, [latents], retain_graph=True)[0]
@@ -593,15 +581,16 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
         return latents
 
     def _perform_iterative_refinement_step(
-            self,
-            latents: paddle.Tensor,
-            indices: List[int],
-            loss: paddle.Tensor,
-            threshold: float,
-            text_embeddings: paddle.Tensor,
-            step_size: float,
-            t: int,
-            max_refinement_steps: int=20, ):
+        self,
+        latents: paddle.Tensor,
+        indices: List[int],
+        loss: paddle.Tensor,
+        threshold: float,
+        text_embeddings: paddle.Tensor,
+        step_size: float,
+        t: int,
+        max_refinement_steps: int = 20,
+    ):
         """
         Performs the iterative latent refinement introduced in the paper. Here, we continuously update the latent code
         according to our loss objective until the given threshold is reached for all tokens.
@@ -618,7 +607,8 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
 
             # Get max activation value for each subject token
             max_attention_per_index = self._aggregate_and_get_max_attention_per_token(
-                indices=indices, )
+                indices=indices,
+            )
 
             loss = self._compute_loss(max_attention_per_index)
 
@@ -628,9 +618,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
             logger.info(f"\t Try {iteration}. loss: {loss}")
 
             if iteration >= max_refinement_steps:
-                logger.info(
-                    f"\t Exceeded max number of iterations ({max_refinement_steps})! "
-                )
+                logger.info(f"\t Exceeded max number of iterations ({max_refinement_steps})! ")
                 break
 
         # Run one more time but don't compute gradients and update the latents.
@@ -643,7 +631,8 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
 
         # Get max activation value for each subject token
         max_attention_per_index = self._aggregate_and_get_max_attention_per_token(
-            indices=indices, )
+            indices=indices,
+        )
         loss = self._compute_loss(max_attention_per_index)
         logger.info(f"\t Finished with loss of: {loss}")
         return loss, latents, max_attention_per_index
@@ -662,8 +651,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                 continue
 
             cross_att_count += 1
-            attn_procs[name] = AttendExciteAttnProcessor(
-                attnstore=self.attention_store, place_in_unet=place_in_unet)
+            attn_procs[name] = AttendExciteAttnProcessor(attnstore=self.attention_store, place_in_unet=place_in_unet)
 
         self.unet.set_attn_processor(attn_procs)
         self.attention_store.num_att_layers = cross_att_count
@@ -671,42 +659,36 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
     def get_indices(self, prompt: str) -> Dict[str, int]:
         """Utility function to list the indices of the tokens you wish to alte"""
         ids = self.tokenizer(prompt).input_ids
-        indices = {
-            i: tok
-            for tok, i in zip(
-                self.tokenizer.convert_ids_to_tokens(ids), range(len(ids)))
-        }
+        indices = {i: tok for tok, i in zip(self.tokenizer.convert_ids_to_tokens(ids), range(len(ids)))}
         return indices
 
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
-            self,
-            prompt: Union[str, List[str]],
-            token_indices: Union[List[int], List[List[int]]],
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: int=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None,
-            max_iter_to_alter: int=25,
-            thresholds: dict={0: 0.05,
-                              10: 0.5,
-                              20: 0.8},
-            scale_factor: int=20,
-            attn_res: Optional[Tuple[int]]=(16, 16), ):
+        self,
+        prompt: Union[str, List[str]],
+        token_indices: Union[List[int], List[List[int]]],
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: int = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        max_iter_to_alter: int = 25,
+        thresholds: dict = {0: 0.05, 10: 0.5, 20: 0.8},
+        scale_factor: int = 20,
+        attn_res: Optional[Tuple[int]] = (16, 16),
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -802,7 +784,8 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
             callback_steps,
             negative_prompt,
             prompt_embeds,
-            negative_prompt_embeds, )
+            negative_prompt_embeds,
+        )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -824,7 +807,8 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds, )
+            negative_prompt_embeds=negative_prompt_embeds,
+        )
 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
@@ -839,7 +823,8 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
             width,
             prompt_embeds.dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -853,8 +838,9 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
         scale_range = np.linspace(1.0, 0.5, len(self.scheduler.timesteps))
         step_size = scale_factor * np.sqrt(scale_range)
 
-        text_embeddings = (prompt_embeds[batch_size * num_images_per_prompt:]
-                           if do_classifier_free_guidance else prompt_embeds)
+        text_embeddings = (
+            prompt_embeds[batch_size * num_images_per_prompt :] if do_classifier_free_guidance else prompt_embeds
+        )
 
         if isinstance(token_indices[0], int):
             token_indices = [token_indices]
@@ -865,8 +851,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
             indices = indices + [ind] * num_images_per_prompt
 
         # 7. Denoising loop
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # Attend and excite process
@@ -874,8 +859,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                     latents = latents.clone().detach()
                     latents.stop_gradient = False
                     updated_latents = []
-                    for latent, index, text_embedding in zip(latents, indices,
-                                                             text_embeddings):
+                    for latent, index, text_embedding in zip(latents, indices, text_embeddings):
                         # Forward pass of denoising with text conditioning
                         latent = latent.unsqueeze(0)
                         text_embedding = text_embedding.unsqueeze(0)
@@ -889,28 +873,23 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                         self.unet.clear_gradients()
 
                         # Get max activation value for each subject token
-                        max_attention_per_index = (
-                            self._aggregate_and_get_max_attention_per_token(
-                                indices=index, ))
+                        max_attention_per_index = self._aggregate_and_get_max_attention_per_token(
+                            indices=index,
+                        )
 
-                        loss = self._compute_loss(
-                            max_attention_per_index=max_attention_per_index)
+                        loss = self._compute_loss(max_attention_per_index=max_attention_per_index)
 
                         # If this is an iterative refinement step, verify we have reached the desired threshold for all
-                        if i in thresholds.keys() and loss > 1.0 - thresholds[
-                                i]:
-                            (
-                                loss,
-                                latent,
-                                max_attention_per_index,
-                            ) = self._perform_iterative_refinement_step(
+                        if i in thresholds.keys() and loss > 1.0 - thresholds[i]:
+                            (loss, latent, max_attention_per_index,) = self._perform_iterative_refinement_step(
                                 latents=latent,
                                 indices=index,
                                 loss=loss,
                                 threshold=thresholds[i],
                                 text_embeddings=text_embedding,
                                 step_size=step_size[i],
-                                t=t, )
+                                t=t,
+                            )
 
                         # Perform gradient update
                         if i < max_iter_to_alter:
@@ -918,41 +897,36 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                                 latent = self._update_latent(
                                     latents=latent,
                                     loss=loss,
-                                    step_size=step_size[i], )
-                            logger.info(
-                                f"Iteration {i} | Loss: {loss.item():0.4f}")
+                                    step_size=step_size[i],
+                                )
+                            logger.info(f"Iteration {i} | Loss: {loss.item():0.4f}")
 
                         updated_latents.append(latent)
 
                     latents = paddle.concat(updated_latents, axis=0)
 
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = (paddle.concat([latents] * 2) if
-                                      do_classifier_free_guidance else latents)
-                latent_model_input = self.scheduler.scale_model_input(
-                    latent_model_input, t)
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
-                    cross_attention_kwargs=cross_attention_kwargs, ).sample
+                    cross_attention_kwargs=cross_attention_kwargs,
+                ).sample
 
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
+                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -961,8 +935,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
         image = self.decode_latents(latents)
 
         # 9. Run safety checker
-        image, has_nsfw_concept = self.run_safety_checker(image,
-                                                          prompt_embeds.dtype)
+        image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
 
         # 10. Convert to PIL
         if output_type == "pil":
@@ -971,8 +944,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
         if not return_dict:
             return (image, has_nsfw_concept)
 
-        return StableDiffusionPipelineOutput(
-            images=image, nsfw_content_detected=has_nsfw_concept)
+        return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)
 
 
 class GaussianSmoothing(nn.Layer):
@@ -989,11 +961,12 @@ class GaussianSmoothing(nn.Layer):
 
     # channels=1, kernel_size=kernel_size, sigma=sigma, dim=2
     def __init__(
-            self,
-            channels: int=1,
-            kernel_size: int=3,
-            sigma: float=0.5,
-            dim: int=2, ):
+        self,
+        channels: int = 1,
+        kernel_size: int = 3,
+        sigma: float = 0.5,
+        dim: int = 2,
+    ):
         super().__init__()
 
         if isinstance(kernel_size, int):
@@ -1004,21 +977,17 @@ class GaussianSmoothing(nn.Layer):
         # The gaussian kernel is the product of the
         # gaussian function of each dimension.
         kernel = 1
-        meshgrids = paddle.meshgrid([
-            paddle.arange(
-                size, dtype=paddle.float32) for size in kernel_size
-        ])
+        meshgrids = paddle.meshgrid([paddle.arange(size, dtype=paddle.float32) for size in kernel_size])
         for size, std, mgrid in zip(kernel_size, sigma, meshgrids):
             mean = (size - 1) / 2
-            kernel *= (1 / (std * math.sqrt(2 * math.pi)) *
-                       paddle.exp(-(((mgrid - mean) / (2 * std))**2)))
+            kernel *= 1 / (std * math.sqrt(2 * math.pi)) * paddle.exp(-(((mgrid - mean) / (2 * std)) ** 2))
 
         # Make sure sum of values in gaussian kernel equals 1.
         kernel = kernel / paddle.sum(kernel)
 
         # Reshape to depthwise convolutional weight
         kernel = kernel.reshape([1, 1, *kernel.shape])
-        kernel = kernel.tile([channels, * [1] * (kernel.ndim - 1)])
+        kernel = kernel.tile([channels, *[1] * (kernel.ndim - 1)])
 
         self.register_buffer("weight", kernel)
         self.groups = channels
@@ -1030,9 +999,7 @@ class GaussianSmoothing(nn.Layer):
         elif dim == 3:
             self.conv = F.conv3d
         else:
-            raise RuntimeError(
-                "Only 1, 2 and 3 dimensions are supported. Received {}.".format(
-                    dim))
+            raise RuntimeError("Only 1, 2 and 3 dimensions are supported. Received {}.".format(dim))
 
     def forward(self, input):
         """
@@ -1042,5 +1009,4 @@ class GaussianSmoothing(nn.Layer):
         Returns:
             filtered (paddle.Tensor): Filtered output.
         """
-        return self.conv(
-            input, weight=self.weight.cast(input.dtype), groups=self.groups)
+        return self.conv(input, weight=self.weight.cast(input.dtype), groups=self.groups)

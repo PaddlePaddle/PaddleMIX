@@ -30,9 +30,7 @@ class AllGather(paddle.autograd.PyLayer):
         else:
             rank = dist.get_rank()
             world_size = dist.get_world_size()
-        tensors_gather = [
-            paddle.empty_like(x=tensor) for _ in range(world_size)
-        ]
+        tensors_gather = [paddle.empty_like(x=tensor) for _ in range(world_size)]
         paddle.distributed.all_gather(tensors_gather, tensor, group=group)
         ctx.rank = rank
         ctx.batch_size = tensor.shape[0]
@@ -40,8 +38,7 @@ class AllGather(paddle.autograd.PyLayer):
 
     @staticmethod
     def backward(ctx, grad_output):
-        return grad_output[ctx.batch_size * ctx.rank:ctx.batch_size * (ctx.rank
-                                                                       + 1)]
+        return grad_output[ctx.batch_size * ctx.rank : ctx.batch_size * (ctx.rank + 1)]
 
 
 allgather = AllGather.apply

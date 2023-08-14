@@ -1,0 +1,25 @@
+[tool.isort]
+profile = 'black'
+known_third_party = ["paddle"]
+skip = ['ppdiffusers/examples/community/mixture_tiling.py']
+
+[tool.black]
+line-length = 119
+target_version = ['py35', 'py36', 'py37', 'py38', 'py39', 'py310']
+exclude = ['.flake8', 'ppdiffusers/examples/community/mixture_tiling.py']
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+# addopts = "-ra -q --ignore model_zoo/gpt-3/"
+pythonpath = ["."]
+testpaths = [
+    # "tests/models",
+]
+python_files = [
+    "test.py",
+    "test_*.py"
+]
+filterwarnings = [
+    "ignore::UserWarning",
+    'ignore::DeprecationWarning',
+]

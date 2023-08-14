@@ -24,8 +24,11 @@ from zipfile import ZipFile
 import numpy as np
 
 from .constants import get_map_location_default
-from .import_utils import (is_paddle_available, is_safetensors_available,
-                           is_torch_available)
+from .import_utils import (
+    is_paddle_available,
+    is_safetensors_available,
+    is_torch_available,
+)
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -68,8 +71,7 @@ def read_prefix_key(path):
     with open(path, "rb") as file_handler:
         end_index = seek_by_string(file_handler, "data.pkl", file_size)
         file_handler.seek(MZ_ZIP_LOCAL_DIR_HEADER_SIZE)
-        prefix_key = file_handler.read(end_index - MZ_ZIP_LOCAL_DIR_HEADER_SIZE
-                                       - len("/data.pkl"))
+        prefix_key = file_handler.read(end_index - MZ_ZIP_LOCAL_DIR_HEADER_SIZE - len("/data.pkl"))
     return prefix_key.decode("latin")
 
 
@@ -89,8 +91,7 @@ def seek_by_string(file_handler, string: str, file_size: int) -> int:
             word_index = 0
 
     if file_handler.tell() >= file_size - 1:
-        raise Exception(
-            f"can't find the find the target string<{string}> in the file")
+        raise Exception(f"can't find the find the target string<{string}> in the file")
     return file_handler.tell()
 
 
@@ -163,21 +164,18 @@ class UnpicklerWrapperStage(pickle.Unpickler):
         return super().find_class(mod_name, name)
 
 
-def _rebuild_tensor_stage(storage, storage_offset, size, stride, requires_grad,
-                          backward_hooks):
+def _rebuild_tensor_stage(storage, storage_offset, size, stride, requires_grad, backward_hooks):
     # if a tensor has shape [M, N] and stride is [1, N], it's column-wise / fortran-style
     # if a tensor has shape [M, N] and stride is [M, 1], it's row-wise / C-style
     # defautls to C-style
-    if stride is not None and len(stride) > 1 and stride[0] == 1 and stride[
-            1] > 1:
+    if stride is not None and len(stride) > 1 and stride[0] == 1 and stride[1] > 1:
         order = "F"
     else:
         order = "C"
 
     # fix bug when load https://dl.fbaipublicfiles.com/segment_anything/sam_vit_h_4b8939.pth
     numel = int(np.prod(size))
-    return storage[storage_offset:storage_offset + numel].reshape(
-        size, order=order)
+    return storage[storage_offset : storage_offset + numel].reshape(size, order=order)
 
 
 def _rebuild_parameter(data, requires_grad, backward_hooks):
@@ -207,8 +205,7 @@ def torch_load(path: str, **pickle_load_args):
 
         def load_tensor(dtype, numel, key, location):
             name = f"{prefix_key}/data/{key}"
-            typed_storage = np.frombuffer(
-                torch_zip.open(name).read()[:numel], dtype=dtype)
+            typed_storage = np.frombuffer(torch_zip.open(name).read()[:numel], dtype=dtype)
             return typed_storage
 
         def persistent_load(saved_id):
@@ -226,15 +223,13 @@ def torch_load(path: str, **pickle_load_args):
                 typed_storage = loaded_storages[key]
             else:
                 nbytes = numel * _element_size(dtype)
-                typed_storage = load_tensor(dtype, nbytes, key,
-                                            _maybe_decode_ascii(location))
+                typed_storage = load_tensor(dtype, nbytes, key, _maybe_decode_ascii(location))
                 loaded_storages[key] = typed_storage
 
             return typed_storage
 
         data_iostream = torch_zip.open(f"{prefix_key}/data.pkl").read()
-        unpickler_stage = UnpicklerWrapperStage(
-            io.BytesIO(data_iostream), **pickle_load_args)
+        unpickler_stage = UnpicklerWrapperStage(io.BytesIO(data_iostream), **pickle_load_args)
         unpickler_stage.persistent_load = persistent_load
         state_dict = unpickler_stage.load()
         torch_zip.close()
@@ -263,19 +258,18 @@ def convert_to_paddle(state_dict, return_numpy=False, return_global_step=False):
         # if "position_id" in k and "int" not in str(v.dtype):
         #     v = v.numpy().astype("int64") if hasattr(v, "numpy") else v.astype("int64")
         if v.ndim == 0:
-            v = v.reshape((1, ))
+            v = v.reshape((1,))
         if not return_numpy:
             # support bfloat16
             if "torch.bfloat16" in str(v.dtype):
                 v = v.float()
                 pd_state_dict[k] = (
                     paddle.to_tensor(v.numpy()).cast(paddle.bfloat16)
-                    if hasattr(v, "numpy") else
-                    paddle.to_tensor(v).cast(paddle.bfloat16))
+                    if hasattr(v, "numpy")
+                    else paddle.to_tensor(v).cast(paddle.bfloat16)
+                )
             else:
-                pd_state_dict[k] = (paddle.to_tensor(v.numpy())
-                                    if hasattr(v, "numpy") else
-                                    paddle.to_tensor(v))
+                pd_state_dict[k] = paddle.to_tensor(v.numpy()) if hasattr(v, "numpy") else paddle.to_tensor(v)
         else:
             pd_state_dict[k] = v.numpy() if hasattr(v, "numpy") else v
 
@@ -290,7 +284,7 @@ def convert_to_numpy(state_dict):
         # if "position_id" in k and "int" not in str(v.dtype):
         #     v = v.numpy().astype("int64") if hasattr(v, "numpy") else v.astype("int64")
         if v.ndim == 0:
-            v = v.reshape((1, ))
+            v = v.reshape((1,))
     return pd_state_dict
 
 
@@ -310,19 +304,18 @@ def safetensors_load(path: str):
 
             data = load_file(path)
     else:
-        raise ImportError(
-            "`safetensors_load` requires the `safetensors library: `pip install safetensors`."
-        )
+        raise ImportError("`safetensors_load` requires the `safetensors library: `pip install safetensors`.")
 
     return data
 
 
 def smart_load(
-        path: str,
-        map_location: str=None,
-        return_numpy: bool=False,
-        return_global_step: bool=False,
-        return_is_torch_weight: bool=False, ):
+    path: str,
+    map_location: str = None,
+    return_numpy: bool = False,
+    return_global_step: bool = False,
+    return_is_torch_weight: bool = False,
+):
     if map_location is None:
         map_location = get_map_location_default()
 
@@ -335,46 +328,36 @@ def smart_load(
             return state_dict
 
         if suffix in torch_suffix:
-            state_dict = convert_to_paddle(
-                torch_load(path), return_numpy, return_global_step)
+            state_dict = convert_to_paddle(torch_load(path), return_numpy, return_global_step)
             if return_is_torch_weight:
                 state_dict["is_torch_weight"] = True
             return state_dict
 
         if suffix in safetensors_suffix:
-            state_dict = convert_to_paddle(
-                safetensors_load(path), return_numpy, return_global_step)
+            state_dict = convert_to_paddle(safetensors_load(path), return_numpy, return_global_step)
             if return_is_torch_weight:
                 state_dict["is_torch_weight"] = True
             return state_dict
 
         # must use safetensors_load first
         try:
-            state_dict = convert_to_paddle(
-                safetensors_load(path), return_numpy, return_global_step)
+            state_dict = convert_to_paddle(safetensors_load(path), return_numpy, return_global_step)
             if return_is_torch_weight:
                 state_dict["is_torch_weight"] = True
             return state_dict
         except Exception:
             logger.info(f"Cant load file {name} with safetensors!")
         try:
-            state_dict = convert_to_paddle(
-                torch_load(path), return_numpy, return_global_step)
+            state_dict = convert_to_paddle(torch_load(path), return_numpy, return_global_step)
             if return_is_torch_weight:
                 state_dict["is_torch_weight"] = True
             return state_dict
         except Exception:
-            logger.info(
-                f"Cant load file {name} with torch! We will try to load this with safetensors!"
-            )
+            logger.info(f"Cant load file {name} with torch! We will try to load this with safetensors!")
         try:
             state_dict = paddle.load(path, return_numpy=return_numpy)
             return state_dict
         except Exception:
-            logger.info(
-                f"Cant load file {name} with paddle! We will try to load this with torch/safetensors!"
-            )
+            logger.info(f"Cant load file {name} with paddle! We will try to load this with torch/safetensors!")
     if state_dict is None:
-        raise ValueError(
-            f"Cant load {name}, currently we only support ['torch', 'safetensors', 'paddle']!"
-        )
+        raise ValueError(f"Cant load {name}, currently we only support ['torch', 'safetensors', 'paddle']!")

@@ -25,22 +25,27 @@ import paddle
 import paddle.nn as nn
 import PIL
 import PIL.Image
-from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
-                                    CLIPTokenizer)
+from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
-from ppdiffusers.models import (AutoencoderKL, ControlNetModel,
-                                UNet2DConditionModel)
+from ppdiffusers.models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
 from ppdiffusers.models.controlnet import ControlNetOutput
 from ppdiffusers.models.modeling_utils import ModelMixin
 from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
-from ppdiffusers.pipelines.stable_diffusion import \
-    StableDiffusionPipelineOutput
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
-    StableDiffusionSafetyChecker
+from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
+    StableDiffusionSafetyChecker,
+)
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
-from ppdiffusers.utils import (PIL_INTERPOLATION, PPDIFFUSERS_CACHE, logging,
-                               ppdiffusers_url_download, randn_tensor,
-                               safetensors_load, smart_load, torch_load)
+from ppdiffusers.utils import (
+    PIL_INTERPOLATION,
+    PPDIFFUSERS_CACHE,
+    logging,
+    ppdiffusers_url_download,
+    randn_tensor,
+    safetensors_load,
+    smart_load,
+    torch_load,
+)
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -89,8 +94,7 @@ def resize_image(resize_mode, im, width, height, upscaler_name=None):
 
         resized = resize(im, src_w, src_h)
         res = Image.new("RGB", (width, height))
-        res.paste(
-            resized, box=(width // 2 - src_w // 2, height // 2 - src_h // 2))
+        res.paste(resized, box=(width // 2 - src_w // 2, height // 2 - src_h // 2))
 
     else:
         ratio = width / height
@@ -101,31 +105,22 @@ def resize_image(resize_mode, im, width, height, upscaler_name=None):
 
         resized = resize(im, src_w, src_h)
         res = Image.new("RGB", (width, height))
-        res.paste(
-            resized, box=(width // 2 - src_w // 2, height // 2 - src_h // 2))
+        res.paste(resized, box=(width // 2 - src_w // 2, height // 2 - src_h // 2))
 
         if ratio < src_ratio:
             fill_height = height // 2 - src_h // 2
+            res.paste(resized.resize((width, fill_height), box=(0, 0, width, 0)), box=(0, 0))
             res.paste(
-                resized.resize(
-                    (width, fill_height), box=(0, 0, width, 0)),
-                box=(0, 0))
-            res.paste(
-                resized.resize(
-                    (width, fill_height),
-                    box=(0, resized.height, width, resized.height)),
-                box=(0, fill_height + src_h), )
+                resized.resize((width, fill_height), box=(0, resized.height, width, resized.height)),
+                box=(0, fill_height + src_h),
+            )
         elif ratio > src_ratio:
             fill_width = width // 2 - src_w // 2
+            res.paste(resized.resize((fill_width, height), box=(0, 0, 0, height)), box=(0, 0))
             res.paste(
-                resized.resize(
-                    (fill_width, height), box=(0, 0, 0, height)),
-                box=(0, 0))
-            res.paste(
-                resized.resize(
-                    (fill_width, height),
-                    box=(resized.width, 0, resized.width, height)),
-                box=(fill_width + src_w, 0), )
+                resized.resize((fill_width, height), box=(resized.width, 0, resized.width, height)),
+                box=(fill_width + src_w, 0),
+            )
 
     return res
 
@@ -137,8 +132,7 @@ def get_civitai_download_url(display_url, url_prefix="https://civitai.com"):
     import requests
 
     headers = {
-        "User-Agent":
-        "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36 QIHU 360SE"
+        "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36 QIHU 360SE"
     }
     r = requests.get(display_url, headers=headers)
     soup = bs4.BeautifulSoup(r.text, "lxml")
@@ -151,12 +145,13 @@ def get_civitai_download_url(display_url, url_prefix="https://civitai.com"):
 
 
 def http_file_name(
-        url: str,
-        *,
-        proxies=None,
-        headers: Optional[Dict[str, str]]=None,
-        timeout=10.0,
-        max_retries=0, ):
+    url: str,
+    *,
+    proxies=None,
+    headers: Optional[Dict[str, str]] = None,
+    timeout=10.0,
+    max_retries=0,
+):
     """
     Get a remote file name.
     """
@@ -168,7 +163,8 @@ def http_file_name(
         proxies=proxies,
         headers=headers,
         timeout=timeout,
-        max_retries=max_retries, )
+        max_retries=max_retries,
+    )
     hf_raise_for_status(r)
     displayed_name = url.split("/")[-1]
     content_disposition = r.headers.get("Content-Disposition")
@@ -180,11 +176,12 @@ def http_file_name(
 
 @paddle.no_grad()
 def load_lora(
-        pipeline,
-        state_dict: dict,
-        LORA_PREFIX_UNET: str="lora_unet",
-        LORA_PREFIX_TEXT_ENCODER: str="lora_te",
-        ratio: float=1.0, ):
+    pipeline,
+    state_dict: dict,
+    LORA_PREFIX_UNET: str = "lora_unet",
+    LORA_PREFIX_TEXT_ENCODER: str = "lora_te",
+    ratio: float = 1.0,
+):
     ratio = float(ratio)
     visited = []
     for key in state_dict:
@@ -192,8 +189,7 @@ def load_lora(
             continue
 
         if "text" in key:
-            tmp_layer_infos = (key.split(".")[0].split(LORA_PREFIX_TEXT_ENCODER
-                                                       + "_")[-1].split("_"))
+            tmp_layer_infos = key.split(".")[0].split(LORA_PREFIX_TEXT_ENCODER + "_")[-1].split("_")
             hf_to_ppnlp = {
                 "encoder": "transformer",
                 "fc1": "linear1",
@@ -206,8 +202,7 @@ def load_lora(
                 layer_infos.append(hf_to_ppnlp.get(layer_info, layer_info))
             curr_layer: paddle.nn.Linear = pipeline.text_encoder
         else:
-            layer_infos = key.split(".")[0].split(LORA_PREFIX_UNET + "_")[
-                -1].split("_")
+            layer_infos = key.split(".")[0].split(LORA_PREFIX_UNET + "_")[-1].split("_")
             curr_layer: paddle.nn.Linear = pipeline.unet
 
         temp_name = layer_infos.pop(0)
@@ -248,24 +243,29 @@ def load_lora(
             if weight_down.shape[2:4] == [1, 1]:
                 # conv2d 1x1
                 curr_layer.weight.copy_(
-                    curr_layer.weight + ratio * paddle.matmul(
-                        weight_up.squeeze([-1, -2]),
-                        weight_down.squeeze([-1, -2])).unsqueeze([-1, -2]) *
-                    scale,
-                    True, )
+                    curr_layer.weight
+                    + ratio
+                    * paddle.matmul(weight_up.squeeze([-1, -2]), weight_down.squeeze([-1, -2])).unsqueeze([-1, -2])
+                    * scale,
+                    True,
+                )
             else:
                 # conv2d 3x3
                 curr_layer.weight.copy_(
-                    curr_layer.weight + ratio * paddle.nn.functional.conv2d(
-                        weight_down.transpose([1, 0, 2, 3]),
-                        weight_up).transpose([1, 0, 2, 3]) * scale,
-                    True, )
+                    curr_layer.weight
+                    + ratio
+                    * paddle.nn.functional.conv2d(weight_down.transpose([1, 0, 2, 3]), weight_up).transpose(
+                        [1, 0, 2, 3]
+                    )
+                    * scale,
+                    True,
+                )
         else:
             # linear
             curr_layer.weight.copy_(
-                curr_layer.weight + ratio * paddle.matmul(
-                    weight_up, weight_down).T * scale,
-                True, )
+                curr_layer.weight + ratio * paddle.matmul(weight_up, weight_down).T * scale,
+                True,
+            )
 
         # update visited list
         visited.extend(triplet_keys)
@@ -285,28 +285,25 @@ class MultiControlNetModel(ModelMixin):
             `ControlNetModel` as a list.
     """
 
-    def __init__(
-            self,
-            controlnets: Union[List[ControlNetModel], Tuple[ControlNetModel]]):
+    def __init__(self, controlnets: Union[List[ControlNetModel], Tuple[ControlNetModel]]):
         super().__init__()
         self.nets = nn.LayerList(controlnets)
 
     def forward(
-            self,
-            sample: paddle.Tensor,
-            timestep: Union[paddle.Tensor, float, int],
-            encoder_hidden_states: paddle.Tensor,
-            controlnet_cond: List[paddle.Tensor],
-            conditioning_scale: List[float],
-            class_labels: Optional[paddle.Tensor]=None,
-            timestep_cond: Optional[paddle.Tensor]=None,
-            attention_mask: Optional[paddle.Tensor]=None,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None,
-            guess_mode: bool=False,
-            return_dict: bool=True, ) -> Union[ControlNetOutput, Tuple]:
-        for i, (
-                image, scale, controlnet
-        ) in enumerate(zip(controlnet_cond, conditioning_scale, self.nets)):
+        self,
+        sample: paddle.Tensor,
+        timestep: Union[paddle.Tensor, float, int],
+        encoder_hidden_states: paddle.Tensor,
+        controlnet_cond: List[paddle.Tensor],
+        conditioning_scale: List[float],
+        class_labels: Optional[paddle.Tensor] = None,
+        timestep_cond: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        guess_mode: bool = False,
+        return_dict: bool = True,
+    ) -> Union[ControlNetOutput, Tuple]:
+        for i, (image, scale, controlnet) in enumerate(zip(controlnet_cond, conditioning_scale, self.nets)):
             down_samples, mid_sample = controlnet(
                 sample,
                 timestep,
@@ -318,7 +315,8 @@ class MultiControlNetModel(ModelMixin):
                 attention_mask,
                 cross_attention_kwargs,
                 guess_mode,
-                return_dict, )
+                return_dict,
+            )
 
             # merge samples
             if i == 0:
@@ -326,8 +324,7 @@ class MultiControlNetModel(ModelMixin):
             else:
                 down_block_res_samples = [
                     samples_prev + samples_curr
-                    for samples_prev, samples_curr in zip(
-                        down_block_res_samples, down_samples)
+                    for samples_prev, samples_curr in zip(down_block_res_samples, down_samples)
                 ]
                 mid_block_res_sample += mid_sample
 
@@ -373,17 +370,22 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
     TI_DIR = os.path.join(PPDIFFUSERS_CACHE, "textual_inversion")
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            scheduler: KarrasDiffusionSchedulers,
-            safety_checker: StableDiffusionSafetyChecker,
-            feature_extractor: CLIPFeatureExtractor,
-            controlnet: Union[ControlNetModel, List[ControlNetModel], Tuple[
-                ControlNetModel], MultiControlNetModel, ]=None,
-            requires_safety_checker: bool=True, ):
+        self,
+        vae: AutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: UNet2DConditionModel,
+        scheduler: KarrasDiffusionSchedulers,
+        safety_checker: StableDiffusionSafetyChecker,
+        feature_extractor: CLIPFeatureExtractor,
+        controlnet: Union[
+            ControlNetModel,
+            List[ControlNetModel],
+            Tuple[ControlNetModel],
+            MultiControlNetModel,
+        ] = None,
+        requires_safety_checker: bool = True,
+    ):
         super().__init__()
 
         if safety_checker is None and requires_safety_checker:
@@ -413,8 +415,9 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
             controlnet=controlnet,
             scheduler=scheduler,
             safety_checker=safety_checker,
-            feature_extractor=feature_extractor, )
-        self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+            feature_extractor=feature_extractor,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
         # custom data
@@ -441,9 +444,9 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
         # register_state_dict_hook to fix text_encoder, when we save_pretrained text model.
         def map_to(state_dict, *args, **kwargs):
             if "text_model.token_embedding.wrapped.weight" in state_dict:
-                state_dict[
-                    "text_model.token_embedding.weight"] = state_dict.pop(
-                        "text_model.token_embedding.wrapped.weight")
+                state_dict["text_model.token_embedding.weight"] = state_dict.pop(
+                    "text_model.token_embedding.wrapped.weight"
+                )
             return state_dict
 
         self.text_encoder.register_state_dict_hook(map_to)
@@ -466,7 +469,8 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
         file_path = ppdiffusers_url_download(
             download_url,
             cache_dir=self.LORA_DIR,
-            filename=http_file_name(download_url).strip('"'), )
+            filename=http_file_name(download_url).strip('"'),
+        )
         return file_path
 
     def download_civitai_ti_file(self, url):
@@ -479,7 +483,8 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
         file_path = ppdiffusers_url_download(
             download_url,
             cache_dir=self.TI_DIR,
-            filename=http_file_name(download_url).strip('"'), )
+            filename=http_file_name(download_url).strip('"'),
+        )
         return file_path
 
     def change_scheduler(self, scheduler_type="ddim"):
@@ -488,55 +493,56 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
     def switch_scheduler(self, scheduler_type="ddim"):
         scheduler_type = scheduler_type.lower()
         from ppdiffusers import (
-            DDIMScheduler, DDPMScheduler, DEISMultistepScheduler,
-            DPMSolverMultistepScheduler, DPMSolverSinglestepScheduler,
-            EulerAncestralDiscreteScheduler, EulerDiscreteScheduler,
-            HeunDiscreteScheduler, KDPM2AncestralDiscreteScheduler,
-            KDPM2DiscreteScheduler, LMSDiscreteScheduler, PNDMScheduler,
-            UniPCMultistepScheduler)
+            DDIMScheduler,
+            DDPMScheduler,
+            DEISMultistepScheduler,
+            DPMSolverMultistepScheduler,
+            DPMSolverSinglestepScheduler,
+            EulerAncestralDiscreteScheduler,
+            EulerDiscreteScheduler,
+            HeunDiscreteScheduler,
+            KDPM2AncestralDiscreteScheduler,
+            KDPM2DiscreteScheduler,
+            LMSDiscreteScheduler,
+            PNDMScheduler,
+            UniPCMultistepScheduler,
+        )
 
         if scheduler_type == "pndm":
-            scheduler = PNDMScheduler.from_config(
-                self.orginal_scheduler_config, skip_prk_steps=True)
+            scheduler = PNDMScheduler.from_config(self.orginal_scheduler_config, skip_prk_steps=True)
         elif scheduler_type == "lms":
-            scheduler = LMSDiscreteScheduler.from_config(
-                self.orginal_scheduler_config)
+            scheduler = LMSDiscreteScheduler.from_config(self.orginal_scheduler_config)
         elif scheduler_type == "heun":
-            scheduler = HeunDiscreteScheduler.from_config(
-                self.orginal_scheduler_config)
+            scheduler = HeunDiscreteScheduler.from_config(self.orginal_scheduler_config)
         elif scheduler_type == "euler":
-            scheduler = EulerDiscreteScheduler.from_config(
-                self.orginal_scheduler_config)
+            scheduler = EulerDiscreteScheduler.from_config(self.orginal_scheduler_config)
         elif scheduler_type == "euler-ancestral":
-            scheduler = EulerAncestralDiscreteScheduler.from_config(
-                self.orginal_scheduler_config)
+            scheduler = EulerAncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
         elif scheduler_type == "dpm-multi":
-            scheduler = DPMSolverMultistepScheduler.from_config(
-                self.orginal_scheduler_config)
+            scheduler = DPMSolverMultistepScheduler.from_config(self.orginal_scheduler_config)
         elif scheduler_type == "dpm-single":
-            scheduler = DPMSolverSinglestepScheduler.from_config(
-                self.orginal_scheduler_config)
+            scheduler = DPMSolverSinglestepScheduler.from_config(self.orginal_scheduler_config)
         elif scheduler_type == "kdpm2-ancestral":
-            scheduler = KDPM2AncestralDiscreteScheduler.from_config(
-                self.orginal_scheduler_config)
+            scheduler = KDPM2AncestralDiscreteScheduler.from_config(self.orginal_scheduler_config)
         elif scheduler_type == "kdpm2":
-            scheduler = KDPM2DiscreteScheduler.from_config(
-                self.orginal_scheduler_config)
+            scheduler = KDPM2DiscreteScheduler.from_config(self.orginal_scheduler_config)
         elif scheduler_type == "unipc-multi":
-            scheduler = UniPCMultistepScheduler.from_config(
-                self.orginal_scheduler_config)
+            scheduler = UniPCMultistepScheduler.from_config(self.orginal_scheduler_config)
         elif scheduler_type == "ddim":
             scheduler = DDIMScheduler.from_config(
                 self.orginal_scheduler_config,
                 steps_offset=1,
                 clip_sample=False,
-                set_alpha_to_one=False, )
+                set_alpha_to_one=False,
+            )
         elif scheduler_type == "ddpm":
-            scheduler = DDPMScheduler.from_config(self.orginal_scheduler_config,
-                                                  )
+            scheduler = DDPMScheduler.from_config(
+                self.orginal_scheduler_config,
+            )
         elif scheduler_type == "deis-multi":
             scheduler = DEISMultistepScheduler.from_config(
-                self.orginal_scheduler_config, )
+                self.orginal_scheduler_config,
+            )
         else:
             raise ValueError(
                 f"Scheduler of type {scheduler_type} doesn't exist! Please choose in {self.supported_scheduler}!"
@@ -545,30 +551,28 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def _encode_prompt(
-            self,
-            prompt: str,
-            do_classifier_free_guidance: float=7.5,
-            negative_prompt: str=None,
-            num_inference_steps: int=50, ):
+        self,
+        prompt: str,
+        do_classifier_free_guidance: float = 7.5,
+        negative_prompt: str = None,
+        num_inference_steps: int = 50,
+    ):
         if do_classifier_free_guidance:
             assert isinstance(negative_prompt, str)
             negative_prompt = [negative_prompt]
-            uc = get_learned_conditioning(self.sj.clip, negative_prompt,
-                                          num_inference_steps)
+            uc = get_learned_conditioning(self.sj.clip, negative_prompt, num_inference_steps)
         else:
             uc = None
 
-        c = get_multicond_learned_conditioning(self.sj.clip, prompt,
-                                               num_inference_steps)
+        c = get_multicond_learned_conditioning(self.sj.clip, prompt, num_inference_steps)
         return c, uc
 
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is not None:
-            safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors="pd")
+            safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image,
-                clip_input=safety_checker_input.pixel_values.cast(dtype))
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype)
+            )
         else:
             has_nsfw_concept = None
         return image, has_nsfw_concept
@@ -587,48 +591,43 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     def check_inputs(
-            self,
-            prompt,
-            image,
-            height,
-            width,
-            callback_steps,
-            negative_prompt=None,
-            controlnet_conditioning_scale=1.0, ):
+        self,
+        prompt,
+        image,
+        height,
+        width,
+        callback_steps,
+        negative_prompt=None,
+        controlnet_conditioning_scale=1.0,
+    ):
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and not isinstance(prompt, str):
-            raise ValueError(
-                f"`prompt` has to be of type `str` but is {type(prompt)}")
+            raise ValueError(f"`prompt` has to be of type `str` but is {type(prompt)}")
 
         if negative_prompt is not None and not isinstance(negative_prompt, str):
-            raise ValueError(
-                f"`negative_prompt` has to be of type `str` but is {type(negative_prompt)}"
-            )
+            raise ValueError(f"`negative_prompt` has to be of type `str` but is {type(negative_prompt)}")
 
         # `prompt` needs more sophisticated handling when there are multiple
         # conditionings.
@@ -645,15 +644,12 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                 self.check_image(image, prompt)
             elif isinstance(self.controlnet, MultiControlNetModel):
                 if not isinstance(image, list):
-                    raise TypeError(
-                        "For multiple controlnets: `image` must be type `list`")
+                    raise TypeError("For multiple controlnets: `image` must be type `list`")
 
                 # When `image` is a nested list:
                 # (e.g. [[canny_image_1, pose_image_1], [canny_image_2, pose_image_2]])
                 elif any(isinstance(i, list) for i in image):
-                    raise ValueError(
-                        "A single batch of multiple conditionings are supported at the moment."
-                    )
+                    raise ValueError("A single batch of multiple conditionings are supported at the moment.")
                 elif len(image) != len(self.controlnet.nets):
                     raise ValueError(
                         "For multiple controlnets: `image` must have the same length as the number of controlnets."
@@ -666,39 +662,31 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
 
             # Check `controlnet_conditioning_scale`
             if isinstance(self.controlnet, ControlNetModel):
-                if not isinstance(controlnet_conditioning_scale,
-                                  (float, list, tuple)):
+                if not isinstance(controlnet_conditioning_scale, (float, list, tuple)):
                     raise TypeError(
                         "For single controlnet: `controlnet_conditioning_scale` must be type `float, list(float) or tuple(float)`."
                     )
             elif isinstance(self.controlnet, MultiControlNetModel):
                 if isinstance(controlnet_conditioning_scale, list):
-                    if any(
-                            isinstance(i, list)
-                            for i in controlnet_conditioning_scale):
-                        raise ValueError(
-                            "A single batch of multiple conditionings are supported at the moment."
-                        )
-                elif isinstance(
-                        controlnet_conditioning_scale,
-                        list) and len(controlnet_conditioning_scale) != len(
-                            self.controlnet.nets):
+                    if any(isinstance(i, list) for i in controlnet_conditioning_scale):
+                        raise ValueError("A single batch of multiple conditionings are supported at the moment.")
+                elif isinstance(controlnet_conditioning_scale, list) and len(controlnet_conditioning_scale) != len(
+                    self.controlnet.nets
+                ):
                     raise ValueError(
                         "For multiple controlnets: When `controlnet_conditioning_scale` is specified as `list`, it must have"
-                        " the same length as the number of controlnets")
+                        " the same length as the number of controlnets"
+                    )
             else:
                 assert False
 
     def check_image(self, image, prompt):
         image_is_pil = isinstance(image, PIL.Image.Image)
         image_is_tensor = isinstance(image, paddle.Tensor)
-        image_is_pil_list = isinstance(image, list) and isinstance(
-            image[0], PIL.Image.Image)
-        image_is_tensor_list = isinstance(image, list) and isinstance(
-            image[0], paddle.Tensor)
+        image_is_pil_list = isinstance(image, list) and isinstance(image[0], PIL.Image.Image)
+        image_is_tensor_list = isinstance(image, list) and isinstance(image[0], paddle.Tensor)
 
-        if (not image_is_pil and not image_is_tensor and
-                not image_is_pil_list and not image_is_tensor_list):
+        if not image_is_pil and not image_is_tensor and not image_is_pil_list and not image_is_tensor_list:
             raise TypeError(
                 "image must be one of PIL image, paddle tensor, list of PIL images, or list of paddle tensors"
             )
@@ -725,27 +713,16 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
     def prepare_image(self, image, width, height, dtype, resize_mode=-1):
         if not isinstance(image, paddle.Tensor):
             if isinstance(image, PIL.Image.Image):
-                image = resize_image(
-                    resize_mode=resize_mode,
-                    im=image,
-                    width=width,
-                    height=height)
+                image = resize_image(resize_mode=resize_mode, im=image, width=width, height=height)
                 image = [image]
 
             if isinstance(image[0], PIL.Image.Image):
-                image = [
-                    resize_image(
-                        resize_mode=resize_mode,
-                        im=im,
-                        width=width,
-                        height=height) for im in image
-                ]
+                image = [resize_image(resize_mode=resize_mode, im=im, width=width, height=height) for im in image]
 
                 images = []
                 for image_ in image:
                     image_ = image_.convert("RGB")
-                    image_ = image_.resize(
-                        (width, height), resample=PIL_INTERPOLATION["lanczos"])
+                    image_ = image_.resize((width, height), resample=PIL_INTERPOLATION["lanczos"])
                     image_ = np.array(image_)
                     image_ = image_[None, :]
                     images.append(image_)
@@ -761,14 +738,15 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
         return image
 
     def prepare_latents(
-            self,
-            batch_size,
-            num_channels_latents,
-            height,
-            width,
-            dtype,
-            generator,
-            latents=None, ):
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
         shape = [
             batch_size,
             num_channels_latents,
@@ -812,31 +790,31 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            prompt: str=None,
-            image: PIL.Image.Image=None,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: str=None,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None,
-            clip_skip: int=1,
-            controlnet_conditioning_scale: Union[float, List[float]]=1.0,
-            enable_lora: bool=True,
-            resize_mode: int=0,
-            # ["Just resize", "Crop and resize", "Resize and fill", "Do nothing"]
-            #         0              1                   2               -1
-            starting_control_step: float=0.0,
-            ending_control_step: float=1.0, ):
+        self,
+        prompt: str = None,
+        image: PIL.Image.Image = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: str = None,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        clip_skip: int = 1,
+        controlnet_conditioning_scale: Union[float, List[float]] = 1.0,
+        enable_lora: bool = True,
+        resize_mode: int = 0,
+        # ["Just resize", "Crop and resize", "Resize and fill", "Do nothing"]
+        #         0              1                   2               -1
+        starting_control_step: float = 0.0,
+        ending_control_step: float = 1.0,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -914,17 +892,16 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
             # 0. Default height and width to unet
             if enable_control:
                 if isinstance(self.controlnet, ControlNetModel):
-                    height, width = self._default_height_width(height, width,
-                                                               image)
+                    height, width = self._default_height_width(height, width, image)
                     image = self.prepare_image(
                         image=image,
                         width=width,
                         height=height,
                         dtype=self.controlnet.dtype,
-                        resize_mode=resize_mode, )
+                        resize_mode=resize_mode,
+                    )
                 elif isinstance(self.controlnet, MultiControlNetModel):
-                    height, width = self._default_height_width(height, width,
-                                                               image)
+                    height, width = self._default_height_width(height, width, image)
                     images = []
 
                     for image_ in image:
@@ -933,16 +910,15 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                             width=width,
                             height=height,
                             dtype=self.controlnet.dtype,
-                            resize_mode=resize_mode, )
+                            resize_mode=resize_mode,
+                        )
 
                         images.append(image_)
 
                     image = images
             else:
-                height = height or max(self.unet.config.sample_size *
-                                       self.vae_scale_factor, 512)
-                width = width or max(self.unet.config.sample_size *
-                                     self.vae_scale_factor, 512)
+                height = height or max(self.unet.config.sample_size * self.vae_scale_factor, 512)
+                width = width or max(self.unet.config.sample_size * self.vae_scale_factor, 512)
 
             # 1. Check inputs. Raise error if not correct
             self.check_inputs(
@@ -952,7 +928,8 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                 width,
                 callback_steps,
                 negative_prompt,
-                controlnet_conditioning_scale, )
+                controlnet_conditioning_scale,
+            )
 
             # 2. Define call parameters
             batch_size = 1
@@ -966,47 +943,34 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
 
             if enable_lora and self.LORA_DIR is not None:
                 if os.path.exists(self.LORA_DIR):
-                    lora_mapping = {
-                        p.stem: p.absolute()
-                        for p in Path(self.LORA_DIR).glob("*.safetensors")
-                    }
+                    lora_mapping = {p.stem: p.absolute() for p in Path(self.LORA_DIR).glob("*.safetensors")}
                     for params in extra_network_data["lora"]:
                         assert len(params.items) > 0
                         name = params.items[0]
                         if name in lora_mapping:
-                            ratio = (float(params.items[1])
-                                     if len(params.items) > 1 else 1.0)
-                            lora_state_dict = smart_load(
-                                lora_mapping[name],
-                                map_location=paddle.get_device())
+                            ratio = float(params.items[1]) if len(params.items) > 1 else 1.0
+                            lora_state_dict = smart_load(lora_mapping[name], map_location=paddle.get_device())
                             self.weights_has_changed = True
-                            load_lora(
-                                self, state_dict=lora_state_dict, ratio=ratio)
+                            load_lora(self, state_dict=lora_state_dict, ratio=ratio)
                             del lora_state_dict
                         else:
-                            print(
-                                f"We can't find lora weight: {name}! Please make sure that exists!"
-                            )
+                            print(f"We can't find lora weight: {name}! Please make sure that exists!")
                 else:
                     if len(extra_network_data["lora"]) > 0:
-                        print(
-                            f"{self.LORA_DIR} not exists, so we cant load loras!"
-                        )
+                        print(f"{self.LORA_DIR} not exists, so we cant load loras!")
 
             self.sj.clip.CLIP_stop_at_last_layers = clip_skip
 
-            if isinstance(self.controlnet, MultiControlNetModel) and isinstance(
-                    controlnet_conditioning_scale, float):
-                controlnet_conditioning_scale = [
-                    controlnet_conditioning_scale
-                ] * len(self.controlnet.nets)
+            if isinstance(self.controlnet, MultiControlNetModel) and isinstance(controlnet_conditioning_scale, float):
+                controlnet_conditioning_scale = [controlnet_conditioning_scale] * len(self.controlnet.nets)
 
             # 3. Encode input prompt
             prompt_embeds, negative_prompt_embeds = self._encode_prompt(
                 prompts,
                 do_classifier_free_guidance,
                 negative_prompt,
-                num_inference_steps=num_inference_steps, )
+                num_inference_steps=num_inference_steps,
+            )
 
             # 4. Prepare timesteps
             self.scheduler.set_timesteps(num_inference_steps)
@@ -1021,127 +985,107 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                 width,
                 self.unet.dtype,
                 generator,
-                latents, )
+                latents,
+            )
 
             # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
             extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
             # 7. Denoising loop
-            num_warmup_steps = (
-                len(timesteps) - num_inference_steps * self.scheduler.order)
+            num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
             with self.progress_bar(total=num_inference_steps) as progress_bar:
                 for i, t in enumerate(timesteps):
                     current_control_step = i / len(timesteps)
                     step = i // self.scheduler.order
                     do_batch = False
-                    conds_list, cond_tensor = reconstruct_multicond_batch(
-                        prompt_embeds, step)
+                    conds_list, cond_tensor = reconstruct_multicond_batch(prompt_embeds, step)
                     try:
                         weight = conds_list[0][0][1]
                     except Exception:
                         weight = 1.0
                     if do_classifier_free_guidance:
-                        uncond_tensor = reconstruct_cond_batch(
-                            negative_prompt_embeds, step)
-                        do_batch = cond_tensor.shape[1] == uncond_tensor.shape[
-                            1] and not isinstance(self.controlnet,
-                                                  MultiControlNetModel)
+                        uncond_tensor = reconstruct_cond_batch(negative_prompt_embeds, step)
+                        do_batch = cond_tensor.shape[1] == uncond_tensor.shape[1] and not isinstance(
+                            self.controlnet, MultiControlNetModel
+                        )
 
                     # expand the latents if we are doing classifier free guidance
-                    latent_model_input = (paddle.concat([latents] * 2)
-                                          if do_batch else latents)
-                    latent_model_input = self.scheduler.scale_model_input(
-                        latent_model_input, t)
+                    latent_model_input = paddle.concat([latents] * 2) if do_batch else latents
+                    latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                     if do_batch:
-                        encoder_hidden_states = paddle.concat(
-                            [uncond_tensor, cond_tensor])
+                        encoder_hidden_states = paddle.concat([uncond_tensor, cond_tensor])
                         control_kwargs = {}
-                        if (enable_control and starting_control_step <
-                                current_control_step < ending_control_step):
-                            (
-                                down_block_res_samples,
-                                mid_block_res_sample,
-                            ) = self.controlnet(
+                        if enable_control and starting_control_step < current_control_step < ending_control_step:
+                            (down_block_res_samples, mid_block_res_sample,) = self.controlnet(
                                 latent_model_input,
                                 t,
                                 encoder_hidden_states=encoder_hidden_states,
                                 controlnet_cond=paddle.concat([image, image]),
                                 conditioning_scale=controlnet_conditioning_scale,
-                                return_dict=False, )
-                            control_kwargs[
-                                "down_block_additional_residuals"] = down_block_res_samples
-                            control_kwargs[
-                                "mid_block_additional_residual"] = mid_block_res_sample
+                                return_dict=False,
+                            )
+                            control_kwargs["down_block_additional_residuals"] = down_block_res_samples
+                            control_kwargs["mid_block_additional_residual"] = mid_block_res_sample
                         noise_pred = self.unet(
                             latent_model_input,
                             t,
                             encoder_hidden_states=encoder_hidden_states,
                             cross_attention_kwargs=cross_attention_kwargs,
-                            **control_kwargs, ).sample
+                            **control_kwargs,
+                        ).sample
                         noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                         noise_pred = noise_pred_uncond + weight * guidance_scale * (
-                            noise_pred_text - noise_pred_uncond)
+                            noise_pred_text - noise_pred_uncond
+                        )
                     else:
                         control_kwargs = {}
-                        if (enable_control and starting_control_step <
-                                current_control_step < ending_control_step):
-                            (
-                                down_block_res_samples,
-                                mid_block_res_sample,
-                            ) = self.controlnet(
+                        if enable_control and starting_control_step < current_control_step < ending_control_step:
+                            (down_block_res_samples, mid_block_res_sample,) = self.controlnet(
                                 latent_model_input,
                                 t,
                                 encoder_hidden_states=cond_tensor,
                                 controlnet_cond=image,
                                 conditioning_scale=controlnet_conditioning_scale,
-                                return_dict=False, )
-                            control_kwargs[
-                                "down_block_additional_residuals"] = down_block_res_samples
-                            control_kwargs[
-                                "mid_block_additional_residual"] = mid_block_res_sample
+                                return_dict=False,
+                            )
+                            control_kwargs["down_block_additional_residuals"] = down_block_res_samples
+                            control_kwargs["mid_block_additional_residual"] = mid_block_res_sample
                         noise_pred = self.unet(
                             latent_model_input,
                             t,
                             encoder_hidden_states=cond_tensor,
                             cross_attention_kwargs=cross_attention_kwargs,
-                            **control_kwargs, ).sample
+                            **control_kwargs,
+                        ).sample
 
                         if do_classifier_free_guidance:
                             control_kwargs = {}
-                            if (enable_control and starting_control_step <
-                                    current_control_step < ending_control_step):
-                                (
-                                    down_block_res_samples,
-                                    mid_block_res_sample,
-                                ) = self.controlnet(
+                            if enable_control and starting_control_step < current_control_step < ending_control_step:
+                                (down_block_res_samples, mid_block_res_sample,) = self.controlnet(
                                     latent_model_input,
                                     t,
                                     encoder_hidden_states=uncond_tensor,
                                     controlnet_cond=image,
                                     conditioning_scale=controlnet_conditioning_scale,
-                                    return_dict=False, )
-                                control_kwargs[
-                                    "down_block_additional_residuals"] = down_block_res_samples
-                                control_kwargs[
-                                    "mid_block_additional_residual"] = mid_block_res_sample
+                                    return_dict=False,
+                                )
+                                control_kwargs["down_block_additional_residuals"] = down_block_res_samples
+                                control_kwargs["mid_block_additional_residual"] = mid_block_res_sample
                             noise_pred_uncond = self.unet(
                                 latent_model_input,
                                 t,
                                 encoder_hidden_states=uncond_tensor,
                                 cross_attention_kwargs=cross_attention_kwargs,
-                                **control_kwargs, ).sample
-                            noise_pred = noise_pred_uncond + weight * guidance_scale * (
-                                noise_pred - noise_pred_uncond)
+                                **control_kwargs,
+                            ).sample
+                            noise_pred = noise_pred_uncond + weight * guidance_scale * (noise_pred - noise_pred_uncond)
 
                     # compute the previous noisy sample x_t -> x_t-1
-                    latents = self.scheduler.step(
-                        noise_pred, t, latents, **extra_step_kwargs).prev_sample
+                    latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                     # call the callback, if provided
-                    if i == len(timesteps) - 1 or (
-                        (i + 1) > num_warmup_steps and
-                        (i + 1) % self.scheduler.order == 0):
+                    if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                         progress_bar.update()
                         if callback is not None and i % callback_steps == 0:
                             callback(i, t, latents)
@@ -1154,8 +1098,7 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                 image = self.decode_latents(latents)
 
                 # 9. Run safety checker
-                image, has_nsfw_concept = self.run_safety_checker(
-                    image, self.unet.dtype)
+                image, has_nsfw_concept = self.run_safety_checker(image, self.unet.dtype)
 
                 # 10. Convert to PIL
                 image = self.numpy_to_pil(image)
@@ -1164,14 +1107,12 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                 image = self.decode_latents(latents)
 
                 # 9. Run safety checker
-                image, has_nsfw_concept = self.run_safety_checker(
-                    image, self.unet.dtype)
+                image, has_nsfw_concept = self.run_safety_checker(image, self.unet.dtype)
 
             if not return_dict:
                 return (image, has_nsfw_concept)
 
-            return StableDiffusionPipelineOutput(
-                images=image, nsfw_content_detected=has_nsfw_concept)
+            return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)
         except Exception as e:
             raise ValueError(e)
         finally:
@@ -1215,12 +1156,7 @@ class FrozenCLIPEmbedder(nn.Layer):
 
     LAYERS = ["last", "pooled", "hidden"]
 
-    def __init__(self,
-                 text_encoder,
-                 tokenizer,
-                 freeze=True,
-                 layer="last",
-                 layer_idx=None):
+    def __init__(self, text_encoder, tokenizer, freeze=True, layer="last", layer_idx=None):
         super().__init__()
         assert layer in self.LAYERS
         self.tokenizer = tokenizer
@@ -1244,12 +1180,14 @@ class FrozenCLIPEmbedder(nn.Layer):
             truncation=True,
             max_length=self.tokenizer.model_max_length,
             padding="max_length",
-            return_tensors="pd", )
+            return_tensors="pd",
+        )
         tokens = batch_encoding["input_ids"]
         outputs = self.text_encoder(
             input_ids=tokens,
             output_hidden_states=self.layer == "hidden",
-            return_dict=True, )
+            return_dict=True,
+        )
         if self.layer == "last":
             z = outputs.last_hidden_state
         elif self.layer == "pooled":
@@ -1288,8 +1226,7 @@ class FrozenCLIPEmbedderWithCustomWordsBase(nn.Layer):
     def get_target_prompt_token_count(self, token_count):
         """returns the maximum number of tokens a prompt of a known length can have before it requires one more PromptChunk to be represented"""
 
-        return math.ceil(max(token_count, 1) /
-                         self.chunk_length) * self.chunk_length
+        return math.ceil(max(token_count, 1) / self.chunk_length) * self.chunk_length
 
     def tokenize(self, texts):
         """Converts a batch of texts into a batch of token ids"""
@@ -1370,10 +1307,12 @@ class FrozenCLIPEmbedderWithCustomWordsBase(nn.Layer):
 
                 # this is when we are at the end of alloted 75 tokens for the current chunk, and the current token is not a comma. opts.comma_padding_backtrack
                 # is a setting that specifies that if there is a comma nearby, the text after the comma should be moved out of this chunk and into the next.
-                elif (WebUIStableDiffusionPipeline.comma_padding_backtrack != 0
-                      and len(chunk.tokens) == self.chunk_length and
-                      last_comma != -1 and len(chunk.tokens) - last_comma <=
-                      WebUIStableDiffusionPipeline.comma_padding_backtrack):
+                elif (
+                    WebUIStableDiffusionPipeline.comma_padding_backtrack != 0
+                    and len(chunk.tokens) == self.chunk_length
+                    and last_comma != -1
+                    and len(chunk.tokens) - last_comma <= WebUIStableDiffusionPipeline.comma_padding_backtrack
+                ):
                     break_location = last_comma + 1
 
                     reloc_tokens = chunk.tokens[break_location:]
@@ -1392,8 +1331,7 @@ class FrozenCLIPEmbedderWithCustomWordsBase(nn.Layer):
                 (
                     embedding,
                     embedding_length_in_tokens,
-                ) = self.hijack.embedding_db.find_embedding_at_position(
-                    tokens, position)
+                ) = self.hijack.embedding_db.find_embedding_at_position(tokens, position)
                 if embedding is None:
                     chunk.tokens.append(token)
                     chunk.multipliers.append(weight)
@@ -1455,10 +1393,7 @@ class FrozenCLIPEmbedderWithCustomWordsBase(nn.Layer):
 
         zs = []
         for i in range(chunk_count):
-            batch_chunk = [
-                chunks[i] if i < len(chunks) else self.empty_chunk()
-                for chunks in batch_chunks
-            ]
+            batch_chunk = [chunks[i] if i < len(chunks) else self.empty_chunk() for chunks in batch_chunks]
 
             tokens = [x.tokens for x in batch_chunk]
             multipliers = [x.multipliers for x in batch_chunk]
@@ -1472,10 +1407,9 @@ class FrozenCLIPEmbedderWithCustomWordsBase(nn.Layer):
             zs.append(z)
 
         if len(used_embeddings) > 0:
-            embeddings_list = ", ".join([
-                f"{name} [{embedding.checksum()}]"
-                for name, embedding in used_embeddings.items()
-            ])
+            embeddings_list = ", ".join(
+                [f"{name} [{embedding.checksum()}]" for name, embedding in used_embeddings.items()]
+            )
             self.hijack.comments.append(f"Used embeddings: {embeddings_list}")
 
         return paddle.concat(zs, axis=1)
@@ -1494,15 +1428,19 @@ class FrozenCLIPEmbedderWithCustomWordsBase(nn.Layer):
         if self.id_end != self.id_pad:
             for batch_pos in range(len(remade_batch_tokens)):
                 index = remade_batch_tokens[batch_pos].index(self.id_end)
-                tokens[batch_pos, index + 1:tokens.shape[1]] = self.id_pad
+                tokens[batch_pos, index + 1 : tokens.shape[1]] = self.id_pad
 
         z = self.encode_with_text_encoder(tokens)
 
         # restoring original mean is likely not correct, but it seems to work well to prevent artifacts that happen otherwise
         batch_multipliers = paddle.to_tensor(batch_multipliers)
         original_mean = z.mean()
-        z = z * batch_multipliers.reshape(batch_multipliers.shape +
-                                          [1, ]).expand(z.shape)
+        z = z * batch_multipliers.reshape(
+            batch_multipliers.shape
+            + [
+                1,
+            ]
+        ).expand(z.shape)
         new_mean = z.mean()
         z = z * (original_mean / new_mean)
 
@@ -1520,8 +1458,7 @@ class FrozenCLIPEmbedderWithCustomWords(FrozenCLIPEmbedderWithCustomWordsBase):
         self.comma_token = vocab.get(",</w>", None)
 
         self.token_mults = {}
-        tokens_with_parens = [(k, v) for k, v in vocab.items()
-                              if "(" in k or ")" in k or "[" in k or "]" in k]
+        tokens_with_parens = [(k, v) for k, v in vocab.items() if "(" in k or ")" in k or "[" in k or "]" in k]
         for text, ident in tokens_with_parens:
             mult = 1.0
             for c in text:
@@ -1542,8 +1479,7 @@ class FrozenCLIPEmbedderWithCustomWords(FrozenCLIPEmbedderWithCustomWordsBase):
         self.id_pad = self.id_end
 
     def tokenize(self, texts):
-        tokenized = self.wrapped.tokenizer(
-            texts, truncation=False, add_special_tokens=False)["input_ids"]
+        tokenized = self.wrapped.tokenizer(texts, truncation=False, add_special_tokens=False)["input_ids"]
 
         return tokenized
 
@@ -1552,7 +1488,8 @@ class FrozenCLIPEmbedderWithCustomWords(FrozenCLIPEmbedderWithCustomWordsBase):
         outputs = self.wrapped.text_encoder(
             input_ids=tokens,
             output_hidden_states=output_hidden_states,
-            return_dict=True, )
+            return_dict=True,
+        )
 
         if output_hidden_states:
             z = outputs.hidden_states[-self.CLIP_stop_at_last_layers]
@@ -1564,11 +1501,9 @@ class FrozenCLIPEmbedderWithCustomWords(FrozenCLIPEmbedderWithCustomWordsBase):
 
     def encode_embedding_init_text(self, init_text, nvpt):
         embedding_layer = self.wrapped.text_encoder.text_model
-        ids = self.wrapped.tokenizer(
-            init_text,
-            max_length=nvpt,
-            return_tensors="pd",
-            add_special_tokens=False)["input_ids"]
+        ids = self.wrapped.tokenizer(init_text, max_length=nvpt, return_tensors="pd", add_special_tokens=False)[
+            "input_ids"
+        ]
         embedded = embedding_layer.token_embedding.wrapped(ids).squeeze(0)
 
         return embedded
@@ -1630,8 +1565,7 @@ from PIL import Image
 
 class EmbeddingDecoder(json.JSONDecoder):
     def __init__(self, *args, **kwargs):
-        json.JSONDecoder.__init__(
-            self, object_hook=self.object_hook, *args, **kwargs)
+        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
 
     def object_hook(self, d):
         if "TORCHTENSOR" in d:
@@ -1652,8 +1586,7 @@ def lcg(m=2**32, a=1664525, c=1013904223, seed=0):
 
 def xor_block(block):
     g = lcg()
-    randblock = (np.array([next(g) for _ in range(np.product(block.shape))])
-                 .astype(np.uint8).reshape(block.shape))
+    randblock = np.array([next(g) for _ in range(np.product(block.shape))]).astype(np.uint8).reshape(block.shape)
     return np.bitwise_xor(block.astype(np.uint8), randblock & 0x0F)
 
 
@@ -1667,16 +1600,17 @@ def crop_black(img, tol=0):
 
 def extract_image_data_embed(image):
     d = 3
-    outarr = (crop_black(
-        np.array(image.convert("RGB").getdata())
-        .reshape(image.size[1], image.size[0], d).astype(np.uint8)) & 0x0F)
+    outarr = (
+        crop_black(np.array(image.convert("RGB").getdata()).reshape(image.size[1], image.size[0], d).astype(np.uint8))
+        & 0x0F
+    )
     black_cols = np.where(np.sum(outarr, axis=(0, 2)) == 0)
     if black_cols[0].shape[0] < 2:
         print("No Image data blocks found.")
         return None
 
-    data_block_lower = outarr[:, :black_cols[0].min(), :].astype(np.uint8)
-    data_block_upper = outarr[:, black_cols[0].max() + 1:, :].astype(np.uint8)
+    data_block_lower = outarr[:, : black_cols[0].min(), :].astype(np.uint8)
+    data_block_upper = outarr[:, black_cols[0].max() + 1 :, :].astype(np.uint8)
 
     data_block_lower = xor_block(data_block_lower)
     data_block_upper = xor_block(data_block_upper)
@@ -1703,7 +1637,8 @@ import lark
 # [75, 'fantasy landscape with a lake and an oak in background masterful']
 # [100, 'fantasy landscape with a lake and a christmas tree in background masterful']
 
-schedule_parser = lark.Lark(r"""
+schedule_parser = lark.Lark(
+    r"""
 !start: (prompt | /[][():]/+)*
 prompt: (emphasized | scheduled | alternate | plain | WHITESPACE)*
 !emphasized: "(" prompt ")"
@@ -1714,7 +1649,8 @@ alternate: "[" prompt ("|" prompt)+ "]"
 WHITESPACE: /\s+/
 plain: /([^\\\[\]():|]|\\.)+/
 %import common.SIGNED_NUMBER -> NUMBER
-""")
+"""
+)
 
 
 def get_learned_conditioning_prompt_schedules(prompts, steps):
@@ -1806,8 +1742,7 @@ def get_learned_conditioning_prompt_schedules(prompts, steps):
     return [promptdict[prompt] for prompt in prompts]
 
 
-ScheduledPromptConditioning = namedtuple("ScheduledPromptConditioning",
-                                         ["end_at_step", "cond"])
+ScheduledPromptConditioning = namedtuple("ScheduledPromptConditioning", ["end_at_step", "cond"])
 
 
 def get_learned_conditioning(model, prompts, steps):
@@ -1845,8 +1780,7 @@ def get_learned_conditioning(model, prompts, steps):
 
         cond_schedule = []
         for i, (end_at_step, text) in enumerate(prompt_schedule):
-            cond_schedule.append(
-                ScheduledPromptConditioning(end_at_step, conds[i]))
+            cond_schedule.append(ScheduledPromptConditioning(end_at_step, conds[i]))
 
         cache[prompt] = cond_schedule
         res.append(cond_schedule)
@@ -1871,8 +1805,7 @@ def get_multicond_prompt_list(prompts):
         for subprompt in subprompts:
             match = re_weight.search(subprompt)
 
-            text, weight = match.groups() if match is not None else (subprompt,
-                                                                     1.0)
+            text, weight = match.groups() if match is not None else (subprompt, 1.0)
 
             weight = float(weight) if weight is not None else 1.0
 
@@ -1897,43 +1830,37 @@ class ComposableScheduledPromptConditioning:
 
 class MulticondLearnedConditioning:
     def __init__(self, shape, batch):
-        self.shape: tuple = (
-            shape  # the shape field is needed to send this object to DDIM/PLMS
-        )
+        self.shape: tuple = shape  # the shape field is needed to send this object to DDIM/PLMS
         self.batch: List[List[ComposableScheduledPromptConditioning]] = batch
 
 
-def get_multicond_learned_conditioning(model, prompts,
-                                       steps) -> MulticondLearnedConditioning:
+def get_multicond_learned_conditioning(model, prompts, steps) -> MulticondLearnedConditioning:
     """same as get_learned_conditioning, but returns a list of ScheduledPromptConditioning along with the weight objects for each prompt.
     For each prompt, the list is obtained by splitting the prompt using the AND separator.
 
     https://energy-based-model.github.io/Compositional-Visual-Generation-with-Composable-Diffusion-Models/
     """
 
-    res_indexes, prompt_flat_list, prompt_indexes = get_multicond_prompt_list(
-        prompts)
+    res_indexes, prompt_flat_list, prompt_indexes = get_multicond_prompt_list(prompts)
 
-    learned_conditioning = get_learned_conditioning(model, prompt_flat_list,
-                                                    steps)
+    learned_conditioning = get_learned_conditioning(model, prompt_flat_list, steps)
 
     res = []
     for indexes in res_indexes:
-        res.append([
-            ComposableScheduledPromptConditioning(learned_conditioning[i],
-                                                  weight)
-            for i, weight in indexes
-        ])
+        res.append([ComposableScheduledPromptConditioning(learned_conditioning[i], weight) for i, weight in indexes])
 
-    return MulticondLearnedConditioning(shape=(len(prompts), ), batch=res)
+    return MulticondLearnedConditioning(shape=(len(prompts),), batch=res)
 
 
-def reconstruct_cond_batch(c: List[List[ScheduledPromptConditioning]],
-                           current_step):
+def reconstruct_cond_batch(c: List[List[ScheduledPromptConditioning]], current_step):
     param = c[0][0].cond
     res = paddle.zeros(
-        [len(c), ] + param.shape,
-        dtype=param.dtype, )
+        [
+            len(c),
+        ]
+        + param.shape,
+        dtype=param.dtype,
+    )
     for i, cond_schedule in enumerate(c):
         target_index = 0
         for current, (end_at, cond) in enumerate(cond_schedule):
@@ -1956,8 +1883,7 @@ def reconstruct_multicond_batch(c: MulticondLearnedConditioning, current_step):
 
         for cond_index, composable_prompt in enumerate(composable_prompts):
             target_index = 0
-            for current, (end_at,
-                          cond) in enumerate(composable_prompt.schedules):
+            for current, (end_at, cond) in enumerate(composable_prompt.schedules):
                 if current_step <= end_at:
                     target_index = current
                     break
@@ -1973,10 +1899,8 @@ def reconstruct_multicond_batch(c: MulticondLearnedConditioning, current_step):
     for i in range(len(tensors)):
         if tensors[i].shape[0] != token_count:
             last_vector = tensors[i][-1:]
-            last_vector_repeated = last_vector.tile(
-                [token_count - tensors[i].shape[0], 1])
-            tensors[i] = paddle.concat(
-                [tensors[i], last_vector_repeated], axis=0)
+            last_vector_repeated = last_vector.tile([token_count - tensors[i].shape[0], 1])
+            tensors[i] = paddle.concat([tensors[i], last_vector_repeated], axis=0)
 
     return conds_list, paddle.stack(tensors).cast(dtype=param.dtype)
 
@@ -1997,7 +1921,8 @@ re_attention = re.compile(
 [^\\()\[\]:]+|
 :
 """,
-    re.X, )
+    re.X,
+)
 
 re_break = re.compile(r"\s*\bBREAK\b\s*", re.S)
 
@@ -2102,15 +2027,12 @@ class StableDiffusionModelHijack:
     layers = None
     circular_enabled = False
 
-    def __init__(self,
-                 clip_model,
-                 embeddings_dir=None,
-                 CLIP_stop_at_last_layers=-1):
+    def __init__(self, clip_model, embeddings_dir=None, CLIP_stop_at_last_layers=-1):
         model_embeddings = clip_model.text_encoder.text_model
-        model_embeddings.token_embedding = EmbeddingsWithFixes(
-            model_embeddings.token_embedding, self)
+        model_embeddings.token_embedding = EmbeddingsWithFixes(model_embeddings.token_embedding, self)
         clip_model = FrozenCLIPEmbedderWithCustomWords(
-            clip_model, self, CLIP_stop_at_last_layers=CLIP_stop_at_last_layers)
+            clip_model, self, CLIP_stop_at_last_layers=CLIP_stop_at_last_layers
+        )
 
         self.embedding_db = EmbeddingDatabase(clip_model)
         self.embedding_db.add_embedding_dir(embeddings_dir)
@@ -2148,8 +2070,7 @@ class EmbeddingsWithFixes(nn.Layer):
 
         inputs_embeds = self.wrapped(input_ids)
 
-        if (batch_fixes is None or len(batch_fixes) == 0 or
-                max([len(x) for x in batch_fixes]) == 0):
+        if batch_fixes is None or len(batch_fixes) == 0 or max([len(x) for x in batch_fixes]) == 0:
             return inputs_embeds
 
         vecs = []
@@ -2157,11 +2078,13 @@ class EmbeddingsWithFixes(nn.Layer):
             for offset, embedding in fixes:
                 emb = embedding.vec.cast(self.wrapped.dtype)
                 emb_len = min(tensor.shape[0] - offset - 1, emb.shape[0])
-                tensor = paddle.concat([
-                    tensor[0:offset + 1],
-                    emb[0:emb_len],
-                    tensor[offset + 1 + emb_len:],
-                ])
+                tensor = paddle.concat(
+                    [
+                        tensor[0 : offset + 1],
+                        emb[0:emb_len],
+                        tensor[offset + 1 + emb_len :],
+                    ]
+                )
 
             vecs.append(tensor)
 
@@ -2190,12 +2113,8 @@ class Embedding:
 
     def save(self, filename):
         embedding_data = {
-            "string_to_token": {
-                "*": 265
-            },
-            "string_to_param": {
-                "*": self.vec
-            },
+            "string_to_token": {"*": 265},
+            "string_to_param": {"*": self.vec},
             "name": self.name,
             "step": self.step,
             "sd_checkpoint": self.sd_checkpoint,
@@ -2267,7 +2186,8 @@ class EmbeddingDatabase:
         self.ids_lookup[first_id] = sorted(
             self.ids_lookup[first_id] + [(ids, embedding)],
             key=lambda x: len(x[0]),
-            reverse=True, )
+            reverse=True,
+        )
 
         return embedding
 
@@ -2285,8 +2205,7 @@ class EmbeddingDatabase:
                 return
 
             embed_image = Image.open(path)
-            if hasattr(embed_image,
-                       "text") and "sd-ti-embedding" in embed_image.text:
+            if hasattr(embed_image, "text") and "sd-ti-embedding" in embed_image.text:
                 data = embedding_from_b64(embed_image.text["sd-ti-embedding"])
                 name = data.get("name", name)
             else:
@@ -2308,14 +2227,11 @@ class EmbeddingDatabase:
             param_dict = data["string_to_param"]
             if hasattr(param_dict, "_parameters"):
                 param_dict = getattr(param_dict, "_parameters")
-            assert len(
-                param_dict) == 1, "embedding file has multiple terms in it"
+            assert len(param_dict) == 1, "embedding file has multiple terms in it"
             emb = next(iter(param_dict.items()))[1]
         # diffuser concepts
-        elif type(data) == dict and type(next(iter(data.values(
-        )))) == paddle.Tensor:
-            assert len(data.keys(
-            )) == 1, "embedding file has multiple terms in it"
+        elif type(data) == dict and type(next(iter(data.values()))) == paddle.Tensor:
+            assert len(data.keys()) == 1, "embedding file has multiple terms in it"
 
             emb = next(iter(data.values()))
             if len(emb.shape) == 1:
@@ -2387,7 +2303,8 @@ class EmbeddingDatabase:
 
         displayed_embeddings = (
             tuple(self.word_embeddings.keys()),
-            tuple(self.skipped_embeddings.keys()), )
+            tuple(self.skipped_embeddings.keys()),
+        )
         if self.previously_displayed_embeddings != displayed_embeddings:
             self.previously_displayed_embeddings = displayed_embeddings
             print(
@@ -2406,7 +2323,7 @@ class EmbeddingDatabase:
             return None, None
 
         for ids, embedding in possible_matches:
-            if tokens[offset:offset + len(ids)] == ids:
+            if tokens[offset : offset + len(ids)] == ids:
                 return embedding, len(ids)
 
         return None, None

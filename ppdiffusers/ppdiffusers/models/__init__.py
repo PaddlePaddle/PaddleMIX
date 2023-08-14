@@ -14,8 +14,11 @@
 # limitations under the License.
 # flake8: noqa
 
-from ..utils.import_utils import (OptionalDependencyNotAvailable,
-                                  is_einops_available, is_paddle_available)
+from ..utils.import_utils import (
+    OptionalDependencyNotAvailable,
+    is_einops_available,
+    is_paddle_available,
+)
 
 if is_paddle_available():
     from .adapter import MultiAdapter, T2IAdapter

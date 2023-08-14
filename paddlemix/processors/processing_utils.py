@@ -19,15 +19,23 @@ import tempfile
 from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 import numpy as np
-from huggingface_hub import (create_repo, get_hf_file_metadata, hf_hub_download,
-                             hf_hub_url, repo_type_and_id_from_hf_id,
-                             upload_folder)
+from huggingface_hub import (
+    create_repo,
+    get_hf_file_metadata,
+    hf_hub_download,
+    hf_hub_url,
+    repo_type_and_id_from_hf_id,
+    upload_folder,
+)
 from huggingface_hub.utils import EntryNotFoundError
 from paddlenlp import __version__
 from paddlenlp.transformers.tokenizer_utils_base import BatchEncoding
 
 from paddlemix.utils.downloader import (
-    COMMUNITY_MODEL_PREFIX, get_path_from_url_with_filelock, resolve_cache_dir)
+    COMMUNITY_MODEL_PREFIX,
+    get_path_from_url_with_filelock,
+    resolve_cache_dir,
+)
 from paddlemix.utils.log import logger
 
 PROCESSOR_CONFIG_MAPPING = {
@@ -63,9 +71,7 @@ class BaseProcessingMixin(object):
         self._processor_class = processor_class
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs):
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs):
         r"""
         Instantiate a type of [`~processing_utils.BaseProcessingMixin`] from an processor.
 
@@ -121,13 +127,11 @@ class BaseProcessingMixin(object):
         Returns:
             A processor of type [`~processing_utils.BaseProcessingMixin`].
         ```"""
-        processor_dict, kwargs = cls.get_processor_dict(
-            pretrained_model_name_or_path, **kwargs)
+        processor_dict, kwargs = cls.get_processor_dict(pretrained_model_name_or_path, **kwargs)
 
         return cls.from_dict(processor_dict, **kwargs)
 
-    def save_pretrained(self, save_directory: Union[str, os.PathLike],
-                        **kwargs):
+    def save_pretrained(self, save_directory: Union[str, os.PathLike], **kwargs):
         """
         Save an processor object to the directory `save_directory`, so that it can be re-loaded using the
         [`~processing_utils.BaseProcessingMixin.from_pretrained`] class method.
@@ -139,15 +143,12 @@ class BaseProcessingMixin(object):
                 Additional key word arguments passed along to the [`~utils.PushToHubMixin.push_to_hub`] method.
         """
         if os.path.isfile(save_directory):
-            raise AssertionError(
-                f"Provided path ({save_directory}) should be a directory, not a file"
-            )
+            raise AssertionError(f"Provided path ({save_directory}) should be a directory, not a file")
 
         os.makedirs(save_directory, exist_ok=True)
 
         # If we save using the predefined names, we can load using `from_pretrained`
-        output_processor_file = os.path.join(
-            save_directory, PROCESSOR_CONFIG_MAPPING[self.input_type])
+        output_processor_file = os.path.join(save_directory, PROCESSOR_CONFIG_MAPPING[self.input_type])
 
         self.to_json_file(output_processor_file)
         logger.info(f"processor saved in {output_processor_file}")
@@ -155,13 +156,14 @@ class BaseProcessingMixin(object):
         return [output_processor_file]
 
     def save_to_hf_hub(
-            self,
-            repo_id: str,
-            private: Optional[bool]=None,
-            subfolder: Optional[str]=None,
-            commit_message: Optional[str]=None,
-            revision: Optional[str]=None,
-            create_pr: bool=False, ):
+        self,
+        repo_id: str,
+        private: Optional[bool] = None,
+        subfolder: Optional[str] = None,
+        commit_message: Optional[str] = None,
+        revision: Optional[str] = None,
+        create_pr: bool = False,
+    ):
         """
         Uploads all elements of this processor to a new HuggingFace Hub repository.
         Args:
@@ -186,9 +188,7 @@ class BaseProcessingMixin(object):
 
         # Check if README file already exist in repo
         try:
-            get_hf_file_metadata(
-                hf_hub_url(
-                    repo_id=repo_id, filename="README.md", revision=revision))
+            get_hf_file_metadata(hf_hub_url(repo_id=repo_id, filename="README.md", revision=revision))
             has_readme = True
         except EntryNotFoundError:
             has_readme = False
@@ -214,12 +214,13 @@ class BaseProcessingMixin(object):
                 folder_path=root_dir,
                 commit_message=commit_message,
                 revision=revision,
-                create_pr=create_pr, )
+                create_pr=create_pr,
+            )
 
     @classmethod
     def get_processor_dict(
-            cls, pretrained_model_name_or_path: Union[str, os.PathLike],
-            **kwargs) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """
         From a `pretrained_model_name_or_path`, resolve to a dictionary of parameters, to be used for instantiating a
         processor of type [`~processor_utils.BaseProcessingMixin`] using `from_dict`.
@@ -237,15 +238,14 @@ class BaseProcessingMixin(object):
         cache_dir = kwargs.pop("cache_dir", None)
         from_hf_hub = kwargs.pop("from_hf_hub", False)
         subfolder = kwargs.pop("subfolder", None)
-        cache_dir = resolve_cache_dir(pretrained_model_name_or_path,
-                                      from_hf_hub, cache_dir)
+        cache_dir = resolve_cache_dir(pretrained_model_name_or_path, from_hf_hub, cache_dir)
 
         pretrained_model_name_or_path = str(pretrained_model_name_or_path)
         is_local = os.path.isdir(pretrained_model_name_or_path)
         if os.path.isdir(pretrained_model_name_or_path):
             resolved_processor_file = os.path.join(
-                pretrained_model_name_or_path,
-                PROCESSOR_CONFIG_MAPPING[cls.input_type])
+                pretrained_model_name_or_path, PROCESSOR_CONFIG_MAPPING[cls.input_type]
+            )
         elif os.path.isfile(pretrained_model_name_or_path):
             resolved_processor_file = pretrained_model_name_or_path
             is_local = True
@@ -257,18 +257,20 @@ class BaseProcessingMixin(object):
                 cache_dir=cache_dir,
                 subfolder=subfolder,
                 library_name="PaddleNLP",
-                library_version=__version__, )
+                library_version=__version__,
+            )
         else:
             # Assuming from community-contributed pretrained models
-            processor_file = "/".join([
-                COMMUNITY_MODEL_PREFIX,
-                pretrained_model_name_or_path,
-                PROCESSOR_CONFIG_MAPPING[cls.input_type],
-            ])
+            processor_file = "/".join(
+                [
+                    COMMUNITY_MODEL_PREFIX,
+                    pretrained_model_name_or_path,
+                    PROCESSOR_CONFIG_MAPPING[cls.input_type],
+                ]
+            )
             try:
                 # Load from local folder or from cache or download from model Hub and cache
-                resolved_processor_file = get_path_from_url_with_filelock(
-                    processor_file, cache_dir)
+                resolved_processor_file = get_path_from_url_with_filelock(processor_file, cache_dir)
             except EnvironmentError:
                 # Raise any environment error raise by `cached_file`. It will have a helpful error message adapted to
                 # the original exception.
@@ -296,9 +298,7 @@ class BaseProcessingMixin(object):
         if is_local:
             logger.info(f"loading configuration file {resolved_processor_file}")
         else:
-            logger.info(
-                f"loading configuration file {processor_file} from cache at {resolved_processor_file}"
-            )
+            logger.info(f"loading configuration file {processor_file} from cache at {resolved_processor_file}")
 
         return processor_dict, kwargs
 
@@ -416,8 +416,7 @@ class BaseImageProcessor(BaseProcessingMixin):
         return self.preprocess(images, **kwargs)
 
     def preprocess(self, images, **kwargs) -> BatchEncoding:
-        raise NotImplementedError(
-            "Each image processor must implement its own preprocess method")
+        raise NotImplementedError("Each image processor must implement its own preprocess method")
 
 
 class BaseTextProcessor(BaseProcessingMixin):
@@ -431,8 +430,7 @@ class BaseTextProcessor(BaseProcessingMixin):
         return self.preprocess(text, **kwargs)
 
     def preprocess(self, text, **kwargs) -> BatchEncoding:
-        raise NotImplementedError(
-            "Each image processor must implement its own preprocess method")
+        raise NotImplementedError("Each image processor must implement its own preprocess method")
 
 
 class BaseAudioProcessor(BaseProcessingMixin):
@@ -446,14 +444,14 @@ class BaseAudioProcessor(BaseProcessingMixin):
         return self.preprocess(audios, **kwargs)
 
     def preprocess(self, audios, **kwargs) -> BatchEncoding:
-        raise NotImplementedError(
-            "Each audios processor must implement its own preprocess method")
+        raise NotImplementedError("Each audios processor must implement its own preprocess method")
 
 
 VALID_SIZE_DICT_KEYS = (
     {"height", "width"},
     {"shortest_edge"},
-    {"shortest_edge", "longest_edge"}, )
+    {"shortest_edge", "longest_edge"},
+)
 
 
 def is_valid_size_dict(size_dict):
@@ -468,16 +466,15 @@ def is_valid_size_dict(size_dict):
 
 
 def convert_to_size_dict(
-        size,
-        max_size: Optional[int]=None,
-        default_to_square: bool=True,
-        height_width_order: bool=True, ):
+    size,
+    max_size: Optional[int] = None,
+    default_to_square: bool = True,
+    height_width_order: bool = True,
+):
     # By default, if size is an int we assume it represents a tuple of (size, size).
     if isinstance(size, int) and default_to_square:
         if max_size is not None:
-            raise ValueError(
-                "Cannot specify both size as an int, with default_to_square=True and max_size"
-            )
+            raise ValueError("Cannot specify both size as an int, with default_to_square=True and max_size")
         return {"height": size, "width": size}
     # In other configs, if size is an int and default_to_square is False, size represents the length of
     # the shortest edge after resizing.
@@ -496,11 +493,12 @@ def convert_to_size_dict(
 
 
 def get_size_dict(
-        size: Union[int, Iterable[int], Dict[str, int]]=None,
-        max_size: Optional[int]=None,
-        height_width_order: bool=True,
-        default_to_square: bool=True,
-        param_name="size", ) -> dict:
+    size: Union[int, Iterable[int], Dict[str, int]] = None,
+    max_size: Optional[int] = None,
+    height_width_order: bool = True,
+    default_to_square: bool = True,
+    param_name="size",
+) -> dict:
     """
     Converts the old size parameter in the config into the new dict expected in the config. This is to ensure backwards
     compatibility with the old image processor configs and removes ambiguity over whether the tuple is in (height,
@@ -523,11 +521,11 @@ def get_size_dict(
             If `size` is an int, whether to default to a square image or not.
     """
     if not isinstance(size, dict):
-        size_dict = convert_to_size_dict(size, max_size, default_to_square,
-                                         height_width_order)
+        size_dict = convert_to_size_dict(size, max_size, default_to_square, height_width_order)
         logger.info(
             f"{param_name} should be a dictionary on of the following set of keys: {VALID_SIZE_DICT_KEYS}, got {size}."
-            f" Converted to {size_dict}.", )
+            f" Converted to {size_dict}.",
+        )
     else:
         size_dict = size
 

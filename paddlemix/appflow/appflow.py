@@ -32,16 +32,8 @@ class Appflow(object):
 
     """
 
-    def __init__(self,
-                 app,
-                 models=None,
-                 mode=None,
-                 device_id=0,
-                 from_hf_hub=False,
-                 **kwargs):
-        assert (
-            app in APPLICATIONS
-        ), f"The task name:{app} is not in Taskflow list, please check your task name."
+    def __init__(self, app, models=None, mode=None, device_id=0, from_hf_hub=False, **kwargs):
+        assert app in APPLICATIONS, f"The task name:{app} is not in Taskflow list, please check your task name."
         self.app = app
         # Set the device for the task
         device = get_env_device()
@@ -55,16 +47,14 @@ class Appflow(object):
         self.models = models
         if isinstance(self.models, list) and len(self.models) > 0:
             for model in self.models:
-                assert model in set(APPLICATIONS[app][tag].keys(
-                )), f"The {tag} name: {model} is not in task:[{app}]"
+                assert model in set(APPLICATIONS[app][tag].keys()), f"The {tag} name: {model} is not in task:[{app}]"
         else:
             self.models = [APPLICATIONS[app]["default"][ind_tag]]
 
         self.task_instances = []
         for model in self.models:
             if "task_priority_path" in APPLICATIONS[self.app][tag][model]:
-                priority_path = APPLICATIONS[self.app][tag][model][
-                    "task_priority_path"]
+                priority_path = APPLICATIONS[self.app][tag][model]["task_priority_path"]
             else:
                 priority_path = None
 
@@ -79,7 +69,9 @@ class Appflow(object):
                     task=self.app,
                     priority_path=priority_path,
                     from_hf_hub=from_hf_hub,
-                    **kwargs, ))
+                    **kwargs,
+                )
+            )
 
         app_list = APPLICATIONS.keys()
         Appflow.app_list = app_list

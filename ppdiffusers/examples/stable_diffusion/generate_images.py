@@ -22,9 +22,14 @@ from paddle.utils.download import get_path_from_url
 from paddlenlp.transformers import CLIPTextModel
 from tqdm.auto import tqdm
 
-from ppdiffusers import (DDIMScheduler, EulerAncestralDiscreteScheduler,
-                         LMSDiscreteScheduler, PNDMScheduler,
-                         StableDiffusionPipeline, UNet2DConditionModel)
+from ppdiffusers import (
+    DDIMScheduler,
+    EulerAncestralDiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+    StableDiffusionPipeline,
+    UNet2DConditionModel,
+)
 from ppdiffusers.utils import DOWNLOAD_SERVER, PPDIFFUSERS_CACHE
 
 base_url = DOWNLOAD_SERVER + "/CompVis/data/"
@@ -43,32 +48,30 @@ def batchify(data, batch_size=16):
 
 
 def generate_images(
-        unet_model_name_or_path,
-        text_encoder_model_name_or_path=None,
-        batch_size=16,
-        file="coco30k.csv",
-        save_path="output",
-        seed=42,
-        scheduler_type="ddim",
-        eta=0.0,
-        num_inference_steps=50,
-        guidance_scales=[3, 4, 5, 6, 7, 8],
-        height=256,
-        width=256,
-        device="gpu",
-        variant="bf16", ):
+    unet_model_name_or_path,
+    text_encoder_model_name_or_path=None,
+    batch_size=16,
+    file="coco30k.csv",
+    save_path="output",
+    seed=42,
+    scheduler_type="ddim",
+    eta=0.0,
+    num_inference_steps=50,
+    guidance_scales=[3, 4, 5, 6, 7, 8],
+    height=256,
+    width=256,
+    device="gpu",
+    variant="bf16",
+):
     paddle.set_device(device)
     if variant == "fp32":
         variant = None
-    unet = UNet2DConditionModel.from_pretrained(
-        unet_model_name_or_path, variant=variant)
+    unet = UNet2DConditionModel.from_pretrained(unet_model_name_or_path, variant=variant)
     kwargs = {"safety_checker": None, "unet": unet}
     if text_encoder_model_name_or_path is not None:
-        text_encoder = CLIPTextModel.from_pretrained(
-            text_encoder_model_name_or_path, variant=variant)
+        text_encoder = CLIPTextModel.from_pretrained(text_encoder_model_name_or_path, variant=variant)
         kwargs["text_encoder"] = text_encoder
-    pipe = StableDiffusionPipeline.from_pretrained(
-        "CompVis/stable-diffusion-v1-4", **kwargs)
+    pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", **kwargs)
     pipe.set_progress_bar_config(disable=True)
     beta_start = pipe.scheduler.beta_start
     beta_end = pipe.scheduler.beta_end
@@ -80,17 +83,14 @@ def generate_images(
             set_alpha_to_one=False,
             steps_offset=1,
             # Make sure the scheduler compatible with PNDM
-            skip_prk_steps=True, )
+            skip_prk_steps=True,
+        )
     elif scheduler_type == "lms":
-        scheduler = LMSDiscreteScheduler(
-            beta_start=beta_start,
-            beta_end=beta_end,
-            beta_schedule="scaled_linear")
+        scheduler = LMSDiscreteScheduler(beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear")
     elif scheduler_type == "euler-ancestral":
         scheduler = EulerAncestralDiscreteScheduler(
-            beta_start=beta_start,
-            beta_end=beta_end,
-            beta_schedule="scaled_linear")
+            beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear"
+        )
     elif scheduler_type == "ddim":
         scheduler = DDIMScheduler(
             beta_start=beta_start,
@@ -99,7 +99,8 @@ def generate_images(
             # Make sure the scheduler compatible with DDIM
             clip_sample=False,
             set_alpha_to_one=False,
-            steps_offset=1, )
+            steps_offset=1,
+        )
     else:
         raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
     pipe.scheduler = scheduler
@@ -122,7 +123,8 @@ def generate_images(
                 eta=eta,
                 height=height,
                 width=width,
-                num_inference_steps=num_inference_steps, )[0]
+                num_inference_steps=num_inference_steps,
+            )[0]
             for image in images:
                 path = os.path.join(new_save_path, "{:05d}_000.png".format(i))
                 image.save(path)
@@ -136,28 +138,33 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="unet_model_name_or_path.", )
+        help="unet_model_name_or_path.",
+    )
     parser.add_argument(
         "--text_encoder_model_name_or_path",
         default=None,
         type=str,
-        help="text_encoder_model_name_or_path.", )
+        help="text_encoder_model_name_or_path.",
+    )
     parser.add_argument(
         "--file",
         default="coco30k",
         type=str,
-        help="eval file.", )
+        help="eval file.",
+    )
     parser.add_argument(
         "--variant",
         default="fp32",
         type=str,
         choices=["fp32", "bf16"],
-        help="eval file.", )
+        help="eval file.",
+    )
     parser.add_argument(
         "--seed",
         default=42,
         type=int,
-        help="random seed.", )
+        help="random seed.",
+    )
     parser.add_argument(
         "--scheduler_type",
         default="ddim",
@@ -167,22 +174,15 @@ if __name__ == "__main__":
     )
     parser.add_argument("--device", default="gpu", type=str, help="device")
     parser.add_argument("--batch_size", default=16, type=int, help="batch_size")
-    parser.add_argument(
-        "--num_inference_steps",
-        default=50,
-        type=int,
-        help="num_inference_steps")
-    parser.add_argument(
-        "--save_path",
-        default="outputs",
-        type=str,
-        help="Path to the output file.")
+    parser.add_argument("--num_inference_steps", default=50, type=int, help="num_inference_steps")
+    parser.add_argument("--save_path", default="outputs", type=str, help="Path to the output file.")
     parser.add_argument(
         "--guidance_scales",
         default=[1.5, 2, 3, 4, 5, 6, 7, 8],
         nargs="+",
         type=str,
-        help="guidance_scales list.", )
+        help="guidance_scales list.",
+    )
     parser.add_argument("--height", default=256, type=int, help="height.")
     parser.add_argument("--width", default=256, type=int, help="width.")
     args = parser.parse_args()
@@ -210,4 +210,5 @@ if __name__ == "__main__":
         height=args.height,
         width=args.width,
         device=args.device,
-        variant=args.variant, )
+        variant=args.variant,
+    )

@@ -14,9 +14,9 @@
 
 import paddle
 import paddle.nn as nn
-import paddle.nn.functional as F
-from paddlenlp.transformers.model_outputs import \
-    BaseModelOutputWithPoolingAndCrossAttentions
+from paddlenlp.transformers.model_outputs import (
+    BaseModelOutputWithPoolingAndCrossAttentions,
+)
 
 from .bert_model import BertModel
 
@@ -37,20 +37,21 @@ class BertModelWarper(nn.Layer):
         self.use_return_dict = True
 
     def forward(
-            self,
-            input_ids=None,
-            attention_mask=None,
-            token_type_ids=None,
-            position_ids=None,
-            head_mask=None,
-            inputs_embeds=None,
-            encoder_hidden_states=None,
-            encoder_attention_mask=None,
-            past_key_values=None,
-            use_cache=None,
-            output_attentions=None,
-            output_hidden_states=None,
-            return_dict=None, ):
+        self,
+        input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        position_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        encoder_hidden_states=None,
+        encoder_attention_mask=None,
+        past_key_values=None,
+        use_cache=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+    ):
         r"""
         encoder_hidden_states  (:obj:`torch.FloatTensor` of shape :obj:`(batch_size, sequence_length, hidden_size)`, `optional`):
             Sequence of hidden-states at the output of the last layer of the encoder. Used in the cross-attention if
@@ -71,11 +72,10 @@ class BertModelWarper(nn.Layer):
             If set to :obj:`True`, :obj:`past_key_values` key value states are returned and can be used to speed up
             decoding (see :obj:`past_key_values`).
         """
-        output_attentions = (output_attentions if output_attentions is not None
-                             else self.config.output_attentions)
-        output_hidden_states = (output_hidden_states
-                                if output_hidden_states is not None else
-                                self.config.output_hidden_states)
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
         return_dict = return_dict if return_dict is not None else self.use_return_dict
 
         if self.config.is_decoder:
@@ -84,9 +84,7 @@ class BertModelWarper(nn.Layer):
             use_cache = False
 
         if input_ids is not None and inputs_embeds is not None:
-            raise ValueError(
-                "You cannot specify both input_ids and inputs_embeds at the same time"
-            )
+            raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
             input_shape = input_ids.shape
             batch_size, seq_length = input_shape
@@ -94,23 +92,19 @@ class BertModelWarper(nn.Layer):
             input_shape = inputs_embeds.shape[:-1]
             batch_size, seq_length = input_shape
         else:
-            raise ValueError(
-                "You have to specify either input_ids or inputs_embeds")
+            raise ValueError("You have to specify either input_ids or inputs_embeds")
 
         # past_key_values_length
-        past_key_values_length = (past_key_values[0][0].shape[2]
-                                  if past_key_values is not None else 0)
+        past_key_values_length = past_key_values[0][0].shape[2] if past_key_values is not None else 0
 
         if attention_mask is None:
-            attention_mask = paddle.ones((
-                (batch_size, seq_length + past_key_values_length)))
+            attention_mask = paddle.ones(((batch_size, seq_length + past_key_values_length)))
         if token_type_ids is None:
             token_type_ids = paddle.zeros(input_shape, dtype=paddle.int64)
 
         # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
         # ourselves in which case we just need to make it broadcastable to all heads.
-        extended_attention_mask: paddle.Tensor = self.get_extended_attention_mask(
-            attention_mask, input_shape)
+        extended_attention_mask: paddle.Tensor = self.get_extended_attention_mask(attention_mask, input_shape)
 
         # If a 2D or 3D attention mask is provided for the cross-attention
         # we need to make broadcastable to [batch_size, num_heads, seq_length, seq_length]
@@ -138,7 +132,8 @@ class BertModelWarper(nn.Layer):
             position_ids=position_ids,
             token_type_ids=token_type_ids,
             inputs_embeds=inputs_embeds,
-            past_key_values_length=past_key_values_length, )
+            past_key_values_length=past_key_values_length,
+        )
 
         encoder_outputs = self.encoder(
             embedding_output,
@@ -150,10 +145,10 @@ class BertModelWarper(nn.Layer):
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
         sequence_output = encoder_outputs[0]
-        pooled_output = (self.pooler(sequence_output)
-                         if self.pooler is not None else None)
+        pooled_output = self.pooler(sequence_output) if self.pooler is not None else None
 
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
@@ -164,7 +159,8 @@ class BertModelWarper(nn.Layer):
             past_key_values=encoder_outputs.past_key_values,
             hidden_states=encoder_outputs.hidden_states,
             attentions=encoder_outputs.attentions,
-            cross_attentions=encoder_outputs.cross_attentions, )
+            cross_attentions=encoder_outputs.cross_attentions,
+        )
 
 
 class TextEncoderShell(nn.Layer):
@@ -178,8 +174,7 @@ class TextEncoderShell(nn.Layer):
         return self.text_encoder(**kw)
 
 
-def generate_masks_with_special_tokens(tokenized, special_tokens_list,
-                                       tokenizer):
+def generate_masks_with_special_tokens(tokenized, special_tokens_list, tokenizer):
     """Generate attention mask between each pair of special tokens
     Args:
         input_ids (torch.Tensor): input ids. Shape: [bs, num_token]
@@ -198,8 +193,7 @@ def generate_masks_with_special_tokens(tokenized, special_tokens_list,
     idxs = paddle.nonzero(special_tokens_mask)
 
     # generate attention mask and positional ids
-    attention_mask = (
-        paddle.eye(num_token, dtype=paddle.bool).unsqueeze(0).tile([bs, 1, 1]))
+    attention_mask = paddle.eye(num_token, dtype=paddle.bool).unsqueeze(0).tile([bs, 1, 1])
     position_ids = paddle.zeros((bs, num_token))
     previous_col = 0
     for i in range(idxs.shape[0]):
@@ -208,10 +202,8 @@ def generate_masks_with_special_tokens(tokenized, special_tokens_list,
             attention_mask[row, col, col] = True
             position_ids[row, col] = 0
         else:
-            attention_mask[row, previous_col + 1:col + 1, previous_col + 1:col +
-                           1] = True
-            position_ids[row, previous_col + 1:col + 1] = paddle.arange(
-                0, col - previous_col)
+            attention_mask[row, previous_col + 1 : col + 1, previous_col + 1 : col + 1] = True
+            position_ids[row, previous_col + 1 : col + 1] = paddle.arange(0, col - previous_col)
 
         previous_col = col
 
@@ -222,8 +214,7 @@ def generate_masks_with_special_tokens(tokenized, special_tokens_list,
     return attention_mask, position_ids.cast(paddle.int64)
 
 
-def generate_masks_with_special_tokens_and_transfer_map(
-        tokenized, special_tokens_list, tokenizer):
+def generate_masks_with_special_tokens_and_transfer_map(tokenized, special_tokens_list, tokenizer):
     """Generate attention mask between each pair of special tokens
     Args:
         input_ids (torch.Tensor): input ids. Shape: [bs, num_token]
@@ -242,8 +233,7 @@ def generate_masks_with_special_tokens_and_transfer_map(
     idxs = paddle.nonzero(special_tokens_mask)
 
     # generate attention mask and positional ids
-    attention_mask = (paddle.eye(num_token, dtype=paddle.int32)
-                      .cast(paddle.bool).unsqueeze(0).tile([bs, 1, 1]))
+    attention_mask = paddle.eye(num_token, dtype=paddle.int32).cast(paddle.bool).unsqueeze(0).tile([bs, 1, 1])
     position_ids = paddle.zeros((bs, num_token))
     cate_to_token_mask_list = [[] for _ in range(bs)]
     previous_col = 0
@@ -253,12 +243,14 @@ def generate_masks_with_special_tokens_and_transfer_map(
             attention_mask[row, col, col] = True
             position_ids[row, col] = 0
         else:
-            attention_mask[row, previous_col + 1:col + 1, previous_col + 1:col +
-                           1] = True
-            position_ids[row, previous_col + 1:col + 1] = paddle.arange(
-                0, col - previous_col)
-            c2t_maski = paddle.zeros([num_token, ]).cast(paddle.bool)
-            c2t_maski[previous_col + 1:col] = True
+            attention_mask[row, previous_col + 1 : col + 1, previous_col + 1 : col + 1] = True
+            position_ids[row, previous_col + 1 : col + 1] = paddle.arange(0, col - previous_col)
+            c2t_maski = paddle.zeros(
+                [
+                    num_token,
+                ]
+            ).cast(paddle.bool)
+            c2t_maski[previous_col + 1 : col] = True
             cate_to_token_mask_list[row].append(c2t_maski)
         previous_col = col
 
@@ -271,5 +263,4 @@ def generate_masks_with_special_tokens_and_transfer_map(
     # padding_mask = tokenized['attention_mask']
     # attention_mask = attention_mask & padding_mask.unsqueeze(1).bool() & padding_mask.unsqueeze(2).bool()
 
-    return attention_mask, position_ids.cast(
-        paddle.int64), cate_to_token_mask_list
+    return attention_mask, position_ids.cast(paddle.int64), cate_to_token_mask_list

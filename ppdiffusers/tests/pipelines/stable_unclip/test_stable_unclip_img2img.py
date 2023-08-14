@@ -19,24 +19,36 @@ import unittest
 import numpy as np
 import paddle
 from paddlenlp.transformers import (
-    CLIPImageProcessor, CLIPTextConfig, CLIPTextModel, CLIPTokenizer,
-    CLIPVisionConfig, CLIPVisionModelWithProjection)
+    CLIPImageProcessor,
+    CLIPTextConfig,
+    CLIPTextModel,
+    CLIPTokenizer,
+    CLIPVisionConfig,
+    CLIPVisionModelWithProjection,
+)
 
-from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
-                         StableUnCLIPImg2ImgPipeline, UNet2DConditionModel)
+from ppdiffusers import (
+    AutoencoderKL,
+    DDIMScheduler,
+    DDPMScheduler,
+    StableUnCLIPImg2ImgPipeline,
+    UNet2DConditionModel,
+)
 from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
-from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import \
-    StableUnCLIPImageNormalizer
+from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import (
+    StableUnCLIPImageNormalizer,
+)
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers.utils.testing_utils import floats_tensor
 
-from ..pipeline_params import (TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
-                               TEXT_GUIDED_IMAGE_VARIATION_PARAMS)
+from ..pipeline_params import (
+    TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
+    TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
+)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
-class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
-                                           unittest.TestCase):
+class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableUnCLIPImg2ImgPipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS
@@ -53,15 +65,14 @@ class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
                 num_attention_heads=4,
                 image_size=32,
                 intermediate_size=37,
-                patch_size=1, ))
+                patch_size=1,
+            )
+        )
         paddle.seed(0)
-        image_normalizer = StableUnCLIPImageNormalizer(
-            embedding_dim=embedder_hidden_size)
-        image_noising_scheduler = DDPMScheduler(
-            beta_schedule="squaredcos_cap_v2")
+        image_normalizer = StableUnCLIPImageNormalizer(embedding_dim=embedder_hidden_size)
+        image_noising_scheduler = DDPMScheduler(beta_schedule="squaredcos_cap_v2")
         paddle.seed(0)
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         paddle.seed(0)
         text_encoder = CLIPTextModel(
             CLIPTextConfig(
@@ -74,7 +85,9 @@ class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
                 num_attention_heads=4,
                 num_hidden_layers=5,
                 pad_token_id=1,
-                vocab_size=1000, ))
+                vocab_size=1000,
+            )
+        )
         paddle.seed(0)
         unet = UNet2DConditionModel(
             sample_size=32,
@@ -89,7 +102,8 @@ class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
             cross_attention_dim=embedder_hidden_size,
             layers_per_block=1,
             upcast_attention=True,
-            use_linear_projection=True, )
+            use_linear_projection=True,
+        )
         paddle.seed(0)
         scheduler = DDIMScheduler(
             beta_schedule="scaled_linear",
@@ -97,7 +111,8 @@ class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
             beta_end=0.012,
             prediction_type="v_prediction",
             set_alpha_to_one=False,
-            steps_offset=1, )
+            steps_offset=1,
+        )
         paddle.seed(0)
         vae = AutoencoderKL()
         components = {
@@ -124,17 +139,19 @@ class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
         image_slice = image[0, -3:, -3:, -1]
 
         assert image.shape == (1, 32, 32, 3)
-        expected_slice = np.array([
-            0.40317363,
-            1.0,
-            0.5802471,
-            0.47334313,
-            0.39546987,
-            0.72409034,
-            0.15691131,
-            0.42981434,
-            0.72585064,
-        ])
+        expected_slice = np.array(
+            [
+                0.40317363,
+                1.0,
+                0.5802471,
+                0.47334313,
+                0.39546987,
+                0.72409034,
+                0.15691131,
+                0.42981434,
+                0.72585064,
+            ]
+        )
 
         assert np.abs(image_slice.flatten() - expected_slice).max() < 1e-3
 
@@ -145,8 +162,7 @@ class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
         if pil_image:
             input_image = input_image * 0.5 + 0.5
             input_image = input_image.clip(min=0, max=1)
-            input_image = (input_image.cpu().transpose(
-                perm=[0, 2, 3, 1]).cast("float32").numpy())
+            input_image = input_image.cpu().transpose(perm=[0, 2, 3, 1]).cast("float32").numpy()
             input_image = DiffusionPipeline.numpy_to_pil(input_image)[0]
         return {
             "prompt": "An anime racoon running a marathon",
@@ -158,21 +174,18 @@ class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
 
     def test_attention_slicing_forward_pass(self):
         test_max_difference = False
-        self._test_attention_slicing_forward_pass(
-            test_max_difference=test_max_difference)
+        self._test_attention_slicing_forward_pass(test_max_difference=test_max_difference)
 
     def test_inference_batch_single_identical(self):
         test_max_difference = False
-        self._test_inference_batch_single_identical(
-            test_max_difference=test_max_difference)
+        self._test_inference_batch_single_identical(test_max_difference=test_max_difference)
 
     @unittest.skipIf(
         not is_ppxformers_available(),
         reason="XFormers attention is only available with CUDA and `xformers` installed",
     )
     def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(
-            test_max_difference=False)
+        self._test_xformers_attention_forwardGenerator_pass(test_max_difference=False)
 
 
 # @slow

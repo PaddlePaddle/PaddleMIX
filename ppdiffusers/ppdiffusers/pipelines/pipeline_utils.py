@@ -30,9 +30,15 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import PIL
 import PIL.Image
-from huggingface_hub import (create_repo, get_hf_file_metadata, hf_hub_url,
-                             model_info, repo_type_and_id_from_hf_id,
-                             snapshot_download, upload_folder)
+from huggingface_hub import (
+    create_repo,
+    get_hf_file_metadata,
+    hf_hub_url,
+    model_info,
+    repo_type_and_id_from_hf_id,
+    snapshot_download,
+    upload_folder,
+)
 from huggingface_hub.utils import EntryNotFoundError
 from packaging import version
 from tqdm.auto import tqdm
@@ -40,13 +46,31 @@ from tqdm.auto import tqdm
 from ..configuration_utils import ConfigMixin
 from ..schedulers.scheduling_utils import SCHEDULER_CONFIG_NAME
 from ..utils import (
-    CONFIG_NAME, DEPRECATED_REVISION_ARGS, DIFFUSERS_CACHE, FLAX_WEIGHTS_NAME,
-    FROM_DIFFUSERS, FROM_HF_HUB, HF_HUB_OFFLINE, LOW_CPU_MEM_USAGE_DEFAULT,
-    ONNX_EXTERNAL_WEIGHTS_NAME, ONNX_WEIGHTS_NAME, PPDIFFUSERS_CACHE,
-    TO_DIFFUSERS, TORCH_SAFETENSORS_WEIGHTS_NAME, TORCH_WEIGHTS_NAME,
-    BaseOutput, deprecate, get_class_from_dynamic_module, is_paddle_available,
-    is_paddlenlp_available, is_safetensors_available, logging, numpy_to_pil,
-    ppdiffusers_bos_dir_download, ppdiffusers_url_download)
+    CONFIG_NAME,
+    DEPRECATED_REVISION_ARGS,
+    DIFFUSERS_CACHE,
+    FLAX_WEIGHTS_NAME,
+    FROM_DIFFUSERS,
+    FROM_HF_HUB,
+    HF_HUB_OFFLINE,
+    LOW_CPU_MEM_USAGE_DEFAULT,
+    ONNX_EXTERNAL_WEIGHTS_NAME,
+    ONNX_WEIGHTS_NAME,
+    PPDIFFUSERS_CACHE,
+    TO_DIFFUSERS,
+    TORCH_SAFETENSORS_WEIGHTS_NAME,
+    TORCH_WEIGHTS_NAME,
+    BaseOutput,
+    deprecate,
+    get_class_from_dynamic_module,
+    is_paddle_available,
+    is_paddlenlp_available,
+    is_safetensors_available,
+    logging,
+    numpy_to_pil,
+    ppdiffusers_bos_dir_download,
+    ppdiffusers_url_download,
+)
 from ..version import VERSION as __version__
 
 if is_paddle_available():
@@ -133,8 +157,7 @@ class AudioPipelineOutput(BaseOutput):
     audios: np.ndarray
 
 
-def is_safetensors_compatible(filenames, variant=None,
-                              passed_components=None) -> bool:
+def is_safetensors_compatible(filenames, variant=None, passed_components=None) -> bool:
     """
     Checking for safetensors compatibility:
     - By default, all models are saved with the default pytorch serialization, so we use the list of default pytorch
@@ -154,8 +177,7 @@ def is_safetensors_compatible(filenames, variant=None,
     for filename in filenames:
         _, extension = os.path.splitext(filename)
 
-        if (len(filename.split("/")) == 2 and
-                filename.split("/")[0] in passed_components):
+        if len(filename.split("/")) == 2 and filename.split("/")[0] in passed_components:
             continue
 
         if extension == ".bin":
@@ -183,8 +205,7 @@ def is_safetensors_compatible(filenames, variant=None,
     return True
 
 
-def variant_compatible_siblings(filenames,
-                                variant=None) -> Union[List[os.PathLike], str]:
+def variant_compatible_siblings(filenames, variant=None) -> Union[List[os.PathLike], str]:
     weight_names = [
         TORCH_WEIGHTS_NAME,
         TORCH_SAFETENSORS_WEIGHTS_NAME,
@@ -217,35 +238,17 @@ def variant_compatible_siblings(filenames,
         rf"({'|'.join(weight_prefixes)})(-{transformers_index_format})?\.({'|'.join(weight_suffixs)})$"
     )
     # `text_encoder/pytorch_model.bin.index.json`
-    non_variant_index_re = re.compile(
-        rf"({'|'.join(weight_prefixes)})\.({'|'.join(weight_suffixs)})\.index\.json"
-    )
+    non_variant_index_re = re.compile(rf"({'|'.join(weight_prefixes)})\.({'|'.join(weight_suffixs)})\.index\.json")
 
     if variant is not None:
-        variant_weights = {
-            f
-            for f in filenames
-            if variant_file_re.match(f.split("/")[-1]) is not None
-        }
-        variant_indexes = {
-            f
-            for f in filenames
-            if variant_index_re.match(f.split("/")[-1]) is not None
-        }
+        variant_weights = {f for f in filenames if variant_file_re.match(f.split("/")[-1]) is not None}
+        variant_indexes = {f for f in filenames if variant_index_re.match(f.split("/")[-1]) is not None}
         variant_filenames = variant_weights | variant_indexes
     else:
         variant_filenames = set()
 
-    non_variant_weights = {
-        f
-        for f in filenames
-        if non_variant_file_re.match(f.split("/")[-1]) is not None
-    }
-    non_variant_indexes = {
-        f
-        for f in filenames
-        if non_variant_index_re.match(f.split("/")[-1]) is not None
-    }
+    non_variant_weights = {f for f in filenames if non_variant_file_re.match(f.split("/")[-1]) is not None}
+    non_variant_indexes = {f for f in filenames if non_variant_index_re.match(f.split("/")[-1]) is not None}
     non_variant_filenames = non_variant_weights | non_variant_indexes
 
     # all variant filenames will be used by default
@@ -254,12 +257,10 @@ def variant_compatible_siblings(filenames,
     def convert_to_variant(filename):
         if "index" in filename:
             variant_filename = filename.replace("index", f"index.{variant}")
-        elif (re.compile(f"^(.*?){transformers_index_format}").match(filename)
-              is not None):
+        elif re.compile(f"^(.*?){transformers_index_format}").match(filename) is not None:
             variant_filename = f"{filename.split('-')[0]}.{variant}-{'-'.join(filename.split('-')[1:])}"
         else:
-            variant_filename = (
-                f"{filename.split('.')[0]}.{variant}.{filename.split('.')[1]}")
+            variant_filename = f"{filename.split('.')[0]}.{variant}.{filename.split('.')[1]}"
         return variant_filename
 
     for f in non_variant_filenames:
@@ -270,51 +271,46 @@ def variant_compatible_siblings(filenames,
     return usable_filenames, variant_filenames
 
 
-def warn_deprecated_model_variant(pretrained_model_name_or_path, use_auth_token,
-                                  variant, revision, model_filenames):
+def warn_deprecated_model_variant(pretrained_model_name_or_path, use_auth_token, variant, revision, model_filenames):
     info = model_info(
         pretrained_model_name_or_path,
         use_auth_token=use_auth_token,
-        revision=None, )
+        revision=None,
+    )
     filenames = {sibling.rfilename for sibling in info.siblings}
-    comp_model_filenames, _ = variant_compatible_siblings(
-        filenames, variant=revision)
-    comp_model_filenames = [
-        ".".join(f.split(".")[:1] + f.split(".")[2:])
-        for f in comp_model_filenames
-    ]
+    comp_model_filenames, _ = variant_compatible_siblings(filenames, variant=revision)
+    comp_model_filenames = [".".join(f.split(".")[:1] + f.split(".")[2:]) for f in comp_model_filenames]
 
     if set(comp_model_filenames) == set(model_filenames):
         warnings.warn(
             f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'` even though you can load it via `variant=`{revision}`. Loading model variants via `revision='{revision}'` is deprecated and will be removed in diffusers v1. Please use `variant='{revision}'` instead.",
-            FutureWarning, )
+            FutureWarning,
+        )
     else:
         warnings.warn(
             f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'`. This behavior is deprecated and will be removed in diffusers v1. One should use `variant='{revision}'` instead. However, it appears that {pretrained_model_name_or_path} currently does not have the required variant filenames in the 'main' branch. \n The Diffusers team and community would be very grateful if you could open an issue: https://github.com/huggingface/diffusers/issues/new with the title '{pretrained_model_name_or_path} is missing {revision} files' so that the correct variant file can be added.",
-            FutureWarning, )
+            FutureWarning,
+        )
 
 
 def maybe_raise_or_warn(
-        library_name,
-        library,
-        class_name,
-        importable_classes,
-        passed_class_obj,
-        name,
-        is_pipeline_module, ):
+    library_name,
+    library,
+    class_name,
+    importable_classes,
+    passed_class_obj,
+    name,
+    is_pipeline_module,
+):
     """Simple helper method to raise or warn in case incorrect module has been passed"""
     if not is_pipeline_module:
         library = importlib.import_module(library_name)
         class_obj = getattr(library, class_name)
-        class_candidates = {
-            c: getattr(library, c, None)
-            for c in importable_classes.keys()
-        }
+        class_candidates = {c: getattr(library, c, None) for c in importable_classes.keys()}
 
         expected_class_obj = None
         for class_name, class_candidate in class_candidates.items():
-            if class_candidate is not None and issubclass(class_obj,
-                                                          class_candidate):
+            if class_candidate is not None and issubclass(class_obj, class_candidate):
                 expected_class_obj = class_candidate
 
         # Dynamo wraps the original model in a private class.
@@ -325,15 +321,16 @@ def maybe_raise_or_warn(
         if not issubclass(model_cls, expected_class_obj):
             raise ValueError(
                 f"{passed_class_obj[name]} is of type: {type(passed_class_obj[name])}, but should be"
-                f" {expected_class_obj}")
+                f" {expected_class_obj}"
+            )
     else:
         logger.warning(
             f"You have passed a non-standard module {passed_class_obj[name]}. We cannot verify whether it"
-            " has the correct type")
+            " has the correct type"
+        )
 
 
-def get_class_obj_and_candidates(library_name, class_name, importable_classes,
-                                 pipelines, is_pipeline_module):
+def get_class_obj_and_candidates(library_name, class_name, importable_classes, pipelines, is_pipeline_module):
     """Simple helper method to retrieve class object of module as well as potential parent class objects"""
     if is_pipeline_module:
         pipeline_module = getattr(pipelines, library_name)
@@ -344,19 +341,12 @@ def get_class_obj_and_candidates(library_name, class_name, importable_classes,
         # else we just import it from the library.
         library = importlib.import_module(library_name)
         class_obj = getattr(library, class_name)
-        class_candidates = {
-            c: getattr(library, c, None)
-            for c in importable_classes.keys()
-        }
+        class_candidates = {c: getattr(library, c, None) for c in importable_classes.keys()}
 
     return class_obj, class_candidates
 
 
-def _get_pipeline_class(class_obj,
-                        config,
-                        custom_pipeline=None,
-                        cache_dir=None,
-                        revision=None):
+def _get_pipeline_class(class_obj, config, custom_pipeline=None, cache_dir=None, revision=None):
     if custom_pipeline is not None:
         if custom_pipeline.endswith(".py"):
             path = Path(custom_pipeline)
@@ -370,31 +360,32 @@ def _get_pipeline_class(class_obj,
             custom_pipeline,
             module_file=file_name,
             cache_dir=cache_dir,
-            revision=revision, )
+            revision=revision,
+        )
 
     if class_obj != DiffusionPipeline:
         return class_obj
 
-    ppdiffusers_module = importlib.import_module(
-        class_obj.__module__.split(".")[0])
+    ppdiffusers_module = importlib.import_module(class_obj.__module__.split(".")[0])
     return getattr(ppdiffusers_module, config["_class_name"])
 
 
 def load_sub_model(
-        library_name: str,
-        class_name: str,
-        importable_classes: List[Any],
-        pipelines: Any,
-        is_pipeline_module: bool,
-        pipeline_class: Any,
-        paddle_dtype: paddle.dtype,
-        runtime_options: Any,
-        model_variants: Dict[str, str],
-        name: str,
-        from_diffusers: bool,
-        low_cpu_mem_usage: bool=False,
-        cached_folder: Union[str, os.PathLike]=None,
-        **kwargs, ):
+    library_name: str,
+    class_name: str,
+    importable_classes: List[Any],
+    pipelines: Any,
+    is_pipeline_module: bool,
+    pipeline_class: Any,
+    paddle_dtype: paddle.dtype,
+    runtime_options: Any,
+    model_variants: Dict[str, str],
+    name: str,
+    from_diffusers: bool,
+    low_cpu_mem_usage: bool = False,
+    cached_folder: Union[str, os.PathLike] = None,
+    **kwargs,
+):
     # support huggingface diffusers onnx model
     is_onnx_model = False
     if "Onnx" in class_name:
@@ -403,29 +394,29 @@ def load_sub_model(
     """Helper method to load the module `name` from `library_name` and `class_name`"""
     # retrieve class candidates
     class_obj, class_candidates = get_class_obj_and_candidates(
-        library_name, class_name, importable_classes, pipelines,
-        is_pipeline_module)
+        library_name, class_name, importable_classes, pipelines, is_pipeline_module
+    )
 
     load_method_name = None
     # retrive load method name
     for class_name, class_candidate in class_candidates.items():
-        if class_candidate is not None and issubclass(class_obj,
-                                                      class_candidate):
+        if class_candidate is not None and issubclass(class_obj, class_candidate):
             load_method_name = importable_classes[class_name][1]
 
     # if load method name is None, then we have a dummy module -> raise Error
     if load_method_name is None:
         none_module = class_obj.__module__
-        is_dummy_path = none_module.startswith(
-            DUMMY_MODULES_FOLDER) or none_module.startswith(
-                PADDLENLP_DUMMY_MODULES_FOLDER)
+        is_dummy_path = none_module.startswith(DUMMY_MODULES_FOLDER) or none_module.startswith(
+            PADDLENLP_DUMMY_MODULES_FOLDER
+        )
         if is_dummy_path and "dummy" in none_module:
             # call class_obj for nice error message of missing requirements
             class_obj()
 
         raise ValueError(
             f"The component {class_obj} of {pipeline_class} cannot be loaded as it does not seem to have"
-            f" any of the loading methods defined in {ALL_IMPORTABLE_CLASSES}.")
+            f" any of the loading methods defined in {ALL_IMPORTABLE_CLASSES}."
+        )
 
     load_method = getattr(class_obj, load_method_name)
 
@@ -435,17 +426,17 @@ def load_sub_model(
     # FastDeploy Model
     if issubclass(class_obj, FastDeployRuntimeModel):
         loading_kwargs["runtime_options"] = (
-            runtime_options.get(name, None)
-            if isinstance(runtime_options, dict) else runtime_options)
+            runtime_options.get(name, None) if isinstance(runtime_options, dict) else runtime_options
+        )
         if not is_onnx_model:
             if os.path.isdir(os.path.join(cached_folder, name)):
                 is_onnx_model = any(
-                    d.endswith(".onnx") or d.endswith(".pb")
-                    for d in os.listdir(os.path.join(cached_folder, name)))
+                    d.endswith(".onnx") or d.endswith(".pb") for d in os.listdir(os.path.join(cached_folder, name))
+                )
             else:
                 is_onnx_model = any(
-                    d.endswith(".onnx") or d.endswith(".pb")
-                    for d in os.listdir(os.path.join(cached_folder)))
+                    d.endswith(".onnx") or d.endswith(".pb") for d in os.listdir(os.path.join(cached_folder))
+                )
         loading_kwargs["is_onnx_model"] = is_onnx_model
 
     from ppdiffusers import ModelMixin
@@ -461,8 +452,7 @@ def load_sub_model(
     try:
         # check if the module is in a subdirectory
         if os.path.isdir(os.path.join(cached_folder, name)):
-            loaded_sub_model = load_method(
-                os.path.join(cached_folder, name), **loading_kwargs)
+            loaded_sub_model = load_method(os.path.join(cached_folder, name), **loading_kwargs)
         else:
             # else load from the root directory
             loaded_sub_model = load_method(cached_folder, **loading_kwargs)
@@ -478,11 +468,10 @@ def load_sub_model(
             loaded_sub_model = load_method(
                 pretrained_model_name_or_path + "/" + name,
                 cache_dir=cache_dir,
-                **loading_kwargs, )
-        if loaded_sub_model is None:
-            raise ValueError(
-                f"We cant load '{name}' from {pretrained_model_name_or_path} or {cached_folder}! \n {e} "
+                **loading_kwargs,
             )
+        if loaded_sub_model is None:
+            raise ValueError(f"We cant load '{name}' from {pretrained_model_name_or_path} or {cached_folder}! \n {e} ")
 
     return loaded_sub_model
 
@@ -517,19 +506,15 @@ class DiffusionPipeline(ConfigMixin):
                 register_dict = {name: (None, None)}
             else:
                 # TODO (junnyu) support paddlenlp.transformers
-                if "paddlenlp" in module.__module__.split(
-                        ".") or "ppnlp_patch_utils" in module.__module__.split(
-                            "."):
+                if "paddlenlp" in module.__module__.split(".") or "ppnlp_patch_utils" in module.__module__.split("."):
                     library = "paddlenlp.transformers"
                 else:
                     library = module.__module__.split(".")[0]
 
                 # check if the module is a pipeline module
-                pipeline_dir = (module.__module__.split(".")[-2] if
-                                len(module.__module__.split(".")) > 2 else None)
+                pipeline_dir = module.__module__.split(".")[-2] if len(module.__module__.split(".")) > 2 else None
                 path = module.__module__.split(".")
-                is_pipeline_module = pipeline_dir in path and hasattr(
-                    pipelines, pipeline_dir)
+                is_pipeline_module = pipeline_dir in path and hasattr(pipelines, pipeline_dir)
 
                 # if library is not in LOADABLE_CLASSES, then it is a custom module.
                 # Or if it's a pipeline module, then the module is inside the pipeline
@@ -549,19 +534,20 @@ class DiffusionPipeline(ConfigMixin):
             setattr(self, name, module)
 
             # TODO junnyu, before register model, we may need to keep some module in fp32
-            if (isinstance(module, nn.Layer) and
-                    hasattr(module, "_keep_in_fp32_modules") and
-                    module.dtype == paddle.float16 and
-                    module._keep_in_fp32_modules is not None):
-                for module_name, sub_module in module.named_sublayers(
-                        include_self=True):
-                    if any(n in module_name
-                           for n in module._keep_in_fp32_modules):
+            if (
+                isinstance(module, nn.Layer)
+                and hasattr(module, "_keep_in_fp32_modules")
+                and module.dtype == paddle.float16
+                and module._keep_in_fp32_modules is not None
+            ):
+                for module_name, sub_module in module.named_sublayers(include_self=True):
+                    if any(n in module_name for n in module._keep_in_fp32_modules):
                         sub_module.to(dtype=paddle.float32)
                         if hasattr(sub_module, "pre_hook"):
                             sub_module.pre_hook.remove()
                         sub_module.pre_hook = sub_module.register_forward_pre_hook(
-                            lambda layer, input: input[0].cast("float32"))
+                            lambda layer, input: input[0].cast("float32")
+                        )
 
     def __setattr__(self, name: str, value: Any):
         if name in self.__dict__ and hasattr(self.config, name):
@@ -570,7 +556,8 @@ class DiffusionPipeline(ConfigMixin):
                 if value is not None and self.config[name][0] is not None:
                     class_library_tuple = (
                         value.__module__.split(".")[0],
-                        value.__class__.__name__, )
+                        value.__class__.__name__,
+                    )
                 else:
                     class_library_tuple = (None, None)
 
@@ -581,11 +568,12 @@ class DiffusionPipeline(ConfigMixin):
         super().__setattr__(name, value)
 
     def save_pretrained(
-            self,
-            save_directory: Union[str, os.PathLike],
-            safe_serialization: bool=False,
-            variant: Optional[str]=None,
-            to_diffusers: bool=None, ):
+        self,
+        save_directory: Union[str, os.PathLike],
+        safe_serialization: bool = False,
+        variant: Optional[str] = None,
+        to_diffusers: bool = None,
+    ):
         """
         Save all variables of the pipeline that can be saved and loaded as well as the pipelines configuration file to
         a directory. A pipeline variable can be saved and loaded if its class implements both a save and loading
@@ -619,10 +607,7 @@ class DiffusionPipeline(ConfigMixin):
                 return False
             return True
 
-        model_index_dict = {
-            k: v
-            for k, v in model_index_dict.items() if is_saveable_module(k, v)
-        }
+        model_index_dict = {k: v for k, v in model_index_dict.items() if is_saveable_module(k, v)}
 
         for pipeline_component_name in model_index_dict.keys():
             sub_model = getattr(self, pipeline_component_name)
@@ -639,8 +624,7 @@ class DiffusionPipeline(ConfigMixin):
                     )
                 for base_class, save_load_methods in library_classes.items():
                     class_candidate = getattr(library, base_class, None)
-                    if class_candidate is not None and issubclass(
-                            model_cls, class_candidate):
+                    if class_candidate is not None and issubclass(model_cls, class_candidate):
                         # if we found a suitable base class in LOADABLE_CLASSES then grab its save method
                         save_method_name = save_load_methods[0]
                         break
@@ -648,23 +632,18 @@ class DiffusionPipeline(ConfigMixin):
                     break
 
             if save_method_name is None:
-                logger.warn(
-                    f"self.{pipeline_component_name}={sub_model} of type {type(sub_model)} cannot be saved."
-                )
+                logger.warn(f"self.{pipeline_component_name}={sub_model} of type {type(sub_model)} cannot be saved.")
                 # make sure that unsaveable components are not tried to be loaded afterward
-                self.register_to_config(
-                    **{pipeline_component_name: (None, None)})
+                self.register_to_config(**{pipeline_component_name: (None, None)})
                 continue
 
             save_method = getattr(sub_model, save_method_name)
 
             # Call the save method with the argument safe_serialization only if it's supported
             save_method_signature = inspect.signature(save_method)
-            save_method_accept_safe = (
-                "safe_serialization" in save_method_signature.parameters)
+            save_method_accept_safe = "safe_serialization" in save_method_signature.parameters
             save_method_accept_variant = "variant" in save_method_signature.parameters
-            save_method_accept_to_diffusers = (
-                "to_diffusers" in save_method_signature.parameters)
+            save_method_accept_to_diffusers = "to_diffusers" in save_method_signature.parameters
 
             save_kwargs = {}
             # maybe we donot have torch so we use safe_serialization
@@ -678,20 +657,19 @@ class DiffusionPipeline(ConfigMixin):
             if save_method_accept_to_diffusers:
                 save_kwargs["to_diffusers"] = to_diffusers
 
-            save_method(
-                os.path.join(save_directory, pipeline_component_name),
-                **save_kwargs)
+            save_method(os.path.join(save_directory, pipeline_component_name), **save_kwargs)
 
         # finally save the config
         self.save_config(save_directory, to_diffusers=to_diffusers)
 
     def save_to_hf_hub(
-            self,
-            repo_id: str,
-            private: Optional[bool]=None,
-            commit_message: Optional[str]=None,
-            revision: Optional[str]=None,
-            create_pr: bool=False, ):
+        self,
+        repo_id: str,
+        private: Optional[bool] = None,
+        commit_message: Optional[str] = None,
+        revision: Optional[str] = None,
+        create_pr: bool = False,
+    ):
         """
         Uploads all elements of this pipeline to a new HuggingFace Hub repository.
         Args:
@@ -715,9 +693,7 @@ class DiffusionPipeline(ConfigMixin):
 
         # Check if README file already exist in repo
         try:
-            get_hf_file_metadata(
-                hf_hub_url(
-                    repo_id=repo_id, filename="README.md", revision=revision))
+            get_hf_file_metadata(hf_hub_url(repo_id=repo_id, filename="README.md", revision=revision))
             has_readme = True
         except EntryNotFoundError:
             has_readme = False
@@ -739,13 +715,15 @@ class DiffusionPipeline(ConfigMixin):
                 folder_path=tmp_dir,
                 commit_message=commit_message,
                 revision=revision,
-                create_pr=create_pr, )
+                create_pr=create_pr,
+            )
 
     def to(
-            self,
-            paddle_device: Optional[str]=None,
-            paddle_dtype: Optional[paddle.dtype]=None,
-            silence_dtype_warnings: bool=True, ):
+        self,
+        paddle_device: Optional[str] = None,
+        paddle_dtype: Optional[paddle.dtype] = None,
+        silence_dtype_warnings: bool = True,
+    ):
         if paddle_device is None and paddle_dtype is None:
             return self
 
@@ -753,9 +731,12 @@ class DiffusionPipeline(ConfigMixin):
         modules = [getattr(self, n, None) for n in module_names]
         modules = [m for m in modules if isinstance(m, nn.Layer)]
         for module in modules:
-            if (paddle_device is not None and module.dtype == paddle.float16 and
-                    str(paddle_device) in ["cpu"] and
-                    not silence_dtype_warnings):
+            if (
+                paddle_device is not None
+                and module.dtype == paddle.float16
+                and str(paddle_device) in ["cpu"]
+                and not silence_dtype_warnings
+            ):
                 logger.warning(
                     "Pipelines loaded with `paddle_dtype=paddle.float16` cannot run with `cpu` device. It"
                     " is not recommended to move them to `cpu` as running them will fail. Please make"
@@ -771,19 +752,20 @@ class DiffusionPipeline(ConfigMixin):
             module.to(**kwargs)
 
             # TODO junnyu, before register model, we may need to keep some module in fp32
-            if (isinstance(module, nn.Layer) and
-                    hasattr(module, "_keep_in_fp32_modules") and
-                    module.dtype == paddle.float16 and
-                    module._keep_in_fp32_modules is not None):
-                for module_name, sub_module in module.named_sublayers(
-                        include_self=True):
-                    if any(n in module_name
-                           for n in module._keep_in_fp32_modules):
+            if (
+                isinstance(module, nn.Layer)
+                and hasattr(module, "_keep_in_fp32_modules")
+                and module.dtype == paddle.float16
+                and module._keep_in_fp32_modules is not None
+            ):
+                for module_name, sub_module in module.named_sublayers(include_self=True):
+                    if any(n in module_name for n in module._keep_in_fp32_modules):
                         sub_module.to(dtype=paddle.float32)
                         if hasattr(sub_module, "pre_hook"):
                             sub_module.pre_hook.remove()
                         sub_module.pre_hook = sub_module.register_forward_pre_hook(
-                            lambda layer, input: input[0].cast("float32"))
+                            lambda layer, input: input[0].cast("float32")
+                        )
         return self
 
     @property
@@ -801,10 +783,7 @@ class DiffusionPipeline(ConfigMixin):
         return "cpu"
 
     @classmethod
-    def from_pretrained(
-            cls,
-            pretrained_model_name_or_path: Optional[Union[str, os.PathLike]],
-            **kwargs):
+    def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
         r"""
         Instantiate a Paddle diffusion pipeline from pre-trained pipeline weights.
 
@@ -964,18 +943,17 @@ class DiffusionPipeline(ConfigMixin):
         custom_pipeline = kwargs.pop("custom_pipeline", None)
         custom_revision = kwargs.pop("custom_revision", None)
         runtime_options = kwargs.pop("runtime_options", None)
-        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage",
-                                       LOW_CPU_MEM_USAGE_DEFAULT)
-        use_safetensors = kwargs.pop("use_safetensors", None
-                                     if is_safetensors_available() else False)
+        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", LOW_CPU_MEM_USAGE_DEFAULT)
+        use_safetensors = kwargs.pop("use_safetensors", None if is_safetensors_available() else False)
         variant = kwargs.pop("variant", None)
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
 
         # deperate
         return_cached_folder = kwargs.pop("return_cached_folder", False)
 
-        cache_dir = (kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub
-                     else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE))
+        cache_dir = (
+            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
+        )
 
         load_sub_model_kwargs = {
             "pretrained_model_name_or_path": pretrained_model_name_or_path,
@@ -1003,7 +981,8 @@ class DiffusionPipeline(ConfigMixin):
                 variant=variant,
                 from_hf_hub=from_hf_hub,
                 from_diffusers=from_diffusers,
-                **kwargs, )
+                **kwargs,
+            )
         else:
             # is_local_dir
             load_sub_model_kwargs["is_local_dir"] = True
@@ -1023,8 +1002,8 @@ class DiffusionPipeline(ConfigMixin):
                 folder_path = os.path.join(cached_folder, folder)
                 is_folder = os.path.isdir(folder_path) and folder in config_dict
                 variant_exists = is_folder and any(
-                    p.split(".")[1].startswith(variant)
-                    for p in os.listdir(folder_path))
+                    p.split(".")[1].startswith(variant) for p in os.listdir(folder_path)
+                )
                 if variant_exists:
                     model_variants[folder] = variant
 
@@ -1035,18 +1014,22 @@ class DiffusionPipeline(ConfigMixin):
             config_dict,
             custom_pipeline=custom_pipeline,
             cache_dir=cache_dir,
-            revision=custom_revision, )
+            revision=custom_revision,
+        )
 
         # DEPRECATED: To be removed in 1.0.0
-        _ppdiffusers_version = (config_dict["_diffusers_paddle_version"]
-                                if "_diffusers_paddle_version" in config_dict
-                                else config_dict["_ppdiffusers_version"])
-        if (pipeline_class.__name__ == "StableDiffusionInpaintPipeline" and
-                version.parse(
-                    version.parse(_ppdiffusers_version).base_version) <=
-                version.parse("0.5.1")):
-            from ppdiffusers import (StableDiffusionInpaintPipeline,
-                                     StableDiffusionInpaintPipelineLegacy)
+        _ppdiffusers_version = (
+            config_dict["_diffusers_paddle_version"]
+            if "_diffusers_paddle_version" in config_dict
+            else config_dict["_ppdiffusers_version"]
+        )
+        if pipeline_class.__name__ == "StableDiffusionInpaintPipeline" and version.parse(
+            version.parse(_ppdiffusers_version).base_version
+        ) <= version.parse("0.5.1"):
+            from ppdiffusers import (
+                StableDiffusionInpaintPipeline,
+                StableDiffusionInpaintPipelineLegacy,
+            )
 
             pipeline_class = StableDiffusionInpaintPipelineLegacy
 
@@ -1063,7 +1046,8 @@ class DiffusionPipeline(ConfigMixin):
                 "StableDiffusionInpaintPipelineLegacy",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False, )
+                standard_warn=False,
+            )
 
         # 4. Define expected modules given pipeline signature
         # and define non-None initialized modules (=`init_kwargs`)
@@ -1071,26 +1055,15 @@ class DiffusionPipeline(ConfigMixin):
         # some modules can be passed directly to the init
         # in this case they are already instantiated in `kwargs`
         # extract them here
-        expected_modules, optional_kwargs = cls._get_signature_keys(
-            pipeline_class)
-        passed_class_obj = {
-            k: kwargs.pop(k)
-            for k in expected_modules if k in kwargs
-        }
-        passed_pipe_kwargs = {
-            k: kwargs.pop(k)
-            for k in optional_kwargs if k in kwargs
-        }
+        expected_modules, optional_kwargs = cls._get_signature_keys(pipeline_class)
+        passed_class_obj = {k: kwargs.pop(k) for k in expected_modules if k in kwargs}
+        passed_pipe_kwargs = {k: kwargs.pop(k) for k in optional_kwargs if k in kwargs}
 
-        init_dict, unused_kwargs, _ = pipeline_class.extract_init_dict(
-            config_dict, **kwargs)
+        init_dict, unused_kwargs, _ = pipeline_class.extract_init_dict(config_dict, **kwargs)
 
         # define init kwargs
-        init_kwargs = {
-            k: init_dict.pop(k)
-            for k in optional_kwargs if k in init_dict
-        }
-        init_kwargs = { ** init_kwargs, ** passed_pipe_kwargs}
+        init_kwargs = {k: init_dict.pop(k) for k in optional_kwargs if k in init_dict}
+        init_kwargs = {**init_kwargs, **passed_pipe_kwargs}
 
         # remove `null` components
         def load_module(name, value):
@@ -1127,8 +1100,7 @@ class DiffusionPipeline(ConfigMixin):
 
             # 6.2 Define all importable classes
             is_pipeline_module = hasattr(pipelines, library_name)
-            importable_classes = (ALL_IMPORTABLE_CLASSES if is_pipeline_module
-                                  else LOADABLE_CLASSES[library_name])
+            importable_classes = ALL_IMPORTABLE_CLASSES if is_pipeline_module else LOADABLE_CLASSES[library_name]
             loaded_sub_model = None
 
             # 6.3 Use passed sub model or load class_name from library_name
@@ -1144,7 +1116,8 @@ class DiffusionPipeline(ConfigMixin):
                         importable_classes,
                         passed_class_obj,
                         name,
-                        is_pipeline_module, )
+                        is_pipeline_module,
+                    )
 
                 loaded_sub_model = passed_class_obj[name]
             else:
@@ -1164,23 +1137,20 @@ class DiffusionPipeline(ConfigMixin):
                     variant=variant,
                     low_cpu_mem_usage=low_cpu_mem_usage,
                     cached_folder=cached_folder,
-                    **load_sub_model_kwargs, )
+                    **load_sub_model_kwargs,
+                )
 
-            init_kwargs[
-                name] = loaded_sub_model  # UNet(...), # DiffusionSchedule(...)
+            init_kwargs[name] = loaded_sub_model  # UNet(...), # DiffusionSchedule(...)
 
         # 7. Potentially add passed objects if expected
         missing_modules = set(expected_modules) - set(init_kwargs.keys())
         passed_modules = list(passed_class_obj.keys())
         optional_modules = pipeline_class._optional_components
-        if len(missing_modules) > 0 and missing_modules <= set(
-                passed_modules + optional_modules):
+        if len(missing_modules) > 0 and missing_modules <= set(passed_modules + optional_modules):
             for module in missing_modules:
                 init_kwargs[module] = passed_class_obj.get(module, None)
         elif len(missing_modules) > 0:
-            passed_modules = (
-                set(list(init_kwargs.keys()) + list(passed_class_obj.keys())) -
-                optional_kwargs)
+            passed_modules = set(list(init_kwargs.keys()) + list(passed_class_obj.keys())) - optional_kwargs
             raise ValueError(
                 f"Pipeline {pipeline_class} expected {expected_modules}, but only {passed_modules} were passed."
             )
@@ -1195,8 +1165,7 @@ class DiffusionPipeline(ConfigMixin):
                 for _submodule in _module:
                     if isinstance(_submodule, nn.Layer):
                         _submodule.eval()
-                        if (paddle_dtype is not None and
-                                _submodule.dtype != paddle_dtype):
+                        if paddle_dtype is not None and _submodule.dtype != paddle_dtype:
                             _submodule.to(dtype=paddle_dtype)
 
         # 9. Instantiate the pipeline
@@ -1210,8 +1179,7 @@ class DiffusionPipeline(ConfigMixin):
         return model
 
     @classmethod
-    def download(cls, pretrained_model_name,
-                 **kwargs) -> Union[str, os.PathLike]:
+    def download(cls, pretrained_model_name, **kwargs) -> Union[str, os.PathLike]:
         r"""
         Download and cache a PyTorch diffusion pipeline from pre-trained pipeline weights.
         Parameters:
@@ -1284,8 +1252,9 @@ class DiffusionPipeline(ConfigMixin):
         </Tip>
         """
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
-        cache_dir = (kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub
-                     else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE))
+        cache_dir = (
+            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
+        )
         from_diffusers = kwargs.pop("from_diffusers", FROM_DIFFUSERS)
         resume_download = kwargs.pop("resume_download", False)
         force_download = kwargs.pop("force_download", False)
@@ -1299,8 +1268,7 @@ class DiffusionPipeline(ConfigMixin):
         use_safetensors = kwargs.pop("use_safetensors", None)
         max_workers = int(kwargs.pop("max_workers", 1))
 
-        if from_diffusers and use_safetensors and not is_safetensors_available(
-        ):
+        if from_diffusers and use_safetensors and not is_safetensors_available():
             raise ValueError(
                 "`use_safetensors`=True but safetensors is not installed. Please install safetensors with `pip install safetenstors"
             )
@@ -1324,14 +1292,14 @@ class DiffusionPipeline(ConfigMixin):
             use_auth_token=use_auth_token,
             revision=revision,
             from_hf_hub=from_hf_hub,
-            return_config_file=True, )
+            return_config_file=True,
+        )
 
         ignore_filenames = config_dict.pop("_ignore_files", [])
 
         # is_fastdeploy_model we wont use safetensors
         if cls == DiffusionPipeline:
-            is_fastdeploy_model = (
-                "fastdeploy" in config_dict.get("_class_name", "").lower())
+            is_fastdeploy_model = "fastdeploy" in config_dict.get("_class_name", "").lower()
         else:
             is_fastdeploy_model = "fastdeploy" in cls.__name__.lower()
         if is_fastdeploy_model:
@@ -1354,46 +1322,38 @@ class DiffusionPipeline(ConfigMixin):
                 info = model_info(
                     pretrained_model_name,
                     use_auth_token=use_auth_token,
-                    revision=revision, )
+                    revision=revision,
+                )
 
                 filenames = {sibling.rfilename for sibling in info.siblings}
-                model_filenames, variant_filenames = variant_compatible_siblings(
-                    filenames, variant=variant)
+                model_filenames, variant_filenames = variant_compatible_siblings(filenames, variant=variant)
 
                 # remove ignored filenames
                 model_filenames = set(model_filenames) - set(ignore_filenames)
-                variant_filenames = set(variant_filenames) - set(
-                    ignore_filenames)
+                variant_filenames = set(variant_filenames) - set(ignore_filenames)
 
                 # if the whole pipeline is cached we don't have to ping the Hub
                 if revision in DEPRECATED_REVISION_ARGS and version.parse(
-                        version.parse(__version__)
-                        .base_version) >= version.parse("0.17.0"):
+                    version.parse(__version__).base_version
+                ) >= version.parse("0.17.0"):
                     warn_deprecated_model_variant(
                         pretrained_model_name,
                         use_auth_token,
                         variant,
                         revision,
-                        model_filenames, )
+                        model_filenames,
+                    )
 
-                model_folder_names = {
-                    os.path.split(f)[0]
-                    for f in model_filenames
-                }
+                model_folder_names = {os.path.split(f)[0] for f in model_filenames}
 
                 # all filenames compatible with variant will be added
                 allow_patterns = list(model_filenames)
 
                 # allow all patterns from non-model folders
                 # this enables downloading schedulers, tokenizers, ...
-                allow_patterns += [
-                    os.path.join(k, "*") for k in folder_names
-                    if k not in model_folder_names
-                ]
+                allow_patterns += [os.path.join(k, "*") for k in folder_names if k not in model_folder_names]
                 # also allow downloading config.json files with the model
-                allow_patterns += [
-                    os.path.join(k, "config.json") for k in model_folder_names
-                ]
+                allow_patterns += [os.path.join(k, "config.json") for k in model_folder_names]
 
                 allow_patterns += [
                     SCHEDULER_CONFIG_NAME,
@@ -1408,24 +1368,28 @@ class DiffusionPipeline(ConfigMixin):
                     config_dict,
                     custom_pipeline=custom_pipeline,
                     cache_dir=cache_dir,
-                    revision=custom_revision, )
+                    revision=custom_revision,
+                )
                 expected_components, _ = cls._get_signature_keys(pipeline_class)
-                passed_components = [
-                    k for k in expected_components if k in kwargs
-                ]
+                passed_components = [k for k in expected_components if k in kwargs]
 
-                if (use_safetensors and not allow_pickle and
-                        not is_safetensors_compatible(
-                            model_filenames,
-                            variant=variant,
-                            passed_components=passed_components, )):
+                if (
+                    use_safetensors
+                    and not allow_pickle
+                    and not is_safetensors_compatible(
+                        model_filenames,
+                        variant=variant,
+                        passed_components=passed_components,
+                    )
+                ):
                     raise EnvironmentError(
                         f"Could not found the necessary `safetensors` weights in {model_filenames} (variant={variant})"
                     )
                 elif use_safetensors and is_safetensors_compatible(
-                        model_filenames,
-                        variant=variant,
-                        passed_components=passed_components, ):
+                    model_filenames,
+                    variant=variant,
+                    passed_components=passed_components,
+                ):
                     ignore_patterns = [
                         "*.msgpack",
                         "*.bin",
@@ -1434,79 +1398,50 @@ class DiffusionPipeline(ConfigMixin):
                         "*.pdmodel",
                     ]
 
-                    safetensors_variant_filenames = {
-                        f
-                        for f in variant_filenames if f.endswith(".safetensors")
-                    }
-                    safetensors_model_filenames = {
-                        f
-                        for f in model_filenames if f.endswith(".safetensors")
-                    }
-                    if (len(safetensors_variant_filenames) > 0 and
-                            safetensors_model_filenames !=
-                            safetensors_variant_filenames):
+                    safetensors_variant_filenames = {f for f in variant_filenames if f.endswith(".safetensors")}
+                    safetensors_model_filenames = {f for f in model_filenames if f.endswith(".safetensors")}
+                    if (
+                        len(safetensors_variant_filenames) > 0
+                        and safetensors_model_filenames != safetensors_variant_filenames
+                    ):
                         logger.warn(
                             f"\nA mixture of {variant} and non-{variant} filenames will be loaded.\nLoaded {variant} filenames:\n[{', '.join(safetensors_variant_filenames)}]\nLoaded non-{variant} filenames:\n[{', '.join(safetensors_model_filenames - safetensors_variant_filenames)}\nIf this behavior is not expected, please check your folder structure."
                         )
                 else:
                     ignore_patterns = ["*.safetensors", "*.msgpack"]
                     if from_diffusers:
-                        ignore_patterns.extend(
-                            ["*.pdparams", "*.pdiparams", "*.pdmodel"])
+                        ignore_patterns.extend(["*.pdparams", "*.pdiparams", "*.pdmodel"])
                         suffix = ".bin"
                     else:
                         if is_fastdeploy_model:
                             ignore_patterns.extend(["*.pdparams", "*.bin"])
                             suffix = ".pdmodel"
                         else:
-                            ignore_patterns.extend(
-                                ["*.pdiparams", "*.pdmodel", "*.bin"])
+                            ignore_patterns.extend(["*.pdiparams", "*.pdmodel", "*.bin"])
                             suffix = ".pdparams"
 
-                    bin_variant_filenames = {
-                        f
-                        for f in variant_filenames if f.endswith(suffix)
-                    }
-                    bin_model_filenames = {
-                        f
-                        for f in model_filenames if f.endswith(suffix)
-                    }
-                    if (len(bin_variant_filenames) > 0 and
-                            bin_model_filenames != bin_variant_filenames):
+                    bin_variant_filenames = {f for f in variant_filenames if f.endswith(suffix)}
+                    bin_model_filenames = {f for f in model_filenames if f.endswith(suffix)}
+                    if len(bin_variant_filenames) > 0 and bin_model_filenames != bin_variant_filenames:
                         logger.warn(
                             f"\nA mixture of {variant} and non-{variant} filenames will be loaded.\nLoaded {variant} filenames:\n[{', '.join(bin_variant_filenames)}]\nLoaded non-{variant} filenames:\n[{', '.join(bin_model_filenames - bin_variant_filenames)}\nIf this behavior is not expected, please check your folder structure."
                         )
 
                 # Don't download any objects that are passed
                 allow_patterns = [
-                    p for p in allow_patterns
-                    if not (len(p.split("/")) == 2 and p.split("/")[0] in
-                            passed_components)
+                    p for p in allow_patterns if not (len(p.split("/")) == 2 and p.split("/")[0] in passed_components)
                 ]
                 # Don't download index files of forbidden patterns either
-                ignore_patterns = ignore_patterns + [
-                    f"{i}.index.*json" for i in ignore_patterns
-                ]
+                ignore_patterns = ignore_patterns + [f"{i}.index.*json" for i in ignore_patterns]
 
-                re_ignore_pattern = [
-                    re.compile(fnmatch.translate(p)) for p in ignore_patterns
-                ]
-                re_allow_pattern = [
-                    re.compile(fnmatch.translate(p)) for p in allow_patterns
-                ]
+                re_ignore_pattern = [re.compile(fnmatch.translate(p)) for p in ignore_patterns]
+                re_allow_pattern = [re.compile(fnmatch.translate(p)) for p in allow_patterns]
 
-                expected_files = [
-                    f for f in filenames
-                    if not any(p.match(f) for p in re_ignore_pattern)
-                ]
-                expected_files = [
-                    f for f in expected_files
-                    if any(p.match(f) for p in re_allow_pattern)
-                ]
+                expected_files = [f for f in filenames if not any(p.match(f) for p in re_ignore_pattern)]
+                expected_files = [f for f in expected_files if any(p.match(f) for p in re_allow_pattern)]
 
                 snapshot_folder = Path(config_file).parent
-                pipeline_is_cached = all((snapshot_folder / f).is_file()
-                                         for f in expected_files)
+                pipeline_is_cached = all((snapshot_folder / f).is_file() for f in expected_files)
 
                 if pipeline_is_cached:
                     # if the pipeline is cached, we can directly return it
@@ -1514,8 +1449,7 @@ class DiffusionPipeline(ConfigMixin):
                     return snapshot_folder
 
             user_agent = {"pipeline_class": cls.__name__}
-            if custom_pipeline is not None and not custom_pipeline.endswith(
-                    ".py"):
+            if custom_pipeline is not None and not custom_pipeline.endswith(".py"):
                 user_agent["custom_pipeline"] = custom_pipeline
 
             # download all allow_patterns - ignore_patterns
@@ -1528,13 +1462,13 @@ class DiffusionPipeline(ConfigMixin):
                 local_files_only=local_files_only,
                 use_auth_token=use_auth_token,
                 revision=revision,
-                allow_patterns=list(
-                    set(allow_patterns) - set(ignore_filenames)),
+                allow_patterns=list(set(allow_patterns) - set(ignore_filenames)),
                 ignore_patterns=list(
                     set(ignore_patterns + ignore_filenames)
                 ),  # diffusers bug, so we must add this ignore_filenames!
                 user_agent=user_agent,
-                max_workers=max_workers, )
+                max_workers=max_workers,
+            )
         else:
             # only support [PD] .pdparams, fastdeploy model
             cached_folder = ppdiffusers_bos_dir_download(
@@ -1547,17 +1481,16 @@ class DiffusionPipeline(ConfigMixin):
                 variant=variant,
                 is_fastdeploy_model=is_fastdeploy_model,
                 local_files_only=local_files_only,
-                max_workers=max_workers, )
+                max_workers=max_workers,
+            )
 
         return cached_folder
 
     @classmethod
-    def from_pretrained_original_ckpt(
-            cls,
-            pretrained_model_name_or_path: Optional[Union[str, os.PathLike]],
-            **kwargs):
-        from .stable_diffusion.convert_from_ckpt_deprecated import \
-            load_pipeline_from_original_stable_diffusion_ckpt
+    def from_pretrained_original_ckpt(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
+        from .stable_diffusion.convert_from_ckpt_deprecated import (
+            load_pipeline_from_original_stable_diffusion_ckpt,
+        )
 
         resume_download = kwargs.pop("resume_download", False)
         force_download = kwargs.pop("force_download", False)
@@ -1568,37 +1501,33 @@ class DiffusionPipeline(ConfigMixin):
         pretrained_model_name_or_path = str(pretrained_model_name_or_path)
         if os.path.isfile(pretrained_model_name_or_path):
             checkpoint_path = pretrained_model_name_or_path
-        elif pretrained_model_name_or_path.startswith(
-                "http://") or pretrained_model_name_or_path.startswith(
-                    "https://"):
+        elif pretrained_model_name_or_path.startswith("http://") or pretrained_model_name_or_path.startswith(
+            "https://"
+        ):
             checkpoint_path = ppdiffusers_url_download(
                 pretrained_model_name_or_path,
                 cache_dir=cache_dir,
                 resume_download=resume_download,
-                force_download=force_download, )
+                force_download=force_download,
+            )
         else:
-            raise EnvironmentError(
-                f"Please check your {pretrained_model_name_or_path}.")
+            raise EnvironmentError(f"Please check your {pretrained_model_name_or_path}.")
         pipeline = load_pipeline_from_original_stable_diffusion_ckpt(
             checkpoint_path=checkpoint_path,
             original_config_file=original_config_file,
             paddle_dtype=paddle_dtype,
             requires_safety_checker=requires_safety_checker,
             cls=cls,
-            **kwargs, )
+            **kwargs,
+        )
 
         return pipeline
 
     @staticmethod
     def _get_signature_keys(obj):
         parameters = inspect.signature(obj.__init__).parameters
-        required_parameters = {
-            k: v
-            for k, v in parameters.items() if v.default == inspect._empty
-        }
-        optional_parameters = set(
-            {k
-             for k, v in parameters.items() if v.default != inspect._empty})
+        required_parameters = {k: v for k, v in parameters.items() if v.default == inspect._empty}
+        optional_parameters = set({k for k, v in parameters.items() if v.default != inspect._empty})
         expected_modules = set(required_parameters.keys()) - {"self"}
         return expected_modules, optional_parameters
 
@@ -1628,9 +1557,7 @@ class DiffusionPipeline(ConfigMixin):
         """
         expected_modules, optional_parameters = self._get_signature_keys(self)
         components = {
-            k: getattr(self, k)
-            for k in self.config.keys()
-            if not k.startswith("_") and k not in optional_parameters
+            k: getattr(self, k) for k in self.config.keys() if not k.startswith("_") and k not in optional_parameters
         }
 
         if set(components.keys()) != expected_modules:
@@ -1666,8 +1593,7 @@ class DiffusionPipeline(ConfigMixin):
     def set_progress_bar_config(self, **kwargs):
         self._progress_bar_config = kwargs
 
-    def enable_xformers_memory_efficient_attention(
-            self, attention_op: Optional[str]=None):
+    def enable_xformers_memory_efficient_attention(self, attention_op: Optional[str] = None):
         r"""
         Enable memory efficient attention as implemented in xformers.
 
@@ -1701,15 +1627,13 @@ class DiffusionPipeline(ConfigMixin):
         """
         self.set_use_memory_efficient_attention_xformers(False)
 
-    def set_use_memory_efficient_attention_xformers(
-            self, valid: bool, attention_op: Optional[str]=None) -> None:
+    def set_use_memory_efficient_attention_xformers(self, valid: bool, attention_op: Optional[str] = None) -> None:
         # Recursively walk through all the children.
         # Any children which exposes the set_use_memory_efficient_attention_xformers method
         # gets the message
         def fn_recursive_set_mem_eff(module: nn.Layer):
             if hasattr(module, "set_use_memory_efficient_attention_xformers"):
-                module.set_use_memory_efficient_attention_xformers(valid,
-                                                                   attention_op)
+                module.set_use_memory_efficient_attention_xformers(valid, attention_op)
 
             for child in module.children():
                 fn_recursive_set_mem_eff(child)
@@ -1721,8 +1645,7 @@ class DiffusionPipeline(ConfigMixin):
         for module in modules:
             fn_recursive_set_mem_eff(module)
 
-    def enable_attention_slicing(self,
-                                 slice_size: Optional[Union[str, int]]="auto"):
+    def enable_attention_slicing(self, slice_size: Optional[Union[str, int]] = "auto"):
         r"""
         Enable sliced attention computation.
 
@@ -1749,10 +1672,7 @@ class DiffusionPipeline(ConfigMixin):
     def set_attention_slice(self, slice_size: Optional[int]):
         module_names, _ = self._get_signature_keys(self)
         modules = [getattr(self, n, None) for n in module_names]
-        modules = [
-            m for m in modules
-            if isinstance(m, nn.Layer) and hasattr(m, "set_attention_slice")
-        ]
+        modules = [m for m in modules if isinstance(m, nn.Layer) and hasattr(m, "set_attention_slice")]
 
         for module in modules:
             module.set_attention_slice(slice_size)

@@ -75,17 +75,18 @@ class UnCLIPPipeline(DiffusionPipeline):
     super_res_scheduler: UnCLIPScheduler
 
     def __init__(
-            self,
-            prior: PriorTransformer,
-            decoder: UNet2DConditionModel,
-            text_encoder: CLIPTextModelWithProjection,
-            tokenizer: CLIPTokenizer,
-            text_proj: UnCLIPTextProjModel,
-            super_res_first: UNet2DModel,
-            super_res_last: UNet2DModel,
-            prior_scheduler: UnCLIPScheduler,
-            decoder_scheduler: UnCLIPScheduler,
-            super_res_scheduler: UnCLIPScheduler, ):
+        self,
+        prior: PriorTransformer,
+        decoder: UNet2DConditionModel,
+        text_encoder: CLIPTextModelWithProjection,
+        tokenizer: CLIPTokenizer,
+        text_proj: UnCLIPTextProjModel,
+        super_res_first: UNet2DModel,
+        super_res_last: UNet2DModel,
+        prior_scheduler: UnCLIPScheduler,
+        decoder_scheduler: UnCLIPScheduler,
+        super_res_scheduler: UnCLIPScheduler,
+    ):
         super().__init__()
 
         self.register_modules(
@@ -98,27 +99,27 @@ class UnCLIPPipeline(DiffusionPipeline):
             super_res_last=super_res_last,
             prior_scheduler=prior_scheduler,
             decoder_scheduler=decoder_scheduler,
-            super_res_scheduler=super_res_scheduler, )
+            super_res_scheduler=super_res_scheduler,
+        )
 
     def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             if latents.shape != list(shape):
-                raise ValueError(
-                    f"Unexpected latents shape, got {latents.shape}, expected {shape}"
-                )
+                raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {shape}")
 
         latents = latents * scheduler.init_noise_sigma
         return latents
 
     def _encode_prompt(
-            self,
-            prompt,
-            num_images_per_prompt,
-            do_classifier_free_guidance,
-            text_model_output: Optional[Union[CLIPTextModelOutput, Tuple]]=None,
-            text_attention_mask: Optional[paddle.Tensor]=None, ):
+        self,
+        prompt,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+        text_model_output: Optional[Union[CLIPTextModelOutput, Tuple]] = None,
+        text_attention_mask: Optional[paddle.Tensor] = None,
+    ):
         if text_model_output is None:
             batch_size = len(prompt) if isinstance(prompt, list) else 1
             # get prompt text embeddings
@@ -128,23 +129,24 @@ class UnCLIPPipeline(DiffusionPipeline):
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
                 return_attention_mask=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_input_ids = text_inputs.input_ids
             text_mask = text_inputs.attention_mask
 
-            untruncated_ids = self.tokenizer(
-                prompt, padding="longest", return_tensors="pd").input_ids
+            untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                    -1] and not paddle.equal_all(text_input_ids,
-                                                 untruncated_ids):
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+                text_input_ids, untruncated_ids
+            ):
                 removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
+                    untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1]
+                )
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
-                    f" {self.tokenizer.model_max_length} tokens: {removed_text}")
-                text_input_ids = text_input_ids[:, :
-                                                self.tokenizer.model_max_length]
+                    f" {self.tokenizer.model_max_length} tokens: {removed_text}"
+                )
+                text_input_ids = text_input_ids[:, : self.tokenizer.model_max_length]
 
             text_encoder_output = self.text_encoder(text_input_ids)
 
@@ -155,27 +157,26 @@ class UnCLIPPipeline(DiffusionPipeline):
             batch_size = text_model_output[0].shape[0]
             prompt_embeds, text_encoder_hidden_states = (
                 text_model_output[0],
-                text_model_output[1], )
+                text_model_output[1],
+            )
             text_mask = text_attention_mask
 
         # duplicate text embeddings for each generation per prompt
         seq_len = prompt_embeds.shape[1]
         prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt])
-        prompt_embeds = prompt_embeds.reshape(
-            [batch_size * num_images_per_prompt, seq_len])
+        prompt_embeds = prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len])
 
         # duplicate text_encoder_hidden_states for each generation per prompt
         seq_len = text_encoder_hidden_states.shape[1]
-        text_encoder_hidden_states = text_encoder_hidden_states.tile(
-            [1, num_images_per_prompt, 1])
+        text_encoder_hidden_states = text_encoder_hidden_states.tile([1, num_images_per_prompt, 1])
         text_encoder_hidden_states = text_encoder_hidden_states.reshape(
-            [batch_size * num_images_per_prompt, seq_len, -1])
+            [batch_size * num_images_per_prompt, seq_len, -1]
+        )
 
         # duplicate text_mask for each generation per prompt
         seq_len = text_mask.shape[1]
         text_mask = text_mask.tile([1, num_images_per_prompt])
-        text_mask = text_mask.reshape(
-            [batch_size * num_images_per_prompt, seq_len])
+        text_mask = text_mask.reshape([batch_size * num_images_per_prompt, seq_len])
 
         # prompt_embeds = prompt_embeds.repeat_interleave(num_images_per_prompt, axis=0)
         # text_encoder_hidden_states = text_encoder_hidden_states.repeat_interleave(num_images_per_prompt, axis=0)
@@ -190,47 +191,38 @@ class UnCLIPPipeline(DiffusionPipeline):
                 max_length=self.tokenizer.model_max_length,
                 return_attention_mask=True,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             uncond_text_mask = uncond_input.attention_mask
-            negative_prompt_embeds_text_encoder_output = self.text_encoder(
-                uncond_input.input_ids)
+            negative_prompt_embeds_text_encoder_output = self.text_encoder(uncond_input.input_ids)
 
-            negative_prompt_embeds = (
-                negative_prompt_embeds_text_encoder_output.text_embeds)
-            uncond_text_encoder_hidden_states = (
-                negative_prompt_embeds_text_encoder_output.last_hidden_state)
+            negative_prompt_embeds = negative_prompt_embeds_text_encoder_output.text_embeds
+            uncond_text_encoder_hidden_states = negative_prompt_embeds_text_encoder_output.last_hidden_state
 
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
 
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                [1, num_images_per_prompt])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                [batch_size * num_images_per_prompt, seq_len])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt])
+            negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len])
 
             seq_len = uncond_text_encoder_hidden_states.shape[1]
-            uncond_text_encoder_hidden_states = uncond_text_encoder_hidden_states.tile(
-                [1, num_images_per_prompt, 1])
-            uncond_text_encoder_hidden_states = (
-                uncond_text_encoder_hidden_states.reshape(
-                    [batch_size * num_images_per_prompt, seq_len, -1]))
+            uncond_text_encoder_hidden_states = uncond_text_encoder_hidden_states.tile([1, num_images_per_prompt, 1])
+            uncond_text_encoder_hidden_states = uncond_text_encoder_hidden_states.reshape(
+                [batch_size * num_images_per_prompt, seq_len, -1]
+            )
 
             # duplicate uncond_text_mask for each generation per prompt
             seq_len = uncond_text_mask.shape[1]
             uncond_text_mask = uncond_text_mask.tile([1, num_images_per_prompt])
-            uncond_text_mask = uncond_text_mask.reshape(
-                [batch_size * num_images_per_prompt, seq_len])
+            uncond_text_mask = uncond_text_mask.reshape([batch_size * num_images_per_prompt, seq_len])
             # uncond_text_mask = uncond_text_mask.repeat_interleave(num_images_per_prompt, axis=0)
             # done duplicates
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            prompt_embeds = paddle.concat(
-                [negative_prompt_embeds, prompt_embeds])
-            text_encoder_hidden_states = paddle.concat([
-                uncond_text_encoder_hidden_states, text_encoder_hidden_states
-            ])
+            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
+            text_encoder_hidden_states = paddle.concat([uncond_text_encoder_hidden_states, text_encoder_hidden_states])
 
             text_mask = paddle.concat([uncond_text_mask, text_mask])
 
@@ -238,23 +230,23 @@ class UnCLIPPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: int=1,
-            prior_num_inference_steps: int=25,
-            decoder_num_inference_steps: int=25,
-            super_res_num_inference_steps: int=7,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            prior_latents: Optional[paddle.Tensor]=None,
-            decoder_latents: Optional[paddle.Tensor]=None,
-            super_res_latents: Optional[paddle.Tensor]=None,
-            text_model_output: Optional[Union[CLIPTextModelOutput, Tuple]]=None,
-            text_attention_mask: Optional[paddle.Tensor]=None,
-            prior_guidance_scale: float=4.0,
-            decoder_guidance_scale: float=8.0,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True, ):
+        self,
+        prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: int = 1,
+        prior_num_inference_steps: int = 25,
+        decoder_num_inference_steps: int = 25,
+        super_res_num_inference_steps: int = 7,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        prior_latents: Optional[paddle.Tensor] = None,
+        decoder_latents: Optional[paddle.Tensor] = None,
+        super_res_latents: Optional[paddle.Tensor] = None,
+        text_model_output: Optional[Union[CLIPTextModelOutput, Tuple]] = None,
+        text_attention_mask: Optional[paddle.Tensor] = None,
+        prior_guidance_scale: float = 4.0,
+        decoder_guidance_scale: float = 8.0,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+    ):
         """
         Function invoked when calling the pipeline for generation.
 
@@ -312,23 +304,21 @@ class UnCLIPPipeline(DiffusionPipeline):
             elif isinstance(prompt, list):
                 batch_size = len(prompt)
             else:
-                raise ValueError(
-                    f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-                )
+                raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
         else:
             batch_size = text_model_output[0].shape[0]
 
         batch_size = batch_size * num_images_per_prompt
 
-        do_classifier_free_guidance = (prior_guidance_scale > 1.0 or
-                                       decoder_guidance_scale > 1.0)
+        do_classifier_free_guidance = prior_guidance_scale > 1.0 or decoder_guidance_scale > 1.0
 
         prompt_embeds, text_encoder_hidden_states, text_mask = self._encode_prompt(
             prompt,
             num_images_per_prompt,
             do_classifier_free_guidance,
             text_model_output,
-            text_attention_mask, )
+            text_attention_mask,
+        )
 
         # prior
 
@@ -342,30 +332,29 @@ class UnCLIPPipeline(DiffusionPipeline):
             prompt_embeds.dtype,
             generator,
             prior_latents,
-            self.prior_scheduler, )
+            self.prior_scheduler,
+        )
 
         for i, t in enumerate(self.progress_bar(prior_timesteps_tensor)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = (paddle.concat([prior_latents] * 2)
-                                  if do_classifier_free_guidance else
-                                  prior_latents)
+            latent_model_input = paddle.concat([prior_latents] * 2) if do_classifier_free_guidance else prior_latents
 
             predicted_image_embedding = self.prior(
                 latent_model_input,
                 timestep=t,
                 proj_embedding=prompt_embeds,
                 encoder_hidden_states=text_encoder_hidden_states,
-                attention_mask=text_mask, ).predicted_image_embedding
+                attention_mask=text_mask,
+            ).predicted_image_embedding
 
             if do_classifier_free_guidance:
                 (
                     predicted_image_embedding_uncond,
                     predicted_image_embedding_text,
                 ) = predicted_image_embedding.chunk(2)
-                predicted_image_embedding = (
-                    predicted_image_embedding_uncond + prior_guidance_scale *
-                    (predicted_image_embedding_text -
-                     predicted_image_embedding_uncond))
+                predicted_image_embedding = predicted_image_embedding_uncond + prior_guidance_scale * (
+                    predicted_image_embedding_text - predicted_image_embedding_uncond
+                )
 
             if i + 1 == prior_timesteps_tensor.shape[0]:
                 prev_timestep = None
@@ -377,7 +366,8 @@ class UnCLIPPipeline(DiffusionPipeline):
                 timestep=t,
                 sample=prior_latents,
                 generator=generator,
-                prev_timestep=prev_timestep, ).prev_sample
+                prev_timestep=prev_timestep,
+            ).prev_sample
 
         prior_latents = self.prior.post_process_latents(prior_latents)
 
@@ -390,13 +380,15 @@ class UnCLIPPipeline(DiffusionPipeline):
             image_embeddings=image_embeddings,
             prompt_embeds=prompt_embeds,
             text_encoder_hidden_states=text_encoder_hidden_states,
-            do_classifier_free_guidance=do_classifier_free_guidance, )
+            do_classifier_free_guidance=do_classifier_free_guidance,
+        )
 
         decoder_text_mask = F.pad(
             text_mask.unsqueeze(0),
             (self.text_proj.clip_extra_context_tokens, 0),
             value=1,
-            data_format="NCL", ).squeeze(0)
+            data_format="NCL",
+        ).squeeze(0)
 
         self.decoder_scheduler.set_timesteps(decoder_num_inference_steps)
         decoder_timesteps_tensor = self.decoder_scheduler.timesteps
@@ -410,20 +402,22 @@ class UnCLIPPipeline(DiffusionPipeline):
             text_encoder_hidden_states.dtype,
             generator,
             decoder_latents,
-            self.decoder_scheduler, )
+            self.decoder_scheduler,
+        )
 
         for i, t in enumerate(self.progress_bar(decoder_timesteps_tensor)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = (paddle.concat([decoder_latents] * 2)
-                                  if do_classifier_free_guidance else
-                                  decoder_latents)
+            latent_model_input = (
+                paddle.concat([decoder_latents] * 2) if do_classifier_free_guidance else decoder_latents
+            )
 
             noise_pred = self.decoder(
                 sample=latent_model_input,
                 timestep=t,
                 encoder_hidden_states=text_encoder_hidden_states,
                 class_labels=additive_clip_time_embeddings,
-                attention_mask=decoder_text_mask, ).sample
+                attention_mask=decoder_text_mask,
+            ).sample
 
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
@@ -431,20 +425,19 @@ class UnCLIPPipeline(DiffusionPipeline):
                 noise_pred_uncond, _ = noise_pred_uncond.split(
                     [
                         latent_model_input.shape[1],
-                        noise_pred_uncond.shape[1] -
-                        latent_model_input.shape[1],
+                        noise_pred_uncond.shape[1] - latent_model_input.shape[1],
                     ],
-                    axis=1, )
+                    axis=1,
+                )
                 noise_pred_text, predicted_variance = noise_pred_text.split(
                     [
                         latent_model_input.shape[1],
                         noise_pred_text.shape[1] - latent_model_input.shape[1],
                     ],
-                    axis=1, )
-                noise_pred = noise_pred_uncond + decoder_guidance_scale * (
-                    noise_pred_text - noise_pred_uncond)
-                noise_pred = paddle.concat(
-                    [noise_pred, predicted_variance], axis=1)
+                    axis=1,
+                )
+                noise_pred = noise_pred_uncond + decoder_guidance_scale * (noise_pred_text - noise_pred_uncond)
+                noise_pred = paddle.concat([noise_pred, predicted_variance], axis=1)
 
             if i + 1 == decoder_timesteps_tensor.shape[0]:
                 prev_timestep = None
@@ -457,7 +450,8 @@ class UnCLIPPipeline(DiffusionPipeline):
                 t,
                 decoder_latents,
                 prev_timestep=prev_timestep,
-                generator=generator, ).prev_sample
+                generator=generator,
+            ).prev_sample
 
         decoder_latents = decoder_latents.clip(-1, 1)
 
@@ -479,7 +473,8 @@ class UnCLIPPipeline(DiffusionPipeline):
             image_small.dtype,
             generator,
             super_res_latents,
-            self.super_res_scheduler, )
+            self.super_res_scheduler,
+        )
 
         interpolate_antialias = {}
         if "antialias" in inspect.signature(F.interpolate).parameters:
@@ -490,7 +485,8 @@ class UnCLIPPipeline(DiffusionPipeline):
             size=[height, width],
             mode="bicubic",
             align_corners=False,
-            **interpolate_antialias, )
+            **interpolate_antialias,
+        )
 
         for i, t in enumerate(self.progress_bar(super_res_timesteps_tensor)):
             # no classifier free guidance
@@ -501,15 +497,14 @@ class UnCLIPPipeline(DiffusionPipeline):
                 unet = self.super_res_first
 
             latent_model_input = paddle.concat(
-                [
-                    super_res_latents,
-                    image_upscaled.cast(super_res_latents.dtype)
-                ],
-                axis=1, )
+                [super_res_latents, image_upscaled.cast(super_res_latents.dtype)],
+                axis=1,
+            )
 
             noise_pred = unet(
                 sample=latent_model_input,
-                timestep=t, ).sample
+                timestep=t,
+            ).sample
 
             if i + 1 == super_res_timesteps_tensor.shape[0]:
                 prev_timestep = None
@@ -522,7 +517,8 @@ class UnCLIPPipeline(DiffusionPipeline):
                 t,
                 super_res_latents,
                 prev_timestep=prev_timestep,
-                generator=generator, ).prev_sample
+                generator=generator,
+            ).prev_sample
 
         image = super_res_latents
         # done super res
@@ -537,6 +533,6 @@ class UnCLIPPipeline(DiffusionPipeline):
             image = self.numpy_to_pil(image)
 
         if not return_dict:
-            return (image, )
+            return (image,)
 
         return ImagePipelineOutput(images=image)

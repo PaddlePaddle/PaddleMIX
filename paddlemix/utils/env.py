@@ -39,9 +39,7 @@ def _get_ppmix_home():
             if os.path.isdir(home_path):
                 return home_path
             else:
-                raise RuntimeError(
-                    "The environment variable PPMIX_HOME {} is not a directory.".
-                    format(home_path))
+                raise RuntimeError("The environment variable PPMIX_HOME {} is not a directory.".format(home_path))
         else:
             return home_path
     return os.path.join(_get_user_home(), ".paddlemix")
@@ -108,8 +106,8 @@ def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
 def setdistenv(args):
     if dist.get_world_size() > 1:
         args.dp_degree = dist.get_world_size() // (
-            args.tensor_parallel_degree * args.sharding_parallel_degree *
-            args.pipeline_parallel_degree)
+            args.tensor_parallel_degree * args.sharding_parallel_degree * args.pipeline_parallel_degree
+        )
         strategy = fleet.DistributedStrategy()
         strategy.hybrid_configs = {
             "dp_degree": args.dp_degree,
@@ -131,10 +129,10 @@ def setdistenv(args):
         args.dp_rank = hcg.get_data_parallel_rank()
         args.sharding_rank = hcg.get_sharding_parallel_rank()
 
-        args.data_world_rank = (
-            args.dp_rank * args.sharding_parallel_degree + args.sharding_rank)
+        args.data_world_rank = args.dp_rank * args.sharding_parallel_degree + args.sharding_rank
         args.data_world_size = dist.get_world_size() // abs(
-            args.tensor_parallel_degree * args.pipeline_parallel_degree)
+            args.tensor_parallel_degree * args.pipeline_parallel_degree
+        )
     else:
         args.data_world_rank = 0
         args.data_world_size = 1

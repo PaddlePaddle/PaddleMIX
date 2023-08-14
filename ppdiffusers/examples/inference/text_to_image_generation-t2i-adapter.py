@@ -16,21 +16,20 @@ import paddle
 from ppdiffusers import StableDiffusionAdapterPipeline, T2IAdapter
 from ppdiffusers.utils import PIL_INTERPOLATION, load_image
 
-input_image = load_image(
-    "https://huggingface.co/RzZ/sd-v1-4-adapter-color/resolve/main/color_ref.png"
-)
+input_image = load_image("https://huggingface.co/RzZ/sd-v1-4-adapter-color/resolve/main/color_ref.png")
 color_palette = input_image.resize((8, 8))
-color_palette = color_palette.resize(
-    (512, 512), resample=PIL_INTERPOLATION["nearest"])
+color_palette = color_palette.resize((512, 512), resample=PIL_INTERPOLATION["nearest"])
 
 adapter = T2IAdapter.from_pretrained("westfish/sd-v1-4-adapter-color")
 
 pipe = StableDiffusionAdapterPipeline.from_pretrained(
     "CompVis/stable-diffusion-v1-4",
     adapter=adapter,
-    paddle_dtype=paddle.float16, )
+    paddle_dtype=paddle.float16,
+)
 
 image = pipe(
     prompt="At night, glowing cubes in front of the beach",
-    image=color_palette, ).images[0]
+    image=color_palette,
+).images[0]
 image.save("text_to_image_generation-t2i-adapter-result-color_adapter.png")

@@ -33,12 +33,9 @@ try:
 
     av.logging.set_level(av.logging.ERROR)
     if not hasattr(av.video.frame.VideoFrame, "pict_type"):
-        av = ImportError(
-            """Your version of PyAV is too old for the necessary video operations."""
-        )
+        av = ImportError("""Your version of PyAV is too old for the necessary video operations.""")
 except ImportError:
-    av = ImportError(
-        """PyAV is not installed, and is necessary for the video operations.""")
+    av = ImportError("""PyAV is not installed, and is necessary for the video operations.""")
 
 
 def _check_av_available() -> None:
@@ -47,15 +44,16 @@ def _check_av_available() -> None:
 
 
 def write_video(
-        filename: str,
-        video_array: paddle.Tensor,
-        fps: float,
-        video_codec: str="libx264",
-        options: Optional[Dict[str, Any]]=None,
-        audio_array: Optional[paddle.Tensor]=None,
-        audio_fps: Optional[float]=None,
-        audio_codec: Optional[str]=None,
-        audio_options: Optional[Dict[str, Any]]=None, ) -> None:
+    filename: str,
+    video_array: paddle.Tensor,
+    fps: float,
+    video_codec: str = "libx264",
+    options: Optional[Dict[str, Any]] = None,
+    audio_array: Optional[paddle.Tensor] = None,
+    audio_fps: Optional[float] = None,
+    audio_codec: Optional[str] = None,
+    audio_options: Optional[Dict[str, Any]] = None,
+) -> None:
     """
     Writes a 4d tensor in [T, H, W, C] format in a video file
 
@@ -101,10 +99,8 @@ def write_video(
             audio_layout = "stereo" if num_channels > 1 else "mono"
             audio_sample_fmt = container.streams.audio[0].format.name
             format_dtype = np.dtype(audio_format_dtypes[audio_sample_fmt])
-            audio_array = (
-                paddle.to_tensor(data=audio_array).numpy().astype(format_dtype))
-            frame = av.AudioFrame.from_ndarray(
-                audio_array, format=audio_sample_fmt, layout=audio_layout)
+            audio_array = paddle.to_tensor(data=audio_array).numpy().astype(format_dtype)
+            frame = av.AudioFrame.from_ndarray(audio_array, format=audio_sample_fmt, layout=audio_layout)
             frame.sample_rate = audio_fps
             for packet in a_stream.encode(frame):
                 container.mux(packet)
@@ -121,13 +117,14 @@ def write_video(
 
 @paddle.no_grad()
 def make_grid(
-        tensor: Union[paddle.Tensor, List[paddle.Tensor]],
-        nrow: int=8,
-        padding: int=2,
-        normalize: bool=False,
-        value_range: Optional[Tuple[int, int]]=None,
-        scale_each: bool=False,
-        pad_value: float=0.0, ) -> paddle.Tensor:
+    tensor: Union[paddle.Tensor, List[paddle.Tensor]],
+    nrow: int = 8,
+    padding: int = 2,
+    normalize: bool = False,
+    value_range: Optional[Tuple[int, int]] = None,
+    scale_each: bool = False,
+    pad_value: float = 0.0,
+) -> paddle.Tensor:
     """
     Make a grid of images.
 
@@ -153,12 +150,9 @@ def make_grid(
         if isinstance(tensor, list):
             for t in tensor:
                 if not paddle.is_tensor(x=t):
-                    raise TypeError(
-                        f"tensor or list of tensors expected, got a list containing {type(t)}"
-                    )
+                    raise TypeError(f"tensor or list of tensors expected, got a list containing {type(t)}")
         else:
-            raise TypeError(
-                f"tensor or list of tensors expected, got {type(tensor)}")
+            raise TypeError(f"tensor or list of tensors expected, got {type(tensor)}")
     if isinstance(tensor, list):
         tensor = paddle.stack(x=tensor, axis=0)
     if tensor.dim() == 2:
@@ -172,9 +166,7 @@ def make_grid(
     if normalize is True:
         tensor = tensor.clone()
         if value_range is not None and not isinstance(value_range, tuple):
-            raise TypeError(
-                "value_range has to be a tuple (min, max) if specified. min and max are numbers"
-            )
+            raise TypeError("value_range has to be a tuple (min, max) if specified. min and max are numbers")
 
         def norm_ip(img, low, high):
             img.clip_(min=low, max=high)
@@ -198,32 +190,33 @@ def make_grid(
     nmaps = tensor.shape[0]
     xmaps = min(nrow, nmaps)
     ymaps = int(math.ceil(float(nmaps) / xmaps))
-    height, width = int(tensor.shape[2] + padding), int(tensor.shape[3] +
-                                                        padding)
+    height, width = int(tensor.shape[2] + padding), int(tensor.shape[3] + padding)
     num_channels = tensor.shape[1]
     grid = paddle.full(
         shape=(num_channels, height * ymaps + padding, width * xmaps + padding),
         fill_value=pad_value,
-        dtype=tensor.dtype, )
+        dtype=tensor.dtype,
+    )
     k = 0
     for y in range(ymaps):
         for x in range(xmaps):
             if k >= nmaps:
                 break
-            start_0 = (grid.shape[1] + y * height + padding
-                       if y * height + padding < 0 else y * height + padding)
-            start_1 = (paddle.slice(grid, [1], [start_0],
-                                    [start_0 + height - padding]).shape[2] + x *
-                       width + padding
-                       if x * width + padding < 0 else x * width + padding)
+            start_0 = grid.shape[1] + y * height + padding if y * height + padding < 0 else y * height + padding
+            start_1 = (
+                paddle.slice(grid, [1], [start_0], [start_0 + height - padding]).shape[2] + x * width + padding
+                if x * width + padding < 0
+                else x * width + padding
+            )
             paddle.assign(
                 tensor[k],
                 output=paddle.slice(
-                    paddle.slice(grid, [1], [start_0],
-                                 [start_0 + height - padding]),
+                    paddle.slice(grid, [1], [start_0], [start_0 + height - padding]),
                     [2],
                     [start_1],
-                    [start_1 + width - padding], ), )
+                    [start_1 + width - padding],
+                ),
+            )
             k = k + 1
     return grid
 
@@ -264,13 +257,12 @@ def to_tensor(pic) -> paddle.Tensor:
         if img.dtype == paddle.uint8:
             return paddle.divide(
                 img.cast(default_float_dtype),
-                paddle.to_tensor(
-                    255, dtype=paddle.float32), )
+                paddle.to_tensor(255, dtype=paddle.float32),
+            )
         else:
             return img
     mode_to_nptype = {"I": np.int32, "I;16": np.int16, "F": np.float32}
-    img = paddle.to_tensor(data=np.array(
-        pic, mode_to_nptype.get(pic.mode, np.uint8), copy=True))
+    img = paddle.to_tensor(data=np.array(pic, mode_to_nptype.get(pic.mode, np.uint8), copy=True))
     if pic.mode == "1":
         img = 255 * img
     img = img.reshape([pic.size[1], pic.size[0], get_image_num_channels(pic)])
@@ -299,20 +291,21 @@ def fill_with_black_squares(video, desired_len: int) -> paddle.Tensor:
     return paddle.concat(
         x=[
             video,
-            paddle.zeros_like(x=video[0]).unsqueeze(axis=0)
-            .tile(repeat_times=[desired_len - len(video), 1, 1, 1]),
+            paddle.zeros_like(x=video[0]).unsqueeze(axis=0).tile(repeat_times=[desired_len - len(video), 1, 1, 1]),
         ],
-        axis=0, )
+        axis=0,
+    )
 
 
 def npz_to_video_grid(
-        data_path,
-        out_path,
-        num_frames=None,
-        fps=8,
-        num_videos=None,
-        nrow=None,
-        verbose=True, ):
+    data_path,
+    out_path,
+    num_frames=None,
+    fps=8,
+    num_videos=None,
+    nrow=None,
+    verbose=True,
+):
     if isinstance(data_path, str):
         videos = load_num_videos(data_path, num_videos)
     elif isinstance(data_path, np.ndarray):
@@ -332,22 +325,14 @@ def npz_to_video_grid(
     if num_frames is None:
         num_frames = videos.shape[1]
     if verbose:
-        videos = [
-            fill_with_black_squares(v, num_frames)
-            for v in tqdm(
-                videos_th, desc="Adding empty frames")
-        ]
+        videos = [fill_with_black_squares(v, num_frames) for v in tqdm(videos_th, desc="Adding empty frames")]
     else:
         videos = [fill_with_black_squares(v, num_frames) for v in videos_th]
     frame_grids = paddle.stack(x=videos).transpose(perm=[1, 0, 2, 3, 4])
     if nrow is None:
         nrow = int(np.ceil(np.sqrt(n)))
     if verbose:
-        frame_grids = [
-            make_grid(
-                fs, nrow=nrow) for fs in tqdm(
-                    frame_grids, desc="Making grids")
-        ]
+        frame_grids = [make_grid(fs, nrow=nrow) for fs in tqdm(frame_grids, desc="Making grids")]
 
     else:
         frame_grids = [make_grid(fs, nrow=nrow) for fs in frame_grids]
@@ -356,21 +341,14 @@ def npz_to_video_grid(
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
     if isinstance("uint8", paddle.dtype):
         dtype = "uint8"
-    elif isinstance("uint8",
-                    str) and "uint8" not in ["cpu", "cuda", "ipu", "xpu"]:
+    elif isinstance("uint8", str) and "uint8" not in ["cpu", "cuda", "ipu", "xpu"]:
         dtype = "uint8"
     elif isinstance("uint8", paddle.Tensor):
         dtype = "uint8".dtype
     else:
         dtype = (paddle.stack(x=frame_grids) * 255).dtype
-    frame_grids = ((paddle.stack(x=frame_grids) * 255).transpose(
-        perm=[0, 2, 3, 1]).cast(dtype))
-    write_video(
-        out_path,
-        frame_grids,
-        fps=fps,
-        video_codec="h264",
-        options={"crf": "10"})
+    frame_grids = (paddle.stack(x=frame_grids) * 255).transpose(perm=[0, 2, 3, 1]).cast(dtype)
+    write_video(out_path, frame_grids, fps=fps, video_codec="h264", options={"crf": "10"})
 
 
 def savenp2sheet(imgs, savepath, nrow=None):
@@ -398,10 +376,7 @@ def savenp2sheet(imgs, savepath, nrow=None):
     n_rows = int(np.ceil(n / n_cols))
     print(n_cols)
     print(n_rows)
-    imgsheet = cv2.vconcat([
-        cv2.hconcat(imgs_new[i * n_cols:(i + 1) * n_cols])
-        for i in range(n_rows)
-    ])
+    imgsheet = cv2.vconcat([cv2.hconcat(imgs_new[i * n_cols : (i + 1) * n_cols]) for i in range(n_rows)])
     cv2.imwrite(savepath, imgsheet)
     print(f"saved in {savepath}")
 
@@ -414,7 +389,7 @@ def npz_to_imgsheet_5d(data_path, res_dir, nrow=None):
     else:
         raise Exception
     if os.path.isdir(res_dir):
-        res_path = os.path.join(res_dir, f"samples.jpg")
+        res_path = os.path.join(res_dir, "samples.jpg")
     else:
         assert res_dir.endswith(".jpg")
         res_path = res_dir
@@ -423,24 +398,25 @@ def npz_to_imgsheet_5d(data_path, res_dir, nrow=None):
 
 
 def save_results(
-        videos,
-        save_dir,
-        save_name="results",
-        save_fps=8,
-        save_mp4=True,
-        save_npz=False,
-        save_mp4_sheet=False,
-        save_jpg=False, ):
+    videos,
+    save_dir,
+    save_name="results",
+    save_fps=8,
+    save_mp4=True,
+    save_npz=False,
+    save_mp4_sheet=False,
+    save_jpg=False,
+):
     if save_mp4:
         save_subdir = os.path.join(save_dir, "videos")
         os.makedirs(save_subdir, exist_ok=True)
         shape_str = "x".join([str(x) for x in videos[0:1, (...)].shape])
         for i in range(videos.shape[0]):
             npz_to_video_grid(
-                videos[i:i + 1, (...)],
-                os.path.join(save_subdir,
-                             f"{save_name}_{i:03d}_{shape_str}.mp4"),
-                fps=save_fps, )
+                videos[i : i + 1, (...)],
+                os.path.join(save_subdir, f"{save_name}_{i:03d}_{shape_str}.mp4"),
+                fps=save_fps,
+            )
         print(f"Successfully saved videos in {save_subdir}")
     shape_str = "x".join([str(x) for x in videos.shape])
     if save_npz:

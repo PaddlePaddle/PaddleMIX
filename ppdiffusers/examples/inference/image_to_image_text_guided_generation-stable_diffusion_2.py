@@ -17,8 +17,7 @@ import paddle
 from ppdiffusers import StableDiffusionImg2ImgPipeline
 from ppdiffusers.utils import load_image
 
-pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-2")
+pipe = StableDiffusionImg2ImgPipeline.from_pretrained("stabilityai/stable-diffusion-2")
 
 # 下载初始图片
 url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
@@ -28,9 +27,6 @@ init_image = load_image(url).resize((768, 768))
 prompt = "A fantasy landscape, trending on artstation"
 # 使用fp16加快生成速度
 with paddle.amp.auto_cast(True):
-    image = pipe(
-        prompt=prompt, image=init_image, strength=0.75,
-        guidance_scale=7.5).images[0]
+    image = pipe(prompt=prompt, image=init_image, strength=0.75, guidance_scale=7.5).images[0]
 
-image.save(
-    "image_to_image_text_guided_generation-stable_diffusion_2-result.png")
+image.save("image_to_image_text_guided_generation-stable_diffusion_2-result.png")

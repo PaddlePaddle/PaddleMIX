@@ -37,7 +37,8 @@ device = "gpu"
 pipe = CycleDiffusionPipeline.from_pretrained(
     model_id_or_path,
     use_auth_token=os.environ.get("USER_TOKEN"),
-    paddle_dtype=paddle_dtype, )
+    paddle_dtype=paddle_dtype,
+)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
 tokenizer = pipe.tokenizer
 
@@ -45,17 +46,11 @@ tokenizer = pipe.tokenizer
 class LocalBlend:
     def __call__(self, x_t, attention_store):
         k = 1
-        maps = attention_store["down_cross"][2:4] + attention_store[
-            "up_cross"][:3]
-        maps = [
-            item.reshape(
-                [self.alpha_layers.shape[0], -1, 1, 16, 16, MAX_NUM_WORDS])
-            for item in maps
-        ]
+        maps = attention_store["down_cross"][2:4] + attention_store["up_cross"][:3]
+        maps = [item.reshape([self.alpha_layers.shape[0], -1, 1, 16, 16, MAX_NUM_WORDS]) for item in maps]
         maps = paddle.concat(maps, axis=1)
         maps = (maps * self.alpha_layers).sum(-1).mean(1)
-        mask = F.max_pool2d(
-            maps, (k * 2 + 1, k * 2 + 1), (1, 1), padding=(k, k))
+        mask = F.max_pool2d(maps, (k * 2 + 1, k * 2 + 1), (1, 1), padding=(k, k))
         mask = F.interpolate(mask, size=(x_t.shape[2:]))
         mask = mask / mask.max(2, keepdim=True)[0].max(3, keepdim=True)[0]
         mask = mask > self.threshold
@@ -150,8 +145,7 @@ class AttentionStore(AttentionControl):
 
     def get_average_attention(self):
         average_attention = {
-            key: [item / self.cur_step for item in self.attention_store[key]]
-            for key in self.attention_store
+            key: [item / self.cur_step for item in self.attention_store[key]] for key in self.attention_store
         }
         return average_attention
 
@@ -174,8 +168,7 @@ class AttentionControlEdit(AttentionStore, abc.ABC):
 
     def replace_self_attention(self, attn_base, att_replace):
         if att_replace.shape[2] <= 16**2:
-            return attn_base.unsqueeze(0).expand(
-                [att_replace.shape[0], *attn_base.shape])
+            return attn_base.unsqueeze(0).expand([att_replace.shape[0], *attn_base.shape])
         else:
             return att_replace
 
@@ -185,36 +178,35 @@ class AttentionControlEdit(AttentionStore, abc.ABC):
 
     def forward(self, attn, is_cross: bool, place_in_unet: str):
         super(AttentionControlEdit, self).forward(attn, is_cross, place_in_unet)
-        if is_cross or (self.num_self_replace[0] <= self.cur_step <
-                        self.num_self_replace[1]):
+        if is_cross or (self.num_self_replace[0] <= self.cur_step < self.num_self_replace[1]):
             attn_base, attn_repalce = attn[0], attn[1:]
             if is_cross:
                 alpha_words = self.cross_replace_alpha[self.cur_step]
-                attn_replace_new = (self.replace_cross_attention(
-                    attn_base, attn_repalce) * alpha_words +
-                                    (1 - alpha_words) * attn_repalce)
+                attn_replace_new = (
+                    self.replace_cross_attention(attn_base, attn_repalce) * alpha_words
+                    + (1 - alpha_words) * attn_repalce
+                )
                 attn[1:] = attn_replace_new
             else:
                 attn[1:] = self.replace_self_attention(attn_base, attn_repalce)
         return attn
 
     def __init__(
-            self,
-            prompts,
-            num_steps: int,
-            cross_replace_steps: Union[float, Tuple[float, float], Dict[
-                str, Tuple[float, float]]],
-            self_replace_steps: Union[float, Tuple[float, float]],
-            local_blend: Optional[LocalBlend], ):
+        self,
+        prompts,
+        num_steps: int,
+        cross_replace_steps: Union[float, Tuple[float, float], Dict[str, Tuple[float, float]]],
+        self_replace_steps: Union[float, Tuple[float, float]],
+        local_blend: Optional[LocalBlend],
+    ):
         super(AttentionControlEdit, self).__init__()
         self.batch_size = len(prompts)
         self.cross_replace_alpha = ptp_utils.get_time_words_attention_alpha(
-            prompts, num_steps, cross_replace_steps,
-            tokenizer).cast(paddle_dtype)
+            prompts, num_steps, cross_replace_steps, tokenizer
+        ).cast(paddle_dtype)
         if type(self_replace_steps) is float or type(self_replace_steps) is int:
             self_replace_steps = 0, self_replace_steps
-        self.num_self_replace = int(num_steps * self_replace_steps[0]), int(
-            num_steps * self_replace_steps[1])
+        self.num_self_replace = int(num_steps * self_replace_steps[0]), int(num_steps * self_replace_steps[1])
         self.local_blend = local_blend
 
 
@@ -223,17 +215,17 @@ class AttentionReplace(AttentionControlEdit):
         return paddle.einsum("hpw,bwn->bhpn", attn_base, self.mapper)
 
     def __init__(
-            self,
-            prompts,
-            num_steps: int,
-            cross_replace_steps: float,
-            self_replace_steps: float,
-            local_blend: Optional[LocalBlend]=None, ):
-        super(AttentionReplace, self).__init__(prompts, num_steps,
-                                               cross_replace_steps,
-                                               self_replace_steps, local_blend)
-        self.mapper = seq_aligner.get_replacement_mapper(
-            prompts, tokenizer).cast(paddle_dtype)
+        self,
+        prompts,
+        num_steps: int,
+        cross_replace_steps: float,
+        self_replace_steps: float,
+        local_blend: Optional[LocalBlend] = None,
+    ):
+        super(AttentionReplace, self).__init__(
+            prompts, num_steps, cross_replace_steps, self_replace_steps, local_blend
+        )
+        self.mapper = seq_aligner.get_replacement_mapper(prompts, tokenizer).cast(paddle_dtype)
 
 
 class AttentionRefine(AttentionControlEdit):
@@ -243,35 +235,33 @@ class AttentionRefine(AttentionControlEdit):
         # pt: a[:, :, b].shape = torch.Size([8, 4096, 1, 77])
         # pd: a.take_along_axis(b.unsqueeze(0), axis=-1).unsqueeze(-2)
 
-        attn_base_replace = (attn_base.take_along_axis(
-            self.mapper.unsqueeze(0), axis=-1).unsqueeze(-2)
-                             .transpose([2, 0, 1, 3]))
-        attn_replace = attn_base_replace * self.alphas + att_replace * (
-            1 - self.alphas)
+        attn_base_replace = (
+            attn_base.take_along_axis(self.mapper.unsqueeze(0), axis=-1).unsqueeze(-2).transpose([2, 0, 1, 3])
+        )
+        attn_replace = attn_base_replace * self.alphas + att_replace * (1 - self.alphas)
         return attn_replace
 
     def __init__(
-            self,
-            prompts,
-            num_steps: int,
-            cross_replace_steps: float,
-            self_replace_steps: float,
-            local_blend: Optional[LocalBlend]=None, ):
-        super(AttentionRefine, self).__init__(prompts, num_steps,
-                                              cross_replace_steps,
-                                              self_replace_steps, local_blend)
-        self.mapper, alphas = seq_aligner.get_refinement_mapper(prompts,
-                                                                tokenizer)
+        self,
+        prompts,
+        num_steps: int,
+        cross_replace_steps: float,
+        self_replace_steps: float,
+        local_blend: Optional[LocalBlend] = None,
+    ):
+        super(AttentionRefine, self).__init__(prompts, num_steps, cross_replace_steps, self_replace_steps, local_blend)
+        self.mapper, alphas = seq_aligner.get_refinement_mapper(prompts, tokenizer)
         alphas = alphas.cast(paddle_dtype)
         self.alphas = alphas.reshape([alphas.shape[0], 1, 1, alphas.shape[1]])
 
 
 def get_equalizer(
-        text: str,
-        word_select: Union[int, Tuple[int, ...]],
-        values: Union[List[float], Tuple[float, ...]], ):
+    text: str,
+    word_select: Union[int, Tuple[int, ...]],
+    values: Union[List[float], Tuple[float, ...]],
+):
     if type(word_select) is int or type(word_select) is str:
-        word_select = (word_select, )
+        word_select = (word_select,)
     equalizer = paddle.ones([len(values), 77])
     values = paddle.to_tensor(values, dtype=paddle_dtype)
     for word in word_select:
@@ -281,19 +271,20 @@ def get_equalizer(
 
 
 def inference(
-        source_prompt,
-        target_prompt,
-        source_guidance_scale=1,
-        guidance_scale=5,
-        num_inference_steps=100,
-        width=512,
-        height=512,
-        seed=0,
-        img=None,
-        strength=0.7,
-        cross_attention_control="None",
-        cross_replace_steps=0.8,
-        self_replace_steps=0.4, ):
+    source_prompt,
+    target_prompt,
+    source_guidance_scale=1,
+    guidance_scale=5,
+    num_inference_steps=100,
+    width=512,
+    height=512,
+    seed=0,
+    img=None,
+    strength=0.7,
+    cross_attention_control="None",
+    cross_replace_steps=0.8,
+    self_replace_steps=0.4,
+):
 
     paddle.seed(seed)
 
@@ -312,21 +303,22 @@ def inference(
             [source_prompt, target_prompt],
             num_inference_steps,
             cross_replace_steps=cross_replace_steps,
-            self_replace_steps=self_replace_steps, )
+            self_replace_steps=self_replace_steps,
+        )
         ptp_utils.register_attention_control(pipe, controller)
     elif cross_attention_control == "Refine":
         controller = AttentionRefine(
             [source_prompt, target_prompt],
             num_inference_steps,
             cross_replace_steps=cross_replace_steps,
-            self_replace_steps=self_replace_steps, )
+            self_replace_steps=self_replace_steps,
+        )
         ptp_utils.register_attention_control(pipe, controller)
     elif cross_attention_control == "None":
         controller = EmptyControl()
         ptp_utils.register_attention_control(pipe, controller)
     else:
-        raise ValueError("Unknown cross_attention_control: {}".format(
-            cross_attention_control))
+        raise ValueError("Unknown cross_attention_control: {}".format(cross_attention_control))
 
     with paddle.amp.auto_cast(True, level="O2"):
         results = pipe(
@@ -337,7 +329,8 @@ def inference(
             eta=0.1,
             strength=strength,
             guidance_scale=guidance_scale,
-            source_guidance_scale=source_guidance_scale, )
+            source_guidance_scale=source_guidance_scale,
+        )
     if pipe.safety_checker is None:
         return results.images[0]
     else:
@@ -354,7 +347,8 @@ def replace_nsfw_images(results):
 css = """.cycle-diffusion-div div{display:inline-flex;align-items:center;gap:.8rem;font-size:1.75rem}.cycle-diffusion-div div h1{font-weight:900;margin-bottom:7px}.cycle-diffusion-div p{margin-bottom:10px;font-size:94%}.cycle-diffusion-div p a{text-decoration:underline}.tabs{margin-top:0;margin-bottom:0}#gallery{min-height:20rem}
 """
 with gr.Blocks(css=css) as demo:
-    gr.HTML("""
+    gr.HTML(
+        """
             <div class="cycle-diffusion-div">
               <div>
                 <h1>CycleDiffusion with Stable Diffusion</h1>
@@ -370,9 +364,11 @@ with gr.Blocks(css=css) as demo:
               2. Click the "Run CycleDiffusion" button. <br>
               </p>
             </div>
-        """)
+        """
+    )
     with gr.Accordion("See Details", open=False):
-        gr.HTML("""
+        gr.HTML(
+            """
             <div class="cycle-diffusion-div">
               <p>
                 <b>How to use:</b> <br>
@@ -396,14 +392,14 @@ with gr.Blocks(css=css) as demo:
               1. 20s on A10G. <br>
               </p>
             </div>
-        """)
+        """
+        )
     with gr.Row():
 
         with gr.Column(scale=55):
             with gr.Group():
 
-                img = gr.Image(
-                    label="Input image", height=512, tool="editor", type="pil")
+                img = gr.Image(label="Input image", height=512, tool="editor", type="pil")
 
                 image_out = gr.Image(label="Output image", height=512)
                 # gallery = gr.Gallery(
@@ -422,7 +418,8 @@ with gr.Blocks(css=css) as demo:
                             label="Source guidance scale",
                             value=1,
                             minimum=1,
-                            maximum=10, )
+                            maximum=10,
+                        )
                     with gr.Row():
                         target_prompt = gr.Textbox(
                             label="Target prompt",
@@ -432,14 +429,16 @@ with gr.Blocks(css=css) as demo:
                             label="Target guidance scale",
                             value=5,
                             minimum=1,
-                            maximum=10, )
+                            maximum=10,
+                        )
                     with gr.Row():
                         strength = gr.Slider(
                             label="Strength",
                             value=0.7,
                             minimum=0.5,
                             maximum=1,
-                            step=0.01, )
+                            step=0.01,
+                        )
                     with gr.Row():
                         generate1 = gr.Button(value="Run CycleDiffusion")
 
@@ -449,7 +448,8 @@ with gr.Blocks(css=css) as demo:
                         cross_attention_control = gr.Radio(
                             label="CAC type",
                             choices=["None", "Replace", "Refine"],
-                            value="None", )
+                            value="None",
+                        )
                     with gr.Row():
                         # If not "None", the following two parameters will be used.
                         cross_replace_steps = gr.Slider(
@@ -457,13 +457,15 @@ with gr.Blocks(css=css) as demo:
                             value=0.8,
                             minimum=0.0,
                             maximum=1,
-                            step=0.01, )
+                            step=0.01,
+                        )
                         self_replace_steps = gr.Slider(
                             label="Self replace steps",
                             value=0.4,
                             minimum=0.0,
                             maximum=1,
-                            step=0.01, )
+                            step=0.01,
+                        )
                     with gr.Row():
                         generate2 = gr.Button(value="Run CycleDiffusion")
 
@@ -475,23 +477,13 @@ with gr.Blocks(css=css) as demo:
                             value=100,
                             minimum=25,
                             maximum=500,
-                            step=1, )
-                        width = gr.Slider(
-                            label="Width",
-                            value=512,
-                            minimum=512,
-                            maximum=1024,
-                            step=8)
-                        height = gr.Slider(
-                            label="Height",
-                            value=512,
-                            minimum=512,
-                            maximum=1024,
-                            step=8)
+                            step=1,
+                        )
+                        width = gr.Slider(label="Width", value=512, minimum=512, maximum=1024, step=8)
+                        height = gr.Slider(label="Height", value=512, minimum=512, maximum=1024, step=8)
 
                     with gr.Row():
-                        seed = gr.Slider(
-                            0, 2147483647, label="Seed", value=0, step=1)
+                        seed = gr.Slider(0, 2147483647, label="Seed", value=0, step=1)
                     with gr.Row():
                         generate3 = gr.Button(value="Run CycleDiffusion")
 
@@ -714,11 +706,14 @@ with gr.Blocks(css=css) as demo:
         ],
         image_out,
         inference,
-        cache_examples=True, )
+        cache_examples=True,
+    )
 
-    gr.Markdown("""
+    gr.Markdown(
+        """
       Space built with PPDiffusers 🧨 by PaddleNLP.
       [![Twitter Follow](https://img.shields.io/twitter/follow/ChenHenryWu?style=social)](https://twitter.com/ChenHenryWu)
-      """)
+      """
+    )
 
 demo.launch(debug=True, share=True, server_name="0.0.0.0", server_port=8581)

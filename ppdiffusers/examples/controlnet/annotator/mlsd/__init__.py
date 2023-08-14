@@ -27,13 +27,11 @@ remote_model_path = "https://bj.bcebos.com/v1/paddlenlp/models/community/ppdiffu
 
 class MLSDdetector:
     def __init__(self):
-        model_path = os.path.join(annotator_ckpts_path,
-                                  "mlsd_large_512_fp32.pdparams")
+        model_path = os.path.join(annotator_ckpts_path, "mlsd_large_512_fp32.pdparams")
         if not os.path.exists(model_path):
             from basicsr.utils.download_util import load_file_from_url
 
-            load_file_from_url(
-                remote_model_path, model_dir=annotator_ckpts_path)
+            load_file_from_url(remote_model_path, model_dir=annotator_ckpts_path)
         self.model = MobileV2_MLSD_Large()
         self.model.eval()
         self.model.set_dict(paddle.load(model_path))
@@ -43,10 +41,8 @@ class MLSDdetector:
         img = input_image
         img_output = np.zeros_like(img)
         with paddle.no_grad():
-            lines = pred_lines(img, self.model, [img.shape[0], img.shape[1]],
-                               thr_v, thr_d)
+            lines = pred_lines(img, self.model, [img.shape[0], img.shape[1]], thr_v, thr_d)
             for line in lines:
                 x_start, y_start, x_end, y_end = [int(val) for val in line]
-                cv2.line(img_output, (x_start, y_start), (x_end, y_end),
-                         [255, 255, 255], 1)
+                cv2.line(img_output, (x_start, y_start), (x_end, y_end), [255, 255, 255], 1)
         return img_output[:, :, (0)]

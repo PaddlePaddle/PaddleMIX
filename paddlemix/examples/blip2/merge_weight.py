@@ -31,8 +31,7 @@ def merge(args):
     # load the first item: vision_model
     state_dict = paddle.load(args.blip2_path)
     for n, p in state_dict.items():
-        if (n.startswith("vision_model") or n.startswith("qformer") or
-                n == "query_tokens"):
+        if n.startswith("vision_model") or n.startswith("qformer") or n == "query_tokens":
             model_dict[n] = p
     logger.info("[1/3] load ViT, qformer and query_tokens done!")
 
@@ -53,8 +52,7 @@ def merge(args):
     llm_state_dict = torch.load(args.llm_path)
     for n, p in llm_state_dict["model"].items():
         if n.startswith(args.llm_name + "_model.model"):
-            new_name = n.replace(args.llm_name + "_model.model",
-                                 "language_model." + args.llm_name)
+            new_name = n.replace(args.llm_name + "_model.model", "language_model." + args.llm_name)
             new_p = paddle.to_tensor(p.cpu().numpy())
             model_dict[new_name] = new_p
 
@@ -66,13 +64,11 @@ def merge(args):
                 new_p = paddle.to_tensor(p.cpu().numpy())
             model_dict[new_name] = new_p
 
-    logger.info(
-        "[3/3] load language_projection, some llm weights from blip2 done!")
+    logger.info("[3/3] load language_projection, some llm weights from blip2 done!")
 
     save_path = os.path.join(args.save_path, "model_state.pdparams")
     paddle.save(model_dict, save_path)
-    logger.info("The checkpoint of blip2 has been saved to :{}".format(
-        save_path))
+    logger.info("The checkpoint of blip2 has been saved to :{}".format(save_path))
 
 
 if __name__ == "__main__":
@@ -82,24 +78,27 @@ if __name__ == "__main__":
         "--blip2_path",
         default="/blip2/dirname",
         type=str,
-        help="The dir name of blip2-flan-t5-xxl.", )
-    parser.add_argument(
-        "--llm_name", default="opt", type=str, help="Thename of llm model.")
+        help="The dir name of blip2-flan-t5-xxl.",
+    )
+    parser.add_argument("--llm_name", default="opt", type=str, help="Thename of llm model.")
     parser.add_argument(
         "--llm_path",
         default="/llm/dirname",
         type=str,
-        help="The dir name of llm model.", )
+        help="The dir name of llm model.",
+    )
     parser.add_argument(
         "--blip2_path",
         default="/blip2/prerained_blip2.pth",
         type=str,
-        help="The checkpoint path of blip2.", )
+        help="The checkpoint path of blip2.",
+    )
     parser.add_argument(
         "--save_path",
         default="/save/to/dirname",
         type=str,
-        help="The saving path of blip2.", )
+        help="The saving path of blip2.",
+    )
     args = parser.parse_args()
 
     args.blip2_path = os.path.join(args.blip2_path, "model_state.pdparams")

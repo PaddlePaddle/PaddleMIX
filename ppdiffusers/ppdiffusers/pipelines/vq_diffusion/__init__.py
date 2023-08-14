@@ -17,5 +17,7 @@
 from ...utils import is_paddle_available, is_paddlenlp_available
 
 if is_paddle_available() and is_paddlenlp_available():
-    from .pipeline_vq_diffusion import (LearnedClassifierFreeSamplingEmbeddings,
-                                        VQDiffusionPipeline)
+    from .pipeline_vq_diffusion import (
+        LearnedClassifierFreeSamplingEmbeddings,
+        VQDiffusionPipeline,
+    )

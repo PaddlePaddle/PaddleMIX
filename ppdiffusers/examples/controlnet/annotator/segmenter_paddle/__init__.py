@@ -32,71 +32,80 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Model prediction")
 
     # params of prediction
-    parser.add_argument(
-        "--config", dest="cfg", help="The config file.", default=None, type=str)
+    parser.add_argument("--config", dest="cfg", help="The config file.", default=None, type=str)
     parser.add_argument(
         "--model_path",
         dest="model_path",
         help="The path of model for prediction",
         type=str,
-        default=None, )
+        default=None,
+    )
     parser.add_argument(
         "--image_path",
         dest="image_path",
         help="The image to predict, which can be a path of image, or a file list containing image paths, or a directory including images",
         type=str,
-        default=None, )
+        default=None,
+    )
     parser.add_argument(
         "--save_dir",
         dest="save_dir",
         help="The directory for saving the predicted results",
         type=str,
-        default="./output/result", )
+        default="./output/result",
+    )
 
     # augment for prediction
     parser.add_argument(
         "--aug_pred",
         dest="aug_pred",
         help="Whether to use mulit-scales and flip augment for prediction",
-        action="store_true", )
+        action="store_true",
+    )
     parser.add_argument(
         "--scales",
         dest="scales",
         nargs="+",
         help="Scales for augment",
         type=float,
-        default=1.0, )
+        default=1.0,
+    )
     parser.add_argument(
         "--flip_horizontal",
         dest="flip_horizontal",
         help="Whether to use flip horizontally augment",
-        action="store_true", )
+        action="store_true",
+    )
     parser.add_argument(
         "--flip_vertical",
         dest="flip_vertical",
         help="Whether to use flip vertically augment",
-        action="store_true", )
+        action="store_true",
+    )
 
     # sliding window prediction
     parser.add_argument(
         "--is_slide",
         dest="is_slide",
         help="Whether to prediction by sliding window",
-        action="store_true", )
+        action="store_true",
+    )
     parser.add_argument(
         "--crop_size",
         dest="crop_size",
         nargs=2,
         help="The crop size of sliding window, the first is width and the second is height.",
         type=int,
-        default=None, )
+        default=None,
+    )
     parser.add_argument(
         "--stride",
         dest="stride",
         nargs=2,
         help="The stride of sliding window, the first is width and the second is height.",
         type=int,
-        default=None, )
+        default=None,
+    )
 
     # custom color map
     parser.add_argument(
@@ -105,7 +114,8 @@ def parse_args():
         nargs="+",
         help="Save images with a custom color map. Default: None, use paddleseg's default color map.",
         type=int,
-        default=None, )
+        default=None,
+    )
 
     # set device
     parser.add_argument(
@@ -113,7 +123,8 @@ def parse_args():
         dest="device",
         help="Device place to be set, which can be GPU, XPU, NPU, CPU",
         default="gpu",
-        type=str, )
+        type=str,
+    )
 
     return parser.parse_args()
 
@@ -301,8 +312,7 @@ def get_test_config(cfg, args):
 def main(args):
     env_info = get_sys_env()
 
-    if (args.device == "gpu" and env_info["Paddle compiled with cuda"] and
-            env_info["GPUs used"]):
+    if args.device == "gpu" and env_info["Paddle compiled with cuda"] and env_info["GPUs used"]:
         place = "gpu"
     elif args.device == "xpu" and paddle.is_compiled_with_xpu():
         place = "xpu"
@@ -337,24 +347,23 @@ def main(args):
         image_list=image_list,
         image_dir=image_dir,
         save_dir=args.save_dir,
-        **test_config, )
+        **test_config,
+    )
 
 
-checkpoint_file = "https://paddleseg.bj.bcebos.com/dygraph/ade20k/segmenter_vit_base_linear_ade20k_512x512_160k/model.pdparams"
+checkpoint_file = (
+    "https://paddleseg.bj.bcebos.com/dygraph/ade20k/segmenter_vit_base_linear_ade20k_512x512_160k/model.pdparams"
+)
 
 
 class SegmenterDetector:
     def __init__(self):
-        segmenter_annotator_ckpts_path = os.path.join(annotator_ckpts_path,
-                                                      "segmenter_model")
-        modelpath = os.path.join(segmenter_annotator_ckpts_path,
-                                 "model.pdparams")
+        segmenter_annotator_ckpts_path = os.path.join(annotator_ckpts_path, "segmenter_model")
+        modelpath = os.path.join(segmenter_annotator_ckpts_path, "model.pdparams")
         if not os.path.exists(modelpath):
-            from paddlenlp.utils.downloader import \
-                get_path_from_url_with_filelock
+            from paddlenlp.utils.downloader import get_path_from_url_with_filelock
 
-            get_path_from_url_with_filelock(
-                checkpoint_file, root_dir=segmenter_annotator_ckpts_path)
+            get_path_from_url_with_filelock(checkpoint_file, root_dir=segmenter_annotator_ckpts_path)
         self.model_path = modelpath
 
         cfg = "annotator/segmenter_paddle/segmenter_vit_base_linear_ade20k_512x512_160k.yml"
@@ -385,9 +394,9 @@ class SegmenterDetector:
             save_dir="output",
             skip_save=True,
             custom_color=custom_color_flatten,
-            **self.test_config, )
-        pred_mask = cv2.cvtColor(
-            np.asarray(pred_mask.convert("RGB"))[:, :, ::-1], cv2.COLOR_RGB2BGR)
+            **self.test_config,
+        )
+        pred_mask = cv2.cvtColor(np.asarray(pred_mask.convert("RGB"))[:, :, ::-1], cv2.COLOR_RGB2BGR)
         return pred_mask
 
 

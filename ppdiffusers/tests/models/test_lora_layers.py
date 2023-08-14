@@ -20,8 +20,12 @@ import paddle
 import paddle.nn as nn
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
-from ppdiffusers import (AutoencoderKL, DDIMScheduler, StableDiffusionPipeline,
-                         UNet2DConditionModel)
+from ppdiffusers import (
+    AutoencoderKL,
+    DDIMScheduler,
+    StableDiffusionPipeline,
+    UNet2DConditionModel,
+)
 from ppdiffusers.loaders import AttnProcsLayers, LoraLoaderMixin
 from ppdiffusers.models.attention_processor import LoRAAttnProcessor
 from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE, floats_tensor
@@ -30,19 +34,16 @@ from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE, floats_tensor
 def create_unet_lora_layers(unet: nn.Layer):
     lora_attn_procs = {}
     for name in unet.attn_processors.keys():
-        cross_attention_dim = (None if name.endswith("attn1.processor") else
-                               unet.config.cross_attention_dim)
+        cross_attention_dim = None if name.endswith("attn1.processor") else unet.config.cross_attention_dim
         if name.startswith("mid_block"):
             hidden_size = unet.config.block_out_channels[-1]
         elif name.startswith("up_blocks"):
             block_id = int(name[len("up_blocks.")])
-            hidden_size = list(reversed(unet.config.block_out_channels))[
-                block_id]
+            hidden_size = list(reversed(unet.config.block_out_channels))[block_id]
         elif name.startswith("down_blocks"):
             block_id = int(name[len("down_blocks.")])
             hidden_size = unet.config.block_out_channels[block_id]
-        lora_attn_procs[name] = LoRAAttnProcessor(
-            hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
+        lora_attn_procs[name] = LoRAAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
     unet_lora_layers = AttnProcsLayers(lora_attn_procs)
     return lora_attn_procs, unet_lora_layers
 
@@ -52,8 +53,8 @@ def create_text_encoder_lora_layers(text_encoder: nn.Layer):
     for name, module in text_encoder.named_sublayers(include_self=True):
         if name.endswith(TEXT_ENCODER_ATTN_MODULE):
             text_lora_attn_procs[name] = LoRAAttnProcessor(
-                hidden_size=module.out_proj.weight.shape[1],
-                cross_attention_dim=None)
+                hidden_size=module.out_proj.weight.shape[1], cross_attention_dim=None
+            )
 
     text_encoder_lora_layers = AttnProcsLayers(text_lora_attn_procs)
     return text_encoder_lora_layers
@@ -70,14 +71,16 @@ class LoraLoaderMixinTests(unittest.TestCase):
             out_channels=4,
             down_block_types=("DownBlock2D", "CrossAttnDownBlock2D"),
             up_block_types=("CrossAttnUpBlock2D", "UpBlock2D"),
-            cross_attention_dim=32, )
+            cross_attention_dim=32,
+        )
         scheduler = DDIMScheduler(
             beta_start=0.00085,
             beta_end=0.012,
             beta_schedule="scaled_linear",
             clip_sample=False,
             set_alpha_to_one=False,
-            steps_offset=1, )
+            steps_offset=1,
+        )
         paddle.seed(0)
         vae = AutoencoderKL(
             block_out_channels=[32, 64],
@@ -85,7 +88,8 @@ class LoraLoaderMixinTests(unittest.TestCase):
             out_channels=3,
             down_block_types=["DownEncoderBlock2D", "DownEncoderBlock2D"],
             up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D"],
-            latent_channels=4, )
+            latent_channels=4,
+        )
         text_encoder_config = CLIPTextConfig(
             bos_token_id=0,
             eos_token_id=2,
@@ -95,11 +99,11 @@ class LoraLoaderMixinTests(unittest.TestCase):
             num_attention_heads=4,
             num_hidden_layers=5,
             pad_token_id=1,
-            vocab_size=1000, )
+            vocab_size=1000,
+        )
         text_encoder = CLIPTextModel(text_encoder_config)
         text_encoder.eval()
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
 
         unet_lora_attn_procs, unet_lora_layers = create_unet_lora_layers(unet)
         text_encoder_lora_layers = create_text_encoder_lora_layers(text_encoder)
@@ -128,11 +132,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
 
         generator = paddle.Generator().manual_seed(0)
         noise = floats_tensor((batch_size, num_channels) + sizes)
-        input_ids = paddle.randint(
-            1,
-            sequence_length,
-            size=(batch_size, sequence_length),
-            generator=generator)
+        input_ids = paddle.randint(1, sequence_length, size=(batch_size, sequence_length), generator=generator)
 
         pipeline_inputs = {
             "prompt": "A painting of a squirrel eating a burger",
@@ -158,22 +158,17 @@ class LoraLoaderMixinTests(unittest.TestCase):
             LoraLoaderMixin.save_lora_weights(
                 save_directory=tmpdirname,
                 unet_lora_layers=lora_components["unet_lora_layers"],
-                text_encoder_lora_layers=lora_components[
-                    "text_encoder_lora_layers"],
-                to_diffusers=False, )
-            self.assertTrue(
-                os.path.isfile(
-                    os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+                text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
+                to_diffusers=False,
+            )
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
             sd_pipe.load_lora_weights(tmpdirname, from_diffusers=False)
 
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
 
         # Outputs shouldn't match.
-        self.assertFalse(
-            paddle.allclose(
-                paddle.to_tensor(orig_image_slice),
-                paddle.to_tensor(lora_image_slice)))
+        self.assertFalse(paddle.allclose(paddle.to_tensor(orig_image_slice), paddle.to_tensor(lora_image_slice)))
 
     def test_lora_save_load_safetensors(self):
         pipeline_components, lora_components = self.get_dummy_components()
@@ -189,24 +184,18 @@ class LoraLoaderMixinTests(unittest.TestCase):
             LoraLoaderMixin.save_lora_weights(
                 save_directory=tmpdirname,
                 unet_lora_layers=lora_components["unet_lora_layers"],
-                text_encoder_lora_layers=lora_components[
-                    "text_encoder_lora_layers"],
+                text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
                 safe_serialization=True,
-                to_diffusers=True, )
-            self.assertTrue(
-                os.path.isfile(
-                    os.path.join(tmpdirname,
-                                 "pytorch_lora_weights.safetensors")))
+                to_diffusers=True,
+            )
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.safetensors")))
             sd_pipe.load_lora_weights(tmpdirname, from_diffusers=True)
 
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
 
         # Outputs shouldn't match.
-        self.assertFalse(
-            paddle.allclose(
-                paddle.to_tensor(orig_image_slice),
-                paddle.to_tensor(lora_image_slice)))
+        self.assertFalse(paddle.allclose(paddle.to_tensor(orig_image_slice), paddle.to_tensor(lora_image_slice)))
 
     def test_lora_save_load_legacy(self):
         pipeline_components, lora_components = self.get_dummy_components()
@@ -223,16 +212,11 @@ class LoraLoaderMixinTests(unittest.TestCase):
             unet = sd_pipe.unet
             unet.set_attn_processor(unet_lora_attn_procs)
             unet.save_attn_procs(tmpdirname, to_diffusers=False)
-            self.assertTrue(
-                os.path.isfile(
-                    os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
             sd_pipe.load_lora_weights(tmpdirname, from_diffusers=False)
 
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
 
         # Outputs shouldn't match.
-        self.assertFalse(
-            paddle.allclose(
-                paddle.to_tensor(orig_image_slice),
-                paddle.to_tensor(lora_image_slice)))
+        self.assertFalse(paddle.allclose(paddle.to_tensor(orig_image_slice), paddle.to_tensor(lora_image_slice)))
