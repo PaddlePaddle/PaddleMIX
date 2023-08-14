@@ -16,7 +16,7 @@ import paddle
 from paddlenlp.trainer.trainer import Trainer
 from paddle.io import DataLoader
 from paddlevlp.models.evaclip.eva_clip.utils import clip_grad_norm
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 
 
 class CLIPTrainer(Trainer):
@@ -39,9 +39,9 @@ class CLIPTrainer(Trainer):
             self.accum_texts_emb = []
             self.accum_texts = []
             self.step = 0
-        
+
         self.rank = paddle.distributed.get_rank()
-        if self.rank==0:
+        if self.rank == 0:
             self.writer = SummaryWriter("output/tensorboard")
             self.logstep = 0
 
@@ -63,7 +63,7 @@ class CLIPTrainer(Trainer):
         Return:
             `paddle.Tensor`: The tensor with training loss on this batch.
         """
-        
+
         if self.args.pipeline_parallel_degree > 1:
             return self.training_pipeline_step(model, inputs)
         elif self.args.accum_freq > 1:
@@ -90,8 +90,10 @@ class CLIPTrainer(Trainer):
         if self.rank == 0:
             self.logstep += 1
             self.writer.add_scalar("train/loss", loss.item(), self.logstep)
-            self.writer.add_scalar("train/grad_norm", grad_norms.item(), self.logstep)
-            self.writer.add_scalar("train/logit_scale", logit_scale.item(), self.logstep)
+            self.writer.add_scalar("train/grad_norm",
+                                   grad_norms.item(), self.logstep)
+            self.writer.add_scalar("train/logit_scale",
+                                   logit_scale.item(), self.logstep)
 
         return loss.detach()
 
@@ -130,10 +132,10 @@ class CLIPTrainer(Trainer):
         # Call backwards each time, but only step optimizer at the end.
         self.optimizer.clear_grad()
         for j in range(self.args.accum_freq):
-            texts_emb_accumulated = paddle.concat(
-                    [self.accum_texts_emb[j]] + self.accum_texts_emb[:j] + self.accum_texts_emb[j + 1:])
-            input_ids_accumulated = paddle.concat(
-                    [self.accum_texts[j]] + self.accum_texts[:j] + self.accum_texts[j + 1:])
+            texts_emb_accumulated = paddle.concat([self.accum_texts_emb[
+                j]] + self.accum_texts_emb[:j] + self.accum_texts_emb[j + 1:])
+            input_ids_accumulated = paddle.concat([self.accum_texts[
+                j]] + self.accum_texts[:j] + self.accum_texts[j + 1:])
             # preds = model(
             #     self.accum_images[j], input_ids=input_ids_accumulated, text_emb=texts_emb_accumulated, skiploss=True)
             # image_features, text_features, logit_scale = preds[:3]
@@ -154,13 +156,15 @@ class CLIPTrainer(Trainer):
             #      logit_scale))
 
             with self.autocast_smart_context_manager():
-                loss,_,_,_ = model(
-                    self.accum_images[j], input_ids=input_ids_accumulated, text_emb=texts_emb_accumulated)
-            
+                loss, _, _, _ = model(
+                    self.accum_images[j],
+                    input_ids=input_ids_accumulated,
+                    text_emb=texts_emb_accumulated)
+
             if self.do_grad_scaling:
-                self.scaler.scale(loss/self.args.accum_freq).backward()
+                self.scaler.scale(loss / self.args.accum_freq).backward()
             else:
-                (loss/self.args.accum_freq).backward()
+                (loss / self.args.accum_freq).backward()
             # del inputs
 
         if self.args.max_grad_norm > 0.0:
@@ -196,5 +200,4 @@ class CLIPTrainer(Trainer):
             collate_fn=self.data_collator,
             num_workers=self.args.dataloader_num_workers,
             prefetch_factor=1,
-            shuffle=False,
-        )
+            shuffle=False, )

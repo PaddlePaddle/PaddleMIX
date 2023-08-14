@@ -28,10 +28,9 @@ from paddlevlp.models.blip2 import (
     Blip2VisionConfig,
     Blip2QFormerConfig,
     Blip2Config,
-    Blip2QFormerModel,
-    Blip2Model,
-    Blip2VisionModel,
     Blip2ForConditionalGeneration, )
+from paddlevlp.models.blip2.eva_vit import VisionTransformer
+from paddlevlp.models.blip2.Qformer import BertLMHeadModel
 from paddlevlp.models.blip2.modeling import BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST
 from paddlevlp.tests.testing_utils import slow
 from paddlevlp.tests.models.test_configuration_common import ConfigTester
@@ -112,7 +111,7 @@ class Blip2VisionModelTester:
             initializer_range=self.initializer_range, )
 
     def create_and_check_model(self, config, pixel_values):
-        model = Blip2VisionModel(config=config)
+        model = VisionTransformer(config=config)
         model.eval()
         with paddle.no_grad():
             result = model(pixel_values)
@@ -140,7 +139,7 @@ class Blip2VisionModelTest(ModelTesterMixin, unittest.TestCase):
     attention_mask and seq_length.
     """
 
-    all_model_classes = (Blip2VisionModel, )
+    all_model_classes = (VisionTransformer, )
     fx_compatible = False
     test_pruning = False
     test_resize_embeddings = False
@@ -190,11 +189,11 @@ class Blip2VisionModelTest(ModelTesterMixin, unittest.TestCase):
     @slow
     def test_model_from_pretrained(self):
         for model_name in BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST[:1]:
-            model = Blip2VisionModel.from_pretrained(model_name)
+            model = VisionTransformer.from_pretrained(model_name)
             self.assertIsNotNone(model)
 
 
-class Blip2QFormerModelTester:
+class BertLMHeadModelTester:
     def __init__(
             self,
             parent,
@@ -216,7 +215,8 @@ class Blip2QFormerModelTester:
             bos_token_id=0,
             scope=None,
             num_patches=257,
-            encoder_hidden_size=1408, ):
+            encoder_hidden_size=1408,
+            encoder_width=1408, ):
         self.parent = parent
         self.batch_size = batch_size
         self.seq_length = seq_length
@@ -237,6 +237,7 @@ class Blip2QFormerModelTester:
         self.bos_token_id = bos_token_id
         self.num_patches = num_patches
         self.encoder_hidden_size = encoder_hidden_size
+        self.encoder_width = encoder_width
 
     def prepare_config_and_inputs(self):
         query_embeds = floats_tensor(
@@ -266,7 +267,7 @@ class Blip2QFormerModelTester:
 
     def create_and_check_model(self, config, query_embeds,
                                encoder_hidden_states, encoder_attention_mask):
-        model = Blip2QFormerModel(config=config)
+        model = BertLMHeadModel(config=config, encoder_width=self.encoder_width)
         model.eval()
         result = model(
             query_embeds=query_embeds,
@@ -276,7 +277,7 @@ class Blip2QFormerModelTester:
             result.last_hidden_state.shape,
             [self.batch_size, self.seq_length, self.hidden_size])
 
-        model = Blip2QFormerModel(config=config)
+        model = BertLMHeadModel(config=config)
         model.eval()
         with paddle.no_grad():
             result = model(
@@ -299,8 +300,8 @@ class Blip2QFormerModelTester:
         return config, inputs_dict
 
 
-class Blip2QFormerModelTest(ModelTesterMixin, unittest.TestCase):
-    all_model_classes = (Blip2QFormerModel, )
+class BertLMHeadModelTest(ModelTesterMixin, unittest.TestCase):
+    all_model_classes = (BertLMHeadModel, )
     fx_compatible = False
     test_pruning = False
     test_resize_embeddings = False
@@ -308,7 +309,7 @@ class Blip2QFormerModelTest(ModelTesterMixin, unittest.TestCase):
     use_test_model_name_list = False
 
     def setUp(self):
-        self.model_tester = Blip2QFormerModelTester(self)
+        self.model_tester = BertLMHeadModelTester(self)
         self.config_tester = ConfigTester(
             self,
             config_class=Blip2QFormerConfig,
@@ -431,8 +432,8 @@ class Blip2ModelTester:
         self.parent = parent
         self.vision_model_tester = Blip2VisionModelTester(parent,
                                                           **vision_kwargs)
-        self.qformer_model_tester = Blip2QFormerModelTester(parent,
-                                                            **qformer_kwargs)
+        self.qformer_model_tester = BertLMHeadModelTester(parent,
+                                                          **qformer_kwargs)
         self.text_model_tester = Blip2TextModelTester(parent, **text_kwargs)
         self.is_training = is_training
         self.num_query_tokens = num_query_tokens
