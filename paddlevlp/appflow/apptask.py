@@ -18,7 +18,6 @@ import math
 from multiprocessing import cpu_count
 
 import paddle
-from paddle.dataset.common import md5file
 
 from paddlevlp.utils.env import PPMIX_HOME
 from paddlevlp.utils.log import logger
@@ -127,7 +126,7 @@ class AppTask(object):
                 'trt_fp32': paddle.inference.PrecisionType.Float32,
                 'trt_fp16': paddle.inference.PrecisionType.Half
             }
-            self._config.enable_use_gpu(100, self.kwargs["device_id"])
+            self._config.enable_use_gpu(5000, self.kwargs["device_id"])
             self._config.set_cpu_math_library_num_threads(self._num_threads)
             self._config.switch_use_feed_fetch_ops(False)
             self._config.disable_glog_info()
@@ -135,7 +134,7 @@ class AppTask(object):
             self._config.enable_memory_optim(True)
             if self._infer_precision in precision_map.keys():
                 self._config.enable_tensorrt_engine(
-                    workspace_size=(1 << 30),
+                    workspace_size=(1 << 40),
                     max_batch_size=0,
                     min_subgraph_size=30,
                     precision_mode=precision_map[self._infer_precision],
