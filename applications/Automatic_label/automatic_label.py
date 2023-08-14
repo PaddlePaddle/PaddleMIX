@@ -25,17 +25,17 @@ import paddle
 import paddle.nn.functional as F
 from PIL import Image, ImageDraw, ImageFont
 
-from paddlevlp.processors.groundingdino_processing import GroudingDinoProcessor
-from paddlevlp.models.groundingdino.modeling import GroundingDinoModel
-from paddlevlp.models.sam.modeling import SamModel
-from paddlevlp.processors.sam_processing import SamProcessor
+from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
+from paddlemix.models.groundingdino.modeling import GroundingDinoModel
+from paddlemix.models.sam.modeling import SamModel
+from paddlemix.processors.sam_processing import SamProcessor
 from paddlenlp.transformers import AutoTokenizer
-from paddlevlp.processors.blip_processing import BlipImageProcessor, BlipTextProcessor
-from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
-from paddlevlp.processors.blip_processing import Blip2Processor
+from paddlemix.processors.blip_processing import BlipImageProcessor, BlipTextProcessor
+from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
+from paddlemix.processors.blip_processing import Blip2Processor
 import nltk
 
-from paddlevlp.utils.log import logger
+from paddlemix.utils.log import logger
 import matplotlib.pyplot as plt
 
 

@@ -24,17 +24,17 @@ import paddle.nn as nn
 import requests
 from PIL import Image
 
-from paddlevlp.models.blip2 import (
+from paddlemix.models.blip2 import (
     Blip2VisionConfig,
     Blip2QFormerConfig,
     Blip2Config,
     Blip2ForConditionalGeneration, )
-from paddlevlp.models.blip2.eva_vit import VisionTransformer
-from paddlevlp.models.blip2.Qformer import BertLMHeadModel
-from paddlevlp.models.blip2.modeling import BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST
-from paddlevlp.tests.testing_utils import slow
-from paddlevlp.tests.models.test_configuration_common import ConfigTester
-from paddlevlp.tests.models.test_modeling_common import (
+from paddlemix.models.blip2.eva_vit import VisionTransformer
+from paddlemix.models.blip2.Qformer import BertLMHeadModel
+from paddlemix.models.blip2.modeling import BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST
+from paddlemix.tests.testing_utils import slow
+from paddlemix.tests.models.test_configuration_common import ConfigTester
+from paddlemix.tests.models.test_modeling_common import (
     ModelTesterMixin,
     floats_tensor,
     ids_tensor,

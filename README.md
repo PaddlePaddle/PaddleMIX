@@ -101,16 +101,16 @@ pip install -e .
         </ul>
           <li><b>图文预训练</b></li>
         <ul>
-            <li><a href="paddlevlp/examples/evaclip">EVA-CLIP</a></li>
-            <li><a href="paddlevlp/examples/blip2">BLIP-2</a></li>
-            <li><a href="paddlevlp/examples/minigpt4">miniGPT-4</a></li>
-            <li><a href="paddlevlp/examples/visualglm">VIsualGLM</a></li>
+            <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
+            <li><a href="paddlemix/examples/blip2">BLIP-2</a></li>
+            <li><a href="paddlemix/examples/minigpt4">miniGPT-4</a></li>
+            <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
       </ul>
       </ul>
           <li><b>开放世界视觉模型</b></li>
         <ul>
-            <li><a href="paddlevlp/examples/groundingdino">Grounding DINO</a></li>
-            <li><a href="paddlevlp/examples/Sam">SAM</a></li>
+            <li><a href="paddlemix/examples/groundingdino">Grounding DINO</a></li>
+            <li><a href="paddlemix/examples/Sam">SAM</a></li>
       </ul>
       </td>
       <td>

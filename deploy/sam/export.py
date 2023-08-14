@@ -18,8 +18,8 @@ import yaml
 import argparse
 import paddle
 
-from paddlevlp.utils.log import logger
-from paddlevlp.models.sam.modeling import SamModel
+from paddlemix.utils.log import logger
+from paddlemix.models.sam.modeling import SamModel
 
 
 def parse_args():
@@ -52,10 +52,11 @@ def parse_args():
 
 
 def main(args):
-  
+
     os.environ['PADDLESEG_EXPORT_STAGE'] = 'True'
 
-    model = SamModel.from_pretrained(args.model_type,input_type=args.input_type)
+    model = SamModel.from_pretrained(
+        args.model_type, input_type=args.input_type)
 
     shape = [None, 3, None, None] if args.input_img_shape is None \
         else args.input_img_shape
