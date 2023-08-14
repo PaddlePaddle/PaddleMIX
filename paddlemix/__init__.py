@@ -13,8 +13,8 @@
 # see the license for the specific language governing permissions and
 # limitations under the license.
 
+from .appflow import *
 from .datasets import *
 from .models import *
 from .optimization import *
 from .processors import *
-from .appflow import *

@@ -12,11 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ...utils import (
-    OptionalDependencyNotAvailable,
-    is_paddle_available,
-    is_paddlenlp_available,
-    is_paddlenlp_version, )
+from ...utils import (OptionalDependencyNotAvailable, is_paddle_available,
+                      is_paddlenlp_available, is_paddlenlp_version)
 
 try:
     if not (is_paddlenlp_available() and is_paddle_available() and

@@ -21,7 +21,8 @@ import numpy as np
 import paddle
 
 from ppdiffusers import VersatileDiffusionDualGuidedPipeline
-from ppdiffusers.utils.testing_utils import load_image, require_paddle_gpu, nightly
+from ppdiffusers.utils.testing_utils import (load_image, nightly,
+                                             require_paddle_gpu)
 
 
 @nightly
@@ -63,8 +64,8 @@ class VersatileDiffusionDualGuidedPipelineIntegrationTests(unittest.TestCase):
             guidance_scale=7.5,
             num_inference_steps=2,
             output_type="numpy", ).images
-        assert np.abs(image - new_image).sum(
-        ) < 1e-05, "Models don't have the same forward pass"
+        assert (np.abs(image - new_image).sum() < 1e-05
+                ), "Models don't have the same forward pass"
 
     def test_inference_dual_guided(self):
         pipe = VersatileDiffusionDualGuidedPipeline.from_pretrained(

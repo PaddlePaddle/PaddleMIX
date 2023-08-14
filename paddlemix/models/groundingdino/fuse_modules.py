@@ -16,8 +16,9 @@ import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle.nn.initializer import Constant
-from .layers import DropPath
 from paddlenlp.utils.initializer import constant_, xavier_uniform_
+
+from .layers import DropPath
 from .utils import masked_fill
 
 
@@ -193,8 +194,9 @@ class BiMultiHeadAttention(nn.Layer):
         value_l_states = value_l_states.reshape(proj_shape)
 
         src_len = key_states.shape[1]
-        attn_weights = paddle.bmm(query_states, key_states.transpose(
-            [0, 2, 1]))  # bs*nhead, nimg, ntxt
+        attn_weights = paddle.bmm(
+            query_states,
+            key_states.transpose([0, 2, 1]))  # bs*nhead, nimg, ntxt
 
         if attn_weights.shape != [bsz * self.num_heads, tgt_len, src_len]:
             raise ValueError(
@@ -228,20 +230,20 @@ class BiMultiHeadAttention(nn.Layer):
         # mask vison for language
         if attention_mask_v is not None:
 
-            attention_mask_v = (
-                attention_mask_v[:, None, None, :].cast(paddle.float32).tile(
-                    [1, self.num_heads, 1, 1]).flatten(0, 1))
-            attn_weights_l = masked_fill(attn_weights_l, attention_mask_v == 1.,
-                                         float("-inf"))
+            attention_mask_v = (attention_mask_v[:, None, None, :]
+                                .cast(paddle.float32)
+                                .tile([1, self.num_heads, 1, 1]).flatten(0, 1))
+            attn_weights_l = masked_fill(attn_weights_l,
+                                         attention_mask_v == 1.0, float("-inf"))
 
         attn_weights_l = F.softmax(attn_weights_l, axis=-1)
 
         # mask language for vision
         if attention_mask_l is not None:
-            attention_mask_l = (
-                attention_mask_l[:, None, None, :].cast(paddle.float32).tile(
-                    [1, self.num_heads, 1, 1]).flatten(0, 1))
-            attn_weights = masked_fill(attn_weights, attention_mask_l == 1.,
+            attention_mask_l = (attention_mask_l[:, None, None, :]
+                                .cast(paddle.float32)
+                                .tile([1, self.num_heads, 1, 1]).flatten(0, 1))
+            attn_weights = masked_fill(attn_weights, attention_mask_l == 1.0,
                                        float("-inf"))
 
         attn_weights_v = F.softmax(attn_weights, axis=-1)
@@ -314,7 +316,7 @@ class BiAttentionBlock(nn.Layer):
             l_dim=l_dim,
             embed_dim=embed_dim,
             num_heads=num_heads,
-            dropout=dropout)
+            dropout=dropout, )
 
         # add layer scale for training stability
         self.drop_path = DropPath(

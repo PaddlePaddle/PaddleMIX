@@ -20,17 +20,16 @@ from copy import deepcopy
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
-import PIL
 import paddle
-from paddle.vision.transforms.functional import resize
+import PIL
 from paddle.nn import functional as F
+from paddle.vision.transforms.functional import resize
 
 from .base_processing import ProcessorMixin
-
-from .image_utils import (IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD,
-                          valid_images, get_preprocess_shape)
 from .image_transform_utils import to_pil_image
-from .processing_utils import (BaseImageProcessor, BaseTextProcessor)
+from .image_utils import (IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD,
+                          get_preprocess_shape, valid_images)
+from .processing_utils import BaseImageProcessor, BaseTextProcessor
 
 __all__ = [
     "SamProcessor",
@@ -65,10 +64,10 @@ class SamProcessor(ProcessorMixin):
             raise ValueError(
                 "You have to specify either images and input_type.")
 
-        if input_type == 'boxs' and box is None:
+        if input_type == "boxs" and box is None:
             raise ValueError("You have to specify either box.")
 
-        if input_type == 'points' and point_coords is None:
+        if input_type == "points" and point_coords is None:
             raise ValueError("You have to specify either point_coords.")
 
         image_pil_numpy = np.array(images)
@@ -79,7 +78,7 @@ class SamProcessor(ProcessorMixin):
             self.original_size,
             point_coords=point_coords,
             point_labels=point_labels,
-            box=box)
+            box=box, )
 
         return image_seg, prompt
 
@@ -145,17 +144,21 @@ class SamPromptProcessor(BaseTextProcessor):
             point_labels=None,
             box=None,
             **kwargs, ):
-        coords_paddle, labels_paddle, box_paddle, mask_input_paddle = None, None, None, None
+        coords_paddle, labels_paddle, box_paddle, mask_input_paddle = (
+            None,
+            None,
+            None,
+            None, )
         if point_coords is not None:
             point_coords = self.apply_coords(point_coords, original_size)
-            coords_paddle = paddle.to_tensor(point_coords).cast('float32')
+            coords_paddle = paddle.to_tensor(point_coords).cast("float32")
             coords_paddle = coords_paddle[None, :, :]
 
             return coords_paddle
 
         if box is not None:
             box = self.apply_boxes(box, original_size)
-            box_paddle = paddle.to_tensor(box).cast('float32')
+            box_paddle = paddle.to_tensor(box).cast("float32")
             box_paddle = box_paddle[None, :]
             return box_paddle
 
@@ -235,7 +238,7 @@ class SamImageProcessor(BaseImageProcessor):
 
         input_image = [self.apply_image(image) for image in images]
 
-        input_image_paddle = paddle.to_tensor(input_image).cast('int32')
+        input_image_paddle = paddle.to_tensor(input_image).cast("int32")
 
         input_image_paddle = input_image_paddle.transpose([0, 3, 1, 2])
 

@@ -17,20 +17,16 @@ from collections import OrderedDict
 
 import paddle
 import torch
-from diffusers import StableDiffusionPipeline as DiffusersStableDiffusionPipeline
+from diffusers import \
+    StableDiffusionPipeline as DiffusersStableDiffusionPipeline
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextConfig,
+                                    CLIPTextModel, CLIPTokenizer,
+                                    CLIPVisionConfig)
 
-from paddlenlp.transformers import (
-    CLIPFeatureExtractor,
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPTokenizer,
-    CLIPVisionConfig, )
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler, )
-from ppdiffusers import StableDiffusionPipeline as PPDiffusersStableDiffusionPipeline
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, LMSDiscreteScheduler,
+                         PNDMScheduler)
+from ppdiffusers import \
+    StableDiffusionPipeline as PPDiffusersStableDiffusionPipeline
 from ppdiffusers import UNet2DConditionModel
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
@@ -189,8 +185,10 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(
             pp_feature_extractor = CLIPFeatureExtractor.from_pretrained(
                 "CompVis/stable-diffusion-v1-4/feature_extractor")
             # 7. safety_checker
-            safety_checker_state_dict, safety_checker_config = convert_hf_clip_to_ppnlp_clip(
-                diffusers_pipe.safety_checker, is_text_encoder=False)
+            (
+                safety_checker_state_dict,
+                safety_checker_config, ) = convert_hf_clip_to_ppnlp_clip(
+                    diffusers_pipe.safety_checker, is_text_encoder=False)
             pp_safety_checker = StableDiffusionSafetyChecker(
                 CLIPVisionConfig.from_dict(safety_checker_config))
             pp_safety_checker.set_dict(safety_checker_state_dict)

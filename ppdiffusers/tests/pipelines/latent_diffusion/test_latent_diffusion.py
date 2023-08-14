@@ -18,18 +18,12 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    LDMTextToImagePipeline,
-    UNet2DConditionModel, )
-from ppdiffusers.utils.testing_utils import (
-    load_numpy,
-    nightly,
-    require_paddle_gpu,
-    slow, )
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, LDMTextToImagePipeline,
+                         UNet2DConditionModel)
+from ppdiffusers.utils.testing_utils import (load_numpy, nightly,
+                                             require_paddle_gpu, slow)
 
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
@@ -95,7 +89,7 @@ class LDMTextToImagePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             "scheduler": scheduler,
             "vqvae": vae,
             "bert": text_encoder,
-            "tokenizer": tokenizer
+            "tokenizer": tokenizer,
         }
         return components
 
@@ -120,8 +114,15 @@ class LDMTextToImagePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         assert image.shape == (1, 64, 64, 3)
         image_slice = image[0, -3:, -3:, -1]
         expected_slice = np.array([
-            0.28524342, 0.23806289, 0.38151595, 0.21939021, 0.26112252,
-            0.5172909, 0.25647423, 0.25049314, 0.47979864
+            0.28524342,
+            0.23806289,
+            0.38151595,
+            0.21939021,
+            0.26112252,
+            0.5172909,
+            0.25647423,
+            0.25049314,
+            0.47979864,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
@@ -157,8 +158,15 @@ class LDMTextToImagePipelineSlowTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 256, 256, 3)
         expected_slice = np.array([
-            0.51825, 0.5285, 0.52543, 0.54258, 0.52304, 0.52569, 0.54363,
-            0.55276, 0.56878
+            0.51825,
+            0.5285,
+            0.52543,
+            0.54258,
+            0.52304,
+            0.52569,
+            0.54363,
+            0.55276,
+            0.56878,
         ])
         max_diff = np.abs(expected_slice - image_slice).max()
         assert max_diff < 0.02

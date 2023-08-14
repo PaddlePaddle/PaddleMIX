@@ -1,14 +1,32 @@
-import os
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import copy
+import os
 from typing import Union
+
+from paddlenlp.transformers.clip.configuration import (CLIPTextConfig,
+                                                       CLIPVisionConfig)
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.clip.configuration import CLIPTextConfig, CLIPVisionConfig
 
 from paddlemix.utils.log import logger
 
 __all__ = [
-    "ImageBindVisionConfig", "ImageBindTextConfig", "ImageBindConfig",
-    "ImageBindAudioConfig"
+    "ImageBindVisionConfig",
+    "ImageBindTextConfig",
+    "ImageBindConfig",
+    "ImageBindAudioConfig",
 ]
 
 
@@ -22,22 +40,23 @@ class ImageBindVisionConfig(CLIPVisionConfig):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
-    def __init__(self,
-                 hidden_size=768,
-                 intermediate_size=3072,
-                 projection_dim=512,
-                 num_hidden_layers=12,
-                 num_attention_heads=12,
-                 num_channels=3,
-                 image_size=224,
-                 patch_size=32,
-                 hidden_act="quick_gelu",
-                 layer_norm_eps=0.00001,
-                 dropout=0.0,
-                 attention_dropout=0.0,
-                 initializer_range=0.02,
-                 initializer_factor=1.0,
-                 **kwargs):
+    def __init__(
+            self,
+            hidden_size=768,
+            intermediate_size=3072,
+            projection_dim=512,
+            num_hidden_layers=12,
+            num_attention_heads=12,
+            num_channels=3,
+            image_size=224,
+            patch_size=32,
+            hidden_act="quick_gelu",
+            layer_norm_eps=0.00001,
+            dropout=0.0,
+            attention_dropout=0.0,
+            initializer_range=0.02,
+            initializer_factor=1.0,
+            **kwargs, ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
@@ -61,29 +80,30 @@ class ImageBindTextConfig(CLIPTextConfig):
 
     model_type = "imagebind_text_model"
 
-    def __init__(self,
-                 vocab_size=49408,
-                 hidden_size=512,
-                 intermediate_size=2048,
-                 projection_dim=512,
-                 num_hidden_layers=12,
-                 num_attention_heads=8,
-                 max_position_embeddings=77,
-                 hidden_act="quick_gelu",
-                 layer_norm_eps=0.00001,
-                 dropout=0.0,
-                 attention_dropout=0.0,
-                 initializer_range=0.02,
-                 initializer_factor=1.0,
-                 pad_token_id=1,
-                 bos_token_id=0,
-                 eos_token_id=2,
-                 **kwargs):
+    def __init__(
+            self,
+            vocab_size=49408,
+            hidden_size=512,
+            intermediate_size=2048,
+            projection_dim=512,
+            num_hidden_layers=12,
+            num_attention_heads=8,
+            max_position_embeddings=77,
+            hidden_act="quick_gelu",
+            layer_norm_eps=0.00001,
+            dropout=0.0,
+            attention_dropout=0.0,
+            initializer_range=0.02,
+            initializer_factor=1.0,
+            pad_token_id=1,
+            bos_token_id=0,
+            eos_token_id=2,
+            **kwargs, ):
         super().__init__(
             pad_token_id=pad_token_id,
             bos_token_id=bos_token_id,
             eos_token_id=eos_token_id,
-            **kwargs)
+            **kwargs, )
 
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
@@ -229,16 +249,17 @@ class ImageBindConfig(PretrainedConfig):
     model_type = "imagebind"
     is_composition = True
 
-    def __init__(self,
-                 text_config=None,
-                 vision_config=None,
-                 audio_config=None,
-                 depth_config=None,
-                 thermal_config=None,
-                 imu_config=None,
-                 projection_dim=512,
-                 logit_scale_init_value=2.6592,
-                 **kwargs):
+    def __init__(
+            self,
+            text_config=None,
+            vision_config=None,
+            audio_config=None,
+            depth_config=None,
+            thermal_config=None,
+            imu_config=None,
+            projection_dim=512,
+            logit_scale_init_value=2.6592,
+            **kwargs, ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
@@ -312,10 +333,11 @@ class ImageBindConfig(PretrainedConfig):
         self.initializer_factor = 1.0
 
     @classmethod
-    def from_text_vision_configs(cls,
-                                 text_config: ImageBindTextConfig,
-                                 vision_config: ImageBindVisionConfig,
-                                 **kwargs):
+    def from_text_vision_configs(
+            cls,
+            text_config: ImageBindTextConfig,
+            vision_config: ImageBindVisionConfig,
+            **kwargs, ):
         r"""
         Instantiate a [`ImageBindConfig`] (or a derived class) from clip text model configuration and clip vision model
         configuration.
@@ -324,9 +346,10 @@ class ImageBindConfig(PretrainedConfig):
             [`ImageBindConfig`]: An instance of a configuration object
         """
 
-        return cls(text_config=text_config.to_dict(),
-                   vision_config=vision_config.to_dict(),
-                   **kwargs)
+        return cls(
+            text_config=text_config.to_dict(),
+            vision_config=vision_config.to_dict(),
+            **kwargs, )
 
     def to_dict(self):
         """

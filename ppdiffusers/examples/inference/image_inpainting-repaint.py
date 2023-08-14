@@ -15,7 +15,9 @@
 from ppdiffusers import RePaintPipeline, RePaintScheduler
 from ppdiffusers.utils import load_image
 
-img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/celeba_hq_256.png"
+img_url = (
+    "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/celeba_hq_256.png"
+)
 mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/mask_256.png"
 
 # Load the original image and the mask as PIL images

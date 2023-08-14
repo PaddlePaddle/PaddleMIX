@@ -170,11 +170,11 @@ class VQDiffusionScheduler(SchedulerMixin, ConfigMixin):
         at, att = alpha_schedules(
             num_train_timesteps,
             alpha_cum_start=alpha_cum_start,
-            alpha_cum_end=alpha_cum_end)
+            alpha_cum_end=alpha_cum_end, )
         ct, ctt = gamma_schedules(
             num_train_timesteps,
             gamma_cum_start=gamma_cum_start,
-            gamma_cum_end=gamma_cum_end)
+            gamma_cum_end=gamma_cum_end, )
 
         num_non_mask_classes = self.num_embed - 1
         bt = (1 - at - ct) / num_non_mask_classes

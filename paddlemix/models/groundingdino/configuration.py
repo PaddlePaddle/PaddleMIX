@@ -14,6 +14,7 @@
 """ GroundingDino model configuration"""
 import os
 from typing import Union
+
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 __all__ = ["GroundingDinoConfig"]

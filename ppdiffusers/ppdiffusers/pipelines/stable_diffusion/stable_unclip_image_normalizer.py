@@ -39,11 +39,11 @@ class StableUnCLIPImageNormalizer(ModelMixin, ConfigMixin):
         self.mean = self.create_parameter(
             (1, embedding_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0))
+            default_initializer=nn.initializer.Constant(0.0), )
         self.std = self.create_parameter(
             (1, embedding_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(1.0))
+            default_initializer=nn.initializer.Constant(1.0), )
 
     def to(
             self,
@@ -59,7 +59,7 @@ class StableUnCLIPImageNormalizer(ModelMixin, ConfigMixin):
                 self.std.shape,
                 dtype=dtype,
                 default_initializer=paddle.nn.initializer.Assign(self.std.numpy(
-                )))
+                )), )
         if device is not None:
             self.mean._to(device)
             self.std._to(device)

@@ -15,17 +15,10 @@ import itertools
 import os
 
 import paddle
-
-from sd import (
-    SDDataArguments,
-    SDModelArguments,
-    SDTrainingArguments,
-    StableDiffusionModel,
-    StableDiffusionTrainer,
-    TextImagePair, )
-
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint, set_seed
 from paddlenlp.utils.log import logger
+from sd import (SDDataArguments, SDModelArguments, SDTrainingArguments,
+                StableDiffusionModel, StableDiffusionTrainer, TextImagePair)
 
 
 def main():
@@ -39,16 +32,16 @@ def main():
 
     # Detecting last checkpoint.
     last_checkpoint = None
-    if os.path.isdir(
-            training_args.output_dir
-    ) and training_args.do_train and not training_args.overwrite_output_dir:
+    if (os.path.isdir(training_args.output_dir) and training_args.do_train and
+            not training_args.overwrite_output_dir):
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
         if last_checkpoint is None and len(
                 os.listdir(training_args.output_dir)) > 0:
             raise ValueError(
                 f"Output directory ({training_args.output_dir}) already exists and is not empty. "
                 "Use --overwrite_output_dir to overcome.")
-        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+        elif (last_checkpoint is not None and
+              training_args.resume_from_checkpoint is None):
             logger.info(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
@@ -69,7 +62,7 @@ def main():
         pixel_values = paddle.static.InputSpec(
             name="pixel_values",
             shape=[-1, 3, training_args.resolution, training_args.resolution],
-            dtype="float32")
+            dtype="float32", )
         specs = [input_ids, pixel_values]
         paddle.jit.ignore_module([os])
         model = paddle.jit.to_static(model, input_spec=specs)

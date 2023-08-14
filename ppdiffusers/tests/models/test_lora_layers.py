@@ -18,13 +18,10 @@ import unittest
 
 import paddle
 import paddle.nn as nn
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    StableDiffusionPipeline,
-    UNet2DConditionModel, )
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, StableDiffusionPipeline,
+                         UNet2DConditionModel)
 from ppdiffusers.loaders import AttnProcsLayers, LoraLoaderMixin
 from ppdiffusers.models.attention_processor import LoRAAttnProcessor
 from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE, floats_tensor
@@ -33,8 +30,8 @@ from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE, floats_tensor
 def create_unet_lora_layers(unet: nn.Layer):
     lora_attn_procs = {}
     for name in unet.attn_processors.keys():
-        cross_attention_dim = None if name.endswith(
-            "attn1.processor") else unet.config.cross_attention_dim
+        cross_attention_dim = (None if name.endswith("attn1.processor") else
+                               unet.config.cross_attention_dim)
         if name.startswith("mid_block"):
             hidden_size = unet.config.block_out_channels[-1]
         elif name.startswith("up_blocks"):

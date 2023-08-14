@@ -38,7 +38,7 @@ def argsparser():
         "--image_dir",
         type=str,
         default=None,
-        help="Dir of image file, `image_file` has a higher priority.")
+        help="Dir of image file, `image_file` has a higher priority.", )
     parser.add_argument(
         "--keypoint_batch_size",
         type=int,
@@ -68,12 +68,12 @@ def argsparser():
         "--output_dir",
         type=str,
         default="output",
-        help="Directory of output visualization files.")
+        help="Directory of output visualization files.", )
     parser.add_argument(
         "--run_mode",
         type=str,
         default="paddle",
-        help="mode of running(paddle/trt_fp32/trt_fp16/trt_int8)")
+        help="mode of running(paddle/trt_fp32/trt_fp16/trt_int8)", )
     parser.add_argument(
         "--device",
         type=str,
@@ -89,7 +89,7 @@ def argsparser():
         "--enable_mkldnn",
         type=ast.literal_eval,
         default=False,
-        help="Whether use mkldnn with CPU.")
+        help="Whether use mkldnn with CPU.", )
     parser.add_argument(
         "--cpu_threads", type=int, default=1, help="Num of threads with CPU.")
     parser.add_argument(

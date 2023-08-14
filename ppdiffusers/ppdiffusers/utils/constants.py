@@ -61,7 +61,8 @@ FASTDEPLOY_WEIGHTS_NAME = "inference.pdiparams"
 FASTDEPLOY_MODEL_NAME = "inference.pdmodel"
 WEIGHTS_NAME = PADDLE_WEIGHTS_NAME
 
-TEST_DOWNLOAD_SERVER = "https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/tests"
+TEST_DOWNLOAD_SERVER = (
+    "https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/tests")
 DOWNLOAD_SERVER = "https://bj.bcebos.com/paddlenlp/models/community"
 PPNLP_BOS_RESOLVE_ENDPOINT = os.getenv("PPNLP_ENDPOINT",
                                        "https://bj.bcebos.com/paddlenlp")

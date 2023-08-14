@@ -15,10 +15,10 @@
 Various positional encodings for the transformer.
 """
 import math
-from matplotlib.pyplot import axis
 
 import paddle
 import paddle.nn as nn
+from matplotlib.pyplot import axis
 from paddlenlp.utils.initializer import uniform_
 
 
@@ -28,12 +28,13 @@ class PositionEmbeddingSineHW(nn.Layer):
     used by the Attention is all you need paper, generalized to work on images.
     """
 
-    def __init__(self,
-                 num_pos_feats=64,
-                 temperatureH=10000,
-                 temperatureW=10000,
-                 normalize=False,
-                 scale=None):
+    def __init__(
+            self,
+            num_pos_feats=64,
+            temperatureH=10000,
+            temperatureW=10000,
+            normalize=False,
+            scale=None, ):
         super().__init__()
         self.num_pos_feats = num_pos_feats
         self.temperatureH = temperatureH
@@ -60,13 +61,15 @@ class PositionEmbeddingSineHW(nn.Layer):
             x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
         dim_tx = paddle.arange(self.num_pos_feats)
-        dim_tx = self.temperatureW**(2 * (paddle.floor_divide(
-            dim_tx, paddle.to_tensor(2))) / self.num_pos_feats)
+        dim_tx = self.temperatureW**(
+            2 * (paddle.floor_divide(dim_tx, paddle.to_tensor(2))) /
+            self.num_pos_feats)
         pos_x = x_embed[:, :, :, None] / dim_tx
 
         dim_ty = paddle.arange(self.num_pos_feats)
-        dim_ty = self.temperatureH**(2 * (paddle.floor_divide(
-            dim_ty, paddle.to_tensor(2))) / self.num_pos_feats)
+        dim_ty = self.temperatureH**(
+            2 * (paddle.floor_divide(dim_ty, paddle.to_tensor(2))) /
+            self.num_pos_feats)
         pos_y = y_embed[:, :, :, None] / dim_ty
 
         pos_x = paddle.stack(

@@ -19,12 +19,13 @@ PPMIX_HOME              -->  the root directory for storing PaddleMIX related da
 └─ DATA_HOME         -->  Store automatically downloaded datasets.
 """
 import os
-import paddle
-import numpy as np
 import random
-from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+
+import numpy as np
+import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 
 
 def _get_user_home():
@@ -90,7 +91,7 @@ ENABLE_TORCH_CHECKPOINT = _get_bool_env("ENABLE_TORCH_CHECKPOINT", "true")
 
 def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
     device_id = paddle.device.get_device()
-    assert 'gpu' in device_id
+    assert "gpu" in device_id
 
     random.seed(basic_seed + data_world_rank)
     np.random.seed(basic_seed + data_world_rank)
@@ -130,7 +131,8 @@ def setdistenv(args):
         args.dp_rank = hcg.get_data_parallel_rank()
         args.sharding_rank = hcg.get_sharding_parallel_rank()
 
-        args.data_world_rank = args.dp_rank * args.sharding_parallel_degree + args.sharding_rank
+        args.data_world_rank = (
+            args.dp_rank * args.sharding_parallel_degree + args.sharding_rank)
         args.data_world_size = dist.get_world_size() // abs(
             args.tensor_parallel_degree * args.pipeline_parallel_degree)
     else:

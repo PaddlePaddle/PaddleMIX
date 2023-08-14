@@ -42,7 +42,10 @@ class PNDMSchedulerTest(SchedulerCommonTest):
         sample = self.dummy_sample
         residual = 0.1 * sample
         dummy_past_residuals = [
-            residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05
+            residual + 0.2,
+            residual + 0.15,
+            residual + 0.1,
+            residual + 0.05,
         ]
 
         for scheduler_class in self.scheduler_classes:
@@ -64,16 +67,16 @@ class PNDMSchedulerTest(SchedulerCommonTest):
             new_output = new_scheduler.step_prk(residual, time_step, sample,
                                                 **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
             output = scheduler.step_plms(residual, time_step, sample,
                                          **kwargs).prev_sample
             new_output = new_scheduler.step_plms(residual, time_step, sample,
                                                  **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
     def test_from_save_pretrained(self):
         pass
@@ -84,7 +87,10 @@ class PNDMSchedulerTest(SchedulerCommonTest):
         sample = self.dummy_sample
         residual = 0.1 * sample
         dummy_past_residuals = [
-            residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05
+            residual + 0.2,
+            residual + 0.15,
+            residual + 0.1,
+            residual + 0.05,
         ]
 
         for scheduler_class in self.scheduler_classes:
@@ -109,16 +115,16 @@ class PNDMSchedulerTest(SchedulerCommonTest):
             new_output = new_scheduler.step_prk(residual, time_step, sample,
                                                 **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
             output = scheduler.step_plms(residual, time_step, sample,
                                          **kwargs).prev_sample
             new_output = new_scheduler.step_plms(residual, time_step, sample,
                                                  **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
     def full_loop(self, **config):
         scheduler_class = self.scheduler_classes[0]
@@ -161,7 +167,10 @@ class PNDMSchedulerTest(SchedulerCommonTest):
 
             # copy over dummy past residuals (must be done after set_timesteps)
             dummy_past_residuals = [
-                residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05
+                residual + 0.2,
+                residual + 0.15,
+                residual + 0.1,
+                residual + 0.05,
             ]
             scheduler.ets = dummy_past_residuals[:]
 
@@ -196,8 +205,25 @@ class PNDMSchedulerTest(SchedulerCommonTest):
         assert paddle.equal_all(
             scheduler.timesteps,
             paddle.to_tensor([
-                901, 851, 851, 801, 801, 751, 751, 701, 701, 651, 651, 601, 601,
-                501, 401, 301, 201, 101, 1
+                901,
+                851,
+                851,
+                801,
+                801,
+                751,
+                751,
+                701,
+                701,
+                651,
+                651,
+                601,
+                601,
+                501,
+                401,
+                301,
+                201,
+                101,
+                1,
             ]), )
 
     def test_betas(self):

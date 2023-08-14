@@ -12,19 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
-import numpy as np
 from typing import Any, Optional, Tuple, Type
+
+import numpy as np
+import paddle
+
 from .common import LayerNorm2d
 
 
 class PromptEncoder(paddle.nn.Layer):
-    def __init__(self,
-                 embed_dim: int,
-                 image_embedding_size: Tuple[int, int],
-                 input_image_size: Tuple[int, int],
-                 mask_in_chans: int,
-                 activation: Type[paddle.nn.Layer]=paddle.nn.GELU) -> None:
+    def __init__(
+            self,
+            embed_dim: int,
+            image_embedding_size: Tuple[int, int],
+            input_image_size: Tuple[int, int],
+            mask_in_chans: int,
+            activation: Type[paddle.nn.Layer]=paddle.nn.GELU, ) -> None:
         """
         Encodes prompts for input to SAM's mask decoder.
 
@@ -65,13 +68,13 @@ class PromptEncoder(paddle.nn.Layer):
                 in_channels=mask_in_chans // 4,
                 out_channels=mask_in_chans,
                 kernel_size=2,
-                stride=2),
+                stride=2, ),
             LayerNorm2d(mask_in_chans),
             activation(),
             paddle.nn.Conv2D(
                 in_channels=mask_in_chans,
                 out_channels=embed_dim,
-                kernel_size=1))
+                kernel_size=1), )
         self.no_mask_embed = paddle.nn.Embedding(1, embed_dim)
 
     def get_dense_pe(self) -> paddle.Tensor:
@@ -91,7 +94,7 @@ class PromptEncoder(paddle.nn.Layer):
                       pad: bool) -> paddle.Tensor:
         """Embeds point prompts."""
         points = points + 0.5
-        points = points.cast('float32')
+        points = points.cast("float32")
         if pad:
             padding_point = paddle.zeros(shape=(points.shape[0], 1, 2))
             padding_label = -paddle.ones(shape=(labels.shape[0], 1))
@@ -125,10 +128,11 @@ class PromptEncoder(paddle.nn.Layer):
         mask_embedding = self.mask_downscaling(masks)
         return mask_embedding
 
-    def _get_batch_size(self,
-                        points: Optional[Tuple[paddle.Tensor, paddle.Tensor]],
-                        boxes: Optional[paddle.Tensor],
-                        masks: Optional[paddle.Tensor]) -> int:
+    def _get_batch_size(
+            self,
+            points: Optional[Tuple[paddle.Tensor, paddle.Tensor]],
+            boxes: Optional[paddle.Tensor],
+            masks: Optional[paddle.Tensor], ) -> int:
         """
         Gets the batch size of the output given the batch size of the input prompts.
         """
@@ -144,11 +148,12 @@ class PromptEncoder(paddle.nn.Layer):
     def _get_device(self):
         return self.point_embeddings[0].weight.place
 
-    def forward(self,
-                points: Optional[Tuple[paddle.Tensor, paddle.Tensor]],
-                boxes: Optional[paddle.Tensor],
-                masks: Optional[paddle.Tensor]) -> Tuple[paddle.Tensor,
-                                                         paddle.Tensor]:
+    def forward(
+            self,
+            points: Optional[Tuple[paddle.Tensor, paddle.Tensor]],
+            boxes: Optional[paddle.Tensor],
+            masks: Optional[paddle.Tensor], ) -> Tuple[paddle.Tensor,
+                                                       paddle.Tensor]:
         """
         Embeds different types of prompts, returning both sparse and dense
         embeddings.
@@ -183,8 +188,10 @@ class PromptEncoder(paddle.nn.Layer):
         else:
             dense_embeddings = self.no_mask_embed.weight.reshape(
                 [1, -1, 1, 1]).expand(shape=[
-                    bs, -1, self.image_embedding_size[0],
-                    self.image_embedding_size[1]
+                    bs,
+                    -1,
+                    self.image_embedding_size[0],
+                    self.image_embedding_size[1],
                 ])
         return sparse_embeddings, dense_embeddings
 
@@ -200,8 +207,8 @@ class PositionEmbeddingRandom(paddle.nn.Layer):
         if scale is None or scale <= 0.0:
             scale = 1.0
         self.register_buffer(
-            'positional_encoding_gaussian_matrix',
-            scale * paddle.randn(shape=(2, num_pos_feats)))
+            "positional_encoding_gaussian_matrix",
+            scale * paddle.randn(shape=(2, num_pos_feats)), )
 
     def _pe_encoding(self, coords: paddle.Tensor) -> paddle.Tensor:
         """Positionally encode points that are normalized to [0,1]."""
@@ -215,7 +222,7 @@ class PositionEmbeddingRandom(paddle.nn.Layer):
         """Generate positional encoding for a grid of the specified size."""
         h, w = size
         device: Any = self.positional_encoding_gaussian_matrix.place
-        grid = paddle.ones(shape=(h, w), dtype='float32')
+        grid = paddle.ones(shape=(h, w), dtype="float32")
         y_embed = grid.cumsum(axis=0) - 0.5
         x_embed = grid.cumsum(axis=1) - 0.5
         y_embed = y_embed / h
@@ -231,4 +238,4 @@ class PositionEmbeddingRandom(paddle.nn.Layer):
         coords[:, :, (0)] = coords[:, :, (0)] / image_size[1]
         coords[:, :, (1)] = coords[:, :, (1)] / image_size[0]
 
-        return self._pe_encoding(coords.astype('float32'))
+        return self._pe_encoding(coords.astype("float32"))

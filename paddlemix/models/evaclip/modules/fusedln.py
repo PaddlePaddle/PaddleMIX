@@ -54,17 +54,18 @@ def check_normalized_shape(normalized_shape):
 
 
 class FusedLayerNorm(OriginLayerNorm):
-    def __init__(self,
-                 normalized_shape,
-                 epsilon=1e-05,
-                 weight_attr=None,
-                 bias_attr=None,
-                 name=None):
+    def __init__(
+            self,
+            normalized_shape,
+            epsilon=1e-05,
+            weight_attr=None,
+            bias_attr=None,
+            name=None, ):
         super().__init__(
             normalized_shape=normalized_shape,
             epsilon=epsilon,
             weight_attr=weight_attr,
-            bias_attr=bias_attr)
+            bias_attr=bias_attr, )
         check_normalized_shape(self._normalized_shape)
 
     def forward(self, input):
@@ -72,17 +73,18 @@ class FusedLayerNorm(OriginLayerNorm):
 
 
 class FastLayerNorm(OriginLayerNorm):
-    def __init__(self,
-                 normalized_shape,
-                 epsilon=1e-05,
-                 weight_attr=None,
-                 bias_attr=None,
-                 name=None):
+    def __init__(
+            self,
+            normalized_shape,
+            epsilon=1e-05,
+            weight_attr=None,
+            bias_attr=None,
+            name=None, ):
         super().__init__(
             normalized_shape=normalized_shape,
             epsilon=epsilon,
             weight_attr=weight_attr,
-            bias_attr=bias_attr)
+            bias_attr=bias_attr, )
         check_normalized_shape(self._normalized_shape)
 
     def forward(self, input):

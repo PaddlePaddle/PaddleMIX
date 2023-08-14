@@ -11,13 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import paddlemix
-from paddlenlp.trainer.trainer import Trainer
-from paddlemix.optimization import FilterParamsName
-from paddlemix.examples.blip2.utils import coco_caption_eval
-
 import contextlib
 import inspect
+import json
 import math
 import os
 import sys
@@ -30,19 +26,22 @@ import paddle.amp.auto_cast as autocast
 import paddle.nn as nn
 from paddle.distributed import fleet
 from paddle.io import DataLoader, Dataset, DistributedBatchSampler
-
-from paddlenlp.transformers.model_utils import unwrap_model
-from paddlenlp.utils import device_guard
-from paddlenlp.utils.batch_sampler import DistributedBatchSampler as NlpDistributedBatchSampler
-from paddlenlp.utils.import_utils import is_datasets_available
-from paddlenlp.utils.log import logger
-from paddlenlp.trainer.trainer_callback import (
-    DefaultFlowCallback,
-    ProgressCallback, )
+from paddlenlp.trainer.trainer import Trainer
+from paddlenlp.trainer.trainer_callback import (DefaultFlowCallback,
+                                                ProgressCallback)
 from paddlenlp.trainer.trainer_utils import (  # set_hyrbid_parallel_seed,
     EvalLoopOutput, EvalPrediction, IterableDatasetShard, ShardingOption,
-    find_batch_size, has_length, speed_metrics, )
-import json
+    find_batch_size, has_length, speed_metrics)
+from paddlenlp.transformers.model_utils import unwrap_model
+from paddlenlp.utils import device_guard
+from paddlenlp.utils.batch_sampler import \
+    DistributedBatchSampler as NlpDistributedBatchSampler
+from paddlenlp.utils.import_utils import is_datasets_available
+from paddlenlp.utils.log import logger
+
+import paddlemix
+from paddlemix.examples.blip2.utils import coco_caption_eval
+from paddlemix.optimization import FilterParamsName
 
 DEFAULT_CALLBACKS = [DefaultFlowCallback]
 DEFAULT_PROGRESS_CALLBACK = ProgressCallback
@@ -92,7 +91,8 @@ class BLIP2Trainer(Trainer):
 
     """
 
-    from paddlenlp.trainer.trainer_utils import log_metrics, metrics_format, save_metrics, save_state
+    from paddlenlp.trainer.trainer_utils import (log_metrics, metrics_format,
+                                                 save_metrics, save_state)
 
     def __init__(self,
                  processor=None,
@@ -191,7 +191,7 @@ class BLIP2Trainer(Trainer):
                 decorated = paddle.amp.decorate(
                     models=[model.visual_encoder, model.language_model],
                     optimizers=self.optimizer,
-                    level="O2")
+                    level="O2", )
                 model.visual_encoder, model.language_model = decorated[0]
             else:
                 decorated = paddle.amp.decorate(
@@ -204,7 +204,9 @@ class BLIP2Trainer(Trainer):
         # Multi-gpu training
         if self.args.world_size > 1 and not self.args.use_hybrid_parallel:
             model = paddle.DataParallel(model)
-            assert self.args.tensor_parallel_degree < 2, "tensor_parallel_degree = {}, pelease init optimizer.".format(
+            assert (
+                self.args.tensor_parallel_degree < 2
+            ), "tensor_parallel_degree = {}, pelease init optimizer.".format(
                 self.args.tensor_parallel_degree)
         in_pipeline_parallel_mode = self.args.pipeline_parallel_degree > 1
         in_sharding_parallel_mode = self.sharding is not None
@@ -258,7 +260,9 @@ class BLIP2Trainer(Trainer):
                 )
                 model._prepare_pipeline_inputs_func = _prepare_pipeline_inputs_func
 
-            assert self.optimizer is not None, "Pipeline mode need decorate optimizer, pelease init optimizer."
+            assert (
+                self.optimizer is not None
+            ), "Pipeline mode need decorate optimizer, pelease init optimizer."
             if self.args.amp_master_grad:
                 self.optimizer = mix_precision_utils.MixPrecisionOptimizer(
                     self.optimizer)
@@ -281,13 +285,15 @@ class BLIP2Trainer(Trainer):
                 self.optimizer = fleet.distributed_optimizer(self.optimizer)
             else:
                 # sync params (broadcast) buffers in dp group
-                if not is_dp_group_support_in_group_sharded_parallel(
-                ) and self.args.data_parallel_degree > 1:
+                if (not is_dp_group_support_in_group_sharded_parallel() and
+                        self.args.data_parallel_degree > 1):
                     try:
-                        from paddle.fluid.dygraph.parallel import sync_params_buffers
+                        from paddle.fluid.dygraph.parallel import \
+                            sync_params_buffers
                     except ImportError:
                         # fix for new api in paddlepaddle v2.5
-                        from paddle.distributed.parallel import sync_params_buffers
+                        from paddle.distributed.parallel import \
+                            sync_params_buffers
 
                     hcg = fleet.get_hybrid_communicate_group()
                     dp_group = hcg.get_data_parallel_group()
@@ -322,13 +328,16 @@ class BLIP2Trainer(Trainer):
                 self.optimizer = optimizer
 
         # pure tesnor parallel mode, no pipeline_parallel, no sharding.
-        if not in_pipeline_parallel_mode and not in_sharding_parallel_mode and in_tensor_parallel_model:
+        if (not in_pipeline_parallel_mode and not in_sharding_parallel_mode and
+                in_tensor_parallel_model):
             if self.args.amp_master_grad:
                 mix_precision_utils.MixPrecisionLayer(
                     model, dtype=self.amp_dtype)  # return value has no use
 
             model = fleet.distributed_model(model)
-            assert self.optimizer is not None, "Tensor parallel mode need decorate optimizer, pelease init optimizer."
+            assert (
+                self.optimizer is not None
+            ), "Tensor parallel mode need decorate optimizer, pelease init optimizer."
             if self.args.amp_master_grad:
                 self.optimizer = mix_precision_utils.MixPrecisionOptimizer(
                     self.optimizer)
@@ -343,8 +352,9 @@ class BLIP2Trainer(Trainer):
         if self.enable_autocast_context_manager:
             ctx_manager = autocast(True, )
         else:
-            ctx_manager = contextlib.nullcontext() if sys.version_info >= (
-                3, 7) else contextlib.suppress()
+            ctx_manager = (contextlib.nullcontext()
+                           if sys.version_info >= (3, 7) else
+                           contextlib.suppress())
 
         return ctx_manager
 
@@ -380,7 +390,7 @@ class BLIP2Trainer(Trainer):
         # memory metrics - must set up as early as possible
         self._memory_tracker.start()
         if isinstance(eval_dataset, dict):
-            eval_dataset = eval_dataset['test']
+            eval_dataset = eval_dataset["test"]
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
         start_time = time.time()
 
@@ -419,7 +429,9 @@ class BLIP2Trainer(Trainer):
         """
         args = self.args
 
-        prediction_loss_only = prediction_loss_only if prediction_loss_only is not None else args.prediction_loss_only
+        prediction_loss_only = (prediction_loss_only
+                                if prediction_loss_only is not None else
+                                args.prediction_loss_only)
 
         model = self.model
 
@@ -502,7 +514,7 @@ class BLIP2Trainer(Trainer):
         with paddle.no_grad():
             # with paddle.amp.auto_cast(level='O2'):
             model_inputs = self.eval_processor(
-                text=[""] * inputs['pixel_values'].shape[0],
+                text=[""] * inputs["pixel_values"].shape[0],
                 return_tensors="pd",
                 return_attention_mask=True,
                 mode="test", )
@@ -511,7 +523,7 @@ class BLIP2Trainer(Trainer):
             generated_text = self.processor.batch_decode(
                 generated_ids, skip_special_tokens=True)
             generated_text = [text.strip() for text in generated_text]
-            for caption, img_id in zip(generated_text, inputs['image_id']):
+            for caption, img_id in zip(generated_text, inputs["image_id"]):
                 results.append({"caption": caption, "image_id": int(img_id)})
         return results
 
@@ -519,9 +531,9 @@ class BLIP2Trainer(Trainer):
         eval_result_file = self.save_result(
             result=val_result,
             result_dir=self.args.output_dir + "/result",
-            filename="{}_epoch{}".format('eval', 'eval'),
+            filename="{}_epoch{}".format("eval", "eval"),
             remove_duplicate="image_id",
-            world_size=self.args.world_size)
+            world_size=self.args.world_size, )
 
         metrics = self._report_metrics(eval_result_file=eval_result_file)
 
@@ -534,10 +546,12 @@ class BLIP2Trainer(Trainer):
                     remove_duplicate="",
                     world_size=1):
         import logging
+
         rank_id_curr_node = int(os.environ.get("PADDLE_RANK_IN_NODE", 0))
         result_file = os.path.join(result_dir, "%s_rank%d.json" %
                                    (filename, rank_id_curr_node))
-        if not os.path.exists(result_dir): os.mkdir(result_dir)
+        if not os.path.exists(result_dir):
+            os.mkdir(result_dir)
         json.dump(result, open(result_file, "w"))
 
         final_result_file = os.path.join(result_dir, "%s.json" % filename)
@@ -577,7 +591,7 @@ class BLIP2Trainer(Trainer):
     def _report_metrics(self, eval_result_file, split_name="test"):
 
         # TODO better way to define this
-        coco_gt_root = os.path.join('/export/home/.cache/lavis', "coco_gt")
+        coco_gt_root = os.path.join("/export/home/.cache/lavis", "coco_gt")
         coco_val = coco_caption_eval(coco_gt_root, eval_result_file, split_name)
 
         agg_metrics = coco_val.eval["CIDEr"] + coco_val.eval["Bleu_4"]

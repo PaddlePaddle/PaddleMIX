@@ -1,12 +1,28 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import math
+import warnings
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddlenlp.taskflow.utils import pad_batch_data
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-import math
-import numpy as np
-import warnings
-from paddlenlp.transformers.bert.modeling import BaseModelOutputWithPoolingAndCrossAttentions
+from paddlenlp.transformers.bert.modeling import \
+    BaseModelOutputWithPoolingAndCrossAttentions
 
 
 class GELUActivation(nn.Layer):
@@ -55,8 +71,9 @@ class BertSelfAttention(nn.Layer):
         self.is_decoder = config.is_decoder
 
     def transpose_for_scores(self, x):
-        new_x_shape = tuple(x.shape[:-1]) + (self.num_attention_heads,
-                                             self.attention_head_size)
+        new_x_shape = tuple(x.shape[:-1]) + (
+            self.num_attention_heads,
+            self.attention_head_size, )
         x = x.reshape(new_x_shape)
         return x.transpose([0, 2, 1, 3])
 
@@ -130,8 +147,8 @@ class BertSelfAttention(nn.Layer):
             self.all_head_size, )
         context_layer = context_layer.reshape(new_context_layer_shape)
 
-        outputs = (context_layer, attention_probs) if output_attentions else (
-            context_layer, )
+        outputs = ((context_layer, attention_probs)
+                   if output_attentions else (context_layer, ))
 
         if self.is_decoder:
             outputs = outputs + (past_key_value, )
@@ -180,7 +197,7 @@ class BertAttention(nn.Layer):
             encoder_hidden_states,
             encoder_attention_mask,
             past_key_value,
-            output_attentions, )  #pass    
+            output_attentions, )  # pass
         # return self_outputs
         attention_output = self.output(self_outputs[0], hidden_states)
         outputs = (attention_output,
@@ -238,12 +255,12 @@ class BertEmbeddings(nn.Layer):
             config, "position_embedding_type", "absolute")
         self.register_buffer(
             "position_ids",
-            paddle.arange(config.max_position_embeddings).reshape((1, -1)))
+            paddle.arange(config.max_position_embeddings).reshape((1, -1)), )
         self.register_buffer(
             "token_type_ids",
             paddle.zeros(
                 self.position_ids.shape, dtype=paddle.int64),
-            persistable=False)
+            persistable=False, )
 
     def forward(
             self,
@@ -315,8 +332,8 @@ class BertLayer(nn.Layer):
             past_key_value=None,
             output_attentions=False, ):
 
-        self_attn_past_key_value = past_key_value[:
-                                                  2] if past_key_value is not None else None
+        self_attn_past_key_value = (past_key_value[:2]
+                                    if past_key_value is not None else None)
         self_attention_outputs = self.attention(
             hidden_states,
             attention_mask,
@@ -340,8 +357,8 @@ class BertLayer(nn.Layer):
                     f"If `encoder_hidden_states` are passed, {self} has to be instantiated with cross-attention layers"
                     " by setting `config.add_cross_attention=True`")
 
-            cross_attn_past_key_value = past_key_value[
-                -2:] if past_key_value is not None else None
+            cross_attn_past_key_value = (past_key_value[-2:] if
+                                         past_key_value is not None else None)
             cross_attention_outputs = self.crossattention(
                 attention_output,
                 attention_mask,
@@ -393,8 +410,8 @@ class BertEncoder(nn.Layer):
             return_dict=True, ):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
-        all_cross_attentions = (
-        ) if output_attentions and self.config.add_cross_attention else None
+        all_cross_attentions = (() if output_attentions and
+                                self.config.add_cross_attention else None)
 
         next_decoder_cache = () if use_cache else None
         for i, layer_module in enumerate(self.layer):
@@ -492,11 +509,12 @@ class BertModel(nn.Layer):
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
 
-    def get_extended_attention_mask(self,
-                                    attention_mask: paddle.Tensor,
-                                    input_shape: Tuple[int],
-                                    device: str=None,
-                                    dtype: np.float=None) -> paddle.Tensor:
+    def get_extended_attention_mask(
+            self,
+            attention_mask: paddle.Tensor,
+            input_shape: Tuple[int],
+            device: str=None,
+            dtype: np.float=None, ) -> paddle.Tensor:
         if dtype is None:
             dtype = np.float32
 
@@ -505,7 +523,7 @@ class BertModel(nn.Layer):
             if device is not None:
                 warnings.warn(
                     "The `device` argument is deprecated and will be removed in v5 of Transformers.",
-                    FutureWarning)
+                    FutureWarning, )
 
         if attention_mask.dim() == 3:
             extended_attention_mask = attention_mask[:, None, :, :]
@@ -565,11 +583,13 @@ class BertModel(nn.Layer):
             If set to `True`, `past_key_values` key value states are returned and can be used to speed up decoding (see
             `past_key_values`).
         """
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (output_attentions if output_attentions is not None
+                             else self.config.output_attentions)
         output_hidden_states = (output_hidden_states
                                 if output_hidden_states is not None else
                                 self.config.output_hidden_states)
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (return_dict if return_dict is not None else
+                       self.config.use_return_dict)
 
         if self.config.is_decoder:
             use_cache = use_cache if use_cache is not None else self.config.use_cache
@@ -591,8 +611,8 @@ class BertModel(nn.Layer):
         batch_size, seq_length = input_shape
 
         # past_key_values_length
-        past_key_values_length = past_key_values[0][0].shape[
-            2] if past_key_values is not None else 0
+        past_key_values_length = (past_key_values[0][0].shape[2]
+                                  if past_key_values is not None else 0)
 
         if attention_mask is None:
             attention_mask = paddle.ones((
@@ -643,8 +663,8 @@ class BertModel(nn.Layer):
             return_dict=return_dict, )
         # return encoder_outputs
         sequence_output = encoder_outputs[0]
-        pooled_output = self.pooler(
-            sequence_output) if self.pooler is not None else None
+        pooled_output = (self.pooler(sequence_output)
+                         if self.pooler is not None else None)
 
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
@@ -663,9 +683,11 @@ class language_model(nn.Layer):
         super().__init__()
         self.cfg = cfg
         self.bert_name = cfg.MODEL.LANGUAGE_BACKBONE.MODEL_TYPE
-        print("LANGUAGE BACKBONE USE GRADIENT CHECKPOINTING: ",
-              self.cfg.MODEL.LANGUAGE_BACKBONE.USE_CHECKPOINT)
-        bert_config.gradient_checkpointing = self.cfg.MODEL.LANGUAGE_BACKBONE.USE_CHECKPOINT
+        print(
+            "LANGUAGE BACKBONE USE GRADIENT CHECKPOINTING: ",
+            self.cfg.MODEL.LANGUAGE_BACKBONE.USE_CHECKPOINT, )
+        bert_config.gradient_checkpointing = (
+            self.cfg.MODEL.LANGUAGE_BACKBONE.USE_CHECKPOINT)
 
         self.model = BertModel(bert_config)
         self.language_dim = 768
@@ -692,13 +714,13 @@ class language_model(nn.Layer):
 
             embedded = paddle.cast(features * mask.unsqueeze(-1),
                                    paddle.float32)
-            aggregate = embedded.sum(1) / (paddle.cast(
-                mask.sum(-1).unsqueeze(-1), paddle.float32))
+            aggregate = embedded.sum(1) / (
+                paddle.cast(mask.sum(-1).unsqueeze(-1), paddle.float32))
 
         ret = {
             "aggregate": aggregate,
             "embedded": embedded,
             "masks": mask,
-            "hidden": encoded_layers[-1]
+            "hidden": encoded_layers[-1],
         }
         return ret

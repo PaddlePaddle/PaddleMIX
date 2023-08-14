@@ -1,27 +1,42 @@
-import paddle
-from itertools import repeat
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import collections
+from itertools import repeat
+
+import paddle
 
 
-def params_normal_(tensor, mean=0., std=1.):
+def params_normal_(tensor, mean=0.0, std=1.0):
     origin_dtype = paddle.get_default_dtype()
     paddle.set_default_dtype("float32")
     with paddle.no_grad():
         normal = paddle.normal(mean=mean, std=std, shape=tensor.shape)
-        if origin_dtype != 'float32':
+        if origin_dtype != "float32":
             normal = normal.astype(origin_dtype)
         tensor.set_value(normal)
     paddle.set_default_dtype(origin_dtype)
     return tensor
 
 
-def trunc_normal_(tensor, mean=0., std=1., min=-2, max=2):
+def trunc_normal_(tensor, mean=0.0, std=1.0, min=-2, max=2):
     origin_dtype = paddle.get_default_dtype()
     paddle.set_default_dtype("float32")
     with paddle.no_grad():
         normal = paddle.normal(mean=mean, std=std, shape=tensor.shape)
         trunc = paddle.clip(normal, min=min, max=max)
-        if origin_dtype != 'float32':
+        if origin_dtype != "float32":
             trunc = trunc.astype(origin_dtype)
         tensor.set_value(trunc)
     paddle.set_default_dtype(origin_dtype)
@@ -72,7 +87,7 @@ def clip_grad_norm_(parameters,
     max_norm = float(max_norm)
     norm_type = float(norm_type)
     if len(grads) == 0:
-        return paddle.to_tensor([0.])
+        return paddle.to_tensor([0.0])
     if norm_type == float("inf"):
         norms = [g.detach().abs().max() for g in grads]
         total_norm = norms[0] if len(norms) == 1 else paddle.max(
@@ -84,10 +99,10 @@ def clip_grad_norm_(parameters,
     if error_if_nonfinite and paddle.logical_or(total_norm.isnan(),
                                                 total_norm.isinf()):
         raise RuntimeError(
-            f'The total norm of order {norm_type} for gradients from '
-            '`parameters` is non-finite, so it cannot be clipped. To disable '
-            'this error and scale the gradients by the non-finite norm anyway, '
-            'set `error_if_nonfinite=False`')
+            f"The total norm of order {norm_type} for gradients from "
+            "`parameters` is non-finite, so it cannot be clipped. To disable "
+            "this error and scale the gradients by the non-finite norm anyway, "
+            "set `error_if_nonfinite=False`")
     clip_coef = max_norm / (total_norm + 1e-6)
     # Note: multiplying by the clamped coef is redundant when the coef is clamped to 1, but doing so
     # avoids a `if clip_coef < 1:` conditional which can require a CPU <=> device synchronization

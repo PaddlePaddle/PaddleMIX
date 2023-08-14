@@ -22,7 +22,8 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
+from .scheduling_utils import (KarrasDiffusionSchedulers, SchedulerMixin,
+                               SchedulerOutput)
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
@@ -152,7 +153,7 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype=paddle.float32)**2)
+                dtype=paddle.float32, )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -264,9 +265,9 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
             )  # When clip to min=1, equivalent to standard clipping to [-1, 1]
         s = s.unsqueeze(
             1)  # (batch_size, 1) because clip will broadcast along axis=0
-        sample = paddle.clip(
-            sample, -s, s
-        ) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
+        sample = (
+            paddle.clip(sample, -s, s) /
+            s)  # "we threshold xt0 to the range [-s, s] and then divide by s"
 
         sample = paddle.reshape(sample, [batch_size, channels, height, width])
         sample = paddle.cast(sample, dtype)
@@ -281,9 +282,9 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         dists = log_sigma - log_sigmas[:, np.newaxis]
 
         # get sigmas range
-        low_idx = np.cumsum(
-            (dists >= 0),
-            axis=0).argmax(axis=0).clip(max=log_sigmas.shape[0] - 2)
+        low_idx = (np.cumsum(
+            (dists >= 0), axis=0).argmax(axis=0)
+                   .clip(max=log_sigmas.shape[0] - 2))
         high_idx = low_idx + 1
 
         low = log_sigmas[low_idx]
@@ -431,8 +432,10 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         """
         t, s0, s1 = prev_timestep, timestep_list[-1], timestep_list[-2]
         m0, m1 = model_output_list[-1], model_output_list[-2]
-        lambda_t, lambda_s0, lambda_s1 = self.lambda_t[t], self.lambda_t[
-            s0], self.lambda_t[s1]
+        lambda_t, lambda_s0, lambda_s1 = (
+            self.lambda_t[t],
+            self.lambda_t[s0],
+            self.lambda_t[s1], )
         alpha_t, alpha_s0 = self.alpha_t[t], self.alpha_t[s0]
         sigma_t, sigma_s0 = self.sigma_t[t], self.sigma_t[s0]
         h, h_0 = lambda_t - lambda_s0, lambda_s0 - lambda_s1
@@ -480,8 +483,11 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
         Returns:
             `paddle.Tensor`: the sample tensor at the previous timestep.
         """
-        t, s0, s1, s2 = prev_timestep, timestep_list[-1], timestep_list[
-            -2], timestep_list[-3]
+        t, s0, s1, s2 = (
+            prev_timestep,
+            timestep_list[-1],
+            timestep_list[-2],
+            timestep_list[-3], )
         m0, m1, m2 = model_output_list[-1], model_output_list[
             -2], model_output_list[-3]
         lambda_t, lambda_s0, lambda_s1, lambda_s2 = (
@@ -542,8 +548,8 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
             step_index = len(self.timesteps) - 1
         else:
             step_index = step_index.item()
-        prev_timestep = 0 if step_index == len(
-            self.timesteps) - 1 else self.timesteps[step_index + 1]
+        prev_timestep = (0 if step_index == len(self.timesteps) - 1 else
+                         self.timesteps[step_index + 1])
         lower_order_final = ((step_index == len(self.timesteps) - 1) and
                              self.config.lower_order_final and
                              len(self.timesteps) < 15)
@@ -556,17 +562,20 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
             self.model_outputs[i] = self.model_outputs[i + 1]
         self.model_outputs[-1] = model_output
 
-        if self.config.solver_order == 1 or self.lower_order_nums < 1 or lower_order_final:
+        if (self.config.solver_order == 1 or self.lower_order_nums < 1 or
+                lower_order_final):
             prev_sample = self.dpm_solver_first_order_update(
                 model_output, timestep, prev_timestep, sample)
-        elif self.config.solver_order == 2 or self.lower_order_nums < 2 or lower_order_second:
+        elif (self.config.solver_order == 2 or self.lower_order_nums < 2 or
+              lower_order_second):
             timestep_list = [self.timesteps[step_index - 1], timestep]
             prev_sample = self.multistep_dpm_solver_second_order_update(
                 self.model_outputs, timestep_list, prev_timestep, sample)
         else:
             timestep_list = [
-                self.timesteps[step_index - 2], self.timesteps[step_index - 1],
-                timestep
+                self.timesteps[step_index - 2],
+                self.timesteps[step_index - 1],
+                timestep,
             ]
             prev_sample = self.multistep_dpm_solver_third_order_update(
                 self.model_outputs, timestep_list, prev_timestep, sample)
@@ -612,7 +621,8 @@ class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
                 original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
-        noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
+        noisy_samples = (sqrt_alpha_prod * original_samples +
+                         sqrt_one_minus_alpha_prod * noise)
         return noisy_samples
 
     def __len__(self):

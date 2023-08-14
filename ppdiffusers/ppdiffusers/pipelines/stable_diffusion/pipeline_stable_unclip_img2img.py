@@ -18,12 +18,9 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
 import PIL
-
-from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPTextModel,
-    CLIPTokenizer,
-    CLIPVisionModelWithProjection, )
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer,
+                                    CLIPVisionModelWithProjection)
 
 from ...loaders import TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -202,8 +199,8 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -253,8 +250,8 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -424,7 +421,8 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
                     f" {negative_prompt_embeds.shape}.")
 
-        if noise_level < 0 or noise_level >= self.image_noising_scheduler.config.num_train_timesteps:
+        if (noise_level < 0 or noise_level >=
+                self.image_noising_scheduler.config.num_train_timesteps):
             raise ValueError(
                 f"`noise_level` must be between 0 and {self.image_noising_scheduler.config.num_train_timesteps - 1}, inclusive."
             )
@@ -448,16 +446,20 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                     f" {type(image)}")
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = (batch_size, num_channels_latents, height //
-                 self.vae_scale_factor, width // self.vae_scale_factor)
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
+        shape = (
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor, )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -510,7 +512,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
             timesteps=noise_level,
             embedding_dim=image_embeds.shape[-1],
             flip_sin_to_cos=True,
-            downscale_freq_shift=0)
+            downscale_freq_shift=0, )
 
         # `get_timestep_embeddings` does not contain any weights and will always return f32 tensors,
         # but we might actually be running in fp16. so we need to cast here.
@@ -696,8 +698,8 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
 
         # 8. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
-            latent_model_input = paddle.concat(
-                [latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = (paddle.concat([latents] * 2)
+                                  if do_classifier_free_guidance else latents)
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
 

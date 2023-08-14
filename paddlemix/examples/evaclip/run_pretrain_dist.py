@@ -1,24 +1,42 @@
 # coding:utf-8
-import sys
+
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
-parent_path = os.path.abspath(os.path.join(__file__, *(['..'] * 4)))
+import sys
+
+parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 4)))
 sys.path.insert(0, parent_path)
 import pprint
 import socket
 from dataclasses import dataclass, field
-import paddle
 
-from paddlemix.models.evaclip.eva_clip_model import EVACLIP
-from paddlemix.optimization import create_optimizer
-from paddlemix.checkpoint import save, load_model
-from paddlemix.datasets import load_dataset
-from paddlemix.utils.env import setdistenv
-from paddlemix.trainer import CLIPTrainer
-from paddlemix.processors.clip_processing import CLIPProcessor, CLIPImageProcessor, CLIPTextProcessor
-from paddlemix.processors import SimpleTokenizer
-from paddlenlp.transformers import AutoTokenizer
+import paddle
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
+from paddlenlp.transformers import AutoTokenizer
+
+from paddlemix.checkpoint import load_model, save
+from paddlemix.datasets import load_dataset
+from paddlemix.models.evaclip.eva_clip_model import EVACLIP
+from paddlemix.optimization import create_optimizer
+from paddlemix.processors import SimpleTokenizer
+from paddlemix.processors.clip_processing import (
+    CLIPImageProcessor, CLIPProcessor, CLIPTextProcessor)
+from paddlemix.trainer import CLIPTrainer
+from paddlemix.utils.env import setdistenv
 
 
 @dataclass
@@ -136,14 +154,14 @@ class SelfTrainer(CLIPTrainer):
         self.lr_scheduler = paddle.optimizer.lr.CosineAnnealingDecay(
             1.0,
             num_training_steps - self.args.warmup_steps,
-            last_epoch=self.args.last_epoch)
+            last_epoch=self.args.last_epoch, )
         if self.args.warmup_steps > 0:
             self.lr_scheduler = paddle.optimizer.lr.LinearWarmup(
                 self.lr_scheduler,
                 self.args.warmup_steps,
                 0,
                 1.0,
-                last_epoch=self.args.last_epoch)
+                last_epoch=self.args.last_epoch, )
         self.optimizer = create_optimizer(self.args, self.model,
                                           self.lr_scheduler)
 
@@ -174,7 +192,7 @@ class Collator:
 
 
 def main_worker(training_args, model_args, data_args):
-    if training_args.bf16 and training_args.fp16_opt_level == 'O2':
+    if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("bfloat16")
 
     config = EVACLIPConfig.from_pretrained(model_args.model)
@@ -184,16 +202,18 @@ def main_worker(training_args, model_args, data_args):
         local_loss=training_args.local_loss,
         gather_with_grad=training_args.gather_with_grad,
         data_world_rank=training_args.data_world_rank,
-        data_world_size=training_args.data_world_size)
+        data_world_size=training_args.data_world_size, )
 
     training_args.model = model_args.model
-    if training_args.pretrained_model_path and training_args.pretrained_model_path != "None" and training_args.resume_from_checkpoint is None:
+    if (training_args.pretrained_model_path and
+            training_args.pretrained_model_path != "None" and
+            training_args.resume_from_checkpoint is None):
         load_model(
             training_args, model, ckpt_dir=training_args.pretrained_model_path)
-    if training_args.bf16 and training_args.fp16_opt_level == 'O2':
+    if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("float32")
 
-    train_dataset = load_dataset('coco_clip', splits="train")
+    train_dataset = load_dataset("coco_clip", splits="train")
     image_processor = CLIPImageProcessor.from_pretrained(
         model_args.model_name_or_path)
     text_processor = CLIPTextProcessor.from_pretrained(
@@ -219,7 +239,8 @@ def main_worker(training_args, model_args, data_args):
         trainer.save_state()
 
 
-from paddlemix.models.evaclip.eva_clip_model import EVACLIPConfig, EVACLIP
+from paddlemix.models.evaclip.eva_clip_model import EVACLIP, EVACLIPConfig
+
 if __name__ == "__main__":
     parser = PdArgumentParser(
         (ModelArguments, DataArguments, PreTrainingArguments))

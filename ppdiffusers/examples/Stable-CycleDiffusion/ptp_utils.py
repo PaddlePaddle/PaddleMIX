@@ -105,10 +105,11 @@ def get_word_inds(text: str, word_place: int, tokenizer):
     return np.array(out)
 
 
-def update_alpha_time_word(alpha,
-                           bounds: Union[float, Tuple[float, float]],
-                           prompt_ind: int,
-                           word_inds: Optional[paddle.Tensor]=None):
+def update_alpha_time_word(
+        alpha,
+        bounds: Union[float, Tuple[float, float]],
+        prompt_ind: int,
+        word_inds: Optional[paddle.Tensor]=None, ):
     if type(bounds) is float or bounds == 0:
         bounds = 0, bounds
     start, end = int(bounds[0] * alpha.shape[0]), int(bounds[1] *

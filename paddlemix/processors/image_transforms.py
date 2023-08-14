@@ -20,17 +20,12 @@ from typing import Iterable, List, Optional, Tuple, Union
 import numpy as np
 import paddle
 import PIL
+from paddlenlp.transformers.tokenizer_utils_base import (ExplicitEnum,
+                                                         TensorType)
 
-from .image_utils import (
-    ChannelDimension,
-    ImageInput,
-    PILImageResampling,
-    get_channel_dimension_axis,
-    get_image_size,
-    infer_channel_dimension_format,
-    to_numpy_array, )
-
-from paddlenlp.transformers.tokenizer_utils_base import ExplicitEnum, TensorType
+from .image_utils import (ChannelDimension, ImageInput, PILImageResampling,
+                          get_channel_dimension_axis, get_image_size,
+                          infer_channel_dimension_format, to_numpy_array)
 
 
 def is_paddle_tensor(tensor):
@@ -76,10 +71,11 @@ def to_channel_dimension_format(
     return image
 
 
-def rescale(image: np.ndarray,
-            scale: float,
-            data_format: Optional[ChannelDimension]=None,
-            dtype=np.float32) -> np.ndarray:
+def rescale(
+        image: np.ndarray,
+        scale: float,
+        data_format: Optional[ChannelDimension]=None,
+        dtype=np.float32, ) -> np.ndarray:
     """
     Rescales `image` by `scale`.
 
@@ -143,8 +139,8 @@ def to_pil_image(
     image = np.squeeze(image, axis=-1) if image.shape[-1] == 1 else image
 
     # PIL.Image can only store uint8 values, so we rescale the image to be between 0 and 255 if needed.
-    do_rescale = isinstance(image.flat[0], (
-        float, np.float32, np.float64)) if do_rescale is None else do_rescale
+    do_rescale = (isinstance(image.flat[0], (float, np.float32, np.float64))
+                  if do_rescale is None else do_rescale)
     if do_rescale:
         image = rescale(image, 255)
     image = image.astype(np.uint8)
@@ -252,8 +248,8 @@ def resize(
 
     # For all transformations, we want to keep the same data format as the input image unless otherwise specified.
     # The resized image from PIL will always have channels last, so find the input format first.
-    data_format = infer_channel_dimension_format(
-        image) if data_format is None else data_format
+    data_format = (infer_channel_dimension_format(image)
+                   if data_format is None else data_format)
 
     # To maintain backwards compatibility with the resizing done in previous image feature extractors, we use
     # the pillow library to resize the image and then convert back to numpy
@@ -268,9 +264,9 @@ def resize(
         resized_image = np.array(resized_image)
         # If the input image channel dimension was of size 1, then it is dropped when converting to a PIL image
         # so we need to add it back if necessary.
-        resized_image = np.expand_dims(
-            resized_image,
-            axis=-1) if resized_image.ndim == 2 else resized_image
+        resized_image = (np.expand_dims(
+            resized_image, axis=-1)
+                         if resized_image.ndim == 2 else resized_image)
         # The image is always in channels last format after converting from a PIL image
         resized_image = to_channel_dimension_format(
             resized_image, data_format, input_channel_dim=ChannelDimension.LAST)
@@ -336,8 +332,8 @@ def normalize(
     else:
         image = ((image.T - mean) / std).T
 
-    image = to_channel_dimension_format(
-        image, data_format) if data_format is not None else image
+    image = (to_channel_dimension_format(image, data_format)
+             if data_format is not None else image)
     return image
 
 
@@ -443,8 +439,12 @@ def _center_to_corners_format_paddle(
     center_x, center_y, width, height = bboxes_center.unbind(-1)
     bbox_corners = paddle.stack(
         # top left x, top left y, bottom right x, bottom right y
-        [(center_x - 0.5 * width), (center_y - 0.5 * height),
-         (center_x + 0.5 * width), (center_y + 0.5 * height)],
+        [
+            (center_x - 0.5 * width),
+            (center_y - 0.5 * height),
+            (center_x + 0.5 * width),
+            (center_y + 0.5 * height),
+        ],
         axis=-1, )
     return bbox_corners
 
@@ -454,8 +454,10 @@ def _center_to_corners_format_numpy(bboxes_center: np.ndarray) -> np.ndarray:
     bboxes_corners = np.stack(
         # top left x, top left y, bottom right x, bottom right y
         [
-            center_x - 0.5 * width, center_y - 0.5 * height,
-            center_x + 0.5 * width, center_y + 0.5 * height
+            center_x - 0.5 * width,
+            center_y - 0.5 * height,
+            center_x + 0.5 * width,
+            center_y + 0.5 * height,
         ],
         axis=-1, )
     return bboxes_corners
@@ -482,7 +484,7 @@ def center_to_corners_format(bboxes_center: TensorType) -> TensorType:
 
 
 def _corners_to_center_format_paddle(
-        bboxes_corners: "paddle.Tensor") -> "paddle.Tensor":
+        bboxes_corners: "paddle.Tensor", ) -> "paddle.Tensor":
     top_left_x, top_left_y, bottom_right_x, bottom_right_y = bboxes_corners.unbind(
         -1)
     b = [
@@ -624,19 +626,19 @@ def pad(
             values = ((values, values), (values, values))
         elif isinstance(values, tuple) and len(values) == 1:
             values = ((values[0], values[0]), (values[0], values[0]))
-        elif isinstance(values, tuple) and len(values) == 2 and isinstance(
-                values[0], int):
+        elif (isinstance(values, tuple) and len(values) == 2 and
+              isinstance(values[0], int)):
             values = (values, values)
-        elif isinstance(values, tuple) and len(values) == 2 and isinstance(
-                values[0], tuple):
+        elif (isinstance(values, tuple) and len(values) == 2 and
+              isinstance(values[0], tuple)):
             values = values
         else:
             raise ValueError(f"Unsupported format: {values}")
 
         # add 0 for channel dimension
-        values = ((0, 0),
-                  *values) if input_data_format == ChannelDimension.FIRST else (
-                      *values, (0, 0))
+        values = (((0, 0), *values)
+                  if input_data_format == ChannelDimension.FIRST else (*values,
+                                                                       (0, 0)))
 
         # Add additional padding if there's a batch dimension
         values = (0, *values) if image.ndim == 4 else values
@@ -659,8 +661,8 @@ def pad(
     else:
         raise ValueError(f"Invalid padding mode: {mode}")
 
-    image = to_channel_dimension_format(
-        image, data_format) if data_format is not None else image
+    image = (to_channel_dimension_format(image, data_format)
+             if data_format is not None else image)
     return image
 
 

@@ -19,8 +19,8 @@ from typing import Callable, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-
-from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
+from paddlenlp.transformers import (CLIPImageProcessor,
+                                    CLIPVisionModelWithProjection)
 
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
@@ -72,8 +72,12 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
             scheduler=scheduler, )
         self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
 
-    def _encode_image_prompt(self, prompt, num_images_per_prompt,
-                             do_classifier_free_guidance, negative_prompt):
+    def _encode_image_prompt(
+            self,
+            prompt,
+            num_images_per_prompt,
+            do_classifier_free_guidance,
+            negative_prompt, ):
         r"""
         Encodes the prompt into text encoder hidden states.
 
@@ -208,17 +212,20 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
                 f" {type(callback_steps)}.")
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -369,8 +376,8 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         # 7. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(
-                [latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = (paddle.concat([latents] * 2)
+                                  if do_classifier_free_guidance else latents)
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
 

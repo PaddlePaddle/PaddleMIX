@@ -1,7 +1,23 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
 from PIL import Image
-from ppdiffusers import StableDiffusionInpaintPipeline
+
 from paddlemix.utils.log import logger
+from ppdiffusers import StableDiffusionInpaintPipeline
+
 from .apptask import AppTask
 
 
@@ -21,14 +37,13 @@ class StableDiffusionInpaintTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        #bulid model
+        # bulid model
         model_instance = StableDiffusionInpaintPipeline.from_pretrained(model)
 
         self._model = model_instance
 
     def _preprocess(self, inputs):
-        """
-        """
+        """ """
         image = inputs.get("image", None)
         assert image is not None, f"The image is None"
         seg_masks = inputs.get("seg_masks", None)
@@ -41,11 +56,11 @@ class StableDiffusionInpaintTask(AppTask):
         merge_mask = merge_mask > 0
         mask_pil = Image.fromarray(merge_mask[0][0].cpu().numpy())
 
-        inputs['image'] = image.resize(self._resize)
+        inputs["image"] = image.resize(self._resize)
         mask_pil = mask_pil.resize(self._resize)
 
-        inputs.pop('seg_masks', None)
-        inputs['mask_pil'] = mask_pil
+        inputs.pop("seg_masks", None)
+        inputs["mask_pil"] = mask_pil
 
         return inputs
 
@@ -55,14 +70,14 @@ class StableDiffusionInpaintTask(AppTask):
         """
 
         result = self._model(
-            inputs['inpaint_prompt'],
-            image=inputs['image'],
-            mask_image=inputs['mask_pil']).images[0]
+            inputs["inpaint_prompt"],
+            image=inputs["image"],
+            mask_image=inputs["mask_pil"], ).images[0]
 
-        inputs.pop('mask_pil', None)
-        inputs.pop('image', None)
+        inputs.pop("mask_pil", None)
+        inputs.pop("image", None)
 
-        inputs['result'] = result
+        inputs["result"] = result
 
         return inputs
 
@@ -71,7 +86,7 @@ class StableDiffusionInpaintTask(AppTask):
         The model output is tag ids, this function will convert the model output to raw text.
         """
 
-        image = inputs['result'].resize(self._org_size)
-        inputs['result'] = image
+        image = inputs["result"].resize(self._org_size)
+        inputs["result"] = image
 
         return inputs

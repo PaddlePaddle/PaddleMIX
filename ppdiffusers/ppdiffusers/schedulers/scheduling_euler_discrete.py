@@ -134,7 +134,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype=paddle.float32)**2)
+                dtype=paddle.float32, )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -231,9 +231,9 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         dists = log_sigma - log_sigmas[:, np.newaxis]
 
         # get sigmas range
-        low_idx = np.cumsum(
-            (dists >= 0),
-            axis=0).argmax(axis=0).clip(max=log_sigmas.shape[0] - 2)
+        low_idx = (np.cumsum(
+            (dists >= 0), axis=0).argmax(axis=0)
+                   .clip(max=log_sigmas.shape[0] - 2))
         high_idx = low_idx + 1
 
         low = log_sigmas[low_idx]
@@ -306,8 +306,8 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         step_index = (self.timesteps == timestep).nonzero().item()
         sigma = self.sigmas[step_index]
 
-        gamma = min(s_churn / (len(self.sigmas) - 1),
-                    2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
+        gamma = (min(s_churn / (len(self.sigmas) - 1), 2**0.5 - 1)
+                 if s_tmin <= sigma <= s_tmax else 0.0)
 
         noise = randn_tensor(
             model_output.shape, dtype=model_output.dtype, generator=generator)
@@ -321,7 +321,8 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise
         # NOTE: "original_sample" should not be an expected prediction_type but is left in for
         # backwards compatibility
-        if self.config.prediction_type == "original_sample" or self.config.prediction_type == "sample":
+        if (self.config.prediction_type == "original_sample" or
+                self.config.prediction_type == "sample"):
             pred_original_sample = model_output
         elif self.config.prediction_type == "epsilon":
             pred_original_sample = sample - sigma_hat * model_output

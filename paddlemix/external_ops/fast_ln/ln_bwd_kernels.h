@@ -214,9 +214,9 @@ __global__ __launch_bounds__(Ktraits::THREADS_PER_CTA) void ln_bwd_kernel(
 }
 
 template <typename Kernel_traits>
-__global__ __launch_bounds__(
-    Kernel_traits::THREADS_PER_CTA) void ln_bwd_finalize_kernel(BwdParams
-                                                                    params) {
+__global__
+__launch_bounds__(Kernel_traits::THREADS_PER_CTA) void ln_bwd_finalize_kernel(
+    BwdParams params) {
   using compute_t = typename Kernel_traits::compute_t;
   using weight_t = typename Kernel_traits::weight_t;
   using index_t = typename Kernel_traits::index_t;

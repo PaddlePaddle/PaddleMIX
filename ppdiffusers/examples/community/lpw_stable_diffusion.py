@@ -19,16 +19,17 @@ from typing import Callable, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
+                                    CLIPTokenizer)
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from paddlemix.utils.tools import compare_version
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipelines.stable_diffusion import (
-    StableDiffusionPipeline,
-    StableDiffusionPipelineOutput, )
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker, )
-from ppdiffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+    StableDiffusionPipeline, StableDiffusionPipelineOutput)
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
+    StableDiffusionSafetyChecker
+from ppdiffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                    PNDMScheduler)
 from ppdiffusers.utils import logging
 
 if compare_version(PIL.__version__, "9.1.0") >= 0:
@@ -193,10 +194,11 @@ def pad_tokens_and_weights(tokens,
     Pad the tokens (with starting and ending tokens) and weights (with 1.0) to max_length.
     """
     max_embeddings_multiples = (max_length - 2) // (chunk_length - 2)
-    weights_length = max_length if no_boseos_middle else max_embeddings_multiples * chunk_length
+    weights_length = (max_length if no_boseos_middle else
+                      max_embeddings_multiples * chunk_length)
     for i in range(len(tokens)):
-        tokens[i] = [bos] + tokens[i] + [eos] + [pad] * (max_length - 2 -
-                                                         len(tokens[i]))
+        tokens[i] = ([bos] + tokens[i] + [eos] + [pad] *
+                     (max_length - 2 - len(tokens[i])))
         if no_boseos_middle:
             weights[i] = [1.0] + weights[i] + [1.0] * (max_length - 1 -
                                                        len(weights[i]))
@@ -334,8 +336,12 @@ def get_weighted_text_embeddings(
 
     # pad the length of tokens and weights
     # support bert tokenizer
-    bos = pipe.tokenizer.bos_token_id if pipe.tokenizer.bos_token_id is not None else pipe.tokenizer.cls_token_id
-    eos = pipe.tokenizer.eos_token_id if pipe.tokenizer.eos_token_id is not None else pipe.tokenizer.sep_token_id
+    bos = (pipe.tokenizer.bos_token_id
+           if pipe.tokenizer.bos_token_id is not None else
+           pipe.tokenizer.cls_token_id)
+    eos = (pipe.tokenizer.eos_token_id
+           if pipe.tokenizer.eos_token_id is not None else
+           pipe.tokenizer.sep_token_id)
     pad = pipe.tokenizer.pad_token_id
     prompt_tokens, prompt_weights = pad_tokens_and_weights(
         prompt_tokens,
@@ -381,13 +387,15 @@ def get_weighted_text_embeddings(
     if (not skip_parsing) and (not skip_weighting):
         previous_mean = text_embeddings.mean(axis=[-2, -1])
         text_embeddings *= prompt_weights.unsqueeze(-1)
-        text_embeddings *= (previous_mean / text_embeddings.mean(
-            axis=[-2, -1])).unsqueeze(-1).unsqueeze(-1)
+        text_embeddings *= (
+            (previous_mean / text_embeddings.mean(axis=[-2, -1])).unsqueeze(-1)
+            .unsqueeze(-1))
         if uncond_prompt is not None:
             previous_mean = uncond_embeddings.mean(axis=[-2, -1])
             uncond_embeddings *= uncond_weights.unsqueeze(-1)
-            uncond_embeddings *= (previous_mean / uncond_embeddings.mean(
-                axis=[-2, -1])).unsqueeze(-1).unsqueeze(-1)
+            uncond_embeddings *= (
+                (previous_mean / uncond_embeddings.mean(axis=[-2, -1]))
+                .unsqueeze(-1).unsqueeze(-1))
 
     if uncond_prompt is not None:
         return text_embeddings, uncond_embeddings
@@ -469,8 +477,10 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
 
     def __init__additional__(self):
         if not hasattr(self, "vae_scale_factor"):
-            setattr(self, "vae_scale_factor", 2
-                    **(len(self.vae.config.block_out_channels) - 1))
+            setattr(
+                self,
+                "vae_scale_factor",
+                2**(len(self.vae.config.block_out_channels) - 1), )
 
     def enable_attention_slicing(self,
                                  slice_size: Optional[Union[str, int]]="auto"):
@@ -784,8 +794,8 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
         # 8. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(
-                [latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = (paddle.concat([latents] * 2)
+                                  if do_classifier_free_guidance else latents)
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
 

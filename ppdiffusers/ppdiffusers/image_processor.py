@@ -165,8 +165,8 @@ class VaeImageProcessor(ConfigMixin):
         supported_formats = (PIL.Image.Image, np.ndarray, paddle.Tensor)
         if isinstance(image, supported_formats):
             image = [image]
-        elif not (isinstance(image, list) and all(
-                isinstance(i, supported_formats) for i in image)):
+        elif not (isinstance(image, list) and
+                  all(isinstance(i, supported_formats) for i in image)):
             raise ValueError(
                 f"Input is in incorrect format: {[type(i) for i in image]}. Currently, we only support {', '.join(supported_formats)}"
             )
@@ -180,9 +180,9 @@ class VaeImageProcessor(ConfigMixin):
             image = self.numpy_to_pd(image)  # to pd
 
         elif isinstance(image[0], np.ndarray):
-            image = np.concatenate(
+            image = (np.concatenate(
                 image, axis=0) if image[0].ndim == 4 else np.stack(
-                    image, axis=0)
+                    image, axis=0))
             image = self.numpy_to_pd(image)
             _, _, height, width = image.shape
             if self.config.do_resize and (
@@ -194,9 +194,9 @@ class VaeImageProcessor(ConfigMixin):
                 )
 
         elif isinstance(image[0], paddle.Tensor):
-            image = paddle.concat(
+            image = (paddle.concat(
                 image, axis=0) if image[0].ndim == 4 else paddle.stack(
-                    image, axis=0)
+                    image, axis=0))
             _, channel, height, width = image.shape
 
             # don't need any preprocess if the image is latents
@@ -212,7 +212,8 @@ class VaeImageProcessor(ConfigMixin):
                 )
 
         # expected range [0,1], normalize to [-1,1]
-        do_normalize = self.config.do_normalize if do_normalize is None else do_normalize
+        do_normalize = (self.config.do_normalize
+                        if do_normalize is None else do_normalize)
         if image.min() < 0:
             warnings.warn(
                 "Passing `image` as paddle tensor with value range in [-1,1] is deprecated. The expected value range for image tensor is [0,1] "
@@ -242,7 +243,7 @@ class VaeImageProcessor(ConfigMixin):
                 "Unsupported output_type",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False, )
             output_type = "np"
 
         if output_type == "latent":

@@ -18,11 +18,8 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import paddle
 import paddle.nn.functional as F
-
-from paddlenlp.transformers import (
-    ClapTextModelWithProjection,
-    RobertaTokenizer,
-    SpeechT5HifiGan, )
+from paddlenlp.transformers import (ClapTextModelWithProjection,
+                                    RobertaTokenizer, SpeechT5HifiGan)
 
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
@@ -82,7 +79,7 @@ class AudioLDMPipeline(DiffusionPipeline):
             tokenizer=tokenizer,
             unet=unet,
             scheduler=scheduler,
-            vocoder=vocoder)
+            vocoder=vocoder, )
         self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
 
     def _encode_prompt(
@@ -144,7 +141,7 @@ class AudioLDMPipeline(DiffusionPipeline):
                 prompt,
                 padding="longest",
                 return_tensors="pd",
-                return_attention_mask=True).input_ids
+                return_attention_mask=True, ).input_ids
             if (untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and
                     not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item()):
@@ -409,16 +406,18 @@ class AudioLDMPipeline(DiffusionPipeline):
             When returning a tuple, the first element is a list with the generated audios.
         """
         # 0. Convert audio input length from seconds to spectrogram height
-        vocoder_upsample_factor = np.prod(self.vocoder.config.upsample_rates
-                                          ) / self.vocoder.config.sampling_rate
+        vocoder_upsample_factor = (np.prod(self.vocoder.config.upsample_rates) /
+                                   self.vocoder.config.sampling_rate)
         if audio_length_in_s is None:
-            audio_length_in_s = self.unet.config.sample_size * self.vae_scale_factor * vocoder_upsample_factor
+            audio_length_in_s = (self.unet.config.sample_size *
+                                 self.vae_scale_factor *
+                                 vocoder_upsample_factor)
         height = int(audio_length_in_s / vocoder_upsample_factor)
         original_waveform_length = int(audio_length_in_s *
                                        self.vocoder.config.sampling_rate)
         if height % self.vae_scale_factor != 0:
-            height = int(np.ceil(height /
-                                 self.vae_scale_factor)) * self.vae_scale_factor
+            height = (int(np.ceil(height / self.vae_scale_factor)) *
+                      self.vae_scale_factor)
             logger.info(
                 f"Audio length in seconds {audio_length_in_s} is increased to {height * vocoder_upsample_factor} so that it can be handled by the model. It will be cut to {audio_length_in_s} after the denoising process."
             )
@@ -478,8 +477,8 @@ class AudioLDMPipeline(DiffusionPipeline):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    x=[latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat(x=[latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -503,8 +502,8 @@ class AudioLDMPipeline(DiffusionPipeline):
                                               **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
-                        i + 1) % self.scheduler.order == 0:
+                if (i == len(timesteps) - 1 or i + 1 > num_warmup_steps and
+                    (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)

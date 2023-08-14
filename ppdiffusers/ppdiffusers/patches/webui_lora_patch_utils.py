@@ -193,9 +193,10 @@ def apply_lora(
 
     waitlist = []
     if isinstance(pipe_or_module, nn.Layer):
-        waitlist.append(
-            (pipe_or_module,
-             text_encoder_target_replace_modules + unet_target_replace_modules))
+        waitlist.append((
+            pipe_or_module,
+            text_encoder_target_replace_modules + unet_target_replace_modules,
+        ))
     else:
         if hasattr(pipe_or_module, "text_encoder"):
             waitlist.append((pipe_or_module.text_encoder,
@@ -233,8 +234,9 @@ def apply_lora(
                                                   child_module.scale)
                                 child_module.weight.set_value(new_weight)
 
-                        in_features, out_features = child_module.weight.shape[
-                            0], child_module.weight.shape[1]
+                        in_features, out_features = (
+                            child_module.weight.shape[0],
+                            child_module.weight.shape[1], )
                         child_module.is_conv = False
                         child_module.merged = False
 
@@ -438,11 +440,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_0_mlp_fc1.alpha",
-        "text_model.transformer.layers.0.linear1.alpha"
+        "text_model.transformer.layers.0.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_0_mlp_fc2.alpha",
-        "text_model.transformer.layers.0.linear2.alpha"
+        "text_model.transformer.layers.0.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_1_self_attn_q_proj.lora_down.weight",
@@ -510,11 +512,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_1_mlp_fc1.alpha",
-        "text_model.transformer.layers.1.linear1.alpha"
+        "text_model.transformer.layers.1.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_1_mlp_fc2.alpha",
-        "text_model.transformer.layers.1.linear2.alpha"
+        "text_model.transformer.layers.1.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_2_self_attn_q_proj.lora_down.weight",
@@ -582,11 +584,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_2_mlp_fc1.alpha",
-        "text_model.transformer.layers.2.linear1.alpha"
+        "text_model.transformer.layers.2.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_2_mlp_fc2.alpha",
-        "text_model.transformer.layers.2.linear2.alpha"
+        "text_model.transformer.layers.2.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_3_self_attn_q_proj.lora_down.weight",
@@ -654,11 +656,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_3_mlp_fc1.alpha",
-        "text_model.transformer.layers.3.linear1.alpha"
+        "text_model.transformer.layers.3.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_3_mlp_fc2.alpha",
-        "text_model.transformer.layers.3.linear2.alpha"
+        "text_model.transformer.layers.3.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_4_self_attn_q_proj.lora_down.weight",
@@ -726,11 +728,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_4_mlp_fc1.alpha",
-        "text_model.transformer.layers.4.linear1.alpha"
+        "text_model.transformer.layers.4.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_4_mlp_fc2.alpha",
-        "text_model.transformer.layers.4.linear2.alpha"
+        "text_model.transformer.layers.4.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_5_self_attn_q_proj.lora_down.weight",
@@ -798,11 +800,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_5_mlp_fc1.alpha",
-        "text_model.transformer.layers.5.linear1.alpha"
+        "text_model.transformer.layers.5.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_5_mlp_fc2.alpha",
-        "text_model.transformer.layers.5.linear2.alpha"
+        "text_model.transformer.layers.5.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_6_self_attn_q_proj.lora_down.weight",
@@ -870,11 +872,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_6_mlp_fc1.alpha",
-        "text_model.transformer.layers.6.linear1.alpha"
+        "text_model.transformer.layers.6.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_6_mlp_fc2.alpha",
-        "text_model.transformer.layers.6.linear2.alpha"
+        "text_model.transformer.layers.6.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_7_self_attn_q_proj.lora_down.weight",
@@ -942,11 +944,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_7_mlp_fc1.alpha",
-        "text_model.transformer.layers.7.linear1.alpha"
+        "text_model.transformer.layers.7.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_7_mlp_fc2.alpha",
-        "text_model.transformer.layers.7.linear2.alpha"
+        "text_model.transformer.layers.7.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_8_self_attn_q_proj.lora_down.weight",
@@ -1014,11 +1016,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_8_mlp_fc1.alpha",
-        "text_model.transformer.layers.8.linear1.alpha"
+        "text_model.transformer.layers.8.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_8_mlp_fc2.alpha",
-        "text_model.transformer.layers.8.linear2.alpha"
+        "text_model.transformer.layers.8.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_9_self_attn_q_proj.lora_down.weight",
@@ -1086,11 +1088,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_9_mlp_fc1.alpha",
-        "text_model.transformer.layers.9.linear1.alpha"
+        "text_model.transformer.layers.9.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_9_mlp_fc2.alpha",
-        "text_model.transformer.layers.9.linear2.alpha"
+        "text_model.transformer.layers.9.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_10_self_attn_q_proj.lora_down.weight",
@@ -1158,11 +1160,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_10_mlp_fc1.alpha",
-        "text_model.transformer.layers.10.linear1.alpha"
+        "text_model.transformer.layers.10.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_10_mlp_fc2.alpha",
-        "text_model.transformer.layers.10.linear2.alpha"
+        "text_model.transformer.layers.10.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_11_self_attn_q_proj.lora_down.weight",
@@ -1230,11 +1232,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_11_mlp_fc1.alpha",
-        "text_model.transformer.layers.11.linear1.alpha"
+        "text_model.transformer.layers.11.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_11_mlp_fc2.alpha",
-        "text_model.transformer.layers.11.linear2.alpha"
+        "text_model.transformer.layers.11.linear2.alpha",
     ],
     [
         "lora_unet_down_blocks_0_attentions_0_proj_in.lora_down.weight",
@@ -1818,7 +1820,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_0_proj_in.lora_up.weight",
-        "up_blocks.1.attentions.0.proj_in.lora_up.weight"
+        "up_blocks.1.attentions.0.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_1_attentions_0_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -1906,7 +1908,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_0_proj_out.lora_up.weight",
-        "up_blocks.1.attentions.0.proj_out.lora_up.weight"
+        "up_blocks.1.attentions.0.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_1_attentions_1_proj_in.lora_down.weight",
@@ -1914,7 +1916,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_1_proj_in.lora_up.weight",
-        "up_blocks.1.attentions.1.proj_in.lora_up.weight"
+        "up_blocks.1.attentions.1.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_1_attentions_1_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2002,7 +2004,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_1_proj_out.lora_up.weight",
-        "up_blocks.1.attentions.1.proj_out.lora_up.weight"
+        "up_blocks.1.attentions.1.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_1_attentions_2_proj_in.lora_down.weight",
@@ -2010,7 +2012,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_2_proj_in.lora_up.weight",
-        "up_blocks.1.attentions.2.proj_in.lora_up.weight"
+        "up_blocks.1.attentions.2.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_1_attentions_2_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2098,7 +2100,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_2_proj_out.lora_up.weight",
-        "up_blocks.1.attentions.2.proj_out.lora_up.weight"
+        "up_blocks.1.attentions.2.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_0_proj_in.lora_down.weight",
@@ -2106,7 +2108,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_0_proj_in.lora_up.weight",
-        "up_blocks.2.attentions.0.proj_in.lora_up.weight"
+        "up_blocks.2.attentions.0.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_0_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2194,7 +2196,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_0_proj_out.lora_up.weight",
-        "up_blocks.2.attentions.0.proj_out.lora_up.weight"
+        "up_blocks.2.attentions.0.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_1_proj_in.lora_down.weight",
@@ -2202,7 +2204,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_1_proj_in.lora_up.weight",
-        "up_blocks.2.attentions.1.proj_in.lora_up.weight"
+        "up_blocks.2.attentions.1.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_1_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2290,7 +2292,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_1_proj_out.lora_up.weight",
-        "up_blocks.2.attentions.1.proj_out.lora_up.weight"
+        "up_blocks.2.attentions.1.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_2_proj_in.lora_down.weight",
@@ -2298,7 +2300,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_2_proj_in.lora_up.weight",
-        "up_blocks.2.attentions.2.proj_in.lora_up.weight"
+        "up_blocks.2.attentions.2.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_2_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2386,7 +2388,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_2_proj_out.lora_up.weight",
-        "up_blocks.2.attentions.2.proj_out.lora_up.weight"
+        "up_blocks.2.attentions.2.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_0_proj_in.lora_down.weight",
@@ -2394,7 +2396,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_0_proj_in.lora_up.weight",
-        "up_blocks.3.attentions.0.proj_in.lora_up.weight"
+        "up_blocks.3.attentions.0.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_0_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2482,7 +2484,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_0_proj_out.lora_up.weight",
-        "up_blocks.3.attentions.0.proj_out.lora_up.weight"
+        "up_blocks.3.attentions.0.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_1_proj_in.lora_down.weight",
@@ -2490,7 +2492,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_1_proj_in.lora_up.weight",
-        "up_blocks.3.attentions.1.proj_in.lora_up.weight"
+        "up_blocks.3.attentions.1.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_1_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2578,7 +2580,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_1_proj_out.lora_up.weight",
-        "up_blocks.3.attentions.1.proj_out.lora_up.weight"
+        "up_blocks.3.attentions.1.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_2_proj_in.lora_down.weight",
@@ -2586,7 +2588,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_2_proj_in.lora_up.weight",
-        "up_blocks.3.attentions.2.proj_in.lora_up.weight"
+        "up_blocks.3.attentions.2.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_2_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2674,15 +2676,15 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_2_proj_out.lora_up.weight",
-        "up_blocks.3.attentions.2.proj_out.lora_up.weight"
+        "up_blocks.3.attentions.2.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_mid_block_attentions_0_proj_in.lora_down.weight",
-        "mid_block.attentions.0.proj_in.lora_down.weight"
+        "mid_block.attentions.0.proj_in.lora_down.weight",
     ],
     [
         "lora_unet_mid_block_attentions_0_proj_in.lora_up.weight",
-        "mid_block.attentions.0.proj_in.lora_up.weight"
+        "mid_block.attentions.0.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_mid_block_attentions_0_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2766,10 +2768,10 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_mid_block_attentions_0_proj_out.lora_down.weight",
-        "mid_block.attentions.0.proj_out.lora_down.weight"
+        "mid_block.attentions.0.proj_out.lora_down.weight",
     ],
     [
         "lora_unet_mid_block_attentions_0_proj_out.lora_up.weight",
-        "mid_block.attentions.0.proj_out.lora_up.weight"
+        "mid_block.attentions.0.proj_out.lora_up.weight",
     ],
 ]

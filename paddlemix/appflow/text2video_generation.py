@@ -1,5 +1,21 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
+
 from ppdiffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
+
 from .apptask import AppTask
 
 
@@ -16,19 +32,18 @@ class TextToVideoSDTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        #bulid model
+        # bulid model
         model_instance = TextToVideoSDPipeline.from_pretrained(model)
         model_instance.scheduler = DPMSolverMultistepScheduler.from_config(
             model_instance.scheduler.config)
         self._model = model_instance
 
     def _preprocess(self, inputs):
-        """
-        """
+        """ """
         prompt = inputs.get("prompt", None)
         assert prompt is not None, f"The prompt is None"
         num_inference_steps = inputs.get("num_inference_steps", 25)
-        inputs['num_inference_steps'] = num_inference_steps
+        inputs["num_inference_steps"] = num_inference_steps
 
         return inputs
 
@@ -38,12 +53,12 @@ class TextToVideoSDTask(AppTask):
         """
 
         result = self._model(
-            prompt=inputs['prompt'],
-            num_inference_steps=inputs['num_inference_steps'], ).frames
+            prompt=inputs["prompt"],
+            num_inference_steps=inputs["num_inference_steps"], ).frames
 
-        inputs.pop('prompt', None)
+        inputs.pop("prompt", None)
 
-        inputs['result'] = result
+        inputs["result"] = result
 
         return inputs
 

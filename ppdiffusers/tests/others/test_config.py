@@ -16,14 +16,10 @@
 import tempfile
 import unittest
 
-from ppdiffusers import (
-    DDIMScheduler,
-    DDPMScheduler,
-    DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    PNDMScheduler,
-    logging, )
+from ppdiffusers import (DDIMScheduler, DDPMScheduler,
+                         DPMSolverMultistepScheduler,
+                         EulerAncestralDiscreteScheduler,
+                         EulerDiscreteScheduler, PNDMScheduler, logging)
 from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
 from ppdiffusers.utils.testing_utils import CaptureLogger
 

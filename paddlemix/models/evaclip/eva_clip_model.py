@@ -1,22 +1,35 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
 from paddlenlp.transformers.convbert.modeling import ConvBertClassificationHead
 """ CLIP Model
 
 Adapted from https://github.com/openai/CLIP. Originally MIT License, Copyright (c) 2021 OpenAI.
 """
-import os
 import math
+import os
 from typing import Union
-import numpy as np
-from .loss import ClipLoss
-from .eva_vit_model import EVAVisionTransformer
-from .eva_text_model import EVATextTransformer
 
+import numpy as np
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel
 from paddlenlp.utils.log import logger
-from .eva_vit_model import EVAVisionTransformerConfig
-from .eva_text_model import EVATextTransformerConfig
+
+from .eva_text_model import EVATextTransformer, EVATextTransformerConfig
+from .eva_vit_model import EVAVisionTransformer, EVAVisionTransformerConfig
+from .loss import ClipLoss
 
 
 class EVACLIPConfig(PretrainedConfig):
@@ -40,11 +53,14 @@ class EVACLIPConfig(PretrainedConfig):
             pretrained_model_name_or_path: Union[str, os.PathLike]=None,
             pretrained_vismodel_name_or_path: Union[str, os.PathLike]=None,
             pretrained_textmodel_name_or_path: Union[str, os.PathLike]=None,
-            **kwargs) -> "PretrainedConfig":
-        assert pretrained_model_name_or_path is not None or (pretrained_vismodel_name_or_path is not None and pretrained_textmodel_name_or_path is not None), \
-                f'Either `pretrained_model_name_or_path` or (`pretrained_vismodel_name_or_path` and `pretrained_textmodel_name_or_path`) must be set, but' \
-                    f'received `pretrained_model_name_or_path={pretrained_model_name_or_path}` and `pretrained_vismodel_name_or_path={pretrained_vismodel_name_or_path}`, ' \
-                        f'`pretrained_textmodel_name_or_path={pretrained_textmodel_name_or_path}`'
+            **kwargs, ) -> "PretrainedConfig":
+        assert pretrained_model_name_or_path is not None or (
+            pretrained_vismodel_name_or_path is not None and
+            pretrained_textmodel_name_or_path is not None
+        ), (f"Either `pretrained_model_name_or_path` or (`pretrained_vismodel_name_or_path` and `pretrained_textmodel_name_or_path`) must be set, but"
+            f"received `pretrained_model_name_or_path={pretrained_model_name_or_path}` and `pretrained_vismodel_name_or_path={pretrained_vismodel_name_or_path}`, "
+            f"`pretrained_textmodel_name_or_path={pretrained_textmodel_name_or_path}`"
+            )
         config_dict = {}
         if pretrained_model_name_or_path is not None:
             config_dict, kwargs = cls.get_config_dict(
@@ -67,11 +83,11 @@ class EVACLIPConfig(PretrainedConfig):
                     f"You are using a model of type {visual_config_dict['model_type']} to instantiate a model of type "
                     f"evavision_transformer. This is not supported for all configurations of models and can yield errors."
                 )
-            config_dict['vision_cfg'] = visual_config_dict
+            config_dict["vision_cfg"] = visual_config_dict
         if pretrained_textmodel_name_or_path is not None:
             text_config_dict, kwargs = cls.get_config_dict(
                 pretrained_textmodel_name_or_path, **kwargs)
-            config_dict['text_cfg'] = text_config_dict
+            config_dict["text_cfg"] = text_config_dict
 
             if ("model_type" in text_config_dict and
                     text_config_dict["model_type"] != "evatext_transformer"):
@@ -94,18 +110,22 @@ class EVACLIPPretrainedModel(PretrainedModel):
     base_model_prefix = "evaclip"
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path=None,
-                        pretrained_vismodel_name_or_path=None,
-                        pretrained_textmodel_name_or_path=None,
-                        from_hf_hub: bool=False,
-                        subfolder: str=None,
-                        *args,
-                        **kwargs):
-        assert pretrained_model_name_or_path is not None or (pretrained_vismodel_name_or_path is not None and pretrained_textmodel_name_or_path is not None), \
-                f'Either `pretrained_model_name_or_path` or (`pretrained_vismodel_name_or_path` and `pretrained_textmodel_name_or_path`) must be set, but' \
-                    f'received `pretrained_model_name_or_path={pretrained_model_name_or_path}` and `pretrained_vismodel_name_or_path={pretrained_vismodel_name_or_path}`, ' \
-                        f'`pretrained_textmodel_name_or_path={pretrained_textmodel_name_or_path}`'
+    def from_pretrained(
+            cls,
+            pretrained_model_name_or_path=None,
+            pretrained_vismodel_name_or_path=None,
+            pretrained_textmodel_name_or_path=None,
+            from_hf_hub: bool=False,
+            subfolder: str=None,
+            *args,
+            **kwargs, ):
+        assert pretrained_model_name_or_path is not None or (
+            pretrained_vismodel_name_or_path is not None and
+            pretrained_textmodel_name_or_path is not None
+        ), (f"Either `pretrained_model_name_or_path` or (`pretrained_vismodel_name_or_path` and `pretrained_textmodel_name_or_path`) must be set, but"
+            f"received `pretrained_model_name_or_path={pretrained_model_name_or_path}` and `pretrained_vismodel_name_or_path={pretrained_vismodel_name_or_path}`, "
+            f"`pretrained_textmodel_name_or_path={pretrained_textmodel_name_or_path}`"
+            )
 
         if pretrained_model_name_or_path is not None:
             return super().from_pretrained(
@@ -113,26 +133,27 @@ class EVACLIPPretrainedModel(PretrainedModel):
                 from_hf_hub=from_hf_hub,
                 subfolder=subfolder,
                 *args,
-                **kwargs)
+                **kwargs, )
         else:
             config_dict = {
                 "vision_cfg": pretrained_vismodel_name_or_path,
-                "text_cfg": pretrained_textmodel_name_or_path
+                "text_cfg": pretrained_textmodel_name_or_path,
             }
             config = EVACLIPConfig.from_dict(config_dict)
             return cls(config, *args, **kwargs)
 
 
 class EVACLIP(EVACLIPPretrainedModel):
-    def __init__(self,
-                 config,
-                 disable_text=False,
-                 local_loss=False,
-                 gather_with_grad=False,
-                 cache_labels=True,
-                 data_world_rank=0,
-                 data_world_size=1,
-                 enable_recompute=False):
+    def __init__(
+            self,
+            config,
+            disable_text=False,
+            local_loss=False,
+            gather_with_grad=False,
+            cache_labels=True,
+            data_world_rank=0,
+            data_world_size=1,
+            enable_recompute=False, ):
         super().__init__(config)
         if isinstance(config.vision_config, str):
             self.visual = EVAVisionTransformer.from_pretrained(
@@ -177,7 +198,7 @@ class EVACLIP(EVACLIPPretrainedModel):
         self.text.set_grad_checkpointing(enable)
 
     def no_weight_decay(self):
-        return {'logit_scale'}
+        return {"logit_scale"}
 
     @paddle.no_grad()
     def clip_scale(self):
@@ -186,18 +207,18 @@ class EVACLIP(EVACLIPPretrainedModel):
 
     def encode_image(self, image, normalize: bool=False):
         features = self.visual(image)
-        out = paddle.nn.functional.normalize(
-            x=features, axis=-1) if normalize else features
+        out = (paddle.nn.functional.normalize(
+            x=features, axis=-1) if normalize else features)
         return out
 
     def encode_text(self, text, text_features=None, normalize: bool=False):
         if text_features is not None:
             # directly use text_features if given
-            return paddle.nn.functional.normalize(
-                x=text_features, axis=-1) if normalize else text_features
+            return (paddle.nn.functional.normalize(
+                x=text_features, axis=-1) if normalize else text_features)
         features = self.text(text)
-        return paddle.nn.functional.normalize(
-            x=features, axis=-1) if normalize else features
+        return (paddle.nn.functional.normalize(
+            x=features, axis=-1) if normalize else features)
 
     def forward(self, image, input_ids, text_emb=None, skiploss=False):
         self.clip_scale()

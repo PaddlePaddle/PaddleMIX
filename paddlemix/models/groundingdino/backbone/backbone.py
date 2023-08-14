@@ -15,8 +15,8 @@
 Backbone modules.
 """
 
-from typing import Dict, List, Optional
 from collections import OrderedDict
+from typing import Dict, List, Optional
 
 import paddle
 import paddle.nn as nn

@@ -16,15 +16,11 @@ import argparse
 import json
 
 import paddle
-
 from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.utils.log import logger
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    LDMBertModel,
-    LDMTextToImagePipeline,
-    UNet2DConditionModel, )
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, LDMBertModel,
+                         LDMTextToImagePipeline, UNet2DConditionModel)
 from ppdiffusers.pipelines.latent_diffusion import LDMBertConfig
 
 
@@ -34,12 +30,12 @@ def parse_args():
         "--model_file",
         type=str,
         default="./model_state.pdparams",
-        help="path to pretrained model_state.pdparams")
+        help="path to pretrained model_state.pdparams", )
     parser.add_argument(
         "--output_path",
         type=str,
         default="./ldm_pipelines",
-        help="the output path of pipeline.")
+        help="the output path of pipeline.", )
     parser.add_argument(
         "--vae_name_or_path",
         type=str,
@@ -49,12 +45,12 @@ def parse_args():
         "--text_encoder_config_file",
         type=str,
         default="./config/ldmbert.json",
-        help="text_encoder_config_file.")
+        help="text_encoder_config_file.", )
     parser.add_argument(
         "--unet_config_file",
         type=str,
         default="./config/unet.json",
-        help="unet_config_file.")
+        help="unet_config_file.", )
     parser.add_argument(
         "--tokenizer_name_or_path",
         type=str,
@@ -65,7 +61,7 @@ def parse_args():
         "--model_max_length",
         type=int,
         default=77,
-        help="Pretrained tokenizer model_max_length.")
+        help="Pretrained tokenizer model_max_length.", )
     parser.add_argument(
         "--device",
         type=str,
@@ -171,7 +167,7 @@ def build_pipelines(
         tokenizer=tokenizer,
         scheduler=scheduler,
         vqvae=vae,
-        unet=unet)
+        unet=unet, )
     pipe.save_pretrained(output_path)
 
 

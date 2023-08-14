@@ -21,12 +21,13 @@ from typing import List, Optional, Union
 
 import numpy as np
 import paddle
+from paddlenlp.transformers.tokenizer_utils_base import (BatchEncoding,
+                                                         TensorType, TextInput)
 from PIL import Image
 
+from .base_processing import ProcessorMixin
 from .image_processing_utils import BatchFeature
 from .image_utils import ImageInput
-from .base_processing import ProcessorMixin
-from paddlenlp.transformers.tokenizer_utils_base import BatchEncoding, TensorType, TextInput
 
 __all__ = ["VisualGLMProcessor", ]
 
@@ -133,8 +134,8 @@ class VisualGLMProcessor(ProcessorMixin):
             image_input = [self.tokenizer.unk_token_id] * self.num_query_tokens
             second_text_input = self.tokenizer.encode(
                 prompt[image_end_position:], add_special_tokens=False)
-            all_input_ids = first_text_input[
-                "input_ids"] + image_input + second_text_input["input_ids"]
+            all_input_ids = (first_text_input["input_ids"] + image_input +
+                             second_text_input["input_ids"])
             all_input_ids = self.tokenizer.build_inputs_with_special_tokens(
                 all_input_ids)
 

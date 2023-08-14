@@ -120,8 +120,8 @@ class PicoDetPostProcess(object):
             # create new boxes
             x = xy[:, [0, 2, 4, 6]]
             y = xy[:, [1, 3, 5, 7]]
-            xy = np.concatenate(
-                (x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
+            xy = (np.concatenate(
+                (x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T)
             # clip boxes
             xy[:, [0, 2]] = xy[:, [0, 2]].clip(0, width)
             xy[:, [1, 3]] = xy[:, [1, 3]].clip(0, height)
@@ -206,7 +206,7 @@ class PicoDetPostProcess(object):
                     picked_box_probs[:, :4], self.ori_shape[batch_id])
                 im_scale = np.concatenate([
                     self.scale_factor[batch_id][::-1],
-                    self.scale_factor[batch_id][::-1]
+                    self.scale_factor[batch_id][::-1],
                 ])
                 picked_box_probs[:, :4] /= im_scale
                 # clas score box

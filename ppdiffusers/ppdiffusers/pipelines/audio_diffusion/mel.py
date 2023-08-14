@@ -25,9 +25,7 @@ try:
     _import_error = ""
 except Exception as e:
     _librosa_can_be_imported = False
-    _import_error = (
-        f"Cannot import librosa because {e}. Make sure to correctly install librosa to be able to install it."
-    )
+    _import_error = f"Cannot import librosa because {e}. Make sure to correctly install librosa to be able to install it."
 
 from PIL import Image  # noqa: E402
 
@@ -94,8 +92,8 @@ class Mel(ConfigMixin, SchedulerMixin):
         # Pad with silence if necessary.
         if len(self.audio) < self.x_res * self.hop_length:
             self.audio = np.concatenate([
-                self.audio, np.zeros(
-                    (self.x_res * self.hop_length - len(self.audio), ))
+                self.audio,
+                np.zeros((self.x_res * self.hop_length - len(self.audio), )),
             ])
 
     def get_number_of_slices(self) -> int:
@@ -139,7 +137,7 @@ class Mel(ConfigMixin, SchedulerMixin):
             sr=self.sr,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
-            n_mels=self.n_mels)
+            n_mels=self.n_mels, )
         log_S = librosa.power_to_db(S, ref=np.max, top_db=self.top_db)
         bytedata = ((
             (log_S + self.top_db) * 255 / self.top_db).clip(0, 255) + 0.5
@@ -165,5 +163,5 @@ class Mel(ConfigMixin, SchedulerMixin):
             sr=self.sr,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
-            n_iter=self.n_iter)
+            n_iter=self.n_iter, )
         return audio

@@ -20,7 +20,8 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
+from .scheduling_utils import (KarrasDiffusionSchedulers, SchedulerMixin,
+                               SchedulerOutput)
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
@@ -104,7 +105,7 @@ class KDPM2DiscreteScheduler(SchedulerMixin, ConfigMixin):
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype=paddle.float32)**2)
+                dtype=paddle.float32, )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -187,8 +188,9 @@ class KDPM2DiscreteScheduler(SchedulerMixin, ConfigMixin):
         self.sigmas = paddle.concat(
             [sigmas[:1], sigmas[1:].repeat_interleave(2), sigmas[-1:]])
         self.sigmas_interpol = paddle.concat([
-            sigmas_interpol[:1], sigmas_interpol[1:].repeat_interleave(2),
-            sigmas_interpol[-1:]
+            sigmas_interpol[:1],
+            sigmas_interpol[1:].repeat_interleave(2),
+            sigmas_interpol[-1:],
         ])
 
         # standard deviation of the initial noise distribution
@@ -215,8 +217,8 @@ class KDPM2DiscreteScheduler(SchedulerMixin, ConfigMixin):
         dists = log_sigma - self.log_sigmas[:, None]
 
         # get sigmas range
-        low_idx = (dists >= 0).cast("int64").cumsum(axis=0).argmax(axis=0).clip(
-            max=self.log_sigmas.shape[0] - 2)
+        low_idx = ((dists >= 0).cast("int64").cumsum(axis=0).argmax(axis=0)
+                   .clip(max=self.log_sigmas.shape[0] - 2))
         high_idx = low_idx + 1
 
         low = self.log_sigmas[low_idx]

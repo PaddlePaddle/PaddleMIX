@@ -46,7 +46,7 @@ STR_OPERATION_TO_FUNC = {
     "==": op.eq,
     "!=": op.ne,
     "<=": op.le,
-    "<": op.lt
+    "<": op.lt,
 }
 
 _paddle_version = "N/A"
@@ -64,8 +64,8 @@ if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
 
         if _paddle_available:
             try:
-                from paddle.incubate.nn.memory_efficient_attention import (  # noqa
-                    memory_efficient_attention, )
+                from paddle.incubate.nn.memory_efficient_attention import \
+                    memory_efficient_attention  # noqa
 
                 _ppxformers_available = True
             except ImportError:
@@ -528,7 +528,7 @@ def requires_backends(obj, backends):
 
     if name in [
             "StableDiffusionDepth2ImgPipeline",
-            "StableDiffusionPix2PixZeroPipeline"
+            "StableDiffusionPix2PixZeroPipeline",
     ] and is_paddlenlp_version(
             "<",
             "2.5.1"  # TODO version

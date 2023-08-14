@@ -153,7 +153,7 @@ class Network(paddle.nn.Layer):
                 kernel_size=1,
                 stride=1,
                 padding=0),
-            paddle.nn.Sigmoid())
+            paddle.nn.Sigmoid(), )
 
         if model_path:
             self.set_state_dict(paddle.load(model_path))
@@ -180,27 +180,27 @@ class Network(paddle.nn.Layer):
             tenScoreOne,
             size=(tenInput.shape[2], tenInput.shape[3]),
             mode="bilinear",
-            align_corners=False)
+            align_corners=False, )
         tenScoreTwo = paddle.nn.functional.interpolate(
             tenScoreTwo,
             size=(tenInput.shape[2], tenInput.shape[3]),
             mode="bilinear",
-            align_corners=False)
+            align_corners=False, )
         tenScoreThr = paddle.nn.functional.interpolate(
             tenScoreThr,
             size=(tenInput.shape[2], tenInput.shape[3]),
             mode="bilinear",
-            align_corners=False)
+            align_corners=False, )
         tenScoreFou = paddle.nn.functional.interpolate(
             tenScoreFou,
             size=(tenInput.shape[2], tenInput.shape[3]),
             mode="bilinear",
-            align_corners=False)
+            align_corners=False, )
         tenScoreFiv = paddle.nn.functional.interpolate(
             tenScoreFiv,
             size=(tenInput.shape[2], tenInput.shape[3]),
             mode="bilinear",
-            align_corners=False)
+            align_corners=False, )
 
         return self.netCombine(
             paddle.concat([
@@ -208,9 +208,7 @@ class Network(paddle.nn.Layer):
             ], 1))
 
 
-remote_model_path = (
-    "https://paddlenlp.bj.bcebos.com/models/community/westfish/network-bsds500-paddle/network-bsds500.pdparams"
-)
+remote_model_path = "https://paddlenlp.bj.bcebos.com/models/community/westfish/network-bsds500-paddle/network-bsds500.pdparams"
 
 
 class HEDdetector:
@@ -218,7 +216,8 @@ class HEDdetector:
         modelpath = os.path.join(annotator_ckpts_path,
                                  "network-bsds500.pdparams")
         if not os.path.exists(modelpath):
-            from paddlenlp.utils.downloader import get_path_from_url_with_filelock
+            from paddlenlp.utils.downloader import \
+                get_path_from_url_with_filelock
 
             get_path_from_url_with_filelock(
                 remote_model_path, root_dir=annotator_ckpts_path)

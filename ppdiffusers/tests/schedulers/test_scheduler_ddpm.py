@@ -194,7 +194,7 @@ class DDPMSchedulerTest(SchedulerCommonTest):
 
         with self.assertRaises(
                 ValueError,
-                msg="Can only pass one of `num_inference_steps` or `custom_timesteps`."
+                msg="Can only pass one of `num_inference_steps` or `custom_timesteps`.",
         ):
             scheduler.set_timesteps(
                 num_inference_steps=num_inference_steps, timesteps=timesteps)

@@ -1,5 +1,21 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from paddlenlp import Taskflow
+
 from paddlemix.utils.log import logger
+
 from .apptask import AppTask
 
 
@@ -17,23 +33,23 @@ class ChatGlmTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        #bulid model
+        # bulid model
         model_instance = Taskflow("text2text_generation", model=model)
 
         self._model = model_instance
 
     def _preprocess(self, inputs):
-        """
-        """
+        """ """
         image = inputs.get("image", None)
         assert image is not None, f"The image is None"
         prompt = inputs.get("prompt", None)
         assert prompt is not None, f"The prompt is None"
 
-        prompt = "Given caption,extract the main object to be replaced and marked it as 'main_object', " + \
-              f"Extract the remaining part as 'other prompt', " + \
-              f"Return main_object, other prompt in English" + \
-              f"Given caption: {prompt}."
+        prompt = (
+            "Given caption,extract the main object to be replaced and marked it as 'main_object', "
+            + f"Extract the remaining part as 'other prompt', " +
+            f"Return main_object, other prompt in English" +
+            f"Given caption: {prompt}.")
 
         inputs["prompt"] = prompt
 
@@ -44,10 +60,10 @@ class ChatGlmTask(AppTask):
         Run the task model from the outputs of the `_preprocess` function.
         """
 
-        result = self._model(inputs["prompt"])['result'][0]
+        result = self._model(inputs["prompt"])["result"][0]
 
-        inputs.pop('prompt', None)
-        inputs['result'] = result
+        inputs.pop("prompt", None)
+        inputs["result"] = result
 
         return inputs
 
@@ -56,12 +72,13 @@ class ChatGlmTask(AppTask):
         The model output is tag ids, this function will convert the model output to raw text.
         """
 
-        prompt, inpaint_prompt = inputs['result'].split('\n')[0].split(':')[
-            -1].strip(), inputs['result'].split('\n')[-1].split(':')[-1].strip()
+        prompt, inpaint_prompt = (
+            inputs["result"].split("\n")[0].split(":")[-1].strip(),
+            inputs["result"].split("\n")[-1].split(":")[-1].strip(), )
 
-        inputs.pop('result', None)
+        inputs.pop("result", None)
 
-        inputs['prompt'] = prompt
-        inputs['inpaint_prompt'] = inpaint_prompt
+        inputs["prompt"] = prompt
+        inputs["inpaint_prompt"] = inpaint_prompt
 
         return inputs

@@ -19,14 +19,16 @@ import paddle
 import PIL.Image
 
 from ...utils import logging
-from .pipeline_fastdeploy_cycle_diffusion import FastDeployCycleDiffusionPipeline
-from .pipeline_fastdeploy_stable_diffusion import FastDeployStableDiffusionPipeline
-from .pipeline_fastdeploy_stable_diffusion_img2img import (
-    FastDeployStableDiffusionImg2ImgPipeline, )
-from .pipeline_fastdeploy_stable_diffusion_inpaint import (
-    FastDeployStableDiffusionInpaintPipeline, )
-from .pipeline_fastdeploy_stable_diffusion_inpaint_legacy import (
-    FastDeployStableDiffusionInpaintPipelineLegacy, )
+from .pipeline_fastdeploy_cycle_diffusion import \
+    FastDeployCycleDiffusionPipeline
+from .pipeline_fastdeploy_stable_diffusion import \
+    FastDeployStableDiffusionPipeline
+from .pipeline_fastdeploy_stable_diffusion_img2img import \
+    FastDeployStableDiffusionImg2ImgPipeline
+from .pipeline_fastdeploy_stable_diffusion_inpaint import \
+    FastDeployStableDiffusionInpaintPipeline
+from .pipeline_fastdeploy_stable_diffusion_inpaint_legacy import \
+    FastDeployStableDiffusionInpaintPipelineLegacy
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 

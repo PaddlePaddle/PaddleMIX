@@ -23,7 +23,8 @@ from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import BaseOutput
 from .embeddings import GaussianFourierProjection, TimestepEmbedding, Timesteps
 from .modeling_utils import ModelMixin
-from .unet_1d_blocks import get_down_block, get_mid_block, get_out_block, get_up_block
+from .unet_1d_blocks import (get_down_block, get_mid_block, get_out_block,
+                             get_up_block)
 
 
 @dataclass
@@ -82,8 +83,10 @@ class UNet1DModel(ModelMixin, ConfigMixin):
             flip_sin_to_cos: bool=True,
             use_timestep_embedding: bool=False,
             freq_shift: float=0.0,
-            down_block_types: Tuple[str]=("DownBlock1DNoSkip", "DownBlock1D",
-                                          "AttnDownBlock1D"),
+            down_block_types: Tuple[str]=(
+                "DownBlock1DNoSkip",
+                "DownBlock1D",
+                "AttnDownBlock1D", ),
             up_block_types: Tuple[str]=("AttnUpBlock1D", "UpBlock1D",
                                         "UpBlock1DNoSkip"),
             mid_block_type: Tuple[str]="UNetMidBlock1D",
@@ -102,13 +105,13 @@ class UNet1DModel(ModelMixin, ConfigMixin):
                 embedding_size=8,
                 set_W_to_weight=False,
                 log=False,
-                flip_sin_to_cos=flip_sin_to_cos)
+                flip_sin_to_cos=flip_sin_to_cos, )
             timestep_input_dim = 2 * block_out_channels[0]
         elif time_embedding_type == "positional":
             self.time_proj = Timesteps(
                 block_out_channels[0],
                 flip_sin_to_cos=flip_sin_to_cos,
-                downscale_freq_shift=freq_shift)
+                downscale_freq_shift=freq_shift, )
             timestep_input_dim = block_out_channels[0]
 
         if use_timestep_embedding:
@@ -181,8 +184,8 @@ class UNet1DModel(ModelMixin, ConfigMixin):
             prev_output_channel = output_channel
 
         # out
-        num_groups_out = norm_num_groups if norm_num_groups is not None else min(
-            block_out_channels[0] // 4, 32)
+        num_groups_out = (norm_num_groups if norm_num_groups is not None else
+                          min(block_out_channels[0] // 4, 32))
         self.out_block = get_out_block(
             out_block_type=out_block_type,
             num_groups_out=num_groups_out,

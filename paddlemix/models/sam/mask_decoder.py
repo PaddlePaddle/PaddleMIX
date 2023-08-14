@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
 from typing import List, Tuple, Type
+
+import paddle
+
 from .common import LayerNorm2d
 
 
@@ -55,15 +57,15 @@ class MaskDecoder(paddle.nn.Layer):
                 in_channels=transformer_dim,
                 out_channels=transformer_dim // 4,
                 kernel_size=2,
-                stride=2),
+                stride=2, ),
             LayerNorm2d(transformer_dim // 4),
             activation(),
             paddle.nn.Conv2DTranspose(
                 in_channels=transformer_dim // 4,
                 out_channels=transformer_dim // 8,
                 kernel_size=2,
-                stride=2),
-            activation())
+                stride=2, ),
+            activation(), )
         self.output_hypernetworks_mlps = paddle.nn.LayerList(sublayers=[
             MLP(transformer_dim, transformer_dim, transformer_dim // 8, 3)
             for i in range(self.num_mask_tokens)
@@ -71,12 +73,13 @@ class MaskDecoder(paddle.nn.Layer):
         self.iou_prediction_head = MLP(transformer_dim, iou_head_hidden_dim,
                                        self.num_mask_tokens, iou_head_depth)
 
-    def forward(self,
-                image_embeddings: paddle.Tensor,
-                image_pe: paddle.Tensor,
-                sparse_prompt_embeddings: paddle.Tensor,
-                dense_prompt_embeddings: paddle.Tensor,
-                multimask_output: bool) -> Tuple[paddle.Tensor, paddle.Tensor]:
+    def forward(
+            self,
+            image_embeddings: paddle.Tensor,
+            image_pe: paddle.Tensor,
+            sparse_prompt_embeddings: paddle.Tensor,
+            dense_prompt_embeddings: paddle.Tensor,
+            multimask_output: bool, ) -> Tuple[paddle.Tensor, paddle.Tensor]:
         """
         Predict masks given image and prompt embeddings.
 
@@ -96,7 +99,7 @@ class MaskDecoder(paddle.nn.Layer):
             image_embeddings=image_embeddings,
             image_pe=image_pe,
             sparse_prompt_embeddings=sparse_prompt_embeddings,
-            dense_prompt_embeddings=dense_prompt_embeddings)
+            dense_prompt_embeddings=dense_prompt_embeddings, )
 
         if multimask_output:
             mask_slice = slice(1, None)
@@ -107,12 +110,13 @@ class MaskDecoder(paddle.nn.Layer):
 
         return masks, iou_pred
 
-    def predict_masks(self,
-                      image_embeddings: paddle.Tensor,
-                      image_pe: paddle.Tensor,
-                      sparse_prompt_embeddings: paddle.Tensor,
-                      dense_prompt_embeddings: paddle.Tensor) -> Tuple[
-                          paddle.Tensor, paddle.Tensor]:
+    def predict_masks(
+            self,
+            image_embeddings: paddle.Tensor,
+            image_pe: paddle.Tensor,
+            sparse_prompt_embeddings: paddle.Tensor,
+            dense_prompt_embeddings: paddle.Tensor, ) -> Tuple[paddle.Tensor,
+                                                               paddle.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         output_tokens = paddle.concat(
             x=[self.iou_token.weight, self.mask_tokens.weight], axis=0)
@@ -150,12 +154,13 @@ class MaskDecoder(paddle.nn.Layer):
 
 
 class MLP(paddle.nn.Layer):
-    def __init__(self,
-                 input_dim: int,
-                 hidden_dim: int,
-                 output_dim: int,
-                 num_layers: int,
-                 sigmoid_output: bool=False) -> None:
+    def __init__(
+            self,
+            input_dim: int,
+            hidden_dim: int,
+            output_dim: int,
+            num_layers: int,
+            sigmoid_output: bool=False, ) -> None:
         super().__init__()
         self.num_layers = num_layers
         h = [hidden_dim] * (num_layers - 1)
@@ -166,8 +171,8 @@ class MLP(paddle.nn.Layer):
 
     def forward(self, x):
         for i, layer in enumerate(self.layers):
-            x = paddle.nn.functional.relu(
-                x=layer(x)) if i < self.num_layers - 1 else layer(x)
+            x = (paddle.nn.functional.relu(x=layer(x))
+                 if i < self.num_layers - 1 else layer(x))
         if self.sigmoid_output:
             x = paddle.nn.functional.sigmoid(x=x)
         return x

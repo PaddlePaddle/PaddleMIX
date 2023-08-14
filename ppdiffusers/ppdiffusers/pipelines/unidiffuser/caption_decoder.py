@@ -18,7 +18,6 @@ import numpy as np
 import paddle
 from paddle import nn
 from paddle.nn import functional as F
-
 from paddlenlp.transformers import GPTConfig, GPTLMHeadModel
 
 from ...configuration_utils import ConfigMixin, register_to_config
@@ -57,12 +56,10 @@ class CaptionDecoder(ModelMixin, ConfigMixin):
         self.gpt = GPTLMHeadModel(config)
 
         self.hidden_dim = hidden_dim
-        self.encode_prefix = nn.Linear(
-            hidden_size,
-            hidden_dim) if hidden_dim is not None else nn.Identity()
-        self.decode_prefix = nn.Linear(
-            hidden_dim,
-            hidden_size) if hidden_dim is not None else nn.Identity()
+        self.encode_prefix = (nn.Linear(hidden_size, hidden_dim)
+                              if hidden_dim is not None else nn.Identity())
+        self.decode_prefix = (nn.Linear(hidden_dim, hidden_size)
+                              if hidden_dim is not None else nn.Identity())
 
     def get_dummy_token(self, batch_size: int) -> paddle.Tensor:
         return paddle.zeros(

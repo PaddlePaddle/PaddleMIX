@@ -1,24 +1,43 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import collections
+import logging
+import math
+import os
+from typing import Callable, Optional, Sequence, Union
+
 import paddle
+import paddle.distributed as dist
+import paddle.nn.functional as F
 import paddle.tensor as tensor
 from paddle import nn
-import paddle.nn.functional as F
-import paddle.distributed as dist
+from paddle.common_ops_import import convert_dtype
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-from paddle.common_ops_import import convert_dtype
-import os
-import logging
-import collections
-import math
-from typing import Callable, Optional, Sequence, Union
-from .utils import to_2tuple, params_normal_
+
+from .utils import params_normal_, to_2tuple
+
 try:
     from .modules.fusedln import FusedLayerNorm
 except:
     from paddle.nn import LayerNorm as FusedLayerNorm
+
     print("Warning, FusedLn module is not available, use LayerNorm instead.")
 try:
-    from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention, LowerTriangularMask
+    from paddle.incubate.nn.memory_efficient_attention import (
+        LowerTriangularMask, memory_efficient_attention)
 except:
     print("Warning: import memory_efficient_attention error")
 
@@ -49,7 +68,7 @@ def _convert_attention_mask(attn_mask, dtype):
     """
     if attn_mask is not None and attn_mask.dtype != dtype:
         attn_mask_dtype = convert_dtype(attn_mask.dtype)
-        if attn_mask_dtype == 'bool' or 'int' in attn_mask_dtype:
+        if attn_mask_dtype == "bool" or "int" in attn_mask_dtype:
             attn_mask = (paddle.cast(attn_mask, dtype) - 1.0) * 1e9
         else:
             attn_mask = paddle.cast(attn_mask, dtype)
@@ -89,7 +108,8 @@ class MultiHeadAttention(paddle.nn.Layer):
         self.fuse_attention_qkv = fuse_attention_qkv
 
         self.head_dim = embed_dim // num_heads
-        assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
+        assert (self.head_dim * num_heads == self.embed_dim
+                ), "embed_dim must be divisible by num_heads"
 
         assert self.num_heads % num_partitions == 0
         self.num_heads = self.num_heads // num_partitions
@@ -104,7 +124,7 @@ class MultiHeadAttention(paddle.nn.Layer):
                     3 * embed_dim,
                     weight_attr=weight_attr,
                     has_bias=True,
-                    gather_output=False)
+                    gather_output=False, )
             else:
                 self.qkv_proj = paddle.nn.Linear(
                     embed_dim,
@@ -117,21 +137,21 @@ class MultiHeadAttention(paddle.nn.Layer):
                     embed_dim,
                     weight_attr=weight_attr,
                     has_bias=True,
-                    gather_output=False)
+                    gather_output=False, )
 
                 self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
                     self.kdim,
                     embed_dim,
                     weight_attr=weight_attr,
                     has_bias=True,
-                    gather_output=False)
+                    gather_output=False, )
 
                 self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
                     self.vdim,
                     embed_dim,
                     weight_attr=weight_attr,
                     has_bias=True,
-                    gather_output=False)
+                    gather_output=False, )
             else:
                 self.q_proj = paddle.nn.Linear(
                     embed_dim,
@@ -152,7 +172,7 @@ class MultiHeadAttention(paddle.nn.Layer):
                 embed_dim,
                 weight_attr=weight_attr,
                 has_bias=True,
-                input_is_parallel=True)
+                input_is_parallel=True, )
         else:
             self.out_proj = paddle.nn.Linear(
                 embed_dim,
@@ -268,7 +288,7 @@ class MultiHeadAttention(paddle.nn.Layer):
                     weights,
                     self.dropout,
                     training=self.training,
-                    mode="upscale_in_train")
+                    mode="upscale_in_train", )
 
         out = tensor.matmul(weights, v)
 
@@ -295,13 +315,13 @@ class LayerNormFp32(paddle.nn.LayerNorm):
 
     def forward(self, x: paddle.Tensor):
         output = paddle.nn.functional.layer_norm(
-            x=x.astype(dtype='float32'),
+            x=x.astype(dtype="float32"),
             normalized_shape=self._normalized_shape,
-            weight=self.weight.astype(dtype='float32')
+            weight=self.weight.astype(dtype="float32")
             if self.weight is not None else None,
-            bias=self.bias.astype(dtype='float32')
+            bias=self.bias.astype(dtype="float32")
             if self.bias is not None else None,
-            epsilon=self._epsilon)
+            epsilon=self._epsilon, )
         return output.astype(dtype=x.dtype)
 
 
@@ -315,12 +335,15 @@ class LayerNorm(paddle.nn.LayerNorm):
             normalized_shape=self._normalized_shape,
             weight=self.weight,
             bias=self.bias,
-            epsilon=self._epsilon)
+            epsilon=self._epsilon, )
         if isinstance(orig_type, paddle.dtype):
             dtype = orig_type
-        elif isinstance(
-                orig_type,
-                str) and orig_type not in ['cpu', 'cuda', 'ipu', 'xpu']:
+        elif isinstance(orig_type, str) and orig_type not in [
+                "cpu",
+                "cuda",
+                "ipu",
+                "xpu",
+        ]:
             dtype = orig_type
         elif isinstance(orig_type, paddle.Tensor):
             dtype = orig_type.dtype
@@ -365,8 +388,9 @@ class PatchDropout(paddle.nn.Layer):
             cls_tokens, x = x[:, :1], x[:, 1:]
         else:
             import pdb
+
             pdb.set_trace()
-            #never used
+            # never used
             # cls_tokens = torch.jit.annotate(paddle.Tensor, x[:, :1])
         batch = x.shape[0]
         num_tokens = x.shape[1]
@@ -379,16 +403,17 @@ class PatchDropout(paddle.nn.Layer):
         x = x[batch_indices, patch_indices_keep]
         if self.exclude_first_token:
             x = paddle.concat(x=(cls_tokens, x), axis=1)
-        if self.training and os.getenv('RoPE') == '1':
+        if self.training and os.getenv("RoPE") == "1":
             return x, patch_indices_keep
         return x
 
 
-def _in_projection_packed(q: paddle.Tensor,
-                          k: paddle.Tensor,
-                          v: paddle.Tensor,
-                          w: paddle.Tensor,
-                          b: Optional[paddle.Tensor]=None):
+def _in_projection_packed(
+        q: paddle.Tensor,
+        k: paddle.Tensor,
+        v: paddle.Tensor,
+        w: paddle.Tensor,
+        b: Optional[paddle.Tensor]=None, ):
     """
     https://github.com/pytorch/pytorch/blob/db2a237763eb8693a20788be94f8c192e762baa8/torch/nn/functional.py#L4726
     """
@@ -414,10 +439,13 @@ def _in_projection_packed(q: paddle.Tensor,
             b_q = b_k = b_v = None
         else:
             b_q, b_k, b_v = b.chunk(chunks=3)
-        return paddle.nn.functional.linear(
-            x=q, weight=w_q, bias=b_q), paddle.nn.functional.linear(
-                x=k, weight=w_k, bias=b_k), paddle.nn.functional.linear(
-                    x=v, weight=w_v, bias=b_v)
+        return (
+            paddle.nn.functional.linear(
+                x=q, weight=w_q, bias=b_q),
+            paddle.nn.functional.linear(
+                x=k, weight=w_k, bias=b_k),
+            paddle.nn.functional.linear(
+                x=v, weight=w_v, bias=b_v), )
 
 
 def masked_fill(x, mask, value):
@@ -426,21 +454,22 @@ def masked_fill(x, mask, value):
 
 
 class Attention(paddle.nn.Layer):
-    def __init__(self,
-                 dim,
-                 num_heads=8,
-                 qkv_bias=True,
-                 scaled_cosine=False,
-                 scale_heads=False,
-                 logit_scale_max=math.log(1.0 / 0.01),
-                 attn_drop=0.0,
-                 proj_drop=0.0,
-                 xattn=False,
-                 rope=False):
+    def __init__(
+            self,
+            dim,
+            num_heads=8,
+            qkv_bias=True,
+            scaled_cosine=False,
+            scale_heads=False,
+            logit_scale_max=math.log(1.0 / 0.01),
+            attn_drop=0.0,
+            proj_drop=0.0,
+            xattn=False,
+            rope=False, ):
         super().__init__()
         self.scaled_cosine = scaled_cosine
         self.scale_heads = scale_heads
-        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        assert dim % num_heads == 0, "dim should be divisible by num_heads"
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim**-0.5
@@ -448,24 +477,24 @@ class Attention(paddle.nn.Layer):
         origin_dtype = paddle.get_default_dtype()
         paddle.set_default_dtype("float32")
         init_data = paddle.randn(shape=[dim, dim * 3]) * self.scale
-        if origin_dtype != 'float32':
+        if origin_dtype != "float32":
             init_data.astype(origin_dtype)
         paddle.set_default_dtype(origin_dtype)
         self.in_proj_weight = self.create_parameter(
             shape=[dim, dim * 3],
-            default_initializer=paddle.nn.initializer.Assign(init_data))
+            default_initializer=paddle.nn.initializer.Assign(init_data), )
         if qkv_bias:
             init_data = paddle.zeros(shape=[dim * 3])
             self.in_proj_bias = self.create_parameter(
                 shape=[dim * 3],
-                default_initializer=paddle.nn.initializer.Assign(init_data))
+                default_initializer=paddle.nn.initializer.Assign(init_data), )
         else:
             self.in_proj_bias = None
         if self.scaled_cosine:
             init_data = paddle.log(x=10 * paddle.ones(shape=[num_heads, 1, 1]))
             self.logit_scale = self.create_parameter(
                 shape=[num_heads, 1, 1],
-                default_initializer=paddle.nn.initializer.Assign(init_data))
+                default_initializer=paddle.nn.initializer.Assign(init_data), )
         else:
             self.logit_scale = None
         self.attn_drop = paddle.nn.Dropout(p=attn_drop)
@@ -473,7 +502,7 @@ class Attention(paddle.nn.Layer):
             init_data = paddle.ones(shape=[num_heads, 1, 1])
             self.head_scale = self.create_parameter(
                 shape=[num_heads, 1, 1],
-                default_initializer=paddle.nn.initializer.Assign(init_data))
+                default_initializer=paddle.nn.initializer.Assign(init_data), )
         else:
             self.head_scale = None
         if dist.get_world_size() > 1:
@@ -514,7 +543,7 @@ class Attention(paddle.nn.Layer):
                 p=self.xattn_drop,
                 scale=self.scale if self.logit_scale is None else None,
                 attn_bias=LowerTriangularMask()
-                if attn_mask is not None else None)
+                if attn_mask is not None else None, )
         else:
             x = q.reshape((L, N * self.num_heads, -1))
             perm_6 = list(range(x.ndim))
@@ -536,9 +565,10 @@ class Attention(paddle.nn.Layer):
                 perm_9 = list(range(x.ndim))
                 perm_9[-1] = -2
                 perm_9[-2] = -1
-                attn = paddle.bmm(x=paddle.nn.functional.normalize(
-                    x=q, axis=-1),
-                                  y=x.transpose(perm=perm_9))
+                attn = paddle.bmm(
+                    x=paddle.nn.functional.normalize(
+                        x=q, axis=-1),
+                    y=x.transpose(perm=perm_9), )
                 logit_scale = paddle.clip(
                     x=self.logit_scale, max=self.logit_scale_max).exp()
                 attn = attn.reshape((N, self.num_heads, L, L)) * logit_scale
@@ -551,12 +581,12 @@ class Attention(paddle.nn.Layer):
                 perm_10[-2] = -1
                 attn = paddle.bmm(x=q, y=x.transpose(perm=perm_10))
             if attn_mask is not None:
-                if attn_mask.dtype == 'bool':
+                if attn_mask.dtype == "bool":
                     new_attn_mask = paddle.zeros_like(
                         x=attn_mask).astype(q.dtype)
                     # new_attn_mask.masked_fill_(attn_mask, float('-inf'))
                     new_attn_mask = masked_fill(new_attn_mask, attn_mask,
-                                                float('-inf'))
+                                                float("-inf"))
                     attn_mask = new_attn_mask
                 attn += attn_mask
             attn = paddle.nn.functional.softmax(attn, axis=-1)
@@ -578,20 +608,21 @@ class Attention(paddle.nn.Layer):
 
 
 class CustomAttention(paddle.nn.Layer):
-    def __init__(self,
-                 dim,
-                 num_heads=8,
-                 qkv_bias=True,
-                 scaled_cosine=True,
-                 scale_heads=False,
-                 logit_scale_max=math.log(1.0 / 0.01),
-                 attn_drop=0.0,
-                 proj_drop=0.0,
-                 xattn=False):
+    def __init__(
+            self,
+            dim,
+            num_heads=8,
+            qkv_bias=True,
+            scaled_cosine=True,
+            scale_heads=False,
+            logit_scale_max=math.log(1.0 / 0.01),
+            attn_drop=0.0,
+            proj_drop=0.0,
+            xattn=False, ):
         super().__init__()
         self.scaled_cosine = scaled_cosine
         self.scale_heads = scale_heads
-        assert dim % num_heads == 0, 'dim should be divisible by num_heads'
+        assert dim % num_heads == 0, "dim should be divisible by num_heads"
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.scale = self.head_dim**-0.5
@@ -599,24 +630,24 @@ class CustomAttention(paddle.nn.Layer):
         origin_dtype = paddle.get_default_dtype()
         paddle.set_default_dtype("float32")
         init_data = paddle.randn(shape=[dim, dim * 3]) * self.scale
-        if origin_dtype != 'float32':
+        if origin_dtype != "float32":
             init_data.astype(origin_dtype)
         paddle.set_default_dtype(origin_dtype)
         self.in_proj_weight = self.create_parameter(
             shape=[dim, dim * 3],
-            default_initializer=paddle.nn.initializer.Assign(init_data))
+            default_initializer=paddle.nn.initializer.Assign(init_data), )
         if qkv_bias:
             self.in_proj_bias = self.create_parameter(
                 shape=[dim * 3],
                 default_initializer=paddle.nn.initializer.Assign(
-                    paddle.zeros(shape=[dim * 3])))
+                    paddle.zeros(shape=[dim * 3])), )
         else:
             self.in_proj_bias = None
         if self.scaled_cosine:
             init_data = paddle.log(x=10 * paddle.ones(shape=[num_heads, 1, 1]))
             self.logit_scale = self.create_parameter(
                 shape=[num_heads, 1, 1],
-                default_initializer=paddle.nn.initializer.Assign(init_data))
+                default_initializer=paddle.nn.initializer.Assign(init_data), )
         else:
             self.logit_scale = None
         self.attn_drop = paddle.nn.Dropout(p=attn_drop)
@@ -624,7 +655,7 @@ class CustomAttention(paddle.nn.Layer):
             init_data = paddle.ones(shape=[num_heads, 1, 1])
             self.head_scale = self.create_parameter(
                 shape=[num_heads, 1, 1],
-                default_initializer=paddle.nn.initializer.Assign(init_data))
+                default_initializer=paddle.nn.initializer.Assign(init_data), )
         else:
             self.head_scale = None
         if dist.get_world_size() > 1:
@@ -636,23 +667,24 @@ class CustomAttention(paddle.nn.Layer):
         self.xattn = xattn
         self.xattn_drop = attn_drop
 
-    def forward(self,
-                query: paddle.Tensor,
-                key: paddle.Tensor,
-                value: paddle.Tensor,
-                attn_mask: Optional[paddle.Tensor]=None):
+    def forward(
+            self,
+            query: paddle.Tensor,
+            key: paddle.Tensor,
+            value: paddle.Tensor,
+            attn_mask: Optional[paddle.Tensor]=None, ):
         q, k, v = _in_projection_packed(query, key, value, self.in_proj_weight,
                                         self.in_proj_bias)
         N_q, B_q, C_q = q.shape
         N_k, B_k, C_k = k.shape
         N_v, B_v, C_v = v.shape
         if self.xattn:
-            q = q.transpose(perm=[1, 0, 2]).reshape((B_q, N_q, self.num_heads,
-                                                     -1))
-            k = k.transpose(perm=[1, 0, 2]).reshape((B_k, N_k, self.num_heads,
-                                                     -1))
-            v = v.transpose(perm=[1, 0, 2]).reshape((B_v, N_v, self.num_heads,
-                                                     -1))
+            q = q.transpose(perm=[1, 0, 2]).reshape(
+                (B_q, N_q, self.num_heads, -1))
+            k = k.transpose(perm=[1, 0, 2]).reshape(
+                (B_k, N_k, self.num_heads, -1))
+            v = v.transpose(perm=[1, 0, 2]).reshape(
+                (B_v, N_v, self.num_heads, -1))
             x = memory_efficient_attention(
                 q,
                 k,
@@ -660,7 +692,7 @@ class CustomAttention(paddle.nn.Layer):
                 p=self.xattn_drop,
                 scale=self.scale if self.logit_scale is None else None,
                 attn_bias=LowerTriangularMask()
-                if attn_mask is not None else None)
+                if attn_mask is not None else None, )
 
         else:
             x = q.reshape((N_q, B_q * self.num_heads, -1))
@@ -683,9 +715,10 @@ class CustomAttention(paddle.nn.Layer):
                 perm_15 = list(range(x.ndim))
                 perm_15[-1] = -2
                 perm_15[-2] = -1
-                attn = paddle.bmm(x=paddle.nn.functional.normalize(
-                    x=q, axis=-1),
-                                  y=x.transpose(perm=perm_15))
+                attn = paddle.bmm(
+                    x=paddle.nn.functional.normalize(
+                        x=q, axis=-1),
+                    y=x.transpose(perm=perm_15), )
                 logit_scale = paddle.clip(
                     x=self.logit_scale, max=self.logit_scale_max).exp()
                 attn = attn.reshape(
@@ -699,11 +732,11 @@ class CustomAttention(paddle.nn.Layer):
                 perm_16[-2] = -1
                 attn = paddle.bmm(x=q, y=x.transpose(perm=perm_16))
             if attn_mask is not None:
-                if attn_mask.dtype == 'bool':
+                if attn_mask.dtype == "bool":
                     new_attn_mask = paddle.zeros_like(
                         x=attn_mask).astype(q.dtype)
                     new_attn_mask = masked_fill(new_attn_mask, attn_mask,
-                                                float('-inf'))
+                                                float("-inf"))
                     attn_mask = new_attn_mask
                 attn += attn_mask
             attn = paddle.nn.functional.softmax(attn, axis=-1)
@@ -725,19 +758,20 @@ class CustomAttention(paddle.nn.Layer):
 
 
 class CustomResidualAttentionBlock(paddle.nn.Layer):
-    def __init__(self,
-                 d_model: int,
-                 n_head: int,
-                 mlp_ratio: float=4.0,
-                 ls_init_value: float=None,
-                 act_layer: Callable=paddle.nn.GELU,
-                 norm_layer: Callable=LayerNorm,
-                 scale_cosine_attn: bool=False,
-                 scale_heads: bool=False,
-                 scale_attn: bool=False,
-                 scale_fc: bool=False,
-                 cross_attn: bool=False,
-                 xattn: bool=False):
+    def __init__(
+            self,
+            d_model: int,
+            n_head: int,
+            mlp_ratio: float=4.0,
+            ls_init_value: float=None,
+            act_layer: Callable=paddle.nn.GELU,
+            norm_layer: Callable=LayerNorm,
+            scale_cosine_attn: bool=False,
+            scale_heads: bool=False,
+            scale_attn: bool=False,
+            scale_fc: bool=False,
+            cross_attn: bool=False,
+            xattn: bool=False, ):
         super().__init__()
         self.ln_1 = norm_layer(d_model)
         self.ln_1_k = norm_layer(d_model) if cross_attn else self.ln_1
@@ -750,47 +784,52 @@ class CustomResidualAttentionBlock(paddle.nn.Layer):
             proj_drop=0.0,
             scaled_cosine=scale_cosine_attn,
             scale_heads=scale_heads,
-            xattn=xattn)
+            xattn=xattn, )
         self.ln_attn = norm_layer(
             d_model) if scale_attn else paddle.nn.Identity()
-        self.ls_1 = LayerScale(
-            d_model,
-            ls_init_value) if ls_init_value is not None else paddle.nn.Identity(
-            )
+        self.ls_1 = (LayerScale(d_model, ls_init_value)
+                     if ls_init_value is not None else paddle.nn.Identity())
         self.ln_2 = norm_layer(d_model)
         mlp_width = int(d_model * mlp_ratio)
         if dist.get_world_size() > 1:
-            self.mlp = paddle.nn.Sequential(
-                * [('c_fc', fleet.meta_parallel.ColumnParallelLinear(
-                    d_model,
-                    mlp_width,
-                    weight_attr=None,
-                    has_bias=True,
-                    gather_output=True)), ('ln', norm_layer(mlp_width)
-                                           if scale_fc else paddle.nn.Identity()
-                                           ), ('gelu', act_layer()),
-                   ('c_proj', fleet.meta_parallel.ColumnParallelLinear(
-                       mlp_width,
-                       d_model,
-                       weight_attr=None,
-                       has_bias=True,
-                       gather_output=True))])
+            self.mlp = paddle.nn.Sequential(* [
+                (
+                    "c_fc",
+                    fleet.meta_parallel.ColumnParallelLinear(
+                        d_model,
+                        mlp_width,
+                        weight_attr=None,
+                        has_bias=True,
+                        gather_output=True, ), ),
+                ("ln", norm_layer(mlp_width)
+                 if scale_fc else paddle.nn.Identity()),
+                ("gelu", act_layer()),
+                (
+                    "c_proj",
+                    fleet.meta_parallel.ColumnParallelLinear(
+                        mlp_width,
+                        d_model,
+                        weight_attr=None,
+                        has_bias=True,
+                        gather_output=True, ), ),
+            ])
         else:
-            self.mlp = paddle.nn.Sequential(* [('c_fc', paddle.nn.Linear(
-                d_model, mlp_width)), (
-                    'ln', norm_layer(mlp_width)
-                    if scale_fc else paddle.nn.Identity()), ('gelu', act_layer(
-                    )), ('c_proj', paddle.nn.Linear(mlp_width, d_model))])
-        self.ls_2 = LayerScale(
-            d_model,
-            ls_init_value) if ls_init_value is not None else paddle.nn.Identity(
-            )
+            self.mlp = paddle.nn.Sequential(* [
+                ("c_fc", paddle.nn.Linear(d_model, mlp_width)),
+                ("ln", norm_layer(mlp_width)
+                 if scale_fc else paddle.nn.Identity()),
+                ("gelu", act_layer()),
+                ("c_proj", paddle.nn.Linear(mlp_width, d_model)),
+            ])
+        self.ls_2 = (LayerScale(d_model, ls_init_value)
+                     if ls_init_value is not None else paddle.nn.Identity())
 
-    def forward(self,
-                q: paddle.Tensor,
-                k: paddle.Tensor,
-                v: paddle.Tensor,
-                attn_mask: Optional[paddle.Tensor]=None):
+    def forward(
+            self,
+            q: paddle.Tensor,
+            k: paddle.Tensor,
+            v: paddle.Tensor,
+            attn_mask: Optional[paddle.Tensor]=None, ):
         q = q + self.ls_1(
             self.ln_attn(
                 self.attn(
@@ -820,35 +859,41 @@ class ResidualAttentionBlock(paddle.nn.Layer):
             self.attn = Attention(d_model, n_head, xattn=True)
         else:
             self.attn = MultiHeadAttention(d_model, n_head)
-        self.ls_1 = LayerScale(
-            d_model,
-            ls_init_value) if ls_init_value is not None else nn.Identity()
+        self.ls_1 = (LayerScale(d_model, ls_init_value)
+                     if ls_init_value is not None else nn.Identity())
         if is_cross_attention:
             self.ln_1_kv = norm_layer(d_model)
 
         self.ln_2 = norm_layer(d_model)
         mlp_width = int(d_model * mlp_ratio)
         if dist.get_world_size() > 1:
-            self.mlp = paddle.nn.Sequential(* [(
-                'c_fc', fleet.meta_parallel.ColumnParallelLinear(
-                    d_model,
-                    mlp_width,
-                    weight_attr=None,
-                    has_bias=True,
-                    gather_output=True)), ('gelu', act_layer()), (
-                        'c_proj', fleet.meta_parallel.ColumnParallelLinear(
-                            mlp_width,
-                            d_model,
-                            weight_attr=None,
-                            has_bias=True,
-                            gather_output=True))])
+            self.mlp = paddle.nn.Sequential(* [
+                (
+                    "c_fc",
+                    fleet.meta_parallel.ColumnParallelLinear(
+                        d_model,
+                        mlp_width,
+                        weight_attr=None,
+                        has_bias=True,
+                        gather_output=True, ), ),
+                ("gelu", act_layer()),
+                (
+                    "c_proj",
+                    fleet.meta_parallel.ColumnParallelLinear(
+                        mlp_width,
+                        d_model,
+                        weight_attr=None,
+                        has_bias=True,
+                        gather_output=True, ), ),
+            ])
         else:
-            self.mlp = paddle.nn.Sequential(* [('c_fc', paddle.nn.Linear(
-                d_model, mlp_width)), ('gelu', act_layer()), (
-                    'c_proj', paddle.nn.Linear(mlp_width, d_model))])
-        self.ls_2 = LayerScale(
-            d_model,
-            ls_init_value) if ls_init_value is not None else nn.Identity()
+            self.mlp = paddle.nn.Sequential(* [
+                ("c_fc", paddle.nn.Linear(d_model, mlp_width)),
+                ("gelu", act_layer()),
+                ("c_proj", paddle.nn.Linear(mlp_width, d_model)),
+            ])
+        self.ls_2 = (LayerScale(d_model, ls_init_value)
+                     if ls_init_value is not None else nn.Identity())
         self.xattn = xattn
 
     def attention(
@@ -860,9 +905,12 @@ class ResidualAttentionBlock(paddle.nn.Layer):
 
         if isinstance(q_x.dtype, paddle.dtype):
             dtype = q_x.dtype
-        elif isinstance(
-                q_x.dtype,
-                str) and q_x.dtype not in ['cpu', 'cuda', 'ipu', 'xpu']:
+        elif isinstance(q_x.dtype, str) and q_x.dtype not in [
+                "cpu",
+                "cuda",
+                "ipu",
+                "xpu",
+        ]:
             dtype = q_x.dtype
         elif isinstance(q_x.dtype, paddle.Tensor):
             dtype = q_x.dtype.dtype
@@ -872,8 +920,8 @@ class ResidualAttentionBlock(paddle.nn.Layer):
         if self.xattn:
             return self.attn(q_x, attn_mask=attn_mask)
 
-        attn_mask = attn_mask.unsqueeze(0).unsqueeze(
-            0) if attn_mask is not None else None
+        attn_mask = (attn_mask.unsqueeze(0).unsqueeze(0)
+                     if attn_mask is not None else None)
         q_x = q_x.transpose((1, 0, 2))
         k_x = k_x if k_x is not None else q_x
         v_x = v_x if v_x is not None else q_x
@@ -886,10 +934,10 @@ class ResidualAttentionBlock(paddle.nn.Layer):
             k_x=None,
             v_x=None,
             attn_mask=None, ):
-        k_x = self.ln_1_kv(k_x) if hasattr(
-            self, "ln_1_kv") and k_x is not None else None
-        v_x = self.ln_1_kv(v_x) if hasattr(
-            self, "ln_1_kv") and v_x is not None else None
+        k_x = (self.ln_1_kv(k_x)
+               if hasattr(self, "ln_1_kv") and k_x is not None else None)
+        v_x = (self.ln_1_kv(v_x)
+               if hasattr(self, "ln_1_kv") and v_x is not None else None)
 
         x = self.ls_1(
             self.attention(
@@ -900,10 +948,11 @@ class ResidualAttentionBlock(paddle.nn.Layer):
 
 
 class Transformer(paddle.nn.Layer):
-    def __init__(self,
-                 config,
-                 act_layer: Callable=paddle.nn.GELU,
-                 norm_layer: Callable=LayerNorm):
+    def __init__(
+            self,
+            config,
+            act_layer: Callable=paddle.nn.GELU,
+            norm_layer: Callable=LayerNorm, ):
         super().__init__()
         self.enable_recompute = False
         self.width = config.width
@@ -916,7 +965,7 @@ class Transformer(paddle.nn.Layer):
                 ls_init_value=config.ls_init_value,
                 act_layer=act_layer,
                 norm_layer=norm_layer,
-                xattn=config.xattn) for _ in range(config.layers)
+                xattn=config.xattn, ) for _ in range(config.layers)
         ])
 
     def get_cast_dtype(self) -> paddle.dtype:
@@ -941,12 +990,12 @@ class AttentionalPooler(paddle.nn.Layer):
         origin_dtype = paddle.get_default_dtype()
         paddle.set_default_dtype("float32")
         init_data = paddle.randn(shape=[config.n_queries, d_model])
-        if origin_dtype != 'float32':
+        if origin_dtype != "float32":
             init_data.astype(origin_dtype)
         paddle.set_default_dtype(origin_dtype)
         self.query = self.create_parameter(
             shape=[config.n_queries, d_model],
-            default_initializer=paddle.nn.initializer.Assign(init_data))
+            default_initializer=paddle.nn.initializer.Assign(init_data), )
         self.attn = MultiHeadAttention(
             d_model,
             config.attn_pooler_heads,
@@ -1057,14 +1106,14 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         init_data = paddle.empty(shape=[width, self.output_dim])
         self.text_projection = self.create_parameter(
             shape=[width, self.output_dim],
-            default_initializer=paddle.nn.initializer.Assign(init_data))
+            default_initializer=paddle.nn.initializer.Assign(init_data), )
         init_data = paddle.empty(shape=[self.num_pos, width])
         self.positional_embedding = self.create_parameter(
             shape=[self.num_pos, width],
-            default_initializer=paddle.nn.initializer.Assign(init_data))
+            default_initializer=paddle.nn.initializer.Assign(init_data), )
         if config.attn_mask:
             self.register_buffer(
-                'attn_mask', self.build_attention_mask(), persistable=False)
+                "attn_mask", self.build_attention_mask(), persistable=False)
         else:
             self.attn_mask = None
         # self.init_parameters()
@@ -1075,8 +1124,8 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         self.positional_embedding = params_normal_(
             self.positional_embedding, std=0.01)
 
-        proj_std = self.transformer.width**-0.5 * (
-            2 * self.transformer.layers)**-0.5
+        proj_std = (self.transformer.width**-0.5 * (2 * self.transformer.layers)
+                    **-0.5)
         attn_std = self.transformer.width**-0.5
         fc_std = (2 * self.transformer.width)**-0.5
         for block in self.transformer.resblocks:
@@ -1100,14 +1149,14 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         self.transformer.enable_recompute = enable
 
     def no_weight_decay(self):
-        return {'positional_embedding'}
+        return {"positional_embedding"}
 
     def get_num_layers(self):
         return self.transformer.layers
 
     def build_attention_mask(self):
         mask = paddle.empty(shape=[self.num_pos, self.num_pos])
-        mask.fill_(value=float('-inf'))
+        mask.fill_(value=float("-inf"))
         mask = paddle.triu(mask, 1)
         return mask
 
@@ -1118,9 +1167,12 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         cast_dtype = self.transformer.get_cast_dtype()
         if isinstance(cast_dtype, paddle.dtype):
             dtype = cast_dtype
-        elif isinstance(
-                cast_dtype,
-                str) and cast_dtype not in ['cpu', 'cuda', 'ipu', 'xpu']:
+        elif isinstance(cast_dtype, str) and cast_dtype not in [
+                "cpu",
+                "cuda",
+                "ipu",
+                "xpu",
+        ]:
             dtype = cast_dtype
         elif isinstance(cast_dtype, paddle.Tensor):
             dtype = cast_dtype.dtype
@@ -1131,9 +1183,12 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
 
         if isinstance(cast_dtype, paddle.dtype):
             dtype = cast_dtype
-        elif isinstance(
-                cast_dtype,
-                str) and cast_dtype not in ['cpu', 'cuda', 'ipu', 'xpu']:
+        elif isinstance(cast_dtype, str) and cast_dtype not in [
+                "cpu",
+                "cuda",
+                "ipu",
+                "xpu",
+        ]:
             dtype = cast_dtype
         elif isinstance(cast_dtype, paddle.Tensor):
             dtype = cast_dtype.dtype

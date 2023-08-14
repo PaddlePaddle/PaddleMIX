@@ -104,7 +104,7 @@ class VQModel(ModelMixin, ConfigMixin):
             vq_embed_dim,
             beta=0.25,
             remap=None,
-            sane_index_shape=False)
+            sane_index_shape=False, )
         self.post_quant_conv = nn.Conv2D(vq_embed_dim, latent_channels, 1)
 
         # pass init params to Decoder
@@ -126,10 +126,11 @@ class VQModel(ModelMixin, ConfigMixin):
 
         return VQEncoderOutput(latents=h)
 
-    def decode(self,
-               h: paddle.Tensor,
-               force_not_quantize: bool=False,
-               return_dict: bool=True):
+    def decode(
+            self,
+            h: paddle.Tensor,
+            force_not_quantize: bool=False,
+            return_dict: bool=True, ):
         # cast h to float16 / float32
         h = h.cast(self.dtype)
         # also go through quantization layer

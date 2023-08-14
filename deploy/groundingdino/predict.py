@@ -1,36 +1,49 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
-import numpy as np
-import requests
 from dataclasses import dataclass, field
 
+import numpy as np
 import paddle
 import paddle.nn.functional as F
-from paddle.inference import Config
-from paddle.inference import create_predictor
-
+import requests
+from paddle.inference import Config, create_predictor
+from paddle.utils.cpp_extension import load
+from paddlenlp.trainer import PdArgumentParser
 from PIL import Image, ImageDraw, ImageFont
 
 from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
-from paddle.utils.cpp_extension import load
-from paddlenlp.trainer import PdArgumentParser
 from paddlemix.utils.log import logger
 
 ms_deformable_attn = load(
     name="deformable_detr_ops",
     sources=[
         "./paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cc",
-        "./paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cu"
-    ])
+        "./paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cu",
+    ], )
 
 
-def load_predictor(model_dir,
-                   run_mode='paddle',
-                   batch_size=1,
-                   device='GPU',
-                   cpu_threads=1,
-                   enable_mkldnn=False,
-                   enable_mkldnn_bfloat16=False,
-                   delete_shuffle_pass=False):
+def load_predictor(
+        model_dir,
+        run_mode="paddle",
+        batch_size=1,
+        device="GPU",
+        cpu_threads=1,
+        enable_mkldnn=False,
+        enable_mkldnn_bfloat16=False,
+        delete_shuffle_pass=False, ):
     """set AnalysisConfig, generate AnalysisPredictor
     Args:
         model_dir (str): root path of __model__ and __params__
@@ -42,31 +55,31 @@ def load_predictor(model_dir,
         trt_opt_shape (int): opt shape for dynamic shape in trt
         trt_calib_mode (bool): If the model is produced by TRT offline quantitative
             calibration, trt_calib_mode need to set True
-        delete_shuffle_pass (bool): whether to remove shuffle_channel_detect_pass in TensorRT. 
+        delete_shuffle_pass (bool): whether to remove shuffle_channel_detect_pass in TensorRT.
                                     Used by action model.
     Returns:
         predictor (PaddlePredictor): AnalysisPredictor
     Raises:
         ValueError: predict by TensorRT need device == 'GPU'.
     """
-    if device != 'GPU' and run_mode != 'paddle':
+    if device != "GPU" and run_mode != "paddle":
         raise ValueError(
-            "Predict by TensorRT mode: {}, expect device=='GPU', but device == {}"
-            .format(run_mode, device))
-    infer_model = os.path.join(model_dir, 'groundingdino_model.pdmodel')
-    infer_params = os.path.join(model_dir, 'groundingdino_model.pdiparams')
+            "Predict by TensorRT mode: {}, expect device=='GPU', but device == {}".
+            format(run_mode, device))
+    infer_model = os.path.join(model_dir, "groundingdino_model.pdmodel")
+    infer_params = os.path.join(model_dir, "groundingdino_model.pdiparams")
 
     config = Config(infer_model, infer_params)
-    if device == 'GPU':
+    if device == "GPU":
         # initial GPU memory(M), device ID
         config.enable_use_gpu(200, 0)
         # optimize graph and fuse op
         config.switch_ir_optim(True)
-    elif device == 'XPU':
+    elif device == "XPU":
         if config.lite_engine_enabled():
             config.enable_lite_engine()
         config.enable_xpu(10 * 1024 * 1024)
-    elif device == 'NPU':
+    elif device == "NPU":
         if config.lite_engine_enabled():
             config.enable_lite_engine()
         config.enable_npu()
@@ -154,12 +167,12 @@ class Predictor(object):
 
     def create_inputs(self):
 
-        self.input_map['x'] = self.image.numpy()
-        self.input_map['m'] = np.array(self.mask.numpy(), dtype='int64')
+        self.input_map["x"] = self.image.numpy()
+        self.input_map["m"] = np.array(self.mask.numpy(), dtype="int64")
 
         for key in self.tokenized_input.keys():
             self.input_map[key] = np.array(
-                self.tokenized_input[key].numpy(), dtype='int64')
+                self.tokenized_input[key].numpy(), dtype="int64")
 
         input_names = self.predictor.get_input_names()
         for i in range(len(input_names)):
@@ -184,7 +197,7 @@ class Predictor(object):
 
         pred_dict = {
             "pred_logits": paddle.to_tensor(pred_logits),
-            "pred_boxes": paddle.to_tensor(pred_boxes)
+            "pred_boxes": paddle.to_tensor(pred_boxes),
         }
         boxes_filt, pred_phrases = self.postprocess(pred_dict)
         return boxes_filt, pred_phrases
@@ -216,10 +229,10 @@ class Predictor(object):
 
 def main(model_args, data_args):
     predictor = Predictor(model_args, data_args)
-    url = (data_args.input_image)
-    #read image
+    url = data_args.input_image
+    # read image
     if os.path.isfile(url):
-        #read image
+        # read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw).convert(
@@ -291,13 +304,17 @@ class ModelArguments:
         }, )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
 
     model_args.device = model_args.device.upper()
-    assert model_args.device in ['CPU', 'GPU', 'XPU', 'NPU'
-                                 ], "device should be CPU, GPU, XPU or NPU"
+    assert model_args.device in [
+        "CPU",
+        "GPU",
+        "XPU",
+        "NPU",
+    ], "device should be CPU, GPU, XPU or NPU"
 
     main(model_args, data_args)

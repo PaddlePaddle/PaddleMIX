@@ -76,8 +76,11 @@ class PNDMPipeline(DiffusionPipeline):
 
         # Sample gaussian noise to begin loop
         image = randn_tensor(
-            (batch_size, self.unet.config.in_channels,
-             self.unet.config.sample_size, self.unet.config.sample_size),
+            (
+                batch_size,
+                self.unet.config.in_channels,
+                self.unet.config.sample_size,
+                self.unet.config.sample_size, ),
             generator=generator, )
 
         self.scheduler.set_timesteps(num_inference_steps)

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import imageio
-
 # pip install imageio[ffmpeg]
 import paddle
 

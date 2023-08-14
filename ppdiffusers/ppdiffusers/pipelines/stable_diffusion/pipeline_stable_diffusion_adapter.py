@@ -18,13 +18,15 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 # from ...loaders import TextualInversionLoaderMixin
-from ...models import AutoencoderKL, MultiAdapter, T2IAdapter, UNet2DConditionModel
+from ...models import (AutoencoderKL, MultiAdapter, T2IAdapter,
+                       UNet2DConditionModel)
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import PIL_INTERPOLATION, logging, randn_tensor, replace_example_docstring
+from ...utils import (PIL_INTERPOLATION, logging, randn_tensor,
+                      replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
@@ -259,8 +261,8 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 logger.warning(
                     f"The following part of your input was truncated because CLIP can only handle sequences up to {self.tokenizer.model_max_length} tokens: {removed_text}"
                 )
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -298,9 +300,9 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
-                return_tensors="pd")
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+                return_tensors="pd", )
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -391,16 +393,20 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                     f"`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}."
                 )
 
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = (batch_size, num_channels_latents, height //
-                 self.vae_scale_factor, width // self.vae_scale_factor)
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
+        shape = (
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor, )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
@@ -537,9 +543,14 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             width = 512
             image = resize(image, 512)
 
-        self.check_inputs(prompt, height, width, callback_steps,
-                          negative_prompt, prompt_embeds,
-                          negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            height,
+            width,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
         is_multi_adapter = isinstance(self.adapter, MultiAdapter)
         if is_multi_adapter:
             adapter_input = [preprocess(img) for img in image]
@@ -589,8 +600,8 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-                latent_model_input = paddle.concat(
-                    x=[latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat(x=[latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
                 noise_pred = self.unet(
@@ -608,8 +619,8 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                         noise_pred_text - noise_pred_uncond)
                 latents = self.scheduler.step(noise_pred, t, latents,
                                               **extra_step_kwargs).prev_sample
-                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
-                        i + 1) % self.scheduler.order == 0:
+                if (i == len(timesteps) - 1 or i + 1 > num_warmup_steps and
+                    (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)

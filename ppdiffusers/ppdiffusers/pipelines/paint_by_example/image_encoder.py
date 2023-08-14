@@ -14,11 +14,8 @@
 # limitations under the License.
 import paddle
 from paddle import nn
-
-from paddlenlp.transformers import (
-    CLIPPretrainedModel,
-    CLIPVisionConfig,
-    CLIPVisionModel, )
+from paddlenlp.transformers import (CLIPPretrainedModel, CLIPVisionConfig,
+                                    CLIPVisionModel)
 
 from ...models.attention import BasicTransformerBlock
 from ...utils import logging
@@ -72,7 +69,7 @@ class PaintByExampleMapper(nn.Layer):
                 num_heads,
                 hid_size,
                 activation_fn="gelu",
-                attention_bias=True) for _ in range(num_layers)
+                attention_bias=True, ) for _ in range(num_layers)
         ])
 
     def forward(self, hidden_states):

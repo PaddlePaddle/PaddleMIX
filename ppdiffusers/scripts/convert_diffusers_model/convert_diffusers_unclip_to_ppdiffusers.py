@@ -18,11 +18,9 @@ from collections import OrderedDict
 import paddle
 import torch
 from diffusers import UnCLIPPipeline as DiffusersUnCLIPPipeline
+from paddlenlp.transformers import (CLIPTextConfig, CLIPTextModelWithProjection,
+                                    CLIPTokenizer)
 
-from paddlenlp.transformers import (
-    CLIPTextConfig,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer, )
 from ppdiffusers import PriorTransformer
 from ppdiffusers import UnCLIPPipeline as PPDiffusersUnCLIPPipeline
 from ppdiffusers import UnCLIPScheduler, UNet2DConditionModel, UNet2DModel

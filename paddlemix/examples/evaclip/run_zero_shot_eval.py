@@ -1,21 +1,37 @@
 # coding:utf-8
-import sys
+
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
-parent_path = os.path.abspath(os.path.join(__file__, *(['..'] * 4)))
+import sys
+
+parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 4)))
 sys.path.insert(0, parent_path)
 import pprint
-from dataclasses import dataclass, field
 import socket
-
-from paddlemix.datasets.laion_clip import get_data
-from paddlemix.processors.clip_processing import image_transform
-from paddlemix.models.evaclip.eva_clip_model import EVACLIP
-from paddlemix.metrics.clip_zero_shot import zero_shot_eval
-from paddlemix.checkpoint import save, load_model
-from paddlemix.utils.env import setdistenv
+from dataclasses import dataclass, field
 
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
+
+from paddlemix.checkpoint import load_model, save
+from paddlemix.datasets.laion_clip import get_data
+from paddlemix.metrics.clip_zero_shot import zero_shot_eval
+from paddlemix.models.evaclip.eva_clip_model import EVACLIP
+from paddlemix.processors.clip_processing import image_transform
+from paddlemix.utils.env import setdistenv
 
 
 @dataclass
@@ -82,7 +98,9 @@ def main_worker(training_args, model_args, data_args):
         model_args.model, ignore_mismatched_sizes=False)
 
     training_args.model = model_args.model
-    if training_args.pretrained_model_path and training_args.pretrained_model_path != "None" and training_args.resume_from_checkpoint is None:
+    if (training_args.pretrained_model_path and
+            training_args.pretrained_model_path != "None" and
+            training_args.resume_from_checkpoint is None):
         load_model(
             training_args, model, ckpt_dir=training_args.pretrained_model_path)
 

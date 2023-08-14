@@ -1,7 +1,21 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
 import paddle.nn as nn
-from paddle.nn import functional as F
 from paddle import distributed as dist
+from paddle.nn import functional as F
 
 from paddlemix.models.common.distributed_utils import allgather
 
@@ -42,13 +56,14 @@ def gather_features_cat_group(image_features,
     return image_features, text_features
 
 
-def gather_features(image_features,
-                    text_features,
-                    local_loss=False,
-                    gather_with_grad=False,
-                    rank=0,
-                    world_size=1,
-                    use_horovod=False):
+def gather_features(
+        image_features,
+        text_features,
+        local_loss=False,
+        gather_with_grad=False,
+        rank=0,
+        world_size=1,
+        use_horovod=False, ):
     hcg = paddle.distributed.fleet.get_hybrid_communicate_group()
     shardinggroup = hcg.get_sharding_parallel_group()
     dpgroup = hcg.get_data_parallel_group()
@@ -88,13 +103,14 @@ def gather_features(image_features,
     return all_image_features, all_text_features
 
 
-def gather_features_bk(image_features,
-                       text_features,
-                       local_loss=False,
-                       gather_with_grad=False,
-                       rank=0,
-                       world_size=1,
-                       use_horovod=False):
+def gather_features_bk(
+        image_features,
+        text_features,
+        local_loss=False,
+        gather_with_grad=False,
+        rank=0,
+        world_size=1,
+        use_horovod=False, ):
 
     # We gather tensors from all gpus
     if gather_with_grad:
@@ -142,14 +158,19 @@ class ClipLoss(nn.Layer):
         image_features, text_features, logit_scale = preds
         if self.world_size > 1:
             all_image_features, all_text_features = gather_features(
-                image_features, text_features, self.local_loss,
-                self.gather_with_grad, self.rank, self.world_size)
+                image_features,
+                text_features,
+                self.local_loss,
+                self.gather_with_grad,
+                self.rank,
+                self.world_size, )
 
             if self.local_loss:
                 logits_per_image = logit_scale * image_features @all_text_features.T
                 logits_per_text = logit_scale * text_features @all_image_features.T
             else:
-                logits_per_image = logit_scale * all_image_features @all_text_features.T
+                logits_per_image = (logit_scale * all_image_features
+                                    @all_text_features.T)
                 logits_per_text = logits_per_image.T
         else:
             logits_per_image = logit_scale * image_features @text_features.T

@@ -13,10 +13,11 @@
 # limitations under the License.
 import numpy as np
 import paddle
-from paddlenlp.trainer.trainer import Trainer
 from paddle.io import DataLoader
-from paddlemix.models.evaclip.utils import clip_grad_norm
+from paddlenlp.trainer.trainer import Trainer
 from tensorboardX import SummaryWriter
+
+from paddlemix.models.evaclip.utils import clip_grad_norm
 
 
 class CLIPTrainer(Trainer):
@@ -24,10 +25,10 @@ class CLIPTrainer(Trainer):
         """
         Implementation of an `Trainer` suitable for EVA-CLIP
         1、selfdefine optimizer for sharding which can't create by passing by args
-        
+
         Args:
             kwargs (dict): any arugments to pass to `Trainer`
-        
+
         Returns:
             None
         """

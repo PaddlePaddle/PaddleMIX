@@ -14,14 +14,15 @@
 import numpy as np
 import paddle
 import paddle.nn.functional as F
+from paddlenlp.taskflow.utils import static_mode_guard
 
-from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
 from paddlemix.models.sam.modeling import SamModel
+from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
 from paddlemix.processors.sam_processing import SamProcessor
 from paddlemix.utils.log import logger
+
 from .apptask import AppTask
-from paddlenlp.taskflow.utils import static_mode_guard
 
 
 class OpenSetDetTask(AppTask):
@@ -57,27 +58,27 @@ class OpenSetDetTask(AppTask):
         """
         self._input_spec = [
             paddle.static.InputSpec(
-                shape=[None, 3, None, None], name='x',
-                dtype='float32'),  #image features
+                shape=[None, 3, None, None], name="x",
+                dtype="float32"),  # image features
             paddle.static.InputSpec(
-                shape=[None, None, None], name='m', dtype="int64"),  # mask
+                shape=[None, None, None], name="m", dtype="int64"),  # mask
             paddle.static.InputSpec(
-                shape=[None, None], name='input_ids', dtype="int64"),
+                shape=[None, None], name="input_ids", dtype="int64"),
             paddle.static.InputSpec(
-                shape=[None, None], name='attention_mask', dtype="int64"),
+                shape=[None, None], name="attention_mask", dtype="int64"),
             paddle.static.InputSpec(
                 shape=[None, None, None],
-                name='text_self_attention_masks',
-                dtype="int64"),
+                name="text_self_attention_masks",
+                dtype="int64", ),
             paddle.static.InputSpec(
-                shape=[None, None], name='position_ids', dtype="int64"),
+                shape=[None, None], name="position_ids", dtype="int64"),
         ]
 
     def _construct_processor(self, model):
         """
         Construct the tokenizer for the predictor.
         """
-        #bulid processor
+        # bulid processor
         self._processor = GroudingDinoProcessor.from_pretrained(
             model, cache_dir=self._model_dir)
 
@@ -86,7 +87,7 @@ class OpenSetDetTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        #bulid model
+        # bulid model
         model_instance = GroundingDinoModel.from_pretrained(
             model, cache_dir=self._model_dir)
 
@@ -95,8 +96,7 @@ class OpenSetDetTask(AppTask):
         self._model = model_instance
 
     def _preprocess(self, inputs):
-        """
-        """
+        """ """
         image = inputs.get("image", None)
         assert image is not None, f"The image is None"
         prompt = inputs.get("prompt", None)
@@ -108,7 +108,7 @@ class OpenSetDetTask(AppTask):
 
         inputs["image_tensor"] = image_tensor
         inputs["mask"] = mask
-        inputs['tokenized_out'] = tokenized_out
+        inputs["tokenized_out"] = tokenized_out
 
         return inputs
 
@@ -119,32 +119,33 @@ class OpenSetDetTask(AppTask):
 
         if self._static_mode:
 
-            inputs['mask'] = paddle.cast(inputs['mask'], dtype='int64')
-            inputs['tokenized_out']['text_self_attention_masks'] = paddle.cast(
-                inputs['tokenized_out']['text_self_attention_masks'],
-                dtype='int64')
+            inputs["mask"] = paddle.cast(inputs["mask"], dtype="int64")
+            inputs["tokenized_out"]["text_self_attention_masks"] = paddle.cast(
+                inputs["tokenized_out"]["text_self_attention_masks"],
+                dtype="int64")
             [pred_boxes, pred_logits] = self.predictor.run([
-                inputs['image_tensor'], inputs['mask'],
-                inputs['tokenized_out']['input_ids'],
-                inputs['tokenized_out']['attention_mask'],
-                inputs['tokenized_out']['text_self_attention_masks'],
-                inputs['tokenized_out']['position_ids']
+                inputs["image_tensor"],
+                inputs["mask"],
+                inputs["tokenized_out"]["input_ids"],
+                inputs["tokenized_out"]["attention_mask"],
+                inputs["tokenized_out"]["text_self_attention_masks"],
+                inputs["tokenized_out"]["position_ids"],
             ])
             result = {"pred_logits": pred_logits, "pred_boxes": pred_boxes}
         else:
             result = self._model(
-                inputs['image_tensor'],
-                inputs['mask'],
-                input_ids=inputs['tokenized_out']['input_ids'],
-                attention_mask=inputs['tokenized_out']['attention_mask'],
-                text_self_attention_masks=inputs['tokenized_out'][
-                    'text_self_attention_masks'],
-                position_ids=inputs['tokenized_out']['position_ids'])
-        inputs.pop('image_tensor', None)
-        inputs.pop('mask', None)
-        inputs.pop('tokenized_out', None)
+                inputs["image_tensor"],
+                inputs["mask"],
+                input_ids=inputs["tokenized_out"]["input_ids"],
+                attention_mask=inputs["tokenized_out"]["attention_mask"],
+                text_self_attention_masks=inputs["tokenized_out"][
+                    "text_self_attention_masks"],
+                position_ids=inputs["tokenized_out"]["position_ids"], )
+        inputs.pop("image_tensor", None)
+        inputs.pop("mask", None)
+        inputs.pop("tokenized_out", None)
 
-        inputs['result'] = result
+        inputs["result"] = result
 
         return inputs
 
@@ -154,13 +155,13 @@ class OpenSetDetTask(AppTask):
         """
 
         if self._static_mode:
-            inputs['result']["pred_logits"] = paddle.to_tensor(inputs['result'][
+            inputs["result"]["pred_logits"] = paddle.to_tensor(inputs["result"][
                 "pred_logits"])
-            inputs['result']["pred_boxes"] = paddle.to_tensor(inputs['result'][
+            inputs["result"]["pred_boxes"] = paddle.to_tensor(inputs["result"][
                 "pred_boxes"])
 
-        logits = F.sigmoid(inputs['result']["pred_logits"])[0]  # (nq, 256)
-        boxes = inputs['result']["pred_boxes"][0]  # (nq, 4)
+        logits = F.sigmoid(inputs["result"]["pred_logits"])[0]  # (nq, 256)
+        boxes = inputs["result"]["pred_boxes"][0]  # (nq, 4)
 
         # filter output
         logits_filt = logits.clone()
@@ -188,10 +189,10 @@ class OpenSetDetTask(AppTask):
 
         boxes = np.array(boxes)
 
-        inputs.pop('result', None)
-        inputs.pop('prompt', None)
-        inputs['labels'] = pred_phrases
-        inputs['boxes'] = boxes
+        inputs.pop("result", None)
+        inputs.pop("prompt", None)
+        inputs["labels"] = pred_phrases
+        inputs["boxes"] = boxes
         return inputs
 
     def set_argument(self, argument: dict):
@@ -214,7 +215,7 @@ class OpenSetSegTask(AppTask):
 
         self.kwargs["openset_det_sam"] = task
 
-        self._input_type = kwargs.get("input_type", 'boxs')
+        self._input_type = kwargs.get("input_type", "boxs")
         # Default to static mode
         self._static_mode = kwargs.get("static_mode", False)
 
@@ -230,25 +231,25 @@ class OpenSetSegTask(AppTask):
         Construct the input spec for the convert dygraph model to static model.
         """
         shape = [None, 3, None, None]
-        if self._input_type == 'points':
+        if self._input_type == "points":
             shape2 = [1, 1, 2]
-        elif self._input_type == 'boxs':
+        elif self._input_type == "boxs":
             shape2 = [None, 4]
-        elif self._input_type == 'points_grid':
+        elif self._input_type == "points_grid":
             shape2 = [64, 1, 2]
 
         self._input_spec = [
             paddle.static.InputSpec(
-                shape=shape, dtype='float32'),
+                shape=shape, dtype="float32"),
             paddle.static.InputSpec(
-                shape=shape2, dtype='int32'),
+                shape=shape2, dtype="int32"),
         ]
 
     def _construct_processor(self, model):
         """
         Construct the tokenizer for the predictor.
         """
-        #bulid processor
+        # bulid processor
         self._processor = SamProcessor.from_pretrained(
             model, cache_dir=self._model_dir)
 
@@ -257,7 +258,7 @@ class OpenSetSegTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        #bulid model
+        # bulid model
         model_instance = SamModel.from_pretrained(
             model, input_type=self._input_type, cache_dir=self._model_dir)
 
@@ -266,8 +267,7 @@ class OpenSetSegTask(AppTask):
         self._model = model_instance
 
     def _preprocess(self, inputs):
-        """
-        """
+        """ """
         image = inputs.get("image", None)
         assert image is not None, f"The image is None"
         box_prompt = inputs.get("boxes", None)
@@ -276,8 +276,8 @@ class OpenSetSegTask(AppTask):
                 points_prompt is not None), f"The prompt is None"
 
         if box_prompt is not None:
-            box_prompt = box_prompt if isinstance(
-                box_prompt, np.ndarray) else np.array(box_prompt)
+            box_prompt = (box_prompt if isinstance(box_prompt, np.ndarray) else
+                          np.array(box_prompt))
         if points_prompt is not None:
             points_prompt = np.array([points_prompt])
 
@@ -285,7 +285,7 @@ class OpenSetSegTask(AppTask):
             image,
             input_type=self._input_type,
             box=box_prompt,
-            point_coords=points_prompt)
+            point_coords=points_prompt, )
 
         inputs["image_seg"] = image_seg
         inputs["prompt"] = prompt
@@ -299,7 +299,7 @@ class OpenSetSegTask(AppTask):
 
         if self._static_mode:
 
-            if self._input_type == 'boxs':
+            if self._input_type == "boxs":
                 inputs["prompt"] = inputs["prompt"].reshape([-1, 4])
 
             result = self.predictor.run([inputs["image_seg"], inputs["prompt"]])
@@ -309,9 +309,9 @@ class OpenSetSegTask(AppTask):
             result = self._model(
                 img=inputs["image_seg"], prompt=inputs["prompt"])
 
-        inputs.pop('image_seg', None)
+        inputs.pop("image_seg", None)
 
-        inputs['result'] = result
+        inputs["result"] = result
 
         return inputs
 
@@ -320,9 +320,9 @@ class OpenSetSegTask(AppTask):
         The model output is tag ids, this function will convert the model output to raw text.
         """
 
-        seg_masks = self._processor.postprocess_masks(inputs['result'])
-        inputs['seg_masks'] = seg_masks
-        inputs.pop('result', None)
+        seg_masks = self._processor.postprocess_masks(inputs["result"])
+        inputs["seg_masks"] = seg_masks
+        inputs.pop("result", None)
         return inputs
 
     def set_argument(self, argument: dict):

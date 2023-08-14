@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import copy
 import math
 
@@ -43,8 +57,8 @@ def get_sine_pos_embed(
     """
     scale = 2 * math.pi
     dim_t = paddle.arange(num_pos_feats)
-    dim_t = temperature**(2. * paddle.floor_divide(dim_t, paddle.to_tensor(2)) /
-                          num_pos_feats)
+    dim_t = temperature**(
+        2.0 * paddle.floor_divide(dim_t, paddle.to_tensor(2)) / num_pos_feats)
 
     def sine_func(x: paddle.Tensor):
         sin_x = x * scale / dim_t
@@ -63,10 +77,11 @@ def get_sine_pos_embed(
     return pos_res
 
 
-def gen_encoder_output_proposals(memory: paddle.Tensor,
-                                 memory_padding_mask: paddle.Tensor,
-                                 spatial_shapes: paddle.Tensor,
-                                 learnedwh=None):
+def gen_encoder_output_proposals(
+        memory: paddle.Tensor,
+        memory_padding_mask: paddle.Tensor,
+        spatial_shapes: paddle.Tensor,
+        learnedwh=None, ):
     """
     Input:
         - memory: bs, \sum{hw}, d_model
@@ -149,12 +164,13 @@ class RandomBoxPerturber:
         return new_refanchors.clip(0, 1)
 
 
-def sigmoid_focal_loss(inputs,
-                       targets,
-                       num_boxes,
-                       alpha: float=0.25,
-                       gamma: float=2,
-                       no_reduction=False):
+def sigmoid_focal_loss(
+        inputs,
+        targets,
+        num_boxes,
+        alpha: float=0.25,
+        gamma: float=2,
+        no_reduction=False, ):
     """
     Loss used in RetinaNet for dense detection: https://arxiv.org/abs/1708.02002.
     Args:

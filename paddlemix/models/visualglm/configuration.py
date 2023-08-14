@@ -16,9 +16,10 @@ import copy
 import os
 from typing import Union
 
-from ...utils.log import logger
 from paddlenlp.transformers.chatglm.configuration import ChatGLMConfig
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
+
+from ...utils.log import logger
 
 __all__ = ["VisualGLMVisionConfig", "VisualGLMQFormerConfig", "VisualGLMConfig"]
 
@@ -115,9 +116,8 @@ class VisualGLMVisionConfig(PretrainedConfig):
         if config_dict.get("model_type") == "visualglm":
             config_dict = config_dict["vision_config"]
 
-        if "model_type" in config_dict and hasattr(
-                cls,
-                "model_type") and config_dict["model_type"] != cls.model_type:
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -226,9 +226,8 @@ class VisualGLMQFormerConfig(PretrainedConfig):
         if config_dict.get("model_type") == "visualglm":
             config_dict = config_dict["qformer_config"]
 
-        if "model_type" in config_dict and hasattr(
-                cls,
-                "model_type") and config_dict["model_type"] != cls.model_type:
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -280,12 +279,13 @@ class VisualGLMConfig(PretrainedConfig):
 
     model_type = "visualglm"
 
-    def __init__(self,
-                 vision_config=None,
-                 qformer_config=None,
-                 text_config=None,
-                 num_query_tokens=32,
-                 **kwargs):
+    def __init__(
+            self,
+            vision_config=None,
+            qformer_config=None,
+            text_config=None,
+            num_query_tokens=32,
+            **kwargs, ):
         super().__init__(**kwargs)
 
         if vision_config is None:
@@ -307,8 +307,8 @@ class VisualGLMConfig(PretrainedConfig):
             )
         self.vision_config = VisualGLMVisionConfig(**vision_config)
         self.qformer_config = VisualGLMQFormerConfig(**qformer_config)
-        text_model_type = text_config[
-            "model_type"] if "model_type" in text_config else "chatglm"
+        text_model_type = (text_config["model_type"]
+                           if "model_type" in text_config else "chatglm")
 
         if text_model_type == "chatglm":
             self.text_config = ChatGLMConfig(**text_config)

@@ -22,10 +22,10 @@ import paddle
 import pandas as pd
 from fid_score import IMAGE_EXTENSIONS, calculate_fid_given_paths
 from paddle.utils.download import get_path_from_url
+from paddlenlp.transformers import CLIPModel, CLIPProcessor
 from PIL import Image
 from tqdm.auto import tqdm
 
-from paddlenlp.transformers import CLIPModel, CLIPProcessor
 from ppdiffusers.utils import DOWNLOAD_SERVER, PPDIFFUSERS_CACHE
 
 base_url = DOWNLOAD_SERVER + "/CompVis/data/"
@@ -55,7 +55,7 @@ def compute_clip_score(model, processor, texts, images_path, batch_size=64):
     for text, image_path in tqdm(
             zip(
                 batchify(texts, batch_size), batchify(images_path, batch_size)),
-            total=math.ceil(len(texts) / batch_size)):
+            total=math.ceil(len(texts) / batch_size), ):
         assert len(text) == len(image_path)
         batch_inputs = processor(
             text=text,
@@ -90,7 +90,7 @@ if __name__ == "__main__":
         "--output_file",
         default="statistic_results.json",
         type=str,
-        help="output file name")
+        help="output file name", )
     parser.add_argument(
         "--text_file_name",
         default="coco30k",
@@ -101,7 +101,7 @@ if __name__ == "__main__":
         "--clip_model_name_or_path",
         default="openai/clip-vit-base-patch32",
         type=str,
-        help="clip_model_name_or_path")
+        help="clip_model_name_or_path", )
     parser.add_argument(
         "--fid_batch_size", default=32, type=int, help="fid_batch_size")
     parser.add_argument(

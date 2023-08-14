@@ -21,18 +21,13 @@ import time
 
 import paddle
 import paddle.nn as nn
-from ldm import (
-    DataArguments,
-    LatentDiffusionModel,
-    ModelArguments,
-    NoTrainerTrainingArguments,
-    TextImagePair,
-    worker_init_fn, )
+from ldm import (DataArguments, LatentDiffusionModel, ModelArguments,
+                 NoTrainerTrainingArguments, TextImagePair, worker_init_fn)
 from paddle.io import DataLoader
 from paddle.optimizer import AdamW
-
 from paddlenlp.trainer import PdArgumentParser, set_seed
 from paddlenlp.utils.log import logger
+
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import unwrap_model
 
@@ -155,8 +150,9 @@ def main():
                 # grad acc, no_sync when (step + 1) % training_args.gradient_accumulation_steps != 0:
                 ctx_manager = model.no_sync()
             else:
-                ctx_manager = contextlib.nullcontext() if sys.version_info >= (
-                    3, 7) else contextlib.suppress()
+                ctx_manager = (contextlib.nullcontext()
+                               if sys.version_info >= (3, 7) else
+                               contextlib.suppress())
 
             with ctx_manager:
                 loss = model(**batch)
@@ -206,36 +202,37 @@ def main():
                                 "reconstruction",
                                 reconstruction_img,
                                 global_steps,
-                                dataformats="NHWC")
+                                dataformats="NHWC", )
                             writer.add_image(
                                 "ddim-samples-1.0",
                                 ddim_10_img,
                                 global_steps,
-                                dataformats="NHWC")
+                                dataformats="NHWC", )
                             writer.add_image(
                                 "ddim-samples-7.5",
                                 ddim_75_img,
                                 global_steps,
-                                dataformats="NHWC")
+                                dataformats="NHWC", )
                     tic_train = time.time()
 
                     if rank == 0 and global_steps % training_args.save_steps == 0:
                         os.makedirs(
                             os.path.join(training_args.output_dir,
                                          f"global-steps-{global_steps}"),
-                            exist_ok=True)
+                            exist_ok=True, )
                         paddle.save(
                             model.state_dict(),
-                            os.path.join(training_args.output_dir,
-                                         f"global-steps-{global_steps}",
-                                         "model_state.pdparams"), )
+                            os.path.join(
+                                training_args.output_dir,
+                                f"global-steps-{global_steps}",
+                                "model_state.pdparams", ), )
 
                 if global_steps >= training_args.max_steps:
                     break
     if rank == 0:
-        paddle.save(model.state_dict(),
-                    os.path.join(training_args.output_dir,
-                                 "model_state.pdparams"))
+        paddle.save(
+            model.state_dict(),
+            os.path.join(training_args.output_dir, "model_state.pdparams"), )
         writer.close()
 
 

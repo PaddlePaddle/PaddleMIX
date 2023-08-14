@@ -18,24 +18,21 @@ from typing import Callable, List, Optional, Union
 
 import paddle
 import PIL.Image
-
-from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-    CLIPVisionModelWithProjection, )
+from paddlenlp.transformers import (CLIPImageProcessor,
+                                    CLIPTextModelWithProjection, CLIPTokenizer,
+                                    CLIPVisionModelWithProjection)
 
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging
 from ..pipeline_utils import DiffusionPipeline
 from .modeling_text_unet import UNetFlatConditionModel
-from .pipeline_versatile_diffusion_dual_guided import (
-    VersatileDiffusionDualGuidedPipeline, )
-from .pipeline_versatile_diffusion_image_variation import (
-    VersatileDiffusionImageVariationPipeline, )
-from .pipeline_versatile_diffusion_text_to_image import (
-    VersatileDiffusionTextToImagePipeline, )
+from .pipeline_versatile_diffusion_dual_guided import \
+    VersatileDiffusionDualGuidedPipeline
+from .pipeline_versatile_diffusion_image_variation import \
+    VersatileDiffusionImageVariationPipeline
+from .pipeline_versatile_diffusion_text_to_image import \
+    VersatileDiffusionTextToImagePipeline
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 

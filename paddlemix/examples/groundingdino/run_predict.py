@@ -1,14 +1,29 @@
-from dataclasses import dataclass, field
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
+from dataclasses import dataclass, field
+
 import numpy as np
-import requests
 import paddle
 import paddle.nn.functional as F
-
-from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
-from paddlemix.models.groundingdino.modeling import GroundingDinoModel
-from PIL import Image, ImageDraw, ImageFont
+import requests
 from paddlenlp.trainer import PdArgumentParser
+from PIL import Image, ImageDraw, ImageFont
+
+from paddlemix.models.groundingdino.modeling import GroundingDinoModel
+from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
 from paddlemix.utils.log import logger
 
 
@@ -95,24 +110,24 @@ def main():
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
 
-    #bulid processor
+    # bulid processor
     processor = GroudingDinoProcessor.from_pretrained(
         model_args.model_name_or_path)
-    #bulid model
+    # bulid model
     logger.info("dino_model: {}".format(model_args.model_name_or_path))
     dino_model = GroundingDinoModel.from_pretrained(
         model_args.model_name_or_path)
     dino_model.eval()
-    #read image
-    url = (data_args.input_image)
-    #read image
+    # read image
+    url = data_args.input_image
+    # read image
     if os.path.isfile(url):
-        #read image
+        # read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw).convert(
             "RGB")
-    #preprocess image text_prompt
+    # preprocess image text_prompt
     image_tensor, mask, tokenized_out = processor(
         images=image_pil, text=data_args.prompt)
 
@@ -120,11 +135,11 @@ def main():
         outputs = dino_model(
             image_tensor,
             mask,
-            input_ids=tokenized_out['input_ids'],
-            attention_mask=tokenized_out['attention_mask'],
+            input_ids=tokenized_out["input_ids"],
+            attention_mask=tokenized_out["attention_mask"],
             text_self_attention_masks=tokenized_out[
-                'text_self_attention_masks'],
-            position_ids=tokenized_out['position_ids'])
+                "text_self_attention_masks"],
+            position_ids=tokenized_out["position_ids"], )
 
     logits = F.sigmoid(outputs["pred_logits"])[0]  # (nq, 256)
     boxes = outputs["pred_boxes"][0]  # (nq, 4)

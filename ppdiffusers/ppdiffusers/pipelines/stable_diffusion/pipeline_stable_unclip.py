@@ -17,11 +17,8 @@ import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import paddle
-
-from paddlenlp.transformers import (
-    CLIPTextModel,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer, )
+from paddlenlp.transformers import (CLIPTextModel, CLIPTextModelWithProjection,
+                                    CLIPTokenizer)
 from paddlenlp.transformers.clip.modeling import CLIPTextModelOutput
 
 from ...loaders import TextualInversionLoaderMixin
@@ -29,7 +26,6 @@ from ...models import AutoencoderKL, PriorTransformer, UNet2DConditionModel
 from ...models.embeddings import get_timestep_embedding
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging, randn_tensor, replace_example_docstring
-
 # from ...utils import is_accelerate_available, is_accelerate_version, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 from .stable_unclip_image_normalizer import StableUnCLIPImageNormalizer
@@ -180,18 +176,21 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             prior_text_encoder_output = self.prior_text_encoder(text_input_ids)
 
             prompt_embeds = prior_text_encoder_output.text_embeds
-            prior_text_encoder_hidden_states = prior_text_encoder_output.last_hidden_state
+            prior_text_encoder_hidden_states = (
+                prior_text_encoder_output.last_hidden_state)
 
         else:
             batch_size = text_model_output[0].shape[0]
-            prompt_embeds, prior_text_encoder_hidden_states = text_model_output[
-                0], text_model_output[1]
+            prompt_embeds, prior_text_encoder_hidden_states = (
+                text_model_output[0],
+                text_model_output[1], )
             text_mask = text_attention_mask
 
         prompt_embeds = prompt_embeds.repeat_interleave(
             num_images_per_prompt, axis=0)
-        prior_text_encoder_hidden_states = prior_text_encoder_hidden_states.repeat_interleave(
-            num_images_per_prompt, axis=0)
+        prior_text_encoder_hidden_states = (
+            prior_text_encoder_hidden_states.repeat_interleave(
+                num_images_per_prompt, axis=0))
 
         text_mask = text_mask.repeat_interleave(num_images_per_prompt, axis=0)
 
@@ -209,7 +208,8 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             negative_prompt_embeds_prior_text_encoder_output = self.prior_text_encoder(
                 uncond_input.input_ids)
 
-            negative_prompt_embeds = negative_prompt_embeds_prior_text_encoder_output.text_embeds
+            negative_prompt_embeds = (
+                negative_prompt_embeds_prior_text_encoder_output.text_embeds)
             uncond_prior_text_encoder_hidden_states = (
                 negative_prompt_embeds_prior_text_encoder_output.
                 last_hidden_state)
@@ -223,10 +223,12 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 [batch_size * num_images_per_prompt, seq_len])
 
             seq_len = uncond_prior_text_encoder_hidden_states.shape[1]
-            uncond_prior_text_encoder_hidden_states = uncond_prior_text_encoder_hidden_states.tile(
-                [1, num_images_per_prompt, 1])
-            uncond_prior_text_encoder_hidden_states = uncond_prior_text_encoder_hidden_states.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
+            uncond_prior_text_encoder_hidden_states = (
+                uncond_prior_text_encoder_hidden_states.tile(
+                    [1, num_images_per_prompt, 1]))
+            uncond_prior_text_encoder_hidden_states = (
+                uncond_prior_text_encoder_hidden_states.reshape(
+                    [batch_size * num_images_per_prompt, seq_len, -1]))
             uncond_text_mask = uncond_text_mask.repeat_interleave(
                 num_images_per_prompt, axis=0)
 
@@ -239,7 +241,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 [negative_prompt_embeds, prompt_embeds])
             prior_text_encoder_hidden_states = paddle.concat([
                 uncond_prior_text_encoder_hidden_states,
-                prior_text_encoder_hidden_states
+                prior_text_encoder_hidden_states,
             ])
 
             text_mask = paddle.concat([uncond_text_mask, text_mask])
@@ -308,8 +310,8 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -359,8 +361,8 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -495,7 +497,8 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
                     f" {negative_prompt_embeds.shape}.")
 
-        if noise_level < 0 or noise_level >= self.image_noising_scheduler.config.num_train_timesteps:
+        if (noise_level < 0 or noise_level >=
+                self.image_noising_scheduler.config.num_train_timesteps):
             raise ValueError(
                 f"`noise_level` must be between 0 and {self.image_noising_scheduler.config.num_train_timesteps - 1}, inclusive."
             )
@@ -551,7 +554,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             timesteps=noise_level,
             embedding_dim=image_embeds.shape[-1],
             flip_sin_to_cos=True,
-            downscale_freq_shift=0)
+            downscale_freq_shift=0, )
 
         # `get_timestep_embeddings` does not contain any weights and will always return f32 tensors,
         # but we might actually be running in fp16. so we need to cast here.
@@ -702,10 +705,13 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         prior_do_classifier_free_guidance = prior_guidance_scale > 1.0
 
         # 3. Encode input prompt
-        prior_prompt_embeds, prior_text_encoder_hidden_states, prior_text_mask = self._encode_prior_prompt(
-            prompt=prompt,
-            num_images_per_prompt=num_images_per_prompt,
-            do_classifier_free_guidance=prior_do_classifier_free_guidance, )
+        (
+            prior_prompt_embeds,
+            prior_text_encoder_hidden_states,
+            prior_text_mask, ) = self._encode_prior_prompt(
+                prompt=prompt,
+                num_images_per_prompt=num_images_per_prompt,
+                do_classifier_free_guidance=prior_do_classifier_free_guidance, )
 
         # 4. Prepare prior timesteps
         self.prior_scheduler.set_timesteps(prior_num_inference_steps)
@@ -741,11 +747,14 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 attention_mask=prior_text_mask, ).predicted_image_embedding
 
             if prior_do_classifier_free_guidance:
-                predicted_image_embedding_uncond, predicted_image_embedding_text = predicted_image_embedding.chunk(
-                    2)
-                predicted_image_embedding = predicted_image_embedding_uncond + prior_guidance_scale * (
-                    predicted_image_embedding_text -
-                    predicted_image_embedding_uncond)
+                (
+                    predicted_image_embedding_uncond,
+                    predicted_image_embedding_text,
+                ) = predicted_image_embedding.chunk(2)
+                predicted_image_embedding = (
+                    predicted_image_embedding_uncond + prior_guidance_scale *
+                    (predicted_image_embedding_text -
+                     predicted_image_embedding_uncond))
 
             prior_latents = self.prior_scheduler.step(
                 predicted_image_embedding,
@@ -796,8 +805,11 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
         # 11. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
-        shape = (batch_size, num_channels_latents, height //
-                 self.vae_scale_factor, width // self.vae_scale_factor)
+        shape = (
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor, )
         latents = self.prepare_latents(
             shape=shape,
             dtype=prompt_embeds.dtype,
@@ -810,8 +822,8 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
         # 13. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
-            latent_model_input = paddle.concat(
-                [latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = (paddle.concat([latents] * 2)
+                                  if do_classifier_free_guidance else latents)
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
 

@@ -155,13 +155,15 @@ MSDeformableAttnCUDAForward(const paddle::Tensor &value,
                              0, value.dtype(), paddle::GPUPlace());
 
   const int num_kernels = batch_size * query_length * num_heads * channels;
-  deformable_attn_cuda_kernel_forward<
-      float><<<GET_BLOCKS(num_kernels, CUDA_NUM_THREADS), CUDA_NUM_THREADS, 0,
-               value.stream()>>>(
-      num_kernels, value.data<float>(), value_spatial_shapes.data<int64_t>(),
-      value_level_start_index.data<int64_t>(), sampling_locations.data<float>(),
-      attention_weights.data<float>(), batch_size, value_length, num_heads,
-      channels, num_levels, query_length, num_points, output.data<float>());
+  deformable_attn_cuda_kernel_forward<float>
+      <<<GET_BLOCKS(num_kernels, CUDA_NUM_THREADS), CUDA_NUM_THREADS, 0,
+         value.stream()>>>(num_kernels, value.data<float>(),
+                           value_spatial_shapes.data<int64_t>(),
+                           value_level_start_index.data<int64_t>(),
+                           sampling_locations.data<float>(),
+                           attention_weights.data<float>(), batch_size,
+                           value_length, num_heads, channels, num_levels,
+                           query_length, num_points, output.data<float>());
   return {output};
 }
 
@@ -868,155 +870,154 @@ void deformable_attn_cuda_backward(
       batch_size * query_length * num_heads * channels;
   if (channels > 1024) {
     if ((channels & 1023) == 0) {
-      deformable_attn_cuda_kernel_backward_shm_reduce_v2_multi_blocks<
-          data_t><<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
-                    num_threads * 3 * sizeof(data_t), stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_reduce_v2_multi_blocks<data_t>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
+             num_threads * 3 * sizeof(data_t), stream>>>(
+              num_kernels, grad_out, data_value, data_spatial_shapes,
+              data_level_start_index, data_sampling_loc, data_attn_weight,
+              batch_size, value_length, num_heads, channels, num_levels,
+              query_length, num_points, grad_value, grad_sampling_loc,
+              grad_attn_weight);
     } else {
-      deformable_attn_cuda_kernel_backward_gm<
-          data_t><<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
-                    stream>>>(num_kernels, grad_out, data_value,
-                              data_spatial_shapes, data_level_start_index,
-                              data_sampling_loc, data_attn_weight, batch_size,
-                              value_length, num_heads, channels, num_levels,
-                              query_length, num_points, grad_value,
-                              grad_sampling_loc, grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_gm<data_t>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
     }
   } else {
     switch (channels) {
     case 1:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<
-          data_t, 1><<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
-                       0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<data_t,
+                                                                         1>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     case 2:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<
-          data_t, 2><<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
-                       0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<data_t,
+                                                                         2>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     case 4:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<
-          data_t, 4><<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
-                       0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<data_t,
+                                                                         4>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     case 8:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<
-          data_t, 8><<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
-                       0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<data_t,
+                                                                         8>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     case 16:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<
-          data_t, 16><<<GET_BLOCKS(num_actual_kernels, num_threads),
-                        num_threads, 0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<data_t,
+                                                                         16>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     case 32:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<
-          data_t, 32><<<GET_BLOCKS(num_actual_kernels, num_threads),
-                        num_threads, 0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v1<data_t,
+                                                                         32>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     case 64:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v2<
-          data_t, 64><<<GET_BLOCKS(num_actual_kernels, num_threads),
-                        num_threads, 0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v2<data_t,
+                                                                         64>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     case 128:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v2<
-          data_t, 128><<<GET_BLOCKS(num_actual_kernels, num_threads),
-                         num_threads, 0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v2<data_t,
+                                                                         128>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     case 256:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v2<
-          data_t, 256><<<GET_BLOCKS(num_actual_kernels, num_threads),
-                         num_threads, 0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v2<data_t,
+                                                                         256>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     case 512:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v2<
-          data_t, 512><<<GET_BLOCKS(num_actual_kernels, num_threads),
-                         num_threads, 0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v2<data_t,
+                                                                         512>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     case 1024:
-      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v2<
-          data_t, 1024><<<GET_BLOCKS(num_actual_kernels, num_threads),
-                          num_threads, 0, stream>>>(
-          num_kernels, grad_out, data_value, data_spatial_shapes,
-          data_level_start_index, data_sampling_loc, data_attn_weight,
-          batch_size, value_length, num_heads, channels, num_levels,
-          query_length, num_points, grad_value, grad_sampling_loc,
-          grad_attn_weight);
+      deformable_attn_cuda_kernel_backward_shm_blocksize_aware_reduce_v2<data_t,
+                                                                         1024>
+          <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads, 0,
+             stream>>>(num_kernels, grad_out, data_value, data_spatial_shapes,
+                       data_level_start_index, data_sampling_loc,
+                       data_attn_weight, batch_size, value_length, num_heads,
+                       channels, num_levels, query_length, num_points,
+                       grad_value, grad_sampling_loc, grad_attn_weight);
       break;
     default:
       if (channels < 64) {
-        deformable_attn_cuda_kernel_backward_shm_reduce_v1<
-            data_t><<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
-                      num_threads * 3 * sizeof(data_t), stream>>>(
-            num_kernels, grad_out, data_value, data_spatial_shapes,
-            data_level_start_index, data_sampling_loc, data_attn_weight,
-            batch_size, value_length, num_heads, channels, num_levels,
-            query_length, num_points, grad_value, grad_sampling_loc,
-            grad_attn_weight);
+        deformable_attn_cuda_kernel_backward_shm_reduce_v1<data_t>
+            <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
+               num_threads * 3 * sizeof(data_t), stream>>>(
+                num_kernels, grad_out, data_value, data_spatial_shapes,
+                data_level_start_index, data_sampling_loc, data_attn_weight,
+                batch_size, value_length, num_heads, channels, num_levels,
+                query_length, num_points, grad_value, grad_sampling_loc,
+                grad_attn_weight);
       } else {
-        deformable_attn_cuda_kernel_backward_shm_reduce_v2<
-            data_t><<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
-                      num_threads * 3 * sizeof(data_t), stream>>>(
-            num_kernels, grad_out, data_value, data_spatial_shapes,
-            data_level_start_index, data_sampling_loc, data_attn_weight,
-            batch_size, value_length, num_heads, channels, num_levels,
-            query_length, num_points, grad_value, grad_sampling_loc,
-            grad_attn_weight);
+        deformable_attn_cuda_kernel_backward_shm_reduce_v2<data_t>
+            <<<GET_BLOCKS(num_actual_kernels, num_threads), num_threads,
+               num_threads * 3 * sizeof(data_t), stream>>>(
+                num_kernels, grad_out, data_value, data_spatial_shapes,
+                data_level_start_index, data_sampling_loc, data_attn_weight,
+                batch_size, value_length, num_heads, channels, num_levels,
+                query_length, num_points, grad_value, grad_sampling_loc,
+                grad_attn_weight);
       }
     }
   }

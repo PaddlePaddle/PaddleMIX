@@ -13,15 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import math
+import os
 from multiprocessing import cpu_count
 
 import paddle
+from paddlenlp.taskflow.utils import dygraph_mode_guard
 
 from paddlemix.utils.env import PPMIX_HOME
 from paddlemix.utils.log import logger
-from paddlenlp.taskflow.utils import dygraph_mode_guard
 
 
 class AppTask(object):
@@ -42,8 +42,8 @@ class AppTask(object):
         self._priority_path = priority_path
         self.is_static_model = kwargs.get("is_static_model", False)
 
-        self._home_path = self.kwargs[
-            "home_path"] if "home_path" in self.kwargs else PPMIX_HOME
+        self._home_path = (self.kwargs["home_path"]
+                           if "home_path" in self.kwargs else PPMIX_HOME)
 
         if "task_path" in self.kwargs:
             self._task_path = self.kwargs["task_path"]
@@ -57,13 +57,13 @@ class AppTask(object):
                                            self.model)
             self._model_dir = os.path.join(self._home_path, "models")
 
-        self._infer_precision = self.kwargs[
-            "precision"] if "precision" in self.kwargs else "fp32"
+        self._infer_precision = (self.kwargs["precision"]
+                                 if "precision" in self.kwargs else "fp32")
         # Default to use Paddle Inference
         self._predictor_type = "paddle-inference"
-        self._num_threads = self.kwargs[
-            "num_threads"] if "num_threads" in self.kwargs else math.ceil(
-                cpu_count() / 2)
+        self._num_threads = (self.kwargs["num_threads"]
+                             if "num_threads" in self.kwargs else
+                             math.ceil(cpu_count() / 2))
 
     def _construct_tokenizer(self, model):
         """
@@ -122,9 +122,9 @@ class AppTask(object):
             self._config.enable_custom_device("npu", self.kwargs["device_id"])
         else:
             precision_map = {
-                'trt_int8': paddle.inference.PrecisionType.Int8,
-                'trt_fp32': paddle.inference.PrecisionType.Float32,
-                'trt_fp16': paddle.inference.PrecisionType.Half
+                "trt_int8": paddle.inference.PrecisionType.Int8,
+                "trt_fp32": paddle.inference.PrecisionType.Float32,
+                "trt_fp16": paddle.inference.PrecisionType.Half,
             }
             self._config.enable_use_gpu(5000, self.kwargs["device_id"])
             self._config.set_cpu_math_library_num_threads(self._num_threads)
@@ -139,33 +139,38 @@ class AppTask(object):
                     min_subgraph_size=30,
                     precision_mode=precision_map[self._infer_precision],
                     use_static=True,
-                    use_calib_mode=False)
+                    use_calib_mode=False, )
 
                 if not os.path.exists(self._tuned_trt_shape_file):
                     self._config.collect_shape_range_info(
                         self._tuned_trt_shape_file)
                 else:
-                    logger.info(f'Use dynamic shape file: '
-                                f'{self._tuned_trt_shape_file} for TRT...')
+                    logger.info(f"Use dynamic shape file: "
+                                f"{self._tuned_trt_shape_file} for TRT...")
                 self._config.enable_tuned_tensorrt_dynamic_shape(
                     self._tuned_trt_shape_file, True)
 
-            if self.task == 'openset_det_sam':
+            if self.task == "openset_det_sam":
                 self._config.delete_pass("add_support_int8_pass")
 
-                if self.model == 'GroundingDino/groundingdino-swint-ogc':
+                if self.model == "GroundingDino/groundingdino-swint-ogc":
                     self._config.exp_disable_tensorrt_ops([
-                        "pad3d", "set_value", "reduce_all", "cumsum_8.tmp_0",
-                        "linear_296.tmp_1"
+                        "pad3d",
+                        "set_value",
+                        "reduce_all",
+                        "cumsum_8.tmp_0",
+                        "linear_296.tmp_1",
                     ])
 
-                if self.model == 'Sam/SamVitH-1024' or self.model == 'Sam/SamVitH-512':
+                if self.model == "Sam/SamVitH-1024" or self.model == "Sam/SamVitH-512":
                     self._config.delete_pass("shuffle_channel_detect_pass")
                     self._config.delete_pass("trt_skip_layernorm_fuse_pass")
                     self._config.delete_pass("preln_residual_bias_fuse_pass")
                     self._config.exp_disable_tensorrt_ops([
-                        "concat_1.tmp_0", "set_value", "empty_0.tmp_0",
-                        "concat_55.tmp_0"
+                        "concat_1.tmp_0",
+                        "set_value",
+                        "empty_0.tmp_0",
+                        "concat_55.tmp_0",
                     ])
 
         self.predictor = paddle.inference.create_predictor(self._config)
@@ -212,11 +217,12 @@ class AppTask(object):
         self._static_model_file = self.inference_model_path + ".pdmodel"
         self._static_params_file = self.inference_model_path + ".pdiparams"
 
-        if paddle.get_device().split(
-                ":", 1)[0] == "npu" and self._infer_precision == "fp16":
+        if (paddle.get_device().split(":", 1)[0] == "npu" and
+                self._infer_precision == "fp16"):
             # transform fp32 model tp fp16 model
             self._static_fp16_model_file = self.inference_model_path + "-fp16.pdmodel"
-            self._static_fp16_params_file = self.inference_model_path + "-fp16.pdiparams"
+            self._static_fp16_params_file = (
+                self.inference_model_path + "-fp16.pdiparams")
             if not os.path.exists(
                     self._static_fp16_model_file) and not os.path.exists(
                         self._static_fp16_params_file):

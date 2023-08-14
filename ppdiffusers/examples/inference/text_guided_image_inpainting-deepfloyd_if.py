@@ -14,7 +14,8 @@
 
 import paddle
 
-from ppdiffusers import IFInpaintingPipeline, IFInpaintingSuperResolutionPipeline
+from ppdiffusers import (IFInpaintingPipeline,
+                         IFInpaintingSuperResolutionPipeline)
 from ppdiffusers.utils import load_image, pd_to_pil
 
 url = "https://huggingface.co/datasets/diffusers/docs-images/resolve/main/if/person.png"
@@ -44,7 +45,7 @@ super_res_1_pipe = IFInpaintingSuperResolutionPipeline.from_pretrained(
     "DeepFloyd/IF-II-L-v1.0",
     text_encoder=None,
     variant="fp16",
-    paddle_dtype=paddle.float16)
+    paddle_dtype=paddle.float16, )
 super_res_1_pipe.enable_xformers_memory_efficient_attention()
 
 image = super_res_1_pipe(

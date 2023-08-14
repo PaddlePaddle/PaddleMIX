@@ -19,24 +19,23 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np
 import paddle
 import PIL.Image
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.image_processor import VaeImageProcessor
 from ppdiffusers.loaders import LoraLoaderMixin, TextualInversionLoaderMixin
-from ppdiffusers.models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
+from ppdiffusers.models import (AutoencoderKL, ControlNetModel,
+                                UNet2DConditionModel)
 from ppdiffusers.pipeline_utils import DiffusionPipeline
-from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
-from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_controlnet import (
-    MultiControlNetModel, )
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker, )
+from ppdiffusers.pipelines.stable_diffusion import \
+    StableDiffusionPipelineOutput
+from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_controlnet import \
+    MultiControlNetModel
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
+    StableDiffusionSafetyChecker
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
-from ppdiffusers.utils import (
-    check_min_version,
-    deprecate,
-    logging,
-    randn_tensor,
-    replace_example_docstring, )
+from ppdiffusers.utils import (check_min_version, deprecate, logging,
+                               randn_tensor, replace_example_docstring)
 
 check_min_version("0.16.1")
 
@@ -133,7 +132,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
             tokenizer: CLIPTokenizer,
             unet: UNet2DConditionModel,
             controlnet: Union[ControlNetModel, List[ControlNetModel], Tuple[
-                ControlNetModel], MultiControlNetModel],
+                ControlNetModel], MultiControlNetModel, ],
             scheduler: KarrasDiffusionSchedulers,
             safety_checker: StableDiffusionSafetyChecker,
             feature_extractor: CLIPImageProcessor,
@@ -174,7 +173,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
         self.control_image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor,
             do_convert_rgb=True,
-            do_normalize=False)
+            do_normalize=False, )
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     def _encode_prompt(
@@ -249,8 +248,8 @@ class StableDiffusionControlNetImg2ImgPipeline(
             config = (self.text_encoder.config
                       if isinstance(self.text_encoder.config, dict) else
                       self.text_encoder.config.to_dict())
-            if config.get("use_attention_mask",
-                          None) is not None and config["use_attention_mask"]:
+            if (config.get("use_attention_mask", None) is not None and
+                    config["use_attention_mask"]):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -304,8 +303,8 @@ class StableDiffusionControlNetImg2ImgPipeline(
             config = (self.text_encoder.config
                       if isinstance(self.text_encoder.config, dict) else
                       self.text_encoder.config.to_dict())
-            if config.get("use_attention_mask",
-                          None) is not None and config["use_attention_mask"]:
+            if (config.get("use_attention_mask", None) is not None and
+                    config["use_attention_mask"]):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -580,8 +579,8 @@ class StableDiffusionControlNetImg2ImgPipeline(
 
             init_latents = self.vae.config.scaling_factor * init_latents
 
-        if batch_size > init_latents.shape[
-                0] and batch_size % init_latents.shape[0] == 0:
+        if (batch_size > init_latents.shape[0] and
+                batch_size % init_latents.shape[0] == 0):
             # expand init_latents for batch_size
             deprecation_message = (
                 f"You have passed {batch_size} text prompts (`prompt`), but only {init_latents.shape[0]} initial"
@@ -593,12 +592,12 @@ class StableDiffusionControlNetImg2ImgPipeline(
                 "len(prompt) != len(image)",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False, )
             additional_image_per_prompt = batch_size // init_latents.shape[0]
             init_latents = paddle.concat(
                 [init_latents] * additional_image_per_prompt, axis=0)
-        elif batch_size > init_latents.shape[
-                0] and batch_size % init_latents.shape[0] != 0:
+        elif (batch_size > init_latents.shape[0] and
+              batch_size % init_latents.shape[0] != 0):
             raise ValueError(
                 f"Cannot duplicate `image` of batch size {init_latents.shape[0]} to {batch_size} text prompts."
             )
@@ -840,8 +839,8 @@ class StableDiffusionControlNetImg2ImgPipeline(
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 

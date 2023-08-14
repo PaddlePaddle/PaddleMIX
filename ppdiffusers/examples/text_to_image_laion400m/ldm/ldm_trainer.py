@@ -18,13 +18,9 @@ import time
 
 import paddle.amp.auto_cast as autocast
 from paddle.io import DataLoader
-
 from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
 from paddlenlp.trainer.integrations import (
-    INTEGRATION_TO_CALLBACK,
-    TrainerCallback,
-    VisualDLCallback,
-    rewrite_logs, )
+    INTEGRATION_TO_CALLBACK, TrainerCallback, VisualDLCallback, rewrite_logs)
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
 
@@ -44,15 +40,17 @@ class VisualDLWithImageCallback(VisualDLCallback):
                 level=args.fp16_opt_level,
                 dtype=amp_dtype, )
         else:
-            ctx_manager = contextlib.nullcontext() if sys.version_info >= (
-                3, 7) else contextlib.suppress()
+            ctx_manager = (contextlib.nullcontext()
+                           if sys.version_info >= (3, 7) else
+                           contextlib.suppress())
 
         return ctx_manager
 
     def on_step_end(self, args, state, control, model=None, **kwargs):
         if hasattr(model, "on_train_batch_end"):
             model.on_train_batch_end()
-        if args.image_logging_steps > 0 and state.global_step % args.image_logging_steps == 0:
+        if (args.image_logging_steps > 0 and
+                state.global_step % args.image_logging_steps == 0):
             control.should_log = True
 
     def on_log(self, args, state, control, logs=None, **kwargs):
@@ -70,12 +68,12 @@ class VisualDLWithImageCallback(VisualDLCallback):
                     input_ids=inputs["input_ids"],
                     guidance_scale=1.0,
                     height=args.resolution,
-                    width=args.resolution)
+                    width=args.resolution, )
                 image_logs["ddim-samples-7.5"] = model.log_image(
                     input_ids=inputs["input_ids"],
                     guidance_scale=7.5,
                     height=args.resolution,
-                    width=args.resolution)
+                    width=args.resolution, )
 
         if not state.is_world_process_zero:
             return
@@ -138,7 +136,8 @@ class BenchmarkCallback(TrainerCallback):
         self.profiler_options = profiler_options
 
     def on_train_begin(self, args, state, control, **kwargs):
-        assert args.gradient_accumulation_steps == 1 and not args.do_eval and not args.do_predict
+        assert (args.gradient_accumulation_steps == 1 and not args.do_eval and
+                not args.do_predict)
         if self.benchmark:
             self.reader_cost_avg = AverageStatistical()
 
@@ -197,7 +196,7 @@ class LatentDiffusionTrainer(Trainer):
             self.add_callback(
                 BenchmarkCallback(
                     benchmark=self.args.benchmark,
-                    profiler_options=self.args.profiler_options))
+                    profiler_options=self.args.profiler_options, ))
             if self.args.benchmark:
                 if self.args.disable_tqdm:
                     self.pop_callback(PrinterCallback)

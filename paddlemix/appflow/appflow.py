@@ -16,6 +16,7 @@
 import paddle
 
 from paddlemix.utils.tools import get_env_device
+
 from .configuration import APPLICATIONS
 
 
@@ -38,7 +39,9 @@ class Appflow(object):
                  device_id=0,
                  from_hf_hub=False,
                  **kwargs):
-        assert app in APPLICATIONS, f"The task name:{app} is not in Taskflow list, please check your task name."
+        assert (
+            app in APPLICATIONS
+        ), f"The task name:{app} is not in Taskflow list, please check your task name."
         self.app = app
         # Set the device for the task
         device = get_env_device()
@@ -76,7 +79,7 @@ class Appflow(object):
                     task=self.app,
                     priority_path=priority_path,
                     from_hf_hub=from_hf_hub,
-                    **kwargs))
+                    **kwargs, ))
 
         app_list = APPLICATIONS.keys()
         Appflow.app_list = app_list

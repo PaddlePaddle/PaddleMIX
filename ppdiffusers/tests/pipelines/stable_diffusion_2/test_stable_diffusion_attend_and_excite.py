@@ -18,13 +18,11 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    StableDiffusionAttendAndExcitePipeline,
-    UNet2DConditionModel, )
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler,
+                         StableDiffusionAttendAndExcitePipeline,
+                         UNet2DConditionModel)
 from ppdiffusers.utils import load_numpy, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
@@ -151,7 +149,7 @@ class StableDiffusionAttendAndExcitePipelineIntegrationTests(unittest.TestCase):
         pipe = StableDiffusionAttendAndExcitePipeline.from_pretrained(
             "CompVis/stable-diffusion-v1-4",
             safety_checker=None,
-            paddle_dtype=paddle.float16)
+            paddle_dtype=paddle.float16, )
 
         prompt = "a painting of an elephant with glasses"
         token_indices = [5, 7]

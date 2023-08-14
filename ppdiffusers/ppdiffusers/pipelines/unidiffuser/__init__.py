@@ -18,12 +18,9 @@ from typing import List, Optional, Union
 import numpy as np
 import PIL
 
-from ...utils import (
-    BaseOutput,
-    OptionalDependencyNotAvailable,
-    is_einops_available,
-    is_paddle_available,
-    is_paddlenlp_available, )
+from ...utils import (BaseOutput, OptionalDependencyNotAvailable,
+                      is_einops_available, is_paddle_available,
+                      is_paddlenlp_available)
 
 
 @dataclass
@@ -47,8 +44,8 @@ try:
             is_einops_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
-    from ...utils.dummy_paddle_and_paddlenlp_and_einops_objects import (
-        UniDiffuserPipeline, )
+    from ...utils.dummy_paddle_and_paddlenlp_and_einops_objects import \
+        UniDiffuserPipeline
     from ...utils.dummy_paddle_and_paddlenlp_objects import CaptionDecoder
 else:
     from .caption_decoder import CaptionDecoder

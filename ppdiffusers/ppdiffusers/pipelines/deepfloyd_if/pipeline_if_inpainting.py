@@ -21,19 +21,14 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-
-from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, T5EncoderModel,
+                                    T5Tokenizer)
 
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
-from ...utils import (
-    BACKENDS_MAPPING,
-    PIL_INTERPOLATION,
-    is_bs4_available,
-    is_ftfy_available,
-    logging,
-    randn_tensor,
-    replace_example_docstring, )
+from ...utils import (BACKENDS_MAPPING, PIL_INTERPOLATION, is_bs4_available,
+                      is_ftfy_available, logging, randn_tensor,
+                      replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import IFPipelineOutput
 from .safety_checker import IFSafetyChecker
@@ -139,8 +134,11 @@ class IFInpaintingPipeline(DiffusionPipeline):
         "\|" + "\\" + "\/" + "\*" + r"]{1,}")  # noqa
 
     _optional_components = [
-        "tokenizer", "text_encoder", "safety_checker", "feature_extractor",
-        "watermarker"
+        "tokenizer",
+        "text_encoder",
+        "safety_checker",
+        "feature_extractor",
+        "watermarker",
     ]
 
     def __init__(
@@ -638,15 +636,15 @@ class IFInpaintingPipeline(DiffusionPipeline):
             image = numpy_to_pd(image)  # to pd
 
         elif isinstance(image[0], np.ndarray):
-            image = np.concatenate(
+            image = (np.concatenate(
                 image, axis=0) if image[0].ndim == 4 else np.stack(
-                    image, axis=0)
+                    image, axis=0))
             image = numpy_to_pd(image)
 
         elif isinstance(image[0], paddle.Tensor):
-            image = paddle.concat(
+            image = (paddle.concat(
                 image, axis=0) if image[0].ndim == 4 else paddle.stack(
-                    image, axis=0)
+                    image, axis=0))
 
         return image
 
@@ -714,14 +712,15 @@ class IFInpaintingPipeline(DiffusionPipeline):
 
         return timesteps, num_inference_steps - t_start
 
-    def prepare_intermediate_images(self,
-                                    image,
-                                    timestep,
-                                    batch_size,
-                                    num_images_per_prompt,
-                                    dtype,
-                                    mask_image,
-                                    generator=None):
+    def prepare_intermediate_images(
+            self,
+            image,
+            timestep,
+            batch_size,
+            num_images_per_prompt,
+            dtype,
+            mask_image,
+            generator=None, ):
         image_batch_size, channels, height, width = image.shape
 
         batch_size = batch_size * num_images_per_prompt
@@ -749,9 +748,9 @@ class IFInpaintingPipeline(DiffusionPipeline):
             self,
             prompt: Union[str, List[str]]=None,
             image: Union[PIL.Image.Image, paddle.Tensor, np.ndarray, List[
-                PIL.Image.Image], List[paddle.Tensor], List[np.ndarray]]=None,
+                PIL.Image.Image], List[paddle.Tensor], List[np.ndarray], ]=None,
             mask_image: Union[PIL.Image.Image, paddle.Tensor, np.ndarray, List[
-                PIL.Image.Image], List[paddle.Tensor], List[np.ndarray]]=None,
+                PIL.Image.Image], List[paddle.Tensor], List[np.ndarray], ]=None,
             strength: float=1.0,
             num_inference_steps: int=50,
             timesteps: List[int]=None,
@@ -919,8 +918,13 @@ class IFInpaintingPipeline(DiffusionPipeline):
             (batch_size * num_images_per_prompt, ))
 
         intermediate_images = self.prepare_intermediate_images(
-            image, noise_timestep, batch_size, num_images_per_prompt, dtype,
-            mask_image, generator)
+            image,
+            noise_timestep,
+            batch_size,
+            num_images_per_prompt,
+            dtype,
+            mask_image,
+            generator, )
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -948,15 +952,15 @@ class IFInpaintingPipeline(DiffusionPipeline):
                     noise_pred_uncond, _ = noise_pred_uncond.split(
                         [
                             model_input.shape[1],
-                            noise_pred_uncond.shape[1] - model_input.shape[1]
+                            noise_pred_uncond.shape[1] - model_input.shape[1],
                         ],
-                        axis=1)
+                        axis=1, )
                     noise_pred_text, predicted_variance = noise_pred_text.split(
                         [
                             model_input.shape[1],
-                            noise_pred_text.shape[1] - model_input.shape[1]
+                            noise_pred_text.shape[1] - model_input.shape[1],
                         ],
-                        axis=1)
+                        axis=1, )
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
                     noise_pred = paddle.concat(
@@ -1018,4 +1022,4 @@ class IFInpaintingPipeline(DiffusionPipeline):
         return IFPipelineOutput(
             images=image,
             nsfw_detected=nsfw_detected,
-            watermark_detected=watermark_detected)
+            watermark_detected=watermark_detected, )

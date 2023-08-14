@@ -23,7 +23,8 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
+from .scheduling_utils import (KarrasDiffusionSchedulers, SchedulerMixin,
+                               SchedulerOutput)
 
 
 def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
@@ -152,7 +153,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype=paddle.float32)**2)
+                dtype=paddle.float32, )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -252,9 +253,9 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             )  # When clip to min=1, equivalent to standard clipping to [-1, 1]
         s = s.unsqueeze(
             1)  # (batch_size, 1) because clip will broadcast along axis=0
-        sample = paddle.clip(
-            sample, -s, s
-        ) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
+        sample = (
+            paddle.clip(sample, -s, s) /
+            s)  # "we threshold xt0 to the range [-s, s] and then divide by s"
 
         sample = paddle.reshape(sample, [batch_size, channels, height, width])
         sample = paddle.cast(sample, dtype)
@@ -577,8 +578,8 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
                 order=self.this_order, )
 
         # now prepare to run the predictor
-        prev_timestep = 0 if step_index == len(
-            self.timesteps) - 1 else self.timesteps[step_index + 1]
+        prev_timestep = (0 if step_index == len(self.timesteps) - 1 else
+                         self.timesteps[step_index + 1])
 
         for i in range(self.config.solver_order - 1):
             self.model_outputs[i] = self.model_outputs[i + 1]
@@ -646,7 +647,8 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
                 original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
-        noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
+        noisy_samples = (sqrt_alpha_prod * original_samples +
+                         sqrt_one_minus_alpha_prod * noise)
         return noisy_samples
 
     def __len__(self):

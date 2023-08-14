@@ -821,4 +821,4 @@ def random_resized_crop(
     i, j, h, w = _dynamic_get_param(image)
 
     cropped_img = F.crop(image, i, j, h, w)  # pil
-    return F.resize(cropped_img, size, 'bicubic')
+    return F.resize(cropped_img, size, "bicubic")

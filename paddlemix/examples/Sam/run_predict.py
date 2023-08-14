@@ -1,18 +1,32 @@
-from dataclasses import dataclass, field
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
-import numpy as np
-import requests
+from dataclasses import dataclass, field
 from typing import List
+
+import matplotlib.pyplot as plt
+import numpy as np
 import paddle
 import paddle.nn.functional as F
-
-from PIL import Image, ImageDraw, ImageFont
+import requests
 from paddlenlp.trainer import PdArgumentParser
-from paddlemix.utils.log import logger
+from PIL import Image, ImageDraw, ImageFont
 
 from paddlemix.models.sam.modeling import SamModel
 from paddlemix.processors.sam_processing import SamProcessor
-import matplotlib.pyplot as plt
+from paddlemix.utils.log import logger
 
 
 def show_mask(mask, ax, random_color=False):
@@ -28,7 +42,7 @@ def show_mask(mask, ax, random_color=False):
 # def show_box(box, ax, label):
 #     x0, y0 = box[0], box[1]
 #     w, h = box[2] - box[0], box[3] - box[1]
-#     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2)) 
+#     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2))
 #     ax.text(x0, y0, label)
 
 
@@ -75,17 +89,17 @@ class ModelArguments:
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
-    url = (data_args.input_image)
+    url = data_args.input_image
     if os.path.isfile(url):
-        #read image
+        # read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw).convert(
             "RGB")
 
-    #bulid processor
+    # bulid processor
     processor = SamProcessor.from_pretrained(model_args.model_name_or_path)
-    #bulid model
+    # bulid model
     logger.info("SamModel: {}".format(model_args.model_name_or_path))
     sam_model = SamModel.from_pretrained(
         model_args.model_name_or_path, input_type=model_args.input_type)
@@ -99,7 +113,7 @@ def main():
         image_pil,
         input_type=model_args.input_type,
         box=data_args.box_prompt,
-        point_coords=data_args.points_prompt)
+        point_coords=data_args.points_prompt, )
     seg_masks = sam_model(img=image_seg, prompt=prompt)
     seg_masks = processor.postprocess_masks(seg_masks)
 
@@ -112,12 +126,12 @@ def main():
         for mask in seg_masks:
             show_mask(mask.cpu().numpy(), plt.gca(), random_color=True)
 
-        plt.axis('off')
+        plt.axis("off")
         plt.savefig(
-            os.path.join(model_args.output_dir, 'mask_pred.jpg'),
+            os.path.join(model_args.output_dir, "mask_pred.jpg"),
             bbox_inches="tight",
             dpi=300,
-            pad_inches=0.0)
+            pad_inches=0.0, )
 
 
 if __name__ == "__main__":

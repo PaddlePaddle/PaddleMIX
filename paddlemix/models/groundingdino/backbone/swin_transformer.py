@@ -13,18 +13,22 @@
 # limitations under the License.
 
 import os
-import numpy as np
 from typing import Union
+
+import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle.distributed.fleet.utils import recompute
 from paddle.nn.initializer import Constant
+
 from ..layers import DropPath, to_2tuple
+
 trunc_normal_ = nn.initializer.TruncatedNormal(std=0.02)
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
+from paddlenlp.transformers.model_utils import (PretrainedModel,
+                                                register_base_model)
 """ swin_transformer model configuration"""
 __all__ = ["SwinTransformerConfig"]
 
@@ -111,12 +115,13 @@ class SwinTransformerPretrainedModel(PretrainedModel):
 class Mlp(nn.Layer):
     """Multilayer perceptron."""
 
-    def __init__(self,
-                 in_features,
-                 hidden_features=None,
-                 out_features=None,
-                 act_layer=nn.GELU,
-                 drop=0.0):
+    def __init__(
+            self,
+            in_features,
+            hidden_features=None,
+            out_features=None,
+            act_layer=nn.GELU,
+            drop=0.0, ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -202,7 +207,7 @@ class WindowAttention(nn.Layer):
             shape=[(2 * window_size[0] - 1) * (2 * window_size[1] - 1),
                    num_heads],
             dtype=paddle.float32,
-            default_initializer=Constant(0.))  # 2*Wh-1 * 2*Ww-1, nH
+            default_initializer=Constant(0.0), )  # 2*Wh-1 * 2*Ww-1, nH
 
         # get pair-wise relative position index for each token inside the window
         coords_h = paddle.arange(self.window_size[0])
@@ -210,9 +215,9 @@ class WindowAttention(nn.Layer):
         coords = paddle.stack(paddle.meshgrid(
             [coords_h, coords_w]))  # 2, Wh, Ww
         coords_flatten = paddle.flatten(coords, 1)  # 2, Wh*Ww
-        relative_coords = coords_flatten[:, :,
-                                         None] - coords_flatten[:,
-                                                                None, :]  # 2, Wh*Ww, Wh*Ww
+        relative_coords = (
+            coords_flatten[:, :, None] - coords_flatten[:, None, :]
+        )  # 2, Wh*Ww, Wh*Ww
         relative_coords = relative_coords.transpose(
             [1, 2, 0])  # Wh*Ww, Wh*Ww, 2
         relative_coords[:, :, 0] += self.window_size[
@@ -239,8 +244,10 @@ class WindowAttention(nn.Layer):
         qkv = (self.qkv(x)
                .reshape([B_, N, 3, self.num_heads, C // self.num_heads])
                .transpose([2, 0, 3, 1, 4]))
-        q, k, v = qkv[0], qkv[1], qkv[
-            2]  # make torchscript happy (cannot use tensor as tuple)
+        q, k, v = (
+            qkv[0],
+            qkv[1],
+            qkv[2], )  # make torchscript happy (cannot use tensor as tuple)
 
         q = q * self.scale
         attn = paddle.mm(q, k.transpose([0, 1, 3, 2]))
@@ -251,7 +258,8 @@ class WindowAttention(nn.Layer):
 
         relative_position_bias = relative_position_bias.reshape([
             self.window_size[0] * self.window_size[1],
-            self.window_size[0] * self.window_size[1], -1
+            self.window_size[0] * self.window_size[1],
+            -1,
         ])  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.transpose(
             [2, 0, 1])  # nH, Wh*Ww, Wh*Ww
@@ -311,7 +319,8 @@ class SwinTransformerBlock(nn.Layer):
         self.window_size = window_size
         self.shift_size = shift_size
         self.mlp_ratio = mlp_ratio
-        assert 0 <= self.shift_size < self.window_size, "shift_size must in 0-window_size"
+        assert (0 <= self.shift_size < self.window_size
+                ), "shift_size must in 0-window_size"
 
         self.norm1 = norm_layer(dim)
         self.attn = WindowAttention(
@@ -327,10 +336,11 @@ class SwinTransformerBlock(nn.Layer):
             drop_path) if drop_path > 0.0 else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim,
-                       hidden_features=mlp_hidden_dim,
-                       act_layer=act_layer,
-                       drop=drop)
+        self.mlp = Mlp(
+            in_features=dim,
+            hidden_features=mlp_hidden_dim,
+            act_layer=act_layer,
+            drop=drop, )
 
         self.H = None
         self.W = None
@@ -356,7 +366,7 @@ class SwinTransformerBlock(nn.Layer):
         pad_list = paddle.zeros([4], dtype="int32")
         pad_list[1] = pad_r
         pad_list[3] = pad_b
-        x = F.pad(x, pad_list, data_format='NHWC')
+        x = F.pad(x, pad_list, data_format="NHWC")
         _, Hp, Wp, _ = x.shape
 
         # cyclic shift
@@ -433,7 +443,7 @@ class PatchMerging(nn.Layer):
         pad_list = paddle.zeros([4], dtype="int32")
         pad_list[3] = H % 2
         pad_list[1] = W % 2
-        x = F.pad(x, pad_list, data_format='NHWC')
+        x = F.pad(x, pad_list, data_format="NHWC")
 
         x0 = x[:, 0::2, 0::2, :]  # B H/2 W/2 C
         x1 = x[:, 1::2, 0::2, :]  # B H/2 W/2 C
@@ -541,8 +551,8 @@ class BasicLayer(nn.Layer):
         mask_windows = mask_windows.reshape(
             [-1, self.window_size * self.window_size])
         attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
-        attn_mask = -100.0 * paddle.ones_like(attn_mask) * (
-            attn_mask != 0).astype(paddle.float32)
+        attn_mask = (-100.0 * paddle.ones_like(attn_mask) *
+                     (attn_mask != 0).astype(paddle.float32))
 
         for blk in self.blocks:
             blk.H, blk.W = H, W
@@ -604,8 +614,8 @@ class PatchEmbed(nn.Layer):
 @register_base_model
 class SwinTransformerModel(SwinTransformerPretrainedModel):
     """Swin Transformer backbone.
-        A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
-          https://arxiv.org/pdf/2103.14030
+    A PyTorch impl of : `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
+      https://arxiv.org/pdf/2103.14030
     """
 
     def __init__(self, config: SwinTransformerConfig):
@@ -646,7 +656,7 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
                     patches_resolution[1]
                 ],
                 dtype=paddle.float32,
-                default_initializer=Constant(0.))
+                default_initializer=Constant(0.0), )
             trunc_normal_(self.absolute_pos_embed)
 
         self.pos_drop = nn.Dropout(p=config.drop_rate)

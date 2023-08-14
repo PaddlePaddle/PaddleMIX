@@ -18,20 +18,16 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    PNDMScheduler,
-    StableDiffusionAdapterPipeline,
-    T2IAdapter,
-    UNet2DConditionModel, )
+
+from ppdiffusers import (AutoencoderKL, PNDMScheduler,
+                         StableDiffusionAdapterPipeline, T2IAdapter,
+                         UNet2DConditionModel)
 from ppdiffusers.utils import floats_tensor, load_image, load_numpy, slow
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 
-from ..pipeline_params import (
-    TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
-    TEXT_GUIDED_IMAGE_VARIATION_PARAMS, )
+from ..pipeline_params import (TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
+                               TEXT_GUIDED_IMAGE_VARIATION_PARAMS)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -119,8 +115,15 @@ class StableDiffusionAdapterPipelineFastTests(PipelineTesterMixin,
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.9088084, 0.6012194, 0.43046606, 0.7228667, 0.46428588, 0.30164504,
-            0.508494, 0.6241546, 0.55453974
+            0.9088084,
+            0.6012194,
+            0.43046606,
+            0.7228667,
+            0.46428588,
+            0.30164504,
+            0.508494,
+            0.6241546,
+            0.55453974,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
 

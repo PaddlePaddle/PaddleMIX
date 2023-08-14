@@ -11,24 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import sys
 import os
+import sys
+
 sys.path.insert(
-    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../..'))
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
+import argparse
+import os
 from dataclasses import dataclass, field
+
 import paddle
 import requests
+import yaml
 from paddlenlp.trainer import PdArgumentParser
 from PIL import Image
+
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import Blip2Processor
 from paddlemix.utils.log import logger
-import os
-import yaml
-import paddle
-import argparse
-import os
-import paddle
 
 
 @dataclass
@@ -42,8 +42,8 @@ class DataArguments:
 
     input_image: str = field(
         default="http://images.cocodataset.org/val2017/000000039769.jpg",
-        metadata={"help": "The name of input image."
-                  })  # "http://images.cocodataset.org/val2017/000000039769.jpg"
+        metadata={"help": "The name of input image."},
+    )  # "http://images.cocodataset.org/val2017/000000039769.jpg"
     prompt: str = field(
         default=None,
         metadata={"help": "The prompt of the image to be generated."
@@ -87,35 +87,35 @@ def main():
         decorated = paddle.amp.decorate(
             models=[model.visual_encoder, model.language_model],
             optimizers=None,
-            level="O2")
+            level="O2", )
         model.visual_encoder, model.language_model = decorated
         dtype = "float16"
 
     shape1 = [None, 3, None, None]
-    input_spec = [paddle.static.InputSpec(shape=shape1, dtype='float32'), ]
+    input_spec = [paddle.static.InputSpec(shape=shape1, dtype="float32"), ]
     image_encoder = paddle.jit.to_static(
         model.encode_image, input_spec=input_spec)
     save_path = "blip2_export"
-    paddle.jit.save(image_encoder, os.path.join(save_path, 'image_encoder'))
+    paddle.jit.save(image_encoder, os.path.join(save_path, "image_encoder"))
 
     # TODO add test config
     deploy_info = {
-        'Deploy': {
-            'model': 'image_encoder.pdmodel',
-            'params': 'image_encoder.pdiparams',
-            'input_img_shape': shape1,
-            'output_dtype': dtype
+        "Deploy": {
+            "model": "image_encoder.pdmodel",
+            "params": "image_encoder.pdiparams",
+            "input_img_shape": shape1,
+            "output_dtype": dtype,
         }
     }
-    msg = '\n---------------Deploy Information---------------\n'
+    msg = "\n---------------Deploy Information---------------\n"
     msg += str(yaml.dump(deploy_info))
     logger.info(msg)
 
-    yml_file = os.path.join(save_path, 'deploy.yaml')
-    with open(yml_file, 'w') as file:
+    yml_file = os.path.join(save_path, "deploy.yaml")
+    with open(yml_file, "w") as file:
         yaml.dump(deploy_info, file)
 
-    logger.info(f'The inference model is saved in {save_path}')
+    logger.info(f"The inference model is saved in {save_path}")
 
 
 if __name__ == "__main__":

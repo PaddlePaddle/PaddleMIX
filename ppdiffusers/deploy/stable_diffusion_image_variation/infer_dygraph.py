@@ -19,10 +19,10 @@ import warnings
 
 import numpy as np
 import paddle
-from tqdm.auto import trange
-
 from paddlenlp.trainer.argparser import strtobool
 from paddlenlp.utils.log import logger
+from tqdm.auto import trange
+
 from ppdiffusers import StableDiffusionImageVariationPipeline
 from ppdiffusers.utils import load_image
 
@@ -40,12 +40,12 @@ def parse_arguments():
         "--inference_steps",
         type=int,
         default=50,
-        help="The number of unet inference steps.")
+        help="The number of unet inference steps.", )
     parser.add_argument(
         "--benchmark_steps",
         type=int,
         default=1,
-        help="The number of performance benchmark steps.")
+        help="The number of performance benchmark steps.", )
     parser.add_argument(
         "--parse_prompt_type",
         type=str,
@@ -65,7 +65,7 @@ def parse_arguments():
         type=str,
         default="raw",
         choices=["raw", "cutlass", "flash", "all"],
-        help="attention_type.")
+        help="attention_type.", )
     parser.add_argument(
         "--device_id",
         type=int,
@@ -126,13 +126,12 @@ def main(args):
         height = args.height
         # hr_resize_width = args.hr_resize_width
         # hr_resize_height = args.hr_resize_height
-        folder = f"attn_{attention_type}_fp16" if args.use_fp16 else f"attn_{attention_type}_fp32"
+        folder = (f"attn_{attention_type}_fp16"
+                  if args.use_fp16 else f"attn_{attention_type}_fp32")
         os.makedirs(folder, exist_ok=True)
 
         # image_variation
-        img_url = (
-            "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
-        )
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
         init_image = load_image(img_url)
         time_costs = []
         # warmup

@@ -121,12 +121,13 @@ def renew_vae_attention_paths(old_list, n_shave_prefix_segments=0):
     return mapping
 
 
-def assign_to_checkpoint(paths,
-                         checkpoint,
-                         old_checkpoint,
-                         attention_paths_to_split=None,
-                         additional_replacements=None,
-                         config=None):
+def assign_to_checkpoint(
+        paths,
+        checkpoint,
+        old_checkpoint,
+        attention_paths_to_split=None,
+        additional_replacements=None,
+        config=None, ):
     """
     This does the final conversion step: take locally converted weights and apply a global renaming
     to them. It splits attention layers, and takes into account additional replacements
@@ -160,7 +161,8 @@ def assign_to_checkpoint(paths,
         new_path = path["new"]
 
         # These have already been assigned
-        if attention_paths_to_split is not None and new_path in attention_paths_to_split:
+        if (attention_paths_to_split is not None and
+                new_path in attention_paths_to_split):
             continue
 
         # Global renaming happens here
@@ -304,7 +306,7 @@ def convert_ldm_vae_checkpoint(vae_state_dict, config):
             new_checkpoint,
             vae_state_dict,
             additional_replacements=[meta_path],
-            config=config)
+            config=config, )
 
     mid_resnets = [key for key in vae_state_dict if "encoder.mid.block" in key]
     num_mid_res_blocks = 2
@@ -323,7 +325,7 @@ def convert_ldm_vae_checkpoint(vae_state_dict, config):
             new_checkpoint,
             vae_state_dict,
             additional_replacements=[meta_path],
-            config=config)
+            config=config, )
 
     mid_attentions = [
         key for key in vae_state_dict if "encoder.mid.attn" in key
@@ -335,7 +337,7 @@ def convert_ldm_vae_checkpoint(vae_state_dict, config):
         new_checkpoint,
         vae_state_dict,
         additional_replacements=[meta_path],
-        config=config)
+        config=config, )
     conv_attn_to_linear(new_checkpoint)
 
     for i in range(num_up_blocks):
@@ -363,7 +365,7 @@ def convert_ldm_vae_checkpoint(vae_state_dict, config):
             new_checkpoint,
             vae_state_dict,
             additional_replacements=[meta_path],
-            config=config)
+            config=config, )
 
     mid_resnets = [key for key in vae_state_dict if "decoder.mid.block" in key]
     num_mid_res_blocks = 2
@@ -382,7 +384,7 @@ def convert_ldm_vae_checkpoint(vae_state_dict, config):
             new_checkpoint,
             vae_state_dict,
             additional_replacements=[meta_path],
-            config=config)
+            config=config, )
 
     mid_attentions = [
         key for key in vae_state_dict if "decoder.mid.attn" in key
@@ -394,7 +396,7 @@ def convert_ldm_vae_checkpoint(vae_state_dict, config):
         new_checkpoint,
         vae_state_dict,
         additional_replacements=[meta_path],
-        config=config)
+        config=config, )
     conv_attn_to_linear(new_checkpoint)
     return new_checkpoint
 
@@ -440,7 +442,7 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="Path to the checkpoint to convert.")
+        help="Path to the checkpoint to convert.", )
     parser.add_argument(
         "--original_config_file",
         default="../config/f8encoder_f16decoder.yaml",
@@ -457,7 +459,7 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="Path to the output model.")
+        help="Path to the output model.", )
 
     args = parser.parse_args()
 

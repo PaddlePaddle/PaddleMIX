@@ -21,9 +21,8 @@ import paddle
 from ppdiffusers import DDIMPipeline, DDIMScheduler, UNet2DModel
 from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
 
-from ..pipeline_params import (
-    UNCONDITIONAL_IMAGE_GENERATION_BATCH_PARAMS,
-    UNCONDITIONAL_IMAGE_GENERATION_PARAMS, )
+from ..pipeline_params import (UNCONDITIONAL_IMAGE_GENERATION_BATCH_PARAMS,
+                               UNCONDITIONAL_IMAGE_GENERATION_PARAMS)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -60,7 +59,7 @@ class DDIMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             "batch_size": 1,
             "generator": generator,
             "num_inference_steps": 2,
-            "output_type": "numpy"
+            "output_type": "numpy",
         }
         return inputs
 
@@ -73,8 +72,15 @@ class DDIMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1]
         self.assertEqual(image.shape, (1, 32, 32, 3))
         expected_slice = np.array([
-            0.0, 0.00152004, 0.0, 0.0, 0.00860906, 0.00182715, 0.00189051, 1.0,
-            0.668702
+            0.0,
+            0.00152004,
+            0.0,
+            0.0,
+            0.00860906,
+            0.00182715,
+            0.00189051,
+            1.0,
+            0.668702,
         ])
         max_diff = np.abs(image_slice.flatten() - expected_slice).max()
         self.assertLessEqual(max_diff, 0.001)
@@ -110,7 +116,14 @@ class DDIMPipelineIntegrationTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 256, 256, 3)
         expected_slice = np.array([
-            0.19830778, 0.18826014, 0.18584034, 0.1927332, 0.18754855,
-            0.17855307, 0.18288234, 0.16375086, 0.1497818
+            0.19830778,
+            0.18826014,
+            0.18584034,
+            0.1927332,
+            0.18754855,
+            0.17855307,
+            0.18288234,
+            0.16375086,
+            0.1497818,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01

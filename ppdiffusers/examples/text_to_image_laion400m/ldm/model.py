@@ -18,15 +18,11 @@ import os
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-
 from paddlenlp.transformers import AutoTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DDPMScheduler,
-    LDMBertModel,
-    UNet2DConditionModel,
-    is_ppxformers_available, )
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
+                         LDMBertModel, UNet2DConditionModel,
+                         is_ppxformers_available)
 from ppdiffusers.models.attention import AttentionBlock
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.pipelines.latent_diffusion import LDMBertConfig
@@ -35,12 +31,15 @@ from ppdiffusers.training_utils import freeze_params
 try:
     from ppdiffusers.models.attention import SpatialTransformer
 except ImportError:
-    from ppdiffusers.models.transformer_2d import Transformer2DModel as SpatialTransformer
+    from ppdiffusers.models.transformer_2d import (Transformer2DModel as
+                                                   SpatialTransformer, )
 
 import json
 
 from paddlenlp.utils.log import logger
-from ppdiffusers.initializer import normal_, reset_initialized_parameter, zeros_
+
+from ppdiffusers.initializer import (normal_, reset_initialized_parameter,
+                                     zeros_)
 from ppdiffusers.models.resnet import ResnetBlock2D
 
 
@@ -139,8 +138,8 @@ class LatentDiffusionModel(nn.Layer):
         if self.use_ema:
             self.model_ema = LitEma(self.unet)
 
-        if model_args.enable_xformers_memory_efficient_attention and is_ppxformers_available(
-        ):
+        if (model_args.enable_xformers_memory_efficient_attention and
+                is_ppxformers_available()):
             try:
                 self.unet.enable_xformers_memory_efficient_attention()
             except Exception as e:
@@ -169,7 +168,8 @@ class LatentDiffusionModel(nn.Layer):
                 original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
-        noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
+        noisy_samples = (sqrt_alpha_prod * original_samples +
+                         sqrt_one_minus_alpha_prod * noise)
         return noisy_samples
 
     def get_velocity(self,
@@ -262,10 +262,10 @@ class LatentDiffusionModel(nn.Layer):
         else:
             raise ValueError(f"Unknown prediction type {self.prediction_type}")
 
-        loss = F.mse_loss(
+        loss = (F.mse_loss(
             noise_pred.cast("float32"),
             target.cast("float32"),
-            reduction="none").mean([1, 2, 3]).mean()
+            reduction="none").mean([1, 2, 3]).mean())
 
         return loss
 
@@ -281,13 +281,14 @@ class LatentDiffusionModel(nn.Layer):
         return image
 
     @paddle.no_grad()
-    def log_image(self,
-                  input_ids=None,
-                  height=256,
-                  width=256,
-                  eta=0.0,
-                  guidance_scale=7.5,
-                  **kwargs):
+    def log_image(
+            self,
+            input_ids=None,
+            height=256,
+            width=256,
+            eta=0.0,
+            guidance_scale=7.5,
+            **kwargs, ):
         self.eval()
         with self.ema_scope():
             if height % 8 != 0 or width % 8 != 0:
@@ -325,8 +326,8 @@ class LatentDiffusionModel(nn.Layer):
 
             for t in self.eval_scheduler.timesteps:
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 # ddim donot use this
                 latent_model_input = self.eval_scheduler.scale_model_input(
                     latent_model_input, t)

@@ -21,11 +21,12 @@ import paddle
 import paddle.nn.functional as F
 import PIL
 from packaging import version
-
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...configuration_utils import FrozenDict
-from ...loaders import FromCkptMixin, LoraLoaderMixin, TextualInversionLoaderMixin
+from ...loaders import (FromCkptMixin, LoraLoaderMixin,
+                        TextualInversionLoaderMixin)
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import PIL_INTERPOLATION, deprecate, logging, randn_tensor
@@ -53,7 +54,7 @@ def preprocess_mask(mask, batch_size, scale_factor=8):
         w, h = (x - x % 8 for x in (w, h))  # resize to integer multiple of 8
         mask = mask.resize(
             (w // scale_factor, h // scale_factor),
-            resample=PIL_INTERPOLATION["nearest"])
+            resample=PIL_INTERPOLATION["nearest"], )
         mask = np.array(mask).astype(np.float32) / 255.0
         mask = np.tile(mask, (4, 1, 1))
         mask = np.vstack([mask[None]] * batch_size)
@@ -129,8 +130,8 @@ class StableDiffusionInpaintPipelineLegacy(DiffusionPipeline,
             requires_safety_checker: bool=True, ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -147,8 +148,8 @@ class StableDiffusionInpaintPipelineLegacy(DiffusionPipeline,
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if (hasattr(scheduler.config, "clip_sample") and
+                scheduler.config.clip_sample is True):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -185,8 +186,8 @@ class StableDiffusionInpaintPipelineLegacy(DiffusionPipeline,
             unet.config, "_ppdiffusers_version") and version.parse(
                 version.parse(unet.config._ppdiffusers_version)
                 .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = (hasattr(unet.config, "sample_size") and
+                                       unet.config.sample_size < 64)
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -280,8 +281,8 @@ class StableDiffusionInpaintPipelineLegacy(DiffusionPipeline,
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -331,8 +332,8 @@ class StableDiffusionInpaintPipelineLegacy(DiffusionPipeline,
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -404,13 +405,14 @@ class StableDiffusionInpaintPipelineLegacy(DiffusionPipeline,
         return extra_step_kwargs
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.check_inputs
-    def check_inputs(self,
-                     prompt,
-                     strength,
-                     callback_steps,
-                     negative_prompt=None,
-                     prompt_embeds=None,
-                     negative_prompt_embeds=None):
+    def check_inputs(
+            self,
+            prompt,
+            strength,
+            callback_steps,
+            negative_prompt=None,
+            prompt_embeds=None,
+            negative_prompt_embeds=None, ):
         if strength < 0 or strength > 1:
             raise ValueError(
                 f"The value of strength should in [0.0, 1.0] but is {strength}")
@@ -572,8 +574,13 @@ class StableDiffusionInpaintPipelineLegacy(DiffusionPipeline,
         """
 
         # 1. Check inputs
-        self.check_inputs(prompt, strength, callback_steps, negative_prompt,
-                          prompt_embeds, negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            strength,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -614,8 +621,11 @@ class StableDiffusionInpaintPipelineLegacy(DiffusionPipeline,
         # 6. Prepare latent variables
         # encode the init image into latents and scale the latents
         latents, init_latents_orig, noise = self.prepare_latents(
-            image, latent_timestep, num_images_per_prompt, prompt_embeds.dtype,
-            generator)
+            image,
+            latent_timestep,
+            num_images_per_prompt,
+            prompt_embeds.dtype,
+            generator, )
 
         # 7. Prepare mask latent
         mask = mask_image.cast(latents.dtype)
@@ -630,8 +640,8 @@ class StableDiffusionInpaintPipelineLegacy(DiffusionPipeline,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 

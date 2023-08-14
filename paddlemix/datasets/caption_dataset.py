@@ -101,14 +101,14 @@ class CaptionDataset(DatasetBuilder):
             if mode == "train":
                 yield_data = {
                     "image": image_path,
-                    "image_id": image_ids[ann["image_id"]]
+                    "image_id": image_ids[ann["image_id"]],
                 }
                 # only train mode has text input
                 yield_data["text_input"] = ann["caption"]
             else:
                 yield_data = {
                     "image": image_path,
-                    "image_id":
-                    ann["image"].split("/")[-1].strip(".jpg").split("_")[-1]
+                    "image_id": ann["image"].split("/")[-1].strip(".jpg")
+                    .split("_")[-1],
                 }
             yield yield_data

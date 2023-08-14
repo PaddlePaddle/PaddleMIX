@@ -20,20 +20,17 @@ import numpy as np
 import paddle
 import PIL
 from packaging import version
-
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...configuration_utils import FrozenDict
 from ...image_processor import VaeImageProcessor
-from ...loaders import FromCkptMixin, LoraLoaderMixin, TextualInversionLoaderMixin
+from ...loaders import (FromCkptMixin, LoraLoaderMixin,
+                        TextualInversionLoaderMixin)
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import (
-    PIL_INTERPOLATION,
-    deprecate,
-    logging,
-    randn_tensor,
-    replace_example_docstring, )
+from ...utils import (PIL_INTERPOLATION, deprecate, logging, randn_tensor,
+                      replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
@@ -144,8 +141,8 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
             requires_safety_checker: bool=True, ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -162,8 +159,8 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if (hasattr(scheduler.config, "clip_sample") and
+                scheduler.config.clip_sample is True):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -200,8 +197,8 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
             unet.config, "_ppdiffusers_version") and version.parse(
                 version.parse(unet.config._ppdiffusers_version)
                 .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = (hasattr(unet.config, "sample_size") and
+                                       unet.config.sample_size < 64)
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -297,8 +294,8 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -347,8 +344,8 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -393,7 +390,7 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
                 clip_input=paddle.cast(safety_checker_input.pixel_values,
-                                       dtype))
+                                       dtype), )
         return image, has_nsfw_concept
 
     def decode_latents(self, latents):
@@ -422,13 +419,14 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
-    def check_inputs(self,
-                     prompt,
-                     strength,
-                     callback_steps,
-                     negative_prompt=None,
-                     prompt_embeds=None,
-                     negative_prompt_embeds=None):
+    def check_inputs(
+            self,
+            prompt,
+            strength,
+            callback_steps,
+            negative_prompt=None,
+            prompt_embeds=None,
+            negative_prompt_embeds=None, ):
         if strength < 0 or strength > 1:
             raise ValueError(
                 f"The value of strength should in [0.0, 1.0] but is {strength}")
@@ -509,8 +507,8 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
 
         init_latents = self.vae.config.scaling_factor * init_latents
 
-        if batch_size > init_latents.shape[
-                0] and batch_size % init_latents.shape[0] == 0:
+        if (batch_size > init_latents.shape[0] and
+                batch_size % init_latents.shape[0] == 0):
             # expand init_latents for batch_size
             deprecation_message = (
                 f"You have passed {batch_size} text prompts (`prompt`), but only {init_latents.shape[0]} initial"
@@ -522,12 +520,12 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
                 "len(prompt) != len(image)",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False, )
             additional_image_per_prompt = batch_size // init_latents.shape[0]
             init_latents = paddle.concat(
                 [init_latents] * additional_image_per_prompt, axis=0)
-        elif batch_size > init_latents.shape[
-                0] and batch_size % init_latents.shape[0] != 0:
+        elif (batch_size > init_latents.shape[0] and
+              batch_size % init_latents.shape[0] != 0):
             raise ValueError(
                 f"Cannot duplicate `image` of batch size {init_latents.shape[0]} to {batch_size} text prompts."
             )
@@ -633,8 +631,13 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
             (nsfw) content, according to the `safety_checker`.
         """
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, strength, callback_steps, negative_prompt,
-                          prompt_embeds, negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            strength,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -668,9 +671,13 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
             [batch_size * num_images_per_prompt])
 
         # 6. Prepare latent variables
-        latents = self.prepare_latents(image, latent_timestep, batch_size,
-                                       num_images_per_prompt,
-                                       prompt_embeds.dtype, generator)
+        latents = self.prepare_latents(
+            image,
+            latent_timestep,
+            batch_size,
+            num_images_per_prompt,
+            prompt_embeds.dtype,
+            generator, )
 
         # 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -681,8 +688,8 @@ class StableDiffusionImg2ImgPipeline(DiffusionPipeline,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 

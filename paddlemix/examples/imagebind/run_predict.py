@@ -1,18 +1,33 @@
-import paddle
-import sys
-import os
-from paddlemix.datasets import *
-from paddlemix import ImageBindModel, ImageBindProcessor
-from paddlemix.models import ModalityType
-import numpy as np
-import argparse
-import requests
-from PIL import Image
-from dataclasses import dataclass, field
-from paddlenlp.trainer import PdArgumentParser
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from paddlemix.utils.log import logger
+import argparse
+import os
+import sys
+from dataclasses import dataclass, field
+
+import numpy as np
+import paddle
+import requests
+from paddlenlp.trainer import PdArgumentParser
+from PIL import Image
+
+from paddlemix import ImageBindModel, ImageBindProcessor
+from paddlemix.datasets import *
+from paddlemix.models import ModalityType
 from paddlemix.models.imagebind.modeling import ImageBindModel
+from paddlemix.utils.log import logger
 
 
 class Predictor:
@@ -32,12 +47,12 @@ class Predictor:
 
 def main(model_args, data_args):
 
-    #bulid model
+    # bulid model
     logger.info("imagebind_model: {}".format(model_args.model_name_or_path))
 
-    url = (data_args.input_image)
+    url = data_args.input_image
     if os.path.isfile(url):
-        #read image
+        # read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     elif url:
         image_pil = Image.open(requests.get(url, stream=True).raw).convert(
@@ -51,10 +66,10 @@ def main(model_args, data_args):
         images=image_pil,
         text=data_args.input_text,
         audios=data_args.input_audio,
-        return_tensors='pd')
+        return_tensors="pd", )
     inputs = {}
     if data_args.input_text:
-        tokenized_processor = encoding['input_ids']
+        tokenized_processor = encoding["input_ids"]
         inputs.update({ModalityType.TEXT: tokenized_processor})
         # input.update()
     if image_pil:
@@ -89,12 +104,12 @@ class DataArguments:
         metadata={"help": "The name of imagebind text input."})
     input_image: str = field(
         default="",
-        #wget https://github.com/facebookresearch/ImageBind/blob/main/.assets/bird_image.jpg
-        metadata={"help": "The name of imagebind image input."})
+        # wget https://github.com/facebookresearch/ImageBind/blob/main/.assets/bird_image.jpg
+        metadata={"help": "The name of imagebind image input."}, )
     input_audio: str = field(
         default=None,
-        #wget https://github.com/facebookresearch/ImageBind/blob/main/.assets/bird_audio.wav
-        metadata={"help": "The name of imagebind audio input."})
+        # wget https://github.com/facebookresearch/ImageBind/blob/main/.assets/bird_audio.wav
+        metadata={"help": "The name of imagebind audio input."}, )
 
 
 @dataclass
@@ -115,13 +130,17 @@ class ModelArguments:
         }, )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
 
     model_args.device = model_args.device.upper()
-    assert model_args.device in ['CPU', 'GPU', 'XPU', 'NPU'
-                                 ], "device should be CPU, GPU, XPU or NPU"
+    assert model_args.device in [
+        "CPU",
+        "GPU",
+        "XPU",
+        "NPU",
+    ], "device should be CPU, GPU, XPU or NPU"
 
     main(model_args, data_args)

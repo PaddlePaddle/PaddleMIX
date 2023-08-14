@@ -124,7 +124,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 "norm_type!=num_embeds_ada_norm",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False, )
             norm_type = "ada_norm"
 
         if self.is_input_continuous and self.is_input_vectorized:
@@ -137,7 +137,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 f"Cannot define both `num_vector_embeds`: {num_vector_embeds} and `patch_size`: {patch_size}. Make"
                 " sure that either `num_vector_embeds` or `num_patches` is None."
             )
-        elif not self.is_input_continuous and not self.is_input_vectorized and not self.is_input_patches:
+        elif (not self.is_input_continuous and not self.is_input_vectorized and
+              not self.is_input_patches):
             raise ValueError(
                 f"Has to define `in_channels`: {in_channels}, `num_vector_embeds`: {num_vector_embeds}, or patch_size:"
                 f" {patch_size}. Make sure that `in_channels`, `num_vector_embeds` or `num_patches` is not None."
@@ -157,8 +158,12 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 self.proj_in = nn.Conv2D(
                     in_channels, inner_dim, kernel_size=1, stride=1, padding=0)
         elif self.is_input_vectorized:
-            assert sample_size is not None, "Transformer2DModel over discrete input must provide sample_size"
-            assert num_vector_embeds is not None, "Transformer2DModel over discrete input must provide num_embed"
+            assert (
+                sample_size is not None
+            ), "Transformer2DModel over discrete input must provide sample_size"
+            assert (
+                num_vector_embeds is not None
+            ), "Transformer2DModel over discrete input must provide num_embed"
 
             self.height = sample_size
             self.width = sample_size
@@ -169,9 +174,11 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 num_embed=num_vector_embeds,
                 embed_dim=inner_dim,
                 height=self.height,
-                width=self.width)
+                width=self.width, )
         elif self.is_input_patches:
-            assert sample_size is not None, "Transformer2DModel over patched input must provide sample_size"
+            assert (
+                sample_size is not None
+            ), "Transformer2DModel over patched input must provide sample_size"
 
             self.height = sample_size
             self.width = sample_size
@@ -301,8 +308,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 timestep, class_labels, hidden_dtype=hidden_states.dtype)
             shift, scale = self.proj_out_1(F.silu(conditioning)).chunk(
                 2, axis=1)
-            hidden_states = self.norm_out(hidden_states) * (1 + scale[:, None]
-                                                            ) + shift[:, None]
+            hidden_states = (self.norm_out(hidden_states) *
+                             (1 + scale[:, None]) + shift[:, None])
             hidden_states = self.proj_out_2(hidden_states)
 
             # unpatchify
@@ -311,9 +318,11 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                 (-1, height, width, self.patch_size, self.patch_size,
                  self.out_channels))
             hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
-            output = hidden_states.reshape(
-                (-1, self.out_channels, height * self.patch_size,
-                 width * self.patch_size))
+            output = hidden_states.reshape((
+                -1,
+                self.out_channels,
+                height * self.patch_size,
+                width * self.patch_size, ))
 
         if not return_dict:
             return (output, )

@@ -17,5 +17,5 @@
 # NOTE: This file is deprecated and will be removed in a future version.
 # It only exists so that temporarely `from diffusers.pipelines import DiffusionPipeline` works
 
-from .pipelines import (  # noqa: F401
-    DiffusionPipeline, ImagePipelineOutput, TextPipelineOutput, )
+from .pipelines import ImagePipelineOutput  # noqa: F401
+from .pipelines import DiffusionPipeline, TextPipelineOutput

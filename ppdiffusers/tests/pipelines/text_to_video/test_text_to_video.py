@@ -17,14 +17,11 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    TextToVideoSDPipeline,
-    UNet3DConditionModel, )
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler,
+                         DPMSolverMultistepScheduler, TextToVideoSDPipeline,
+                         UNet3DConditionModel)
 from ppdiffusers.utils import load_numpy, slow
 
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
@@ -36,8 +33,12 @@ class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
     required_optional_params = frozenset([
-        "num_inference_steps", "generator", "latents", "return_dict",
-        "callback", "callback_steps"
+        "num_inference_steps",
+        "generator",
+        "latents",
+        "return_dict",
+        "callback",
+        "callback_steps",
     ])
 
     def get_dummy_components(self):
@@ -48,10 +49,16 @@ class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             sample_size=32,
             in_channels=4,
             out_channels=4,
-            down_block_types=("CrossAttnDownBlock3D", "CrossAttnDownBlock3D",
-                              "CrossAttnDownBlock3D", "DownBlock3D"),
-            up_block_types=("UpBlock3D", "CrossAttnUpBlock3D",
-                            "CrossAttnUpBlock3D", "CrossAttnUpBlock3D"),
+            down_block_types=(
+                "CrossAttnDownBlock3D",
+                "CrossAttnDownBlock3D",
+                "CrossAttnDownBlock3D",
+                "DownBlock3D", ),
+            up_block_types=(
+                "UpBlock3D",
+                "CrossAttnUpBlock3D",
+                "CrossAttnUpBlock3D",
+                "CrossAttnUpBlock3D", ),
             cross_attention_dim=32,
             attention_head_dim=4, )
         scheduler = DDIMScheduler(

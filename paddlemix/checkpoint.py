@@ -1,5 +1,20 @@
-import paddle
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
+
+import paddle
 
 
 def save(args, model, optimizer, epoch=0, step=0, output_dir="", is_best=False):
@@ -26,11 +41,11 @@ def save(args, model, optimizer, epoch=0, step=0, output_dir="", is_best=False):
         paddle.save(optimizer.state_dict(),
                     os.path.join(save_dir, "model_state.pdopt"))
         if is_best:
-            shutil.copyfile("model.pdparams", 'model_best.pdparams')
+            shutil.copyfile("model.pdparams", "model_best.pdparams")
         meta_dict = {
             "epoch": epoch,
             "step": step,
-            "cuda_rng_state": paddle.get_cuda_rng_state()
+            "cuda_rng_state": paddle.get_cuda_rng_state(),
         }
         paddle.save(meta_dict, os.path.join(save_dir, "meta_state.pdopt"))
 
@@ -54,7 +69,8 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         if os.path.exists(model_path):
             model_dict = paddle.load(model_path)
             for name, param in model.state_dict().items():
-                assert name in model_dict.keys(
+                assert (
+                    name in model_dict.keys()
                 ), "No param named `{}` was found in checkpoint file.".format(
                     name)
 
@@ -88,16 +104,29 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         print("successfully load checkpoints")
     elif ckpt_dir and os.path.isfile(ckpt_dir):
         print("Try to load a whole checkpoint from %s " % ckpt_dir)
-        embedding_list = ['token_embedding']
+        embedding_list = ["token_embedding"]
         collinear_list = [
-            'proj', 'w1', 'w2', 'w3', 'head', 'c_fc', 'c_proj', 'q_bias',
-            'v_bias', 'q_proj', 'k_proj', 'v_proj', 'out_proj', 'qkv', 'c_fc',
-            'c_proj'
+            "proj",
+            "w1",
+            "w2",
+            "w3",
+            "head",
+            "c_fc",
+            "c_proj",
+            "q_bias",
+            "v_bias",
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "out_proj",
+            "qkv",
+            "c_fc",
+            "c_proj",
         ]
         rowlinear_list = []
         all_list = collinear_list + rowlinear_list + embedding_list
         skip_list = [
-            'visual.patch_embed.proj.weight', 'visual.patch_embed.proj.bias'
+            "visual.patch_embed.proj.weight", "visual.patch_embed.proj.bias"
         ]
 
         col_list = []
@@ -108,10 +137,10 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         mp_size = args.tensor_parallel_degree
 
         def renamebias(model_dict, whole_key):
-            if 'q_bias' in whole_key:
-                key = whole_key.replace('q_bias', 'q_proj.bias')
-            elif 'v_bias' in whole_key:
-                key = whole_key.replace('v_bias', 'v_proj.bias')
+            if "q_bias" in whole_key:
+                key = whole_key.replace("q_bias", "q_proj.bias")
+            elif "v_bias" in whole_key:
+                key = whole_key.replace("v_bias", "v_proj.bias")
             model_dict[key] = model_dict[whole_key]
             del model_dict[whole_key]
             return model_dict
@@ -139,13 +168,13 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         model_dict = paddle.load(ckpt_dir)
         modelkeys = list(model_dict.keys())
         for whole_key in modelkeys:
-            if not '.' in whole_key:
+            if "." not in whole_key:
                 continue
-            if 'q_bias' in whole_key or 'v_bias' in whole_key:
+            if "q_bias" in whole_key or "v_bias" in whole_key:
                 model_dict = renamebias(model_dict, whole_key)
                 continue
 
-            key = whole_key.split('.')[-2]
+            key = whole_key.split(".")[-2]
             if whole_key in skip_list:
                 continue
             if key in all_list:
@@ -169,7 +198,7 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         print("cast state_dict to default dtype:{}".format(
             paddle.get_default_dtype()))
         for key, value in model_dict.items():
-            if 'freqs_cos' in key or 'freqs_sin' in key:
+            if "freqs_cos" in key or "freqs_sin" in key:
                 continue
             model_dict[key] = paddle.cast(
                 value, dtype=paddle.get_default_dtype())

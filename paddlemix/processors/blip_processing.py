@@ -131,7 +131,7 @@ class Blip2Processor(ProcessorMixin):
                 padding="longest",
                 truncation=True,
                 max_length=max_length,
-                return_attention_mask=True)
+                return_attention_mask=True, )
         else:
             text_encoding = None
             # eos_token_id = None

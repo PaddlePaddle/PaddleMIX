@@ -140,8 +140,10 @@ class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
         model.eval()
         noise = paddle.randn(
             shape=[
-                1, model.config.in_channels, model.config.sample_size,
-                model.config.sample_size
+                1,
+                model.config.in_channels,
+                model.config.sample_size,
+                model.config.sample_size,
             ],
             generator=paddle.Generator().manual_seed(0), )
         time_step = paddle.to_tensor([10] * noise.shape[0])
@@ -194,12 +196,16 @@ class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
             "mid_block_scale_factor": math.sqrt(2.0),
             "norm_num_groups": None,
             "down_block_types": [
-                "SkipDownBlock2D", "AttnSkipDownBlock2D", "SkipDownBlock2D",
-                "SkipDownBlock2D"
+                "SkipDownBlock2D",
+                "AttnSkipDownBlock2D",
+                "SkipDownBlock2D",
+                "SkipDownBlock2D",
             ],
             "up_block_types": [
-                "SkipUpBlock2D", "SkipUpBlock2D", "AttnSkipUpBlock2D",
-                "SkipUpBlock2D"
+                "SkipUpBlock2D",
+                "SkipUpBlock2D",
+                "AttnSkipUpBlock2D",
+                "SkipUpBlock2D",
             ],
         }
         inputs_dict = self.dummy_input
@@ -230,8 +236,15 @@ class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
             output = model(noise, time_step).sample
         output_slice = output[0, -3:, -3:, -1].flatten().cpu()
         expected_output_slice = paddle.to_tensor([
-            -4836.2231, -6487.1387, -3816.7969, -7964.9253, -10966.2842,
-            -20043.6016, 8137.0571, 2340.3499, 544.6114
+            -4836.2231,
+            -6487.1387,
+            -3816.7969,
+            -7964.9253,
+            -10966.2842,
+            -20043.6016,
+            8137.0571,
+            2340.3499,
+            544.6114,
         ])
         self.assertTrue(
             paddle_all_close(

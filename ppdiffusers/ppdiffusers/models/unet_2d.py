@@ -91,10 +91,16 @@ class UNet2DModel(ModelMixin, ConfigMixin):
             time_embedding_type: str="positional",
             freq_shift: int=0,
             flip_sin_to_cos: bool=True,
-            down_block_types: Tuple[str]=("DownBlock2D", "AttnDownBlock2D",
-                                          "AttnDownBlock2D", "AttnDownBlock2D"),
-            up_block_types: Tuple[str]=("AttnUpBlock2D", "AttnUpBlock2D",
-                                        "AttnUpBlock2D", "UpBlock2D"),
+            down_block_types: Tuple[str]=(
+                "DownBlock2D",
+                "AttnDownBlock2D",
+                "AttnDownBlock2D",
+                "AttnDownBlock2D", ),
+            up_block_types: Tuple[str]=(
+                "AttnUpBlock2D",
+                "AttnUpBlock2D",
+                "AttnUpBlock2D",
+                "UpBlock2D", ),
             block_out_channels: Tuple[int]=(224, 448, 672, 896),
             layers_per_block: int=2,
             mid_block_scale_factor: float=1,
@@ -234,12 +240,12 @@ class UNet2DModel(ModelMixin, ConfigMixin):
             prev_output_channel = output_channel
 
         # out
-        num_groups_out = norm_num_groups if norm_num_groups is not None else min(
-            block_out_channels[0] // 4, 32)
+        num_groups_out = (norm_num_groups if norm_num_groups is not None else
+                          min(block_out_channels[0] // 4, 32))
         self.conv_norm_out = nn.GroupNorm(
             num_channels=block_out_channels[0],
             num_groups=num_groups_out,
-            epsilon=norm_eps)
+            epsilon=norm_eps, )
         self.conv_act = nn.Silu()
         self.conv_out = nn.Conv2D(
             block_out_channels[0], out_channels, kernel_size=3, padding=1)

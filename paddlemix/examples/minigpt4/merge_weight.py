@@ -20,7 +20,6 @@ os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 
 import paddle
 import torch
-
 from paddlenlp.transformers import LlamaForCausalLM
 
 
@@ -29,8 +28,8 @@ def merge(args):
     # load the first item: blip2-flan-t5-xxl
     state_dict = paddle.load(args.blip2_path)
     for n, p in state_dict.items():
-        if n.startswith("vision_model") or n.startswith(
-                "qformer") or n == "query_tokens":
+        if (n.startswith("vision_model") or n.startswith("qformer") or
+                n == "query_tokens"):
             model_dict[n] = p
     print(
         "[1/3] load ViT, qformer and query_tokens from blip2-flan-t5-xxl done!")
@@ -74,22 +73,22 @@ if __name__ == "__main__":
         "--blip2_path",
         default="/blip2/dirname",
         type=str,
-        help="The dir name of blip2-flan-t5-xxl.")
+        help="The dir name of blip2-flan-t5-xxl.", )
     parser.add_argument(
         "--vicuna_path",
         default="/vicuna/dirname",
         type=str,
-        help="The dir name of vicuna.")
+        help="The dir name of vicuna.", )
     parser.add_argument(
         "--minigpt4_path",
         default="/minigpt4/prerained_minigpt4.pth",
         type=str,
-        help="The checkpoint path of vicuna.")
+        help="The checkpoint path of vicuna.", )
     parser.add_argument(
         "--save_path",
         default="/save/to/dirname",
         type=str,
-        help="The saving path of minigpt4.")
+        help="The saving path of minigpt4.", )
     args = parser.parse_args()
 
     args.blip2_path = os.path.join(args.blip2_path, "model_state.pdparams")

@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import paddle
+
 from paddlemix.models.imagebind.utils.kaldi import *
-from paddlemix.models.imagebind.utils.resample import *
 from paddlemix.models.imagebind.utils.paddle_aux import *
+from paddlemix.models.imagebind.utils.resample import *
 
 
 class finfo:

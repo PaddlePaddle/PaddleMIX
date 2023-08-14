@@ -19,23 +19,14 @@ from typing import Dict, List, Optional, Union
 
 import numpy as np
 import PIL
-
-from .image_processing_utils import BaseImageProcessor, BatchFeature, get_size_dict
-from .image_transforms import (
-    convert_to_rgb,
-    normalize,
-    rescale,
-    resize,
-    to_channel_dimension_format, )
-from .image_utils import (
-    ChannelDimension,
-    ImageInput,
-    PILImageResampling,
-    is_batched,
-    to_numpy_array,
-    valid_images, )
-
 from paddlenlp.transformers.tokenizer_utils_base import TensorType
+
+from .image_processing_utils import (BaseImageProcessor, BatchFeature,
+                                     get_size_dict)
+from .image_transforms import (convert_to_rgb, normalize, rescale, resize,
+                               to_channel_dimension_format)
+from .image_utils import (ChannelDimension, ImageInput, PILImageResampling,
+                          is_batched, to_numpy_array, valid_images)
 
 __all__ = ["VisualGLMImageProcessor", ]
 
@@ -77,17 +68,18 @@ class VisualGLMImageProcessor(BaseImageProcessor):
 
     model_input_names = ["pixel_values"]
 
-    def __init__(self,
-                 do_resize: bool=True,
-                 size: Dict[str, int]=None,
-                 resample: PILImageResampling=PILImageResampling.BICUBIC,
-                 do_rescale: bool=True,
-                 rescale_factor: Union[int, float]=1 / 255,
-                 do_normalize: bool=True,
-                 image_mean: Optional[Union[float, List[float]]]=None,
-                 image_std: Optional[Union[float, List[float]]]=None,
-                 do_convert_rgb: bool=True,
-                 **kwargs) -> None:
+    def __init__(
+            self,
+            do_resize: bool=True,
+            size: Dict[str, int]=None,
+            resample: PILImageResampling=PILImageResampling.BICUBIC,
+            do_rescale: bool=True,
+            rescale_factor: Union[int, float]=1 / 255,
+            do_normalize: bool=True,
+            image_mean: Optional[Union[float, List[float]]]=None,
+            image_std: Optional[Union[float, List[float]]]=None,
+            do_convert_rgb: bool=True,
+            **kwargs, ) -> None:
         super().__init__(**kwargs)
         default_image_mean = [0.48145466, 0.4578275, 0.40821073]
         default_image_std = [0.26862954, 0.26130258, 0.27577711]
@@ -104,12 +96,13 @@ class VisualGLMImageProcessor(BaseImageProcessor):
         self.image_std = image_std if image_std is not None else default_image_std
         self.do_convert_rgb = do_convert_rgb
 
-    def resize(self,
-               image: np.ndarray,
-               size: Dict[str, int],
-               resample: PILImageResampling=PILImageResampling.BICUBIC,
-               data_format: Optional[Union[str, ChannelDimension]]=None,
-               **kwargs) -> np.ndarray:
+    def resize(
+            self,
+            image: np.ndarray,
+            size: Dict[str, int],
+            resample: PILImageResampling=PILImageResampling.BICUBIC,
+            data_format: Optional[Union[str, ChannelDimension]]=None,
+            **kwargs, ) -> np.ndarray:
         """
         Resize an image.
 
@@ -134,13 +127,14 @@ class VisualGLMImageProcessor(BaseImageProcessor):
             size=output_size,
             resample=resample,
             data_format=data_format,
-            **kwargs)
+            **kwargs, )
 
-    def rescale(self,
-                image: np.ndarray,
-                scale: Union[int, float],
-                data_format: Optional[Union[str, ChannelDimension]]=None,
-                **kwargs):
+    def rescale(
+            self,
+            image: np.ndarray,
+            scale: Union[int, float],
+            data_format: Optional[Union[str, ChannelDimension]]=None,
+            **kwargs, ):
         """
         Rescale an image by a scale factor. image = image * scale.
 
@@ -154,12 +148,13 @@ class VisualGLMImageProcessor(BaseImageProcessor):
         """
         return rescale(image, scale=scale, data_format=data_format, **kwargs)
 
-    def normalize(self,
-                  image: np.ndarray,
-                  mean: Union[float, List[float]],
-                  std: Union[float, List[float]],
-                  data_format: Optional[Union[str, ChannelDimension]]=None,
-                  **kwargs) -> np.ndarray:
+    def normalize(
+            self,
+            image: np.ndarray,
+            mean: Union[float, List[float]],
+            std: Union[float, List[float]],
+            data_format: Optional[Union[str, ChannelDimension]]=None,
+            **kwargs, ) -> np.ndarray:
         """
         Normalize an image. image = (image - image_mean) / image_std.
 
@@ -232,11 +227,13 @@ class VisualGLMImageProcessor(BaseImageProcessor):
         do_resize = do_resize if do_resize is not None else self.do_resize
         resample = resample if resample is not None else self.resample
         do_rescale = do_rescale if do_rescale is not None else self.do_rescale
-        rescale_factor = rescale_factor if rescale_factor is not None else self.rescale_factor
+        rescale_factor = (rescale_factor if rescale_factor is not None else
+                          self.rescale_factor)
         do_normalize = do_normalize if do_normalize is not None else self.do_normalize
         image_mean = image_mean if image_mean is not None else self.image_mean
         image_std = image_std if image_std is not None else self.image_std
-        do_convert_rgb = do_convert_rgb if do_convert_rgb is not None else self.do_convert_rgb
+        do_convert_rgb = (do_convert_rgb if do_convert_rgb is not None else
+                          self.do_convert_rgb)
 
         size = size if size is not None else self.size
         size = get_size_dict(size, default_to_square=False)

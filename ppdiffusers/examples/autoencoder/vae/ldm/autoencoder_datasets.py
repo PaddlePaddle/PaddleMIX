@@ -277,8 +277,8 @@ class ImageNetBase(Dataset):
         SIZE = 2655750
         URL = "https://heibox.uni-heidelberg.de/f/9f28e956cd304264bb82/?dl=1"
         self.human_dict = os.path.join(self.root, "synset_human.txt")
-        if not os.path.exists(self.human_dict) or not os.path.getsize(
-                self.human_dict) == SIZE:
+        if (not os.path.exists(self.human_dict) or
+                not os.path.getsize(self.human_dict) == SIZE):
             download(URL, self.human_dict)
 
     def _prepare_idx_to_synset(self):
@@ -376,8 +376,8 @@ class ImageNetTrain(ImageNetBase):
             datadir = self.datadir
             if not os.path.exists(datadir):
                 path = os.path.join(self.root, self.FILES[0])
-                if not os.path.exists(path) or not os.path.getsize(
-                        path) == self.SIZES[0]:
+                if (not os.path.exists(path) or
+                        not os.path.getsize(path) == self.SIZES[0]):
                     import academictorrents as at
 
                     atpath = at.get(self.AT_HASH, datastore=self.root)
@@ -444,8 +444,8 @@ class ImageNetValidation(ImageNetBase):
             datadir = self.datadir
             if not os.path.exists(datadir):
                 path = os.path.join(self.root, self.FILES[0])
-                if not os.path.exists(path) or not os.path.getsize(
-                        path) == self.SIZES[0]:
+                if (not os.path.exists(path) or
+                        not os.path.getsize(path) == self.SIZES[0]):
                     import academictorrents as at
 
                     atpath = at.get(self.AT_HASH, datastore=self.root)
@@ -457,8 +457,8 @@ class ImageNetValidation(ImageNetBase):
                     tar.extractall(path=datadir)
 
                 vspath = os.path.join(self.root, self.FILES[1])
-                if not os.path.exists(vspath) or not os.path.getsize(
-                        vspath) == self.SIZES[1]:
+                if (not os.path.exists(vspath) or
+                        not os.path.getsize(vspath) == self.SIZES[1]):
                     download(self.VS_URL, vspath)
 
                 with open(vspath, "r") as f:
@@ -525,7 +525,9 @@ class ImageNetSR(Dataset):
         self.image_rescaler = albumentations.SmallestMaxSize(
             max_size=size, interpolation=cv2.INTER_AREA)
 
-        self.pil_interpolation = False  # gets reset later if incase interp_op is from pillow
+        self.pil_interpolation = (
+            False  # gets reset later if incase interp_op is from pillow
+        )
 
         if degradation == "bsrgan":
             self.degradation_process = partial(
@@ -590,8 +592,8 @@ class ImageNetSR(Dataset):
                 LR_image = np.array(LR_image).astype(np.uint8)
             else:
                 LR_image = self.degradation_process(image=image)["image"]
-            example["LR_image"] = (
-                LR_image / 127.5 - 1.0).astype(np.float32).transpose([2, 0, 1])
+            example["LR_image"] = ((
+                LR_image / 127.5 - 1.0).astype(np.float32).transpose([2, 0, 1]))
 
         example["image"] = (image / 127.5 - 1.0).astype(np.float32).transpose(
             [2, 0, 1])

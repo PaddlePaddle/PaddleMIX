@@ -19,19 +19,14 @@ import urllib.parse as ul
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
-
-from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, T5EncoderModel,
+                                    T5Tokenizer)
 
 from ...loaders import LoraLoaderMixin
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
-from ...utils import (
-    BACKENDS_MAPPING,
-    is_bs4_available,
-    is_ftfy_available,
-    logging,
-    randn_tensor,
-    replace_example_docstring, )
+from ...utils import (BACKENDS_MAPPING, is_bs4_available, is_ftfy_available,
+                      logging, randn_tensor, replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import IFPipelineOutput
 from .safety_checker import IFSafetyChecker
@@ -110,8 +105,11 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         "\|" + "\\" + "\/" + "\*" + r"]{1,}")  # noqa
 
     _optional_components = [
-        "tokenizer", "text_encoder", "safety_checker", "feature_extractor",
-        "watermarker"
+        "tokenizer",
+        "text_encoder",
+        "safety_checker",
+        "feature_extractor",
+        "watermarker",
     ]
 
     def __init__(
@@ -622,8 +620,12 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             or watermarked content, according to the `safety_checker`.
         """
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, callback_steps, negative_prompt,
-                          prompt_embeds, negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         # 2. Define call parameters
         height = height or self.unet.config.sample_size
@@ -700,28 +702,29 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                     noise_pred_uncond, _ = noise_pred_uncond.split(
                         [
                             model_input.shape[1],
-                            noise_pred_uncond.shape[1] - model_input.shape[1]
+                            noise_pred_uncond.shape[1] - model_input.shape[1],
                         ],
-                        axis=1)
+                        axis=1, )
                     noise_pred_text, predicted_variance = noise_pred_text.split(
                         [
                             model_input.shape[1],
-                            noise_pred_text.shape[1] - model_input.shape[1]
+                            noise_pred_text.shape[1] - model_input.shape[1],
                         ],
-                        axis=1)
+                        axis=1, )
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
                     noise_pred = paddle.concat(
                         [noise_pred, predicted_variance], axis=1)
                 if self.scheduler.config.variance_type not in [
-                        "learned", "learned_range"
+                        "learned",
+                        "learned_range",
                 ]:
                     noise_pred, _ = noise_pred.split(
                         [
                             model_input.shape[1],
-                            noise_pred_uncond.shape[1] - model_input.shape[1]
+                            noise_pred_uncond.shape[1] - model_input.shape[1],
                         ],
-                        axis=1)
+                        axis=1, )
 
                 # compute the previous noisy sample x_t -> x_t-1
                 intermediate_images = self.scheduler.step(
@@ -729,7 +732,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                     t,
                     intermediate_images,
                     **extra_step_kwargs,
-                    return_dict=False)[0]
+                    return_dict=False, )[0]
 
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or (
@@ -776,4 +779,4 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         return IFPipelineOutput(
             images=image,
             nsfw_detected=nsfw_detected,
-            watermark_detected=watermark_detected)
+            watermark_detected=watermark_detected, )

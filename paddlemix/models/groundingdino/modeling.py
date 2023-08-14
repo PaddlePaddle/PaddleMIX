@@ -20,21 +20,17 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle import Tensor
 from paddle.nn import Layer
-
-from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
-from paddlenlp.utils.initializer import constant_, xavier_uniform_
 from paddlenlp.transformers import AutoTokenizer, BertModel, RobertaModel
+from paddlenlp.transformers.model_utils import (PretrainedModel,
+                                                register_base_model)
+from paddlenlp.utils.initializer import constant_, xavier_uniform_
 
-from .utils import MLP, ContrastiveEmbed, inverse_sigmoid
-
-from .bertwarper import (
-    BertModelWarper,
-    generate_masks_with_special_tokens,
-    generate_masks_with_special_tokens_and_transfer_map, )
-
-from .configuration import GroundingDinoConfig
 from .backbone import build_backbone
+from .bertwarper import (BertModelWarper, generate_masks_with_special_tokens,
+                         generate_masks_with_special_tokens_and_transfer_map)
+from .configuration import GroundingDinoConfig
 from .transformer import build_transformer
+from .utils import MLP, ContrastiveEmbed, inverse_sigmoid
 
 __all__ = [
     "GroundingDinoModel",
@@ -114,7 +110,8 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
                 in_channels = hidden_dim
             self.input_proj = nn.LayerList(input_proj_list)
         else:
-            assert two_stage_type == "no", "two_stage_type should be no if num_feature_levels=1 !!!"
+            assert (two_stage_type == "no"
+                    ), "two_stage_type should be no if num_feature_levels=1 !!!"
             self.input_proj = nn.LayerList([
                 nn.Sequential(
                     nn.Conv2D(
@@ -150,7 +147,8 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
 
         # two stage
         assert config.two_stage_type in [
-            "no", "standard"
+            "no",
+            "standard",
         ], "unknown param {} of two_stage_type".format(config.two_stage_type)
         if config.two_stage_type != "no":
             if config.two_stage_bbox_embed_share:
@@ -179,14 +177,15 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
     def init_ref_points(self, use_num_queries):
         self.refpoint_embed = nn.Embedding(use_num_queries, self.query_dim)
 
-    def forward(self,
-                x: paddle.Tensor,
-                m: paddle.Tensor,
-                input_ids: paddle.Tensor,
-                attention_mask: paddle.Tensor,
-                text_self_attention_masks: paddle.Tensor,
-                position_ids: paddle.Tensor=None,
-                targets: List=None):
+    def forward(
+            self,
+            x: paddle.Tensor,
+            m: paddle.Tensor,
+            input_ids: paddle.Tensor,
+            attention_mask: paddle.Tensor,
+            text_self_attention_masks: paddle.Tensor,
+            position_ids: paddle.Tensor=None,
+            targets: List=None, ):
 
         tokenized = {
             "input_ids": input_ids,

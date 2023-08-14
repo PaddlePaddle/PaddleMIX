@@ -18,13 +18,13 @@ from typing import Callable, Dict, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-
 from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
 
 from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import PIL_INTERPOLATION, logging
-from ..fastdeploy_utils import FastDeployDiffusionPipelineMixin, FastDeployRuntimeModel
+from ..fastdeploy_utils import (FastDeployDiffusionPipelineMixin,
+                                FastDeployRuntimeModel)
 from . import StableDiffusionPipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -77,8 +77,8 @@ def prepare_mask_and_masked_image(image,
 
         # Batch single image
         if image.ndim == 3:
-            assert image.shape[
-                0] == 3, "Image outside a batch should be of shape (3, H, W)"
+            assert (image.shape[0] == 3
+                    ), "Image outside a batch should be of shape (3, H, W)"
             image = image.unsqueeze(0)
 
         # Batch and add channel dim for single mask
@@ -95,11 +95,12 @@ def prepare_mask_and_masked_image(image,
             else:
                 mask = mask.unsqueeze(1)
 
-        assert image.ndim == 4 and mask.ndim == 4, "Image and Mask must have 4 dimensions"
-        assert image.shape[-2:] == mask.shape[
-            -2:], "Image and Mask must have the same spatial dimensions"
-        assert image.shape[0] == mask.shape[
-            0], "Image and Mask must have the same batch size"
+        assert (image.ndim == 4 and
+                mask.ndim == 4), "Image and Mask must have 4 dimensions"
+        assert (image.shape[-2:] == mask.shape[-2:]
+                ), "Image and Mask must have the same spatial dimensions"
+        assert (image.shape[0] == mask.shape[0]
+                ), "Image and Mask must have the same batch size"
 
         # Check image is in [-1, 1]
         if image.min() < -1 or image.max() > 1:
@@ -451,7 +452,8 @@ class FastDeployStableDiffusionInpaintPipeline(
             # default case for runwayml/stable-diffusion-inpainting
             num_channels_mask = mask.shape[1]
             num_channels_masked_image = masked_image_latents.shape[1]
-            if num_channels_latents + num_channels_mask + num_channels_masked_image != num_channels_unet:
+            if (num_channels_latents + num_channels_mask +
+                    num_channels_masked_image != num_channels_unet):
                 raise ValueError(
                     f"Incorrect configuration settings! Received `num_channels_latents`: {num_channels_latents} +"
                     f" `num_channels_mask`: {num_channels_mask} + `num_channels_masked_image`: {num_channels_masked_image}"
@@ -489,8 +491,8 @@ class FastDeployStableDiffusionInpaintPipeline(
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 if is_scheduler_support_step_index:
                     latent_model_input = self.scheduler.scale_model_input(
                         latent_model_input, t, step_index=i)
@@ -535,7 +537,7 @@ class FastDeployStableDiffusionInpaintPipeline(
                         latents,
                         step_index=i,
                         return_pred_original_sample=False,
-                        **extra_step_kwargs)
+                        **extra_step_kwargs, )
                 else:
                     scheduler_output = self.scheduler.step(
                         noise_pred, t, latents, **extra_step_kwargs)
@@ -571,7 +573,7 @@ class FastDeployStableDiffusionInpaintPipeline(
         if not output_type == "latent":
             image = self._decode_vae_latents(
                 latents / self.vae_scaling_factor,
-                infer_op=infer_op_dict.get("vae_decoder", None))
+                infer_op=infer_op_dict.get("vae_decoder", None), )
             image, has_nsfw_concept = self.run_safety_checker(image)
         else:
             image = latents

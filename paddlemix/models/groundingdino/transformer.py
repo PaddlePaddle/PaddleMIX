@@ -13,27 +13,21 @@
 # limitations under the License.
 
 from typing import Optional
-import numpy as np
 
+import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle.distributed.fleet.utils import recompute
-
-from .utils import inverse_sigmoid
-from paddlenlp.utils.initializer import constant_, xavier_uniform_, normal_
-from .layers import MultiHeadAttention
+from paddlenlp.utils.initializer import constant_, normal_, xavier_uniform_
 
 from .fuse_modules import BiAttentionBlock
+from .layers import MultiHeadAttention
 from .ms_deform_attn import MSDeformableAttention as MSDeformAttn
 from .transformer_vanilla import TransformerEncoderLayer
-from .utils import (
-    MLP,
-    _get_activation_fn,
-    _get_clones,
-    gen_encoder_output_proposals,
-    gen_sineembed_for_position,
-    get_sine_pos_embed, )
+from .utils import (MLP, _get_activation_fn, _get_clones,
+                    gen_encoder_output_proposals, gen_sineembed_for_position,
+                    get_sine_pos_embed, inverse_sigmoid)
 
 
 class Transformer(nn.Layer):
@@ -80,8 +74,13 @@ class Transformer(nn.Layer):
 
         # choose encoder layer type
         encoder_layer = DeformableTransformerEncoderLayer(
-            d_model, dim_feedforward, dropout, activation, num_feature_levels,
-            nhead, enc_n_points)
+            d_model,
+            dim_feedforward,
+            dropout,
+            activation,
+            num_feature_levels,
+            nhead,
+            enc_n_points, )
 
         if use_text_enhancer:
             text_enhance_layer = TransformerEncoderLayer(
@@ -166,7 +165,8 @@ class Transformer(nn.Layer):
         # for two stage
         self.two_stage_type = two_stage_type
         assert two_stage_type in [
-            "no", "standard"
+            "no",
+            "standard",
         ], "unknown param {} of two_stage_type".format(two_stage_type)
         if two_stage_type == "standard":
             # anchor selection at the output of encoder
@@ -204,14 +204,15 @@ class Transformer(nn.Layer):
     def init_ref_points(self, use_num_queries):
         self.refpoint_embed = nn.Embedding(use_num_queries, 4)
 
-    def forward(self,
-                srcs,
-                masks,
-                refpoint_embed,
-                pos_embeds,
-                tgt,
-                attn_mask=None,
-                text_dict=None):
+    def forward(
+            self,
+            srcs,
+            masks,
+            refpoint_embed,
+            pos_embeds,
+            tgt,
+            attn_mask=None,
+            text_dict=None, ):
         """
         Input:
             - srcs: List of multi features [bs, ci, hi, wi]
@@ -251,9 +252,10 @@ class Transformer(nn.Layer):
         spatial_shapes = paddle.to_tensor(
             paddle.stack(spatial_shapes), dtype=paddle.int32)
 
-        level_start_index = paddle.concat((paddle.zeros(
-            [1],
-            dtype=spatial_shapes.dtype), spatial_shapes.prod(1).cumsum(0)[:-1]))
+        level_start_index = paddle.concat((
+            paddle.zeros(
+                [1], dtype=spatial_shapes.dtype),
+            spatial_shapes.prod(1).cumsum(0)[:-1], ))
         valid_ratios = paddle.stack([self.get_valid_ratio(m) for m in masks], 1)
 
         # two stage
@@ -320,11 +322,11 @@ class Transformer(nn.Layer):
                 arr=output_memory,
                 axis=1,
                 indices=topk_proposals.unsqueeze(axis=-1).tile(
-                    repeat_times=[1, 1, self.d_model]))
+                    repeat_times=[1, 1, self.d_model]), )
 
             if self.embed_init_tgt:
-                tgt_ = (self.tgt_embed.weight[:, None, :].tile(
-                    [1, bs, 1]).transpose([1, 0, 2]))  # nq, bs, d_model
+                tgt_ = (self.tgt_embed.weight[:, None, :].tile([1, bs, 1])
+                        .transpose([1, 0, 2]))  # nq, bs, d_model
             else:
                 tgt_ = tgt_undetach
 
@@ -338,8 +340,9 @@ class Transformer(nn.Layer):
         elif self.two_stage_type == "no":
             tgt_ = (self.tgt_embed.weight[:, None, :].tile(
                 [1, bs, 1]).transpose([1, 0, 2]))  # nq, bs, d_model
-            refpoint_embed_ = (self.refpoint_embed.weight[:, None, :].tile(
-                [1, bs, 1]).transpose([1, 0, 2]))  # nq, bs, 4
+            refpoint_embed_ = (self.refpoint_embed.weight[:, None, :]
+                               .tile([1, bs, 1])
+                               .transpose([1, 0, 2]))  # nq, bs, 4
 
             if refpoint_embed is not None:
                 refpoint_embed = paddle.concat(
@@ -480,10 +483,10 @@ class TransformerEncoder(nn.Layer):
                     0.5, H_ - 0.5, H_, dtype=paddle.float32),
                 paddle.linspace(
                     0.5, W_ - 0.5, W_, dtype=paddle.float32), )
-            ref_y = ref_y.reshape([-1, ])[None] / (
-                valid_ratios[:, None, lvl, 1] * H_)
-            ref_x = ref_x.reshape([-1, ])[None] / (
-                valid_ratios[:, None, lvl, 0] * W_)
+            ref_y = ref_y.reshape([-1])[None] / (valid_ratios[:, None, lvl, 1] *
+                                                 H_)
+            ref_x = ref_x.reshape([-1])[None] / (valid_ratios[:, None, lvl, 0] *
+                                                 W_)
             ref = paddle.stack((ref_x, ref_y), -1)
             reference_points_list.append(ref)
         reference_points = paddle.concat(reference_points_list, 1)
@@ -552,9 +555,12 @@ class TransformerEncoder(nn.Layer):
             if self.fusion_layers:
                 if self.use_checkpoint:
                     output, memory_text = recompute(
-                        self.fusion_layers[layer_id], output, memory_text,
-                        key_padding_mask, text_attention_mask,
-                        **{"preserve_rng_state": True})
+                        self.fusion_layers[layer_id],
+                        output,
+                        memory_text,
+                        key_padding_mask,
+                        text_attention_mask,
+                        **{"preserve_rng_state": True}, )
                 else:
                     output, memory_text = self.fusion_layers[layer_id](
                         v=output,
@@ -571,10 +577,15 @@ class TransformerEncoder(nn.Layer):
 
             # main process
             if self.use_transformer_ckpt:
-                output = recompute(layer, output, pos, reference_points,
-                                   spatial_shapes, level_start_index,
-                                   key_padding_mask,
-                                   **{"preserve_rng_state": True})
+                output = recompute(
+                    layer,
+                    output,
+                    pos,
+                    reference_points,
+                    spatial_shapes,
+                    level_start_index,
+                    key_padding_mask,
+                    **{"preserve_rng_state": True}, )
             else:
                 output = layer(
                     src=output,
@@ -663,9 +674,8 @@ class TransformerDecoder(nn.Layer):
                 )  # nq, bs, nlevel, 4
             else:
                 assert reference_points.shape[-1] == 2
-                reference_points_input = reference_points[:, :,
-                                                          None] * valid_ratios[
-                                                              None, :]
+                reference_points_input = (reference_points[:, :, None] *
+                                          valid_ratios[None, :])
             query_sine_embed = gen_sineembed_for_position(
                 reference_points_input[:, :, 0, :])  # nq, bs, 256*2
 
@@ -702,7 +712,7 @@ class TransformerDecoder(nn.Layer):
                 except Exception as e:
                     print(e)
 
-# iter update
+            # iter update
             if self.bbox_embed is not None:
 
                 reference_before_sigmoid = inverse_sigmoid(reference_points)
@@ -740,7 +750,7 @@ class DeformableTransformerEncoderLayer(nn.Layer):
             num_levels=n_levels,
             num_heads=n_heads,
             num_points=n_points,
-            batch_first=True)
+            batch_first=True, )
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
@@ -762,13 +772,14 @@ class DeformableTransformerEncoderLayer(nn.Layer):
         src = self.norm2(src)
         return src
 
-    def forward(self,
-                src,
-                pos,
-                reference_points,
-                spatial_shapes,
-                level_start_index,
-                key_padding_mask=None):
+    def forward(
+            self,
+            src,
+            pos,
+            reference_points,
+            spatial_shapes,
+            level_start_index,
+            key_padding_mask=None, ):
 
         src2 = self.self_attn(
             query=self.with_pos_embed(src, pos),
@@ -806,7 +817,7 @@ class DeformableTransformerDecoderLayer(nn.Layer):
             num_levels=n_levels,
             num_heads=n_heads,
             num_points=n_points,
-            batch_first=True)
+            batch_first=True, )
         self.dropout1 = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
         self.norm1 = nn.LayerNorm(d_model)
 
@@ -894,7 +905,7 @@ class DeformableTransformerDecoderLayer(nn.Layer):
                 k,
                 tgt,
                 attn_mask=self_attn_mask
-                if self_attn_mask is None else ~self_attn_mask)[0]
+                if self_attn_mask is None else ~self_attn_mask, )[0]
             tgt = tgt + self.dropout2(tgt2)
             tgt = self.norm2(tgt)
 

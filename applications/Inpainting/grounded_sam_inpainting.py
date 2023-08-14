@@ -15,24 +15,20 @@
 import os
 from dataclasses import dataclass, field
 
-import paddle
+import matplotlib.pyplot as plt
 import numpy as np
-import requests
-from paddlenlp.trainer import PdArgumentParser
-from PIL import Image
-
 import paddle
 import paddle.nn.functional as F
+import requests
+from paddlenlp.trainer import PdArgumentParser
 from PIL import Image, ImageDraw, ImageFont
 
-from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
 from paddlemix.models.sam.modeling import SamModel
+from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
 from paddlemix.processors.sam_processing import SamProcessor
-from ppdiffusers import StableDiffusionInpaintPipeline
-
 from paddlemix.utils.log import logger
-import matplotlib.pyplot as plt
+from ppdiffusers import StableDiffusionInpaintPipeline
 
 
 def show_mask(mask, ax, random_color=False):
@@ -50,7 +46,7 @@ def show_box(box, ax, label):
     w, h = box[2] - box[0], box[3] - box[1]
     ax.add_patch(
         plt.Rectangle(
-            (x0, y0), w, h, edgecolor='green', facecolor=(0, 0, 0, 0), lw=2))
+            (x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2))
     ax.text(x0, y0, label)
 
 
@@ -79,6 +75,7 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
     """
+
     stable_diffusion_pipeline_name_or_path: str = field(
         default="stabilityai/stable-diffusion-2-inpainting",
         metadata={"help": "Path to pretrained model or model identifier"}, )
@@ -105,7 +102,7 @@ class ModelArguments:
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
-    url = (data_args.input_image)
+    url = data_args.input_image
 
     logger.info("stable diffusion pipeline: {}".format(
         model_args.stable_diffusion_pipeline_name_or_path))
@@ -114,27 +111,27 @@ def main():
     logger.info("stable diffusion pipeline build finish!")
 
     logger.info("dino_model: {}".format(model_args.dino_model_name_or_path))
-    #bulid dino processor
+    # bulid dino processor
     dino_processor = GroudingDinoProcessor.from_pretrained(
         model_args.dino_model_name_or_path)
-    #bulid dino model
+    # bulid dino model
     dino_model = GroundingDinoModel.from_pretrained(
         model_args.dino_model_name_or_path)
     dino_model.eval()
     logger.info("dino_model build finish!")
 
-    #buidl sam processor
+    # buidl sam processor
     sam_processor = SamProcessor.from_pretrained(
         model_args.sam_model_name_or_path)
-    #bulid model
+    # bulid model
     logger.info("SamModel: {}".format(model_args.sam_model_name_or_path))
     sam_model = SamModel.from_pretrained(
         model_args.sam_model_name_or_path, input_type="boxs")
     logger.info("SamModel build finish!")
 
-    #read image
+    # read image
     if os.path.isfile(url):
-        #read image
+        # read image
         image_pil = Image.open(url)
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw)
@@ -144,7 +141,7 @@ def main():
 
     image_pil = image_pil.convert("RGB")
 
-    #preprocess image text_prompt
+    # preprocess image text_prompt
     image_tensor, mask, tokenized_out = dino_processor(
         images=image_pil, text=data_args.det_prompt)
 
@@ -152,11 +149,11 @@ def main():
         outputs = dino_model(
             image_tensor,
             mask,
-            input_ids=tokenized_out['input_ids'],
-            attention_mask=tokenized_out['attention_mask'],
+            input_ids=tokenized_out["input_ids"],
+            attention_mask=tokenized_out["attention_mask"],
             text_self_attention_masks=tokenized_out[
-                'text_self_attention_masks'],
-            position_ids=tokenized_out['position_ids'])
+                "text_self_attention_masks"],
+            position_ids=tokenized_out["position_ids"], )
 
     logits = F.sigmoid(outputs["pred_logits"])[0]  # (nq, 256)
     boxes = outputs["pred_boxes"][0]  # (nq, 4)
@@ -210,12 +207,12 @@ def main():
         for box, label in zip(boxes, pred_phrases):
             show_box(box, plt.gca(), label)
 
-        plt.axis('off')
+        plt.axis("off")
         plt.savefig(
-            os.path.join(model_args.output_dir, 'mask_pred.jpg'),
+            os.path.join(model_args.output_dir, "mask_pred.jpg"),
             bbox_inches="tight",
             dpi=300,
-            pad_inches=0.0)
+            pad_inches=0.0, )
 
     merge_mask = paddle.sum(seg_masks, axis=0).unsqueeze(0)
     merge_mask = merge_mask > 0

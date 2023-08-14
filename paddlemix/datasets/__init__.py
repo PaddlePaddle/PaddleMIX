@@ -14,5 +14,5 @@
 
 from .caption_dataset import *
 from .coco_caption import *
-from .dataset import *
 from .coco_clip import *
+from .dataset import *

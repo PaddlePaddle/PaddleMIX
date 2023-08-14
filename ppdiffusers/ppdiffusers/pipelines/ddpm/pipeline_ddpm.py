@@ -72,8 +72,10 @@ class DDPMPipeline(DiffusionPipeline):
                 self.unet.config.sample_size,
                 self.unet.config.sample_size, )
         else:
-            image_shape = (batch_size, self.unet.config.in_channels,
-                           *self.unet.config.sample_size)
+            image_shape = (
+                batch_size,
+                self.unet.config.in_channels,
+                *self.unet.config.sample_size, )
         image = randn_tensor(image_shape, generator=generator)
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)

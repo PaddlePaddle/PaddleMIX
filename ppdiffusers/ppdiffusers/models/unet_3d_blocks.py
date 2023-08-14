@@ -150,8 +150,8 @@ class UNetMidBlock3DCrossAttn(nn.Layer):
         super().__init__()
         self.has_cross_attention = True
         self.attn_num_head_channels = attn_num_head_channels
-        resnet_groups = resnet_groups if resnet_groups is not None else min(
-            in_channels // 4, 32)
+        resnet_groups = (resnet_groups if resnet_groups is not None else
+                         min(in_channels // 4, 32))
         # there is always at least one resnet
         resnets = [
             ResnetBlock2D(
@@ -235,7 +235,7 @@ class UNetMidBlock3DCrossAttn(nn.Layer):
             hidden_states = temp_attn(
                 hidden_states,
                 num_frames=num_frames,
-                cross_attention_kwargs=cross_attention_kwargs).sample
+                cross_attention_kwargs=cross_attention_kwargs, ).sample
             hidden_states = resnet(hidden_states, temb)
             hidden_states = temp_conv(hidden_states, num_frames=num_frames)
         return hidden_states
@@ -319,7 +319,7 @@ class CrossAttnDownBlock3D(nn.Layer):
                     use_conv=True,
                     out_channels=out_channels,
                     padding=downsample_padding,
-                    name="op")
+                    name="op", )
             ])
         else:
             self.downsamplers = None
@@ -346,7 +346,7 @@ class CrossAttnDownBlock3D(nn.Layer):
             hidden_states = temp_attn(
                 hidden_states,
                 num_frames=num_frames,
-                cross_attention_kwargs=cross_attention_kwargs).sample
+                cross_attention_kwargs=cross_attention_kwargs, ).sample
             output_states += (hidden_states, )
         if self.downsamplers is not None:
             for downsampler in self.downsamplers:
@@ -402,7 +402,7 @@ class DownBlock3D(nn.Layer):
                     use_conv=True,
                     out_channels=out_channels,
                     padding=downsample_padding,
-                    name="op")
+                    name="op", )
             ])
         else:
             self.downsamplers = None
@@ -530,7 +530,7 @@ class CrossAttnUpBlock3D(nn.Layer):
             hidden_states = temp_attn(
                 hidden_states,
                 num_frames=num_frames,
-                cross_attention_kwargs=cross_attention_kwargs).sample
+                cross_attention_kwargs=cross_attention_kwargs, ).sample
         if self.upsamplers is not None:
             for upsampler in self.upsamplers:
                 hidden_states = upsampler(hidden_states, upsample_size)
@@ -588,12 +588,13 @@ class UpBlock3D(nn.Layer):
             self.upsamplers = None
         self.gradient_checkpointing = False
 
-    def forward(self,
-                hidden_states,
-                res_hidden_states_tuple,
-                temb=None,
-                upsample_size=None,
-                num_frames=1):
+    def forward(
+            self,
+            hidden_states,
+            res_hidden_states_tuple,
+            temb=None,
+            upsample_size=None,
+            num_frames=1, ):
         for resnet, temp_conv in zip(self.resnets, self.temp_convs):
             # pop res hidden states
             res_hidden_states = res_hidden_states_tuple[-1]

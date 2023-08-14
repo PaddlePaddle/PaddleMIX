@@ -72,8 +72,10 @@ class VQModelTests(ModelTesterMixin, unittest.TestCase):
         model.eval()
         paddle.seed(0)
         image = paddle.randn(shape=[
-            1, model.config.in_channels, model.config.sample_size,
-            model.config.sample_size
+            1,
+            model.config.in_channels,
+            model.config.sample_size,
+            model.config.sample_size,
         ])
         with paddle.no_grad():
             output = model(image).sample

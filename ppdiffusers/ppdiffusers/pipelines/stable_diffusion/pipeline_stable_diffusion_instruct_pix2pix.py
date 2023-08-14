@@ -18,8 +18,8 @@ from typing import Callable, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -247,8 +247,12 @@ class StableDiffusionInstructPix2PixPipeline(
             (nsfw) content, according to the `safety_checker`.
         """
         # 0. Check inputs
-        self.check_inputs(prompt, callback_steps, negative_prompt,
-                          prompt_embeds, negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         if image is None:
             raise ValueError("`image` input cannot be undefined.")
@@ -264,7 +268,8 @@ class StableDiffusionInstructPix2PixPipeline(
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
         # corresponds to doing no classifier free guidance.
-        do_classifier_free_guidance = guidance_scale > 1.0 and image_guidance_scale >= 1.0
+        do_classifier_free_guidance = (guidance_scale > 1.0 and
+                                       image_guidance_scale >= 1.0)
         # check if scheduler is in sigmas space
         scheduler_is_in_sigma_space = hasattr(self.scheduler, "sigmas")
 
@@ -326,8 +331,8 @@ class StableDiffusionInstructPix2PixPipeline(
                 # Expand the latents if we are doing classifier free guidance.
                 # The latents are expanded 3 times because for pix2pix the guidance\
                 # is applied for both the text and the input image.
-                latent_model_input = paddle.concat(
-                    [latents] * 3) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 3) if
+                                      do_classifier_free_guidance else latents)
 
                 # concat latents, image_latents in the channel dimension
                 scaled_latent_model_input = self.scheduler.scale_model_input(
@@ -335,9 +340,9 @@ class StableDiffusionInstructPix2PixPipeline(
                 scaled_latent_model_input = paddle.concat(
                     [
                         scaled_latent_model_input,
-                        image_latents.cast(scaled_latent_model_input.dtype)
+                        image_latents.cast(scaled_latent_model_input.dtype),
                     ],
-                    axis=1)
+                    axis=1, )
 
                 # predict the noise residual
                 noise_pred = self.unet(
@@ -357,8 +362,10 @@ class StableDiffusionInstructPix2PixPipeline(
 
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_text, noise_pred_image, noise_pred_uncond = noise_pred.chunk(
-                        3)
+                    (
+                        noise_pred_text,
+                        noise_pred_image,
+                        noise_pred_uncond, ) = noise_pred.chunk(3)
                     noise_pred = (noise_pred_uncond + guidance_scale *
                                   (noise_pred_text - noise_pred_image
                                    ) + image_guidance_scale *
@@ -463,8 +470,8 @@ class StableDiffusionInstructPix2PixPipeline(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -514,8 +521,8 @@ class StableDiffusionInstructPix2PixPipeline(
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -588,12 +595,13 @@ class StableDiffusionInstructPix2PixPipeline(
         image = image.transpose([0, 2, 3, 1]).cast("float32").numpy()
         return image
 
-    def check_inputs(self,
-                     prompt,
-                     callback_steps,
-                     negative_prompt=None,
-                     prompt_embeds=None,
-                     negative_prompt_embeds=None):
+    def check_inputs(
+            self,
+            prompt,
+            callback_steps,
+            negative_prompt=None,
+            prompt_embeds=None,
+            negative_prompt_embeds=None, ):
         if (callback_steps is None) or (
                 callback_steps is not None and
             (not isinstance(callback_steps, int) or callback_steps <= 0)):
@@ -629,16 +637,20 @@ class StableDiffusionInstructPix2PixPipeline(
                     f" {negative_prompt_embeds.shape}.")
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = (batch_size, num_channels_latents, height //
-                 self.vae_scale_factor, width // self.vae_scale_factor)
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
+        shape = (
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor, )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -652,13 +664,14 @@ class StableDiffusionInstructPix2PixPipeline(
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    def prepare_image_latents(self,
-                              image,
-                              batch_size,
-                              num_images_per_prompt,
-                              dtype,
-                              do_classifier_free_guidance,
-                              generator=None):
+    def prepare_image_latents(
+            self,
+            image,
+            batch_size,
+            num_images_per_prompt,
+            dtype,
+            do_classifier_free_guidance,
+            generator=None, ):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
                 f"`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}"
@@ -682,8 +695,8 @@ class StableDiffusionInstructPix2PixPipeline(
         else:
             image_latents = self.vae.encode(image).latent_dist.mode()
 
-        if batch_size > image_latents.shape[
-                0] and batch_size % image_latents.shape[0] == 0:
+        if (batch_size > image_latents.shape[0] and
+                batch_size % image_latents.shape[0] == 0):
             # expand image_latents for batch_size
             deprecation_message = (
                 f"You have passed {batch_size} text prompts (`prompt`), but only {image_latents.shape[0]} initial"
@@ -695,12 +708,12 @@ class StableDiffusionInstructPix2PixPipeline(
                 "len(prompt) != len(image)",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False, )
             additional_image_per_prompt = batch_size // image_latents.shape[0]
             image_latents = paddle.concat(
                 [image_latents] * additional_image_per_prompt, axis=0)
-        elif batch_size > image_latents.shape[
-                0] and batch_size % image_latents.shape[0] != 0:
+        elif (batch_size > image_latents.shape[0] and
+              batch_size % image_latents.shape[0] != 0):
             raise ValueError(
                 f"Cannot duplicate `image` of batch size {image_latents.shape[0]} to {batch_size} text prompts."
             )

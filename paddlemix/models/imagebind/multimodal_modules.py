@@ -1,16 +1,33 @@
-import sys
-import paddlemix.utils.paddle_aux
-import paddle
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import gzip
 import html
 import io
 import math
+import sys
 from functools import lru_cache
 from typing import Callable, List, Optional, Tuple
+
 import ftfy
 import numpy as np
+import paddle
 import regex as re
 from iopath.common.file_io import g_pathmgr
+
+import paddlemix.utils.paddle_aux
+
 from .helpers import VerboseNNModule, cast_if_src_dtype
 
 
@@ -26,7 +43,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
     sinusoid_table[:, 0::2] = np.sin(sinusoid_table[:, 0::2])
     sinusoid_table[:, 1::2] = np.cos(sinusoid_table[:, 1::2])
     return paddle.to_tensor(
-        data=sinusoid_table, dtype='float32').unsqueeze(axis=0)
+        data=sinusoid_table, dtype="float32").unsqueeze(axis=0)
 
 
 def interpolate_pos_encoding_2d(target_spatial_size, pos_embed):
@@ -34,14 +51,14 @@ def interpolate_pos_encoding_2d(target_spatial_size, pos_embed):
     if N == target_spatial_size:
         return pos_embed
     dim = pos_embed.shape[-1]
-    pos_embed, updated = cast_if_src_dtype(pos_embed, 'bfloat16', 'float32')
+    pos_embed, updated = cast_if_src_dtype(pos_embed, "bfloat16", "float32")
     pos_embed = paddle.nn.functional.interpolate(
         x=pos_embed.reshape(1, int(math.sqrt(N)), int(math.sqrt(N)),
                             dim).transpose(perm=[0, 3, 1, 2]),
         scale_factor=math.sqrt(target_spatial_size / N),
-        mode='bicubic', )
+        mode="bicubic", )
     if updated:
-        pos_embed, _ = cast_if_src_dtype(pos_embed, 'float32', 'bfloat16')
+        pos_embed, _ = cast_if_src_dtype(pos_embed, "float32", "bfloat16")
 
     # pos_embed = pos_embed.transpose(perm=[0, 2, 3, 1]).view(1, -1, dim)
     pos_embed = pos_embed.transpose(perm=[0, 2, 3, 1]).reshape((1, -1, dim))
@@ -53,18 +70,18 @@ def interpolate_pos_encoding(npatch_per_img,
                              patches_layout,
                              input_shape=None,
                              first_patch_idx=1):
-    assert first_patch_idx == 0 or first_patch_idx == 1, 'there is 1 CLS token or none'
+    assert first_patch_idx == 0 or first_patch_idx == 1, "there is 1 CLS token or none"
     N = pos_embed.shape[1] - first_patch_idx
     if npatch_per_img == N:
         return pos_embed
     assert (patches_layout[-1] == patches_layout[-2]
-            ), 'Interpolation of pos embed not supported for non-square layouts'
+            ), "Interpolation of pos embed not supported for non-square layouts"
     class_emb = pos_embed[:, :first_patch_idx]
     pos_embed = pos_embed[:, first_patch_idx:]
     if input_shape is None or patches_layout[0] == 1:
         pos_embed = interpolate_pos_encoding_2d(npatch_per_img, pos_embed)
     elif patches_layout[0] > 1:
-        assert len(input_shape) == 4, 'temporal interpolation not supported'
+        assert len(input_shape) == 4, "temporal interpolation not supported"
         num_frames = patches_layout[0]
         num_spatial_tokens = patches_layout[1] * patches_layout[2]
 
@@ -150,7 +167,7 @@ class SpatioTemporalPosEmbeddingHelper(VerboseNNModule):
             # timm.models.layers.trunc_normal_(self.pos_embed, std=0.02)
         else:
             self.register_buffer(
-                'pos_embed',
+                "pos_embed",
                 get_sinusoid_encoding_table(self.num_tokens, embed_dim))
 
     def get_pos_embedding(self, vision_input, all_vision_tokens):
@@ -173,7 +190,7 @@ class RGBDTPreprocessor(VerboseNNModule):
             num_cls_tokens: int=1,
             pos_embed_fn: Optional[Callable]=None,
             use_type_embed: bool=False,
-            init_param_style: str='openclip', ) -> None:
+            init_param_style: str="openclip", ) -> None:
         super().__init__()
         stem = rgbt_stem if rgbt_stem is not None else depth_stem
         self.patches_layout, self.num_patches, self.embed_dim = stem.get_patch_layout(
@@ -205,7 +222,7 @@ class RGBDTPreprocessor(VerboseNNModule):
 
     @paddle.no_grad()
     def init_parameters(self, init_param_style):
-        if init_param_style == 'openclip':
+        if init_param_style == "openclip":
             scale = self.embed_dim**-0.5
             if self.use_pos_embed:
                 paddle.nn.initializer.Normal()(
@@ -217,10 +234,10 @@ class RGBDTPreprocessor(VerboseNNModule):
                 paddle.nn.initializer.Normal()(self.cls_token)
 
                 self.cls_token.set_value(self.cls_token * scale)
-        elif init_param_style == 'vit':
+        elif init_param_style == "vit":
             self.cls_token.data.fill_(value=0)
         else:
-            raise ValueError(f'Unknown init {init_param_style}')
+            raise ValueError(f"Unknown init {init_param_style}")
         if self.use_type_embed:
             paddle.nn.initializer.Normal()(self.type_embed)
 
@@ -253,7 +270,7 @@ class RGBDTPreprocessor(VerboseNNModule):
             final_tokens = vision_tokens + depth_tokens
         else:
             final_tokens = vision_tokens if vision is not None else depth_tokens
-        return_dict = {'trunk': {'tokens': final_tokens}, 'head': {}}
+        return_dict = {"trunk": {"tokens": final_tokens}, "head": {}}
         return return_dict
 
 
@@ -277,7 +294,7 @@ def build_causal_attention_mask(context_length):
     out_0 = paddle.empty(shape=[context_length, context_length])
     out_0.stop_gradient = not False
     mask = out_0
-    mask.fill_(value=float('-inf'))
+    mask.fill_(value=float("-inf"))
 
     # mask.triu_(1)
     mask = paddle.triu(mask, 1)
@@ -293,7 +310,7 @@ class TextPreprocessor(VerboseNNModule):
             causal_masking: bool,
             supply_seq_len_to_head: bool=True,
             num_cls_tokens: int=0,
-            init_param_style: str='openclip', ) -> None:
+            init_param_style: str="openclip", ) -> None:
         super().__init__()
         self.vocab_size = vocab_size
         self.context_length = context_length
@@ -307,7 +324,7 @@ class TextPreprocessor(VerboseNNModule):
         self.causal_masking = causal_masking
         if self.causal_masking:
             mask = build_causal_attention_mask(self.context_length)
-            self.register_buffer('mask', mask)
+            self.register_buffer("mask", mask)
         self.supply_seq_len_to_head = supply_seq_len_to_head
         self.num_cls_tokens = num_cls_tokens
         self.embed_dim = embed_dim
@@ -321,20 +338,20 @@ class TextPreprocessor(VerboseNNModule):
         self.init_parameters(init_param_style)
 
     @paddle.no_grad()
-    def init_parameters(self, init_param_style='openclip'):
+    def init_parameters(self, init_param_style="openclip"):
         paddle.nn.initializer.Normal(std=0.02)(self.token_embedding.weight)
         paddle.nn.initializer.Normal(std=0.01)(self.pos_embed)
 
-        if init_param_style == 'openclip':
+        if init_param_style == "openclip":
             scale = self.embed_dim**-0.5
             if self.num_cls_tokens > 0:
                 paddle.nn.initializer.Normal()(self.cls_token)
 
                 self.cls_token.set_value(self.cls_token * scale)
-        elif init_param_style == 'vit':
+        elif init_param_style == "vit":
             self.cls_token.data.fill_(value=0)
         else:
-            raise ValueError(f'Unknown init {init_param_style}')
+            raise ValueError(f"Unknown init {init_param_style}")
 
     def forward(self, text):
         text_tokens = self.token_embedding(text)
@@ -343,12 +360,12 @@ class TextPreprocessor(VerboseNNModule):
             class_tokens = self.cls_token.expand(shape=[B, -1, -1])
             text_tokens = paddle.concat(x=(class_tokens, text_tokens), axis=1)
         text_tokens = text_tokens + self.pos_embed
-        return_dict = {'trunk': {'tokens': text_tokens}, 'head': {}}
+        return_dict = {"trunk": {"tokens": text_tokens}, "head": {}}
         if self.supply_seq_len_to_head:
             text_lengths = text.argmax(axis=-1)
-            return_dict['head'] = {'seq_len': text_lengths}
+            return_dict["head"] = {"seq_len": text_lengths}
         if self.causal_masking:
-            return_dict['trunk'].update({'attn_mask': self.mask})
+            return_dict["trunk"].update({"attn_mask": self.mask})
         return return_dict
 
 
@@ -365,25 +382,25 @@ class Im2Video(paddle.nn.Layer):
         elif x.ndim == 5:
             return x
         else:
-            raise ValueError(f'Dimension incorrect {x.shape}')
+            raise ValueError(f"Dimension incorrect {x.shape}")
 
 
 class PadIm2Video(Im2Video):
     def __init__(self, ntimes, pad_type, time_dim=2):
         super().__init__(time_dim=time_dim)
         assert ntimes > 0
-        assert pad_type in ['zero', 'repeat']
+        assert pad_type in ["zero", "repeat"]
         self.ntimes = ntimes
         self.pad_type = pad_type
 
     def forward(self, x):
         x = super().forward(x)
         if x.shape[self.time_dim] == 1:
-            if self.pad_type == 'repeat':
+            if self.pad_type == "repeat":
                 new_shape = [1] * len(x.shape)
                 new_shape[self.time_dim] = self.ntimes
                 x = x.tile(repeat_times=new_shape)
-            elif self.pad_type == 'zero':
+            elif self.pad_type == "zero":
                 padarg = [0, 0] * len(x.shape)
                 padarg[2 * self.time_dim + 1] = self.ntimes - x.shape[
                     self.time_dim]
@@ -402,9 +419,9 @@ def bytes_to_unicode():
     To avoid that, we want lookup tables between utf-8 bytes and unicode strings.
     And avoids mapping to whitespace/control characters the bpe code barfs on.
     """
-    bs = (list(range(ord('!'), ord('~') + 1)) +
-          list(range(ord('¡'), ord('¬') + 1)) +
-          list(range(ord('®'), ord('ÿ') + 1)))
+    bs = (list(range(ord("!"), ord("~") + 1)) +
+          list(range(ord("¡"), ord("¬") + 1)) +
+          list(range(ord("®"), ord("ÿ") + 1)))
     cs = bs[:]
     n = 0
     for b in range(2**8):
@@ -435,7 +452,7 @@ def basic_clean(text):
 
 
 def whitespace_clean(text):
-    text = re.sub('\\s+', ' ', text)
+    text = re.sub("\\s+", " ", text)
     text = text.strip()
     return text
 
@@ -444,26 +461,26 @@ class SimpleTokenizer(object):
     def __init__(self, bpe_path: str, context_length=77):
         self.byte_encoder = bytes_to_unicode()
         self.byte_decoder = {v: k for k, v in self.byte_encoder.items()}
-        with g_pathmgr.open(bpe_path, 'rb') as fh:
+        with g_pathmgr.open(bpe_path, "rb") as fh:
             bpe_bytes = io.BytesIO(fh.read())
             merges: List[str] = gzip.open(bpe_bytes).read().decode(
-                'utf-8').split('\n')
+                "utf-8").split("\n")
         merges = merges[1:49152 - 256 - 2 + 1]
 
         merges: List[Tuple[str, ..
                            .]] = [tuple(merge.split()) for merge in merges]
         vocab = list(bytes_to_unicode().values())
-        vocab = vocab + [(v + '</w>') for v in vocab]
+        vocab = vocab + [(v + "</w>") for v in vocab]
         for merge in merges:
-            vocab.append(''.join(merge))
+            vocab.append("".join(merge))
 
-        vocab.extend(['<|startoftext|>', '<|endoftext|>'])
+        vocab.extend(["<|startoftext|>", "<|endoftext|>"])
         self.encoder = dict(zip(vocab, range(len(vocab))))
         self.decoder = {v: k for k, v in self.encoder.items()}
         self.bpe_ranks = dict(zip(merges, range(len(merges))))
         self.cache = {
-            '<|startoftext|>': '<|startoftext|>',
-            '<|endoftext|>': '<|endoftext|>',
+            "<|startoftext|>": "<|startoftext|>",
+            "<|endoftext|>": "<|endoftext|>",
         }
         self.pat = re.compile(
             "<\\|startoftext\\|>|<\\|endoftext\\|>|'s|'t|'re|'ve|'m|'ll|'d|[\\p{L}]+|[\\p{N}]|[^\\s\\p{L}\\p{N}]+",
@@ -474,13 +491,13 @@ class SimpleTokenizer(object):
         if token in self.cache:
             return self.cache[token]
 
-        word = tuple(token[:-1]) + (token[-1] + '</w>', )
+        word = tuple(token[:-1]) + (token[-1] + "</w>", )
         pairs = get_pairs(word)
         if not pairs:
-            return token + '</w>'
+            return token + "</w>"
         while True:
             bigram = min(
-                pairs, key=lambda pair: self.bpe_ranks.get(pair, float('inf')))
+                pairs, key=lambda pair: self.bpe_ranks.get(pair, float("inf")))
             if bigram not in self.bpe_ranks:
                 break
             first, second = bigram
@@ -507,7 +524,7 @@ class SimpleTokenizer(object):
                 break
             else:
                 pairs = get_pairs(word)
-        word = ' '.join(word)
+        word = " ".join(word)
         self.cache[token] = word
         return word
 
@@ -515,16 +532,16 @@ class SimpleTokenizer(object):
         bpe_tokens = []
         text = whitespace_clean(basic_clean(text)).lower()
         for token in re.findall(self.pat, text):
-            token = ''.join(self.byte_encoder[b] for b in token.encode('utf-8'))
+            token = "".join(self.byte_encoder[b] for b in token.encode("utf-8"))
 
             bpe_tokens.extend(self.encoder[bpe_token]
-                              for bpe_token in self.bpe(token).split(' '))
+                              for bpe_token in self.bpe(token).split(" "))
         return bpe_tokens
 
     def decode(self, tokens):
-        text = ''.join([self.decoder[token] for token in tokens])
+        text = "".join([self.decoder[token] for token in tokens])
         text = (bytearray([self.byte_decoder[c] for c in text]).decode(
-            'utf-8', errors='replace').replace('</w>', ' '))
+            "utf-8", errors="replace").replace("</w>", " "))
         return text
 
     def __call__(self, texts, context_length=None):
@@ -532,12 +549,12 @@ class SimpleTokenizer(object):
             context_length = self.context_length
         if isinstance(texts, str):
             texts = [texts]
-        sot_token = self.encoder['<|startoftext|>']
-        eot_token = self.encoder['<|endoftext|>']
+        sot_token = self.encoder["<|startoftext|>"]
+        eot_token = self.encoder["<|endoftext|>"]
         all_tokens = [([sot_token] + self.encode(text) + [eot_token])
                       for text in texts]
         result = paddle.zeros(
-            shape=[len(all_tokens), context_length], dtype='int64')
+            shape=[len(all_tokens), context_length], dtype="int64")
         for i, tokens in enumerate(all_tokens):
             tokens = tokens[:context_length]
             result[(i), :len(tokens)] = paddle.to_tensor(data=tokens)
@@ -555,7 +572,7 @@ class IMUPreprocessor(VerboseNNModule):
             img_size: Tuple=(6, 2000),
             num_cls_tokens: int=1,
             pos_embed_fn: Optional[Callable]=None,
-            init_param_style: str='openclip', ) -> None:
+            init_param_style: str="openclip", ) -> None:
         super().__init__()
         self.imu_stem = imu_stem
         self.embed_dim = embed_dim
@@ -582,16 +599,16 @@ class IMUPreprocessor(VerboseNNModule):
     def init_parameters(self, init_param_style):
         paddle.nn.initializer.TruncatedNormal(std=0.01)(self.pos_embed)
 
-        if init_param_style == 'openclip':
+        if init_param_style == "openclip":
             scale = self.embed_dim**-0.5
             if self.num_cls_tokens > 0:
                 paddle.nn.initializer.TruncatedNormal()(self.cls_token)
 
                 self.cls_token.set_value(self.cls_token * scale)
-        elif init_param_style == 'vit':
+        elif init_param_style == "vit":
             self.cls_token.data.fill_(value=0)
         else:
-            raise ValueError(f'Unknown init {init_param_style}')
+            raise ValueError(f"Unknown init {init_param_style}")
 
     def tokenize_input_and_cls_pos(self, input, stem):
         tokens = stem.norm_layer(stem.proj(input))
@@ -611,5 +628,5 @@ class IMUPreprocessor(VerboseNNModule):
             perm=[0, 2, 1, 3])  # 需要对齐
         imu = imu.reshape((imu.shape[0], imu.shape[1], -1))
         imu_tokens = self.tokenize_input_and_cls_pos(imu, self.imu_stem)
-        return_dict = {'trunk': {'tokens': imu_tokens}, 'head': {}}
+        return_dict = {"trunk": {"tokens": imu_tokens}, "head": {}}
         return return_dict

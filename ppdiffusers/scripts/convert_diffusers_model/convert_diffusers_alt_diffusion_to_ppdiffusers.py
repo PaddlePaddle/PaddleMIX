@@ -18,25 +18,17 @@ from collections import OrderedDict
 import paddle
 import torch
 from diffusers import AltDiffusionPipeline as DiffusersAltDiffusionPipeline
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPVisionConfig,
+                                    XLMRobertaTokenizer)
 
-from paddlenlp.transformers import (
-    CLIPFeatureExtractor,
-    CLIPVisionConfig,
-    XLMRobertaTokenizer, )
 from ppdiffusers import AltDiffusionPipeline as PPDiffusersAltDiffusionPipeline
 from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    HeunDiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    UNet2DConditionModel, )
+    AutoencoderKL, DDIMScheduler, DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler, EulerDiscreteScheduler,
+    HeunDiscreteScheduler, LMSDiscreteScheduler, PNDMScheduler,
+    UNet2DConditionModel)
 from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
-    RobertaSeriesConfig,
-    RobertaSeriesModelWithTransformation, )
+    RobertaSeriesConfig, RobertaSeriesModelWithTransformation)
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 
 paddle.set_device("cpu")
@@ -133,11 +125,11 @@ def convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(xlm_roberta, dtype="float32"):
         ],
         [
             "embeddings.position_embeddings.weight",
-            "embeddings.position_embeddings.weight"
+            "embeddings.position_embeddings.weight",
         ],
         [
             "embeddings.token_type_embeddings.weight",
-            "embeddings.token_type_embeddings.weight"
+            "embeddings.token_type_embeddings.weight",
         ],
         ["embeddings.LayerNorm.weight", "embeddings.layer_norm.weight"],
         ["embeddings.LayerNorm.bias", "embeddings.layer_norm.bias"],
@@ -199,7 +191,7 @@ def convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(xlm_roberta, dtype="float32"):
             ],
             [
                 f"encoder.layer.{layer_index}.intermediate.dense.bias",
-                f"encoder.layers.{layer_index}.linear1.bias"
+                f"encoder.layers.{layer_index}.linear1.bias",
             ],
             [
                 f"encoder.layer.{layer_index}.output.dense.weight",
@@ -208,15 +200,15 @@ def convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(xlm_roberta, dtype="float32"):
             ],
             [
                 f"encoder.layer.{layer_index}.output.dense.bias",
-                f"encoder.layers.{layer_index}.linear2.bias"
+                f"encoder.layers.{layer_index}.linear2.bias",
             ],
             [
                 f"encoder.layer.{layer_index}.output.LayerNorm.weight",
-                f"encoder.layers.{layer_index}.norm2.weight"
+                f"encoder.layers.{layer_index}.norm2.weight",
             ],
             [
                 f"encoder.layer.{layer_index}.output.LayerNorm.bias",
-                f"encoder.layers.{layer_index}.norm2.bias"
+                f"encoder.layers.{layer_index}.norm2.bias",
             ],
         ]
         mappings.extend(layer_mappings)
@@ -232,8 +224,8 @@ def convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(xlm_roberta, dtype="float32"):
             hf_name = prefix + hf_name
             pp_name = prefix + pp_name
         if need_transpose:
-            new_model_state[pp_name] = state_dict[hf_name].t().cpu().numpy(
-            ).astype(dtype)
+            new_model_state[pp_name] = (
+                state_dict[hf_name].t().cpu().numpy().astype(dtype))
         else:
             new_model_state[pp_name] = state_dict[hf_name].cpu().numpy().astype(
                 dtype)
@@ -249,8 +241,10 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(
         pretrained_model_name_or_path, use_auth_token=True)
     vae_state_dict = convert_to_ppdiffusers(diffusers_pipe.vae)
     unet_state_dict = convert_to_ppdiffusers(diffusers_pipe.unet)
-    text_encoder_state_dict, text_encoder_config = convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(
-        diffusers_pipe.text_encoder)
+    (
+        text_encoder_state_dict,
+        text_encoder_config,
+    ) = convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(diffusers_pipe.text_encoder)
     safety_checker_state_dict, safety_checker_config = convert_hf_clip_to_ppnlp_clip(
         diffusers_pipe.safety_checker, is_text_encoder=False)
 

@@ -14,6 +14,7 @@
 """ Sam model configuration"""
 import os
 from typing import Union
+
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 __all__ = ["SamConfig"]
@@ -23,16 +24,17 @@ class SamConfig(PretrainedConfig):
 
     model_type = "Sam"
 
-    def __init__(self,
-                 modelname="Sam",
-                 prompt_embed_dim=256,
-                 image_size=1024,
-                 vit_patch_size=16,
-                 encoder_embed_dim=768,
-                 encoder_depth=12,
-                 encoder_num_heads=12,
-                 encoder_global_attn_indexes=[2, 5, 8, 11],
-                 input_type=None):
+    def __init__(
+            self,
+            modelname="Sam",
+            prompt_embed_dim=256,
+            image_size=1024,
+            vit_patch_size=16,
+            encoder_embed_dim=768,
+            encoder_depth=12,
+            encoder_num_heads=12,
+            encoder_global_attn_indexes=[2, 5, 8, 11],
+            input_type=None, ):
         super().__init__()
         self.modelname = modelname
         self.prompt_embed_dim = prompt_embed_dim
@@ -43,7 +45,7 @@ class SamConfig(PretrainedConfig):
         self.encoder_num_heads = encoder_num_heads
         self.encoder_global_attn_indexes = encoder_global_attn_indexes
         self.input_type = input_type
-        self.pixel_mean = [123.675, 116.28, 103.53],
+        self.pixel_mean = ([123.675, 116.28, 103.53], )
         self.pixel_std = [58.395, 57.12, 57.375]
 
     @classmethod

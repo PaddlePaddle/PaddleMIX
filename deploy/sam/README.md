@@ -1,4 +1,4 @@
-# 
+#
 
 ## 1. 模型简介
 
@@ -18,11 +18,11 @@ python export.py --model_type Sam/SamVitH-1024 --input_type points  --save_dir s
 
 
 #boxs prompt
-python predict.py 
+python predict.py
 --input_image image_you_want_to_detect.jpg \
 --box_prompt 548 372 593 429 443 374 482 418 \
 --input_type boxs \
---cfg sam_export_SamVitH_boxs/deploy.yaml 
+--cfg sam_export_SamVitH_boxs/deploy.yaml
 
 #points prompt
 python predict.py \
@@ -31,4 +31,3 @@ python predict.py \
 --input_type points \
 --cfg sam_export_SamVitH_points/deploy.yaml
 ```
-

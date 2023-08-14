@@ -1,15 +1,30 @@
-import paddle
-import einops
-import numpy as np
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from types import SimpleNamespace
 
+import einops
+import numpy as np
+import paddle
+
 ModalityType = SimpleNamespace(
-    VISION='vision',
-    TEXT='text',
-    AUDIO='audio',
-    THERMAL='thermal',
-    DEPTH='depth',
-    IMU='imu', )
+    VISION="vision",
+    TEXT="text",
+    AUDIO="audio",
+    THERMAL="thermal",
+    DEPTH="depth",
+    IMU="imu", )
 
 
 class Normalize(paddle.nn.Layer):
@@ -40,7 +55,7 @@ class LearnableLogitScaling(paddle.nn.Layer):
                 default_initializer=paddle.nn.initializer.Assign(
                     value=log_logit_scale), )
         else:
-            self.register_buffer('log_logit_scale', log_logit_scale)
+            self.register_buffer("log_logit_scale", log_logit_scale)
 
     def forward(self, x):
         return (paddle.clip(
@@ -66,8 +81,8 @@ class VerboseNNModule(paddle.nn.Layer):
 
     @staticmethod
     def get_readable_tensor_repr(name: str, tensor: paddle.Tensor) -> str:
-        st = ('(' + name + '): ' + 'tensor(' + str(tuple(tensor[1].shape)) +
-              ', requires_grad=' + str(not tensor[1].stop_gradient) + ')\n')
+        st = ("(" + name + "): " + "tensor(" + str(tuple(tensor[1].shape)) +
+              ", requires_grad=" + str(not tensor[1].stop_gradient) + ")\n")
         return st
 
 
@@ -107,6 +122,6 @@ class SelectEOSAndProject(paddle.nn.Layer):
 
     def forward(self, x, seq_len):
         assert x.ndim == 3
-        x = x[paddle.arange(end=x.shape[0]).astype('int64'), seq_len]
+        x = x[paddle.arange(end=x.shape[0]).astype("int64"), seq_len]
         x = self.proj(x)
         return x

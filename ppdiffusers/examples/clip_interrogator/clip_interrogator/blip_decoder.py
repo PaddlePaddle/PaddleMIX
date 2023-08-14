@@ -8,7 +8,6 @@
 import paddle
 import paddle.nn as nn
 from fastcore.all import patch_to
-
 from paddlenlp.transformers import BlipForConditionalGeneration, BlipProcessor
 from paddlenlp.transformers.generation_utils import BeamHypotheses
 
@@ -68,8 +67,8 @@ class BLIP_Decoder(nn.Layer):
         self.processor.tokenizer.add_special_tokens({
             "additional_special_tokens": ["[ENC]"]
         })
-        self.processor.tokenizer.enc_token_id = self.processor.tokenizer.additional_special_tokens_ids[
-            0]
+        self.processor.tokenizer.enc_token_id = (
+            self.processor.tokenizer.additional_special_tokens_ids[0])
         self.prompt = prompt
         self.prompt_length = len(
             self.processor.tokenizer(self.prompt).input_ids) - 1

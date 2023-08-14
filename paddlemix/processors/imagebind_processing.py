@@ -16,21 +16,21 @@
 Processor class for ImageBind.
 """
 
+import logging
 from typing import Dict, List, Optional, Union
 
 import numpy as np
 import paddle
+from paddle.vision.transforms import transforms as T
+from paddlenlp.transformers.tokenizer_utils_base import (BatchEncoding,
+                                                         TensorType, TextInput)
+from paddlevideo.data.clip_sampling import ConstantClipsPerVideoSampler
 from PIL import Image
-import logging
 
-from paddlenlp.transformers.tokenizer_utils_base import BatchEncoding, TensorType, TextInput
-
+from .base_processing import ProcessorMixin
 from .image_processing_utils import BatchFeature
 from .image_utils import ImageInput
-from .base_processing import ProcessorMixin
 from .processing_utils import BaseAudioProcessor
-from paddlevideo.data.clip_sampling import ConstantClipsPerVideoSampler
-from paddle.vision.transforms import transforms as T
 
 __all__ = ["ImageBindProcessor", "ImageBindAudioProcessor"]
 
@@ -63,11 +63,11 @@ class ImageBindProcessor(ProcessorMixin):
         if text is not None:
             encoding = self.tokenizer(
                 text, return_tensors=return_tensors, **kwargs)
-            n, m = encoding['input_ids'].shape
+            n, m = encoding["input_ids"].shape
             zero_encoding = paddle.zeros(
-                shape=[n, self.tokenizer.max_len], dtype='int64')
-            zero_encoding[:, :m] = paddle.to_tensor(data=encoding['input_ids'])
-            encoding['input_ids'] = zero_encoding
+                shape=[n, self.tokenizer.max_len], dtype="int64")
+            zero_encoding[:, :m] = paddle.to_tensor(data=encoding["input_ids"])
+            encoding["input_ids"] = zero_encoding
 
         if images is not None:
             image_features = self.image_processor(
@@ -178,7 +178,7 @@ class ImageBindAudioProcessor(BaseAudioProcessor):
             htk_compat=True,
             sample_frequency=sample_rate,
             use_energy=False,
-            window_type='hanning',
+            window_type="hanning",
             num_mel_bins=num_mel_bins,
             dither=0.0,
             frame_length=25,
@@ -192,12 +192,12 @@ class ImageBindAudioProcessor(BaseAudioProcessor):
         p = target_length - n_frames
         if abs(p) / n_frames > 0.2:
             logging.warning(
-                'Large gap between audio n_frames(%d) and target_length (%d). Is the audio_target_length setting correct?',
+                "Large gap between audio n_frames(%d) and target_length (%d). Is the audio_target_length setting correct?",
                 n_frames,
                 target_length, )
         if p > 0:
             fbank = paddle.pad_from_torch(
-                fbank, pad=(0, p), mode='constant', value=0)
+                fbank, pad=(0, p), mode="constant", value=0)
         elif p < 0:
             fbank = fbank[:, 0:target_length]
 

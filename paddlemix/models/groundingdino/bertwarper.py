@@ -15,9 +15,10 @@
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
+from paddlenlp.transformers.model_outputs import \
+    BaseModelOutputWithPoolingAndCrossAttentions
 
 from .bert_model import BertModel
-from paddlenlp.transformers.model_outputs import BaseModelOutputWithPoolingAndCrossAttentions
 
 
 class BertModelWarper(nn.Layer):
@@ -151,8 +152,8 @@ class BertModelWarper(nn.Layer):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict, )
         sequence_output = encoder_outputs[0]
-        pooled_output = self.pooler(
-            sequence_output) if self.pooler is not None else None
+        pooled_output = (self.pooler(sequence_output)
+                         if self.pooler is not None else None)
 
         if not return_dict:
             return (sequence_output, pooled_output) + encoder_outputs[1:]
@@ -241,9 +242,8 @@ def generate_masks_with_special_tokens_and_transfer_map(
     idxs = paddle.nonzero(special_tokens_mask)
 
     # generate attention mask and positional ids
-    attention_mask = (paddle.eye(
-        num_token, dtype=paddle.int32).cast(paddle.bool).unsqueeze(0).tile(
-            [bs, 1, 1]))
+    attention_mask = (paddle.eye(num_token, dtype=paddle.int32)
+                      .cast(paddle.bool).unsqueeze(0).tile([bs, 1, 1]))
     position_ids = paddle.zeros((bs, num_token))
     cate_to_token_mask_list = [[] for _ in range(bs)]
     previous_col = 0

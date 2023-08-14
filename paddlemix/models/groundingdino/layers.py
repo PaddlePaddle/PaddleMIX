@@ -1,10 +1,24 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import collections.abc
+from itertools import repeat
+
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddlenlp.utils.initializer import constant_, xavier_uniform_
-
-from itertools import repeat
-import collections.abc
 
 
 def _ntuple(n):
@@ -31,11 +45,11 @@ def _convert_attention_mask(attn_mask, dtype):
                 to prevents attention to some unwanted positions, usually the
                 paddings or the subsequent positions. It is a tensor with shape
                 broadcasted to `[batch_size, n_head, sequence_length, sequence_length]`.
-                When the data type is bool, the unwanted positions have `False` 
-                values and the others have `True` values. When the data type is 
-                int, the unwanted positions have 0 values and the others have 1 
-                values. When the data type is float, the unwanted positions have 
-                `-INF` values and the others have 0 values. It can be None when 
+                When the data type is bool, the unwanted positions have `False`
+                values and the others have `True` values. When the data type is
+                int, the unwanted positions have 0 values and the others have 1
+                values. When the data type is float, the unwanted positions have
+                `-INF` values and the others have 0 values. It can be None when
                 nothing wanted or needed to be prevented attention to. Default None.
         dtype (VarType): The target type of `attn_mask` we expect.
     Returns:
@@ -79,13 +93,14 @@ class MultiHeadAttention(nn.Layer):
             output = multi_head_attn(query, None, None, attn_mask=attn_mask)  # [2, 4, 128]
     """
 
-    def __init__(self,
-                 embed_dim,
-                 num_heads,
-                 dropout=0.,
-                 kdim=None,
-                 vdim=None,
-                 need_weights=False):
+    def __init__(
+            self,
+            embed_dim,
+            num_heads,
+            dropout=0.0,
+            kdim=None,
+            vdim=None,
+            need_weights=False, ):
         super(MultiHeadAttention, self).__init__()
         self.embed_dim = embed_dim
         self.kdim = kdim if kdim is not None else embed_dim
@@ -97,14 +112,15 @@ class MultiHeadAttention(nn.Layer):
         self.need_weights = need_weights
 
         self.head_dim = embed_dim // num_heads
-        assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
+        assert (self.head_dim * num_heads == self.embed_dim
+                ), "embed_dim must be divisible by num_heads"
 
         if self._qkv_same_embed_dim:
             self.in_proj_weight = self.create_parameter(
                 shape=[embed_dim, 3 * embed_dim],
                 attr=None,
                 dtype=self._dtype,
-                is_bias=False)
+                is_bias=False, )
             self.in_proj_bias = self.create_parameter(
                 shape=[3 * embed_dim],
                 attr=None,
@@ -116,7 +132,7 @@ class MultiHeadAttention(nn.Layer):
             self.v_proj = nn.Linear(self.vdim, embed_dim)
 
         self.out_proj = nn.Linear(embed_dim, embed_dim)
-        self._type_list = ('q_proj', 'k_proj', 'v_proj')
+        self._type_list = ("q_proj", "k_proj", "v_proj")
 
         self._reset_parameters()
 
@@ -135,7 +151,7 @@ class MultiHeadAttention(nn.Layer):
                                            * self.embed_dim],
                 bias=self.in_proj_bias[index * self.embed_dim:(index + 1) *
                                        self.embed_dim]
-                if self.in_proj_bias is not None else None)
+                if self.in_proj_bias is not None else None, )
         else:
             tensor = getattr(self, self._type_list[index])(tensor)
         tensor = tensor.reshape(
@@ -221,7 +237,7 @@ class MultiHeadAttention(nn.Layer):
 
 
 def drop_path(x,
-              drop_prob: float=0.,
+              drop_prob: float=0.0,
               training: bool=False,
               scale_by_keep: bool=True):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
@@ -233,7 +249,7 @@ def drop_path(x,
     'survival rate' as the argument.
 
     """
-    if drop_prob == 0. or not training:
+    if drop_prob == 0.0 or not training:
         return x
     keep_prob = 1 - drop_prob
     shape = (x.shape[0], ) + (1, ) * (
@@ -248,10 +264,9 @@ def drop_path(x,
 
 
 class DropPath(nn.Layer):
-    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
-    """
+    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
 
-    def __init__(self, drop_prob: float=0., scale_by_keep: bool=True):
+    def __init__(self, drop_prob: float=0.0, scale_by_keep: bool=True):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
         self.scale_by_keep = scale_by_keep
@@ -260,4 +275,4 @@ class DropPath(nn.Layer):
         return drop_path(x, self.drop_prob, self.training, self.scale_by_keep)
 
     def extra_repr(self):
-        return f'drop_prob={round(self.drop_prob,3):0.3f}'
+        return f"drop_prob={round(self.drop_prob,3):0.3f}"

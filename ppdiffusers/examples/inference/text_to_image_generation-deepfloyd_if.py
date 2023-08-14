@@ -14,7 +14,8 @@
 
 import paddle
 
-from ppdiffusers import DiffusionPipeline, IFPipeline, IFSuperResolutionPipeline
+from ppdiffusers import (DiffusionPipeline, IFPipeline,
+                         IFSuperResolutionPipeline)
 from ppdiffusers.utils import pd_to_pil
 
 # Stage 1: generate images
@@ -39,7 +40,7 @@ super_res_1_pipe = IFSuperResolutionPipeline.from_pretrained(
     "DeepFloyd/IF-II-L-v1.0",
     text_encoder=None,
     variant="fp16",
-    paddle_dtype=paddle.float16)
+    paddle_dtype=paddle.float16, )
 super_res_1_pipe.enable_xformers_memory_efficient_attention()
 
 image = super_res_1_pipe(

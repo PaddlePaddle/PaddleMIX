@@ -61,9 +61,9 @@ class FastGELUActivation(nn.Layer):
     """
 
     def forward(self, input: Tensor) -> Tensor:
-        return 0.5 * input * (
-            1.0 + paddle.tanh(input * 0.7978845608 *
-                              (1.0 + 0.044715 * input * input)))
+        return (0.5 * input *
+                (1.0 + paddle.tanh(input * 0.7978845608 *
+                                   (1.0 + 0.044715 * input * input))))
 
 
 class QuickGELUActivation(nn.Layer):

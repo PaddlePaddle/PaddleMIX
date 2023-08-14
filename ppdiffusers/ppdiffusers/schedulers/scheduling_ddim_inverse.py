@@ -132,9 +132,7 @@ class DDIMInverseScheduler(SchedulerMixin, ConfigMixin):
             clip_sample_range: float=1.0,
             **kwargs, ):
         if kwargs.get("set_alpha_to_one", None) is not None:
-            deprecation_message = (
-                "The `set_alpha_to_one` argument is deprecated. Please use `set_alpha_to_zero` instead."
-            )
+            deprecation_message = "The `set_alpha_to_one` argument is deprecated. Please use `set_alpha_to_zero` instead."
             deprecate(
                 "set_alpha_to_one",
                 "1.0.0",
@@ -149,11 +147,11 @@ class DDIMInverseScheduler(SchedulerMixin, ConfigMixin):
                 beta_start, beta_end, num_train_timesteps, dtype="float32")
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
-            self.betas = paddle.linspace(
+            self.betas = (paddle.linspace(
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype="float32")**2
+                dtype="float32", )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -169,8 +167,8 @@ class DDIMInverseScheduler(SchedulerMixin, ConfigMixin):
         # `set_alpha_to_zero` decides whether we set this parameter simply to zero
         # in this case, self.step() just output the predicted noise
         # or whether we use the final alpha of the "non-previous" one.
-        self.final_alpha_cumprod = paddle.to_tensor(
-            0.0) if set_alpha_to_zero else self.alphas_cumprod[-1]
+        self.final_alpha_cumprod = (paddle.to_tensor(0.0) if set_alpha_to_zero
+                                    else self.alphas_cumprod[-1])
 
         # standard deviation of the initial noise distribution
         self.init_noise_sigma = 1.0
@@ -215,8 +213,8 @@ class DDIMInverseScheduler(SchedulerMixin, ConfigMixin):
         step_ratio = self.config.num_train_timesteps // self.num_inference_steps
         # creates integer timesteps by multiplying by ratio
         # casting to int to avoid issues when num_inference_step is power of 3
-        timesteps = (np.arange(0, num_inference_steps) *
-                     step_ratio).round().copy().astype(np.int64)
+        timesteps = ((np.arange(0, num_inference_steps) * step_ratio).round()
+                     .copy().astype(np.int64))
         self.timesteps = paddle.to_tensor(timesteps)
         self.timesteps += self.config.steps_offset
 
@@ -230,7 +228,8 @@ class DDIMInverseScheduler(SchedulerMixin, ConfigMixin):
             variance_noise: Optional[paddle.Tensor]=None,
             return_dict: bool=True, ) -> Union[DDIMSchedulerOutput, Tuple]:
         # 1. get previous step value (=t+1)
-        prev_timestep = timestep + self.config.num_train_timesteps // self.num_inference_steps
+        prev_timestep = (timestep + self.config.num_train_timesteps //
+                         self.num_inference_steps)
 
         # 2. compute alphas, betas
         # change original implementation to exactly match noise levels for analogous forward process
@@ -270,8 +269,8 @@ class DDIMInverseScheduler(SchedulerMixin, ConfigMixin):
         pred_sample_direction = (1 - alpha_prod_t_prev)**(0.5) * pred_epsilon
 
         # 6. compute x_t without "random noise" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
-        prev_sample = alpha_prod_t_prev**(
-            0.5) * pred_original_sample + pred_sample_direction
+        prev_sample = (alpha_prod_t_prev**
+                       (0.5) * pred_original_sample + pred_sample_direction)
 
         if not return_dict:
             return (prev_sample, pred_original_sample)

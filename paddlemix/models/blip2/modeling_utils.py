@@ -13,12 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
-import numpy as np
-import paddle.nn.functional as F
-import paddle.nn as nn
-from paddlemix.utils.log import logger
 import time
+
+import numpy as np
+import paddle
+import paddle.nn as nn
+import paddle.nn.functional as F
+
+from paddlemix.utils.log import logger
 
 
 def disabled_train(self, mode=True):
@@ -51,7 +53,7 @@ def tile(x, dim, n_tile):
     order_index = paddle.to_tensor(
         np.concatenate(
             [init_dim * np.arange(n_tile) + i for i in range(init_dim)]),
-        dtype='int64')
+        dtype="int64", )
     return paddle.index_select(x, dim, order_index)
 
 
@@ -75,10 +77,11 @@ class CrossEntropyLoss(nn.Layer):
     Softmax Cross entropy loss
     """
 
-    def __init__(self, reduction='mean', label_smoothing=None):
+    def __init__(self, reduction="mean", label_smoothing=None):
         super().__init__()
         if label_smoothing is not None:
-            assert label_smoothing >= 0 and label_smoothing <= 1, "label_smoothing must be in [0, 1]"
+            assert (label_smoothing >= 0 and
+                    label_smoothing <= 1), "label_smoothing must be in [0, 1]"
         self.epsilon = label_smoothing
         self.reduction = reduction
 
@@ -105,12 +108,12 @@ class CrossEntropyLoss(nn.Layer):
                 loss = paddle.sum(-label * F.log_softmax(x, axis=-1), axis=-1)
             else:
                 if label.dtype == paddle.int32:
-                    label = paddle.cast(label, 'int64')
+                    label = paddle.cast(label, "int64")
                 loss = F.cross_entropy(x, label=label, soft_label=False)
 
-        if self.reduction == 'sum':
+        if self.reduction == "sum":
             return loss.sum()
-        elif self.reduction == 'mean':
+        elif self.reduction == "mean":
             return loss.mean()
         else:
             return loss

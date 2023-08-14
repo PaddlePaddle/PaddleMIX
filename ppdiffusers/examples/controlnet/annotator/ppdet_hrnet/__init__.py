@@ -44,8 +44,9 @@ def keypoint_to_openpose_kpts(coco_keypoints_list):
     neck_keypoint_x = int(
         (l_shoulder_keypoint[0] + r_shoulder_keypoint[0]) / 2.0)
     neck_keypoint = [
-        neck_keypoint_x, neck_keypoint_y,
-        min(l_shoulder_keypoint[2], r_shoulder_keypoint[2])
+        neck_keypoint_x,
+        neck_keypoint_y,
+        min(l_shoulder_keypoint[2], r_shoulder_keypoint[2]),
     ]
     open_pose_neck_index = 1
     openpose_kpts.insert(open_pose_neck_index, neck_keypoint)

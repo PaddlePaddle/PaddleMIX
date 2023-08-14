@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+
+import paddle
 from pycocoevalcap.eval import COCOEvalCap
 from pycocotools.coco import COCO
-from paddlemix.utils.downloader import get_weights_path_from_url
-from paddlemix.utils.downloader import is_url
+
 from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
-import paddle
+from paddlemix.utils.downloader import get_weights_path_from_url, is_url
 from paddlemix.utils.log import logger
 
 LLM_LIST = {
@@ -75,7 +76,7 @@ class BlipCollator:
             return_tensors="pd",
             return_attention_mask=True,
             mode=self.mode, )
-        batch.update({'image_id': image_id})
+        batch.update({"image_id": image_id})
         return batch
 
 
@@ -91,8 +92,8 @@ def coco_caption_eval(coco_gt_root, results_file, split):
         "test": "coco_karpathy_test_gt.json",
     }
 
-    #download_url(urls[split], coco_gt_root)
-    annotation_file = os.path.join(coco_gt_root, filenames['test'])
+    # download_url(urls[split], coco_gt_root)
+    annotation_file = os.path.join(coco_gt_root, filenames["test"])
 
     # create coco object and coco_result object
     coco = COCO(annotation_file)
@@ -133,17 +134,29 @@ def load_model(args,
     if ckpt_dir and os.path.isfile(ckpt_dir):
         # breakpoint()
         print("Try to load a whole checkpoint from %s " % ckpt_dir)
-        embedding_list = ['word_embeddings']
+        embedding_list = ["word_embeddings"]
         collinear_list = [
-            "fc1", "fc2", "qkv", "proj", "query", "key", "value", "qkv_proj",
-            "q_proj", "k_proj", "v_proj", "linear1", "linear2", "project_in",
-            "project_out"
+            "fc1",
+            "fc2",
+            "qkv",
+            "proj",
+            "query",
+            "key",
+            "value",
+            "qkv_proj",
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "linear1",
+            "linear2",
+            "project_in",
+            "project_out",
         ]
         rowlinear_list = ["out_proj"]
         all_list = collinear_list + rowlinear_list + embedding_list
         skip_list = [
-            'visual_encoder.patch_embed.proj.weight',
-            'visual_encoder.patch_embed.proj.bias'
+            "visual_encoder.patch_embed.proj.weight",
+            "visual_encoder.patch_embed.proj.bias",
         ]
 
         col_list = []
@@ -154,10 +167,10 @@ def load_model(args,
         mp_size = args.tensor_parallel_degree
 
         def renamebias(model_dict, whole_key):
-            if 'q_bias' in whole_key:
-                key = whole_key.replace('q_bias', 'q_proj.bias')
-            elif 'v_bias' in whole_key:
-                key = whole_key.replace('v_bias', 'v_proj.bias')
+            if "q_bias" in whole_key:
+                key = whole_key.replace("q_bias", "q_proj.bias")
+            elif "v_bias" in whole_key:
+                key = whole_key.replace("v_bias", "v_proj.bias")
             model_dict[key] = model_dict[whole_key]
             del model_dict[whole_key]
             return model_dict
@@ -184,10 +197,10 @@ def load_model(args,
 
         model_dict = paddle.load(ckpt_dir)
         for whole_key in model_dict.keys():
-            if not '.' in whole_key:
+            if "." not in whole_key:
                 continue
 
-            key = whole_key.split('.')[-2]
+            key = whole_key.split(".")[-2]
             if whole_key in skip_list:
                 continue
             if key in all_list:
@@ -206,6 +219,7 @@ def load_model(args,
 
         param_state_dict = model_dict
         import numpy as np
+
         model_dict = model.state_dict()
         model_weight = {}
         incorrect_keys = 0
@@ -221,13 +235,13 @@ def load_model(args,
                     model_weight[key] = param_state_dict[key].astype(
                         value.dtype)
                 if value.shape != param_state_dict[key].shape:
-                    logger.info('Unmatched key: {}'.format(key))
+                    logger.info("Unmatched key: {}".format(key))
                     print(value.shape, param_state_dict[key].shape, key)
 
             else:
-                if load_language_model == False and "language_model" in key:
+                if load_language_model is False and "language_model" in key:
                     continue
-                logger.info('Unmatched key: {}'.format(key))
+                logger.info("Unmatched key: {}".format(key))
                 incorrect_keys += 1
         interpolate_pos_embed(model, model_weight)
         model.set_state_dict(model_weight)

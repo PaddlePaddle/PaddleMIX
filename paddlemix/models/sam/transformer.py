@@ -12,22 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
-from paddle import Tensor, nn
-import paddle.nn.functional as F
 import math
 from typing import Tuple, Type
+
+import paddle
+import paddle.nn.functional as F
+from paddle import Tensor, nn
+
 from .common import MLPBlock
 
 
 class TwoWayTransformer(nn.Layer):
-    def __init__(self,
-                 depth: int,
-                 embedding_dim: int,
-                 num_heads: int,
-                 mlp_dim: int,
-                 activation: Type[nn.Layer]=nn.ReLU,
-                 attention_downsample_rate: int=2) -> None:
+    def __init__(
+            self,
+            depth: int,
+            embedding_dim: int,
+            num_heads: int,
+            mlp_dim: int,
+            activation: Type[nn.Layer]=nn.ReLU,
+            attention_downsample_rate: int=2, ) -> None:
         """
         A transformer decoder that attends to an input image using
         queries whose positional embedding is supplied.
@@ -54,7 +57,7 @@ class TwoWayTransformer(nn.Layer):
                     mlp_dim=mlp_dim,
                     activation=activation,
                     attention_downsample_rate=attention_downsample_rate,
-                    skip_first_layer_pe=i == 0))
+                    skip_first_layer_pe=i == 0, ))
         self.final_attn_token_to_image = Attention(
             embedding_dim, num_heads, downsample_rate=attention_downsample_rate)
         self.norm_final_attn = nn.LayerNorm(embedding_dim)
@@ -94,13 +97,14 @@ class TwoWayTransformer(nn.Layer):
 
 
 class TwoWayAttentionBlock(nn.Layer):
-    def __init__(self,
-                 embedding_dim: int,
-                 num_heads: int,
-                 mlp_dim: int=2048,
-                 activation: Type[nn.Layer]=nn.ReLU,
-                 attention_downsample_rate: int=2,
-                 skip_first_layer_pe: bool=False) -> None:
+    def __init__(
+            self,
+            embedding_dim: int,
+            num_heads: int,
+            mlp_dim: int=2048,
+            activation: Type[nn.Layer]=nn.ReLU,
+            attention_downsample_rate: int=2,
+            skip_first_layer_pe: bool=False, ) -> None:
         """
         A transformer block with four layers: (1) self-attention of sparse
         inputs, (2) cross attention of sparse inputs to dense inputs, (3) mlp
@@ -165,7 +169,8 @@ class Attention(nn.Layer):
         self.embedding_dim = embedding_dim
         self.internal_dim = embedding_dim // downsample_rate
         self.num_heads = num_heads
-        assert self.internal_dim % num_heads == 0, 'num_heads must divide embedding_dim.'
+        assert (self.internal_dim % num_heads == 0
+                ), "num_heads must divide embedding_dim."
         self.q_proj = nn.Linear(embedding_dim, self.internal_dim)
         self.k_proj = nn.Linear(embedding_dim, self.internal_dim)
         self.v_proj = nn.Linear(embedding_dim, self.internal_dim)

@@ -75,8 +75,8 @@ class ImageEncoderViT(nn.Layer):
                 shape=[
                     1, img_size // patch_size, img_size // patch_size, embed_dim
                 ],
-                dtype='float32',
-                default_initializer=nn.initializer.Constant(value=0.0))
+                dtype="float32",
+                default_initializer=nn.initializer.Constant(value=0.0), )
 
         self.blocks = nn.LayerList()
         for i in range(depth):
@@ -225,18 +225,18 @@ class Attention(nn.Layer):
             # initialize relative positional embeddings
             self.rel_pos_h = paddle.create_parameter(
                 shape=[2 * input_size[0] - 1, head_dim],
-                dtype='float32',
-                default_initializer=nn.initializer.Constant(value=0.0))
+                dtype="float32",
+                default_initializer=nn.initializer.Constant(value=0.0), )
             self.rel_pos_w = paddle.create_parameter(
                 shape=[2 * input_size[1] - 1, head_dim],
-                dtype='float32',
-                default_initializer=nn.initializer.Constant(value=0.0))
+                dtype="float32",
+                default_initializer=nn.initializer.Constant(value=0.0), )
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         B, H, W, _ = x.shape
         # qkv with shape (3, B, nHead, H * W, C)
-        qkv = self.qkv(x).reshape(
-            shape=[B, H * W, 3, self.num_heads, -1]).transpose([2, 0, 3, 1, 4])
+        qkv = (self.qkv(x).reshape(shape=[B, H * W, 3, self.num_heads, -1])
+               .transpose([2, 0, 3, 1, 4]))
         # q, k, v with shape (B * nHead, H * W, C)
 
         q, k, v = qkv.reshape(shape=[3, B * self.num_heads, H * W, -1]).unbind(
@@ -249,8 +249,8 @@ class Attention(nn.Layer):
                                           self.rel_pos_w, (H, W), (H, W))
 
         attn = F.softmax(attn, axis=-1)
-        x = (attn @v).reshape([B, self.num_heads, H, W, -1]).transpose(
-            [0, 2, 3, 1, 4]).reshape([B, H, W, -1])
+        x = ((attn @v).reshape([B, self.num_heads, H, W, -1])
+             .transpose([0, 2, 3, 1, 4]).reshape([B, H, W, -1]))
         x = self.proj(x)
 
         return x
@@ -273,8 +273,8 @@ def window_partition(x: paddle.Tensor,
     pad_h = (window_size - H % window_size) % window_size
     pad_w = (window_size - W % window_size) % window_size
     if pad_h > 0 or pad_w > 0:
-        x = paddle.nn.functional.pad(x=x, pad=(0, 0, 0, pad_w, 0, pad_h, 0,
-                                               0))  # 每个维度分两位数进行pad
+        x = paddle.nn.functional.pad(
+            x=x, pad=(0, 0, 0, pad_w, 0, pad_h, 0, 0))  # 每个维度分两位数进行pad
     Hp, Wp = H + pad_h, W + pad_w
 
     x = x.reshape(
@@ -284,10 +284,11 @@ def window_partition(x: paddle.Tensor,
     return windows, (Hp, Wp)
 
 
-def window_unpartition(windows: paddle.Tensor,
-                       window_size: int,
-                       pad_hw: Tuple[int, int],
-                       hw: Tuple[int, int]) -> paddle.Tensor:
+def window_unpartition(
+        windows: paddle.Tensor,
+        window_size: int,
+        pad_hw: Tuple[int, int],
+        hw: Tuple[int, int], ) -> paddle.Tensor:
     """
     Window unpartition into original sequences and removing padding.
     Args:
@@ -346,7 +347,7 @@ def get_rel_pos(q_size: int, k_size: int,
     h, w = relative_coords.shape
 
     return paddle.index_select(rel_pos_resized,
-                               relative_coords.cast('int64').flatten()).reshape(
+                               relative_coords.cast("int64").flatten()).reshape(
                                    (h, w, -1))
 
 
@@ -423,12 +424,13 @@ class PatchEmbed(nn.Layer):
         return x
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import numpy as np
     import paddle
-    from padiff import auto_diff
     import torch
-    from segment_anything.modeling import ImageEncoderViT as ImageEncoderViT_torch
+    from padiff import auto_diff
+    from segment_anything.modeling import \
+        ImageEncoderViT as ImageEncoderViT_torch
 
     image_encoder_t = ImageEncoderViT_torch(
         depth=12,
@@ -462,11 +464,13 @@ if __name__ == '__main__':
 
     # Generate random numbers of shape (4, 3, 128, 128)
     random_numbers = np.random.rand(1, 3, 1024, 1024).astype("float32")
-    inp = ({
-        'x': paddle.to_tensor(random_numbers)
-    }, {
-        'x': torch.as_tensor(random_numbers)
-    })
+    inp = (
+        {
+            "x": paddle.to_tensor(random_numbers)
+        },
+        {
+            "x": torch.as_tensor(random_numbers)
+        }, )
 
     auto_diff(
         image_encoder,
@@ -474,8 +478,8 @@ if __name__ == '__main__':
         inp,
         auto_weights=True,
         options={
-            'atol': 0.001,
-            'rtol': 0,
-            'compare_mode': 'mean',
-            'single_step': False
-        })
+            "atol": 0.001,
+            "rtol": 0,
+            "compare_mode": "mean",
+            "single_step": False,
+        }, )

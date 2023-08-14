@@ -97,8 +97,8 @@ class ScoreSdeVeSchedulerTest(unittest.TestCase):
                 generator=paddle.Generator().manual_seed(0),
                 **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
             output = scheduler.step_correct(
                 residual,
@@ -111,8 +111,8 @@ class ScoreSdeVeSchedulerTest(unittest.TestCase):
                 generator=paddle.Generator().manual_seed(0),
                 **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler correction are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler correction are not identical"
 
     def check_over_forward(self, time_step=0, **forward_kwargs):
         kwargs = dict(self.forward_default_kwargs)
@@ -142,8 +142,8 @@ class ScoreSdeVeSchedulerTest(unittest.TestCase):
                 generator=paddle.Generator().manual_seed(0),
                 **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
             output = scheduler.step_correct(
                 residual,
@@ -156,8 +156,8 @@ class ScoreSdeVeSchedulerTest(unittest.TestCase):
                 generator=paddle.Generator().manual_seed(0),
                 **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler correction are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler correction are not identical"
 
     def test_timesteps(self):
         for timesteps in [10, 100, 1000]:

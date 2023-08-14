@@ -33,7 +33,7 @@ from paddlemix.utils.log import logger
 PROCESSOR_CONFIG_MAPPING = {
     "image": "image_preprocessor_config.json",
     "text": "text_preprocessor_config.json",
-    "audio": "audio_preprocessor_config.json"
+    "audio": "audio_preprocessor_config.json",
 }
 
 

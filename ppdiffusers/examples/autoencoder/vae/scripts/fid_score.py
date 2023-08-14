@@ -73,7 +73,7 @@ parser.add_argument(
     "--num-workers",
     type=int,
     help=("Number of processes to use for data loading. "
-          "Defaults to `min(8, num_cpus)`"))
+          "Defaults to `min(8, num_cpus)`"), )
 parser.add_argument(
     "--device",
     type=str,
@@ -91,7 +91,7 @@ parser.add_argument(
     type=str,
     nargs=2,
     help=("Paths to the generated images or "
-          "to .npz statistic files"))
+          "to .npz statistic files"), )
 
 IMAGE_EXTENSIONS = {
     "bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"
@@ -146,7 +146,7 @@ def get_activations(files, model, batch_size=50, dims=2048, num_workers=1):
         batch_size=batch_size,
         shuffle=False,
         drop_last=False,
-        num_workers=num_workers)
+        num_workers=num_workers, )
 
     pred_arr = np.empty((len(files), dims))
 
@@ -200,8 +200,10 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     sigma1 = np.atleast_2d(sigma1)
     sigma2 = np.atleast_2d(sigma2)
 
-    assert mu1.shape == mu2.shape, "Training and test mean vectors have different lengths"
-    assert sigma1.shape == sigma2.shape, "Training and test covariances have different dimensions"
+    assert (mu1.shape == mu2.shape
+            ), "Training and test mean vectors have different lengths"
+    assert (sigma1.shape == sigma2.shape
+            ), "Training and test covariances have different dimensions"
 
     diff = mu1 - mu2
 

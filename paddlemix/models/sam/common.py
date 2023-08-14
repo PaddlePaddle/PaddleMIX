@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Type
+
 import paddle
 import paddle.nn as nn
-from typing import Type
 
 
 class MLPBlock(nn.Layer):
@@ -36,12 +37,12 @@ class LayerNorm2d(nn.Layer):
         super().__init__()
         self.weight = paddle.create_parameter(
             shape=[num_channels],
-            dtype='float32',
-            default_initializer=nn.initializer.Constant(value=1.0))
+            dtype="float32",
+            default_initializer=nn.initializer.Constant(value=1.0), )
         self.bias = paddle.create_parameter(
             shape=[num_channels],
-            dtype='float32',
-            default_initializer=nn.initializer.Constant(value=0.0))
+            dtype="float32",
+            default_initializer=nn.initializer.Constant(value=0.0), )
         self.eps = eps
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:

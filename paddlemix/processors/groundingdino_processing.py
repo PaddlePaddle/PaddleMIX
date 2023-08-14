@@ -19,18 +19,17 @@ import re
 from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
-import PIL
 import paddle
 import paddle.vision.transforms as T
+import PIL
+from paddlenlp.taskflow.utils import pad_batch_data
 from paddlenlp.transformers.tokenizer_utils_base import (BatchEncoding,
                                                          TensorType, TextInput)
 
 from .base_processing import ProcessorMixin
-
 from .image_utils import (IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD,
                           valid_images)
-from .processing_utils import (BaseImageProcessor, BaseTextProcessor)
-from paddlenlp.taskflow.utils import pad_batch_data
+from .processing_utils import BaseImageProcessor, BaseTextProcessor
 from .utils import _max_by_axis
 
 __all__ = [
@@ -116,8 +115,8 @@ class GroudingDinoTextProcessor(BaseTextProcessor):
         tokenized_out = {}
         input_ids = pad_batch_data(input_ids)
         input_ids = paddle.to_tensor(input_ids, dtype=paddle.int64).squeeze(-1)
-        tokenized_out['input_ids'] = input_ids
-        tokenized_out['attention_mask'] = paddle.cast(input_ids != 0,
+        tokenized_out["input_ids"] = input_ids
+        tokenized_out["attention_mask"] = paddle.cast(input_ids != 0,
                                                       paddle.int64)
 
         (
@@ -136,8 +135,8 @@ class GroudingDinoTextProcessor(BaseTextProcessor):
                 "input_ids"][:, :self.max_words]
             tokenized_out["attention_mask"] = tokenized_out[
                 "attention_mask"][:, :self.max_words]
-        tokenized_out['position_ids'] = position_ids
-        tokenized_out['text_self_attention_masks'] = text_self_attention_masks
+        tokenized_out["position_ids"] = position_ids
+        tokenized_out["text_self_attention_masks"] = text_self_attention_masks
 
         return tokenized_out
 
@@ -171,9 +170,8 @@ class GroudingDinoTextProcessor(BaseTextProcessor):
         idxs = paddle.nonzero(special_tokens_mask)
 
         # generate attention mask and positional ids
-        attention_mask = (paddle.eye(
-            num_token, dtype=paddle.int32).cast(paddle.bool).unsqueeze(0).tile(
-                [bs, 1, 1]))
+        attention_mask = (paddle.eye(num_token, dtype=paddle.int32)
+                          .cast(paddle.bool).unsqueeze(0).tile([bs, 1, 1]))
         position_ids = paddle.zeros((bs, num_token), dtype=paddle.int64)
         cate_to_token_mask_list = [[] for _ in range(bs)]
         previous_col = 0

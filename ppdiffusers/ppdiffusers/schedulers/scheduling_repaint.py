@@ -128,7 +128,7 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype=paddle.float32)**2)
+                dtype=paddle.float32, )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -206,8 +206,8 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
         prev_timestep = t - self.config.num_train_timesteps // self.num_inference_steps
 
         alpha_prod_t = self.alphas_cumprod[t]
-        alpha_prod_t_prev = self.alphas_cumprod[
-            prev_timestep] if prev_timestep >= 0 else self.final_alpha_cumprod
+        alpha_prod_t_prev = (self.alphas_cumprod[prev_timestep] if
+                             prev_timestep >= 0 else self.final_alpha_cumprod)
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
 
@@ -258,12 +258,13 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
 
         """
         t = timestep
-        prev_timestep = timestep - self.config.num_train_timesteps // self.num_inference_steps
+        prev_timestep = (timestep - self.config.num_train_timesteps //
+                         self.num_inference_steps)
 
         # 1. compute alphas, betas
         alpha_prod_t = self.alphas_cumprod[t]
-        alpha_prod_t_prev = self.alphas_cumprod[
-            prev_timestep] if prev_timestep >= 0 else self.final_alpha_cumprod
+        alpha_prod_t_prev = (self.alphas_cumprod[prev_timestep] if
+                             prev_timestep >= 0 else self.final_alpha_cumprod)
         beta_prod_t = 1 - alpha_prod_t
 
         # 2. compute predicted original sample from predicted noise also called
@@ -297,7 +298,8 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
             1 - alpha_prod_t_prev - std_dev_t**2)**0.5 * model_output
 
         # 7. compute x_{t-1} of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
-        prev_unknown_part = alpha_prod_t_prev**0.5 * pred_original_sample + pred_sample_direction + variance
+        prev_unknown_part = (alpha_prod_t_prev**0.5 * pred_original_sample +
+                             pred_sample_direction + variance)
 
         # 8. Algorithm 1 Line 5 https://arxiv.org/pdf/2201.09865.pdf
         prev_known_part = (alpha_prod_t_prev**0.5) * original_image + (

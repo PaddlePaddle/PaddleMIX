@@ -179,8 +179,8 @@ class TextImagePair(IterableDataset):
             else:
                 rand_num = random.random()
                 for i in range(len(self.file_list)):
-                    if self.file_weights_cumsum[
-                            i] <= rand_num < self.file_weights_cumsum[i + 1]:
+                    if (self.file_weights_cumsum[i] <= rand_num <
+                            self.file_weights_cumsum[i + 1]):
                         break
                 sample_loader = sample_loader_per_dataset[i]
                 # debug

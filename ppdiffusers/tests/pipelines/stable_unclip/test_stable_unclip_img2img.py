@@ -15,32 +15,24 @@
 
 import random
 import unittest
+
 import numpy as np
-
 import paddle
-from ..pipeline_params import (
-    TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
-    TEXT_GUIDED_IMAGE_VARIATION_PARAMS, )
-from ..test_pipelines_common import PipelineTesterMixin
-
 from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPTokenizer,
-    CLIPVisionConfig,
-    CLIPVisionModelWithProjection, )
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DDPMScheduler,
-    StableUnCLIPImg2ImgPipeline,
-    UNet2DConditionModel, )
+    CLIPImageProcessor, CLIPTextConfig, CLIPTextModel, CLIPTokenizer,
+    CLIPVisionConfig, CLIPVisionModelWithProjection)
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
+                         StableUnCLIPImg2ImgPipeline, UNet2DConditionModel)
 from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
-from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import (
-    StableUnCLIPImageNormalizer, )
+from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import \
+    StableUnCLIPImageNormalizer
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers.utils.testing_utils import floats_tensor
+
+from ..pipeline_params import (TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
+                               TEXT_GUIDED_IMAGE_VARIATION_PARAMS)
+from ..test_pipelines_common import PipelineTesterMixin
 
 
 class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
@@ -133,8 +125,15 @@ class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
 
         assert image.shape == (1, 32, 32, 3)
         expected_slice = np.array([
-            0.40317363, 1., 0.5802471, 0.47334313, 0.39546987, 0.72409034,
-            0.15691131, 0.42981434, 0.72585064
+            0.40317363,
+            1.0,
+            0.5802471,
+            0.47334313,
+            0.39546987,
+            0.72409034,
+            0.15691131,
+            0.42981434,
+            0.72585064,
         ])
 
         assert np.abs(image_slice.flatten() - expected_slice).max() < 1e-3
@@ -146,8 +145,8 @@ class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin,
         if pil_image:
             input_image = input_image * 0.5 + 0.5
             input_image = input_image.clip(min=0, max=1)
-            input_image = input_image.cpu().transpose(
-                perm=[0, 2, 3, 1]).cast("float32").numpy()
+            input_image = (input_image.cpu().transpose(
+                perm=[0, 2, 3, 1]).cast("float32").numpy())
             input_image = DiffusionPipeline.numpy_to_pil(input_image)[0]
         return {
             "prompt": "An anime racoon running a marathon",

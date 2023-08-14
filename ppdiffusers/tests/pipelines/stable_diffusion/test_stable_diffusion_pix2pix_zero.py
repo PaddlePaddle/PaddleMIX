@@ -18,23 +18,17 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+
 from ppdiffusers import (
-    AutoencoderKL,
-    DDIMInverseScheduler,
-    DDIMScheduler,
-    DDPMScheduler,
-    EulerAncestralDiscreteScheduler,
-    LMSDiscreteScheduler,
-    StableDiffusionPix2PixZeroPipeline,
-    UNet2DConditionModel, )
+    AutoencoderKL, DDIMInverseScheduler, DDIMScheduler, DDPMScheduler,
+    EulerAncestralDiscreteScheduler, LMSDiscreteScheduler,
+    StableDiffusionPix2PixZeroPipeline, UNet2DConditionModel)
 from ppdiffusers.utils import load_image, slow
 from ppdiffusers.utils.testing_utils import load_pt, require_paddle_gpu
 
-from ..pipeline_params import (
-    TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
-    TEXT_GUIDED_IMAGE_VARIATION_PARAMS, )
+from ..pipeline_params import (TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
+                               TEXT_GUIDED_IMAGE_VARIATION_PARAMS)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -135,8 +129,15 @@ class StableDiffusionPix2PixZeroPipelineFastTests(PipelineTesterMixin,
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.58762765, 0.17410329, 0.5067884, 0.39995563, 0.02808204,
-            0.35726422, 0.3250693, 0.3155224, 0.5268162
+            0.58762765,
+            0.17410329,
+            0.5067884,
+            0.39995563,
+            0.02808204,
+            0.35726422,
+            0.3250693,
+            0.3155224,
+            0.5268162,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05
 
@@ -151,8 +152,15 @@ class StableDiffusionPix2PixZeroPipelineFastTests(PipelineTesterMixin,
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.5042143, 0.34658563, 0.56157184, 0.3707891, 0.23746812,
-            0.47898933, 0.2702424, 0.36307925, 0.50807047
+            0.5042143,
+            0.34658563,
+            0.56157184,
+            0.3707891,
+            0.23746812,
+            0.47898933,
+            0.2702424,
+            0.36307925,
+            0.50807047,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05
 
@@ -167,8 +175,15 @@ class StableDiffusionPix2PixZeroPipelineFastTests(PipelineTesterMixin,
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.4870367, 0.2677226, 0.37830275, 0.63265973, 0.32151344, 0.406371,
-            0.67513967, 0.5246535, 0.55954224
+            0.4870367,
+            0.2677226,
+            0.37830275,
+            0.63265973,
+            0.32151344,
+            0.406371,
+            0.67513967,
+            0.5246535,
+            0.55954224,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05
 
@@ -182,8 +197,15 @@ class StableDiffusionPix2PixZeroPipelineFastTests(PipelineTesterMixin,
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.5899046, 0.17750263, 0.50616807, 0.39558932, 0.02976257,
-            0.35918522, 0.32376733, 0.31742626, 0.52768075
+            0.5899046,
+            0.17750263,
+            0.50616807,
+            0.39558932,
+            0.02976257,
+            0.35918522,
+            0.32376733,
+            0.31742626,
+            0.52768075,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05
 
@@ -250,7 +272,7 @@ class StableDiffusionPix2PixZeroPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionPix2PixZeroPipeline.from_pretrained(
             "CompVis/stable-diffusion-v1-4",
             safety_checker=None,
-            paddle_dtype=paddle.float16)
+            paddle_dtype=paddle.float16, )
         pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
         pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
@@ -258,8 +280,15 @@ class StableDiffusionPix2PixZeroPipelineSlowTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
         expected_slice = np.array([
-            0.8129883, 0.81933594, 0.80371094, 0.8105469, 0.8076172, 0.80566406,
-            0.81884766, 0.8330078, 0.82470703
+            0.8129883,
+            0.81933594,
+            0.80371094,
+            0.8105469,
+            0.8076172,
+            0.80566406,
+            0.81884766,
+            0.8330078,
+            0.82470703,
         ])
         assert np.abs(expected_slice - image_slice).max() < 0.05
 
@@ -267,7 +296,7 @@ class StableDiffusionPix2PixZeroPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionPix2PixZeroPipeline.from_pretrained(
             "CompVis/stable-diffusion-v1-4",
             safety_checker=None,
-            paddle_dtype=paddle.float16)
+            paddle_dtype=paddle.float16, )
         pipe.scheduler = LMSDiscreteScheduler.from_config(pipe.scheduler.config)
         pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
@@ -325,7 +354,7 @@ class StableDiffusionPix2PixZeroPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionPix2PixZeroPipeline.from_pretrained(
             "CompVis/stable-diffusion-v1-4",
             safety_checker=None,
-            paddle_dtype=paddle.float16)
+            paddle_dtype=paddle.float16, )
         pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
         pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
@@ -356,7 +385,7 @@ class InversionPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionPix2PixZeroPipeline.from_pretrained(
             "CompVis/stable-diffusion-v1-4",
             safety_checker=None,
-            paddle_dtype=paddle.float16)
+            paddle_dtype=paddle.float16, )
         pipe.inverse_scheduler = DDIMScheduler.from_config(
             pipe.scheduler.config)
         pipe.inverse_scheduler = DDIMInverseScheduler.from_config(
@@ -383,7 +412,7 @@ class InversionPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionPix2PixZeroPipeline.from_pretrained(
             "CompVis/stable-diffusion-v1-4",
             safety_checker=None,
-            paddle_dtype=paddle.float16)
+            paddle_dtype=paddle.float16, )
         pipe.inverse_scheduler = DDIMScheduler.from_config(
             pipe.scheduler.config)
         pipe.inverse_scheduler = DDIMInverseScheduler.from_config(
@@ -395,12 +424,14 @@ class InversionPipelineSlowTests(unittest.TestCase):
         output = pipe.invert(caption, image=self.raw_image, generator=generator)
         inv_latents = output[0]
         source_prompts = 4 * [
-            "a cat sitting on the street", "a cat playing in the field",
-            "a face of a cat"
+            "a cat sitting on the street",
+            "a cat playing in the field",
+            "a face of a cat",
         ]
         target_prompts = 4 * [
-            "a dog sitting on the street", "a dog playing in the field",
-            "a face of a dog"
+            "a dog sitting on the street",
+            "a dog playing in the field",
+            "a face of a dog",
         ]
         source_embeds = pipe.get_embeds(source_prompts)
         target_embeds = pipe.get_embeds(target_prompts)

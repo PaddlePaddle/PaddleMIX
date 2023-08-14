@@ -161,8 +161,8 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
         self.num_inference_steps = num_inference_steps
         step_ratio = (self.config.num_train_timesteps - 1) / (
             self.num_inference_steps - 1)
-        timesteps = (np.arange(0, num_inference_steps) *
-                     step_ratio).round()[::-1].copy().astype(np.int64)
+        timesteps = ((np.arange(0, num_inference_steps) * step_ratio)
+                     .round()[::-1].copy().astype(np.int64))
         self.timesteps = paddle.to_tensor(timesteps)
 
     def _get_variance(self,
@@ -174,8 +174,8 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
             prev_timestep = t - 1
 
         alpha_prod_t = self.alphas_cumprod[t]
-        alpha_prod_t_prev = self.alphas_cumprod[
-            prev_timestep] if prev_timestep >= 0 else self.one
+        alpha_prod_t_prev = (self.alphas_cumprod[prev_timestep]
+                             if prev_timestep >= 0 else self.one)
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
 
@@ -236,8 +236,8 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
         """
         t = timestep
 
-        if model_output.shape[1] == sample.shape[
-                1] * 2 and self.variance_type == "learned_range":
+        if (model_output.shape[1] == sample.shape[1] * 2 and
+                self.variance_type == "learned_range"):
             # must split like this, 3 -> split 2 -> [2, 1]
             model_output, predicted_variance = model_output.split(
                 [sample.shape[1], model_output.shape[1] - sample.shape[1]],
@@ -250,8 +250,8 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
             prev_timestep = t - 1
 
         alpha_prod_t = self.alphas_cumprod[t]
-        alpha_prod_t_prev = self.alphas_cumprod[
-            prev_timestep] if prev_timestep >= 0 else self.one
+        alpha_prod_t_prev = (self.alphas_cumprod[prev_timestep]
+                             if prev_timestep >= 0 else self.one)
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
 
@@ -276,9 +276,10 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
 
         # 3. Clip "predicted x_0"
         if self.config.clip_sample:
-            pred_original_sample = paddle.clip(pred_original_sample,
-                                               -self.config.clip_sample_range,
-                                               self.config.clip_sample_range)
+            pred_original_sample = paddle.clip(
+                pred_original_sample,
+                -self.config.clip_sample_range,
+                self.config.clip_sample_range, )
 
         # 4. Compute coefficients for pred_original_sample x_0 and current sample x_t
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
@@ -288,7 +289,8 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
 
         # 5. Compute predicted previous sample µ_t
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
-        pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * sample
+        pred_prev_sample = (pred_original_sample_coeff * pred_original_sample +
+                            current_sample_coeff * sample)
 
         # 6. Add noise
         variance = 0

@@ -13,10 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..utils import (
-    OptionalDependencyNotAvailable,
-    is_paddle_available,
-    is_scipy_available, )
+from ..utils import (OptionalDependencyNotAvailable, is_paddle_available,
+                     is_scipy_available)
 
 try:
     if not is_paddle_available():
@@ -24,8 +22,8 @@ try:
 except OptionalDependencyNotAvailable:
     from ..utils.dummy_paddle_objects import *  # noqa F403
 else:
-    from .preconfig.preconfig_scheduling_euler_ancestral_discrete import (
-        PreconfigEulerAncestralDiscreteScheduler, )
+    from .preconfig.preconfig_scheduling_euler_ancestral_discrete import \
+        PreconfigEulerAncestralDiscreteScheduler
     from .scheduling_ddim import DDIMScheduler
     from .scheduling_ddim_inverse import DDIMInverseScheduler
     from .scheduling_ddpm import DDPMScheduler
@@ -33,11 +31,13 @@ else:
     from .scheduling_dpmsolver_multistep import DPMSolverMultistepScheduler
     from .scheduling_dpmsolver_singlestep import DPMSolverSinglestepScheduler
     from .scheduling_dpmsolver_unidiffuser import DPMSolverUniDiffuserScheduler
-    from .scheduling_euler_ancestral_discrete import EulerAncestralDiscreteScheduler
+    from .scheduling_euler_ancestral_discrete import \
+        EulerAncestralDiscreteScheduler
     from .scheduling_euler_discrete import EulerDiscreteScheduler
     from .scheduling_heun_discrete import HeunDiscreteScheduler
     from .scheduling_ipndm import IPNDMScheduler
-    from .scheduling_k_dpm_2_ancestral_discrete import KDPM2AncestralDiscreteScheduler
+    from .scheduling_k_dpm_2_ancestral_discrete import \
+        KDPM2AncestralDiscreteScheduler
     from .scheduling_k_dpm_2_discrete import KDPM2DiscreteScheduler
     from .scheduling_karras_ve import KarrasVeScheduler
     from .scheduling_pndm import PNDMScheduler
@@ -55,6 +55,6 @@ try:
 except OptionalDependencyNotAvailable:
     from ..utils.dummy_paddle_and_scipy_objects import *  # noqa F403
 else:
-    from .preconfig.preconfig_scheduling_lms_discrete import (
-        PreconfigLMSDiscreteScheduler, )
+    from .preconfig.preconfig_scheduling_lms_discrete import \
+        PreconfigLMSDiscreteScheduler
     from .scheduling_lms_discrete import LMSDiscreteScheduler

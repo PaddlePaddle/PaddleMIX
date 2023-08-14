@@ -21,28 +21,24 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle.distributed.fleet.utils import recompute
 from paddle.nn import CrossEntropyLoss
-
 from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
 from paddlenlp.transformers.model_outputs import (
-    BaseModelOutput,
-    BaseModelOutputWithPastAndCrossAttentions,
-    BaseModelOutputWithPooling,
-    BaseModelOutputWithPoolingAndCrossAttentions,
-    ModelOutput, )
+    BaseModelOutput, BaseModelOutputWithPastAndCrossAttentions,
+    BaseModelOutputWithPooling, BaseModelOutputWithPoolingAndCrossAttentions,
+    ModelOutput)
 from paddlenlp.transformers.model_utils import (
-    PretrainedModel,
-    apply_chunking_to_forward,
-    find_pruneable_heads_and_indices,
-    prune_linear_layer, )
+    PretrainedModel, apply_chunking_to_forward,
+    find_pruneable_heads_and_indices, prune_linear_layer)
 
-from ...utils.log import logger
 from ...activations import ACT2FN
 from ...utils.initializer import normal_, ones_, zeros_
+from ...utils.log import logger
 from ...utils.parameters import transfer_param
 
 MiniGPT4_PRETRAINED_MODEL_ARCHIVE_LIST = []
 
-from .configuration import MiniGPT4Config, MiniGPT4QFormerConfig, MiniGPT4VisionConfig
+from .configuration import (MiniGPT4Config, MiniGPT4QFormerConfig,
+                            MiniGPT4VisionConfig)
 
 __all__ = [
     "MiniGPT4Model",
@@ -57,7 +53,7 @@ def Parameter(tensor):
     return paddle.create_parameter(
         tensor.shape,
         dtype=tensor.dtype,
-        default_initializer=nn.initializer.Assign(tensor))
+        default_initializer=nn.initializer.Assign(tensor), )
 
 
 def convert_weights_to_dtype(model, dtype: str):
@@ -134,8 +130,8 @@ class MiniGPT4PretrainedModel(PretrainedModel):
     def _init_weights(self, module):
         """Initialize the weights"""
         factor = self.config.initializer_range
-        if isinstance(module, nn.Conv2D) or isinstance(
-                module, nn.Embedding) or isinstance(module, nn.Linear):
+        if (isinstance(module, nn.Conv2D) or isinstance(module, nn.Embedding) or
+                isinstance(module, nn.Linear)):
             normal_(module.weight, mean=0.0, std=factor)
             if hasattr(module, "bias") and module.bias is not None:
                 zeros_(module.bias)
@@ -157,12 +153,13 @@ class MiniGPT4PretrainedModel(PretrainedModel):
             module.gradient_checkpointing = value
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path,
-                        from_hf_hub: bool=False,
-                        subfolder: str=None,
-                        *args,
-                        **kwargs):
+    def from_pretrained(
+            cls,
+            pretrained_model_name_or_path,
+            from_hf_hub: bool=False,
+            subfolder: str=None,
+            *args,
+            **kwargs, ):
         vit_dtype = kwargs.pop("vit_dtype", "float16")
         qformer_dtype = kwargs.pop("qformer_dtype", "float32")
         llama_dtype = kwargs.pop("llama_dtype", "float16")
@@ -172,7 +169,7 @@ class MiniGPT4PretrainedModel(PretrainedModel):
             from_hf_hub=from_hf_hub,
             subfolder=subfolder,
             *args,
-            **kwargs)
+            **kwargs, )
 
         logger.info(
             "Trying to convert dtype for MiniGPT4 model, it may take a while.")
@@ -206,7 +203,7 @@ class MiniGPT4VisionEmbeddings(nn.Layer):
             in_channels=3,
             out_channels=self.embed_dim,
             kernel_size=self.patch_size,
-            stride=self.patch_size)
+            stride=self.patch_size, )
 
         self.num_patches = (self.image_size // self.patch_size)**2
         self.num_positions = self.num_patches + 1
@@ -433,11 +430,13 @@ class MiniGPT4Encoder(nn.Layer):
             return_dict (`bool`, *optional*):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (output_attentions if output_attentions is not None
+                             else self.config.output_attentions)
         output_hidden_states = (output_hidden_states
                                 if output_hidden_states is not None else
                                 self.config.output_hidden_states)
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (return_dict if return_dict is not None else
+                       self.config.use_return_dict)
 
         encoder_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
@@ -479,7 +478,7 @@ class MiniGPT4Encoder(nn.Layer):
         return BaseModelOutput(
             last_hidden_state=hidden_states,
             hidden_states=encoder_states,
-            attentions=all_attentions)
+            attentions=all_attentions, )
 
 
 class MiniGPT4VisionModel(MiniGPT4PretrainedModel):
@@ -506,11 +505,13 @@ class MiniGPT4VisionModel(MiniGPT4PretrainedModel):
         r"""
         Returns:
         """
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (output_attentions if output_attentions is not None
+                             else self.config.output_attentions)
         output_hidden_states = (output_hidden_states
                                 if output_hidden_states is not None else
                                 self.config.output_hidden_states)
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (return_dict if return_dict is not None else
+                       self.config.use_return_dict)
 
         if pixel_values is None:
             raise ValueError("You have to specify pixel_values")
@@ -569,7 +570,8 @@ class MiniGPT4QFormerMultiHeadAttention(nn.Layer):
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = getattr(
             config, "position_embedding_type", "absolute")
-        if self.position_embedding_type == "relative_key" or self.position_embedding_type == "relative_key_query":
+        if (self.position_embedding_type == "relative_key" or
+                self.position_embedding_type == "relative_key_query"):
             self.max_position_embeddings = config.max_position_embeddings
             self.distance_embedding = nn.Embedding(
                 2 * config.max_position_embeddings - 1,
@@ -590,7 +592,8 @@ class MiniGPT4QFormerMultiHeadAttention(nn.Layer):
 
     def transpose_for_scores(self, x):
         new_x_shape = x.shape[:-1] + [
-            self.num_attention_heads, self.attention_head_size
+            self.num_attention_heads,
+            self.attention_head_size,
         ]
         x = x.reshape(new_x_shape)
         return x.transpose([0, 2, 1, 3])
@@ -635,7 +638,8 @@ class MiniGPT4QFormerMultiHeadAttention(nn.Layer):
         attention_scores = paddle.matmul(
             query_layer, key_layer, transpose_y=True)
 
-        if self.position_embedding_type == "relative_key" or self.position_embedding_type == "relative_key_query":
+        if (self.position_embedding_type == "relative_key" or
+                self.position_embedding_type == "relative_key_query"):
             seq_length = hidden_states.shape[1]
             position_ids_l = paddle.arange(
                 seq_length, dtype="int64").reshape([-1, 1])
@@ -656,7 +660,9 @@ class MiniGPT4QFormerMultiHeadAttention(nn.Layer):
                     "bhld,lrd->bhlr", query_layer, positional_embedding)
                 relative_position_scores_key = paddle.einsum(
                     "bhrd,lrd->bhlr", key_layer, positional_embedding)
-                attention_scores = attention_scores + relative_position_scores_query + relative_position_scores_key
+                attention_scores = (
+                    attention_scores + relative_position_scores_query +
+                    relative_position_scores_key)
 
         attention_scores = attention_scores / math.sqrt(
             self.attention_head_size)
@@ -688,8 +694,8 @@ class MiniGPT4QFormerMultiHeadAttention(nn.Layer):
         ]
         context_layer = context_layer.reshape(new_context_layer_shape)
 
-        outputs = (context_layer, attention_probs) if output_attentions else (
-            context_layer, )
+        outputs = ((context_layer, attention_probs)
+                   if output_attentions else (context_layer, ))
 
         outputs = outputs + (past_key_value, )
         return outputs
@@ -723,8 +729,10 @@ class MiniGPT4QFormerAttention(nn.Layer):
         if len(heads) == 0:
             return
         heads, index = find_pruneable_heads_and_indices(
-            heads, self.attention.num_attention_heads,
-            self.attention.attention_head_size, self.pruned_heads)
+            heads,
+            self.attention.num_attention_heads,
+            self.attention.attention_head_size,
+            self.pruned_heads, )
 
         # Prune linear layers
         self.attention.query = prune_linear_layer(self.attention.query, index)
@@ -735,7 +743,8 @@ class MiniGPT4QFormerAttention(nn.Layer):
         # Update hyper params and store pruned heads
         self.attention.num_attention_heads = self.attention.num_attention_heads - len(
             heads)
-        self.attention.all_head_size = self.attention.attention_head_size * self.attention.num_attention_heads
+        self.attention.all_head_size = (self.attention.attention_head_size *
+                                        self.attention.num_attention_heads)
         self.pruned_heads = self.pruned_heads.union(heads)
 
     def forward(
@@ -822,8 +831,8 @@ class MiniGPT4QFormerLayer(nn.Layer):
             output_attentions=False,
             query_length=0, ):
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
-        self_attn_past_key_value = past_key_value[:
-                                                  2] if past_key_value is not None else None
+        self_attn_past_key_value = (past_key_value[:2]
+                                    if past_key_value is not None else None)
         self_attention_outputs = self.attention(
             hidden_states,
             attention_mask,
@@ -1083,10 +1092,11 @@ class MiniGPT4QFormerModel(MiniGPT4PretrainedModel):
 
         return encoder_extended_attention_mask
 
-    def get_head_mask(self,
-                      head_mask: Optional[paddle.Tensor],
-                      num_hidden_layers: int,
-                      is_attention_chunked: bool=False) -> paddle.Tensor:
+    def get_head_mask(
+            self,
+            head_mask: Optional[paddle.Tensor],
+            num_hidden_layers: int,
+            is_attention_chunked: bool=False, ) -> paddle.Tensor:
         """
         Prepare the head mask if needed.
         Args:
@@ -1117,8 +1127,8 @@ class MiniGPT4QFormerModel(MiniGPT4PretrainedModel):
                 -1).unsqueeze(-1)
             head_mask = head_mask.expand([num_hidden_layers, -1, -1, -1, -1])
         elif head_mask.ndim == 2:
-            head_mask = head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(
-                -1)  # We can specify head_mask for each layer
+            head_mask = (head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
+                         )  # We can specify head_mask for each layer
         assert head_mask.ndim == 5, f"head_mask.dim != 5, instead {head_mask.dim()}"
         head_mask = head_mask.cast(
             dtype=self.config.
@@ -1156,11 +1166,13 @@ class MiniGPT4QFormerModel(MiniGPT4PretrainedModel):
             If set to `True`, `past_key_values` key value states are returned and can be used to speed up decoding (see
             `past_key_values`).
         """
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (output_attentions if output_attentions is not None
+                             else self.config.output_attentions)
         output_hidden_states = (output_hidden_states
                                 if output_hidden_states is not None else
                                 self.config.output_hidden_states)
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (return_dict if return_dict is not None else
+                       self.config.use_return_dict)
 
         # past_key_values_length
         past_key_values_length = (
@@ -1269,13 +1281,14 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
     def get_input_embeddings(self) -> nn.Layer:
         return self.vision_model.embeddings.patch_embedding
 
-    def get_text_features(self,
-                          input_ids: Optional[paddle.Tensor]=None,
-                          attention_mask: Optional[paddle.Tensor]=None,
-                          output_attentions: Optional[bool]=None,
-                          output_hidden_states: Optional[bool]=None,
-                          return_dict: Optional[bool]=None,
-                          **kwargs):
+    def get_text_features(
+            self,
+            input_ids: Optional[paddle.Tensor]=None,
+            attention_mask: Optional[paddle.Tensor]=None,
+            output_attentions: Optional[bool]=None,
+            output_hidden_states: Optional[bool]=None,
+            return_dict: Optional[bool]=None,
+            **kwargs, ):
         r"""
         Returns:
             text_outputs (`CausalLMOutputWithPast`, or `tuple(paddle.Tensor)` if `return_dict=False`):
@@ -1293,11 +1306,13 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
         >>> inputs = tokenizer(["a photo of a cat"], padding=True, return_tensors="pd", return_token_type_ids=False)
         >>> text_features = model.get_text_features(**inputs)
         ```"""
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (output_attentions if output_attentions is not None
+                             else self.config.output_attentions)
         output_hidden_states = (output_hidden_states
                                 if output_hidden_states is not None else
                                 self.config.output_hidden_states)
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (return_dict if return_dict is not None else
+                       self.config.use_return_dict)
 
         text_outputs = self.language_model(
             input_ids=input_ids,
@@ -1308,12 +1323,13 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
 
         return text_outputs
 
-    def get_image_features(self,
-                           pixel_values: Optional[paddle.Tensor]=None,
-                           output_attentions: Optional[bool]=None,
-                           output_hidden_states: Optional[bool]=None,
-                           return_dict: Optional[bool]=None,
-                           **kwargs):
+    def get_image_features(
+            self,
+            pixel_values: Optional[paddle.Tensor]=None,
+            output_attentions: Optional[bool]=None,
+            output_hidden_states: Optional[bool]=None,
+            return_dict: Optional[bool]=None,
+            **kwargs, ):
         r"""
         Returns:
             vision_outputs (`BaseModelOutputWithPooling` or tuple of `paddle.Tensor`):
@@ -1333,11 +1349,13 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
         >>> inputs = processor.process_images(images=image, return_tensors="pd")
         >>> image_outputs = model.get_image_features(**inputs)
         ```"""
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (output_attentions if output_attentions is not None
+                             else self.config.output_attentions)
         output_hidden_states = (output_hidden_states
                                 if output_hidden_states is not None else
                                 self.config.output_hidden_states)
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (return_dict if return_dict is not None else
+                       self.config.use_return_dict)
 
         pixel_values = paddle.cast(
             pixel_values,
@@ -1350,12 +1368,13 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
 
         return vision_outputs
 
-    def get_qformer_features(self,
-                             pixel_values: Optional[paddle.Tensor]=None,
-                             output_attentions: Optional[bool]=None,
-                             output_hidden_states: Optional[bool]=None,
-                             return_dict: Optional[bool]=None,
-                             **kwargs):
+    def get_qformer_features(
+            self,
+            pixel_values: Optional[paddle.Tensor]=None,
+            output_attentions: Optional[bool]=None,
+            output_hidden_states: Optional[bool]=None,
+            return_dict: Optional[bool]=None,
+            **kwargs, ):
         r"""
         Returns:
             vision_outputs (`BaseModelOutputWithPooling` or tuple of `paddle.Tensor`):
@@ -1375,11 +1394,13 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
         >>> inputs = processor.process_images(images=image, return_tensors="pd")
         >>> qformer_outputs = model.get_qformer_features(**inputs)
         ```"""
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = (output_attentions if output_attentions is not None
+                             else self.config.output_attentions)
         output_hidden_states = (output_hidden_states
                                 if output_hidden_states is not None else
                                 self.config.output_hidden_states)
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (return_dict if return_dict is not None else
+                       self.config.use_return_dict)
 
         # step 1: forward the images through the vision encoder,
         # to get image embeddings of shape (batch_size, seq_len, hidden_size)
@@ -1440,7 +1461,8 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
         >>> inputs = processor(images=image, texts=text, prompts=prompt, return_tensors="pd")
         >>> outputs = model(**inputs)
         ```"""
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (return_dict if return_dict is not None else
+                       self.config.use_return_dict)
 
         # step 1: forward the images through the vision encoder,
         # to get image embeddings of shape (batch_size, seq_len, hidden_size)
@@ -1485,10 +1507,11 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
                 second_embeds.shape[:-1], dtype="int64")
         attention_mask = paddle.concat(
             [
-                first_attention_mask, language_model_attention_mask,
-                second_attention_mask
+                first_attention_mask,
+                language_model_attention_mask,
+                second_attention_mask,
             ],
-            axis=1)
+            axis=1, )
 
         outputs = self.language_model(
             inputs_embeds=inputs_embeds,
@@ -1510,7 +1533,7 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
 
             loss = loss_fct(
                 shift_logits.reshape([-1, self.config.text_config.vocab_size]),
-                shift_labels.reshape([-1]))
+                shift_labels.reshape([-1]), )
 
         if not return_dict:
             output = (logits, vision_outputs, query_outputs, outputs)
@@ -1573,7 +1596,8 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
         >>> inputs = processor(images=image, texts=text, prompts=prompt, return_tensors="pd")
         >>> outputs = model(**inputs)
         ```"""
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (return_dict if return_dict is not None else
+                       self.config.use_return_dict)
 
         # step 1: forward the images through the vision encoder,
         # to get image embeddings of shape (batch_size, seq_len, hidden_size)
@@ -1618,10 +1642,11 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
                 second_embeds.shape[:-1], dtype="int64")
         attention_mask = paddle.concat(
             [
-                first_attention_mask, language_model_attention_mask,
-                second_attention_mask
+                first_attention_mask,
+                language_model_attention_mask,
+                second_attention_mask,
             ],
-            axis=1)
+            axis=1, )
 
         outputs = self.language_model(
             inputs_embeds=inputs_embeds,
@@ -1644,7 +1669,7 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
 
             loss = loss_fct(
                 shift_logits.reshape([-1, self.config.text_config.vocab_size]),
-                shift_labels.reshape([-1]))
+                shift_labels.reshape([-1]), )
 
         if not return_dict:
             output = (logits, vision_outputs, query_outputs, outputs)
@@ -1741,15 +1766,16 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
                 second_embeds.shape[:-1], dtype="int64")
         attention_mask = paddle.concat(
             [
-                first_attention_mask, language_model_attention_mask,
-                second_attention_mask
+                first_attention_mask,
+                language_model_attention_mask,
+                second_attention_mask,
             ],
-            axis=1)
+            axis=1, )
 
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            **generate_kwargs)
+            **generate_kwargs, )
 
         return outputs
 
@@ -1881,6 +1907,6 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            **generate_kwargs)
+            **generate_kwargs, )
 
         return outputs

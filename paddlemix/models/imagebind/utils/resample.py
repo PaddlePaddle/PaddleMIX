@@ -1,7 +1,22 @@
-import sys
-import paddle
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
-from typing import Optional, Tuple, Union, List
+import sys
+from typing import List, Optional, Tuple, Union
+
+import paddle
 
 
 def _get_sinc_resample_kernel(
@@ -10,16 +25,16 @@ def _get_sinc_resample_kernel(
         gcd: int,
         lowpass_filter_width: int=6,
         rolloff: float=0.99,
-        resampling_method: str='sinc_interpolation',
+        resampling_method: str="sinc_interpolation",
         beta: Optional[float]=None,
-        device: str=str('cpu').replace('cuda', 'gpu'),
+        device: str=str("cpu").replace("cuda", "gpu"),
         dtype: Optional[paddle.dtype]=None, ):
     if not (int(orig_freq) == orig_freq and int(new_freq) == new_freq):
         raise Exception(
-            'Frequencies must be of integer type to ensure quality resampling computation. To work around this, manually convert both frequencies to integer values that maintain their resampling rate ratio before passing them into the function. Example: To downsample a 44100 hz waveform by a factor of 8, use `orig_freq=8` and `new_freq=1` instead of `orig_freq=44100` and `new_freq=5512.5`.'
+            "Frequencies must be of integer type to ensure quality resampling computation. To work around this, manually convert both frequencies to integer values that maintain their resampling rate ratio before passing them into the function. Example: To downsample a 44100 hz waveform by a factor of 8, use `orig_freq=8` and `new_freq=1` instead of `orig_freq=44100` and `new_freq=5512.5`."
         )
-    if resampling_method not in ['sinc_interpolation', 'kaiser_window']:
-        raise ValueError('Invalid resampling method: {}'.format(
+    if resampling_method not in ["sinc_interpolation", "kaiser_window"]:
+        raise ValueError("Invalid resampling method: {}".format(
             resampling_method))
     orig_freq = int(orig_freq) // gcd
     new_freq = int(new_freq) // gcd
@@ -28,12 +43,12 @@ def _get_sinc_resample_kernel(
     base_freq = min(orig_freq, new_freq)
     base_freq *= rolloff
     width = math.ceil(lowpass_filter_width * orig_freq / base_freq)
-    idx_dtype = dtype if dtype is not None else 'float64'
+    idx_dtype = dtype if dtype is not None else "float64"
     idx = paddle.arange(start=-width, end=width + orig_freq).astype(idx_dtype)
     for i in range(new_freq):
         t = (-i / new_freq + idx / orig_freq) * base_freq
         t = t.clip_(min=-lowpass_filter_width, max=lowpass_filter_width)
-        if resampling_method == 'sinc_interpolation':
+        if resampling_method == "sinc_interpolation":
             window = paddle.cos(x=t * math.pi / lowpass_filter_width / 2)**2
         else:
             if beta is None:
@@ -55,7 +70,7 @@ def _get_sinc_resample_kernel(
     kernels = paddle.stack(x=kernels).reshape(
         (new_freq, 1, -1)).scale_(scale=scale)
     if dtype is None:
-        kernels = kernels.to(dtype='float32')
+        kernels = kernels.to(dtype="float32")
     return kernels, width
 
 
@@ -67,7 +82,7 @@ def _apply_sinc_resample_kernel(waveform,
                                 width: int):
     if not waveform.is_floating_point():
         raise TypeError(
-            f'Expected floating point type for waveform tensor, but received {waveform.dtype}.'
+            f"Expected floating point type for waveform tensor, but received {waveform.dtype}."
         )
     orig_freq = int(orig_freq) // gcd
     new_freq = int(new_freq) // gcd
@@ -100,7 +115,7 @@ def resample(
         new_freq: int,
         lowpass_filter_width: int=6,
         rolloff: float=0.99,
-        resampling_method: str='sinc_interpolation',
+        resampling_method: str="sinc_interpolation",
         beta: Optional[float]=None, ):
     """Resamples the waveform at the new frequency using bandlimited interpolation. [:footcite:`RESAMPLE`].
 

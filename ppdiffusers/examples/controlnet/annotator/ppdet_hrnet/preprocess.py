@@ -188,12 +188,13 @@ class ShortSizeScale(object):
         backend(str): Choose pillow or cv2 as the graphics processing backend. default: 'pillow'
     """
 
-    def __init__(self,
-                 short_size,
-                 fixed_ratio=True,
-                 keep_ratio=None,
-                 do_round=False,
-                 backend="pillow"):
+    def __init__(
+            self,
+            short_size,
+            fixed_ratio=True,
+            keep_ratio=None,
+            do_round=False,
+            backend="pillow", ):
         self.short_size = short_size
         assert (fixed_ratio and not keep_ratio) or (
             not fixed_ratio
@@ -203,7 +204,8 @@ class ShortSizeScale(object):
         self.do_round = do_round
 
         assert backend in [
-            "pillow", "cv2"
+            "pillow",
+            "cv2",
         ], "Scale's backend must be pillow or cv2, but get {backend}"
 
         self.backend = backend
@@ -234,10 +236,10 @@ class ShortSizeScale(object):
                 oh = self.short_size
             else:
                 scale_factor = self.short_size / w
-                oh = int(h * float(scale_factor) +
-                         0.5) if self.do_round else int(h * self.short_size / w)
-                ow = int(w * float(scale_factor) +
-                         0.5) if self.do_round else int(w * self.short_size / h)
+                oh = (int(h * float(scale_factor) + 0.5)
+                      if self.do_round else int(h * self.short_size / w))
+                ow = (int(w * float(scale_factor) + 0.5)
+                      if self.do_round else int(w * self.short_size / h))
         else:
             oh = self.short_size
             if self.fixed_ratio:
@@ -246,10 +248,10 @@ class ShortSizeScale(object):
                 ow = self.short_size
             else:
                 scale_factor = self.short_size / h
-                oh = int(h * float(scale_factor) +
-                         0.5) if self.do_round else int(h * self.short_size / w)
-                ow = int(w * float(scale_factor) +
-                         0.5) if self.do_round else int(w * self.short_size / h)
+                oh = (int(h * float(scale_factor) + 0.5)
+                      if self.do_round else int(h * self.short_size / w))
+                ow = (int(w * float(scale_factor) + 0.5)
+                      if self.do_round else int(w * self.short_size / h))
 
         if type(img) == np.ndarray:
             img = Image.fromarray(img, mode="RGB")
@@ -375,8 +377,9 @@ class LetterBoxResize(object):
         ratio_h = float(height) / shape[0]
         ratio_w = float(width) / shape[1]
         ratio = min(ratio_h, ratio_w)
-        new_shape = (round(shape[1] * ratio),
-                     round(shape[0] * ratio))  # [width, height]
+        new_shape = (
+            round(shape[1] * ratio),
+            round(shape[0] * ratio), )  # [width, height]
         padw = (width - new_shape[0]) / 2
         padh = (height - new_shape[1]) / 2
         top, bottom = round(padh - 0.1), round(padh + 0.1)
@@ -441,14 +444,15 @@ class Pad(object):
 class WarpAffine(object):
     """Warp affine the image"""
 
-    def __init__(self,
-                 keep_res=False,
-                 pad=31,
-                 input_h=512,
-                 input_w=512,
-                 scale=0.4,
-                 shift=0.1,
-                 down_ratio=4):
+    def __init__(
+            self,
+            keep_res=False,
+            pad=31,
+            input_h=512,
+            input_w=512,
+            scale=0.4,
+            shift=0.1,
+            down_ratio=4, ):
         self.keep_res = keep_res
         self.pad = pad
         self.input_h = input_h

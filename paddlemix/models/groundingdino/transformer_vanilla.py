@@ -15,17 +15,13 @@
 from typing import Optional
 
 import paddle
-from paddle import Tensor, nn
 import paddle.nn.functional as F
-from .layers import MultiHeadAttention
+from paddle import Tensor, nn
 
-from .utils import (
-    MLP,
-    _get_activation_fn,
-    _get_clones,
-    gen_encoder_output_proposals,
-    gen_sineembed_for_position,
-    sigmoid_focal_loss, )
+from .layers import MultiHeadAttention
+from .utils import (MLP, _get_activation_fn, _get_clones,
+                    gen_encoder_output_proposals, gen_sineembed_for_position,
+                    sigmoid_focal_loss)
 
 
 class TextTransformer(nn.Layer):
@@ -46,7 +42,7 @@ class TextTransformer(nn.Layer):
             d_model=d_model,
             nhead=nheads,
             dim_feedforward=dim_feedforward,
-            dropout=dropout)
+            dropout=dropout, )
         self.layers = _get_clones(single_encoder_layer, num_layers)
 
     def forward(self,

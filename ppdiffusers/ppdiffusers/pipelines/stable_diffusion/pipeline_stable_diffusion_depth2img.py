@@ -20,12 +20,8 @@ import numpy as np
 import paddle
 import PIL
 from packaging import version
-
-from paddlenlp.transformers import (
-    CLIPTextModel,
-    CLIPTokenizer,
-    DPTForDepthEstimation,
-    DPTImageProcessor, )
+from paddlenlp.transformers import (CLIPTextModel, CLIPTokenizer,
+                                    DPTForDepthEstimation, DPTImageProcessor)
 
 from ...configuration_utils import FrozenDict
 from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
@@ -108,8 +104,8 @@ class StableDiffusionDepth2ImgPipeline(
             unet.config, "_ppdiffusers_version") and version.parse(
                 version.parse(unet.config._ppdiffusers_version)
                 .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = (hasattr(unet.config, "sample_size") and
+                                       unet.config.sample_size < 64)
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -202,8 +198,8 @@ class StableDiffusionDepth2ImgPipeline(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -253,8 +249,8 @@ class StableDiffusionDepth2ImgPipeline(
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -326,13 +322,14 @@ class StableDiffusionDepth2ImgPipeline(
         return extra_step_kwargs
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.check_inputs
-    def check_inputs(self,
-                     prompt,
-                     strength,
-                     callback_steps,
-                     negative_prompt=None,
-                     prompt_embeds=None,
-                     negative_prompt_embeds=None):
+    def check_inputs(
+            self,
+            prompt,
+            strength,
+            callback_steps,
+            negative_prompt=None,
+            prompt_embeds=None,
+            negative_prompt_embeds=None, ):
         if strength < 0 or strength > 1:
             raise ValueError(
                 f"The value of strength should in [0.0, 1.0] but is {strength}")
@@ -415,8 +412,8 @@ class StableDiffusionDepth2ImgPipeline(
 
         init_latents = self.vae.config.scaling_factor * init_latents
 
-        if batch_size > init_latents.shape[
-                0] and batch_size % init_latents.shape[0] == 0:
+        if (batch_size > init_latents.shape[0] and
+                batch_size % init_latents.shape[0] == 0):
             # expand init_latents for batch_size
             deprecation_message = (
                 f"You have passed {batch_size} text prompts (`prompt`), but only {init_latents.shape[0]} initial"
@@ -428,12 +425,12 @@ class StableDiffusionDepth2ImgPipeline(
                 "len(prompt) != len(image)",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False, )
             additional_image_per_prompt = batch_size // init_latents.shape[0]
             init_latents = paddle.concat(
                 [init_latents] * additional_image_per_prompt, axis=0)
-        elif batch_size > init_latents.shape[
-                0] and batch_size % init_latents.shape[0] != 0:
+        elif (batch_size > init_latents.shape[0] and
+              batch_size % init_latents.shape[0] != 0):
             raise ValueError(
                 f"Cannot duplicate `image` of batch size {init_latents.shape[0]} to {batch_size} text prompts."
             )
@@ -491,8 +488,8 @@ class StableDiffusionDepth2ImgPipeline(
             repeat_by = batch_size // depth_map.shape[0]
             depth_map = depth_map.tile([repeat_by, 1, 1, 1])
 
-        depth_map = paddle.concat(
-            [depth_map] * 2) if do_classifier_free_guidance else depth_map
+        depth_map = (paddle.concat([depth_map] * 2)
+                     if do_classifier_free_guidance else depth_map)
         return depth_map
 
     @paddle.no_grad()
@@ -651,9 +648,13 @@ class StableDiffusionDepth2ImgPipeline(
             [batch_size * num_images_per_prompt])
 
         # 7. Prepare latent variables
-        latents = self.prepare_latents(image, latent_timestep, batch_size,
-                                       num_images_per_prompt,
-                                       prompt_embeds.dtype, generator)
+        latents = self.prepare_latents(
+            image,
+            latent_timestep,
+            batch_size,
+            num_images_per_prompt,
+            prompt_embeds.dtype,
+            generator, )
 
         # 8. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -664,8 +665,8 @@ class StableDiffusionDepth2ImgPipeline(
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
                 latent_model_input = paddle.concat(

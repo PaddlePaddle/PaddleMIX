@@ -28,12 +28,13 @@ from .text_image_pair_dataset import TextImagePair, worker_init_fn
 logger = get_logger("transformers")
 
 
-def on_log(self,
-           args: TrainingArguments,
-           state: TrainerState,
-           control: TrainerControl,
-           logs,
-           **kwargs):
+def on_log(
+        self,
+        args: TrainingArguments,
+        state: TrainerState,
+        control: TrainerControl,
+        logs,
+        **kwargs, ):
     control.should_log = False
     return self.call_event("on_log", args, state, control, logs=logs, **kwargs)
 
@@ -80,7 +81,8 @@ class VisualDLWithImageCallback(TrainerCallback):
     def on_step_end(self, args, state, control, model=None, **kwargs):
         if hasattr(model, "on_train_batch_end"):
             model.on_train_batch_end()
-        if args.image_logging_steps > 0 and state.global_step % args.image_logging_steps == 0:
+        if (args.image_logging_steps > 0 and
+                state.global_step % args.image_logging_steps == 0):
             control.should_log = True
 
     def _init_summary_writer(self, args, log_dir=None):
@@ -200,7 +202,8 @@ class BenchmarkCallback(TrainerCallback):
         self.benchmark = benchmark
 
     def on_train_begin(self, args, state, control, **kwargs):
-        assert args.gradient_accumulation_steps == 1 and not args.do_eval and not args.do_predict
+        assert (args.gradient_accumulation_steps == 1 and not args.do_eval and
+                not args.do_predict)
         if self.benchmark:
             self.reader_cost_avg = AverageStatistical()
 
@@ -261,7 +264,7 @@ class StableDiffusionTrainer(Trainer):
                     self.pop_callback(ProgressCallback)
 
     def compute_loss(self, model, inputs, return_outputs=False):
-        # move eval 
+        # move eval
         unwraped_model = unwrap_model(model)
         unwraped_model.vae.eval()
         if not unwraped_model.model_args.train_text_encoder:
@@ -282,12 +285,13 @@ class StableDiffusionTrainer(Trainer):
         else:
             return super().get_train_dataloader()
 
-    def _inner_training_loop(self,
-                             batch_size=None,
-                             args=None,
-                             resume_from_checkpoint=None,
-                             trial=None,
-                             ignore_keys_for_eval=None):
+    def _inner_training_loop(
+            self,
+            batch_size=None,
+            args=None,
+            resume_from_checkpoint=None,
+            trial=None,
+            ignore_keys_for_eval=None, ):
         self.accelerator.free_memory()
         self._train_batch_size = batch_size
         logger.debug(
@@ -299,12 +303,15 @@ class StableDiffusionTrainer(Trainer):
         # number of training epochs: num_train_epochs
         # number of training steps per epoch: num_update_steps_per_epoch
         # total number of training steps to execute: max_steps
-        total_train_batch_size = args.train_batch_size * args.gradient_accumulation_steps * args.world_size
+        total_train_batch_size = (args.train_batch_size *
+                                  args.gradient_accumulation_steps *
+                                  args.world_size)
 
         len_dataloader = None
         if has_length(train_dataloader):
             len_dataloader = len(train_dataloader)
-            num_update_steps_per_epoch = len_dataloader // args.gradient_accumulation_steps
+            num_update_steps_per_epoch = (len_dataloader //
+                                          args.gradient_accumulation_steps)
             num_update_steps_per_epoch = max(num_update_steps_per_epoch, 1)
             num_examples = self.num_examples(train_dataloader)
             if args.max_steps > 0:
@@ -318,9 +325,10 @@ class StableDiffusionTrainer(Trainer):
                 max_steps = math.ceil(args.num_train_epochs *
                                       num_update_steps_per_epoch)
                 num_train_epochs = math.ceil(args.num_train_epochs)
-                num_train_samples = self.num_examples(
-                    train_dataloader) * args.num_train_epochs
-        elif args.max_steps > 0:  # Rely on max_steps when dataloader does not have a working size
+                num_train_samples = (self.num_examples(train_dataloader) *
+                                     args.num_train_epochs)
+        elif (args.max_steps >
+              0):  # Rely on max_steps when dataloader does not have a working size
             max_steps = args.max_steps
             # Setting a very large number of epochs so we go as many times as necessary over the iterator.
             num_train_epochs = sys.maxsize
@@ -476,8 +484,8 @@ class StableDiffusionTrainer(Trainer):
                         f"  Will skip the first {epochs_trained} epochs then the first"
                         f" {steps_trained_in_current_epoch} batches in the first epoch."
                     )
-                if self.is_local_process_zero(
-                ) and not args.disable_tqdm and skip_first_batches is None:
+                if (self.is_local_process_zero() and not args.disable_tqdm and
+                        skip_first_batches is None):
                     steps_trained_progress_bar = tqdm(
                         total=steps_trained_in_current_epoch)
                     steps_trained_progress_bar.set_description(
@@ -493,7 +501,9 @@ class StableDiffusionTrainer(Trainer):
             # parameter to Train when using DDP.
             self.state.trial_name = self.hp_name(self._trial)
         if trial is not None:
-            assignments = trial.assignments if self.hp_search_backend == HPSearchBackend.SIGOPT else trial
+            assignments = (trial.assignments
+                           if self.hp_search_backend == HPSearchBackend.SIGOPT
+                           else trial)
             self.state.trial_params = hp_params(assignments)
         else:
             self.state.trial_params = None
@@ -557,7 +567,9 @@ class StableDiffusionTrainer(Trainer):
             self.control = self.callback_handler.on_epoch_begin(
                 args, self.state, self.control)
 
-            if epoch == epochs_trained and resume_from_checkpoint is not None and steps_trained_in_current_epoch == 0:
+            if (epoch == epochs_trained and
+                    resume_from_checkpoint is not None and
+                    steps_trained_in_current_epoch == 0):
                 self._load_rng_state(resume_from_checkpoint)
 
             rng_to_sync = False
@@ -662,19 +674,20 @@ class StableDiffusionTrainer(Trainer):
                         optimizer_was_run = scale_before <= scale_after
                     else:
                         self.optimizer.step()
-                        optimizer_was_run = not self.accelerator.optimizer_step_was_skipped
+                        optimizer_was_run = (
+                            not self.accelerator.optimizer_step_was_skipped)
 
                     if optimizer_was_run:
                         # Delay optimizer scheduling until metrics are generated
                         if not isinstance(
                                 self.lr_scheduler,
-                                torch.optim.lr_scheduler.ReduceLROnPlateau):
+                                torch.optim.lr_scheduler.ReduceLROnPlateau, ):
                             self.lr_scheduler.step()
 
                     model.zero_grad()
                     self.state.global_step += 1
-                    self.state.epoch = epoch + (step + 1 + steps_skipped
-                                                ) / steps_in_epoch
+                    self.state.epoch = (
+                        epoch + (step + 1 + steps_skipped) / steps_in_epoch)
                     self.control = self.callback_handler.on_step_end(
                         args, self.state, self.control)
 
@@ -684,7 +697,7 @@ class StableDiffusionTrainer(Trainer):
                         trial,
                         epoch,
                         ignore_keys_for_eval,
-                        inputs=inputs)
+                        inputs=inputs, )
                 else:
                     self.control = self.callback_handler.on_substep_end(
                         args, self.state, self.control)
@@ -747,7 +760,7 @@ class StableDiffusionTrainer(Trainer):
             "train",
             start_time,
             num_samples=num_train_samples,
-            num_steps=self.state.max_steps)
+            num_steps=self.state.max_steps, )
         self.store_flos()
         metrics["total_flos"] = self.state.total_flos
         metrics["train_loss"] = train_loss
@@ -763,7 +776,9 @@ class StableDiffusionTrainer(Trainer):
             use_mtime=False, output_dir=run_dir)
 
         # Delete the last checkpoint when save_total_limit=1 if it's different from the best checkpoint and process allowed to save.
-        if self.args.should_save and self.state.best_model_checkpoint is not None and self.args.save_total_limit == 1:
+        if (self.args.should_save and
+                self.state.best_model_checkpoint is not None and
+                self.args.save_total_limit == 1):
             for checkpoint in checkpoints_sorted:
                 if checkpoint != self.state.best_model_checkpoint:
                     logger.info(
@@ -790,8 +805,10 @@ class StableDiffusionTrainer(Trainer):
             # reset tr_loss to zero
             tr_loss -= tr_loss
 
-            logs["loss"] = round(tr_loss_scalar / (
-                self.state.global_step - self._globalstep_last_logged), 4)
+            logs["loss"] = round(
+                tr_loss_scalar /
+                (self.state.global_step - self._globalstep_last_logged),
+                4, )
             logs["learning_rate"] = self._get_learning_rate()
             logs["global_step"] = int(self.state.global_step)
 

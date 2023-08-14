@@ -19,7 +19,6 @@ import numpy as np
 import paddle
 import paddle.nn.functional as F
 import PIL
-
 from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -224,14 +223,15 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                 f" {type(callback_steps)}.")
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_upscale.StableDiffusionUpscalePipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = (batch_size, num_channels_latents, height, width)
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
@@ -370,8 +370,8 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
         image = image.cast(text_embeddings.dtype)
         if image.shape[1] == 3:
             # encode image if not in latent-space yet
-            image = self.vae.encode(image).latent_dist.sample(
-            ) * self.vae.config.scaling_factor
+            image = (self.vae.encode(image).latent_dist.sample() *
+                     self.vae.config.scaling_factor)
 
         # 5. set timesteps
         self.scheduler.set_timesteps(num_inference_steps)
@@ -437,8 +437,8 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             for i, t in enumerate(timesteps):
                 sigma = self.scheduler.sigmas[i]
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 scaled_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -447,7 +447,7 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                         scaled_model_input,
                         image_cond.cast(scaled_model_input.dtype)
                     ],
-                    axis=1)
+                    axis=1, )
                 # preconditioning parameter based on  Karras et al. (2022) (table 1)
                 timestep = paddle.log(sigma) * 0.25
                 noise_pred = self.unet(
@@ -461,8 +461,9 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
 
                 # apply preconditioning, based on table 1 in Karras et al. (2022)
                 inv_sigma = 1 / (sigma**2 + 1)
-                noise_pred = inv_sigma * latent_model_input + self.scheduler.scale_model_input(
-                    sigma, t) * noise_pred
+                noise_pred = (
+                    inv_sigma * latent_model_input +
+                    self.scheduler.scale_model_input(sigma, t) * noise_pred)
 
                 # perform guidance
                 if do_classifier_free_guidance:

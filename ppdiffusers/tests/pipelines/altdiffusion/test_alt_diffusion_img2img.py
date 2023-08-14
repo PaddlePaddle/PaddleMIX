@@ -19,18 +19,14 @@ import unittest
 
 import numpy as np
 import paddle
+from paddlenlp.transformers import XLMRobertaTokenizer
 
 import ppdiffusers  # noqa F401
-from paddlenlp.transformers import XLMRobertaTokenizer
-from ppdiffusers import (
-    AltDiffusionImg2ImgPipeline,
-    AutoencoderKL,
-    PNDMScheduler,
-    UNet2DConditionModel, )
+from ppdiffusers import (AltDiffusionImg2ImgPipeline, AutoencoderKL,
+                         PNDMScheduler, UNet2DConditionModel)
 from ppdiffusers.image_processor import VaeImageProcessor
 from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
-    RobertaSeriesConfig,
-    RobertaSeriesModelWithTransformation, )
+    RobertaSeriesConfig, RobertaSeriesModelWithTransformation)
 from ppdiffusers.utils import floats_tensor, load_image, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
@@ -148,8 +144,15 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
         expected_slice = np.array([
-            0.48931587, 0.40102208, 0.49653798, 0.4203022, 0.34621224,
-            0.50789315, 0.41116416, 0.4933398, 0.5465742
+            0.48931587,
+            0.40102208,
+            0.49653798,
+            0.4203022,
+            0.34621224,
+            0.50789315,
+            0.41116416,
+            0.4933398,
+            0.5465742,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
@@ -186,7 +189,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             generator=generator,
             num_inference_steps=2,
             output_type="np",
-            image=init_image).images
+            image=init_image, ).images
         assert image.shape == (1, 32, 32, 3)
 
     def test_stable_diffusion_img2img_pipeline_multiple_of_8(self):
@@ -207,13 +210,20 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             strength=0.75,
             guidance_scale=7.5,
             generator=generator,
-            output_type="np")
+            output_type="np", )
         image = output.images[0]
         image_slice = image[255:258, 383:386, -1]
         assert image.shape == (504, 760, 3)
         expected_slice = np.array([
-            0.3251649, 0.3340174, 0.3418343, 0.32628638, 0.33462793, 0.3300547,
-            0.31628466, 0.3470268, 0.34273332
+            0.3251649,
+            0.3340174,
+            0.3418343,
+            0.32628638,
+            0.33462793,
+            0.3300547,
+            0.31628466,
+            0.3470268,
+            0.34273332,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
 
@@ -247,7 +257,7 @@ class AltDiffusionImg2ImgPipelineIntegrationTests(unittest.TestCase):
             strength=0.75,
             guidance_scale=7.5,
             generator=generator,
-            output_type="np")
+            output_type="np", )
         image = output.images
         assert image.shape == (1, 512, 768, 3)
         image_slice = image[0, -3:, -3:, -1]

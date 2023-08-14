@@ -1,39 +1,45 @@
-import numpy as np
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from functools import partial
+from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple
 
+import numpy as np
 import paddle
 from paddle import nn
 from paddle.nn import functional as F
+from paddlenlp.transformers.model_utils import (PretrainedModel,
+                                                register_base_model)
 
-from .configuration import (ImageBindConfig, )
-from types import SimpleNamespace
-from .helpers import (
-    EinOpsRearrange,
-    LearnableLogitScaling,
-    Normalize,
-    SelectElement,
-    SelectEOSAndProject, )
+from .configuration import ImageBindConfig
+from .helpers import (EinOpsRearrange, LearnableLogitScaling, Normalize,
+                      SelectElement, SelectEOSAndProject, VerboseNNModule,
+                      cast_if_src_dtype)
 from .multimodal_preprocessors import (
-    AudioPreprocessor,
-    IMUPreprocessor,
-    PadIm2Video,
-    PatchEmbedGeneric,
-    RGBDTPreprocessor,
-    SpatioTemporalPosEmbeddingHelper,
-    TextPreprocessor,
-    ThermalPreprocessor, )
+    AudioPreprocessor, IMUPreprocessor, PadIm2Video, PatchEmbedGeneric,
+    RGBDTPreprocessor, SpatioTemporalPosEmbeddingHelper, TextPreprocessor,
+    ThermalPreprocessor)
 from .transformer import MultiheadAttention, SimpleTransformer
-from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
-from .helpers import VerboseNNModule, cast_if_src_dtype
 
 ModalityType = SimpleNamespace(
-    VISION='vision',
-    TEXT='text',
-    AUDIO='audio',
-    THERMAL='thermal',
-    DEPTH='depth',
-    IMU='imu', )
+    VISION="vision",
+    TEXT="text",
+    AUDIO="audio",
+    THERMAL="thermal",
+    DEPTH="depth",
+    IMU="imu", )
 
 __all__ = [
     "ImageBindModel",
@@ -65,7 +71,7 @@ class ImageBindModel(ImageBindPretrainedModel):
         vision_num_blocks = config.vision_config.vision_num_blocks
         vision_num_heads = config.vision_config.vision_num_heads
 
-        #audio_config
+        # audio_config
         audio_kernel_size = config.audio_config.audio_kernel_size
         audio_stride = config.audio_config.audio_stride
         audio_embed_dim = config.audio_config.audio_embed_dim
@@ -75,28 +81,28 @@ class ImageBindModel(ImageBindPretrainedModel):
         audio_target_len = config.audio_config.audio_target_len
         audio_drop_path = config.audio_config.audio_drop_path
 
-        #text_config
+        # text_config
         text_embed_dim = config.text_config.text_embed_dim
         text_num_blocks = config.text_config.text_num_blocks
         text_num_heads = config.text_config.text_num_heads
         context_length = config.text_config.context_length
         vocab_size = config.text_config.vocab_size
 
-        #depth_config
+        # depth_config
         depth_embed_dim = config.depth_config.depth_embed_dim
         depth_kernel_size = config.depth_config.depth_kernel_size
         depth_num_blocks = config.depth_config.depth_num_blocks
         depth_num_heads = config.depth_config.depth_num_heads
         depth_drop_path = config.depth_config.depth_drop_path
 
-        #thermal_config
+        # thermal_config
         thermal_embed_dim = config.thermal_config.thermal_embed_dim
         thermal_kernel_size = config.thermal_config.thermal_kernel_size
         thermal_num_blocks = config.thermal_config.thermal_num_blocks
         thermal_num_heads = config.thermal_config.thermal_num_heads
         thermal_drop_path = config.thermal_config.thermal_drop_path
 
-        #imu_config
+        # imu_config
         imu_embed_dim = config.imu_config.imu_embed_dim
         imu_kernel_size = config.imu_config.imu_kernel_size
         imu_num_blocks = config.imu_config.imu_num_blocks
@@ -170,7 +176,7 @@ class ImageBindModel(ImageBindPretrainedModel):
             imu_embed_dim, ):
         rgbt_stem = PatchEmbedGeneric(proj_stem=[
             PadIm2Video(
-                pad_type='repeat', ntimes=2),
+                pad_type="repeat", ntimes=2),
             paddle.nn.Conv3D(
                 in_channels=3,
                 kernel_size=kernel_size,
@@ -491,8 +497,8 @@ class ImageBindModel(ImageBindPretrainedModel):
                     f"modal: {modality_key}   paddle_modality_value['trunk']['tokens'].mean(): {modality_value['trunk']['tokens'].mean().item()}"
                 )
 
-                trunk_inputs = modality_value['trunk']
-                head_inputs = modality_value['head']
+                trunk_inputs = modality_value["trunk"]
+                head_inputs = modality_value["head"]
                 modality_value = self.modality_trunks[modality_key](
                     **trunk_inputs)
                 modality_value = self.modality_heads[modality_key](

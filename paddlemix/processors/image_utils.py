@@ -276,15 +276,15 @@ def load_image(image: Union[str, "PIL.Image.Image"]) -> "PIL.Image.Image":
             "Incorrect format used for image. Should be an url linking to an image, a local path, or a PIL image."
         )
     image = PIL.ImageOps.exif_transpose(image)
-    #image = image.convert("RGB") #
+    # image = image.convert("RGB") #
     return image
 
 
 def get_preprocess_shape(oldh: int, oldw: int,
                          long_side_length: int) -> Tuple[int, int]:
     """
-        Compute the output size given input size and target long side length.
-        """
+    Compute the output size given input size and target long side length.
+    """
     scale = long_side_length * 1.0 / max(oldh, oldw)
     newh, neww = oldh * scale, oldw * scale
     neww = int(neww + 0.5)

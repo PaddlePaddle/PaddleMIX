@@ -1,26 +1,41 @@
-from typing import Tuple
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
+from typing import Tuple
+
 import paddle
 
 __all__ = [
-    'get_mel_banks',
-    'inverse_mel_scale',
-    'inverse_mel_scale_scalar',
-    'mel_scale',
-    'mel_scale_scalar',
-    'spectrogram',
-    'fbank',
-    'mfcc',
-    'vtln_warp_freq',
-    'vtln_warp_mel_freq',
+    "get_mel_banks",
+    "inverse_mel_scale",
+    "inverse_mel_scale_scalar",
+    "mel_scale",
+    "mel_scale_scalar",
+    "spectrogram",
+    "fbank",
+    "mfcc",
+    "vtln_warp_freq",
+    "vtln_warp_mel_freq",
 ]
 EPSILON = paddle.to_tensor(1.1920928955078125e-07)
 MILLISECONDS_TO_SECONDS = 0.001
-HAMMING = 'hamming'
-HANNING = 'hanning'
-POVEY = 'povey'
-RECTANGULAR = 'rectangular'
-BLACKMAN = 'blackman'
+HAMMING = "hamming"
+HANNING = "hanning"
+POVEY = "povey"
+RECTANGULAR = "rectangular"
+BLACKMAN = "blackman"
 WINDOWS = [HAMMING, HANNING, POVEY, RECTANGULAR, BLACKMAN]
 
 
@@ -104,7 +119,7 @@ def _feature_window_function(window_type: str,
         return (blackman_coeff - 0.5 * paddle.cos(x=a * window_function) +
                 (0.5 - blackman_coeff) * paddle.cos(x=2 * a * window_function))
     else:
-        raise Exception('Invalid window type ' + window_type)
+        raise Exception("Invalid window type " + window_type)
 
 
 def _get_log_energy(strided_input: paddle.Tensor,
@@ -133,7 +148,7 @@ def _get_waveform_and_window_properties(
                                                    int]:
     """Gets the waveform and window properties"""
     channel = max(channel, 0)
-    assert channel < waveform.shape[0], 'Invalid channel {} for size {}'.format(
+    assert channel < waveform.shape[0], "Invalid channel {} for size {}".format(
         channel, waveform.shape[0])
     waveform = waveform[(channel), :]
     window_shift = int(sample_frequency * frame_shift * MILLISECONDS_TO_SECONDS)
@@ -141,15 +156,15 @@ def _get_waveform_and_window_properties(
     padded_window_size = (_next_power_of_2(window_size)
                           if round_to_power_of_two else window_size)
     assert (2 <= window_size <= len(waveform)
-            ), 'choose a window size {} that is [2, {}]'.format(window_size,
+            ), "choose a window size {} that is [2, {}]".format(window_size,
                                                                 len(waveform))
-    assert 0 < window_shift, '`window_shift` must be greater than 0'
+    assert 0 < window_shift, "`window_shift` must be greater than 0"
     assert (
         padded_window_size % 2 == 0
-    ), 'the padded `window_size` must be divisible by two. use `round_to_power_of_two` or change `frame_length`'
+    ), "the padded `window_size` must be divisible by two. use `round_to_power_of_two` or change `frame_length`"
     assert (0.0 <= preemphasis_coefficient <= 1.0
-            ), '`preemphasis_coefficient` must be between [0,1]'
-    assert sample_frequency > 0, '`sample_frequency` must be greater than zero'
+            ), "`preemphasis_coefficient` must be between [0,1]"
+    assert sample_frequency > 0, "`sample_frequency` must be greater than zero"
     return waveform, window_shift, window_size, padded_window_size
 
 
@@ -191,7 +206,7 @@ def _get_window(
     if preemphasis_coefficient != 0.0:
         offset_strided_input = paddle.pad_from_torch(
             strided_input.unsqueeze(axis=0), (1, 0),
-            mode='replicate').squeeze(axis=0)
+            mode="replicate").squeeze(axis=0)
 
         strided_input = (strided_input - preemphasis_coefficient *
                          offset_strided_input[:, :-1])
@@ -204,7 +219,7 @@ def _get_window(
         strided_input = paddle.pad_from_torch(
             strided_input.unsqueeze(axis=0),
             (0, padding_right),
-            mode='constant',
+            mode="constant",
             value=0, ).squeeze(axis=0)
     if not raw_energy:
         signal_log_energy = _get_log_energy(strided_input, epsilon,
@@ -367,10 +382,10 @@ def vtln_warp_freq(
         Tensor: Freq after vtln warp
     """
     assert (vtln_low_cutoff > low_freq
-            ), 'be sure to set the vtln_low option higher than low_freq'
+            ), "be sure to set the vtln_low option higher than low_freq"
     assert (
         vtln_high_cutoff < high_freq
-    ), 'be sure to set the vtln_high option lower than high_freq [or negative]'
+    ), "be sure to set the vtln_high option lower than high_freq [or negative]"
     l = vtln_low_cutoff * max(1.0, vtln_warp_factor)
     h = vtln_high_cutoff * min(1.0, vtln_warp_factor)
     scale = 1.0 / vtln_warp_factor
@@ -437,7 +452,7 @@ def get_mel_banks(
         melbank of size (``num_bins``, ``num_fft_bins``)) and ``center_freqs`` (which is
         center frequencies of bins of size (``num_bins``)).
     """
-    assert num_bins > 3, 'Must have at least 3 mel bins'
+    assert num_bins > 3, "Must have at least 3 mel bins"
     assert window_length_padded % 2 == 0
     num_fft_bins = window_length_padded / 2
     nyquist = 0.5 * sample_freq
@@ -446,7 +461,7 @@ def get_mel_banks(
     assert (
         0.0 <= low_freq < nyquist and 0.0 < high_freq <= nyquist and
         low_freq < high_freq
-    ), 'Bad values in options: low-freq {} and high-freq {} vs. nyquist {}'.format(
+    ), "Bad values in options: low-freq {} and high-freq {} vs. nyquist {}".format(
         low_freq, high_freq, nyquist)
     fft_bin_width = sample_freq / window_length_padded
     mel_low_freq = mel_scale_scalar(low_freq)
@@ -459,7 +474,7 @@ def get_mel_banks(
     assert (
         vtln_warp_factor == 1.0 or low_freq < vtln_low < high_freq and
         0.0 < vtln_high < high_freq and vtln_low < vtln_high
-    ), 'Bad values in options: vtln-low {} and vtln-high {}, versus low-freq {} and high-freq {}'.format(
+    ), "Bad values in options: vtln-low {} and vtln-high {}, versus low-freq {} and high-freq {}".format(
         vtln_low, vtln_high, low_freq, high_freq)
 
     bin = paddle.arange(end=num_bins).unsqueeze(axis=1)
@@ -613,7 +628,7 @@ def fbank(
         vtln_warp, )
     mel_energies = mel_energies
     mel_energies = paddle.pad_from_torch(
-        mel_energies, (0, 1), mode='constant', value=0)
+        mel_energies, (0, 1), mode="constant", value=0)
     mel_energies = paddle.mm(input=spectrum, mat2=mel_energies.T)
     if use_log_fbank:
         mel_energies = paddle.maximum(
@@ -711,7 +726,7 @@ def mfcc(
         where m is calculated in _get_strided
     """
     assert (num_ceps <= num_mel_bins
-            ), 'num_ceps cannot be larger than num_mel_bins: %d vs %d' % (
+            ), "num_ceps cannot be larger than num_mel_bins: %d vs %d" % (
                 num_ceps,
                 num_mel_bins, )
     device, dtype = waveform.place, waveform.dtype

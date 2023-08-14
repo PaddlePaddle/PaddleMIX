@@ -16,10 +16,12 @@ import copy
 import os
 from typing import Union
 
-from ...utils.log import logger
-from paddlenlp.transformers.auto.modeling import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+from paddlenlp.transformers.auto.modeling import \
+    MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.llama.configuration import LlamaConfig
+
+from ...utils.log import logger
 
 __all__ = ["MiniGPT4VisionConfig", "MiniGPT4QFormerConfig", "MiniGPT4Config"]
 
@@ -118,9 +120,8 @@ class MiniGPT4VisionConfig(PretrainedConfig):
         if config_dict.get("model_type") == "minigpt4":
             config_dict = config_dict["vision_config"]
 
-        if "model_type" in config_dict and hasattr(
-                cls,
-                "model_type") and config_dict["model_type"] != cls.model_type:
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -234,9 +235,8 @@ class MiniGPT4QFormerConfig(PretrainedConfig):
         if config_dict.get("model_type") == "minigpt4":
             config_dict = config_dict["qformer_config"]
 
-        if "model_type" in config_dict and hasattr(
-                cls,
-                "model_type") and config_dict["model_type"] != cls.model_type:
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -289,12 +289,13 @@ class MiniGPT4Config(PretrainedConfig):
     model_type = "minigpt4"
     is_composition = True
 
-    def __init__(self,
-                 vision_config=None,
-                 qformer_config=None,
-                 text_config=None,
-                 num_query_tokens=32,
-                 **kwargs):
+    def __init__(
+            self,
+            vision_config=None,
+            qformer_config=None,
+            text_config=None,
+            num_query_tokens=32,
+            **kwargs, ):
         super().__init__(**kwargs)
 
         if vision_config is None:
@@ -316,8 +317,8 @@ class MiniGPT4Config(PretrainedConfig):
             )
         self.vision_config = MiniGPT4VisionConfig(**vision_config)
         self.qformer_config = MiniGPT4QFormerConfig(**qformer_config)
-        text_model_type = text_config[
-            "model_type"] if "model_type" in text_config else "llama"
+        text_model_type = (text_config["model_type"]
+                           if "model_type" in text_config else "llama")
 
         if text_model_type == "llama":
             self.text_config = LlamaConfig(**text_config)
@@ -328,7 +329,8 @@ class MiniGPT4Config(PretrainedConfig):
 
         self.num_query_tokens = num_query_tokens
         self.qformer_config.encoder_hidden_size = self.vision_config.hidden_size
-        self.use_decoder_only_language_model = self.text_config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+        self.use_decoder_only_language_model = (
+            self.text_config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES)
 
         self.initializer_factor = 1.0
         self.initializer_range = 0.02

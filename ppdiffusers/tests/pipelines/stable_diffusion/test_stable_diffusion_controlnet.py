@@ -17,14 +17,11 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    ControlNetModel,
-    DDIMScheduler,
-    StableDiffusionControlNetPipeline,
-    UNet2DConditionModel, )
+
+from ppdiffusers import (AutoencoderKL, ControlNetModel, DDIMScheduler,
+                         StableDiffusionControlNetPipeline,
+                         UNet2DConditionModel)
 from ppdiffusers.utils import load_image, load_numpy, randn_tensor, slow
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
@@ -105,8 +102,11 @@ class StableDiffusionControlNetPipelineFastTests(PipelineTesterMixin,
 
         controlnet_embedder_scale_factor = 2
         image = randn_tensor(
-            (1, 3, 32 * controlnet_embedder_scale_factor,
-             32 * controlnet_embedder_scale_factor),
+            (
+                1,
+                3,
+                32 * controlnet_embedder_scale_factor,
+                32 * controlnet_embedder_scale_factor, ),
             generator=generator, )
 
         inputs = {

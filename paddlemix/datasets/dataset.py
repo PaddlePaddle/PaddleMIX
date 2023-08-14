@@ -18,7 +18,8 @@ import os
 import time
 import warnings
 from collections import namedtuple
-from typing import Any, Callable, cast, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
+
 import datasets
 from multiprocess import Pool, RLock
 from PIL import Image
@@ -912,7 +913,9 @@ def make_dataset(
 
     empty_classes = set(class_to_idx.keys()) - available_classes
     if empty_classes:
-        msg = f"Found no valid file for the classes {', '.join(sorted(empty_classes))}. "
+        msg = (
+            f"Found no valid file for the classes {', '.join(sorted(empty_classes))}. "
+        )
         if extensions is not None:
             msg += f"Supported extensions are: {extensions if isinstance(extensions, str) else ', '.join(extensions)}"
         raise FileNotFoundError(msg)
@@ -1063,8 +1066,16 @@ class DatasetFolder(Dataset):
         return len(self.samples)
 
 
-IMG_EXTENSIONS = (".jpg", ".jpeg", ".png", ".ppm", ".bmp", ".pgm", ".tif",
-                  ".tiff", ".webp")
+IMG_EXTENSIONS = (
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".ppm",
+    ".bmp",
+    ".pgm",
+    ".tif",
+    ".tiff",
+    ".webp", )
 
 
 def pil_loader(path: str) -> Image.Image:

@@ -14,6 +14,7 @@
 
 import argparse
 import os
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 
@@ -42,7 +43,7 @@ def predict(args):
         "repetition_penalty": 1.2,
         "temperature": 0.8,
         "decode_strategy": "sampling",
-        "eos_token_id": processor.tokenizer.eos_token_id
+        "eos_token_id": processor.tokenizer.eos_token_id,
     }
 
     # Epoch 1

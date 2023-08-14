@@ -1,6 +1,21 @@
-import paddle
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from functools import partial
 from typing import Callable, List, Optional
+
+import paddle
 from paddle.nn.layer.transformer import tensor
 
 
@@ -140,7 +155,7 @@ class BlockWithMasking(paddle.nn.Layer):
         super().__init__()
         assert not isinstance(
             attn_target, paddle.nn.Layer
-        ), 'attn_target should be a Callable. Otherwise attn_target is shared across blocks!'
+        ), "attn_target should be a Callable. Otherwise attn_target is shared across blocks!"
         self.attn = attn_target()
         if drop_path > 0.0:
             self.drop_path = paddle.nn.Dropout(drop_path)
@@ -157,12 +172,12 @@ class BlockWithMasking(paddle.nn.Layer):
         self.layer_scale_type = layer_scale_type
         if self.layer_scale_type is not None:
             assert self.layer_scale_type in [
-                'per_channel',
-                'scalar',
-            ], f'Found Layer scale type {self.layer_scale_type}'
-            if self.layer_scale_type == 'per_channel':
+                "per_channel",
+                "scalar",
+            ], f"Found Layer scale type {self.layer_scale_type}"
+            if self.layer_scale_type == "per_channel":
                 gamma_shape = [1, 1, dim]
-            elif self.layer_scale_type == 'scalar':
+            elif self.layer_scale_type == "scalar":
                 gamma_shape = [1, 1, 1]
 
             self.layer_scale_gamma1 = paddle.create_parameter(
@@ -199,13 +214,13 @@ class SimpleTransformer(paddle.nn.Layer):
             pre_transformer_layer: Optional[Callable]=None,
             post_transformer_layer: Optional[Callable]=None,
             drop_path_rate: float=0.0,
-            drop_path_type: str='progressive',
+            drop_path_type: str="progressive",
             norm_layer: Callable=_LAYER_NORM,
             mlp_ratio: int=4,
             ffn_dropout_rate: float=0.0,
             layer_scale_type: Optional[str]=None,
             layer_scale_init_value: float=0.0001,
-            weight_init_style: str='jax', ):
+            weight_init_style: str="jax", ):
         """
         Simple Transformer with the following features
         1. Supports masked attention
@@ -216,16 +231,16 @@ class SimpleTransformer(paddle.nn.Layer):
         """
         super().__init__()
         self.pre_transformer_layer = pre_transformer_layer
-        if drop_path_type == 'progressive':
+        if drop_path_type == "progressive":
             dpr = [
                 x.item()
                 for x in paddle.linspace(
                     start=0, stop=drop_path_rate, num=num_blocks)
             ]
-        elif drop_path_type == 'uniform':
+        elif drop_path_type == "uniform":
             dpr = [drop_path_rate for i in range(num_blocks)]
         else:
-            raise ValueError(f'Unknown drop_path_type: {drop_path_type}')
+            raise ValueError(f"Unknown drop_path_type: {drop_path_type}")
         self.blocks = paddle.nn.Sequential(* [
             block(
                 dim=embed_dim,
@@ -244,10 +259,10 @@ class SimpleTransformer(paddle.nn.Layer):
 
     def _init_weights(self, m):
         if isinstance(m, paddle.nn.Linear):
-            if self.weight_init_style == 'jax':
+            if self.weight_init_style == "jax":
                 paddle.nn.initializer.XavierUniform()(m.weight)
 
-            elif self.weight_init_style == 'pytorch':
+            elif self.weight_init_style == "pytorch":
                 paddle.nn.initializer.TruncatedNormal(std=0.02)(m.weight)
 
             if m.bias is not None:

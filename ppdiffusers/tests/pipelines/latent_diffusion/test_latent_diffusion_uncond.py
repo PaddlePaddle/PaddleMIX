@@ -17,8 +17,8 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel
+
 from ppdiffusers import DDIMScheduler, LDMPipeline, UNet2DModel, VQModel
 from ppdiffusers.utils.testing_utils import require_paddle, slow
 
@@ -75,21 +75,29 @@ class LDMPipelineFastTests(unittest.TestCase):
                     num_inference_steps=2,
                     output_type="numpy").images
         generator = paddle.Generator().manual_seed(0)
-        image_from_tuple = ldm(generator=generator,
-                               num_inference_steps=2,
-                               output_type="numpy",
-                               return_dict=False)[0]
+        image_from_tuple = ldm(
+            generator=generator,
+            num_inference_steps=2,
+            output_type="numpy",
+            return_dict=False, )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.827049, 1.0, 0.6244688, 0.7729403, 1.0, 0.73071766, 0.6108738,
-            0.9107263, 0.7249622
+            0.827049,
+            1.0,
+            0.6244688,
+            0.7729403,
+            1.0,
+            0.73071766,
+            0.6108738,
+            0.9107263,
+            0.7249622,
         ])
         tolerance = 0.01
         assert np.abs(image_slice.flatten() - expected_slice).max() < tolerance
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < tolerance
+        assert (np.abs(image_from_tuple_slice.flatten() - expected_slice).max()
+                < tolerance)
 
 
 @slow
@@ -105,8 +113,15 @@ class LDMPipelineIntegrationTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 256, 256, 3)
         expected_slice = np.array([
-            0.59802866, 0.61698544, 0.62753576, 0.6128236, 0.60961217, 0.617262,
-            0.6060791, 0.60261935, 0.6129079
+            0.59802866,
+            0.61698544,
+            0.62753576,
+            0.6128236,
+            0.60961217,
+            0.617262,
+            0.6060791,
+            0.60261935,
+            0.6129079,
         ])
         tolerance = 0.01
         assert np.abs(image_slice.flatten() - expected_slice).max() < tolerance

@@ -20,13 +20,13 @@ from typing import List, Optional, Union
 
 import numpy as np
 import paddle
+from paddlenlp.transformers.tokenizer_utils_base import (BatchEncoding,
+                                                         TensorType, TextInput)
 from PIL import Image
 
-from paddlenlp.transformers.tokenizer_utils_base import BatchEncoding, TensorType, TextInput
-
+from .base_processing import ProcessorMixin
 from .image_processing_utils import BatchFeature
 from .image_utils import ImageInput
-from .base_processing import ProcessorMixin
 
 __all__ = ["MiniGPT4Processor", ]
 
@@ -74,7 +74,8 @@ class MiniGPT4Processor(ProcessorMixin):
         tokenizer.pad_token = tokenizer.eos_token
         super().__init__(image_processor, tokenizer)
         self.current_processor = self.image_processor
-        self.default_prompt = "###Human: <Img><ImageHere></Img> <TextHere>###Assistant: "
+        self.default_prompt = (
+            "###Human: <Img><ImageHere></Img> <TextHere>###Assistant: ")
         self.image_tag = "<ImageHere>"
         self.text_tag = "<TextHere>"
 
@@ -111,8 +112,8 @@ class MiniGPT4Processor(ProcessorMixin):
             raise TypeError(
                 "Unsupported type for texts: {}, only str and list type supported.".
                 format(type(texts)))
-        if prompts is not None and (not isinstance(prompts, TextInput)) and (
-                not isinstance(prompts, list)):
+        if (prompts is not None and (not isinstance(prompts, TextInput)) and
+            (not isinstance(prompts, list))):
             raise TypeError(
                 "Unsupported type for prompts: {}, only str and list type supported.".
                 format(type(prompts)))
@@ -155,12 +156,12 @@ class MiniGPT4Processor(ProcessorMixin):
             text=first_texts,
             return_tensors=return_tensors,
             add_special_tokens=True,
-            **kwargs)
+            **kwargs, )
         second_text_encoding = self.tokenizer(
             text=second_texts,
             return_tensors=return_tensors,
             add_special_tokens=False,
-            **kwargs)
+            **kwargs, )
 
         encoded_texts = BatchEncoding({
             "first_input_ids": first_text_encoding["input_ids"],
@@ -188,8 +189,8 @@ class MiniGPT4Processor(ProcessorMixin):
             raise ValueError(
                 "Images and text are None, you have to specify either images or texts."
             )
-        if images is not None and not isinstance(images, (
-                Image.Image, np.ndarray, paddle.Tensor, list)):
+        if images is not None and not isinstance(
+                images, (Image.Image, np.ndarray, paddle.Tensor, list)):
             raise TypeError(
                 "A type in [Image.Image, np.ndarray, paddle.Tensor, list] for images is expected, but received {}.".
                 format(type(images)))

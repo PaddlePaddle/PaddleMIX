@@ -20,29 +20,24 @@ import numpy as np
 import paddle
 import PIL
 from packaging import version
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 from PIL import Image
 
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.models.cross_attention import CrossAttention
 from ppdiffusers.models.transformer_2d import Transformer2DModelOutput
-from ppdiffusers.models.unet_2d_blocks import (
-    ResnetBlock2D,
-    Transformer2DModel,
-    Upsample2D, )
+from ppdiffusers.models.unet_2d_blocks import (ResnetBlock2D,
+                                               Transformer2DModel, Upsample2D)
 from ppdiffusers.pipeline_utils import DiffusionPipeline
-from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker, )
+from ppdiffusers.pipelines.stable_diffusion import \
+    StableDiffusionPipelineOutput
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
+    StableDiffusionSafetyChecker
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
-from ppdiffusers.utils import (
-    PIL_INTERPOLATION,
-    check_min_version,
-    deprecate,
-    logging,
-    randn_tensor,
-    replace_example_docstring, )
+from ppdiffusers.utils import (PIL_INTERPOLATION, check_min_version, deprecate,
+                               logging, randn_tensor, replace_example_docstring)
 
 check_min_version("0.14.1")
 
@@ -98,11 +93,12 @@ def var_mean(x, axis=-1, keepdim=True, unbiased=True, correction=None):
     return var, mean
 
 
-def self_attn_forward(self,
-                      hidden_states,
-                      encoder_hidden_states=None,
-                      attention_mask=None,
-                      **cross_attention_kwargs):
+def self_attn_forward(
+        self,
+        hidden_states,
+        encoder_hidden_states=None,
+        attention_mask=None,
+        **cross_attention_kwargs, ):
     attn_output = None
 
     if getattr(self, "enable_attn", False):
@@ -198,8 +194,9 @@ def transformer_2d_model_forward(
                 y_c = y_uc.clone()
                 y_c[self.current_uc_indices] = latent_hidden_states[
                     self.current_uc_indices]
-                latent_hidden_states = self.current_style_fidelity * y_c + (
-                    1.0 - self.current_style_fidelity) * y_uc
+                latent_hidden_states = (
+                    self.current_style_fidelity * y_c +
+                    (1.0 - self.current_style_fidelity) * y_uc)
             else:
                 latent_hidden_states = y_uc
             output = paddle.concat([latent_hidden_states, image_hidden_states])
@@ -239,8 +236,9 @@ def resnet_block_2d_forward(self, input_tensor, temb):
                 y_c = y_uc.clone()
                 y_c[self.current_uc_indices] = latent_hidden_states[
                     self.current_uc_indices]
-                latent_hidden_states = self.current_style_fidelity * y_c + (
-                    1.0 - self.current_style_fidelity) * y_uc
+                latent_hidden_states = (
+                    self.current_style_fidelity * y_c +
+                    (1.0 - self.current_style_fidelity) * y_uc)
             else:
                 latent_hidden_states = y_uc
             output = paddle.concat([latent_hidden_states, image_hidden_states])
@@ -278,8 +276,9 @@ def upsample_2d_forward(self, hidden_states, output_size=None):
                 y_c = y_uc.clone()
                 y_c[self.current_uc_indices] = latent_hidden_states[
                     self.current_uc_indices]
-                latent_hidden_states = self.current_style_fidelity * y_c + (
-                    1.0 - self.current_style_fidelity) * y_uc
+                latent_hidden_states = (
+                    self.current_style_fidelity * y_c +
+                    (1.0 - self.current_style_fidelity) * y_uc)
             else:
                 latent_hidden_states = y_uc
             output = paddle.concat([latent_hidden_states, image_hidden_states])
@@ -466,8 +465,8 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             requires_safety_checker: bool=True, ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -484,8 +483,8 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if (hasattr(scheduler.config, "clip_sample") and
+                scheduler.config.clip_sample is True):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -522,8 +521,8 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             unet.config, "_ppdiffusers_version") and version.parse(
                 version.parse(unet.config._ppdiffusers_version)
                 .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = (hasattr(unet.config, "sample_size") and
+                                       unet.config.sample_size < 64)
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -743,8 +742,8 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -789,8 +788,8 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -906,17 +905,20 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
                     f" {negative_prompt_embeds.shape}.")
 
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -931,12 +933,13 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    def prepare_image_latents(self,
-                              image,
-                              batch_size,
-                              dtype,
-                              generator=None,
-                              do_classifier_free_guidance=False):
+    def prepare_image_latents(
+            self,
+            image,
+            batch_size,
+            dtype,
+            generator=None,
+            do_classifier_free_guidance=False, ):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
                 f"`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}"
@@ -1058,7 +1061,10 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             (nsfw) content, according to the `safety_checker`.
         """
         assert control_name in [
-            "none", "reference_only", "reference_adain", "reference_adain+attn"
+            "none",
+            "reference_only",
+            "reference_adain",
+            "reference_adain+attn",
         ]
         assert num_images_per_prompt == 1
         # 0. Default height and width to unet
@@ -1066,9 +1072,14 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
         width = width or self.unet.config.sample_size * self.vae_scale_factor
 
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, height, width, callback_steps,
-                          negative_prompt, prompt_embeds,
-                          negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            height,
+            width,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -1115,7 +1126,8 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
         # 7. reference_only
         enable_attn = ("only" in control_name or "attn" in control_name and
                        image is not None and attention_auto_machine_weight > 0)
-        enable_gn = "adain" in control_name and image is not None and gn_auto_machine_weight > 0
+        enable_gn = ("adain" in control_name and image is not None and
+                     gn_auto_machine_weight > 0)
         self.set_reference_only(
             attention_auto_machine_weight,
             gn_auto_machine_weight,
@@ -1137,8 +1149,8 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -1151,8 +1163,9 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                     chunk_num = 2 if do_classifier_free_guidance else 1
                     noise_pred = self.unet(
                         paddle.concat([
-                            latent_model_input, image_latent_model_input.cast(
-                                latent_model_input.dtype)
+                            latent_model_input,
+                            image_latent_model_input.cast(
+                                latent_model_input.dtype),
                         ]),
                         t,
                         encoder_hidden_states=prompt_embeds,
