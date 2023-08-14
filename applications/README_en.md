@@ -90,3 +90,11 @@ PaddleMIX provides [Appflow]() without training, and can directly input data to 
 >>> image_pil = Image.open("beauty.png").convert("RGB")
 >>> result = task(image=image_pil,prompt="women")
 ```
+
+Parameter Description
+| parameter | required| meaning                                                                                          |
+|-------|-------|---------------------------------------------------------------------------------------------|
+| --app | Yes| app name                                                                                   |
+| --models | Yes | model list,can be a single model or multiple combinations                               |
+| --static_mode  | Option | static graph inference, default : False                                          |
+| --precision | Option | when static_mode == True used，default: fp32, option trt_fp32、trt_fp16                                                                                    |
