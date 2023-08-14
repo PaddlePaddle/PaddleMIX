@@ -15,21 +15,17 @@
 import numpy as np
 from functools import partial
 from typing import Any, Dict, List, Tuple
-from paddleseg.utils import load_entire_model
 
 import paddle
 from paddle import nn
 from paddle.nn import functional as F
 
-from .image_encoder import ImageEncoderViT 
+from .image_encoder import ImageEncoderViT
 from .mask_decoder import MaskDecoder
 from .prompt_encoder import PromptEncoder
 from .transformer import TwoWayTransformer
 
-
-from .configuration import (
-    SamConfig,
-)
+from .configuration import (SamConfig, )
 
 from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
 
@@ -54,10 +50,10 @@ class SamPretrainedModel(PretrainedModel):
 class SamModel(SamPretrainedModel):
     mask_threshold: float = 0.0
     image_format: str = "RGB"
-    
+
     def __init__(self, config: SamConfig):
         super(SamModel, self).__init__(config)
-    
+
         prompt_embed_dim = config.prompt_embed_dim
         image_size = config.image_size
         vit_patch_size = config.vit_patch_size
@@ -110,20 +106,15 @@ class SamModel(SamPretrainedModel):
             return 'gpu'
         else:
             return 'cpu'
-    
+
     def reset_img(self):
         self.features = None
         self.set_image = False
-
-   
-
-
 
     def after_forward(self):
         masks = masks[0].detach().cpu().numpy()
         iou_predictions = iou_predictions[0].detach().cpu().numpy()
         low_res_masks = low_res_masks[0].detach().cpu().numpy()
-
 
     @paddle.no_grad()
     def prompt_forward_point(self, x=None, coords_paddle=None):
@@ -131,20 +122,18 @@ class SamModel(SamPretrainedModel):
         labels_paddle = paddle.to_tensor(labels_paddle).cast('int32')
         labels_paddle = labels_paddle[None, :]
         points = (coords_paddle, labels_paddle)
-  
+
         if self.set_image == False or x is not None:
             self.reset_img()
             self.features = self.image_encoder(x)  # [1, 3, 1024, 1024]
             self.set_image = True
-        
 
-        # Embed prompts
+# Embed prompts
 
         sparse_embeddings, dense_embeddings = self.prompt_encoder(
             points=points,
             boxes=None,
             masks=None, )
-    
 
         # Predict masks
         low_res_masks, iou_predictions = self.mask_decoder(
@@ -155,20 +144,20 @@ class SamModel(SamPretrainedModel):
             multimask_output=False)
 
         return low_res_masks
-    
+
     @paddle.no_grad()
     def prompt_forward_box(self, x=None, box_paddle=None):
         if self.set_image == False or x is not None:
             self.reset_img()
             self.features = self.image_encoder(x)
             self.set_image = True
-           
+
         # Embed prompts
         sparse_embeddings, dense_embeddings = self.prompt_encoder(
             points=None,
             boxes=box_paddle,
             masks=None, )
-      
+
         # Predict masks
         low_res_masks, iou_predictions = self.mask_decoder(
             image_embeddings=self.features,
@@ -176,7 +165,7 @@ class SamModel(SamPretrainedModel):
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
             multimask_output=False)
-     
+
         return low_res_masks  #, iou_predictions, low_res_masks   
 
     @paddle.no_grad()
@@ -184,7 +173,7 @@ class SamModel(SamPretrainedModel):
         labels_paddle = paddle.ones(
             shape=[coords_paddle.shape[0], ], dtype='int64')
         labels_paddle = paddle.to_tensor(labels_paddle).cast('int32')[:, None]
-       
+
         points = (coords_paddle, labels_paddle)
         if self.set_image == False:
             self.features = self.image_encoder(img)
@@ -220,5 +209,3 @@ class SamModel(SamPretrainedModel):
                 format(self.input_type))
 
         return masks
-
-

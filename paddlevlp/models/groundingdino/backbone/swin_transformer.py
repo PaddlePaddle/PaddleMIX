@@ -25,39 +25,37 @@ trunc_normal_ = nn.initializer.TruncatedNormal(std=0.02)
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
-
 """ swin_transformer model configuration"""
 __all__ = ["SwinTransformerConfig"]
 
 
 class SwinTransformerConfig(PretrainedConfig):
-  
+
     model_type = "swintransformer"
 
     def __init__(
-        self,
-        in_chans=3,
-        embed_dim=128, 
-        depths=[2, 2, 18, 2], 
-        num_heads=[4, 8, 16, 32], 
-        window_size=7,
-        pretrain_img_size=224,
-        patch_size=4,
-        mlp_ratio=4.0,
-        qkv_bias=True,
-        qk_scale=None,
-        drop_rate=0.0,
-        attn_drop_rate=0.0,
-        drop_path_rate=0.2,
-        norm_layer=nn.LayerNorm,
-        ape=False,
-        patch_norm=True,
-        out_indices=(0, 1, 2, 3),
-        frozen_stages=-1,
-        dilation=False,
-        use_checkpoint=False,
-        **kwargs,
-    ):
+            self,
+            in_chans=3,
+            embed_dim=128,
+            depths=[2, 2, 18, 2],
+            num_heads=[4, 8, 16, 32],
+            window_size=7,
+            pretrain_img_size=224,
+            patch_size=4,
+            mlp_ratio=4.0,
+            qkv_bias=True,
+            qk_scale=None,
+            drop_rate=0.0,
+            attn_drop_rate=0.0,
+            drop_path_rate=0.2,
+            norm_layer=nn.LayerNorm,
+            ape=False,
+            patch_norm=True,
+            out_indices=(0, 1, 2, 3),
+            frozen_stages=-1,
+            dilation=False,
+            use_checkpoint=False,
+            **kwargs, ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
@@ -82,26 +80,22 @@ class SwinTransformerConfig(PretrainedConfig):
         self.dilation = dilation
         self.use_checkpoint = use_checkpoint
 
-
     @classmethod
-    def from_pretrained(
-        cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs
-    ) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(
-            pretrained_model_name_or_path, **kwargs
-        )
+    def from_pretrained(cls,
+                        pretrained_model_name_or_path: Union[str, os.PathLike],
+                        **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
+                                                  **kwargs)
 
-        if (
-            "model_type" in config_dict
-            and hasattr(cls, "model_type")
-            and config_dict["model_type"] != cls.model_type
-        ):
+        if ("model_type" in config_dict and hasattr(cls, "model_type") and
+                config_dict["model_type"] != cls.model_type):
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
             )
 
         return cls.from_dict(config_dict, **kwargs)
+
 
 class SwinTransformerPretrainedModel(PretrainedModel):
     """
@@ -113,12 +107,16 @@ class SwinTransformerPretrainedModel(PretrainedModel):
     resource_files_names = {"model_state": "model_state.pdparams"}
     base_model_prefix = "swintransformer"
 
+
 class Mlp(nn.Layer):
     """Multilayer perceptron."""
 
-    def __init__(
-        self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.0
-    ):
+    def __init__(self,
+                 in_features,
+                 hidden_features=None,
+                 out_features=None,
+                 act_layer=nn.GELU,
+                 drop=0.0):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -145,8 +143,10 @@ def window_partition(x, window_size):
         windows: (num_windows*B, window_size, window_size, C)
     """
     B, H, W, C = x.shape
-    x = x.reshape([B, H // window_size, window_size, W // window_size, window_size, C])
-    windows = x.transpose([0, 1, 3, 2, 4, 5]).reshape([-1, window_size, window_size, C])
+    x = x.reshape(
+        [B, H // window_size, window_size, W // window_size, window_size, C])
+    windows = x.transpose([0, 1, 3, 2, 4, 5]).reshape(
+        [-1, window_size, window_size, C])
     return windows
 
 
@@ -161,7 +161,8 @@ def window_reverse(windows, window_size, H, W):
         x: (B, H, W, C)
     """
     B = int(windows.shape[0] / (H * W / window_size / window_size))
-    x = windows.reshape([B, H // window_size, W // window_size, window_size, window_size, -1])
+    x = windows.reshape(
+        [B, H // window_size, W // window_size, window_size, window_size, -1])
     x = x.transpose([0, 1, 3, 2, 4, 5]).reshape([B, H, W, -1])
     return x
 
@@ -180,15 +181,14 @@ class WindowAttention(nn.Layer):
     """
 
     def __init__(
-        self,
-        dim,
-        window_size,
-        num_heads,
-        qkv_bias=True,
-        qk_scale=None,
-        attn_drop=0.0,
-        proj_drop=0.0,
-    ):
+            self,
+            dim,
+            window_size,
+            num_heads,
+            qkv_bias=True,
+            qk_scale=None,
+            attn_drop=0.0,
+            proj_drop=0.0, ):
 
         super().__init__()
         self.dim = dim
@@ -199,19 +199,24 @@ class WindowAttention(nn.Layer):
 
         # define a parameter table of relative position bias
         self.relative_position_bias_table = self.create_parameter(
-            shape=[(2 * window_size[0] - 1) * (2 * window_size[1] - 1), num_heads],
+            shape=[(2 * window_size[0] - 1) * (2 * window_size[1] - 1),
+                   num_heads],
             dtype=paddle.float32,
-            default_initializer=Constant(0.)
-        )  # 2*Wh-1 * 2*Ww-1, nH
+            default_initializer=Constant(0.))  # 2*Wh-1 * 2*Ww-1, nH
 
         # get pair-wise relative position index for each token inside the window
         coords_h = paddle.arange(self.window_size[0])
         coords_w = paddle.arange(self.window_size[1])
-        coords = paddle.stack(paddle.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
+        coords = paddle.stack(paddle.meshgrid(
+            [coords_h, coords_w]))  # 2, Wh, Ww
         coords_flatten = paddle.flatten(coords, 1)  # 2, Wh*Ww
-        relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
-        relative_coords = relative_coords.transpose([1, 2, 0])  # Wh*Ww, Wh*Ww, 2
-        relative_coords[:, :, 0] += self.window_size[0] - 1  # shift to start from 0
+        relative_coords = coords_flatten[:, :,
+                                         None] - coords_flatten[:,
+                                                                None, :]  # 2, Wh*Ww, Wh*Ww
+        relative_coords = relative_coords.transpose(
+            [1, 2, 0])  # Wh*Ww, Wh*Ww, 2
+        relative_coords[:, :, 0] += self.window_size[
+            0] - 1  # shift to start from 0
         relative_coords[:, :, 1] += self.window_size[1] - 1
         relative_coords[:, :, 0] *= 2 * self.window_size[1] - 1
         self.relative_position_index = relative_coords.sum(-1)  # Wh*Ww, Wh*Ww
@@ -231,20 +236,19 @@ class WindowAttention(nn.Layer):
             mask: (0/-inf) mask with shape of (num_windows, Wh*Ww, Wh*Ww) or None
         """
         B_, N, C = x.shape
-        qkv = (
-            self.qkv(x)
-            .reshape([B_, N, 3, self.num_heads, C // self.num_heads])
-            .transpose([2, 0, 3, 1, 4])
-        )
-        q, k, v = qkv[0], qkv[1], qkv[2]  # make torchscript happy (cannot use tensor as tuple)
+        qkv = (self.qkv(x)
+               .reshape([B_, N, 3, self.num_heads, C // self.num_heads])
+               .transpose([2, 0, 3, 1, 4]))
+        q, k, v = qkv[0], qkv[1], qkv[
+            2]  # make torchscript happy (cannot use tensor as tuple)
 
         q = q * self.scale
         attn = paddle.mm(q, k.transpose([0, 1, 3, 2]))
         index = self.relative_position_index.flatten()
-      
+
         relative_position_bias = paddle.index_select(
             self.relative_position_bias_table, index)
-        
+
         relative_position_bias = relative_position_bias.reshape([
             self.window_size[0] * self.window_size[1],
             self.window_size[0] * self.window_size[1], -1
@@ -255,7 +259,8 @@ class WindowAttention(nn.Layer):
 
         if mask is not None:
             nW = mask.shape[0]
-            attn = attn.reshape([-1, nW, self.num_heads, N, N]) + mask.unsqueeze(1).unsqueeze(0)
+            attn = attn.reshape(
+                [-1, nW, self.num_heads, N, N]) + mask.unsqueeze(1).unsqueeze(0)
             attn = attn.reshape([-1, self.num_heads, N, N])
             attn = self.softmax(attn)
         else:
@@ -287,20 +292,19 @@ class SwinTransformerBlock(nn.Layer):
     """
 
     def __init__(
-        self,
-        dim,
-        num_heads,
-        window_size=7,
-        shift_size=0,
-        mlp_ratio=4.0,
-        qkv_bias=True,
-        qk_scale=None,
-        drop=0.0,
-        attn_drop=0.0,
-        drop_path=0.0,
-        act_layer=nn.GELU,
-        norm_layer=nn.LayerNorm,
-    ):
+            self,
+            dim,
+            num_heads,
+            window_size=7,
+            shift_size=0,
+            mlp_ratio=4.0,
+            qkv_bias=True,
+            qk_scale=None,
+            drop=0.0,
+            attn_drop=0.0,
+            drop_path=0.0,
+            act_layer=nn.GELU,
+            norm_layer=nn.LayerNorm, ):
         super().__init__()
         self.dim = dim
         self.num_heads = num_heads
@@ -317,15 +321,16 @@ class SwinTransformerBlock(nn.Layer):
             qkv_bias=qkv_bias,
             qk_scale=qk_scale,
             attn_drop=attn_drop,
-            proj_drop=drop,
-        )
+            proj_drop=drop, )
 
-        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
+        self.drop_path = DropPath(
+            drop_path) if drop_path > 0.0 else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(
-            in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop
-        )
+        self.mlp = Mlp(in_features=dim,
+                       hidden_features=mlp_hidden_dim,
+                       act_layer=act_layer,
+                       drop=drop)
 
         self.H = None
         self.W = None
@@ -344,19 +349,20 @@ class SwinTransformerBlock(nn.Layer):
         shortcut = x
         x = self.norm1(x)
         x = x.reshape([B, H, W, C])
-   
+
         # pad feature maps to multiples of window size
         pad_r = (self.window_size - W % self.window_size) % self.window_size
         pad_b = (self.window_size - H % self.window_size) % self.window_size
-        pad_list = paddle.zeros([4],dtype="int32")
+        pad_list = paddle.zeros([4], dtype="int32")
         pad_list[1] = pad_r
         pad_list[3] = pad_b
-        x = F.pad(x,pad_list,data_format='NHWC')
+        x = F.pad(x, pad_list, data_format='NHWC')
         _, Hp, Wp, _ = x.shape
 
         # cyclic shift
         if self.shift_size > 0:
-            shifted_x = paddle.roll(x, shifts=(-self.shift_size, -self.shift_size), axis=(1, 2))
+            shifted_x = paddle.roll(
+                x, shifts=(-self.shift_size, -self.shift_size), axis=(1, 2))
             attn_mask = mask_matrix
         else:
             shifted_x = x
@@ -364,27 +370,31 @@ class SwinTransformerBlock(nn.Layer):
 
         # partition windows
         x_windows = window_partition(
-            shifted_x, self.window_size
-        )  # nW*B, window_size, window_size, C
+            shifted_x, self.window_size)  # nW*B, window_size, window_size, C
         x_windows = x_windows.reshape(
-            [-1, self.window_size * self.window_size, C]
-        )  # nW*B, window_size*window_size, C
+            [-1, self.window_size * self.window_size,
+             C])  # nW*B, window_size*window_size, C
 
         # W-MSA/SW-MSA
-        attn_windows = self.attn(x_windows, mask=attn_mask)  # nW*B, window_size*window_size, C
+        attn_windows = self.attn(
+            x_windows, mask=attn_mask)  # nW*B, window_size*window_size, C
 
         # merge windows
-        attn_windows = attn_windows.reshape([-1, self.window_size, self.window_size, C])
-        shifted_x = window_reverse(attn_windows, self.window_size, Hp, Wp)  # B H' W' C
+        attn_windows = attn_windows.reshape(
+            [-1, self.window_size, self.window_size, C])
+        shifted_x = window_reverse(attn_windows, self.window_size, Hp,
+                                   Wp)  # B H' W' C
 
         # reverse cyclic shift
         if self.shift_size > 0:
-            x = paddle.roll(shifted_x, shifts=(self.shift_size, self.shift_size), axis=(1, 2))
+            x = paddle.roll(
+                shifted_x,
+                shifts=(self.shift_size, self.shift_size),
+                axis=(1, 2))
         else:
             x = shifted_x
 
-        if pad_r > 0 or pad_b > 0:
-            x = x[:, :H, :W, :]
+        x = x[:, :H, :W, :]
 
         x = x.reshape([B, H * W, C])
 
@@ -420,21 +430,17 @@ class PatchMerging(nn.Layer):
         x = x.reshape([B, H, W, C])
 
         # padding
-        pad_input = (H % 2 == 1) or (W % 2 == 1)
-        if pad_input:
-            pad_list = paddle.zeros([4],dtype="int32")
-            pad_list[3] = H % 2
-            pad_list[1] = W % 2
-            x = F.pad(x, pad_list, data_format='NHWC')
+        pad_list = paddle.zeros([4], dtype="int32")
+        pad_list[3] = H % 2
+        pad_list[1] = W % 2
+        x = F.pad(x, pad_list, data_format='NHWC')
 
-         
         x0 = x[:, 0::2, 0::2, :]  # B H/2 W/2 C
         x1 = x[:, 1::2, 0::2, :]  # B H/2 W/2 C
         x2 = x[:, 0::2, 1::2, :]  # B H/2 W/2 C
         x3 = x[:, 1::2, 1::2, :]  # B H/2 W/2 C
         x = paddle.concat([x0, x1, x2, x3], -1)  # B H/2 W/2 4*C
         x = x.reshape([B, -1, 4 * C])  # B H/2*W/2 4*C
-
 
         x = self.norm(x)
         x = self.reduction(x)
@@ -461,21 +467,20 @@ class BasicLayer(nn.Layer):
     """
 
     def __init__(
-        self,
-        dim,
-        depth,
-        num_heads,
-        window_size=7,
-        mlp_ratio=4.0,
-        qkv_bias=True,
-        qk_scale=None,
-        drop=0.0,
-        attn_drop=0.0,
-        drop_path=0.0,
-        norm_layer=nn.LayerNorm,
-        downsample=None,
-        use_checkpoint=False,
-    ):
+            self,
+            dim,
+            depth,
+            num_heads,
+            window_size=7,
+            mlp_ratio=4.0,
+            qkv_bias=True,
+            qk_scale=None,
+            drop=0.0,
+            attn_drop=0.0,
+            drop_path=0.0,
+            norm_layer=nn.LayerNorm,
+            downsample=None,
+            use_checkpoint=False, ):
         super().__init__()
         self.window_size = window_size
         self.shift_size = window_size // 2
@@ -483,24 +488,21 @@ class BasicLayer(nn.Layer):
         self.use_checkpoint = use_checkpoint
 
         # build blocks
-        self.blocks = nn.LayerList(
-            [
-                SwinTransformerBlock(
-                    dim=dim,
-                    num_heads=num_heads,
-                    window_size=window_size,
-                    shift_size=0 if (i % 2 == 0) else window_size // 2,
-                    mlp_ratio=mlp_ratio,
-                    qkv_bias=qkv_bias,
-                    qk_scale=qk_scale,
-                    drop=drop,
-                    attn_drop=attn_drop,
-                    drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                    norm_layer=norm_layer,
-                )
-                for i in range(depth)
-            ]
-        )
+        self.blocks = nn.LayerList([
+            SwinTransformerBlock(
+                dim=dim,
+                num_heads=num_heads,
+                window_size=window_size,
+                shift_size=0 if (i % 2 == 0) else window_size // 2,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                qk_scale=qk_scale,
+                drop=drop,
+                attn_drop=attn_drop,
+                drop_path=drop_path[i]
+                if isinstance(drop_path, list) else drop_path,
+                norm_layer=norm_layer, ) for i in range(depth)
+        ])
 
         # patch merging layer
         if downsample is not None:
@@ -514,21 +516,20 @@ class BasicLayer(nn.Layer):
             x: Input feature, tensor size (B, H*W, C).
             H, W: Spatial resolution of the input feature.
         """
-        
+
         # calculate attention mask for SW-MSA
-        Hp = paddle.ceil(paddle.to_tensor(H / self.window_size)).astype("int32") * self.window_size
-        Wp = paddle.ceil(paddle.to_tensor(W / self.window_size)).astype("int32") * self.window_size
-        img_mask = paddle.zeros((1,Hp,Wp,1), dtype=paddle.float32)  # 1 Hp Wp 1
+        Hp = (H + self.window_size - 1) // self.window_size * self.window_size
+        Wp = (W + self.window_size - 1) // self.window_size * self.window_size
+        img_mask = paddle.zeros(
+            (1, Hp, Wp, 1), dtype=paddle.float32)  # 1 Hp Wp 1
         h_slices = (
             slice(0, -self.window_size),
             slice(-self.window_size, -self.shift_size),
-            slice(-self.shift_size, None),
-        )
+            slice(-self.shift_size, None), )
         w_slices = (
             slice(0, -self.window_size),
             slice(-self.window_size, -self.shift_size),
-            slice(-self.shift_size, None),
-        )
+            slice(-self.shift_size, None), )
         cnt = 0
         for h in h_slices:
             for w in w_slices:
@@ -536,11 +537,12 @@ class BasicLayer(nn.Layer):
                 cnt += 1
 
         mask_windows = window_partition(
-            img_mask, self.window_size
-        )  # nW, window_size, window_size, 1
-        mask_windows = mask_windows.reshape([-1, self.window_size * self.window_size])
+            img_mask, self.window_size)  # nW, window_size, window_size, 1
+        mask_windows = mask_windows.reshape(
+            [-1, self.window_size * self.window_size])
         attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
-        attn_mask = -100.0 * paddle.ones_like(attn_mask) * (attn_mask != 0).astype(paddle.float32)
+        attn_mask = -100.0 * paddle.ones_like(attn_mask) * (
+            attn_mask != 0).astype(paddle.float32)
 
         for blk in self.blocks:
             blk.H, blk.W = H, W
@@ -573,7 +575,8 @@ class PatchEmbed(nn.Layer):
         self.in_chans = in_chans
         self.embed_dim = embed_dim
 
-        self.proj = nn.Conv2D(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv2D(
+            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
@@ -583,15 +586,11 @@ class PatchEmbed(nn.Layer):
         """Forward function."""
         # padding
         _, _, H, W = x.shape
-        if W % self.patch_size[1] != 0:
-            pad_list = paddle.zeros([4],dtype="int32")
-            pad_list[1] = self.patch_size[1] - W % self.patch_size[1]
-            x = F.pad(x, pad_list)
-        if H % self.patch_size[0] != 0:
-            pad_list = paddle.zeros([4],dtype="int32")
-            pad_list[3] = self.patch_size[0] - H % self.patch_size[0]
-            x = F.pad(x, pad_list)
-        
+        pad_list = paddle.zeros([4], dtype="int32")
+        pad_list[1] = self.patch_size[1] - W % self.patch_size[1]
+        pad_list[3] = self.patch_size[0] - H % self.patch_size[0]
+        x = F.pad(x, pad_list)
+
         x = self.proj(x)  # B C Wh Ww
         if self.norm is not None:
             Wh, Ww = x.shape[2:]
@@ -601,6 +600,7 @@ class PatchEmbed(nn.Layer):
 
         return x
 
+
 @register_base_model
 class SwinTransformerModel(SwinTransformerPretrainedModel):
     """Swin Transformer backbone.
@@ -608,16 +608,16 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
           https://arxiv.org/pdf/2103.14030
     """
 
-    def __init__(self,config: SwinTransformerConfig):
-        super(SwinTransformerModel,self).__init__(config)
-      
+    def __init__(self, config: SwinTransformerConfig):
+        super(SwinTransformerModel, self).__init__(config)
+
         self.pretrain_img_size = config.pretrain_img_size
         self.num_layers = len(config.depths)
         self.in_chans = config.in_chans
         self.embed_dim = config.embed_dim
         self.ape = config.ape
         self.patch_norm = config.patch_norm
-        self.norm_layer = nn.LayerNorm 
+        self.norm_layer = nn.LayerNorm
         self.out_indices = config.out_indices
         self.frozen_stages = config.frozen_stages
         self.dilation = config.dilation
@@ -630,8 +630,7 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
             patch_size=self.patch_size,
             in_chans=self.in_chans,
             embed_dim=self.embed_dim,
-            norm_layer=self.norm_layer if self.patch_norm else None,
-        )
+            norm_layer=self.norm_layer if self.patch_norm else None, )
 
         # absolute position embedding
         if self.ape:
@@ -642,17 +641,20 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
             ]
 
             self.absolute_pos_embed = self.create_parameter(
-                shape=[1, self.embed_dim, patches_resolution[0], patches_resolution[1]],
+                shape=[
+                    1, self.embed_dim, patches_resolution[0],
+                    patches_resolution[1]
+                ],
                 dtype=paddle.float32,
-                default_initializer=Constant(0.)
-            )
+                default_initializer=Constant(0.))
             trunc_normal_(self.absolute_pos_embed)
 
         self.pos_drop = nn.Dropout(p=config.drop_rate)
 
         # stochastic depth
         dpr = [
-            x.item() for x in paddle.linspace(0, config.drop_path_rate, sum(config.depths))
+            x.item() for x in
+            paddle.linspace(0, config.drop_path_rate, sum(config.depths))
         ]  # stochastic depth decay rule
 
         # build layers
@@ -660,10 +662,13 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
         # prepare downsample list
         downsamplelist = [PatchMerging for i in range(self.num_layers)]
         downsamplelist[-1] = None
-        num_features = [int(self.embed_dim * 2**i) for i in range(self.num_layers)]
+        num_features = [
+            int(self.embed_dim * 2**i) for i in range(self.num_layers)
+        ]
         if self.dilation:
             downsamplelist[-2] = None
-            num_features[-1] = int(self.embed_dim * 2 ** (self.num_layers - 1)) // 2
+            num_features[-1] = int(self.embed_dim * 2
+                                   **(self.num_layers - 1)) // 2
         for i_layer in range(self.num_layers):
             layer = BasicLayer(
                 dim=num_features[i_layer],
@@ -675,11 +680,11 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
                 qk_scale=config.qk_scale,
                 drop=config.drop_rate,
                 attn_drop=config.attn_drop_rate,
-                drop_path=dpr[sum(config.depths[:i_layer]) : sum(config.depths[: i_layer + 1])],
+                drop_path=dpr[sum(config.depths[:i_layer]):sum(
+                    config.depths[:i_layer + 1])],
                 norm_layer=self.norm_layer,
                 downsample=downsamplelist[i_layer],
-                use_checkpoint=config.use_checkpoint,
-            )
+                use_checkpoint=config.use_checkpoint, )
             self.layers.append(layer)
 
         self.num_features = num_features
@@ -709,7 +714,6 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
                 for param in m.parameters():
                     param.stop_gradient = True
 
-
     def forward_raw(self, x):
         """Forward function."""
         x = self.patch_embed(x)
@@ -718,9 +722,9 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
         if self.ape:
             # interpolate the position embedding to the corresponding size
             absolute_pos_embed = F.interpolate(
-                self.absolute_pos_embed, size=(Wh, Ww), mode="bicubic"
-            )
-            x = (x + absolute_pos_embed).flatten(2).transpose([0, 2, 1])  # B Wh*Ww C
+                self.absolute_pos_embed, size=(Wh, Ww), mode="bicubic")
+            x = (x + absolute_pos_embed).flatten(2).transpose(
+                [0, 2, 1])  # B Wh*Ww C
         else:
             x = x.flatten(2).transpose([0, 2, 1])
         x = self.pos_drop(x)
@@ -729,13 +733,13 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
         for i in range(self.num_layers):
             layer = self.layers[i]
             x_out, H, W, x, Wh, Ww = layer(x, Wh, Ww)
-     
 
             if i in self.out_indices:
                 norm_layer = getattr(self, f"norm{i}")
                 x_out = norm_layer(x_out)
 
-                out = x_out.reshape((-1, H, W, self.num_features[i])).transpose((0, 3, 1, 2))
+                out = x_out.reshape((-1, H, W, self.num_features[i])).transpose(
+                    (0, 3, 1, 2))
                 outs.append(out)
         # in:
         #   torch.Size([2, 3, 1024, 1024])
@@ -744,8 +748,7 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
         #       torch.Size([2, 768, 64, 64]), torch.Size([2, 1536, 32, 32])]
         return tuple(outs)
 
-    def forward_with_mask(self, x:paddle.Tensor, m:paddle.Tensor):
-
+    def forward_with_mask(self, x: paddle.Tensor, m: paddle.Tensor):
         """Forward function."""
         x = self.patch_embed(x)
 
@@ -753,9 +756,9 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
         if self.ape:
             # interpolate the position embedding to the corresponding size
             absolute_pos_embed = F.interpolate(
-                self.absolute_pos_embed, size=(Wh, Ww), mode="bicubic"
-            )
-            x = (x + absolute_pos_embed).flatten(2).transpose([0, 2, 1])  # B Wh*Ww C
+                self.absolute_pos_embed, size=(Wh, Ww), mode="bicubic")
+            x = (x + absolute_pos_embed).flatten(2).transpose(
+                [0, 2, 1])  # B Wh*Ww C
         else:
             x = x.flatten(2).transpose([0, 2, 1])
         x = self.pos_drop(x)
@@ -769,23 +772,24 @@ class SwinTransformerModel(SwinTransformerPretrainedModel):
                 norm_layer = getattr(self, f"norm{i}")
                 x_out = norm_layer(x_out)
 
-                out = x_out.reshape((-1, H, W, self.num_features[i])).transpose((0, 3, 1, 2))
+                out = x_out.reshape((-1, H, W, self.num_features[i])).transpose(
+                    (0, 3, 1, 2))
                 outs.append(out)
 
         feat_dict = []
         mask_dict = []
         for idx, out_i in enumerate(outs):
             assert m is not None
-            mask = F.interpolate(m[None].cast(paddle.float32), size=out_i.shape[-2:]).cast(paddle.bool)[0]
+            mask = F.interpolate(
+                m[None].cast(paddle.float32),
+                size=out_i.shape[-2:]).cast(paddle.bool)[0]
             feat_dict.append(out_i)
             mask_dict.append(mask)
 
-        return feat_dict,mask_dict
-    
-    def forward(self, x:paddle.Tensor, m=None):
+        return feat_dict, mask_dict
+
+    def forward(self, x: paddle.Tensor, m=None):
         if m is not None:
-            return self.forward_with_mask(x,m)
+            return self.forward_with_mask(x, m)
         else:
             return self.forward_raw(x)
-
- 

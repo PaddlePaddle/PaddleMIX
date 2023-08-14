@@ -21,7 +21,7 @@ import paddle.nn.functional as F
 from paddle.distributed.fleet.utils import recompute
 
 from .utils import inverse_sigmoid
-from paddlenlp.utils.initializer import constant_,xavier_uniform_,normal_
+from paddlenlp.utils.initializer import constant_, xavier_uniform_, normal_
 from .layers import MultiHeadAttention
 
 from .fuse_modules import BiAttentionBlock
@@ -33,45 +33,43 @@ from .utils import (
     _get_clones,
     gen_encoder_output_proposals,
     gen_sineembed_for_position,
-    get_sine_pos_embed,
-)
+    get_sine_pos_embed, )
 
 
 class Transformer(nn.Layer):
     def __init__(
-        self,
-        d_model=256,
-        nhead=8,
-        num_queries=300,
-        num_encoder_layers=6,
-        num_unicoder_layers=0,
-        num_decoder_layers=6,
-        dim_feedforward=2048,
-        dropout=0.0,
-        activation="relu",
-        normalize_before=False,
-        return_intermediate_dec=False,
-        query_dim=4,
-        num_patterns=0,
-        # for deformable encoder
-        num_feature_levels=1,
-        enc_n_points=4,
-        dec_n_points=4,
-        # init query
-        learnable_tgt_init=False,
-        # two stage
-        two_stage_type="no",  
-        embed_init_tgt=False,
-        # for text
-        use_text_enhancer=False,
-        use_fusion_layer=False,
-        use_checkpoint=False,
-        use_transformer_ckpt=False,
-        use_text_cross_attention=False,
-        text_dropout=0.1,
-        fusion_dropout=0.1,
-        fusion_droppath=0.0,
-    ):
+            self,
+            d_model=256,
+            nhead=8,
+            num_queries=300,
+            num_encoder_layers=6,
+            num_unicoder_layers=0,
+            num_decoder_layers=6,
+            dim_feedforward=2048,
+            dropout=0.0,
+            activation="relu",
+            normalize_before=False,
+            return_intermediate_dec=False,
+            query_dim=4,
+            num_patterns=0,
+            # for deformable encoder
+            num_feature_levels=1,
+            enc_n_points=4,
+            dec_n_points=4,
+            # init query
+            learnable_tgt_init=False,
+            # two stage
+            two_stage_type="no",
+            embed_init_tgt=False,
+            # for text
+            use_text_enhancer=False,
+            use_fusion_layer=False,
+            use_checkpoint=False,
+            use_transformer_ckpt=False,
+            use_text_cross_attention=False,
+            text_dropout=0.1,
+            fusion_dropout=0.1,
+            fusion_droppath=0.0, ):
         super().__init__()
         self.num_feature_levels = num_feature_levels
         self.num_encoder_layers = num_encoder_layers
@@ -82,16 +80,15 @@ class Transformer(nn.Layer):
 
         # choose encoder layer type
         encoder_layer = DeformableTransformerEncoderLayer(
-            d_model, dim_feedforward, dropout, activation, num_feature_levels, nhead, enc_n_points
-        )
+            d_model, dim_feedforward, dropout, activation, num_feature_levels,
+            nhead, enc_n_points)
 
         if use_text_enhancer:
             text_enhance_layer = TransformerEncoderLayer(
                 d_model=d_model,
                 nhead=nhead // 2,
                 dim_feedforward=dim_feedforward // 2,
-                dropout=text_dropout,
-            )
+                dropout=text_dropout, )
         else:
             text_enhance_layer = None
 
@@ -102,8 +99,7 @@ class Transformer(nn.Layer):
                 embed_dim=dim_feedforward // 2,
                 num_heads=nhead // 2,
                 dropout=fusion_dropout,
-                drop_path=fusion_droppath,
-            )
+                drop_path=fusion_droppath, )
         else:
             feature_fusion_layer = None
 
@@ -117,8 +113,7 @@ class Transformer(nn.Layer):
             text_enhance_layer=text_enhance_layer,
             feature_fusion_layer=feature_fusion_layer,
             use_checkpoint=use_checkpoint,
-            use_transformer_ckpt=use_transformer_ckpt,
-        )
+            use_transformer_ckpt=use_transformer_ckpt, )
 
         # choose decoder layer type
         decoder_layer = DeformableTransformerDecoderLayer(
@@ -129,8 +124,7 @@ class Transformer(nn.Layer):
             num_feature_levels,
             nhead,
             dec_n_points,
-            use_text_cross_attention=use_text_cross_attention,
-        )
+            use_text_cross_attention=use_text_cross_attention, )
 
         decoder_norm = nn.LayerNorm(d_model)
         self.decoder = TransformerDecoder(
@@ -140,8 +134,7 @@ class Transformer(nn.Layer):
             return_intermediate=return_intermediate_dec,
             d_model=d_model,
             query_dim=query_dim,
-            num_feature_levels=num_feature_levels,
-        )
+            num_feature_levels=num_feature_levels, )
 
         self.d_model = d_model
         self.nhead = nhead
@@ -149,19 +142,22 @@ class Transformer(nn.Layer):
         self.num_queries = num_queries  # useful for single stage model only
         self.num_patterns = num_patterns
         if not isinstance(num_patterns, int):
-            Warning("num_patterns should be int but {}".format(type(num_patterns)))
+            Warning("num_patterns should be int but {}".format(
+                type(num_patterns)))
             self.num_patterns = 0
 
         if num_feature_levels > 1:
             if self.num_encoder_layers > 0:
-                self.level_embed = self.create_parameter(shape=[num_feature_levels, d_model])
+                self.level_embed = self.create_parameter(
+                    shape=[num_feature_levels, d_model])
             else:
                 self.level_embed = None
 
         self.learnable_tgt_init = learnable_tgt_init
         assert learnable_tgt_init, "why not learnable_tgt_init"
         self.embed_init_tgt = embed_init_tgt
-        if (two_stage_type != "no" and embed_init_tgt) or (two_stage_type == "no"):
+        if (two_stage_type != "no" and embed_init_tgt) or (
+                two_stage_type == "no"):
             self.tgt_embed = nn.Embedding(self.num_queries, d_model)
             normal_(self.tgt_embed.weight)
         else:
@@ -169,9 +165,9 @@ class Transformer(nn.Layer):
 
         # for two stage
         self.two_stage_type = two_stage_type
-        assert two_stage_type in ["no", "standard"], "unknown param {} of two_stage_type".format(
-            two_stage_type
-        )
+        assert two_stage_type in [
+            "no", "standard"
+        ], "unknown param {} of two_stage_type".format(two_stage_type)
         if two_stage_type == "standard":
             # anchor selection at the output of encoder
             self.enc_output = nn.Linear(d_model, d_model)
@@ -208,7 +204,14 @@ class Transformer(nn.Layer):
     def init_ref_points(self, use_num_queries):
         self.refpoint_embed = nn.Embedding(use_num_queries, 4)
 
-    def forward(self, srcs, masks, refpoint_embed, pos_embeds, tgt, attn_mask=None, text_dict=None):
+    def forward(self,
+                srcs,
+                masks,
+                refpoint_embed,
+                pos_embeds,
+                tgt,
+                attn_mask=None,
+                text_dict=None):
         """
         Input:
             - srcs: List of multi features [bs, ci, hi, wi]
@@ -223,15 +226,18 @@ class Transformer(nn.Layer):
         mask_flatten = []
         lvl_pos_embed_flatten = []
         spatial_shapes = []
-        for lvl, (src, mask, pos_embed) in enumerate(zip(srcs, masks, pos_embeds)):
+        for lvl, (src, mask,
+                  pos_embed) in enumerate(zip(srcs, masks, pos_embeds)):
             bs, c, h, w = src.shape
             spatial_shapes.append(paddle.to_tensor([h, w]))
 
             src = src.flatten(2).transpose([0, 2, 1])  # bs, hw, c
-            mask = mask.cast(paddle.float32).flatten(1).cast(paddle.bool)  # bs, hw
+            mask = mask.cast(paddle.float32).flatten(1).cast(
+                paddle.bool)  # bs, hw
             pos_embed = pos_embed.flatten(2).transpose([0, 2, 1])  # bs, hw, c
             if self.num_feature_levels > 1 and self.level_embed is not None:
-                lvl_pos_embed = pos_embed + self.level_embed[lvl].reshape([1, 1, -1])
+                lvl_pos_embed = pos_embed + self.level_embed[lvl].reshape(
+                    [1, 1, -1])
             else:
                 lvl_pos_embed = pos_embed
             lvl_pos_embed_flatten.append(lvl_pos_embed)
@@ -239,16 +245,17 @@ class Transformer(nn.Layer):
             mask_flatten.append(mask)
         src_flatten = paddle.concat(src_flatten, 1)  # bs, \sum{hxw}, c
         mask_flatten = paddle.concat(mask_flatten, 1)  # bs, \sum{hxw}
-        lvl_pos_embed_flatten = paddle.concat(lvl_pos_embed_flatten, 1)  # bs, \sum{hxw}, c
-        
+        lvl_pos_embed_flatten = paddle.concat(lvl_pos_embed_flatten,
+                                              1)  # bs, \sum{hxw}, c
+
         spatial_shapes = paddle.to_tensor(
-            paddle.stack(spatial_shapes), dtype=paddle.int32
-        )
-        
-        level_start_index = paddle.concat(
-            (paddle.zeros([1], dtype=spatial_shapes.dtype), spatial_shapes.prod(1).cumsum(0)[:-1]))
+            paddle.stack(spatial_shapes), dtype=paddle.int32)
+
+        level_start_index = paddle.concat((paddle.zeros(
+            [1],
+            dtype=spatial_shapes.dtype), spatial_shapes.prod(1).cumsum(0)[:-1]))
         valid_ratios = paddle.stack([self.get_valid_ratio(m) for m in masks], 1)
-        
+
         # two stage
         enc_topk_proposals = enc_refpoint_embed = None
 
@@ -266,8 +273,7 @@ class Transformer(nn.Layer):
             text_attention_mask=~text_dict["text_token_mask"],
             # we ~ the mask . False means use the token; True means pad the token
             position_ids=text_dict["position_ids"],
-            text_self_attention_masks=text_dict["text_self_attention_masks"],
-        )
+            text_self_attention_masks=text_dict["text_self_attention_masks"], )
         #########################################################
         # End Encoder
         # - memory: bs, \sum{hw}, c
@@ -278,17 +284,17 @@ class Transformer(nn.Layer):
         #########################################################
         text_dict["encoded_text"] = memory_text
 
-
         if self.two_stage_type == "standard":
             output_memory, output_proposals = gen_encoder_output_proposals(
-                memory, mask_flatten, spatial_shapes
-            )
+                memory, mask_flatten, spatial_shapes)
             output_memory = self.enc_output_norm(self.enc_output(output_memory))
 
             if text_dict is not None:
-                enc_outputs_class_unselected = self.enc_out_class_embed(output_memory, text_dict)
+                enc_outputs_class_unselected = self.enc_out_class_embed(
+                    output_memory, text_dict)
             else:
-                enc_outputs_class_unselected = self.enc_out_class_embed(output_memory)
+                enc_outputs_class_unselected = self.enc_out_class_embed(
+                    output_memory)
 
             topk_logits = enc_outputs_class_unselected.max(-1)
             enc_outputs_coord_unselected = (
@@ -297,46 +303,47 @@ class Transformer(nn.Layer):
             topk = self.num_queries
 
             topk_proposals = paddle.topk(topk_logits, topk, axis=1)[1]  # bs, nq
-            
-            topk_ind = topk_proposals.unsqueeze(axis=-1).tile(repeat_times=[1, 1, 4])
-          
+
+            topk_ind = topk_proposals.unsqueeze(axis=-1).tile(
+                repeat_times=[1, 1, 4])
+
             # gather boxes
             refpoint_embed_undetach = paddle.take_along_axis(
-                arr=enc_outputs_coord_unselected,
+                arr=enc_outputs_coord_unselected, axis=1, indices=topk_ind)
+
+            refpoint_embed_ = refpoint_embed_undetach
+            init_box_proposal = F.sigmoid(
+                paddle.take_along_axis(
+                    arr=output_proposals, axis=1, indices=topk_ind))
+
+            tgt_undetach = paddle.take_along_axis(
+                arr=output_memory,
                 axis=1,
-                indices=topk_ind)
-        
-            refpoint_embed_ = refpoint_embed_undetach.detach()
-            init_box_proposal = F.sigmoid(paddle.take_along_axis(
-                arr=output_proposals,
-                axis=1,
-                indices=topk_ind)) 
-    
-            tgt_undetach = paddle.take_along_axis(arr=output_memory, axis=1,indices=topk_proposals.unsqueeze(axis=-1).tile(repeat_times=[1, 1, self.d_model]))
+                indices=topk_proposals.unsqueeze(axis=-1).tile(
+                    repeat_times=[1, 1, self.d_model]))
 
             if self.embed_init_tgt:
-                tgt_ = (
-                    self.tgt_embed.weight[:, None, :].tile([1, bs, 1]).transpose([1, 0, 2])
-                )  # nq, bs, d_model
+                tgt_ = (self.tgt_embed.weight[:, None, :].tile(
+                    [1, bs, 1]).transpose([1, 0, 2]))  # nq, bs, d_model
             else:
-                tgt_ = tgt_undetach.detach()
+                tgt_ = tgt_undetach
 
             if refpoint_embed is not None:
-                refpoint_embed = paddle.concat([refpoint_embed, refpoint_embed_], axis=1)
+                refpoint_embed = paddle.concat(
+                    [refpoint_embed, refpoint_embed_], axis=1)
                 tgt = paddle.concat([tgt, tgt_], axis=1)
             else:
                 refpoint_embed, tgt = refpoint_embed_, tgt_
 
         elif self.two_stage_type == "no":
-            tgt_ = (
-                self.tgt_embed.weight[:, None, :].tile([1, bs, 1]).transpose([1, 0, 2])
-            )  # nq, bs, d_model
-            refpoint_embed_ = (
-                self.refpoint_embed.weight[:, None, :].tile([1, bs, 1]).transpose([1, 0, 2])
-            )  # nq, bs, 4
+            tgt_ = (self.tgt_embed.weight[:, None, :].tile(
+                [1, bs, 1]).transpose([1, 0, 2]))  # nq, bs, d_model
+            refpoint_embed_ = (self.refpoint_embed.weight[:, None, :].tile(
+                [1, bs, 1]).transpose([1, 0, 2]))  # nq, bs, 4
 
             if refpoint_embed is not None:
-                refpoint_embed = paddle.concat([refpoint_embed, refpoint_embed_], axis=1)
+                refpoint_embed = paddle.concat(
+                    [refpoint_embed, refpoint_embed_], axis=1)
                 tgt = paddle.concat([tgt, tgt_], axis=1)
             else:
                 refpoint_embed, tgt = refpoint_embed_, tgt_
@@ -345,20 +352,20 @@ class Transformer(nn.Layer):
                 tgt_embed = tgt.tile([1, self.num_patterns, 1])
                 refpoint_embed = refpoint_embed.tile([1, self.num_patterns, 1])
                 tgt_pat = self.patterns.weight[None, :, :].repeat_interleave(
-                    self.num_queries, 1
-                )  # 1, n_q*n_pat, d_model
+                    self.num_queries, 1)  # 1, n_q*n_pat, d_model
                 tgt = tgt_embed + tgt_pat
 
             init_box_proposal = F.sigmoid(refpoint_embed_)
 
         else:
-            raise NotImplementedError("unknown two_stage_type {}".format(self.two_stage_type))
+            raise NotImplementedError("unknown two_stage_type {}".format(
+                self.two_stage_type))
         #########################################################
         # End preparing tgt
         # - tgt: bs, NQ, d_model
         # - refpoint_embed(unsigmoid): bs, NQ, d_model
         #########################################################
-        
+
         #########################################################
         # Begin Decoder
         #########################################################
@@ -406,17 +413,16 @@ class Transformer(nn.Layer):
 
 class TransformerEncoder(nn.Layer):
     def __init__(
-        self,
-        encoder_layer,
-        num_layers,
-        d_model=256,
-        num_queries=300,
-        enc_layer_share=False,
-        text_enhance_layer=None,
-        feature_fusion_layer=None,
-        use_checkpoint=False,
-        use_transformer_ckpt=False,
-    ):
+            self,
+            encoder_layer,
+            num_layers,
+            d_model=256,
+            num_queries=300,
+            enc_layer_share=False,
+            text_enhance_layer=None,
+            feature_fusion_layer=None,
+            use_checkpoint=False,
+            use_transformer_ckpt=False, ):
         """_summary_
 
         Args:
@@ -434,16 +440,17 @@ class TransformerEncoder(nn.Layer):
         self.text_layers = []
         self.fusion_layers = []
         if num_layers > 0:
-            self.layers = _get_clones(encoder_layer, num_layers, layer_share=enc_layer_share)
+            self.layers = _get_clones(
+                encoder_layer, num_layers, layer_share=enc_layer_share)
 
             if text_enhance_layer is not None:
                 self.text_layers = _get_clones(
-                    text_enhance_layer, num_layers, layer_share=enc_layer_share
-                )
+                    text_enhance_layer, num_layers, layer_share=enc_layer_share)
             if feature_fusion_layer is not None:
                 self.fusion_layers = _get_clones(
-                    feature_fusion_layer, num_layers, layer_share=enc_layer_share
-                )
+                    feature_fusion_layer,
+                    num_layers,
+                    layer_share=enc_layer_share)
         else:
             self.layers = []
             del encoder_layer
@@ -469,11 +476,14 @@ class TransformerEncoder(nn.Layer):
         for lvl, (H_, W_) in enumerate(spatial_shapes):
 
             ref_y, ref_x = paddle.meshgrid(
-                paddle.linspace(0.5, H_ - 0.5, H_, dtype=paddle.float32),
-                paddle.linspace(0.5, W_ - 0.5, W_, dtype=paddle.float32),
-            )
-            ref_y = ref_y.reshape([-1,])[None] / (valid_ratios[:, None, lvl, 1] * H_)
-            ref_x = ref_x.reshape([-1,])[None] / (valid_ratios[:, None, lvl, 0] * W_)
+                paddle.linspace(
+                    0.5, H_ - 0.5, H_, dtype=paddle.float32),
+                paddle.linspace(
+                    0.5, W_ - 0.5, W_, dtype=paddle.float32), )
+            ref_y = ref_y.reshape([-1, ])[None] / (
+                valid_ratios[:, None, lvl, 1] * H_)
+            ref_x = ref_x.reshape([-1, ])[None] / (
+                valid_ratios[:, None, lvl, 0] * W_)
             ref = paddle.stack((ref_x, ref_y), -1)
             reference_points_list.append(ref)
         reference_points = paddle.concat(reference_points_list, 1)
@@ -481,21 +491,20 @@ class TransformerEncoder(nn.Layer):
         return reference_points
 
     def forward(
-        self,
-        # for images
-        src: paddle.Tensor,
-        pos: paddle.Tensor,
-        spatial_shapes: paddle.Tensor,
-        level_start_index: paddle.Tensor,
-        valid_ratios: paddle.Tensor,
-        key_padding_mask: paddle.Tensor,
-        # for texts
-        memory_text: paddle.Tensor = None,
-        text_attention_mask: paddle.Tensor = None,
-        pos_text: paddle.Tensor = None,
-        text_self_attention_masks: paddle.Tensor = None,
-        position_ids: paddle.Tensor = None,
-    ):
+            self,
+            # for images
+            src: paddle.Tensor,
+            pos: paddle.Tensor,
+            spatial_shapes: paddle.Tensor,
+            level_start_index: paddle.Tensor,
+            valid_ratios: paddle.Tensor,
+            key_padding_mask: paddle.Tensor,
+            # for texts
+            memory_text: paddle.Tensor=None,
+            text_attention_mask: paddle.Tensor=None,
+            pos_text: paddle.Tensor=None,
+            text_self_attention_masks: paddle.Tensor=None,
+            position_ids: paddle.Tensor=None, ):
         """
         Input:
             - src: [bs, sum(hi*wi), 256]
@@ -521,67 +530,51 @@ class TransformerEncoder(nn.Layer):
 
         # preparation and reshape
         if self.num_layers > 0:
-            reference_points = self.get_reference_points(
-                spatial_shapes, valid_ratios
-            )
+            reference_points = self.get_reference_points(spatial_shapes,
+                                                         valid_ratios)
 
         if self.text_layers:
             # generate pos_text
             bs, n_text, text_dim = memory_text.shape
             if pos_text is None and position_ids is None:
-                pos_text = (
-                    paddle.arange(n_text)
-                    .cast(paddle.float32)
-                    .unsqueeze(0)
-                    .unsqueeze(-1)
-                    .tile([bs, 1, 1])
-                )
-                pos_text = get_sine_pos_embed(pos_text, num_pos_feats=256, exchange_xy=False)
+                pos_text = (paddle.arange(n_text).cast(paddle.float32)
+                            .unsqueeze(0).unsqueeze(-1).tile([bs, 1, 1]))
+                pos_text = get_sine_pos_embed(
+                    pos_text, num_pos_feats=256, exchange_xy=False)
             if position_ids is not None:
                 pos_text = get_sine_pos_embed(
-                    position_ids[..., None], num_pos_feats=256, exchange_xy=False
-                )
+                    position_ids[..., None],
+                    num_pos_feats=256,
+                    exchange_xy=False)
 
         # main process
         for layer_id, layer in enumerate(self.layers):
             if self.fusion_layers:
                 if self.use_checkpoint:
                     output, memory_text = recompute(
-                        self.fusion_layers[layer_id],
-                        output,
-                        memory_text,
-                        key_padding_mask,
-                        text_attention_mask,
-                        **{"preserve_rng_state": True}
-                    )
+                        self.fusion_layers[layer_id], output, memory_text,
+                        key_padding_mask, text_attention_mask,
+                        **{"preserve_rng_state": True})
                 else:
                     output, memory_text = self.fusion_layers[layer_id](
                         v=output,
                         l=memory_text,
                         attention_mask_v=key_padding_mask,
-                        attention_mask_l=text_attention_mask,
-                    )
+                        attention_mask_l=text_attention_mask, )
 
             if self.text_layers:
                 memory_text = self.text_layers[layer_id](
                     src=memory_text,
                     src_mask=text_self_attention_masks,  # note we use ~ for mask here
                     src_key_padding_mask=text_attention_mask,
-                    pos=(pos_text if pos_text is not None else None),
-                )
+                    pos=(pos_text if pos_text is not None else None), )
 
             # main process
             if self.use_transformer_ckpt:
-                output = recompute(
-                    layer,
-                    output,
-                    pos,
-                    reference_points,
-                    spatial_shapes,
-                    level_start_index,
-                    key_padding_mask,
-                    **{"preserve_rng_state": True}
-                )
+                output = recompute(layer, output, pos, reference_points,
+                                   spatial_shapes, level_start_index,
+                                   key_padding_mask,
+                                   **{"preserve_rng_state": True})
             else:
                 output = layer(
                     src=output,
@@ -589,23 +582,21 @@ class TransformerEncoder(nn.Layer):
                     reference_points=reference_points,
                     spatial_shapes=spatial_shapes,
                     level_start_index=level_start_index,
-                    key_padding_mask=key_padding_mask,
-                )
+                    key_padding_mask=key_padding_mask, )
 
         return output, memory_text
 
 
 class TransformerDecoder(nn.Layer):
     def __init__(
-        self,
-        decoder_layer,
-        num_layers,
-        norm=None,
-        return_intermediate=False,
-        d_model=256,
-        query_dim=4,
-        num_feature_levels=1,
-    ):
+            self,
+            decoder_layer,
+            num_layers,
+            norm=None,
+            return_intermediate=False,
+            d_model=256,
+            query_dim=4,
+            num_feature_levels=1, ):
         super().__init__()
         if num_layers > 0:
             self.layers = _get_clones(decoder_layer, num_layers)
@@ -616,7 +607,8 @@ class TransformerDecoder(nn.Layer):
         self.return_intermediate = return_intermediate
         assert return_intermediate, "support return_intermediate only"
         self.query_dim = query_dim
-        assert query_dim in [2, 4], "query_dim should be 2/4 but {}".format(query_dim)
+        assert query_dim in [2, 4], "query_dim should be 2/4 but {}".format(
+            query_dim)
         self.num_feature_levels = num_feature_levels
 
         self.ref_point_head = MLP(query_dim // 2 * d_model, d_model, d_model, 2)
@@ -631,23 +623,23 @@ class TransformerDecoder(nn.Layer):
         self.ref_anchor_head = None
 
     def forward(
-        self,
-        tgt,
-        memory,
-        tgt_mask: Optional[paddle.Tensor] = None,
-        memory_mask: Optional[paddle.Tensor] = None,
-        tgt_key_padding_mask: Optional[paddle.Tensor] = None,
-        memory_key_padding_mask: Optional[paddle.Tensor] = None,
-        pos: Optional[paddle.Tensor] = None,
-        refpoints_unsigmoid: Optional[paddle.Tensor] = None,  # num_queries, bs, 2
-        # for memory
-        level_start_index: Optional[paddle.Tensor] = None,  # num_levels
-        spatial_shapes: Optional[paddle.Tensor] = None,  # bs, num_levels, 2
-        valid_ratios: Optional[paddle.Tensor] = None,
-        # for text
-        memory_text: Optional[paddle.Tensor] = None,
-        text_attention_mask: Optional[paddle.Tensor] = None,
-    ):
+            self,
+            tgt,
+            memory,
+            tgt_mask: Optional[paddle.Tensor]=None,
+            memory_mask: Optional[paddle.Tensor]=None,
+            tgt_key_padding_mask: Optional[paddle.Tensor]=None,
+            memory_key_padding_mask: Optional[paddle.Tensor]=None,
+            pos: Optional[paddle.Tensor]=None,
+            refpoints_unsigmoid: Optional[
+                paddle.Tensor]=None,  # num_queries, bs, 2
+            # for memory
+            level_start_index: Optional[paddle.Tensor]=None,  # num_levels
+            spatial_shapes: Optional[paddle.Tensor]=None,  # bs, num_levels, 2
+            valid_ratios: Optional[paddle.Tensor]=None,
+            # for text
+            memory_text: Optional[paddle.Tensor]=None,
+            text_attention_mask: Optional[paddle.Tensor]=None, ):
         """
         Input:
             - tgt: nq, bs, d_model
@@ -661,26 +653,28 @@ class TransformerDecoder(nn.Layer):
         intermediate = []
         reference_points = F.sigmoid(refpoints_unsigmoid)
         ref_points = [reference_points]
-    
+
         for layer_id, layer in enumerate(self.layers):
-            
+
             if reference_points.shape[-1] == 4:
                 reference_points_input = (
-                    reference_points[:, :, None]
-                    * paddle.concat([valid_ratios, valid_ratios], -1)[None, :]
+                    reference_points[:, :, None] *
+                    paddle.concat([valid_ratios, valid_ratios], -1)[None, :]
                 )  # nq, bs, nlevel, 4
             else:
                 assert reference_points.shape[-1] == 2
-                reference_points_input = reference_points[:, :, None] * valid_ratios[None, :]
+                reference_points_input = reference_points[:, :,
+                                                          None] * valid_ratios[
+                                                              None, :]
             query_sine_embed = gen_sineembed_for_position(
-                reference_points_input[:, :, 0, :]
-            )  # nq, bs, 256*2
+                reference_points_input[:, :, 0, :])  # nq, bs, 256*2
 
             # conditional query
             raw_query_pos = self.ref_point_head(query_sine_embed)  # nq, bs, 256
-            pos_scale = self.query_scale(output) if self.query_scale is not None else 1
+            pos_scale = self.query_scale(
+                output) if self.query_scale is not None else 1
             query_pos = pos_scale * raw_query_pos
-         
+
             # main process
             output = layer(
                 tgt=output,
@@ -696,10 +690,10 @@ class TransformerDecoder(nn.Layer):
                 memory_spatial_shapes=spatial_shapes,
                 memory_pos=pos,
                 self_attn_mask=tgt_mask,
-                cross_attn_mask=memory_mask,
-            )
-           
-            if (output.isnan().any() | output.isinf().any()) and paddle.in_dynamic_mode():
+                cross_attn_mask=memory_mask, )
+
+            if (output.isnan().any() |
+                    output.isinf().any()) and paddle.in_dynamic_mode():
                 print(f"output layer_id {layer_id} is nan")
                 try:
                     num_nan = output.isnan().sum().item()
@@ -707,9 +701,8 @@ class TransformerDecoder(nn.Layer):
                     print(f"num_nan {num_nan}, num_inf {num_inf}")
                 except Exception as e:
                     print(e)
-                  
 
-            # iter update
+# iter update
             if self.bbox_embed is not None:
 
                 reference_before_sigmoid = inverse_sigmoid(reference_points)
@@ -717,10 +710,10 @@ class TransformerDecoder(nn.Layer):
                 outputs_unsig = delta_unsig + reference_before_sigmoid
                 new_reference_points = F.sigmoid(outputs_unsig)
 
-                reference_points = new_reference_points.detach()
+                reference_points = new_reference_points
                 # if layer_id != self.num_layers - 1:
                 ref_points.append(new_reference_points)
-               
+
             intermediate.append(self.norm(output))
 
         return [
@@ -731,15 +724,14 @@ class TransformerDecoder(nn.Layer):
 
 class DeformableTransformerEncoderLayer(nn.Layer):
     def __init__(
-        self,
-        d_model=256,
-        d_ffn=1024,
-        dropout=0.1,
-        activation="relu",
-        n_levels=4,
-        n_heads=8,
-        n_points=4,
-    ):
+            self,
+            d_model=256,
+            d_ffn=1024,
+            dropout=0.1,
+            activation="relu",
+            n_levels=4,
+            n_heads=8,
+            n_points=4, ):
         super().__init__()
 
         # self attention
@@ -748,8 +740,7 @@ class DeformableTransformerEncoderLayer(nn.Layer):
             num_levels=n_levels,
             num_heads=n_heads,
             num_points=n_points,
-            batch_first=True
-        )
+            batch_first=True)
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
@@ -771,10 +762,13 @@ class DeformableTransformerEncoderLayer(nn.Layer):
         src = self.norm2(src)
         return src
 
-    def forward(
-        self, src, pos, reference_points, spatial_shapes, level_start_index, key_padding_mask=None
-    ):
-    
+    def forward(self,
+                src,
+                pos,
+                reference_points,
+                spatial_shapes,
+                level_start_index,
+                key_padding_mask=None):
 
         src2 = self.self_attn(
             query=self.with_pos_embed(src, pos),
@@ -782,8 +776,7 @@ class DeformableTransformerEncoderLayer(nn.Layer):
             value=src,
             value_spatial_shapes=spatial_shapes,
             value_level_start_index=level_start_index,
-            value_mask=key_padding_mask,
-        )
+            value_mask=key_padding_mask, )
         src = src + self.dropout1(src2)
         src = self.norm1(src)
 
@@ -795,34 +788,33 @@ class DeformableTransformerEncoderLayer(nn.Layer):
 
 class DeformableTransformerDecoderLayer(nn.Layer):
     def __init__(
-        self,
-        d_model=256,
-        d_ffn=1024,
-        dropout=0.1,
-        activation="relu",
-        n_levels=4,
-        n_heads=8,
-        n_points=4,
-        use_text_feat_guide=False,
-        use_text_cross_attention=False,
-    ):
+            self,
+            d_model=256,
+            d_ffn=1024,
+            dropout=0.1,
+            activation="relu",
+            n_levels=4,
+            n_heads=8,
+            n_points=4,
+            use_text_feat_guide=False,
+            use_text_cross_attention=False, ):
         super().__init__()
-     
+
         # cross attention
         self.cross_attn = MSDeformAttn(
             embed_dim=d_model,
             num_levels=n_levels,
             num_heads=n_heads,
             num_points=n_points,
-            batch_first=True
-        )
+            batch_first=True)
         self.dropout1 = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
         self.norm1 = nn.LayerNorm(d_model)
 
         # cross attention text
         if use_text_cross_attention:
             self.ca_text = MultiHeadAttention(d_model, n_heads, dropout=dropout)
-            self.catext_dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+            self.catext_dropout = nn.Dropout(
+                dropout) if dropout > 0 else nn.Identity()
             self.catext_norm = nn.LayerNorm(d_model)
 
         # self attention
@@ -832,7 +824,8 @@ class DeformableTransformerDecoderLayer(nn.Layer):
 
         # ffn
         self.linear1 = nn.Linear(d_model, d_ffn)
-        self.activation = _get_activation_fn(activation, d_model=d_ffn, batch_dim=1)
+        self.activation = _get_activation_fn(
+            activation, d_model=d_ffn, batch_dim=1)
         self.dropout3 = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
         self.linear2 = nn.Linear(d_ffn, d_model)
         self.dropout4 = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
@@ -860,24 +853,30 @@ class DeformableTransformerDecoderLayer(nn.Layer):
         return tgt
 
     def forward(
-        self,
-        # for tgt
-        tgt: Optional[paddle.Tensor],  # nq, bs, d_model
-        tgt_query_pos: Optional[paddle.Tensor] = None,  # pos for query. MLP(Sine(pos))
-        tgt_query_sine_embed: Optional[paddle.Tensor] = None,  # pos for query. Sine(pos)
-        tgt_key_padding_mask: Optional[paddle.Tensor] = None,
-        tgt_reference_points: Optional[paddle.Tensor] = None,  # nq, bs, 4
-        memory_text: Optional[paddle.Tensor] = None,  # bs, num_token, d_model
-        text_attention_mask: Optional[paddle.Tensor] = None,  # bs, num_token
-        # for memory
-        memory: Optional[paddle.Tensor] = None,  # hw, bs, d_model
-        memory_key_padding_mask: Optional[paddle.Tensor] = None,
-        memory_level_start_index: Optional[paddle.Tensor] = None,  # num_levels
-        memory_spatial_shapes: Optional[paddle.Tensor] = None,  # bs, num_levels, 2
-        memory_pos: Optional[paddle.Tensor] = None,  # pos for memory
-        # sa
-        self_attn_mask: Optional[paddle.Tensor] = None,  # mask used for self-attention
-        cross_attn_mask: Optional[paddle.Tensor] = None,  # mask used for cross-attention
+            self,
+            # for tgt
+            tgt: Optional[paddle.Tensor],  # nq, bs, d_model
+            tgt_query_pos: Optional[
+                paddle.Tensor]=None,  # pos for query. MLP(Sine(pos))
+            tgt_query_sine_embed: Optional[
+                paddle.Tensor]=None,  # pos for query. Sine(pos)
+            tgt_key_padding_mask: Optional[paddle.Tensor]=None,
+            tgt_reference_points: Optional[paddle.Tensor]=None,  # nq, bs, 4
+            memory_text: Optional[paddle.Tensor]=None,  # bs, num_token, d_model
+            text_attention_mask: Optional[paddle.Tensor]=None,  # bs, num_token
+            # for memory
+            memory: Optional[paddle.Tensor]=None,  # hw, bs, d_model
+            memory_key_padding_mask: Optional[paddle.Tensor]=None,
+            memory_level_start_index: Optional[
+                paddle.Tensor]=None,  # num_levels
+            memory_spatial_shapes: Optional[
+                paddle.Tensor]=None,  # bs, num_levels, 2
+            memory_pos: Optional[paddle.Tensor]=None,  # pos for memory
+            # sa
+            self_attn_mask: Optional[
+                paddle.Tensor]=None,  # mask used for self-attention
+            cross_attn_mask: Optional[
+                paddle.Tensor]=None,  # mask used for cross-attention
     ):
         """
         Input:
@@ -890,7 +889,12 @@ class DeformableTransformerDecoderLayer(nn.Layer):
         if self.self_attn is not None:
             # import ipdb; ipdb.set_trace()
             q = k = self.with_pos_embed(tgt, tgt_query_pos)
-            tgt2 = self.self_attn(q, k, tgt, attn_mask=self_attn_mask if self_attn_mask is None else ~self_attn_mask)[0]
+            tgt2 = self.self_attn(
+                q,
+                k,
+                tgt,
+                attn_mask=self_attn_mask
+                if self_attn_mask is None else ~self_attn_mask)[0]
             tgt = tgt + self.dropout2(tgt2)
             tgt = self.norm2(tgt)
 
@@ -899,19 +903,17 @@ class DeformableTransformerDecoderLayer(nn.Layer):
                 self.with_pos_embed(tgt, tgt_query_pos),
                 memory_text,
                 memory_text,
-                attn_mask=~text_attention_mask,
-            )[0]
+                attn_mask=~text_attention_mask, )[0]
             tgt = tgt + self.catext_dropout(tgt2)
             tgt = self.catext_norm(tgt)
-     
+
         tgt2 = self.cross_attn(
             query=self.with_pos_embed(tgt, tgt_query_pos),
             reference_points=tgt_reference_points,
             value=memory,
             value_spatial_shapes=memory_spatial_shapes,
             value_level_start_index=memory_level_start_index,
-            value_mask=memory_key_padding_mask,
-        )
+            value_mask=memory_key_padding_mask, )
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
 
@@ -949,5 +951,4 @@ def build_transformer(args):
         use_text_cross_attention=args.use_text_cross_attention,
         text_dropout=args.text_dropout,
         fusion_dropout=args.fusion_dropout,
-        fusion_droppath=args.fusion_droppath,
-    )
+        fusion_droppath=args.fusion_droppath, )

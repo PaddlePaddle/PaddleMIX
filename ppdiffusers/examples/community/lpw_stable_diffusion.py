@@ -21,7 +21,7 @@ import paddle
 import PIL
 
 from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
-from paddlenlp.utils.tools import compare_version
+from paddlevlp.utils.tools import compare_version
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipelines.stable_diffusion import (
     StableDiffusionPipeline,
@@ -303,8 +303,7 @@ def get_weighted_text_embeddings(
                 pipe, uncond_prompt, max_length - 2)
     else:
         prompt_tokens = [
-            token[1:-1]
-            for token in pipe.tokenizer(
+            token[1:-1] for token in pipe.tokenizer(
                 prompt, max_length=max_length, truncation=True).input_ids
         ]
         prompt_weights = [[1.0] * len(token) for token in prompt_tokens]
@@ -312,8 +311,7 @@ def get_weighted_text_embeddings(
             if isinstance(uncond_prompt, str):
                 uncond_prompt = [uncond_prompt]
             uncond_tokens = [
-                token[1:-1]
-                for token in pipe.tokenizer(
+                token[1:-1] for token in pipe.tokenizer(
                     uncond_prompt, max_length=max_length, truncation=True)
                 .input_ids
             ]
