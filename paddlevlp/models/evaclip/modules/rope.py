@@ -1,6 +1,5 @@
 import paddle
 from math import pi
-# from einops import rearrange, repeat
 import logging
 
 
@@ -60,14 +59,12 @@ class VisionRotaryEmbedding(paddle.nn.Layer):
             ft_seq_len = pt_seq_len
         t = paddle.arange(end=ft_seq_len) / ft_seq_len * pt_seq_len
         freqs_h = paddle.einsum('..., f -> ... f', t, freqs)
-        # freqs_h = repeat(freqs_h, '... n -> ... (n r)', r=2)
         freqs_h = freqs_h.repeat_interleave(2, axis=-1)
         freqs_w = paddle.einsum('..., f -> ... f', t, freqs)
-        # freqs_w = repeat(freqs_w, '... n -> ... (n r)', r=2)
         freqs_w = freqs_w.repeat_interleave(2, axis=-1)
         freqs = broadcat((freqs_h[:, (None), :], freqs_w[(None), :, :]), dim=-1)
-        self.register_buffer('freqs_cos', freqs.cos())
-        self.register_buffer('freqs_sin', freqs.sin())
+        self.register_buffer('freqs_cos', freqs.cos(), persistable=False)
+        self.register_buffer('freqs_sin', freqs.sin(), persistable=False)
         logging.info(f'Shape of rope freq: {self.freqs_cos.shape}')
 
     def forward(self, t, start_index=0):
@@ -110,14 +107,13 @@ class VisionRotaryEmbeddingFast(paddle.nn.Layer):
             ft_seq_len = pt_seq_len
         t = paddle.arange(end=ft_seq_len) / ft_seq_len * pt_seq_len
         freqs = paddle.einsum('..., f -> ... f', t, freqs)
-        # freqs = repeat(freqs, '... n -> ... (n r)', r=2)
         freqs = freqs.repeat_interleave(2, axis=freqs.rank() - 1)
         freqs = broadcat((freqs[:, (None), :], freqs[(None), :, :]), dim=-1)
         freqs_cos = freqs.cos().reshape((-1, freqs.shape[-1]))
         freqs_sin = freqs.sin().reshape((-1, freqs.shape[-1]))
         self.patch_dropout = patch_dropout
-        self.register_buffer('freqs_cos', freqs_cos)
-        self.register_buffer('freqs_sin', freqs_sin)
+        self.register_buffer('freqs_cos', freqs_cos, persistable=False)
+        self.register_buffer('freqs_sin', freqs_sin, persistable=False)
         logging.info(f'Shape of rope freq: {self.freqs_cos.shape}')
 
     def forward(self, t, patch_indices_keep=None):

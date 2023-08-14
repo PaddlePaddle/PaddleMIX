@@ -2,16 +2,14 @@ import paddle
 import paddle.nn as nn
 from paddle.nn import functional as F
 from paddle import distributed as dist
-import pprint
 
-from .timm_ext import LabelSmoothingCrossEntropy
 from paddlevlp.models.common.distributed_utils import allgather
 
 
 def gather_features_cat_group_bk(image_features,
-                              text_features,
-                              group,
-                              gather_with_grad=False):
+                                 text_features,
+                                 group,
+                                 gather_with_grad=False):
     if group.world_size <= 1:
         return image_features, text_features
     features = paddle.concat([image_features, text_features], axis=-1)
@@ -23,6 +21,7 @@ def gather_features_cat_group_bk(image_features,
         features = paddle.concat(gathered_features, axis=0)
     image_features, text_features = paddle.split(features, 2, axis=-1)
     return image_features, text_features
+
 
 def gather_features_cat_group(image_features,
                               text_features,
@@ -41,6 +40,7 @@ def gather_features_cat_group(image_features,
         dist.all_gather(gathered_features, text_features, group=group)
         text_features = paddle.concat(gathered_features, axis=0)
     return image_features, text_features
+
 
 def gather_features(image_features,
                     text_features,
@@ -118,6 +118,7 @@ def gather_features_bk(image_features,
 
     return all_image_features, all_text_features
 
+
 class ClipLoss(nn.Layer):
     def __init__(
             self,
@@ -168,47 +169,6 @@ class ClipLoss(nn.Layer):
         if self.text_loss:
             total_loss += F.cross_entropy(logits_per_text, labels)
         return total_loss, logits_per_image, logits_per_text, labels
-
-
-class CoCaLoss(ClipLoss):
-    def __init__(
-            self,
-            caption_loss_weight,
-            clip_loss_weight,
-            pad_id=0,  # pad_token for open_clip custom tokenizer
-            local_loss=False,
-            gather_with_grad=False,
-            cache_labels=False,
-            rank=0,
-            world_size=1, ):
-        super().__init__(
-            local_loss=local_loss,
-            gather_with_grad=gather_with_grad,
-            cache_labels=cache_labels,
-            rank=rank,
-            world_size=world_size, )
-
-        self.clip_loss_weight = clip_loss_weight
-        self.caption_loss_weight = caption_loss_weight
-        self.caption_loss = paddle.nn.CrossEntropyLoss(ignore_index=pad_id)
-
-    def forward(self, preds, output_dict=False):
-        image_features, text_features, logit_scale, logits, pred_labels = preds
-
-        caption_loss = self.caption_loss(
-            logits,
-            pred_labels, )
-        caption_loss = caption_loss * self.caption_loss_weight
-
-        clip_loss = 0
-        clip_loss, logits_per_image, logits_per_text, labels = super().forward(
-            [image_features, text_features, logit_scale])
-        clip_loss = self.clip_loss_weight * clip_loss
-
-        if output_dict:  #output_dict:
-            return {"contrastive_loss": clip_loss, "caption_loss": caption_loss}
-
-        return clip_loss + caption_loss, logits_per_image, logits_per_text, labels
 
 
 if __name__ == "__main__":

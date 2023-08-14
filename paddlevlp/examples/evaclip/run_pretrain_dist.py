@@ -3,34 +3,22 @@ import sys
 import os
 parent_path = os.path.abspath(os.path.join(__file__, *(['..'] * 4)))
 sys.path.insert(0, parent_path)
-import numpy as np
-import time
 import pprint
-import paddle
-import paddle.distributed as dist
-from paddle.distributed import fleet
+import socket
 from dataclasses import dataclass, field
+import paddle
 
-from paddlevlp.models.evaclip.eva_clip.model import EVACLIP
-from paddlevlp.models.evaclip.eva_clip.coca_model import CoCa
-from paddlevlp.models.evaclip.eva_clip.optim import create_optimizer
-from paddlevlp.models.evaclip.utils.checkpoint import save, load_model
-from paddlevlp.optimization import CosineDecayWithWarmup
+from paddlevlp.models.evaclip.eva_clip_model import EVACLIP
+from paddlevlp.optimization import create_optimizer
+from paddlevlp.checkpoint import save, load_model
 from paddlevlp.datasets import load_dataset
-from paddlevlp.datasets.laion_clip import LaionCLIP
-from paddlevlp.models.evaclip.eva_clip.data_src.data import LaionDataset
 from paddlevlp.utils.env import setdistenv
 from paddlevlp.trainer import CLIPTrainer
-
+from paddlevlp.processors.clip_processing import CLIPProcessor, CLIPImageProcessor, CLIPTextProcessor
+from paddlevlp.processors import SimpleTokenizer
+from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
-
-import socket
-import time
-import random
-
-from paddlevlp.processors.clip_processing import CLIPProcessor
-from paddlevlp.processors import SimpleTokenizer, tokenize
 
 
 @dataclass
@@ -60,8 +48,6 @@ class DataArguments:
         default="open_clip_vit_g_14",
         metadata={"help": "precomputed_text_emb name."}, )
 
- 
-
 
 @dataclass
 class ModelArguments:
@@ -70,7 +56,7 @@ class ModelArguments:
     """
 
     model: str = field(
-        default="EVA/EVA02-CLIP-B-16",
+        default="paddlemix/EVA/EVA02-CLIP-L-14",
         metadata={
             "help":
             "model name to create, for example [EVA02-CLIP-B-16/coca_EVA02-B-16]"
@@ -107,13 +93,13 @@ class PreTrainingArguments(TrainingArguments):
         metadata={"help": "The initial learning rate of text tower."})
     visual_lr: float = field(
         default=2e-4,
-        metadata={"help": "The initial learning rate of text tower."})
+        metadata={"help": "The initial learning rate of visual tower."})
     layer_decay: float = field(
         default=1.0, metadata={"help": "The basic layer decay."})
     text_ld: float = field(
         default=0.75, metadata={"help": "The layer decay of text tower."})
     visual_ld: float = field(
-        default=0.75, metadata={"help": "The layer decay of text tower."})
+        default=0.75, metadata={"help": "The layer decay of visual tower."})
     start_epoch: int = field(
         default=0,
         metadata={"help": " manual epoch number (useful on restarts)"}, )
@@ -127,14 +113,15 @@ class PreTrainingArguments(TrainingArguments):
         metadata={"help": " data parallel degrees."}, )
     last_epoch: int = field(
         default=-1, metadata={"help": "the last epoch to resume"})
-    accum_freq: int = field(
-        default=1, metadata={"help": "accum frequency (default: 1)"})
     gather_with_grad: bool = field(
         default=False,
         metadata={"help": "Whether to use gather_with_grad in loss."}, )
     local_loss: bool = field(
         default=False,
         metadata={"help": "Whether to use local loss in loss."}, )
+    tensorboard: bool = field(
+        default=False,
+        metadata={"help": "Whether to use tensorboard to record loss."}, )
 
 
 class SelfTrainer(CLIPTrainer):
@@ -176,11 +163,9 @@ class Collator:
     def __call__(self, data_list):
         images = [sample["image"] for sample in data_list]
         text = [sample["text"] for sample in data_list]
-        text_emb = [sample["text_emb"] for sample in data_list]
         batch = self.processor(
             images=images,
             text=text,
-            text_emb=text_emb,
             max_length=77,
             return_tensors="pd",
             return_attention_mask=False,
@@ -189,32 +174,32 @@ class Collator:
 
 
 def main_worker(training_args, model_args, data_args):
-    if model_args.model.startswith("coca"):
-        model = CoCa.from_pretrained(
-            model_args.model,
-            local_loss=training_args.local_loss,
-            gather_with_grad=training_args.gather_with_grad,
-            data_world_rank=training_args.data_world_rank,
-            data_world_size=training_args.data_world_size,
-            ignore_mismatched_sizes=True)
-    else:
-        model = EVACLIP.from_pretrained(
-            model_args.model,
-            ignore_mismatched_sizes=True,
-            local_loss=training_args.local_loss,
-            gather_with_grad=training_args.gather_with_grad,
-            data_world_rank=training_args.data_world_rank,
-            data_world_size=training_args.data_world_size)
+    if training_args.bf16 and training_args.fp16_opt_level == 'O2':
+        paddle.set_default_dtype("bfloat16")
+
+    config = EVACLIPConfig.from_pretrained(model_args.model)
+    model = EVACLIP(
+        config,
+        disable_text=False,
+        local_loss=training_args.local_loss,
+        gather_with_grad=training_args.gather_with_grad,
+        data_world_rank=training_args.data_world_rank,
+        data_world_size=training_args.data_world_size)
 
     training_args.model = model_args.model
     if training_args.pretrained_model_path and training_args.pretrained_model_path != "None" and training_args.resume_from_checkpoint is None:
         load_model(
             training_args, model, ckpt_dir=training_args.pretrained_model_path)
+    if training_args.bf16 and training_args.fp16_opt_level == 'O2':
+        paddle.set_default_dtype("float32")
 
-    # train_dataset = load_dataset('laion_clip', splits="train")
-    train_dataset = LaionDataset(data_args.train_data, get_text_emb=data_args.precomputed_text_emb, data_world_rank=training_args.data_world_rank, data_world_size=training_args.data_world_size)
-
-    processor = CLIPProcessor.from_pretrained(model_args.model_name_or_path)
+    train_dataset = load_dataset('coco_clip', splits="train")
+    image_processor = CLIPImageProcessor.from_pretrained(
+        model_args.model_name_or_path)
+    text_processor = CLIPTextProcessor.from_pretrained(
+        model_args.model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)
+    processor = CLIPProcessor(image_processor, text_processor, tokenizer)
     collator = Collator(processor)
 
     trainer = SelfTrainer(
@@ -222,7 +207,6 @@ def main_worker(training_args, model_args, data_args):
         args=training_args,
         train_dataset=train_dataset,
         data_collator=collator, )
-
 
     # Training
     checkpoint = None
@@ -235,6 +219,7 @@ def main_worker(training_args, model_args, data_args):
         trainer.save_state()
 
 
+from paddlevlp.models.evaclip.eva_clip_model import EVACLIPConfig, EVACLIP
 if __name__ == "__main__":
     parser = PdArgumentParser(
         (ModelArguments, DataArguments, PreTrainingArguments))
@@ -243,10 +228,7 @@ if __name__ == "__main__":
     pprint.pprint(data_args)
     pprint.pprint(model_args)
     pprint.pprint(training_args)
-    if training_args.accum_freq > 1:
-        # training_args.per_device_train_batch_size *= training_args.accum_freq
-        training_args.gradient_accumulation_steps = training_args.accum_freq
-    
+
     setdistenv(training_args)
     model_args.data_world_rank = training_args.data_world_rank
     model_args.data_world_size = training_args.data_world_size
