@@ -31,7 +31,7 @@ from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel
 
 from paddlemix.utils.env import CONFIG_NAME, LEGACY_CONFIG_NAME, MODEL_HOME
-from paddlemix.tests.testing_utils import slow
+from tests.testing_utils import slow
 
 
 def _config_zero_init(config):

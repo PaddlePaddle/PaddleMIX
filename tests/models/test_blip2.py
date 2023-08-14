@@ -32,9 +32,9 @@ from paddlemix.models.blip2 import (
 from paddlemix.models.blip2.eva_vit import VisionTransformer
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
 from paddlemix.models.blip2.modeling import BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST
-from paddlemix.tests.testing_utils import slow
-from paddlemix.tests.models.test_configuration_common import ConfigTester
-from paddlemix.tests.models.test_modeling_common import (
+from tests.testing_utils import slow
+from tests.models.test_configuration_common import ConfigTester
+from tests.models.test_modeling_common import (
     ModelTesterMixin,
     floats_tensor,
     ids_tensor,
