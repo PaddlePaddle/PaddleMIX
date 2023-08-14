@@ -13,27 +13,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import inspect
+import sklearn
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
-
+from typing import Optional, Tuple, Dict, Any
+import inspect
 import numpy as np
+
 import paddle
-import paddle.nn.functional as F
-import sklearn
 from paddle import Tensor, device, dtype, nn
+from paddle.nn import CrossEntropyLoss
+import paddle.nn.functional as F
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-from paddle.distributed.fleet.utils import recompute
-from paddle.nn import CrossEntropyLoss
+
 from paddlenlp.transformers.activations import ACT2FN
-from paddlenlp.transformers.bert.configuration import BertConfig
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPastAndCrossAttentions,
     BaseModelOutputWithPoolingAndCrossAttentions,
     CausalLMOutputWithCrossAttentions, MaskedLMOutput)
+
 from paddlenlp.transformers.model_utils import PretrainedModel
+from paddlenlp.transformers.bert.configuration import BertConfig
+import numpy as np
+import paddle
+from paddle.distributed.fleet.utils import recompute
 
 
 class CrossEntropyLoss(nn.Layer):
@@ -41,11 +45,10 @@ class CrossEntropyLoss(nn.Layer):
     Softmax Cross entropy loss
     """
 
-    def __init__(self, reduction="mean", label_smoothing=None):
+    def __init__(self, reduction='mean', label_smoothing=None):
         super().__init__()
         if label_smoothing is not None:
-            assert (label_smoothing >= 0 and
-                    label_smoothing <= 1), "label_smoothing must be in [0, 1]"
+            assert label_smoothing >= 0 and label_smoothing <= 1, "label_smoothing must be in [0, 1]"
         self.epsilon = label_smoothing
         self.reduction = reduction
 
@@ -72,12 +75,12 @@ class CrossEntropyLoss(nn.Layer):
                 loss = paddle.sum(-label * F.log_softmax(x, axis=-1), axis=-1)
             else:
                 if label.dtype == paddle.int32:
-                    label = paddle.cast(label, "int64")
+                    label = paddle.cast(label, 'int64')
                 loss = F.cross_entropy(x, label=label, soft_label=False)
 
-        if self.reduction == "sum":
+        if self.reduction == 'sum':
             return loss.sum()
-        elif self.reduction == "mean":
+        elif self.reduction == 'mean':
             return loss.mean()
         else:
             return loss
@@ -101,10 +104,10 @@ class BertEmbeddings(nn.Layer):
         self.LayerNorm = nn.LayerNorm(
             config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.register_buffer(
-            "position_ids",
-            paddle.expand(
-                paddle.arange(config.max_position_embeddings), [1, -1]), )
+        self.register_buffer("position_ids",
+                             paddle.expand(
+                                 paddle.arange(config.max_position_embeddings),
+                                 [1, -1]))
         self.position_embedding_type = getattr(
             config, "position_embedding_type", "absolute")
         self.mp_degree = config.mp_degree
@@ -164,9 +167,14 @@ class BertSelfAttention(nn.Layer):
                 self.all_head_size,
                 weight_attr=None,
                 has_bias=True,
-                gather_output=True, )
+                gather_output=True)
         else:
-            self.query = nn.Linear(config.hidden_size, self.all_head_size)
+            if config.use_fusedlinear:
+                self.query = paddle.incubate.nn.FusedLinear(config.hidden_size,
+                                                            self.all_head_size)
+            else:
+                self.query = nn.Linear(config.hidden_size, self.all_head_size)
+
         if is_cross_attention:
             if config.mp_degree > 1:
                 self.key = fleet.meta_parallel.ColumnParallelLinear(
@@ -174,16 +182,25 @@ class BertSelfAttention(nn.Layer):
                     self.all_head_size,
                     weight_attr=None,
                     has_bias=True,
-                    gather_output=True, )
+                    gather_output=True)
                 self.value = fleet.meta_parallel.ColumnParallelLinear(
                     config.encoder_width,
                     self.all_head_size,
                     weight_attr=None,
                     has_bias=True,
-                    gather_output=True, )
+                    gather_output=True)
             else:
-                self.key = nn.Linear(config.encoder_width, self.all_head_size)
-                self.value = nn.Linear(config.encoder_width, self.all_head_size)
+                if config.use_fusedlinear:
+                    self.key = paddle.incubate.nn.FusedLinear(
+                        config.encoder_width, self.all_head_size)
+                    self.value = paddle.incubate.nn.FusedLinear(
+                        config.encoder_width, self.all_head_size)
+                else:
+                    self.key = nn.Linear(config.encoder_width,
+                                         self.all_head_size)
+                    self.value = nn.Linear(config.encoder_width,
+                                           self.all_head_size)
+
         else:
             if config.mp_degree > 1:
                 self.key = fleet.meta_parallel.ColumnParallelLinear(
@@ -191,16 +208,24 @@ class BertSelfAttention(nn.Layer):
                     self.all_head_size,
                     weight_attr=None,
                     has_bias=True,
-                    gather_output=True, )
+                    gather_output=True)
                 self.value = fleet.meta_parallel.ColumnParallelLinear(
                     config.hidden_size,
                     self.all_head_size,
                     weight_attr=None,
                     has_bias=True,
-                    gather_output=True, )
+                    gather_output=True)
             else:
-                self.key = nn.Linear(config.hidden_size, self.all_head_size)
-                self.value = nn.Linear(config.hidden_size, self.all_head_size)
+                if config.use_fusedlinear:
+                    self.key = paddle.incubate.nn.FusedLinear(
+                        config.hidden_size, self.all_head_size)
+                    self.value = paddle.incubate.nn.FusedLinear(
+                        config.hidden_size, self.all_head_size)
+                else:
+                    self.key = nn.Linear(config.hidden_size, self.all_head_size)
+                    self.value = nn.Linear(config.hidden_size,
+                                           self.all_head_size)
+
         self.mp_degree = config.mp_degree
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = getattr(
@@ -340,7 +365,11 @@ class BertSelfAttention(nn.Layer):
 class BertSelfOutput(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        if config.use_fusedlinear:
+            self.dense = paddle.incubate.nn.FusedLinear(config.hidden_size,
+                                                        config.hidden_size)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(
             config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -390,7 +419,11 @@ class BertAttention(nn.Layer):
 class BertIntermediate(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
+        if config.use_fusedlinear:
+            self.dense = paddle.incubate.nn.FusedLinear(
+                config.hidden_size, config.intermediate_size)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
         if isinstance(config.hidden_act, str):
             self.intermediate_act_fn = ACT2FN[config.hidden_act]
         else:
@@ -405,7 +438,11 @@ class BertIntermediate(nn.Layer):
 class BertOutput(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
+        if config.use_fusedlinear:
+            self.dense = paddle.incubate.nn.FusedLinear(
+                config.intermediate_size, config.hidden_size)
+        else:
+            self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(
             config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
@@ -443,17 +480,16 @@ class BertLayer(nn.Layer):
         self.intermediate_query = BertIntermediate(config)
         self.output_query = BertOutput(config)
 
-    def forward(
-            self,
-            hidden_states=None,
-            attention_mask=None,
-            head_mask=None,
-            encoder_hidden_states=None,
-            encoder_attention_mask=None,
-            past_key_value=None,
-            output_attentions=False,
-            query_length=0,
-            **kwargs, ):
+    def forward(self,
+                hidden_states=None,
+                attention_mask=None,
+                head_mask=None,
+                encoder_hidden_states=None,
+                encoder_attention_mask=None,
+                past_key_value=None,
+                output_attentions=False,
+                query_length=0,
+                **kwargs):
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
         self_attn_past_key_value = (past_key_value[:2]
                                     if past_key_value is not None else None)
@@ -588,7 +624,7 @@ class BertEncoder(nn.Layer):
         # cuda_state = paddle.get_cuda_rng_state()
         # paddle.set_cuda_rng_state(cuda_state)
         # print("qformergradient_checkpointing:{}".format(self.gradient_checkpointing))
-        for i in range(self.config.num_hidden_layers):  # add recompute
+        for i in range(self.config.num_hidden_layers):  #add recompute
             layer_module = self.layer[i]
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states, )
@@ -607,17 +643,11 @@ class BertEncoder(nn.Layer):
 
                 layer_outputs = recompute(
                     create_custom_forward(layer_module),
-                    *(
-                        hidden_states,
-                        attention_mask,
-                        layer_head_mask,
-                        encoder_hidden_states,
-                        encoder_attention_mask,
-                        past_key_value,
-                        output_attentions,
-                        query_length, ),
+                    *(hidden_states, attention_mask, layer_head_mask,
+                      encoder_hidden_states, encoder_attention_mask,
+                      past_key_value, output_attentions, query_length),
                     **{"preserve_rng_state": True,
-                       "use_reentrant": False}, )
+                       "use_reentrant": False})
 
             else:
                 layer_outputs = layer_module(
@@ -670,8 +700,11 @@ class BertPooler(nn.Layer):
             config (BertConfig): BertConfig instance. Defaults to None.
         """
         super(BertPooler, self).__init__()
-
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        if config.use_fusedlinear:
+            self.dense = paddle.incubate.nn.FusedLinear(config.hidden_size,
+                                                        config.hidden_size)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.activation = nn.Tanh()
 
     def forward(self, hidden_states):
@@ -684,7 +717,11 @@ class BertPooler(nn.Layer):
 class BertPredictionHeadTransform(nn.Layer):
     def __init__(self, config):
         super().__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        if config.use_fusedlinear:
+            self.dense = paddle.incubate.nn.FusedLinear(config.hidden_size,
+                                                        config.hidden_size)
+        else:
+            self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         # self.dense = fleet.meta_parallel.ColumnParallelLinear(config.hidden_size, config.hidden_size,weight_attr=None,
         #         has_bias=False,
         #         gather_output=True)
@@ -709,8 +746,12 @@ class BertLMPredictionHead(nn.Layer):
 
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
-        self.decoder = nn.Linear(
-            config.hidden_size, config.vocab_size, bias_attr=False)
+        if config.use_fusedlinear:
+            self.dense = paddle.incubate.nn.FusedLinear(config.hidden_size,
+                                                        config.vocab_size)
+        else:
+            self.decoder = nn.Linear(
+                config.hidden_size, config.vocab_size, bias_attr=False)
 
         # # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
         # self.decoder.bias = self.bias
@@ -719,8 +760,8 @@ class BertLMPredictionHead(nn.Layer):
         bias_data = paddle.zeros([config.vocab_size])
         self.bias = self.create_parameter(
             shape=[config.vocab_size],
-            dtype="float32",
-            default_initializer=initializer(bias_data), )
+            dtype='float32',
+            default_initializer=initializer(bias_data))
 
         # Need a link between the two variables so that the bias is correctly resized with `resize_token_embeddings`
         self.decoder.bias = self.bias
@@ -739,8 +780,8 @@ class BertOnlyMLMHead(nn.Layer):
 
     def forward(self, sequence_output, word_embeddings):
         prediction_scores = self.predictions(sequence_output)
-        prediction_scores = (prediction_scores @word_embeddings.weight.t() +
-                             self.predictions.bias)
+        prediction_scores = prediction_scores @word_embeddings.weight.t(
+        ) + self.predictions.bias
         return prediction_scores
 
 
@@ -826,7 +867,7 @@ class BertModel(BertPreTrainedModel):
         # encoder_extended_attention_mask = encoder_extended_attention_mask.cast(dtype=encoder_attention_mask.dtype)  # fp16 compatibility
 
         encoder_extended_attention_mask = (
-            1.0 - encoder_extended_attention_mask) * np.finfo("float32").min
+            1.0 - encoder_extended_attention_mask) * np.finfo('float32').min
 
         return encoder_extended_attention_mask
 
@@ -947,8 +988,8 @@ class BertModel(BertPreTrainedModel):
                 -1).unsqueeze(-1)
             head_mask = head_mask.expand(num_hidden_layers, -1, -1, -1, -1)
         elif head_mask.dim() == 2:
-            head_mask = (head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
-                         )  # We can specify head_mask for each layer
+            head_mask = head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(
+                -1)  # We can specify head_mask for each layer
         assert head_mask.dim(
         ) == 5, f"head_mask.dim != 5, instead {head_mask.dim()}"
         # head_mask = head_mask.to(dtype=num_hidden_layers.dtype)  # switch to float if need + fp16 compatibility
@@ -1041,11 +1082,8 @@ class BertModel(BertPreTrainedModel):
                 encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states[
                     0].shape
             else:
-                [
-                    encoder_batch_size,
-                    encoder_sequence_length,
-                    _,
-                ] = encoder_hidden_states.shape
+                [encoder_batch_size, encoder_sequence_length,
+                 _] = encoder_hidden_states.shape
             encoder_hidden_shape = (encoder_batch_size, encoder_sequence_length)
 
             if type(encoder_attention_mask) == list:
@@ -1112,21 +1150,20 @@ class BertLMHeadModel(BertPreTrainedModel):
                  **kwargs):
         super().__init__(config)
         from paddle.distributed import fleet
-
-        config.mp_degree = fleet.DistributedStrategy().hybrid_configs[
-            "mp_degree"]
+        config.mp_degree = kwargs.get("mp_degree")
         config.encoder_width = encoder_width
         config.gradient_checkpointing = False
         self.ln_vision = paddle.nn.LayerNorm(config.encoder_width)
         config.query_length = config.num_query_tokens
+        config.use_fusedlinear = getattr(config, "use_fusedlinear", False)
         self.bert = BertModel(config, add_pooling_layer=False)
         self.cls = BertOnlyMLMHead(config)
 
         self.query_tokens = paddle.create_parameter(
             shape=(1, config.num_query_tokens, config.hidden_size),
-            dtype="float32",
+            dtype='float32',
             default_initializer=paddle.nn.initializer.Normal(
-                mean=0.0, std=config.initializer_range), )
+                mean=0.0, std=config.initializer_range))
         if train_in_satge1:
             self.vision_proj = paddle.nn.Linear(
                 in_features=config.hidden_size, out_features=config.embed_dim)
@@ -1134,9 +1171,9 @@ class BertLMHeadModel(BertPreTrainedModel):
                 in_features=config.hidden_size, out_features=config.embed_dim)
             self.itm_head = paddle.nn.Linear(
                 in_features=config.hidden_size, out_features=2)
-            self.resize_token_embeddings(kwargs.get("tokenizer_length"))
+            self.resize_token_embeddings(kwargs.get('tokenizer_length'))
         else:
-            text_hidden_size = kwargs.get("text_hidden_size")
+            text_hidden_size = kwargs.get('text_hidden_size')
             self.language_projection = paddle.nn.Linear(
                 in_features=config.hidden_size, out_features=text_hidden_size)
 
@@ -1375,7 +1412,7 @@ class BertForMaskedLM(BertPreTrainedModel):
             loss_fct = CrossEntropyLoss()  # -100 index = padding token
             masked_lm_loss = loss_fct(
                 prediction_scores.reshape([-1, self.config.vocab_size]),
-                labels.reshape([-1]), )
+                labels.reshape([-1]))
 
         if not return_dict:
             output = (prediction_scores, ) + outputs[2:]
@@ -1425,13 +1462,14 @@ def find_pruneable_heads_and_indices(heads, n_heads, head_size,
         `Tuple[Set[int], torch.LongTensor]`: A tuple with the remaining heads and their corresponding indices.
     """
     mask = paddle.ones([n_heads, head_size])
-    heads = (set(heads) - already_pruned_heads
-             )  # Convert to set and remove already pruned heads
+    heads = set(
+        heads
+    ) - already_pruned_heads  # Convert to set and remove already pruned heads
     for head in heads:
         # Compute how many pruned heads are before the head and move the index accordingly
         head = head - sum(1 if h < head else 0 for h in already_pruned_heads)
         mask[head] = 0
     mask = mask.reshape(-1).eq(1)
     # index: torch.LongTensor = torch.arange(len(mask))[mask].long()
-    index = paddle.arange(len(mask))[mask].astype("int64")
+    index = paddle.arange(len(mask))[mask].astype('int64')
     return heads, index
