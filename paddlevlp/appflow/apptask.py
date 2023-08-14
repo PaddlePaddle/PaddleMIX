@@ -162,8 +162,12 @@ class AppTask(object):
 
                 if self.model == 'Sam/SamVitH-1024' or self.model == 'Sam/SamVitH-512':
                     self._config.delete_pass("shuffle_channel_detect_pass")
-                    self._config.exp_disable_tensorrt_ops(
-                        ["concat_1.tmp_0", "set_value"])
+                    self._config.delete_pass("trt_skip_layernorm_fuse_pass")
+                    self._config.delete_pass("preln_residual_bias_fuse_pass")
+                    self._config.exp_disable_tensorrt_ops([
+                        "concat_1.tmp_0", "set_value", "empty_0.tmp_0",
+                        "concat_55.tmp_0"
+                    ])
 
         self.predictor = paddle.inference.create_predictor(self._config)
         self.input_names = [name for name in self.predictor.get_input_names()]
