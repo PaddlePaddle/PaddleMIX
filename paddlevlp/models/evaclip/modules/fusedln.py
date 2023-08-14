@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import sys
+# import sys
 # your should add the path to sys.path if the root isn't in the system ENV "PATH"
 # sys.path.insert(
 #     0,

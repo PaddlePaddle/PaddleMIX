@@ -22,12 +22,12 @@ __all__ = ["CaptionCLIP"]
 
 from .dataset import DatasetBuilder
 
+
 class CaptionCLIP(DatasetBuilder):
 
     URL = "https://bj.bcebos.com/paddlemix/datasets/coco.tar.gz"
     META_INFO = collections.namedtuple(
-        "META_INFO",
-        ("images", "annotations", "images_md5", "annotations_md5"))
+        "META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
     MD5 = ""
     SPLITS = {
         "train": META_INFO(
@@ -48,7 +48,6 @@ class CaptionCLIP(DatasetBuilder):
     }
 
     def _get_data(self, mode, **kwargs):
-        # default_root = '/paddle/wangguanzhong/blip-jinman/PaddleNLP/blip2'
         logger.info("default dataset root is {}".format(DATA_HOME))
         images, annotations, image_hash, anno_hash = self.SPLITS[mode]
         image_fullname = os.path.join(DATA_HOME, images)
