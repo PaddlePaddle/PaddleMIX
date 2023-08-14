@@ -31,7 +31,7 @@
 
 Appflow provides a rich set of out of the box tools that cover cross modal and multi scenario applications, providing industry level effects and ultimate reasoning performance.
 ```python
-from applications import Appflow
+from paddlemix import Appflow
 from PIL import Image
 task = Appflow(task="openset_det_sam",
                models=["GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024"]

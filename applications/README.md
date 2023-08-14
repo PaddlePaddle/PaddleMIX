@@ -81,7 +81,7 @@ python setup.py install
 PaddleMIX提供[一键预测功能]()，无需训练，直接输入数据即可输出结果：
 
 ```python
->>> from paddlemix.applications import Appflow
+>>> from paddlemix import Appflow
 >>> from PIL import Image
 
 >>> task = Appflow(task="openset_det_sam",
