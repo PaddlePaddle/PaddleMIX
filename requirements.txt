@@ -1,3 +1,17 @@
 numpy
 nltk
 paddlenlp
+tensorboardX
+opencv-python
+PIL
+inspect
+socket
+json
+easydict
+datasets
+collections
+dataclasses
+yaml
+re
+six
+gradio

@@ -635,25 +635,26 @@ class CustomPipelineTests(unittest.TestCase):
         pipeline = pipeline
         assert pipeline.__class__.__name__ == "CustomPipeline"
 
-    def test_load_custom_github(self):
-        pipeline = DiffusionPipeline.from_pretrained(
-            "google/ddpm-cifar10-32",
-            custom_pipeline="one_step_unet",
-            custom_revision="develop")
-        with paddle.no_grad():
-            output = pipeline()
-        assert output.numel() == output.sum()
+    # TODO paddlemix donot have b088618584825b9a2373daecda4193ef450b72d0 commit id
+    # def test_load_custom_github(self):
+    #     pipeline = DiffusionPipeline.from_pretrained(
+    #         "google/ddpm-cifar10-32",
+    #         custom_pipeline="one_step_unet",
+    #         custom_revision="develop")
+    #     with paddle.no_grad():
+    #         output = pipeline()
+    #     assert output.numel() == output.sum()
 
-        del sys.modules["ppdiffusers_modules.git.one_step_unet"]
-        pipeline = DiffusionPipeline.from_pretrained(
-            "google/ddpm-cifar10-32",
-            custom_pipeline="one_step_unet",
-            custom_revision="b088618584825b9a2373daecda4193ef450b72d0", )
-        with paddle.no_grad():
-            output = pipeline()
-        assert output.numel() != output.sum()
+    #     del sys.modules["ppdiffusers_modules.git.one_step_unet"]
+    #     pipeline = DiffusionPipeline.from_pretrained(
+    #         "google/ddpm-cifar10-32",
+    #         custom_pipeline="one_step_unet",
+    #         custom_revision="b088618584825b9a2373daecda4193ef450b72d0", )
+    #     with paddle.no_grad():
+    #         output = pipeline()
+    #     assert output.numel() != output.sum()
 
-        assert pipeline.__class__.__name__ == "UnetSchedulerOneForwardPipeline"
+    #     assert pipeline.__class__.__name__ == "UnetSchedulerOneForwardPipeline"
 
     def test_run_custom_pipeline(self):
         pipeline = DiffusionPipeline.from_pretrained(

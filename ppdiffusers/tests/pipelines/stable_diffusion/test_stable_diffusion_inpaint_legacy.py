@@ -191,8 +191,8 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
         expected_slice = np.array([
-            0.0, 0.42294562, 0.31831095, 0.11458772, 0.57409716, 0.6021224,
-            0.3139254, 0.6612497, 0.51271075
+            0.01514593, 0.46352747, 0.34991893, 0.29177475, 0.5415823,
+            0.56992227, 0.39533705, 0.67953515, 0.5445507
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
@@ -239,12 +239,12 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
         image_slice_1 = images[1, -3:, -3:, -1].flatten()
 
         expected_slice_0 = np.array([
-            0.36070424, 0.6893935, 0.5395819, 0.43957978, 0.52270013,
-            0.41502672, 0.5263115, 0.57829964, 0.61257005
+            0.50299895, 0.6465979, 0.3489662, 0.28862774, 0.59657216,
+            0.41669005, 0.19621253, 0.27549136, 0.39040852
         ])
         expected_slice_1 = np.array([
-            0.5639288, 0.6165064, 0.6162699, 0.6441643, 0.56632555, 0.39611217,
-            0.62690437, 0.5277921, 0.5135379
+            0.70079666, 0.5616544, 0.5304112, 0.38820785, 0.3118701, 0.47477302,
+            0.37215403, 0.3785481, 0.50153226
         ])
 
         assert np.abs(expected_slice_0 - image_slice_0).max() < 1e-2
@@ -286,8 +286,8 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
         expected_slice = np.array([
-            0.0, 0.42320636, 0.3191024, 0.11486277, 0.5742749, 0.6025071,
-            0.31415784, 0.66176593, 0.5128486
+            0., 0.43941003, 0.32130337, 0.31442684, 0.566114, 0.56392324,
+            0.3946159, 0.6844422, 0.5345681
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 

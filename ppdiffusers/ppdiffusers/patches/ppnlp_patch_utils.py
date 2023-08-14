@@ -390,7 +390,9 @@ if is_paddle_available() and is_paddlenlp_available():
             if attention_op in [None, "auto"]:
                 head_dim = query.shape[-1]
                 attention_op = "cutlass"
-                if is_support_flash_attention:
+                if is_support_flash_attention and query.dtype in [
+                        paddle.float16, paddle.bfloat16
+                ]:
                     if flash_attn_version == 1:
                         if head_dim <= 128:
                             attention_op = "flash"

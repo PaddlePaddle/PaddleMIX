@@ -2,8 +2,7 @@ import paddle
 import os
 
 
-def save(args, model, optimizer, epoch=0, step=0, output_dir="",
-         is_best=False):
+def save(args, model, optimizer, epoch=0, step=0, output_dir="", is_best=False):
     """
     save the state dicts of model and optimizer into an checkpoint.
     """
@@ -138,7 +137,8 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
             return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
 
         model_dict = paddle.load(ckpt_dir)
-        for whole_key in model_dict.keys():
+        modelkeys = list(model_dict.keys())
+        for whole_key in modelkeys:
             if not '.' in whole_key:
                 continue
             if 'q_bias' in whole_key or 'v_bias' in whole_key:
@@ -165,6 +165,14 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         if args.context_length != 77:
             model_dict["text.positional_embedding"] = model_dict[
                 "text.positional_embedding"][:args.context_length, :]
+
+        print("cast state_dict to default dtype:{}".format(
+            paddle.get_default_dtype()))
+        for key, value in model_dict.items():
+            if 'freqs_cos' in key or 'freqs_sin' in key:
+                continue
+            model_dict[key] = paddle.cast(
+                value, dtype=paddle.get_default_dtype())
         model.set_state_dict(model_dict)
         del model_dict
     else:

@@ -105,36 +105,39 @@ def set_hyrbid_parallel_seed(basic_seed, data_world_rank, mp_rank, pp_rank=0):
 
 
 def setdistenv(args):
-    args.dp_degree = dist.get_world_size() // (args.tensor_parallel_degree *
-                                               args.sharding_parallel_degree *
-                                               args.pipeline_parallel_degree)
-    strategy = fleet.DistributedStrategy()
-    strategy.hybrid_configs = {
-        "dp_degree": args.dp_degree,
-        "mp_degree": args.tensor_parallel_degree,
-        "sharding_degree": args.sharding_parallel_degree,
-        "pp_degree": args.pipeline_parallel_degree,
-    }
-    # strategy.find_unused_parameters = True
+    if dist.get_world_size() > 1:
+        args.dp_degree = dist.get_world_size() // (
+            args.tensor_parallel_degree * args.sharding_parallel_degree *
+            args.pipeline_parallel_degree)
+        strategy = fleet.DistributedStrategy()
+        strategy.hybrid_configs = {
+            "dp_degree": args.dp_degree,
+            "mp_degree": args.tensor_parallel_degree,
+            "sharding_degree": args.sharding_parallel_degree,
+            "pp_degree": args.pipeline_parallel_degree,
+        }
+        # strategy.find_unused_parameters = True
 
-    # set control in tensor parallel
-    strategy.tensor_parallel_configs = {"tensor_init_seed": args.seed}
+        # set control in tensor parallel
+        strategy.tensor_parallel_configs = {"tensor_init_seed": args.seed}
 
-    fleet.init(is_collective=True, strategy=strategy)
+        fleet.init(is_collective=True, strategy=strategy)
 
-    # if paddle.distributed.get_world_size() > 1:
-    #     paddle.distributed.init_parallel_env()
+        args.rank = dist.get_rank()
+        # obtain rank message of hybrid parallel
+        hcg = fleet.get_hybrid_communicate_group()
+        args.mp_rank = hcg.get_model_parallel_rank()
+        args.dp_rank = hcg.get_data_parallel_rank()
+        args.sharding_rank = hcg.get_sharding_parallel_rank()
 
-    args.rank = dist.get_rank()
-    # obtain rank message of hybrid parallel
-    hcg = fleet.get_hybrid_communicate_group()
-    args.mp_rank = hcg.get_model_parallel_rank()
-    args.dp_rank = hcg.get_data_parallel_rank()
-    args.sharding_rank = hcg.get_sharding_parallel_rank()
-
-    args.data_world_rank = args.dp_rank * args.sharding_parallel_degree + args.sharding_rank
-    args.data_world_size = dist.get_world_size() // abs(
-        args.tensor_parallel_degree * args.pipeline_parallel_degree)
+        args.data_world_rank = args.dp_rank * args.sharding_parallel_degree + args.sharding_rank
+        args.data_world_size = dist.get_world_size() // abs(
+            args.tensor_parallel_degree * args.pipeline_parallel_degree)
+    else:
+        args.data_world_rank = 0
+        args.data_world_size = 1
+        args.mp_rank = 0
+        args.rank = 0
 
     # seed control in hybrid parallel
     set_hyrbid_parallel_seed(args.seed, args.data_world_rank, args.mp_rank)

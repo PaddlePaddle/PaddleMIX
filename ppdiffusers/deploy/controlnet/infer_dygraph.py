@@ -198,6 +198,12 @@ def main(args):
                     continue
                 else:
                     raise ValueError(e)
+
+        if not args.use_fp16 and attention_type == "flash":
+            print(
+                "Flash attention is not supported dtype=float32! Please use float16 or bfloat16. We will skip this!"
+            )
+            continue
         guess_mode = args.guess_mode
         width = args.width
         height = args.height

@@ -2,12 +2,17 @@ import paddle
 import math
 import os
 from typing import Union, Dict
-from . import timm_ext
 from functools import partial
-from .transformer import PatchDropout, AttentionalPooler, LayerNorm
-from .rope import VisionRotaryEmbedding, VisionRotaryEmbeddingFast
-from .fusedln import FusedLayerNorm
+from .eva_text_model import PatchDropout, AttentionalPooler, LayerNorm
+from .modules.rope import VisionRotaryEmbeddingFast
+try:
+    from .modules.fusedln import FusedLayerNorm
+except:
+    from paddle.nn import LayerNorm as FusedLayerNorm
+    print("Warning, FusedLn module is not available, use LayerNorm instead.")
+from .utils import to_2tuple, trunc_normal_
 
+import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
@@ -15,6 +20,38 @@ from paddle.incubate.nn.memory_efficient_attention import memory_efficient_atten
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel
 from paddlenlp.utils.log import logger
+
+
+def drop_path(x,
+              drop_prob: float=0.0,
+              training: bool=False,
+              scale_by_keep: bool=True):
+    """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
+
+    This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
+    the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
+    See discussion: https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956 ... I've opted for
+    changing the layer and argument names to 'drop path' rather than mix DropConnect as a layer name and use
+    'survival rate' as the argument.
+
+    """
+    if drop_prob == 0.0 or not training:
+        return x
+    keep_prob = 1 - drop_prob
+    shape = (x.shape[0], ) + (1, ) * (x.ndim - 1)
+    bern_0 = paddle.to_tensor(
+        [keep_prob], dtype=paddle.float32) if not isinstance(
+            keep_prob, paddle.Tensor) else keep_prob
+    random_tensor = paddle.assign(
+        paddle.bernoulli(
+            paddle.broadcast_to(
+                bern_0, paddle.empty(
+                    shape=shape, dtype=x.dtype).shape)),
+        paddle.empty(
+            shape=shape, dtype=x.dtype))
+    if keep_prob > 0.0 and scale_by_keep:
+        random_tensor = random_tensor.divide(keep_prob)
+    return x * random_tensor
 
 
 class DropPath(paddle.nn.Layer):
@@ -26,7 +63,9 @@ class DropPath(paddle.nn.Layer):
         self.drop_prob = drop_prob
 
     def forward(self, x):
-        return timm_ext.drop_path(x, self.drop_prob, self.training)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            out = drop_path(x, self.drop_prob, self.training)
+        return out
 
     def extra_repr(self) -> str:
         return 'p={}'.format(self.drop_prob)
@@ -34,32 +73,34 @@ class DropPath(paddle.nn.Layer):
 
 class Mlp(paddle.nn.Layer):
     def __init__(self,
-                 in_features,
-                 hidden_features=None,
-                 out_features=None,
+                 config,
                  act_layer=paddle.nn.GELU,
-                 norm_layer=paddle.nn.LayerNorm,
-                 drop=0.0,
-                 subln=False):
+                 norm_layer=paddle.nn.LayerNorm):
         super().__init__()
-        out_features = out_features or in_features
+        in_features = config.embed_dim
+        hidden_features = int(config.embed_dim * config.mlp_ratio)
+        out_features = in_features
         hidden_features = hidden_features or in_features
-        self.fc1 = fleet.meta_parallel.ColumnParallelLinear(
-            in_features,
-            hidden_features,
-            weight_attr=None,
-            has_bias=True,
-            gather_output=True)
+        if dist.get_world_size() > 1:
+            self.fc1 = fleet.meta_parallel.ColumnParallelLinear(
+                in_features,
+                hidden_features,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True)
+            self.fc2 = fleet.meta_parallel.ColumnParallelLinear(
+                hidden_features,
+                out_features,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True)
+        else:
+            self.fc1 = paddle.nn.Linear(in_features, hidden_features)
+            self.fc2 = paddle.nn.Linear(hidden_features, out_features)
         self.act = act_layer()
         self.ffn_ln = norm_layer(
-            hidden_features) if subln else paddle.nn.Identity()
-        self.fc2 = fleet.meta_parallel.ColumnParallelLinear(
-            hidden_features,
-            out_features,
-            weight_attr=None,
-            has_bias=True,
-            gather_output=True)
-        self.drop = paddle.nn.Dropout(p=drop)
+            hidden_features) if config.subln else paddle.nn.Identity()
+        self.drop = paddle.nn.Dropout(p=config.drop_rate)
 
     def forward(self, x):
         x = self.fc1(x)
@@ -72,38 +113,42 @@ class Mlp(paddle.nn.Layer):
 
 
 class SwiGLU(paddle.nn.Layer):
-    def __init__(self,
-                 in_features,
-                 hidden_features=None,
-                 out_features=None,
-                 act_layer=paddle.nn.Silu,
-                 drop=0.0,
-                 norm_layer=paddle.nn.LayerNorm,
-                 subln=False):
+    def __init__(
+            self,
+            config,
+            drop=0.0,
+            act_layer=paddle.nn.Silu,
+            norm_layer=paddle.nn.LayerNorm, ):
         super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        self.w1 = fleet.meta_parallel.ColumnParallelLinear(
-            in_features,
-            hidden_features,
-            weight_attr=None,
-            has_bias=True,
-            gather_output=True)
-        self.w2 = fleet.meta_parallel.ColumnParallelLinear(
-            in_features,
-            hidden_features,
-            weight_attr=None,
-            has_bias=True,
-            gather_output=True)
+        in_features = config.embed_dim
+        hidden_features = int(config.embed_dim * config.mlp_ratio)
+        out_features = in_features
+        if dist.get_world_size() > 1:
+            self.w1 = fleet.meta_parallel.ColumnParallelLinear(
+                in_features,
+                hidden_features,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True)
+            self.w2 = fleet.meta_parallel.ColumnParallelLinear(
+                in_features,
+                hidden_features,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True)
+            self.w3 = fleet.meta_parallel.ColumnParallelLinear(
+                hidden_features,
+                out_features,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True)
+        else:
+            self.w1 = paddle.nn.Linear(in_features, hidden_features)
+            self.w2 = paddle.nn.Linear(in_features, hidden_features)
+            self.w3 = paddle.nn.Linear(hidden_features, out_features)
         self.act = act_layer()
         self.ffn_ln = norm_layer(
-            hidden_features) if subln else paddle.nn.Identity()
-        self.w3 = fleet.meta_parallel.ColumnParallelLinear(
-            hidden_features,
-            out_features,
-            weight_attr=None,
-            has_bias=True,
-            gather_output=True)
+            hidden_features) if config.subln else paddle.nn.Identity()
         self.drop = paddle.nn.Dropout(p=drop)
 
     def forward(self, x):
@@ -119,64 +164,71 @@ class SwiGLU(paddle.nn.Layer):
 
 class Attention(paddle.nn.Layer):
     def __init__(self,
-                 dim,
-                 num_heads=8,
-                 qkv_bias=False,
-                 qk_scale=None,
-                 attn_drop=0.0,
-                 proj_drop=0.0,
+                 config,
                  window_size=None,
-                 attn_head_dim=None,
-                 xattn=False,
                  rope=None,
-                 subln=False,
                  norm_layer=paddle.nn.LayerNorm):
         super().__init__()
-        self.num_heads = num_heads
-        head_dim = dim // num_heads
-        if attn_head_dim is not None:
-            head_dim = attn_head_dim
+        dim = config.embed_dim
+        self.xattn_drop = config.attn_drop_rate
+        self.xattn = config.xattn
+        self.subln = config.subln
+
+        self.num_heads = config.embed_dim // config.head_width
+        head_dim = dim // self.num_heads
+        if hasattr(config,
+                   "attn_head_dim") and config.attn_head_dim is not None:
+            head_dim = config.attn_head_dim
         all_head_dim = head_dim * self.num_heads
-        self.scale = qk_scale or head_dim**-0.5
-        self.subln = subln
+        self.scale = config.qk_scale or head_dim**-0.5
         if self.subln:
-            self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
-                dim,
-                all_head_dim,
-                weight_attr=None,
-                has_bias=qkv_bias,
-                gather_output=True)
-            self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
-                dim,
-                all_head_dim,
-                weight_attr=None,
-                has_bias=False,
-                gather_output=True)
-            self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
-                dim,
-                all_head_dim,
-                weight_attr=None,
-                has_bias=qkv_bias,
-                gather_output=True)
+            if dist.get_world_size() > 1:
+                self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
+                    dim,
+                    all_head_dim,
+                    weight_attr=None,
+                    has_bias=config.qkv_bias,
+                    gather_output=True)
+                self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
+                    dim,
+                    all_head_dim,
+                    weight_attr=None,
+                    has_bias=False,
+                    gather_output=True)
+                self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
+                    dim,
+                    all_head_dim,
+                    weight_attr=None,
+                    has_bias=config.qkv_bias,
+                    gather_output=True)
+            else:
+                self.q_proj = paddle.nn.Linear(dim, all_head_dim)
+                self.k_proj = paddle.nn.Linear(
+                    dim, all_head_dim, bias_attr=False)
+                self.v_proj = paddle.nn.Linear(dim, all_head_dim)
         else:
-            self.qkv = fleet.meta_parallel.ColumnParallelLinear(
-                dim,
-                all_head_dim * 3,
-                weight_attr=None,
-                has_bias=False,
-                gather_output=True)
-            if qkv_bias:
-                mpsize = fleet.get_hybrid_communicate_group(
-                ).get_model_parallel_world_size()
+            if dist.get_world_size() > 1:
+                self.qkv = fleet.meta_parallel.ColumnParallelLinear(
+                    dim,
+                    all_head_dim * 3,
+                    weight_attr=None,
+                    has_bias=False,
+                    gather_output=True)
+            else:
+                self.qkv = paddle.nn.Linear(
+                    dim, all_head_dim * 3, bias_attr=False)
+            if config.qkv_bias:
+                mpsize = 1
+                if dist.get_world_size() > 1:
+                    mpsize = fleet.get_hybrid_communicate_group(
+                    ).get_model_parallel_world_size()
                 init_data = paddle.zeros(shape=[all_head_dim // mpsize])
                 self.q_bias = self.create_parameter(
                     shape=[all_head_dim // mpsize],
-                    default_initializer=paddle.nn.initializer.Assign(
-                        init_data))
+                    default_initializer=paddle.nn.initializer.Assign(init_data))
                 self.v_bias = self.create_parameter(
                     shape=[all_head_dim // mpsize],
-                    default_initializer=paddle.nn.initializer.Assign(
-                        init_data))
+                    default_initializer=paddle.nn.initializer.Assign(init_data))
             else:
                 self.q_bias = None
                 self.v_bias = None
@@ -185,16 +237,16 @@ class Attention(paddle.nn.Layer):
             self.num_relative_distance = (2 * window_size[0] - 1) * (
                 2 * window_size[1] - 1) + 3
             init_data = paddle.zeros(
-                shape=[self.num_relative_distance, num_heads])
+                shape=[self.num_relative_distance, self.num_heads])
             self.relative_position_bias_table = self.create_parameter(
-                shape=[self.num_relative_distance, num_heads],
+                shape=[self.num_relative_distance, self.num_heads],
                 default_initializer=paddle.nn.initializer.Assign(init_data))
             coords_h = paddle.arange(end=window_size[0])
             coords_w = paddle.arange(end=window_size[1])
             coords = paddle.stack(x=paddle.meshgrid([coords_h, coords_w]))
             coords_flatten = paddle.flatten(x=coords, start_axis=1)
-            relative_coords = coords_flatten[:, :, (
-                None)] - coords_flatten[:, (None), :]
+            relative_coords = coords_flatten[:, :, (None)] - coords_flatten[:, (
+                None), :]
             relative_coords = relative_coords.transpose(perm=[1, 2, 0])
             relative_coords[:, :, (0)] += window_size[0] - 1
             relative_coords[:, :, (1)] += window_size[1] - 1
@@ -212,19 +264,19 @@ class Attention(paddle.nn.Layer):
             self.window_size = None
             self.relative_position_bias_table = None
             self.relative_position_index = None
-        self.attn_drop = paddle.nn.Dropout(p=attn_drop)
-        # self.inner_attn_ln = norm_layer(
-        #     all_head_dim) if subln else paddle.nn.Identity()
-        self.inner_attn_ln = paddle.nn.Identity()
-        self.proj = fleet.meta_parallel.ColumnParallelLinear(
-            all_head_dim,
-            dim,
-            weight_attr=None,
-            has_bias=True,
-            gather_output=True)
-        self.proj_drop = paddle.nn.Dropout(p=proj_drop)
-        self.xattn = xattn
-        self.xattn_drop = attn_drop
+        self.attn_drop = paddle.nn.Dropout(p=self.xattn_drop)
+        self.inner_attn_ln = norm_layer(all_head_dim) if (
+            config.subln and config.inner_attn_ln) else paddle.nn.Identity()
+        if dist.get_world_size() > 1:
+            self.proj = fleet.meta_parallel.ColumnParallelLinear(
+                all_head_dim,
+                dim,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True)
+        else:
+            self.proj = paddle.nn.Linear(all_head_dim, dim)
+        self.proj_drop = paddle.nn.Dropout(p=config.drop_rate)
         self.rope = rope
 
     def forward(self, x, rel_pos_bias=None, attn_mask=None):
@@ -249,10 +301,12 @@ class Attention(paddle.nn.Layer):
             qkv = paddle.nn.functional.linear(
                 x=x, weight=self.qkv.weight, bias=qkv_bias)
 
-            hcg = fleet.get_hybrid_communicate_group()
-            model_parallel_group = hcg.get_model_parallel_group()
-            qkv = paddle.distributed.collective._c_concat(
-                qkv, group=model_parallel_group)
+            if dist.get_world_size() > 1:
+                hcg = fleet.get_hybrid_communicate_group()
+                if hcg.get_model_parallel_world_size() > 1:
+                    model_parallel_group = hcg.get_model_parallel_group()
+                    qkv = paddle.distributed.collective._c_concat(
+                        qkv, group=model_parallel_group)
 
             qkv = qkv.reshape(
                 (B, N, 3, self.num_heads, -1)).transpose(perm=[2, 0, 3, 1, 4])
@@ -316,55 +370,26 @@ class Attention(paddle.nn.Layer):
 
 class Block(paddle.nn.Layer):
     def __init__(self,
-                 dim,
-                 num_heads,
-                 mlp_ratio=4.0,
-                 qkv_bias=False,
-                 qk_scale=None,
-                 drop=0.0,
-                 attn_drop=0.0,
+                 config,
                  drop_path=0.0,
-                 init_values=None,
-                 act_layer=paddle.nn.GELU,
-                 norm_layer=paddle.nn.LayerNorm,
                  window_size=None,
-                 attn_head_dim=None,
-                 xattn=False,
                  rope=None,
-                 postnorm=False,
-                 subln=False,
-                 naiveswiglu=False):
+                 act_layer=paddle.nn.GELU,
+                 norm_layer=paddle.nn.LayerNorm):
         super().__init__()
+        dim = config.embed_dim
+        init_values = config.init_values
+        self.postnorm = config.postnorm
+
         self.norm1 = norm_layer(dim)
-        self.attn = Attention(
-            dim,
-            num_heads=num_heads,
-            qkv_bias=qkv_bias,
-            qk_scale=qk_scale,
-            attn_drop=attn_drop,
-            proj_drop=drop,
-            window_size=window_size,
-            attn_head_dim=attn_head_dim,
-            xattn=xattn,
-            rope=rope,
-            subln=subln,
-            norm_layer=norm_layer)
+        self.attn = Attention(config, window_size=window_size, rope=rope)
         self.drop_path = DropPath(
-            timm_ext.drop_path) if drop_path > 0.0 else paddle.nn.Identity()
+            drop_path) if drop_path > 0.0 else paddle.nn.Identity()
         self.norm2 = norm_layer(dim)
-        mlp_hidden_dim = int(dim * mlp_ratio)
-        if naiveswiglu:
-            self.mlp = SwiGLU(
-                in_features=dim,
-                hidden_features=mlp_hidden_dim,
-                subln=subln,
-                norm_layer=norm_layer)
+        if config.naiveswiglu:
+            self.mlp = SwiGLU(config, norm_layer=norm_layer)
         else:
-            self.mlp = Mlp(in_features=dim,
-                           hidden_features=mlp_hidden_dim,
-                           act_layer=act_layer,
-                           subln=subln,
-                           drop=drop)
+            self.mlp = Mlp(config, act_layer=act_layer)
         if init_values is not None and init_values > 0:
             init_data = init_values * paddle.ones(shape=dim)
             self.gamma_1 = self.create_parameter(
@@ -376,7 +401,6 @@ class Block(paddle.nn.Layer):
                 default_initializer=paddle.nn.initializer.Assign(init_data))
         else:
             self.gamma_1, self.gamma_2 = None, None
-        self.postnorm = postnorm
 
     def forward(self, x, rel_pos_bias=None, attn_mask=None):
         if self.gamma_1 is None:
@@ -384,8 +408,7 @@ class Block(paddle.nn.Layer):
                 x = x + self.drop_path(
                     self.norm1(
                         self.attn(
-                            x, rel_pos_bias=rel_pos_bias,
-                            attn_mask=attn_mask)))
+                            x, rel_pos_bias=rel_pos_bias, attn_mask=attn_mask)))
                 x = x + self.drop_path(self.norm2(self.mlp(x)))
             else:
                 x = x + self.drop_path(
@@ -410,10 +433,10 @@ class PatchEmbed(paddle.nn.Layer):
     """ Image to Patch Embedding
     """
 
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
+    def __init__(self, config):
         super().__init__()
-        img_size = timm_ext.to_2tuple(img_size)
-        patch_size = timm_ext.to_2tuple(patch_size)
+        img_size = to_2tuple(config.img_size)
+        patch_size = to_2tuple(config.patch_size)
         num_patches = img_size[1] // patch_size[1] * (img_size[0] //
                                                       patch_size[0])
         self.patch_shape = img_size[0] // patch_size[0], img_size[
@@ -422,8 +445,8 @@ class PatchEmbed(paddle.nn.Layer):
         self.patch_size = patch_size
         self.num_patches = num_patches
         self.proj = paddle.nn.Conv2D(
-            in_channels=in_chans,
-            out_channels=embed_dim,
+            in_channels=config.in_chans,
+            out_channels=config.embed_dim,
             kernel_size=patch_size,
             stride=patch_size)
 
@@ -466,8 +489,7 @@ class RelativePositionBias(paddle.nn.Layer):
         relative_position_index[(0), 0:] = self.num_relative_distance - 3
         relative_position_index[0:, (0)] = self.num_relative_distance - 2
         relative_position_index[0, 0] = self.num_relative_distance - 1
-        self.register_buffer('relative_position_index',
-                             relative_position_index)
+        self.register_buffer('relative_position_index', relative_position_index)
 
     def forward(self):
         relative_position_bias = self.relative_position_bias_table[
@@ -490,7 +512,7 @@ class EVAVisionTransformerConfig(PretrainedConfig):
             num_classes=1000,
             embed_dim=768,
             depth=12,
-            num_heads=12,
+            num_heads=8,
             mlp_ratio=4.0,
             qkv_bias=False,
             qk_scale=None,
@@ -517,10 +539,10 @@ class EVAVisionTransformerConfig(PretrainedConfig):
             subln=False,
             output_tokens=False,
             fusedLN=False,
+            inner_attn_ln=True,
             **kwargs, ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
-
         self.img_size = img_size
         self.patch_size = patch_size
         self.in_chans = in_chans
@@ -554,13 +576,14 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         self.subln = subln
         self.output_tokens = output_tokens
         self.fusedLN = fusedLN
+        self.inner_attn_ln = inner_attn_ln
 
     @classmethod
     def from_pretrained(cls,
                         pretrained_model_name_or_path: Union[str, os.PathLike],
                         **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(
-            pretrained_model_name_or_path, **kwargs)
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
+                                                  **kwargs)
 
         if ("model_type" in config_dict and hasattr(cls, "model_type") and
                 config_dict["model_type"] != cls.model_type):
@@ -592,154 +615,119 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
 
     def __init__(self, config: EVAVisionTransformerConfig):
         super(EVAVisionTransformer, self).__init__(config)
-
-        img_size = config.img_size
-        patch_size = config.patch_size
-        in_chans = config.in_chans
-        num_classes = config.num_classes
-        embed_dim = config.embed_dim
-        depth = config.depth
-        mlp_ratio = config.mlp_ratio
-        qkv_bias = config.qkv_bias
-        qk_scale = config.qk_scale
-        drop_rate = config.drop_rate
-        attn_drop_rate = config.attn_drop_rate
-        drop_path_rate = config.drop_path_rate
-        init_values = config.init_values
-        patch_dropout = config.patch_dropout
-        use_abs_pos_emb = config.use_abs_pos_emb
-        use_rel_pos_bias = config.use_rel_pos_bias
-        use_shared_rel_pos_bias = config.use_shared_rel_pos_bias
-        rope = config.rope
+        self.image_size = config.img_size
+        self.enable_recompute = config.enable_recompute
+        self.output_tokens = config.output_tokens
+        self.num_classes = num_classes = config.num_classes
+        self.embed_dim = embed_dim = config.embed_dim
+        self.naiveswiglu = config.naiveswiglu
         use_mean_pooling = config.use_mean_pooling
-        attentional_pool = config.attentional_pool
-        n_queries = config.n_queries
-        attn_pooler_heads = config.attn_pooler_heads
-        init_scale = config.init_scale
-        enable_recompute = config.enable_recompute
-        xattn = config.xattn
-        postnorm = config.postnorm
-        pt_hw_seq_len = config.pt_hw_seq_len
-        intp_freq = config.intp_freq
-        naiveswiglu = config.naiveswiglu
-        subln = config.subln
-        output_tokens = config.output_tokens
         norm_layer = partial(
             FusedLayerNorm, epsilon=1e-6) if config.fusedLN else partial(
                 LayerNorm, epsilon=1e-6)
         num_heads = config.embed_dim // config.head_width
 
-        self.image_size = img_size
-        self.num_classes = num_classes
-        self.num_features = self.embed_dim = embed_dim
-        self.patch_embed = PatchEmbed(
-            img_size=img_size,
-            patch_size=patch_size,
-            in_chans=in_chans,
-            embed_dim=embed_dim)
+        self.patch_embed = PatchEmbed(config)
         num_patches = self.patch_embed.num_patches
         init_data = paddle.zeros(shape=[1, 1, embed_dim])
         self.cls_token = self.create_parameter(
             shape=[1, 1, embed_dim],
             default_initializer=paddle.nn.initializer.Assign(init_data))
-        if use_abs_pos_emb:
+        if config.use_abs_pos_emb:
             init_data = paddle.zeros(shape=[1, num_patches + 1, embed_dim])
             self.pos_embed = self.create_parameter(
                 shape=[1, num_patches + 1, embed_dim],
                 default_initializer=paddle.nn.initializer.Assign(init_data))
         else:
             self.pos_embed = None
-        self.pos_drop = paddle.nn.Dropout(p=drop_rate)
-        if use_shared_rel_pos_bias:
+        self.pos_drop = paddle.nn.Dropout(p=config.drop_rate)
+        if config.use_shared_rel_pos_bias:
             self.rel_pos_bias = RelativePositionBias(
                 window_size=self.patch_embed.patch_shape, num_heads=num_heads)
         else:
             self.rel_pos_bias = None
-        if rope:
+        if config.rope:
             half_head_dim = embed_dim // num_heads // 2
-            hw_seq_len = img_size // patch_size
+            hw_seq_len = config.img_size // config.patch_size
             self.rope = VisionRotaryEmbeddingFast(
                 dim=half_head_dim,
-                pt_seq_len=pt_hw_seq_len,
-                ft_seq_len=hw_seq_len if intp_freq else None)
+                pt_seq_len=config.pt_hw_seq_len,
+                ft_seq_len=hw_seq_len if config.intp_freq else None)
         else:
             self.rope = None
-        self.naiveswiglu = naiveswiglu
         dpr = [
             x.item()
             for x in paddle.linspace(
-                start=0, stop=drop_path_rate, num=depth)
+                start=0, stop=config.drop_path_rate, num=config.depth)
         ]
-        self.use_rel_pos_bias = use_rel_pos_bias
         self.blocks = paddle.nn.LayerList(sublayers=[
             Block(
-                dim=embed_dim,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                qk_scale=qk_scale,
-                drop=drop_rate,
-                attn_drop=attn_drop_rate,
+                config,
                 drop_path=dpr[i],
                 norm_layer=norm_layer,
-                init_values=init_values,
                 window_size=self.patch_embed.patch_shape
-                if use_rel_pos_bias else None,
-                xattn=xattn,
-                rope=self.rope,
-                postnorm=postnorm,
-                subln=subln,
-                naiveswiglu=naiveswiglu) for i in range(depth)
+                if config.use_rel_pos_bias else None,
+                rope=self.rope) for i in range(config.depth)
         ])
-        if attentional_pool:
-            self.attn_pool = AttentionalPooler(
-                num_classes,
-                embed_dim,
-                n_head=attn_pooler_heads,
-                n_queries=n_queries)
+        if config.attentional_pool:
+            self.attn_pool = AttentionalPooler(config)
             self.norm = paddle.nn.Identity(
             ) if use_mean_pooling else norm_layer(num_classes)
-            self.fc_norm = norm_layer(
-                num_classes) if use_mean_pooling else None
-            self.head = fleet.meta_parallel.ColumnParallelLinear(
-                num_classes,
-                num_classes,
-                weight_attr=None,
-                has_bias=True,
-                gather_output=True) if num_classes > 0 else paddle.nn.Identity(
-                )
+            self.fc_norm = norm_layer(num_classes) if use_mean_pooling else None
+            if dist.get_world_size() > 1:
+                self.head = fleet.meta_parallel.ColumnParallelLinear(
+                    num_classes,
+                    num_classes,
+                    weight_attr=None,
+                    has_bias=True,
+                    gather_output=True
+                ) if num_classes > 0 else paddle.nn.Identity()
+            else:
+                self.head = paddle.nn.Linear(
+                    num_classes,
+                    num_classes) if num_classes > 0 else paddle.nn.Identity()
         else:
             self.attn_pool = None
             self.norm = paddle.nn.Identity(
             ) if use_mean_pooling else norm_layer(embed_dim)
             self.fc_norm = norm_layer(embed_dim) if use_mean_pooling else None
-            self.head = fleet.meta_parallel.ColumnParallelLinear(
-                embed_dim,
-                num_classes,
-                weight_attr=None,
-                has_bias=True,
-                gather_output=True) if num_classes > 0 else paddle.nn.Identity(
-                )
+            if dist.get_world_size() > 1:
+                self.head = fleet.meta_parallel.ColumnParallelLinear(
+                    embed_dim,
+                    num_classes,
+                    weight_attr=None,
+                    has_bias=True,
+                    gather_output=True
+                ) if num_classes > 0 else paddle.nn.Identity()
+            else:
+                self.head = paddle.nn.Linear(
+                    embed_dim,
+                    num_classes) if num_classes > 0 else paddle.nn.Identity()
         if self.pos_embed is not None:
-            timm_ext.trunc_normal_(self.pos_embed, std=0.02)
-        timm_ext.trunc_normal_(self.cls_token, std=0.02)
+            trunc_normal_(self.pos_embed, std=0.02)
+        trunc_normal_(self.cls_token, std=0.02)
         self.apply(self._init_weights)
         self.fix_init_weight()
         if isinstance(self.head, fleet.meta_parallel.ColumnParallelLinear):
-            timm_ext.trunc_normal_(self.head.weight, std=0.02)
+            trunc_normal_(self.head.weight, std=0.02)
             with paddle.no_grad():
                 self.head.weight.set_value(
-                    self.head.weight.scale(scale=init_scale))
+                    self.head.weight.scale(scale=config.init_scale))
                 self.head.bias.set_value(
-                    self.head.bias.scale(scale=init_scale))
+                    self.head.bias.scale(scale=config.init_scale))
         self.patch_dropout = PatchDropout(
-            patch_dropout) if patch_dropout > 0.0 else paddle.nn.Identity()
-        self.enable_recompute = enable_recompute
-        self.output_tokens = output_tokens
+            config.patch_dropout
+        ) if config.patch_dropout > 0.0 else paddle.nn.Identity()
 
     def fix_init_weight(self):
         def rescale(param, layer_id):
-            param = param.divide(paddle.to_tensor(math.sqrt(2.0 * layer_id)))
+            origin_dtype = paddle.get_default_dtype()
+            paddle.set_default_dtype("float32")
+            tmp = paddle.to_tensor(math.sqrt(2.0 * layer_id))
+            paddle.set_default_dtype(origin_dtype)
+            if origin_dtype != 'float32':
+                tmp = tmp.astype(origin_dtype)
+            param = param.divide(tmp)
 
         for layer_id, layer in enumerate(self.blocks):
             rescale(layer.attn.proj.weight, layer_id + 1)
@@ -756,7 +744,7 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
         ones_params = paddle.nn.initializer.Constant(1.0)
         if isinstance(m, (paddle.nn.Linear,
                           fleet.meta_parallel.ColumnParallelLinear)):
-            timm_ext.trunc_normal_(m.weight, std=0.02)
+            trunc_normal_(m.weight, std=0.02)
             if m.bias is not None:
                 zeros_params(m.bias)
         elif isinstance(m, paddle.nn.LayerNorm):
@@ -782,13 +770,17 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
 
     def reset_classifier(self, num_classes, global_pool=''):
         self.num_classes = num_classes
-        self.head = fleet.meta_parallel.ColumnParallelLinear(
-            self.embed_dim,
-            num_classes,
-            weight_attr=None,
-            has_bias=True,
-            gather_output=True) if num_classes > 0 else paddle.nn.Identity()
-
+        if dist.get_world_size() > 1:
+            self.head = fleet.meta_parallel.ColumnParallelLinear(
+                self.embed_dim,
+                num_classes,
+                weight_attr=None,
+                has_bias=True,
+                gather_output=True) if num_classes > 0 else paddle.nn.Identity()
+        else:
+            self.head = paddle.nn.Linear(
+                self.embed_dim,
+                num_classes) if num_classes > 0 else paddle.nn.Identity()
 
     def forward_features(self, x, return_all_features=False):
         x = self.patch_embed(x)
@@ -817,8 +809,8 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
         for blk in self.blocks:
             cnt += 1
             if self.enable_recompute:
-                x = paddle.distributed.fleet.utils.recompute(blk, x,
-                                                             (rel_pos_bias, ), use_reentrant=False)
+                x = paddle.distributed.fleet.utils.recompute(
+                    blk, x, rel_pos_bias, use_reentrant=False)
             else:
                 x = blk(x, rel_pos_bias=rel_pos_bias)
 

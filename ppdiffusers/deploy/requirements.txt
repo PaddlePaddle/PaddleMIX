@@ -1,1 +1,1 @@
-ppdiffusers>=0.16.1
+ppdiffusers>=0.16.3

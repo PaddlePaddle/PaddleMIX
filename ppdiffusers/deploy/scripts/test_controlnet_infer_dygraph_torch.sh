@@ -14,17 +14,17 @@
 cd ../controlnet
 pip install diffusers==0.17.1
 
-python infer_dygraph_toch.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 \
+python infer_dygraph_torch.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 \
     --controlnet_pretrained_model_name_or_path lllyasviel/sd-controlnet-canny \
     --task_name all --use_fp16 True \
     --attention_type raw --benchmark_steps 10 --device_id 0 --parse_prompt_type raw
 
-python infer_dygraph_toch.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 \
+python infer_dygraph_torch.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 \
     --controlnet_pretrained_model_name_or_path lllyasviel/sd-controlnet-canny \
     --task_name all --use_fp16 True \
     --attention_type sdp --benchmark_steps 10 --device_id 0 --parse_prompt_type raw
 
-python infer_dygraph_toch.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 \
+python infer_dygraph_torch.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 \
     --controlnet_pretrained_model_name_or_path lllyasviel/sd-controlnet-canny \
     --task_name all --use_fp16 True \
     --attention_type sdp --benchmark_steps 10 --device_id 0 --parse_prompt_type raw --compile True --channels_last True
