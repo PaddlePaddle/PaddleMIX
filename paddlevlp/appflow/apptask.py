@@ -13,10 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import abc
-import math
 import os
-from abc import abstractmethod
+import math
 from multiprocessing import cpu_count
 
 import paddle
@@ -24,11 +22,10 @@ from paddle.dataset.common import md5file
 
 from paddlevlp.utils.env import PPMIX_HOME
 from paddlevlp.utils.log import logger
-from paddlenlp.taskflow.task import Task
-from paddlenlp.taskflow.utils import cut_chinese_sent, download_check, download_file, dygraph_mode_guard
+from paddlenlp.taskflow.utils import dygraph_mode_guard
 
 
-class AppTask(Task):
+class AppTask(object):
     """
     The meta classs of task in Taskflow. The meta class has the five abstract function,
         the subclass need to inherit from the meta class.
@@ -39,7 +36,12 @@ class AppTask(Task):
     """
 
     def __init__(self, model, task, priority_path=None, **kwargs):
-        super().__init__(task=task, model=model, **kwargs)
+
+        self.model = model
+        self.task = task
+        self.kwargs = kwargs
+        self._priority_path = priority_path
+        self.is_static_model = kwargs.get("is_static_model", False)
 
         self._home_path = self.kwargs[
             "home_path"] if "home_path" in self.kwargs else PPMIX_HOME
@@ -55,6 +57,14 @@ class AppTask(Task):
             self._task_path = os.path.join(self._home_path, "models",
                                            self.model)
             self._model_dir = os.path.join(self._home_path, "models")
+
+        self._infer_precision = self.kwargs[
+            "precision"] if "precision" in self.kwargs else "fp32"
+        # Default to use Paddle Inference
+        self._predictor_type = "paddle-inference"
+        self._num_threads = self.kwargs[
+            "num_threads"] if "num_threads" in self.kwargs else math.ceil(
+                cpu_count() / 2)
 
     def _construct_tokenizer(self, model):
         """
@@ -77,6 +87,24 @@ class AppTask(Task):
             logger.warning(
                 f"{self._task_path} includes more than one '.pdparams' file.")
         return names[0]
+
+    def _convert_dygraph_to_static(self):
+        """
+        Convert the dygraph model to static model.
+        """
+        assert (
+            self._model is not None
+        ), "The dygraph model must be created before converting the dygraph model to static model."
+        assert (
+            self._input_spec is not None
+        ), "The input spec must be created before converting the dygraph model to static model."
+        logger.info("Converting to the inference model cost a little time.")
+        static_model = paddle.jit.to_static(
+            self._model, input_spec=self._input_spec)
+
+        paddle.jit.save(static_model, self.inference_model_path)
+        logger.info("The inference model save in the path:{}".format(
+            self.inference_model_path))
 
     def _prepare_static_mode(self):
         """
@@ -120,8 +148,8 @@ class AppTask(Task):
                 else:
                     logger.info(f'Use dynamic shape file: '
                                 f'{self._tuned_trt_shape_file} for TRT...')
-                    self._config.enable_tuned_tensorrt_dynamic_shape(
-                        self._tuned_trt_shape_file, True)
+                self._config.enable_tuned_tensorrt_dynamic_shape(
+                    self._tuned_trt_shape_file, True)
 
             if self.task == 'openset_det_sam':
                 self._config.delete_pass("add_support_int8_pass")
@@ -172,8 +200,7 @@ class AppTask(Task):
             self.inference_model_path = os.path.join(self._task_path,
                                                      self._static_model_name)
             self._tuned_trt_shape_file = self.inference_model_path + "_shape.txt"
-            if not os.path.exists(self.inference_model_path +
-                                  ".pdiparams") or self._param_updated:
+            if not os.path.exists(self.inference_model_path + ".pdiparams"):
                 with dygraph_mode_guard():
                     self._construct_model(self.model)
                     self._construct_input_spec()
@@ -214,3 +241,9 @@ class AppTask(Task):
             self._prepare_static_mode()
         else:
             self._prepare_onnx_mode()
+
+    def __call__(self, *args, **kwargs):
+        inputs = self._preprocess(*args)
+        outputs = self._run_model(inputs, **kwargs)
+        results = self._postprocess(outputs)
+        return results

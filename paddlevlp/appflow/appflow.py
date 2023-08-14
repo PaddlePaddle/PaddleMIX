@@ -15,7 +15,7 @@
 
 import paddle
 
-from paddlenlp.utils.tools import get_env_device
+from paddlevlp.utils.tools import get_env_device
 from .configuration import APPLICATIONS
 
 
