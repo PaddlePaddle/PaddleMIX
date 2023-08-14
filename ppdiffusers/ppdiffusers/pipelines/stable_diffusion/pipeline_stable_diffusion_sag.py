@@ -17,8 +17,8 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
 import paddle.nn.functional as F
-
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...loaders import TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -205,8 +205,8 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -256,8 +256,8 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -378,16 +378,20 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                     f" {negative_prompt_embeds.shape}.")
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = (batch_size, num_channels_latents, height //
-                 self.vae_scale_factor, width // self.vae_scale_factor)
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
+        shape = (
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor, )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -501,9 +505,14 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
         width = width or self.unet.config.sample_size * self.vae_scale_factor
 
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, height, width, callback_steps,
-                          negative_prompt, prompt_embeds,
-                          negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            height,
+            width,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -567,8 +576,8 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -598,8 +607,11 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                             2)
                         # self-attention-based degrading of latents
                         degraded_latents = self.sag_masking(
-                            pred_x0, uncond_attn, map_size, t,
-                            self.pred_epsilon(latents, noise_pred_uncond, t))
+                            pred_x0,
+                            uncond_attn,
+                            map_size,
+                            t,
+                            self.pred_epsilon(latents, noise_pred_uncond, t), )
                         uncond_emb, _ = prompt_embeds.chunk(2)
                         # forward and give guidance
                         degraded_pred = self.unet(
@@ -615,8 +627,11 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                         cond_attn = store_processor.attention_probs
                         # self-attention-based degrading of latents
                         degraded_latents = self.sag_masking(
-                            pred_x0, cond_attn, map_size, t,
-                            self.pred_epsilon(latents, noise_pred, t))
+                            pred_x0,
+                            cond_attn,
+                            map_size,
+                            t,
+                            self.pred_epsilon(latents, noise_pred, t), )
                         # forward and give guidance
                         degraded_pred = self.unet(
                             degraded_latents,

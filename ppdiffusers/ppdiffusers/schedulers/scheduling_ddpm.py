@@ -147,7 +147,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype=paddle.float32)**2)
+                dtype=paddle.float32, )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -232,8 +232,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                     f" maximal {self.config.num_train_timesteps} timesteps.")
             self.num_inference_steps = num_inference_steps
             step_ratio = self.config.num_train_timesteps // self.num_inference_steps
-            timesteps = (np.arange(0, num_inference_steps) *
-                         step_ratio).round()[::-1].copy().astype(np.int64)
+            timesteps = ((np.arange(0, num_inference_steps) * step_ratio)
+                         .round()[::-1].copy().astype(np.int64))
             self.custom_timesteps = False
 
         self.timesteps = paddle.to_tensor(timesteps)
@@ -312,9 +312,9 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             )  # When clip to min=1, equivalent to standard clipping to [-1, 1]
         s = s.unsqueeze(
             1)  # (batch_size, 1) because clip will broadcast along axis=0
-        sample = paddle.clip(
-            sample, -s, s
-        ) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
+        sample = (
+            paddle.clip(sample, -s, s) /
+            s)  # "we threshold xt0 to the range [-s, s] and then divide by s"
 
         sample = paddle.reshape(sample, [batch_size, channels, height, width])
         sample = paddle.cast(sample, dtype)
@@ -350,7 +350,10 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         prev_t = self.previous_timestep(t)
 
         if model_output.shape[1] == sample.shape[
-                1] * 2 and self.variance_type in ["learned", "learned_range"]:
+                1] * 2 and self.variance_type in [
+                    "learned",
+                    "learned_range",
+                ]:
             model_output, predicted_variance = model_output.chunk(2, axis=1)
         else:
             predicted_variance = None
@@ -383,9 +386,10 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         if self.config.thresholding:
             pred_original_sample = self._threshold_sample(pred_original_sample)
         elif self.config.clip_sample:
-            pred_original_sample = paddle.clip(pred_original_sample,
-                                               -self.config.clip_sample_range,
-                                               self.config.clip_sample_range)
+            pred_original_sample = paddle.clip(
+                pred_original_sample,
+                -self.config.clip_sample_range,
+                self.config.clip_sample_range, )
 
         # 4. Compute coefficients for pred_original_sample x_0 and current sample x_t
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
@@ -396,7 +400,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         # 5. Compute predicted previous sample µ_t
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
-        pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * sample
+        pred_prev_sample = (pred_original_sample_coeff * pred_original_sample +
+                            current_sample_coeff * sample)
 
         # 6. Add noise
         variance = 0
@@ -406,8 +411,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 generator=generator,
                 dtype=model_output.dtype)
             if self.variance_type == "fixed_small_log":
-                variance = self._get_variance(
-                    t, predicted_variance=predicted_variance) * variance_noise
+                variance = (self._get_variance(
+                    t, predicted_variance=predicted_variance) * variance_noise)
             elif self.variance_type == "learned_range":
                 variance = self._get_variance(
                     t, predicted_variance=predicted_variance)
@@ -445,7 +450,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
-        noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
+        noisy_samples = (sqrt_alpha_prod * original_samples +
+                         sqrt_one_minus_alpha_prod * noise)
         return noisy_samples
 
     def get_velocity(self,

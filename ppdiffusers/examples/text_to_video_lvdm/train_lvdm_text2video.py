@@ -16,21 +16,23 @@ import math
 import os
 
 import paddle
-from lvdm import (
-    LatentVideoDiffusion,
-    LatentVideoDiffusionTrainer,
-    WebVidDataset, )
-from lvdm.lvdm_args_text2video import WebVidDatasetArguments, TrainerArguments, ModelArguments
-
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
+from lvdm import (LatentVideoDiffusion, LatentVideoDiffusionTrainer,
+                  WebVidDataset)
+from lvdm.lvdm_args_text2video import (ModelArguments, TrainerArguments,
+                                       WebVidDatasetArguments)
+from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
+                               get_last_checkpoint)
 from paddlenlp.utils.log import logger
 
 
 def main():
     parser = PdArgumentParser((ModelArguments, WebVidDatasetArguments,
                                TrainerArguments, TrainingArguments))
-    model_args, data_args, trainer_args, training_args = parser.parse_args_into_dataclasses(
-    )
+    (
+        model_args,
+        data_args,
+        trainer_args,
+        training_args, ) = parser.parse_args_into_dataclasses()
     # report to custom_visualdl
     training_args.report_to = ["custom_visualdl"]
     training_args.resolution = data_args.resolution
@@ -48,16 +50,16 @@ def main():
 
     # Detecting last checkpoint.
     last_checkpoint = None
-    if os.path.isdir(
-            training_args.output_dir
-    ) and training_args.do_train and not training_args.overwrite_output_dir:
+    if (os.path.isdir(training_args.output_dir) and training_args.do_train and
+            not training_args.overwrite_output_dir):
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
         if last_checkpoint is None and len(
                 os.listdir(training_args.output_dir)) > 0:
             raise ValueError(
                 f"Output directory ({training_args.output_dir}) already exists and is not empty. "
                 "Use --overwrite_output_dir to overcome.")
-        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+        elif (last_checkpoint is not None and
+              training_args.resume_from_checkpoint is None):
             logger.info(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
@@ -72,7 +74,7 @@ def main():
         video_length=data_args.video_length,
         frame_stride=data_args.frame_stride,
         spatial_transform=data_args.spatial_transform,
-        tokenizer=model.tokenizer)
+        tokenizer=model.tokenizer, )
     eval_dataset = WebVidDataset(
         data_root=data_args.eval_data_root,
         annotation_path=data_args.eval_annotation_path,
@@ -81,14 +83,14 @@ def main():
         video_length=data_args.video_length,
         frame_stride=data_args.frame_stride,
         spatial_transform=data_args.spatial_transform,
-        tokenizer=model.tokenizer)
+        tokenizer=model.tokenizer, )
 
     trainer = LatentVideoDiffusionTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset if training_args.do_eval else None,
-        tokenizer=model.tokenizer)
+        tokenizer=model.tokenizer, )
 
     # must set recompute after trainer init
     trainer.model.set_recompute(training_args.recompute)

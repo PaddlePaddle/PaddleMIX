@@ -1,6 +1,21 @@
-import paddle
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import math
+
 import numpy as np
+import paddle
 
 
 def silu(x):
@@ -29,27 +44,28 @@ def vanilla_d_loss(logits_real, logits_fake):
     return d_loss
 
 
-def Normalize(in_channels, norm_type='group'):
-    assert norm_type in ['group', 'batch']
-    if norm_type == 'group':
+def Normalize(in_channels, norm_type="group"):
+    assert norm_type in ["group", "batch"]
+    if norm_type == "group":
         return paddle.nn.GroupNorm(
             num_groups=32,
             num_channels=in_channels,
             epsilon=1e-06,
             weight_attr=None,
-            bias_attr=None)
-    elif norm_type == 'batch':
+            bias_attr=None, )
+    elif norm_type == "batch":
         return paddle.nn.SyncBatchNorm(in_channels)
 
 
 class ResBlock(paddle.nn.Layer):
-    def __init__(self,
-                 in_channels,
-                 out_channels=None,
-                 conv_shortcut=False,
-                 dropout=0.0,
-                 norm_type='group',
-                 padding_type='replicate'):
+    def __init__(
+            self,
+            in_channels,
+            out_channels=None,
+            conv_shortcut=False,
+            dropout=0.0,
+            norm_type="group",
+            padding_type="replicate", ):
         super().__init__()
         self.in_channels = in_channels
         out_channels = in_channels if out_channels is None else out_channels
@@ -86,13 +102,14 @@ class ResBlock(paddle.nn.Layer):
 
 
 class SamePadConv3d(paddle.nn.Layer):
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size,
-                 stride=1,
-                 bias=True,
-                 padding_type='replicate'):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=1,
+            bias=True,
+            padding_type="replicate", ):
         super().__init__()
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size, ) * 3
@@ -111,7 +128,7 @@ class SamePadConv3d(paddle.nn.Layer):
             kernel_size=kernel_size,
             stride=stride,
             padding=0,
-            bias_attr=bias)
+            bias_attr=bias, )
         self.weight = self.conv.weight
 
     def forward(self, x):
@@ -119,17 +136,18 @@ class SamePadConv3d(paddle.nn.Layer):
             paddle.nn.functional.pad(x=x,
                                      pad=self.pad_input,
                                      mode=self.padding_type,
-                                     data_format='NCDHW'))
+                                     data_format="NCDHW"))
 
 
 class SamePadConvTranspose3d(paddle.nn.Layer):
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size,
-                 stride=1,
-                 bias=True,
-                 padding_type='replicate'):
+    def __init__(
+            self,
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=1,
+            bias=True,
+            padding_type="replicate", ):
         super().__init__()
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size, ) * 3
@@ -148,25 +166,26 @@ class SamePadConvTranspose3d(paddle.nn.Layer):
             kernel_size=kernel_size,
             stride=stride,
             padding=tuple([(k - 1) for k in kernel_size]),
-            bias_attr=bias)
+            bias_attr=bias, )
 
     def forward(self, x):
         return self.convt(
             paddle.nn.functional.pad(x=x,
                                      pad=self.pad_input,
                                      mode=self.padding_type,
-                                     data_format='NCDHW'))
+                                     data_format="NCDHW"))
 
 
 class Encoder(paddle.nn.Layer):
-    def __init__(self,
-                 n_hiddens,
-                 downsample,
-                 z_channels,
-                 double_z,
-                 image_channel=3,
-                 norm_type='group',
-                 padding_type='replicate'):
+    def __init__(
+            self,
+            n_hiddens,
+            downsample,
+            z_channels,
+            double_z,
+            image_channel=3,
+            norm_type="group",
+            padding_type="replicate", ):
         super().__init__()
         n_times_downsample = np.array([int(math.log2(d)) for d in downsample])
         self.conv_blocks = paddle.nn.LayerList()
@@ -196,7 +215,7 @@ class Encoder(paddle.nn.Layer):
                 2 * z_channels if double_z else z_channels,
                 kernel_size=3,
                 stride=1,
-                padding_type=padding_type))
+                padding_type=padding_type, ), )
         self.out_channels = out_channels
 
     def forward(self, x):
@@ -214,7 +233,7 @@ class Decoder(paddle.nn.Layer):
                  upsample,
                  z_channels,
                  image_channel,
-                 norm_type='group'):
+                 norm_type="group"):
         super().__init__()
         n_times_upsample = np.array([int(math.log2(d)) for d in upsample])
         max_us = n_times_upsample.max()

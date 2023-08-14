@@ -73,8 +73,11 @@ class LDMPipeline(DiffusionPipeline):
             True, otherwise a `tuple. When returning a tuple, the first element is a list with the generated images.
         """
         latents = randn_tensor(
-            (batch_size, self.unet.config.in_channels,
-             self.unet.config.sample_size, self.unet.config.sample_size),
+            (
+                batch_size,
+                self.unet.config.in_channels,
+                self.unet.config.sample_size,
+                self.unet.config.sample_size, ),
             generator=generator, )
 
         # scale the initial noise by the standard deviation required by the scheduler

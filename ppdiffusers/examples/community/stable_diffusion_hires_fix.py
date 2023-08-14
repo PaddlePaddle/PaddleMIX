@@ -19,19 +19,18 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
 from packaging import version
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
+                                    CLIPTokenizer)
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers import AutoencoderKL, DiffusionPipeline, UNet2DConditionModel
 from ppdiffusers.configuration_utils import FrozenDict
-from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker, )
+from ppdiffusers.pipelines.stable_diffusion import \
+    StableDiffusionPipelineOutput
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
+    StableDiffusionSafetyChecker
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
-from ppdiffusers.utils import (
-    deprecate,
-    logging,
-    randn_tensor,
-    replace_example_docstring, )
+from ppdiffusers.utils import (deprecate, logging, randn_tensor,
+                               replace_example_docstring)
 
 logger = logging.get_logger(__name__)
 
@@ -92,8 +91,8 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
             requires_safety_checker: bool=True, ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -110,8 +109,8 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if (hasattr(scheduler.config, "clip_sample") and
+                scheduler.config.clip_sample is True):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -148,8 +147,8 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
             unet.config, "_ppdiffusers_version") and version.parse(
                 version.parse(unet.config._ppdiffusers_version)
                 .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = (hasattr(unet.config, "sample_size") and
+                                       unet.config.sample_size < 64)
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -238,8 +237,8 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -284,8 +283,8 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -437,17 +436,20 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
                     f" {negative_prompt_embeds.shape}.")
 
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -682,8 +684,8 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
         with self.progress_bar(total=sample_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -717,12 +719,15 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
             # 8. determine the upscaled width and height for upscaled images
             truncate_width = 0
             truncate_height = 0
-            self.hr_upscale_to_width, self.hr_upscale_to_height = self.get_upscaled_width_and_height(
+            (
+                self.hr_upscale_to_width,
+                self.hr_upscale_to_height,
+            ) = self.get_upscaled_width_and_height(
                 width,
                 height,
                 hr_scale=hr_scale,
                 hr_resize_width=hr_resize_width,
-                hr_resize_height=hr_resize_height)
+                hr_resize_height=hr_resize_height, )
             if hr_resize_width != 0 and hr_resize_height != 0:
                 truncate_width = (self.hr_upscale_to_width - hr_resize_width
                                   ) // self.vae_scale_factor
@@ -730,7 +735,8 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
                                    ) // self.vae_scale_factor
 
             # 9. special case: do nothing if upscaling is not nesscessary
-            if self.hr_upscale_to_width == width and self.hr_upscale_to_height == height:
+            if (self.hr_upscale_to_width == width and
+                    self.hr_upscale_to_height == height):
                 enable_hr = False
                 denoising_strength = None
 
@@ -765,9 +771,9 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
             with self.progress_bar(total=hr_steps) as progress_bar:
                 for i, t in enumerate(timesteps):
                     # expand the latents if we are doing classifier free guidance
-                    latent_model_input = paddle.concat(
-                        [latents] *
-                        2) if do_classifier_free_guidance else latents
+                    latent_model_input = (paddle.concat([latents] * 2)
+                                          if do_classifier_free_guidance else
+                                          latents)
                     latent_model_input = self.scheduler.scale_model_input(
                         latent_model_input, t)
 

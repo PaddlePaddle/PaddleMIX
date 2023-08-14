@@ -20,7 +20,8 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
+from .scheduling_utils import (KarrasDiffusionSchedulers, SchedulerMixin,
+                               SchedulerOutput)
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
@@ -108,7 +109,7 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype=paddle.float32)**2)
+                dtype=paddle.float32, )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -209,9 +210,9 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
         dists = log_sigma - log_sigmas[:, np.newaxis]
 
         # get sigmas range
-        low_idx = np.cumsum(
-            (dists >= 0),
-            axis=0).argmax(axis=0).clip(max=log_sigmas.shape[0] - 2)
+        low_idx = (np.cumsum(
+            (dists >= 0), axis=0).argmax(axis=0)
+                   .clip(max=log_sigmas.shape[0] - 2))
         high_idx = low_idx + 1
 
         low = log_sigmas[low_idx]

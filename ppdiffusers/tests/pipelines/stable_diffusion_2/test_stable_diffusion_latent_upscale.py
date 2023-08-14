@@ -19,20 +19,16 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    EulerDiscreteScheduler,
-    StableDiffusionLatentUpscalePipeline,
-    StableDiffusionPipeline,
-    UNet2DConditionModel, )
+
+from ppdiffusers import (AutoencoderKL, EulerDiscreteScheduler,
+                         StableDiffusionLatentUpscalePipeline,
+                         StableDiffusionPipeline, UNet2DConditionModel)
 from ppdiffusers.utils import floats_tensor, load_image, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..pipeline_params import (
-    TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
-    TEXT_GUIDED_IMAGE_VARIATION_PARAMS, )
+from ..pipeline_params import (TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
+                               TEXT_GUIDED_IMAGE_VARIATION_PARAMS)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -84,19 +80,26 @@ class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin,
             resnet_time_scale_shift="scale_shift",
             time_embedding_type="fourier",
             timestep_post_act="gelu",
-            up_block_types=("KCrossAttnUpBlock2D", "KCrossAttnUpBlock2D",
-                            "KCrossAttnUpBlock2D", "KUpBlock2D"), )
+            up_block_types=(
+                "KCrossAttnUpBlock2D",
+                "KCrossAttnUpBlock2D",
+                "KCrossAttnUpBlock2D",
+                "KUpBlock2D", ), )
         vae = AutoencoderKL(
             block_out_channels=[32, 32, 64, 64],
             in_channels=3,
             out_channels=3,
             down_block_types=[
-                "DownEncoderBlock2D", "DownEncoderBlock2D",
-                "DownEncoderBlock2D", "DownEncoderBlock2D"
+                "DownEncoderBlock2D",
+                "DownEncoderBlock2D",
+                "DownEncoderBlock2D",
+                "DownEncoderBlock2D",
             ],
             up_block_types=[
-                "UpDecoderBlock2D", "UpDecoderBlock2D", "UpDecoderBlock2D",
-                "UpDecoderBlock2D"
+                "UpDecoderBlock2D",
+                "UpDecoderBlock2D",
+                "UpDecoderBlock2D",
+                "UpDecoderBlock2D",
             ],
             latent_channels=4, )
         scheduler = EulerDiscreteScheduler(prediction_type="sample")
@@ -179,7 +182,9 @@ class StableDiffusionLatentUpscalePipelineIntegrationTests(unittest.TestCase):
             "stabilityai/sd-x2-latent-upscaler", paddle_dtype=paddle.float16)
         upscaler.to("gpu")
 
-        prompt = "a photo of an astronaut high resolution, unreal engine, ultra realistic"
+        prompt = (
+            "a photo of an astronaut high resolution, unreal engine, ultra realistic"
+        )
         low_res_latents = pipe(
             prompt, generator=generator, output_type="latent").images
         image = upscaler(

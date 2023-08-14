@@ -60,12 +60,13 @@ class DropPath(nn.Layer):
 
 
 class Mlp(nn.Layer):
-    def __init__(self,
-                 in_features,
-                 hidden_features=None,
-                 out_features=None,
-                 act_layer=nn.GELU,
-                 drop=0.0):
+    def __init__(
+            self,
+            in_features,
+            hidden_features=None,
+            out_features=None,
+            act_layer=nn.GELU,
+            drop=0.0, ):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -111,7 +112,8 @@ class AttentionBlock(nn.Layer):
         super().__init__()
         self.channels = channels
 
-        self.num_heads = channels // num_head_channels if num_head_channels is not None else 1
+        self.num_heads = (channels // num_head_channels
+                          if num_head_channels is not None else 1)
         self.head_size = self.channels // self.num_heads
         self.scale = 1 / math.sqrt(self.channels / self.num_heads)
 
@@ -162,7 +164,7 @@ class AttentionBlock(nn.Layer):
     def set_use_memory_efficient_attention_xformers(
             self,
             use_memory_efficient_attention_xformers: bool,
-            attention_op: Optional[str]=None):
+            attention_op: Optional[str]=None, ):
         # remove this PR: https://github.com/PaddlePaddle/Paddle/pull/56045
         # if self.head_size > 128 and attention_op == "flash":
         #     attention_op = "cutlass"
@@ -184,7 +186,8 @@ class AttentionBlock(nn.Layer):
                 except Exception as e:
                     raise e
 
-        self._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
+        self._use_memory_efficient_attention_xformers = (
+            use_memory_efficient_attention_xformers)
         self._attention_op = attention_op
 
     def forward(self, hidden_states):
@@ -223,8 +226,8 @@ class AttentionBlock(nn.Layer):
                 training=self.training,
                 attention_op=self._attention_op, )
         else:
-            attention_scores = paddle.matmul(
-                query_proj, key_proj, transpose_y=True) * self.scale
+            attention_scores = (paddle.matmul(
+                query_proj, key_proj, transpose_y=True) * self.scale)
             attention_probs = F.softmax(
                 attention_scores.cast("float32"),
                 axis=-1).cast(attention_scores.dtype)
@@ -349,7 +352,7 @@ class BasicTransformerBlock(nn.Layer):
             dim,
             dropout=dropout,
             activation_fn=activation_fn,
-            final_dropout=final_dropout)
+            final_dropout=final_dropout, )
 
     def forward(
             self,
@@ -373,7 +376,8 @@ class BasicTransformerBlock(nn.Layer):
         else:
             norm_hidden_states = self.norm1(hidden_states)
 
-        cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
+        cross_attention_kwargs = (cross_attention_kwargs if
+                                  cross_attention_kwargs is not None else {})
         attn_output = self.attn1(
             norm_hidden_states,
             encoder_hidden_states=encoder_hidden_states
@@ -403,8 +407,8 @@ class BasicTransformerBlock(nn.Layer):
         norm_hidden_states = self.norm3(hidden_states)
 
         if self.use_ada_layer_norm_zero:
-            norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]
-                                                       ) + shift_mlp[:, None]
+            norm_hidden_states = (norm_hidden_states *
+                                  (1 + scale_mlp[:, None]) + shift_mlp[:, None])
 
         ff_output = self.ff(norm_hidden_states)
 
@@ -573,12 +577,13 @@ class AdaGroupNorm(nn.Layer):
     GroupNorm layer modified to incorporate timestep embeddings.
     """
 
-    def __init__(self,
-                 embedding_dim: int,
-                 out_dim: int,
-                 num_groups: int,
-                 act_fn: Optional[str]=None,
-                 eps: float=1e-5):
+    def __init__(
+            self,
+            embedding_dim: int,
+            out_dim: int,
+            num_groups: int,
+            act_fn: Optional[str]=None,
+            eps: float=1e-5, ):
         super().__init__()
         self.num_groups = num_groups
         self.eps = eps

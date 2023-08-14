@@ -16,11 +16,8 @@ import tempfile
 
 import paddle
 
-from ppdiffusers import (
-    DEISMultistepScheduler,
-    DPMSolverMultistepScheduler,
-    DPMSolverSinglestepScheduler,
-    UniPCMultistepScheduler, )
+from ppdiffusers import (DEISMultistepScheduler, DPMSolverMultistepScheduler,
+                         DPMSolverSinglestepScheduler, UniPCMultistepScheduler)
 
 from .test_schedulers import SchedulerCommonTest
 
@@ -76,9 +73,8 @@ class DEISMultistepSchedulerTest(SchedulerCommonTest):
                 new_output = new_scheduler.step(residual, t, new_output,
                                                 **kwargs).prev_sample
 
-                assert paddle.sum(paddle.abs(
-                    output -
-                    new_output)) < 1e-5, "Scheduler outputs are not identical"
+                assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                        ), "Scheduler outputs are not identical"
 
     def test_from_save_pretrained(self):
         pass
@@ -118,8 +114,8 @@ class DEISMultistepSchedulerTest(SchedulerCommonTest):
             new_output = new_scheduler.step(residual, time_step, sample,
                                             **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
     def full_loop(self, scheduler=None, **config):
         if scheduler is None:

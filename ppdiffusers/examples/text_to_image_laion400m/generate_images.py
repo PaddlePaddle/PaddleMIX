@@ -20,12 +20,9 @@ import paddle
 import pandas as pd
 from tqdm.auto import tqdm
 
-from ppdiffusers import (
-    DDIMScheduler,
-    EulerAncestralDiscreteScheduler,
-    LDMTextToImagePipeline,
-    LMSDiscreteScheduler,
-    PNDMScheduler, )
+from ppdiffusers import (DDIMScheduler, EulerAncestralDiscreteScheduler,
+                         LDMTextToImagePipeline, LMSDiscreteScheduler,
+                         PNDMScheduler)
 
 
 def batchify(data, batch_size=16):
@@ -120,7 +117,7 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="model_name_or_path.")
+        help="model_name_or_path.", )
     parser.add_argument(
         "--file",
         default="./coco30k.tsv",
@@ -149,13 +146,13 @@ if __name__ == "__main__":
         "--save_path",
         default="output/1.5b_ldm/12w.pd",
         type=str,
-        help="Path to the output file.")
+        help="Path to the output file.", )
     parser.add_argument(
         "--guidance_scales",
         default=[3, 4, 5, 6, 7, 8],
         nargs="+",
         type=str,
-        help="guidance_scales list.")
+        help="guidance_scales list.", )
     parser.add_argument("--height", default=256, type=int, help="height.")
     parser.add_argument("--width", default=256, type=int, help="width.")
     args = parser.parse_args()

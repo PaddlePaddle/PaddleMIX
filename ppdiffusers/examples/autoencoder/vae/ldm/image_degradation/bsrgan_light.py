@@ -92,7 +92,7 @@ def anisotropic_Gaussian(ksize=15, theta=np.pi, l1=6, l2=6):
     v = np.dot(
         np.array(
             [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]),
-        np.array([1.0, 0.0]))
+        np.array([1.0, 0.0]), )
     V = np.array([[v[0], v[1]], [v[1], -v[0]]])
     D = np.array([[l1, 0], [0, l2]])
     Sigma = np.dot(np.dot(V, D), np.linalg.inv(V))
@@ -160,11 +160,12 @@ def blur(x, k):
     return x
 
 
-def gen_kernel(k_size=np.array([15, 15]),
-               scale_factor=np.array([4, 4]),
-               min_var=0.6,
-               max_var=10.0,
-               noise_level=0):
+def gen_kernel(
+        k_size=np.array([15, 15]),
+        scale_factor=np.array([4, 4]),
+        min_var=0.6,
+        max_var=10.0,
+        noise_level=0, ):
     """ "
     # modified version of https://github.com/assafshocher/BlindSR_dataset_generator
     # Kai Zhang
@@ -381,8 +382,9 @@ def add_resize(img, sf=4):
     else:
         sf1 = 1.0
     img = cv2.resize(
-        img, (int(sf1 * img.shape[1]), int(sf1 * img.shape[0])),
-        interpolation=random.choice([1, 2, 3]))
+        img,
+        (int(sf1 * img.shape[1]), int(sf1 * img.shape[0])),
+        interpolation=random.choice([1, 2, 3]), )
     img = np.clip(img, 0.0, 1.0)
 
     return img
@@ -437,8 +439,8 @@ def add_Poisson_noise(img):
     else:
         img_gray = np.dot(img[..., :3], [0.299, 0.587, 0.114])
         img_gray = np.clip((img_gray * 255.0).round(), 0, 255) / 255.0
-        noise_gray = np.random.poisson(
-            img_gray * vals).astype(np.float32) / vals - img_gray
+        noise_gray = (np.random.poisson(img_gray * vals).astype(np.float32) /
+                      vals - img_gray)
         img += noise_gray[:, :, np.newaxis]
     img = np.clip(img, 0.0, 1.0)
     return img
@@ -494,8 +496,9 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
     if sf == 4 and random.random() < scale2_prob:  # downsample1
         if np.random.rand() < 0.5:
             img = cv2.resize(
-                img, (int(1 / 2 * img.shape[1]), int(1 / 2 * img.shape[0])),
-                interpolation=random.choice([1, 2, 3]))
+                img,
+                (int(1 / 2 * img.shape[1]), int(1 / 2 * img.shape[0])),
+                interpolation=random.choice([1, 2, 3]), )
         else:
             img = util.imresize_np(img, 1 / 2, True)
         img = np.clip(img, 0.0, 1.0)
@@ -504,8 +507,9 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
     shuffle_order = random.sample(range(7), 7)
     idx1, idx2 = shuffle_order.index(2), shuffle_order.index(3)
     if idx1 > idx2:  # keep downsample3 last
-        shuffle_order[idx1], shuffle_order[idx2] = shuffle_order[
-            idx2], shuffle_order[idx1]
+        shuffle_order[idx1], shuffle_order[idx2] = (
+            shuffle_order[idx2],
+            shuffle_order[idx1], )
 
     for i in shuffle_order:
 
@@ -538,8 +542,9 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
         elif i == 3:
             # downsample3
             img = cv2.resize(
-                img, (int(1 / sf * a), int(1 / sf * b)),
-                interpolation=random.choice([1, 2, 3]))
+                img,
+                (int(1 / sf * a), int(1 / sf * b)),
+                interpolation=random.choice([1, 2, 3]), )
             img = np.clip(img, 0.0, 1.0)
 
         elif i == 4:
@@ -600,8 +605,9 @@ def degradation_bsrgan_variant(image, sf=4, isp_model=None):
     shuffle_order = random.sample(range(7), 7)
     idx1, idx2 = shuffle_order.index(2), shuffle_order.index(3)
     if idx1 > idx2:  # keep downsample3 last
-        shuffle_order[idx1], shuffle_order[idx2] = shuffle_order[
-            idx2], shuffle_order[idx1]
+        shuffle_order[idx1], shuffle_order[idx2] = (
+            shuffle_order[idx2],
+            shuffle_order[idx1], )
 
     for i in shuffle_order:
 
@@ -636,8 +642,9 @@ def degradation_bsrgan_variant(image, sf=4, isp_model=None):
         elif i == 3:
             # downsample3
             image = cv2.resize(
-                image, (int(1 / sf * a), int(1 / sf * b)),
-                interpolation=random.choice([1, 2, 3]))
+                image,
+                (int(1 / sf * a), int(1 / sf * b)),
+                interpolation=random.choice([1, 2, 3]), )
             image = np.clip(image, 0.0, 1.0)
 
         elif i == 4:
@@ -678,11 +685,11 @@ if __name__ == "__main__":
         lq_nearest = cv2.resize(
             util.single2uint(img_lq),
             (int(sf * img_lq.shape[1]), int(sf * img_lq.shape[0])),
-            interpolation=0)
+            interpolation=0, )
         lq_bicubic_nearest = cv2.resize(
             util.single2uint(img_lq_bicubic),
             (int(sf * img_lq.shape[1]), int(sf * img_lq.shape[0])),
-            interpolation=0)
+            interpolation=0, )
         img_concat = np.concatenate(
             [lq_bicubic_nearest, lq_nearest, util.single2uint(img_hq)], axis=1)
         util.imsave(img_concat, str(i) + ".png")

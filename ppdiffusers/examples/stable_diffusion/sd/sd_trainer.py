@@ -12,25 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import contextlib
 import os
+import sys
 import time
 
 import paddle
+import paddle.amp.auto_cast as autocast
 from paddle.io import DataLoader
-
 from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
 from paddlenlp.trainer.integrations import (
-    INTEGRATION_TO_CALLBACK,
-    TrainerCallback,
-    VisualDLCallback,
-    rewrite_logs, )
+    INTEGRATION_TO_CALLBACK, TrainerCallback, VisualDLCallback, rewrite_logs)
 from paddlenlp.transformers.model_utils import _add_variant
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
+
 from ppdiffusers.training_utils import unwrap_model
-import paddle.amp.auto_cast as autocast
-import contextlib
-import sys
+
 from .text_image_pair_dataset import TextImagePair, worker_init_fn
 
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
@@ -62,15 +60,17 @@ class VisualDLWithImageCallback(VisualDLCallback):
                 level=args.fp16_opt_level,
                 dtype=amp_dtype, )
         else:
-            ctx_manager = contextlib.nullcontext() if sys.version_info >= (
-                3, 7) else contextlib.suppress()
+            ctx_manager = (contextlib.nullcontext()
+                           if sys.version_info >= (3, 7) else
+                           contextlib.suppress())
 
         return ctx_manager
 
     def on_step_end(self, args, state, control, model=None, **kwargs):
         if hasattr(model, "on_train_batch_end"):
             model.on_train_batch_end()
-        if args.image_logging_steps > 0 and state.global_step % args.image_logging_steps == 0:
+        if (args.image_logging_steps > 0 and
+                state.global_step % args.image_logging_steps == 0):
             control.should_log = True
 
     def on_log(self, args, state, control, logs=None, **kwargs):
@@ -112,8 +112,8 @@ class VisualDLWithImageCallback(VisualDLCallback):
                 if args.text_encoder_learning_rate != args.unet_learning_rate:
                     logs[
                         "unet_lr"] = base_learning_rate * args.unet_learning_rate
-                    logs[
-                        "text_encoder_lr"] = base_learning_rate * args.text_encoder_learning_rate
+                    logs["text_encoder_lr"] = (base_learning_rate *
+                                               args.text_encoder_learning_rate)
                 else:
                     logs["text_encoder_lr"] = base_learning_rate
 
@@ -172,7 +172,8 @@ class BenchmarkCallback(TrainerCallback):
         self.profiler_options = profiler_options
 
     def on_train_begin(self, args, state, control, **kwargs):
-        assert args.gradient_accumulation_steps == 1 and not args.do_eval and not args.do_predict
+        assert (args.gradient_accumulation_steps == 1 and not args.do_eval and
+                not args.do_predict)
         if self.benchmark:
             self.reader_cost_avg = AverageStatistical()
 
@@ -231,7 +232,7 @@ class StableDiffusionTrainer(Trainer):
             self.add_callback(
                 BenchmarkCallback(
                     benchmark=self.args.benchmark,
-                    profiler_options=self.args.profiler_options))
+                    profiler_options=self.args.profiler_options, ))
             if self.args.benchmark:
                 if self.args.disable_tqdm:
                     self.pop_callback(PrinterCallback)
@@ -284,9 +285,10 @@ class StableDiffusionTrainer(Trainer):
                 state_dict = self.model.state_dict()
             paddle.save(
                 state_dict,
-                os.path.join(output_dir,
-                             _add_variant(PADDLE_WEIGHTS_NAME,
-                                          self.args.weight_name_suffix)), )
+                os.path.join(
+                    output_dir,
+                    _add_variant(PADDLE_WEIGHTS_NAME,
+                                 self.args.weight_name_suffix), ), )
             if self.args.should_save:
                 if self.tokenizer is not None:
                     self.tokenizer.save_pretrained(output_dir)

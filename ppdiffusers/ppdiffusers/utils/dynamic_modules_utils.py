@@ -26,16 +26,14 @@ from pathlib import Path
 from typing import Dict, Optional, Union
 from urllib import request
 
-from huggingface_hub import HfFolder, cached_download, hf_hub_download, model_info
+from huggingface_hub import (HfFolder, cached_download, hf_hub_download,
+                             model_info)
 
-from . import PPDIFFUSERS_DYNAMIC_MODULE_NAME, PPDIFFUSERS_MODULES_CACHE, logging
+from . import (PPDIFFUSERS_DYNAMIC_MODULE_NAME, PPDIFFUSERS_MODULES_CACHE,
+               logging)
 
-COMMUNITY_PIPELINES_URL = (
-    "https://raw.githubusercontent.com/PaddlePaddle/PaddleMIX/{revision}/ppdiffusers/examples/community/{pipeline}.py"
-)
-GITEE_COMMUNITY_PIPELINES_URL = (
-    "https://gitee.com/paddlepaddle/PaddleMIX/raw/{revision}/ppdiffusers/examples/community/{pipeline}.py"
-)
+COMMUNITY_PIPELINES_URL = "https://raw.githubusercontent.com/PaddlePaddle/PaddleMIX/{revision}/ppdiffusers/examples/community/{pipeline}.py"
+GITEE_COMMUNITY_PIPELINES_URL = "https://gitee.com/paddlepaddle/PaddleMIX/raw/{revision}/ppdiffusers/examples/community/{pipeline}.py"
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -329,7 +327,7 @@ def get_cached_module_file(
             module_needed = f"{module_needed}.py"
             shutil.copy(
                 os.path.join(pretrained_model_name_or_path, module_needed),
-                submodule_path / module_needed)
+                submodule_path / module_needed, )
     else:
         # Get the commit hash
         # TODO: we will get this info in the etag soon, so retrieve it from there and not here.

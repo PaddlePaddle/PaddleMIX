@@ -15,11 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from clip_interrogator import (
-    BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
-    CLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
-    Config,
-    Interrogator, )
+from clip_interrogator import (BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
+                               CLIP_PRETRAINED_MODEL_ARCHIVE_LIST, Config,
+                               Interrogator)
 from cog import BasePredictor, Input, Path
 from PIL import Image
 
@@ -60,12 +58,17 @@ class Predictor(BasePredictor):
         else:
             return self.ci.interrogate_fast(image)
 
-    def switch_model(self,
-                     clip_pretrained_model_name_or_path: str,
-                     blip_pretrained_model_name_or_path: str):
-        if clip_pretrained_model_name_or_path != self.ci.config.clip_pretrained_model_name_or_path:
-            self.ci.config.clip_pretrained_model_name_or_path = clip_pretrained_model_name_or_path
+    def switch_model(
+            self,
+            clip_pretrained_model_name_or_path: str,
+            blip_pretrained_model_name_or_path: str, ):
+        if (clip_pretrained_model_name_or_path !=
+                self.ci.config.clip_pretrained_model_name_or_path):
+            self.ci.config.clip_pretrained_model_name_or_path = (
+                clip_pretrained_model_name_or_path)
             self.ci.load_clip_model()
-        if blip_pretrained_model_name_or_path != self.ci.config.blip_pretrained_model_name_or_path:
-            self.ci.config.blip_pretrained_model_name_or_path = blip_pretrained_model_name_or_path
+        if (blip_pretrained_model_name_or_path !=
+                self.ci.config.blip_pretrained_model_name_or_path):
+            self.ci.config.blip_pretrained_model_name_or_path = (
+                blip_pretrained_model_name_or_path)
             self.ci.load_blip_model()

@@ -94,7 +94,7 @@ class PriorTransformer(ModelMixin, ConfigMixin):
         self.prd_embedding = self.create_parameter(
             (1, 1, inner_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0))
+            default_initializer=nn.initializer.Constant(0.0), )
         self.transformer_blocks = nn.LayerList([
             BasicTransformerBlock(
                 inner_dim,
@@ -109,10 +109,13 @@ class PriorTransformer(ModelMixin, ConfigMixin):
         self.proj_to_clip_embeddings = nn.Linear(inner_dim, embedding_dim)
 
         causal_attention_mask = paddle.triu(
-            paddle.full([
-                num_embeddings + additional_embeddings,
-                num_embeddings + additional_embeddings
-            ], NEG_INF), 1)
+            paddle.full(
+                [
+                    num_embeddings + additional_embeddings,
+                    num_embeddings + additional_embeddings,
+                ],
+                NEG_INF, ),
+            1, )
         causal_attention_mask = causal_attention_mask.unsqueeze(0)
         self.register_buffer(
             "causal_attention_mask", causal_attention_mask, persistable=False)
@@ -120,11 +123,11 @@ class PriorTransformer(ModelMixin, ConfigMixin):
         self.clip_mean = self.create_parameter(
             (1, embedding_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0))
+            default_initializer=nn.initializer.Constant(0.0), )
         self.clip_std = self.create_parameter(
             (1, embedding_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0))
+            default_initializer=nn.initializer.Constant(0.0), )
 
     def forward(
             self,
@@ -199,10 +202,11 @@ class PriorTransformer(ModelMixin, ConfigMixin):
         if attention_mask is not None:
             attention_mask = (
                 1 - attention_mask.cast(hidden_states.dtype)) * NEG_INF
-            attention_mask = F.pad(attention_mask.unsqueeze(0),
-                                   (0, self.additional_embeddings),
-                                   value=0.0,
-                                   data_format="NCL").squeeze(0)
+            attention_mask = F.pad(
+                attention_mask.unsqueeze(0),
+                (0, self.additional_embeddings),
+                value=0.0,
+                data_format="NCL", ).squeeze(0)
             attention_mask = (
                 attention_mask[:, None, :] + self.causal_attention_mask
             ).cast(hidden_states.dtype)

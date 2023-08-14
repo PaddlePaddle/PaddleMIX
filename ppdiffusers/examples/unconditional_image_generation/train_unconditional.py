@@ -27,10 +27,10 @@ import paddle.nn.functional as F
 from datasets import load_dataset
 from huggingface_hub import HfFolder, create_repo, whoami
 from paddle.vision import transforms
-from tqdm.auto import tqdm
-
 from paddlenlp.trainer import set_seed
 from paddlenlp.utils.log import logger
+from tqdm.auto import tqdm
+
 from ppdiffusers import DDPMPipeline, DDPMScheduler, UNet2DModel
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import EMAModel, unwrap_model
@@ -142,12 +142,12 @@ def parse_args():
         "--train_batch_size",
         type=int,
         default=16,
-        help="Batch size (per device) for the training dataloader.")
+        help="Batch size (per device) for the training dataloader.", )
     parser.add_argument(
         "--eval_batch_size",
         type=int,
         default=16,
-        help="The number of images to generate for evaluation.")
+        help="The number of images to generate for evaluation.", )
     parser.add_argument(
         "--dataloader_num_workers",
         type=int,
@@ -160,12 +160,12 @@ def parse_args():
         "--save_images_epochs",
         type=int,
         default=10,
-        help="How often to save images during training.")
+        help="How often to save images during training.", )
     parser.add_argument(
         "--save_model_epochs",
         type=int,
         default=10,
-        help="How often to save the model during training.")
+        help="How often to save the model during training.", )
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
@@ -189,27 +189,27 @@ def parse_args():
         "--lr_warmup_steps",
         type=int,
         default=500,
-        help="Number of steps for the warmup in the lr scheduler.")
+        help="Number of steps for the warmup in the lr scheduler.", )
     parser.add_argument(
         "--adam_beta1",
         type=float,
         default=0.95,
-        help="The beta1 parameter for the Adam optimizer.")
+        help="The beta1 parameter for the Adam optimizer.", )
     parser.add_argument(
         "--adam_beta2",
         type=float,
         default=0.999,
-        help="The beta2 parameter for the Adam optimizer.")
+        help="The beta2 parameter for the Adam optimizer.", )
     parser.add_argument(
         "--adam_weight_decay",
         type=float,
         default=1e-6,
-        help="Weight decay magnitude for the Adam optimizer.")
+        help="Weight decay magnitude for the Adam optimizer.", )
     parser.add_argument(
         "--adam_epsilon",
         type=float,
         default=1e-08,
-        help="Epsilon value for the Adam optimizer.")
+        help="Epsilon value for the Adam optimizer.", )
     parser.add_argument(
         "--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument(
@@ -221,26 +221,26 @@ def parse_args():
         "--ema_inv_gamma",
         type=float,
         default=1.0,
-        help="The inverse gamma value for the EMA decay.")
+        help="The inverse gamma value for the EMA decay.", )
     parser.add_argument(
         "--ema_power",
         type=float,
         default=3 / 4,
-        help="The power value for the EMA decay.")
+        help="The power value for the EMA decay.", )
     parser.add_argument(
         "--ema_max_decay",
         type=float,
         default=0.9999,
-        help="The maximum decay magnitude for EMA.")
+        help="The maximum decay magnitude for EMA.", )
     parser.add_argument(
         "--push_to_hub",
         action="store_true",
-        help="Whether or not to push the model to the Hub.")
+        help="Whether or not to push the model to the Hub.", )
     parser.add_argument(
         "--hub_token",
         type=str,
         default=None,
-        help="The token to use to push to the Model Hub.")
+        help="The token to use to push to the Model Hub.", )
     parser.add_argument(
         "--hub_model_id",
         type=str,
@@ -250,7 +250,7 @@ def parse_args():
     parser.add_argument(
         "--hub_private_repo",
         action="store_true",
-        help="Whether or not to create a private repository.")
+        help="Whether or not to create a private repository.", )
     parser.add_argument(
         "--logger",
         type=str,
@@ -300,7 +300,7 @@ def parse_args():
     parser.add_argument(
         "--enable_xformers_memory_efficient_attention",
         action="store_true",
-        help="Whether or not to use xformers.")
+        help="Whether or not to use xformers.", )
     args = parser.parse_args()
 
     if args.dataset_name is None and args.train_data_dir is None:
@@ -452,7 +452,7 @@ def main():
     else:
         noise_scheduler = DDPMScheduler(
             num_train_timesteps=args.ddpm_num_steps,
-            beta_schedule=args.ddpm_beta_schedule)
+            beta_schedule=args.ddpm_beta_schedule, )
 
     # Get the datasets: you can either provide your own training and evaluation files (see below)
     # or specify a Dataset from the hub (the dataset will be downloaded automatically from the datasets Hub).
@@ -470,7 +470,7 @@ def main():
             "imagefolder",
             data_dir=args.train_data_dir,
             cache_dir=args.cache_dir,
-            split="train")
+            split="train", )
         # See more about loading custom images at
 
     # Preprocessing the datasets and DataLoaders creation.
@@ -498,7 +498,7 @@ def main():
         dataset,
         batch_size=args.train_batch_size,
         shuffle=True,
-        num_workers=args.dataloader_num_workers)
+        num_workers=args.dataloader_num_workers, )
 
     if num_processes > 1:
         model = paddle.DataParallel(model)
@@ -530,7 +530,8 @@ def main():
         writer = get_report_to(args)
 
     # Prepare everything with our `accelerator`.
-    total_batch_size = args.train_batch_size * num_processes * args.gradient_accumulation_steps
+    total_batch_size = (args.train_batch_size * num_processes *
+                        args.gradient_accumulation_steps)
     num_update_steps_per_epoch = math.ceil(
         len(train_dataloader) / args.gradient_accumulation_steps)
     max_train_steps = args.num_epochs * num_update_steps_per_epoch
@@ -578,9 +579,10 @@ def main():
                 loss = F.mse_loss(model_output,
                                   noise)  # this could have different weights!
             elif args.prediction_type == "sample":
-                alpha_t = _extract_into_tensor(noise_scheduler.alphas_cumprod,
-                                               timesteps,
-                                               (clean_images.shape[0], 1, 1, 1))
+                alpha_t = _extract_into_tensor(
+                    noise_scheduler.alphas_cumprod,
+                    timesteps,
+                    (clean_images.shape[0], 1, 1, 1), )
                 snr_weights = alpha_t / (1 - alpha_t)
                 loss = snr_weights * F.mse_loss(
                     model_output, clean_images, reduction="none"
@@ -618,7 +620,7 @@ def main():
             logs = {
                 "loss": loss.detach().item(),
                 "lr": lr_scheduler.get_lr(),
-                "step": global_step
+                "step": global_step,
             }
             if args.use_ema:
                 logs["ema_decay"] = ema_model.cur_decay_value
@@ -655,13 +657,13 @@ def main():
                         "test",
                         images_processed.transpose(0, 3, 1, 2),
                         epoch,
-                        dataformats="NHWC")
+                        dataformats="NHWC", )
                 else:
                     writer.add_image(
                         "test",
                         images_processed.transpose(0, 3, 1, 2),
                         epoch,
-                        dataformats="NHWC")
+                        dataformats="NHWC", )
 
             if epoch % args.save_model_epochs == 0 or epoch == args.num_epochs - 1:
                 # save the model

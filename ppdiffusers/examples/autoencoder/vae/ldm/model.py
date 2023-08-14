@@ -22,12 +22,8 @@ import paddle.nn.functional as F
 from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
 from ppdiffusers.initializer import reset_initialized_parameter
 from ppdiffusers.models.autoencoder_kl import (
-    AutoencoderKLOutput,
-    Decoder,
-    DecoderOutput,
-    DiagonalGaussianDistribution,
-    Encoder, )
-
+    AutoencoderKLOutput, Decoder, DecoderOutput, DiagonalGaussianDistribution,
+    Encoder)
 # from ppdiffusers.models.ema import LitEma
 from ppdiffusers.models.modeling_utils import ModelMixin
 
@@ -87,8 +83,8 @@ class AutoencoderKLWithLoss(ModelMixin, ConfigMixin):
             use_ema=False,
             ema_decay=None, ):
         super().__init__()
-        self.input_size = [int(_) for _ in input_size
-                           ] if input_size is not None else None
+        self.input_size = ([int(_) for _ in input_size]
+                           if input_size is not None else None)
         self.encoder = Encoder(
             in_channels=in_channels,
             out_channels=latent_channels,

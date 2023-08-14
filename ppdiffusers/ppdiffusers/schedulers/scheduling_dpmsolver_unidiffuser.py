@@ -18,7 +18,8 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
+from .scheduling_utils import (KarrasDiffusionSchedulers, SchedulerMixin,
+                               SchedulerOutput)
 
 
 def logaddexp(x, y):
@@ -146,7 +147,7 @@ class DPMSolverUniDiffuserScheduler(SchedulerMixin, ConfigMixin):
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype=paddle.float32)**2)
+                dtype=paddle.float32, )**2)
         else:
             raise NotImplementedError(
                 f"{beta_schedule} does is not implemented for {self.__class__}")
@@ -195,7 +196,7 @@ class DPMSolverUniDiffuserScheduler(SchedulerMixin, ConfigMixin):
             return interpolate_fn(
                 t.reshape((-1, 1)),
                 self.t_discrete.clone(),
-                self.log_alpha_discrete.clone()).reshape((-1, ))
+                self.log_alpha_discrete.clone(), ).reshape((-1, ))
         else:
             raise ValueError
 
@@ -329,8 +330,10 @@ class DPMSolverUniDiffuserScheduler(SchedulerMixin, ConfigMixin):
         """
         t, s0, s1 = prev_timestep, timestep_list[-1], timestep_list[-2]
         m0, m1 = model_output_list[-1], model_output_list[-2]
-        lambda_t, lambda_s0, lambda_s1 = self.marginal_lambda(
-            t), self.marginal_lambda(s0), self.marginal_lambda(s1)
+        lambda_t, lambda_s0, lambda_s1 = (
+            self.marginal_lambda(t),
+            self.marginal_lambda(s0),
+            self.marginal_lambda(s1), )
         log_alpha_t = self.marginal_log_mean_coeff(t)
         sigma_t, sigma_s0 = self.marginal_std(t), self.marginal_std(s0)
         h, h_0 = lambda_t - lambda_s0, lambda_s0 - lambda_s1
@@ -367,8 +370,11 @@ class DPMSolverUniDiffuserScheduler(SchedulerMixin, ConfigMixin):
         Returns:
             `paddle.Tensor`: the sample tensor at the previous timestep.
         """
-        t, s0, s1, s2 = prev_timestep, timestep_list[-1], timestep_list[
-            -2], timestep_list[-3]
+        t, s0, s1, s2 = (
+            prev_timestep,
+            timestep_list[-1],
+            timestep_list[-2],
+            timestep_list[-3], )
         m0, m1, m2 = model_output_list[-1], model_output_list[
             -2], model_output_list[-3]
         lambda_t, lambda_s0, lambda_s1, lambda_s2 = (

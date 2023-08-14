@@ -18,7 +18,6 @@ from typing import Optional, Tuple
 
 import paddle
 from paddle import nn
-
 from paddlenlp.transformers import RobertaConfig as XLMRobertaConfig
 from paddlenlp.transformers import RobertaModel as XLMRobertaModel
 from paddlenlp.transformers import RobertaPretrainedModel
@@ -91,7 +90,7 @@ class RobertaSeriesConfig(XLMRobertaConfig):
             pad_token_id=pad_token_id,
             bos_token_id=bos_token_id,
             eos_token_id=eos_token_id,
-            **kwargs)
+            **kwargs, )
         self.project_dim = project_dim
         self.pooler_fn = pooler_fn
         self.learn_encoder = learn_encoder
@@ -130,7 +129,8 @@ class RobertaSeriesModelWithTransformation(RobertaPretrainedModel):
             output_attentions: Optional[bool]=None,
             return_dict: Optional[bool]=None,
             output_hidden_states: Optional[bool]=None, ):
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        return_dict = (return_dict if return_dict is not None else
+                       self.config.use_return_dict)
 
         if position_ids is None:
             position_ids = create_position_ids_from_input_ids(

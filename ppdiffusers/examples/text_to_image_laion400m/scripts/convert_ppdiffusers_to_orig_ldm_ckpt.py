@@ -286,8 +286,9 @@ def convert_ldmbert_state_dict(ldmbert_state_dict, num_layers=32):
         if isinstance(new_name, (list, tuple)):
             need_transpose = True
             new_name = new_name[0]
-        new_state_dict[new_name] = torch.from_numpy(v.t().numpy(
-        )) if need_transpose else torch.from_numpy(v.numpy())
+        new_state_dict[new_name] = (torch.from_numpy(v.t().numpy())
+                                    if need_transpose else
+                                    torch.from_numpy(v.numpy()))
 
     # dummpy weights, we donot use this!
     new_state_dict[
@@ -307,13 +308,13 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="Path to the model to convert.")
+        help="Path to the model to convert.", )
     parser.add_argument(
         "--dump_path",
         default=None,
         type=str,
         required=True,
-        help="Path to the output model.")
+        help="Path to the output model.", )
     parser.add_argument(
         "--half", action="store_true", help="Save weights in half precision.")
 

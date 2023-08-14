@@ -15,16 +15,8 @@
 import dataclasses
 import math
 import os
-from typing import (
-    Any,
-    Callable,
-    List,
-    Mapping,
-    MutableMapping,
-    Optional,
-    Sequence,
-    Tuple,
-    Union, )
+from typing import (Any, Callable, List, Mapping, MutableMapping, Optional,
+                    Sequence, Tuple, Union)
 
 import numpy as np
 import paddle
@@ -156,10 +148,11 @@ class Codec:
     and specified separately.
     """
 
-    def __init__(self,
-                 max_shift_steps: int,
-                 steps_per_second: float,
-                 event_ranges: List[EventRange]):
+    def __init__(
+            self,
+            max_shift_steps: int,
+            steps_per_second: float,
+            event_ranges: List[EventRange], ):
         """Define Codec.
 
         Args:
@@ -186,7 +179,8 @@ class Codec:
     # events that are intended to be used from within autograph functions.
 
     def is_shift_event_index(self, index: int) -> bool:
-        return self._shift_range.min_value <= index and index <= self._shift_range.max_value
+        return (self._shift_range.min_value <= index and
+                index <= self._shift_range.max_value)
 
     @property
     def max_shift_steps(self) -> int:
@@ -253,19 +247,19 @@ PROGRAM_GRANULARITIES = {
     # map each program to the first program in its MIDI class
     "midi_class": ProgramGranularity(
         tokens_map_fn=programs_to_midi_classes,
-        program_map_fn=lambda program: 8 * (program // 8)),
+        program_map_fn=lambda program: 8 * (program // 8), ),
     # leave programs as is
     "full": ProgramGranularity(
         tokens_map_fn=lambda tokens, codec: tokens,
-        program_map_fn=lambda program: program),
+        program_map_fn=lambda program: program, ),
 }
 
 
 def unfold(tensor, dimension, size, step=1):
     assert dimension < len(
         tensor.shape), "dimension must be less than tensor dimensions"
-    assert tensor.shape[
-        dimension] >= size, "size should not be greater than the dimension of tensor"
+    assert (tensor.shape[dimension] >= size
+            ), "size should not be greater than the dimension of tensor"
 
     slices = []
     for i in range(0, tensor.shape[dimension] - size + 1, step):
@@ -324,7 +318,7 @@ def audio_to_frames(
         paddle.to_tensor(data=samples).unsqueeze(axis=0),
         frame_length=frame_size,
         frame_step=frame_size,
-        pad_end=False)
+        pad_end=False, )
     num_frames = len(samples) // frame_size
     times = np.arange(num_frames) / frame_rate
     return frames, times
@@ -349,8 +343,9 @@ def note_sequence_to_onsets_and_offsets_and_programs(
     # subsequent stable sort.
     notes = sorted(
         ns.notes, key=lambda note: (note.is_drum, note.program, note.pitch))
-    times = [note.end_time for note in notes
-             if not note.is_drum] + [note.start_time for note in notes]
+    times = [note.end_time for note in notes if not note.is_drum] + [
+        note.start_time for note in notes
+    ]
     values = [
         NoteEventData(
             pitch=note.pitch, velocity=0, program=note.program, is_drum=False)
@@ -360,7 +355,7 @@ def note_sequence_to_onsets_and_offsets_and_programs(
             pitch=note.pitch,
             velocity=note.velocity,
             program=note.program,
-            is_drum=note.is_drum) for note in notes
+            is_drum=note.is_drum, ) for note in notes
     ]
     return times, values
 
@@ -410,7 +405,8 @@ def note_event_data_to_events(state: Optional[NoteEncodingState],
                 state.active_pitches[value.pitch, value.program] = velocity_bin
             return [
                 Event("program", value.program),
-                Event("velocity", velocity_bin), Event("pitch", value.pitch)
+                Event("velocity", velocity_bin),
+                Event("pitch", value.pitch),
             ]
 
 
@@ -425,13 +421,14 @@ def note_encoding_state_to_events(state: NoteEncodingState) -> Sequence[Event]:
     return events
 
 
-def encode_and_index_events(state,
-                            event_times,
-                            event_values,
-                            codec,
-                            frame_times,
-                            encode_event_fn,
-                            encoding_state_to_events_fn=None):
+def encode_and_index_events(
+        state,
+        event_times,
+        event_values,
+        codec,
+        frame_times,
+        encode_event_fn,
+        encoding_state_to_events_fn=None, ):
     """Encode a sequence of timed events and index to audio frame times.
 
     Encodes time shifts as repeated single step shifts for later run length encoding.
@@ -546,16 +543,16 @@ def extract_sequence_with_indices(features,
         # prepend them to the targets array.
         state_event_start_idx = features["state_event_indices"][0]
         state_event_end_idx = state_event_start_idx + 1
-        while features["state_events"][state_event_end_idx -
-                                       1] != state_events_end_token:
+        while (features["state_events"][state_event_end_idx - 1] !=
+               state_events_end_token):
             state_event_end_idx += 1
         features[feature_key] = np.concatenate(
             [
                 features["state_events"][state_event_start_idx:
                                          state_event_end_idx],
-                features[feature_key]
+                features[feature_key],
             ],
-            axis=0)
+            axis=0, )
     return features
 
 
@@ -575,7 +572,7 @@ def run_length_encode_shifts_fn(
         codec: Codec,
         feature_key: str="inputs",
         state_change_event_types: Sequence[str]=(
-        )) -> Callable[[Mapping[str, Any]], Mapping[str, Any]]:
+        ), ) -> Callable[[Mapping[str, Any]], Mapping[str, Any]]:
     """Return a function that run-length encodes shifts for a given codec.
 
     Args:
@@ -647,7 +644,8 @@ def note_representation_processor_chain(
         codec: Codec,
         note_representation_config: NoteRepresentationConfig):
     tie_token = codec.encode_event(Event("tie", 0))
-    state_events_end_token = tie_token if note_representation_config.include_ties else None
+    state_events_end_token = (tie_token if
+                              note_representation_config.include_ties else None)
     features = extract_sequence_with_indices(
         features,
         state_events_end_token=state_events_end_token,

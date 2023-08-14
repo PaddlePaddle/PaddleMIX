@@ -23,21 +23,13 @@ from ..configuration_utils import ConfigMixin, register_to_config
 from ..loaders import UNet2DConditionLoadersMixin
 from ..utils import NEG_INF, BaseOutput, logging
 from .attention_processor import AttentionProcessor, AttnProcessor
-from .embeddings import (
-    GaussianFourierProjection,
-    TextTimeEmbedding,
-    TimestepEmbedding,
-    Timesteps, )
+from .embeddings import (GaussianFourierProjection, TextTimeEmbedding,
+                         TimestepEmbedding, Timesteps)
 from .modeling_utils import ModelMixin
-from .unet_2d_blocks import (
-    CrossAttnDownBlock2D,
-    CrossAttnUpBlock2D,
-    DownBlock2D,
-    UNetMidBlock2DCrossAttn,
-    UNetMidBlock2DSimpleCrossAttn,
-    UpBlock2D,
-    get_down_block,
-    get_up_block, )
+from .unet_2d_blocks import (CrossAttnDownBlock2D, CrossAttnUpBlock2D,
+                             DownBlock2D, UNetMidBlock2DCrossAttn,
+                             UNetMidBlock2DSimpleCrossAttn, UpBlock2D,
+                             get_down_block, get_up_block)
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -147,9 +139,11 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
                 "CrossAttnDownBlock2D",
                 "DownBlock2D", ),
             mid_block_type: Optional[str]="UNetMidBlock2DCrossAttn",
-            up_block_types: Tuple[str]=("UpBlock2D", "CrossAttnUpBlock2D",
-                                        "CrossAttnUpBlock2D",
-                                        "CrossAttnUpBlock2D"),
+            up_block_types: Tuple[str]=(
+                "UpBlock2D",
+                "CrossAttnUpBlock2D",
+                "CrossAttnUpBlock2D",
+                "CrossAttnUpBlock2D", ),
             only_cross_attention: Union[bool, Tuple[bool]]=False,
             block_out_channels: Tuple[int]=(320, 640, 1280, 1280),
             layers_per_block: Union[int, Tuple[int]]=2,
@@ -232,7 +226,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
             in_channels,
             block_out_channels[0],
             kernel_size=conv_in_kernel,
-            padding=conv_in_padding)
+            padding=conv_in_padding, )
 
         # time
         if time_embedding_type == "fourier":
@@ -245,7 +239,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
                 time_embed_dim // 2,
                 set_W_to_weight=False,
                 log=False,
-                flip_sin_to_cos=flip_sin_to_cos)
+                flip_sin_to_cos=flip_sin_to_cos, )
             timestep_input_dim = time_embed_dim
         elif time_embedding_type == "positional":
             time_embed_dim = time_embedding_dim or block_out_channels[0] * 4
@@ -313,7 +307,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
             self.add_embedding = TextTimeEmbedding(
                 text_time_embedding_from_dim,
                 time_embed_dim,
-                num_heads=addition_embed_type_num_heads)
+                num_heads=addition_embed_type_num_heads, )
         elif addition_embed_type is not None:
             raise ValueError(
                 f"addition_embed_type: {addition_embed_type} must be None or 'text'."
@@ -498,7 +492,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
             self.conv_norm_out = nn.GroupNorm(
                 num_channels=block_out_channels[0],
                 num_groups=norm_num_groups,
-                epsilon=norm_eps)
+                epsilon=norm_eps, )
             if act_fn == "swish":
                 self.conv_act = lambda x: F.silu(x)
             elif act_fn == "mish":
@@ -518,7 +512,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
             block_out_channels[0],
             out_channels,
             kernel_size=conv_out_kernel,
-            padding=conv_out_padding)
+            padding=conv_out_padding, )
 
     @property
     def attn_processors(self) -> Dict[str, AttentionProcessor]:
@@ -624,8 +618,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
             # make smallest slice possible
             slice_size = num_sliceable_layers * [1]
 
-        slice_size = num_sliceable_layers * [slice_size] if not isinstance(
-            slice_size, list) else slice_size
+        slice_size = (num_sliceable_layers * [slice_size]
+                      if not isinstance(slice_size, list) else slice_size)
 
         if len(slice_size) != len(sliceable_head_dims):
             raise ValueError(
@@ -656,8 +650,9 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
             fn_recursive_set_attention_slice(module, reversed_slice_size)
 
     def _set_gradient_checkpointing(self, module, value=False):
-        if isinstance(module, (CrossAttnDownBlock2D, DownBlock2D,
-                               CrossAttnUpBlock2D, UpBlock2D)):
+        if isinstance(
+                module,
+            (CrossAttnDownBlock2D, DownBlock2D, CrossAttnUpBlock2D, UpBlock2D)):
             module.gradient_checkpointing = value
 
     def forward(
@@ -776,14 +771,16 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
 
         # 3. down
 
-        is_controlnet = mid_block_additional_residual is not None and down_block_additional_residuals is not None
-        is_adapter = mid_block_additional_residual is None and down_block_additional_residuals is not None
+        is_controlnet = (mid_block_additional_residual is not None and
+                         down_block_additional_residuals is not None)
+        is_adapter = (mid_block_additional_residual is None and
+                      down_block_additional_residuals is not None)
 
         down_block_res_samples = (sample, )
 
         for downsample_block in self.down_blocks:
-            if hasattr(downsample_block, "has_cross_attention"
-                       ) and downsample_block.has_cross_attention:
+            if (hasattr(downsample_block, "has_cross_attention") and
+                    downsample_block.has_cross_attention):
                 additional_kwargs = {}
                 if is_adapter and len(down_block_additional_residuals) > 0:
                     additional_kwargs[
@@ -812,7 +809,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
 
             for down_block_res_sample, down_block_additional_residual in zip(
                     down_block_res_samples, down_block_additional_residuals):
-                down_block_res_sample = down_block_res_sample + down_block_additional_residual
+                down_block_res_sample = (
+                    down_block_res_sample + down_block_additional_residual)
                 new_down_block_res_samples += (down_block_res_sample, )
             down_block_res_samples = new_down_block_res_samples
 
@@ -841,8 +839,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin,
             if not is_final_block and forward_upsample_size:
                 upsample_size = down_block_res_samples[-1].shape[2:]
 
-            if hasattr(upsample_block, "has_cross_attention"
-                       ) and upsample_block.has_cross_attention:
+            if (hasattr(upsample_block, "has_cross_attention") and
+                    upsample_block.has_cross_attention):
                 sample = upsample_block(
                     hidden_states=sample,
                     temb=emb,

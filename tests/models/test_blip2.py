@@ -22,30 +22,26 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 import requests
+from paddlenlp.transformers.opt.configuration import OPTConfig
 from PIL import Image
 
-from paddlevlp.models.blip2 import (
-    Blip2VisionConfig,
-    Blip2QFormerConfig,
-    Blip2Config,
-    Blip2ForConditionalGeneration, )
-from paddlevlp.models.blip2.eva_vit import VisionTransformer
-from paddlevlp.models.blip2.Qformer import BertLMHeadModel
-from paddlevlp.models.blip2.modeling import BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST
-from paddlevlp.tests.testing_utils import slow
-from paddlevlp.tests.models.test_configuration_common import ConfigTester
-from paddlevlp.tests.models.test_modeling_common import (
-    ModelTesterMixin,
-    floats_tensor,
-    ids_tensor,
-    random_attention_mask, )
-from paddlenlp.transformers.opt.configuration import OPTConfig
+from paddlemix.models.blip2 import (Blip2Config, Blip2ForConditionalGeneration,
+                                    Blip2QFormerConfig, Blip2VisionConfig)
+from paddlemix.models.blip2.eva_vit import VisionTransformer
+from paddlemix.models.blip2.modeling import \
+    BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST
+from paddlemix.models.blip2.Qformer import BertLMHeadModel
+from tests.models.test_configuration_common import ConfigTester
+from tests.models.test_modeling_common import (
+    ModelTesterMixin, floats_tensor, ids_tensor, random_attention_mask)
+from tests.testing_utils import slow
 
 
 def _config_zero_init(config):
     configs_no_init = copy.deepcopy(config)
     for key in configs_no_init.__dict__.keys():
-        if "_range" in key or "_std" in key or "initializer_factor" in key or "layer_scale" in key:
+        if ("_range" in key or "_std" in key or "initializer_factor" in key or
+                "layer_scale" in key):
             setattr(configs_no_init, key, 1e-10)
     return configs_no_init
 
@@ -122,7 +118,7 @@ class Blip2VisionModelTester:
                                                           patch_size[0])
         self.parent.assertEqual(
             result.last_hidden_state.shape,
-            [self.batch_size, num_patches + 1, self.hidden_size])
+            [self.batch_size, num_patches + 1, self.hidden_size], )
         self.parent.assertEqual(result.pooler_output.shape,
                                 [self.batch_size, self.hidden_size])
 
@@ -152,7 +148,7 @@ class Blip2VisionModelTest(ModelTesterMixin, unittest.TestCase):
             self,
             config_class=Blip2VisionConfig,
             has_text_modality=False,
-            hidden_size=37)
+            hidden_size=37, )
 
     def test_config(self):
         self.config_tester.run_common_tests()
@@ -272,10 +268,10 @@ class BertLMHeadModelTester:
         result = model(
             query_embeds=query_embeds,
             encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=encoder_attention_mask)
+            encoder_attention_mask=encoder_attention_mask, )
         self.parent.assertEqual(
             result.last_hidden_state.shape,
-            [self.batch_size, self.seq_length, self.hidden_size])
+            [self.batch_size, self.seq_length, self.hidden_size], )
 
         model = BertLMHeadModel(config=config)
         model.eval()
@@ -283,19 +279,23 @@ class BertLMHeadModelTester:
             result = model(
                 query_embeds,
                 encoder_hidden_states=encoder_hidden_states,
-                encoder_attention_mask=encoder_attention_mask)
+                encoder_attention_mask=encoder_attention_mask, )
 
         self.parent.assertEqual(
             result.last_hidden_state.shape,
-            [self.batch_size, self.seq_length, self.hidden_size])
+            [self.batch_size, self.seq_length, self.hidden_size], )
 
     def prepare_config_and_inputs_for_common(self):
         config_and_inputs = self.prepare_config_and_inputs()
-        config, query_embeds, encoder_hidden_states, encoder_attention_mask = config_and_inputs
+        (
+            config,
+            query_embeds,
+            encoder_hidden_states,
+            encoder_attention_mask, ) = config_and_inputs
         inputs_dict = {
             "query_embeds": query_embeds,
             "encoder_hidden_states": encoder_hidden_states,
-            "encoder_attention_mask": encoder_attention_mask
+            "encoder_attention_mask": encoder_attention_mask,
         }
         return config, inputs_dict
 
@@ -314,7 +314,7 @@ class BertLMHeadModelTest(ModelTesterMixin, unittest.TestCase):
             self,
             config_class=Blip2QFormerConfig,
             has_text_modality=False,
-            hidden_size=37)
+            hidden_size=37, )
 
     def test_config(self):
         self.config_tester.run_common_tests()
@@ -415,13 +415,14 @@ class Blip2TextModelTester:
 
 
 class Blip2ModelTester:
-    def __init__(self,
-                 parent,
-                 vision_kwargs=None,
-                 qformer_kwargs=None,
-                 text_kwargs=None,
-                 is_training=True,
-                 num_query_tokens=10):
+    def __init__(
+            self,
+            parent,
+            vision_kwargs=None,
+            qformer_kwargs=None,
+            text_kwargs=None,
+            is_training=True,
+            num_query_tokens=10, ):
         if vision_kwargs is None:
             vision_kwargs = {}
         if qformer_kwargs is None:
@@ -528,8 +529,8 @@ class Blip2ModelTest(ModelTesterMixin, unittest.TestCase):
             model.eval()
             with paddle.no_grad():
                 input = self._prepare_for_class(inputs_dict, model_class)
-                first = model(**input)['loss']
-                second = model(**input)['loss']
+                first = model(**input)["loss"]
+                second = model(**input)["loss"]
 
             if isinstance(first, tuple) and isinstance(second, tuple):
                 for tensor1, tensor2 in zip(first, second):

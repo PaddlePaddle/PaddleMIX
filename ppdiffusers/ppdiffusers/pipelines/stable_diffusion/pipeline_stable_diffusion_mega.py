@@ -21,8 +21,8 @@ import PIL.Image
 from ...utils import logging
 from .pipeline_stable_diffusion import StableDiffusionPipeline
 from .pipeline_stable_diffusion_img2img import StableDiffusionImg2ImgPipeline
-from .pipeline_stable_diffusion_inpaint_legacy import (
-    StableDiffusionInpaintPipelineLegacy, )
+from .pipeline_stable_diffusion_inpaint_legacy import \
+    StableDiffusionInpaintPipelineLegacy
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 

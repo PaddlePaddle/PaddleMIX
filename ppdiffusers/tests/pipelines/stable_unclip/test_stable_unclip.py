@@ -16,25 +16,17 @@
 import unittest
 
 import paddle
-from ..pipeline_params import (
-    TEXT_TO_IMAGE_BATCH_PARAMS,
-    TEXT_TO_IMAGE_PARAMS, )
-from ..test_pipelines_common import PipelineTesterMixin
+from paddlenlp.transformers import (CLIPTextConfig, CLIPTextModel,
+                                    CLIPTextModelWithProjection, CLIPTokenizer)
 
-from paddlenlp.transformers import (
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer, )
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DDPMScheduler,
-    PriorTransformer,
-    StableUnCLIPPipeline,
-    UNet2DConditionModel, )
-from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import (
-    StableUnCLIPImageNormalizer, )
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
+                         PriorTransformer, StableUnCLIPPipeline,
+                         UNet2DConditionModel)
+from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import \
+    StableUnCLIPImageNormalizer
+
+from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
+from ..test_pipelines_common import PipelineTesterMixin
 
 
 class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
@@ -67,7 +59,7 @@ class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             num_attention_heads=2,
             attention_head_dim=12,
             embedding_dim=embedder_projection_dim,
-            num_layers=1)
+            num_layers=1, )
         paddle.seed(0)
         prior_scheduler = DDPMScheduler(
             variance_type="fixed_small_log",

@@ -17,22 +17,18 @@ import random
 
 import numpy as np
 import paddle
-from adapter import DataArguments, Fill50kDataset, GenerateArguments, TextImagePair
+from adapter import (DataArguments, Fill50kDataset, GenerateArguments,
+                     TextImagePair)
 from annotator.canny import CannyDetector
 from annotator.util import HWC3
+from paddlenlp.trainer import PdArgumentParser
 from PIL import Image
 from tqdm import tqdm
 
-from paddlenlp.trainer import PdArgumentParser
-from ppdiffusers import (
-    ControlNetModel,
-    DDIMScheduler,
-    EulerAncestralDiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    StableDiffusionAdapterPipeline,
-    StableDiffusionControlNetPipeline,
-    T2IAdapter, )
+from ppdiffusers import (ControlNetModel, DDIMScheduler,
+                         EulerAncestralDiscreteScheduler, LMSDiscreteScheduler,
+                         PNDMScheduler, StableDiffusionAdapterPipeline,
+                         StableDiffusionControlNetPipeline, T2IAdapter)
 
 DEFAULT_NEGATIVE_PROMPT = (
     "longbody, lowres, bad anatomy, bad hands, missing fingers, extra digit, "

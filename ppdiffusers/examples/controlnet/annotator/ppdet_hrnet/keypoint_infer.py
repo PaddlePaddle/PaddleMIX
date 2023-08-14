@@ -30,7 +30,7 @@ from .visualize import visualize_pose
 # Global dictionary
 KEYPOINT_SUPPORT_MODELS = {
     "HigherHRNet": "keypoint_bottomup",
-    "HRNet": "keypoint_topdown"
+    "HRNet": "keypoint_topdown",
 }
 
 
@@ -155,8 +155,9 @@ class KeyPointDetector(Detector):
                 heat_k = self.predictor.get_output_handle(output_names[2])
                 inds_k = self.predictor.get_output_handle(output_names[3])
                 np_masks = [
-                    masks_tensor.copy_to_cpu(), heat_k.copy_to_cpu(),
-                    inds_k.copy_to_cpu()
+                    masks_tensor.copy_to_cpu(),
+                    heat_k.copy_to_cpu(),
+                    inds_k.copy_to_cpu(),
                 ]
         result = dict(heatmap=np_heatmap, masks=np_masks)
         return result
@@ -221,7 +222,7 @@ class KeyPointDetector(Detector):
                         batch_image_list,
                         result,
                         visual_thresh=self.threshold,
-                        save_dir=self.output_dir)
+                        save_dir=self.output_dir, )
 
             results.append(result)
         results = self.merge_batch_result(results)
@@ -244,7 +245,7 @@ class KeyPointDetector(Detector):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         out_path = os.path.join(self.output_dir, video_name)
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        fourcc = cv2.VideoWriter_fourcc(* "mp4v")
         writer = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
         index = 1
         while 1:
@@ -377,12 +378,12 @@ def main():
             mode = FLAGS.run_mode
             model_info = {
                 "model_name": model_dir.strip("/").split("/")[-1],
-                "precision": mode.split("_")[-1]
+                "precision": mode.split("_")[-1],
             }
             data_info = {
                 "batch_size": 1,
                 "shape": "dynamic_shape",
-                "data_num": perf_info["img_num"]
+                "data_num": perf_info["img_num"],
             }
             det_log = PaddleInferBenchmark(detector.config, model_info,
                                            data_info, perf_info, mems)

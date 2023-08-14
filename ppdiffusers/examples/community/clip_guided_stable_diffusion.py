@@ -20,20 +20,14 @@ import paddle
 from paddle import nn
 from paddle.nn import functional as F
 from paddle.vision import transforms
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPModel,
+                                    CLIPTextModel, CLIPTokenizer)
 
-from paddlenlp.transformers import (
-    CLIPFeatureExtractor,
-    CLIPModel,
-    CLIPTextModel,
-    CLIPTokenizer, )
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DiffusionPipeline,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    UNet2DConditionModel, )
-from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DiffusionPipeline,
+                         LMSDiscreteScheduler, PNDMScheduler,
+                         UNet2DConditionModel)
+from ppdiffusers.pipelines.stable_diffusion import \
+    StableDiffusionPipelineOutput
 from ppdiffusers.utils import logging
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -167,9 +161,9 @@ class CLIPGuidedStableDiffusion(DiffusionPipeline):
                 beta_prod_t = 1 - alpha_prod_t
                 # compute predicted original sample from predicted noise also called
                 # "predicted x_0" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
-                pred_original_sample = (latents - beta_prod_t**
-                                        (0.5) * noise_pred) / alpha_prod_t**(
-                                            0.5)
+                pred_original_sample = (
+                    latents - beta_prod_t**
+                    (0.5) * noise_pred) / alpha_prod_t**(0.5)
 
                 fac = paddle.sqrt(beta_prod_t)
                 sample = pred_original_sample * (fac) + latents * (1 - fac)
@@ -202,9 +196,9 @@ class CLIPGuidedStableDiffusion(DiffusionPipeline):
                 dists = dists.reshape([num_cutouts, sample.shape[0], -1])
                 loss = dists.sum(2).mean(0).sum() * clip_guidance_scale
             else:
-                loss = spherical_dist_loss(
-                    image_embeddings_clip,
-                    text_embeddings_clip).mean() * clip_guidance_scale
+                loss = (spherical_dist_loss(image_embeddings_clip,
+                                            text_embeddings_clip).mean() *
+                        clip_guidance_scale)
 
             grads = -paddle.autograd.grad(loss, latents)[0]
 
@@ -360,8 +354,10 @@ class CLIPGuidedStableDiffusion(DiffusionPipeline):
         # for 1-to-1 results reproducibility with the CompVis implementation.
         # However this currently doesn't work in `mps`.
         latents_shape = [
-            batch_size * num_images_per_prompt, self.unet.in_channels,
-            height // 8, width // 8
+            batch_size * num_images_per_prompt,
+            self.unet.in_channels,
+            height // 8,
+            width // 8,
         ]
         if latents is None:
             latents = paddle.randn(
@@ -400,8 +396,8 @@ class CLIPGuidedStableDiffusion(DiffusionPipeline):
 
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(
-                [latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = (paddle.concat([latents] * 2)
+                                  if do_classifier_free_guidance else latents)
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
 

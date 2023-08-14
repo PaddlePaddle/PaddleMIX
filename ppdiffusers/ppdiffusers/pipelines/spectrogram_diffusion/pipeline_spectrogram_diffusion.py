@@ -81,7 +81,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
         continuous_encoded, continuous_mask = self.continuous_encoder(
             encoder_inputs=continuous_inputs.cast(
                 self.continuous_encoder.dtype),
-            encoder_inputs_mask=continuous_mask)
+            encoder_inputs_mask=continuous_mask, )
         return [(tokens_encoded, tokens_mask), (continuous_encoded,
                                                 continuous_mask)]
 
@@ -93,9 +93,13 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
         elif paddle.is_tensor(x=timesteps) and len(timesteps.shape) == 0:
             if isinstance(input_tokens.place, paddle.dtype):
                 dtype = input_tokens.place
-            elif isinstance(
-                    input_tokens.place, str
-            ) and input_tokens.place not in ["cpu", "cuda", "ipu", "xpu"]:
+            elif isinstance(input_tokens.place,
+                            str) and input_tokens.place not in [
+                                "cpu",
+                                "cuda",
+                                "ipu",
+                                "xpu",
+                            ]:
                 dtype = input_tokens.place
             elif isinstance(input_tokens.place, paddle.Tensor):
                 dtype = input_tokens.place.dtype
@@ -108,7 +112,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
         logits = self.decoder(
             encodings_and_masks=encodings_and_masks,
             decoder_input_tokens=input_tokens,
-            decoder_noise_time=timesteps)
+            decoder_noise_time=timesteps, )
         return logits
 
     @paddle.no_grad()
@@ -154,7 +158,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
             x = randn_tensor(
                 shape=encoder_continuous_inputs.shape,
                 generator=generator,
-                dtype=self.decoder.dtype)
+                dtype=self.decoder.dtype, )
             # set step values
             self.scheduler.set_timesteps(num_inference_steps)
             # Denoising diffusion loop

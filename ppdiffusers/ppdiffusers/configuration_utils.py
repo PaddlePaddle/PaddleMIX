@@ -23,23 +23,19 @@ import re
 from collections import OrderedDict
 from pathlib import PosixPath
 from typing import Any, Dict, Tuple, Union
+
 try:
     from omegaconf.listconfig import ListConfig
+
     _omegaconf_available = True
 except:
     _omegaconf_available = False
 import numpy as np
 import paddle
 
-from .utils import (
-    DIFFUSERS_CACHE,
-    PPDIFFUSERS_CACHE,
-    DummyObject,
-    bos_hf_download,
-    deprecate,
-    extract_commit_hash,
-    http_user_agent,
-    logging, )
+from .utils import (DIFFUSERS_CACHE, PPDIFFUSERS_CACHE, DummyObject,
+                    bos_hf_download, deprecate, extract_commit_hash,
+                    http_user_agent, logging)
 from .utils.constants import FROM_HF_HUB
 from .version import VERSION as __version__
 
@@ -151,17 +147,18 @@ class ConfigMixin:
                 "direct config name access",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False, )
             return self._internal_dict[name]
 
         raise AttributeError(
             f"'{type(self).__name__}' object has no attribute '{name}'")
 
-    def save_config(self,
-                    save_directory: Union[str, os.PathLike],
-                    push_to_hub: bool=False,
-                    to_diffusers=False,
-                    **kwargs):
+    def save_config(
+            self,
+            save_directory: Union[str, os.PathLike],
+            push_to_hub: bool=False,
+            to_diffusers=False,
+            **kwargs, ):
         """
         Save a configuration object to the directory `save_directory`, so that it can be re-loaded using the
         [`~ConfigMixin.from_config`] class method.
@@ -184,10 +181,11 @@ class ConfigMixin:
         logger.info(f"Configuration saved in {output_config_file}")
 
     @classmethod
-    def from_config(cls,
-                    config: Union[FrozenDict, Dict[str, Any]]=None,
-                    return_unused_kwargs=False,
-                    **kwargs):
+    def from_config(
+            cls,
+            config: Union[FrozenDict, Dict[str, Any]]=None,
+            return_unused_kwargs=False,
+            **kwargs, ):
         r"""
         Instantiate a Python class from a config dictionary
 
@@ -245,11 +243,11 @@ class ConfigMixin:
                 "config-passed-as-path",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False, )
             config, kwargs = cls.load_config(
                 pretrained_model_name_or_path=config,
                 return_unused_kwargs=True,
-                **kwargs)
+                **kwargs, )
 
         init_dict, unused_kwargs, hidden_dict = cls.extract_init_dict(config,
                                                                       **kwargs)
@@ -704,7 +702,7 @@ class ModuleUtilsMixin:
             self,
             attention_mask: paddle.Tensor,
             input_shape: Tuple[int],
-            dtype: paddle.float32=None) -> paddle.Tensor:
+            dtype: paddle.float32=None, ) -> paddle.Tensor:
         """
         Makes broadcastable attention and causal masks so that future and masked tokens are ignored.
         Arguments:

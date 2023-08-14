@@ -1,16 +1,30 @@
-import paddle
-from paddle.distributed.fleet.utils import recompute
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from abc import abstractmethod
-from einops import rearrange
-
-from .lvdm_util import conv_nd, linear, avg_pool_nd, zero_module, normalization, timestep_embedding, nonlinearity
-from .lvdm_attention_temporal import STAttentionBlock
-from .lvdm_attention_temporal import SpatialTemporalTransformer
-
 from dataclasses import dataclass
+
+import paddle
+from einops import rearrange
+from paddle.distributed.fleet.utils import recompute
+
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import BaseOutput
+from .lvdm_attention_temporal import (SpatialTemporalTransformer,
+                                      STAttentionBlock)
+from .lvdm_util import (avg_pool_nd, conv_nd, linear, nonlinearity,
+                        normalization, timestep_embedding, zero_module)
 from .modeling_utils import ModelMixin
 
 
@@ -72,13 +86,14 @@ class Upsample(paddle.nn.Layer):
                  upsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(self,
-                 channels,
-                 use_conv,
-                 dims=2,
-                 out_channels=None,
-                 kernel_size_t=3,
-                 padding_t=1):
+    def __init__(
+            self,
+            channels,
+            use_conv,
+            dims=2,
+            out_channels=None,
+            kernel_size_t=3,
+            padding_t=1, ):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -88,8 +103,9 @@ class Upsample(paddle.nn.Layer):
             self.conv = conv_nd(
                 dims,
                 self.channels,
-                self.out_channels, (kernel_size_t, 3, 3),
-                padding=(padding_t, 1, 1))
+                self.out_channels,
+                (kernel_size_t, 3, 3),
+                padding=(padding_t, 1, 1), )
 
     def forward(self, x):
         assert x.shape[1] == self.channels
@@ -97,11 +113,11 @@ class Upsample(paddle.nn.Layer):
             x = paddle.nn.functional.interpolate(
                 x=x,
                 size=(x.shape[2], x.shape[3] * 2, x.shape[4] * 2),
-                mode='nearest',
-                data_format='NCDHW')
+                mode="nearest",
+                data_format="NCDHW", )
         else:
             x = paddle.nn.functional.interpolate(
-                x=x, scale_factor=2, mode='nearest')
+                x=x, scale_factor=2, mode="nearest")
         if self.use_conv:
             x = self.conv(x)
         return x
@@ -116,13 +132,14 @@ class Downsample(paddle.nn.Layer):
                  downsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(self,
-                 channels,
-                 use_conv,
-                 dims=2,
-                 out_channels=None,
-                 kernel_size_t=3,
-                 padding_t=1):
+    def __init__(
+            self,
+            channels,
+            use_conv,
+            dims=2,
+            out_channels=None,
+            kernel_size_t=3,
+            padding_t=1, ):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -133,9 +150,10 @@ class Downsample(paddle.nn.Layer):
             self.op = conv_nd(
                 dims,
                 self.channels,
-                self.out_channels, (kernel_size_t, 3, 3),
+                self.out_channels,
+                (kernel_size_t, 3, 3),
                 stride=stride,
-                padding=(padding_t, 1, 1))
+                padding=(padding_t, 1, 1), )
         else:
             assert self.channels == self.out_channels
             self.op = avg_pool_nd(dims, kernel_size=stride, stride=stride)
@@ -174,7 +192,7 @@ class ResBlock(TimestepBlock):
                  down=False,
                  kernel_size_t=3,
                  padding_t=1,
-                 nonlinearity_type='silu',
+                 nonlinearity_type="silu",
                  **kwargs):
         super().__init__()
         self.channels = channels
@@ -191,8 +209,9 @@ class ResBlock(TimestepBlock):
             conv_nd(
                 dims,
                 channels,
-                self.out_channels, (kernel_size_t, 3, 3),
-                padding=(padding_t, 1, 1)))
+                self.out_channels,
+                (kernel_size_t, 3, 3),
+                padding=(padding_t, 1, 1), ), )
         self.updown = up or down
         if up:
             self.h_upd = Upsample(
@@ -224,8 +243,10 @@ class ResBlock(TimestepBlock):
             self.h_upd = self.x_upd = paddle.nn.Identity()
         self.emb_layers = paddle.nn.Sequential(
             nonlinearity(nonlinearity_type),
-            linear(emb_channels, 2 * self.out_channels
-                   if use_scale_shift_norm else self.out_channels))
+            linear(
+                emb_channels,
+                2 * self.out_channels
+                if use_scale_shift_norm else self.out_channels, ), )
         self.out_layers = paddle.nn.Sequential(
             normalization(self.out_channels),
             nonlinearity(nonlinearity_type),
@@ -234,16 +255,18 @@ class ResBlock(TimestepBlock):
                 conv_nd(
                     dims,
                     self.out_channels,
-                    self.out_channels, (kernel_size_t, 3, 3),
-                    padding=(padding_t, 1, 1))))
+                    self.out_channels,
+                    (kernel_size_t, 3, 3),
+                    padding=(padding_t, 1, 1), )), )
         if self.out_channels == channels:
             self.skip_connection = paddle.nn.Identity()
         elif use_conv:
             self.skip_connection = conv_nd(
                 dims,
                 channels,
-                self.out_channels, (kernel_size_t, 3, 3),
-                padding=(padding_t, 1, 1))
+                self.out_channels,
+                (kernel_size_t, 3, 3),
+                padding=(padding_t, 1, 1), )
         else:
             self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
 
@@ -270,7 +293,7 @@ class ResBlock(TimestepBlock):
             h = self.in_layers(x)
         emb_out = self.emb_layers(emb).astype(h.dtype)
         if emb_out.dim() == 3:
-            emb_out = rearrange(emb_out, 'b t c -> b c t')
+            emb_out = rearrange(emb_out, "b t c -> b c t")
         while len(emb_out.shape) < h.dim():
             emb_out = emb_out[..., None]
         if self.use_scale_shift_norm:
@@ -294,10 +317,11 @@ class ResBlock(TimestepBlock):
 #     return STTransformerClass
 
 
-def make_spatialtemporal_transformer(module_name='attention_temporal',
-                                     class_name='SpatialTemporalTransformer'):
+def make_spatialtemporal_transformer(module_name="attention_temporal",
+                                     class_name="SpatialTemporalTransformer"):
     # Todo: Support loading more types of transformers
-    assert module_name == 'attention_temporal' and class_name == 'SpatialTemporalTransformer'
+    assert (module_name == "attention_temporal" and
+            class_name == "SpatialTemporalTransformer")
     return SpatialTemporalTransformer
 
 
@@ -357,24 +381,31 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
                  use_temporal_transformer=False,
                  temporal_length=None,
                  use_relative_position=False,
-                 nonlinearity_type='silu',
-                 ST_transformer_module='attention_temporal',
-                 ST_transformer_class='SpatialTemporalTransformer',
+                 nonlinearity_type="silu",
+                 ST_transformer_module="attention_temporal",
+                 ST_transformer_class="SpatialTemporalTransformer",
                  **kwargs):
         super().__init__()
         if use_temporal_transformer:
-            assert context_dim is not None, 'Fool!! You forgot to include the dimension of your cross-attention conditioning...'
+            assert (
+                context_dim is not None
+            ), "Fool!! You forgot to include the dimension of your cross-attention conditioning..."
         if context_dim is not None:
-            assert use_temporal_transformer, 'Fool!! You forgot to use the temporal transformer for your cross-attention conditioning...'
+            assert (
+                use_temporal_transformer
+            ), "Fool!! You forgot to use the temporal transformer for your cross-attention conditioning..."
             from omegaconf.listconfig import ListConfig
+
             if type(context_dim) == ListConfig:
                 context_dim = list(context_dim)
         if num_heads_upsample == -1:
             num_heads_upsample = num_heads
         if num_heads == -1:
-            assert num_head_channels != -1, 'Either num_heads or num_head_channels has to be set'
+            assert (num_head_channels != -1
+                    ), "Either num_heads or num_head_channels has to be set"
         if num_head_channels == -1:
-            assert num_heads != -1, 'Either num_heads or num_head_channels has to be set'
+            assert (num_heads != -1
+                    ), "Either num_heads or num_head_channels has to be set"
         self.image_size = image_size
         self.in_channels = in_channels
         self.model_channels = model_channels
@@ -399,7 +430,7 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
         self.time_embed = paddle.nn.Sequential(
             linear(model_channels, time_embed_dim),
             nonlinearity(nonlinearity_type),
-            linear(time_embed_dim, time_embed_dim))
+            linear(time_embed_dim, time_embed_dim), )
         if self.num_classes is not None:
             self.label_emb = paddle.nn.Embedding(num_classes, time_embed_dim)
         STTransformerClass = make_spatialtemporal_transformer(
@@ -409,8 +440,9 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
                 conv_nd(
                     dims,
                     in_channels,
-                    model_channels, (kernel_size_t, 3, 3),
-                    padding=(padding_t, 1, 1)))
+                    model_channels,
+                    (kernel_size_t, 3, 3),
+                    padding=(padding_t, 1, 1), ))
         ])
         self._feature_size = model_channels
         input_block_chans = [model_channels]
@@ -449,7 +481,7 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
                             num_heads=num_heads,
                             num_head_channels=dim_head,
                             temporal_length=temporal_length,
-                            use_relative_position=use_relative_position)
+                            use_relative_position=use_relative_position, )
                         if not use_temporal_transformer else STTransformerClass(
                             ch,
                             num_heads,
@@ -484,7 +516,7 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
                                 dims=dims,
                                 out_channels=out_ch,
                                 kernel_size_t=kernel_size_t,
-                                padding_t=padding_t)))
+                                padding_t=padding_t, )))
                 ch = out_ch
                 input_block_chans.append(ch)
                 ds *= 2
@@ -515,7 +547,7 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
                 num_heads=num_heads,
                 num_head_channels=dim_head,
                 temporal_length=temporal_length,
-                use_relative_position=use_relative_position)
+                use_relative_position=use_relative_position, )
             if not use_temporal_transformer else STTransformerClass(
                 ch,
                 num_heads,
@@ -535,7 +567,7 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
                 kernel_size_t=kernel_size_t,
                 padding_t=padding_t,
                 nonlinearity_type=nonlinearity_type,
-                **kwargs))
+                **kwargs), )
         self._feature_size += ch
         self.output_blocks = paddle.nn.LayerList(sublayers=[])
         for level, mult in list(enumerate(channel_mult))[::-1]:
@@ -572,7 +604,7 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
                             num_heads=num_heads,
                             num_head_channels=dim_head,
                             temporal_length=temporal_length,
-                            use_relative_position=use_relative_position)
+                            use_relative_position=use_relative_position, )
                         if not use_temporal_transformer else STTransformerClass(
                             ch,
                             num_heads,
@@ -603,7 +635,7 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
                                 dims=dims,
                                 out_channels=out_ch,
                                 kernel_size_t=kernel_size_t,
-                                padding_t=padding_t))
+                                padding_t=padding_t, ))
                     ds //= 2
                 self.output_blocks.append(TimestepEmbedSequential(*layers))
                 self._feature_size += ch
@@ -614,8 +646,9 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
                 conv_nd(
                     dims,
                     model_channels,
-                    out_channels, (kernel_size_t, 3, 3),
-                    padding=(padding_t, 1, 1))))
+                    out_channels,
+                    (kernel_size_t, 3, 3),
+                    padding=(padding_t, 1, 1), )), )
 
     def convert_to_fp16(self):
         """
@@ -685,12 +718,12 @@ class FrameInterpPredUNet(LVDMUNet3DModel):
                  *args,
                  **kwargs):
         super().__init__(image_size, in_channels, *args, **kwargs)
-        if cond_aug_mode == 'time_embed':
+        if cond_aug_mode == "time_embed":
             self.time_embed_cond = paddle.nn.Sequential(
                 linear(self.model_channels, self.time_embed_dim),
                 nonlinearity(self.nonlinearity_type),
-                linear(self.time_embed_dim, self.time_embed_dim))
-        elif cond_aug_mode == 'learned_embed':
+                linear(self.time_embed_dim, self.time_embed_dim), )
+        elif cond_aug_mode == "learned_embed":
             pass
 
     def forward(self,
@@ -711,11 +744,11 @@ class FrameInterpPredUNet(LVDMUNet3DModel):
             assert emb.dim() == 2
             mask_ = mask[:, :, :, (0), (0)]
             t = mask.shape[2]
-            emb_mix = emb.unsqueeze(axis=2).tile(repeat_times=[1, 1, t]) * (
-                1 - mask_) + s_emb.unsqueeze(axis=2).tile(
-                    repeat_times=[1, 1, t]) * mask_
+            emb_mix = (emb.unsqueeze(axis=2).tile(repeat_times=[1, 1, t]) *
+                       (1 - mask_) + s_emb.unsqueeze(axis=2).tile(
+                           repeat_times=[1, 1, t]) * mask_)
             assert emb_mix.dim() == 3
-            emb_mix = rearrange(emb_mix, 'b c t -> b t c')
+            emb_mix = rearrange(emb_mix, "b c t -> b t c")
             time_emb_replace = emb_mix
             timesteps = None
         else:

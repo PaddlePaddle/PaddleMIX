@@ -26,36 +26,18 @@ import numpy as np
 
 from ..image_processor import VaeImageProcessor
 from ..schedulers import (
-    DDIMScheduler,
-    DDPMScheduler,
-    DEISMultistepScheduler,
-    DPMSolverMultistepScheduler,
-    DPMSolverSinglestepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    HeunDiscreteScheduler,
-    KDPM2AncestralDiscreteScheduler,
-    KDPM2DiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    PreconfigEulerAncestralDiscreteScheduler,
-    PreconfigLMSDiscreteScheduler,
-    UniPCMultistepScheduler, )
+    DDIMScheduler, DDPMScheduler, DEISMultistepScheduler,
+    DPMSolverMultistepScheduler, DPMSolverSinglestepScheduler,
+    EulerAncestralDiscreteScheduler, EulerDiscreteScheduler,
+    HeunDiscreteScheduler, KDPM2AncestralDiscreteScheduler,
+    KDPM2DiscreteScheduler, LMSDiscreteScheduler, PNDMScheduler,
+    PreconfigEulerAncestralDiscreteScheduler, PreconfigLMSDiscreteScheduler,
+    UniPCMultistepScheduler)
 from ..utils import (
-    DIFFUSERS_CACHE,
-    FASTDEPLOY_MODEL_NAME,
-    FASTDEPLOY_WEIGHTS_NAME,
-    FROM_HF_HUB,
-    HF_HUB_OFFLINE,
-    ONNX_EXTERNAL_WEIGHTS_NAME,
-    ONNX_WEIGHTS_NAME,
-    PPDIFFUSERS_CACHE,
-    _add_variant,
-    _get_model_file,
-    is_fastdeploy_available,
-    is_paddle_available,
-    logging,
-    randn_tensor, )
+    DIFFUSERS_CACHE, FASTDEPLOY_MODEL_NAME, FASTDEPLOY_WEIGHTS_NAME,
+    FROM_HF_HUB, HF_HUB_OFFLINE, ONNX_EXTERNAL_WEIGHTS_NAME, ONNX_WEIGHTS_NAME,
+    PPDIFFUSERS_CACHE, _add_variant, _get_model_file, is_fastdeploy_available,
+    is_paddle_available, logging, randn_tensor)
 from ..version import VERSION as __version__
 
 __all__ = ["FastDeployRuntimeModel", "FastDeployDiffusionPipelineMixin"]
@@ -243,10 +225,11 @@ def pad_tokens_and_weights(tokens,
     Pad the tokens (with starting and ending tokens) and weights (with 1.0) to max_length.
     """
     max_embeddings_multiples = (max_length - 2) // (chunk_length - 2)
-    weights_length = max_length if no_boseos_middle else max_embeddings_multiples * chunk_length
+    weights_length = (max_length if no_boseos_middle else
+                      max_embeddings_multiples * chunk_length)
     for i in range(len(tokens)):
-        tokens[i] = [bos] + tokens[i] + [eos] + [pad] * (max_length - 2 -
-                                                         len(tokens[i]))
+        tokens[i] = ([bos] + tokens[i] + [eos] + [pad] *
+                     (max_length - 2 - len(tokens[i])))
         if no_boseos_middle:
             weights[i] = [1.0] + weights[i] + [1.0] * (max_length - 1 -
                                                        len(weights[i]))
@@ -405,8 +388,12 @@ def get_weighted_text_embeddings(
 
     # pad the length of tokens and weights
     # support bert tokenizer
-    bos = pipe.tokenizer.bos_token_id if pipe.tokenizer.bos_token_id is not None else pipe.tokenizer.cls_token_id
-    eos = pipe.tokenizer.eos_token_id if pipe.tokenizer.eos_token_id is not None else pipe.tokenizer.sep_token_id
+    bos = (pipe.tokenizer.bos_token_id
+           if pipe.tokenizer.bos_token_id is not None else
+           pipe.tokenizer.cls_token_id)
+    eos = (pipe.tokenizer.eos_token_id
+           if pipe.tokenizer.eos_token_id is not None else
+           pipe.tokenizer.sep_token_id)
     pad = pipe.tokenizer.pad_token_id
 
     prompt_tokens, prompt_weights = pad_tokens_and_weights(
@@ -447,13 +434,15 @@ def get_weighted_text_embeddings(
     if (not skip_parsing) and (not skip_weighting):
         previous_mean = text_embeddings.mean(axis=[-2, -1])
         text_embeddings *= prompt_weights.unsqueeze(-1)
-        text_embeddings *= (previous_mean / text_embeddings.mean(
-            axis=[-2, -1])).unsqueeze(-1).unsqueeze(-1)
+        text_embeddings *= (
+            (previous_mean / text_embeddings.mean(axis=[-2, -1])).unsqueeze(-1)
+            .unsqueeze(-1))
         if uncond_prompt is not None:
             previous_mean = uncond_embeddings.mean(axis=[-2, -1])
             uncond_embeddings *= uncond_weights.unsqueeze(-1)
-            uncond_embeddings *= (previous_mean / uncond_embeddings.mean(
-                axis=[-2, -1])).unsqueeze(-1).unsqueeze(-1)
+            uncond_embeddings *= (
+                (previous_mean / uncond_embeddings.mean(axis=[-2, -1]))
+                .unsqueeze(-1).unsqueeze(-1))
 
     if uncond_prompt is not None:
         return text_embeddings, uncond_embeddings
@@ -470,9 +459,8 @@ class FastDeployDiffusionPipelineMixin:
                 continue
             module = getattr(self, name)
             if isinstance(module, FastDeployRuntimeModel):
-                infer_op = infer_op_dict.get(
-                    name, "zero_copy_infer") if module.is_spport_zero_copy(
-                    ) else "raw"
+                infer_op = (infer_op_dict.get(name, "zero_copy_infer")
+                            if module.is_spport_zero_copy() else "raw")
                 # if parse_prompt_type in ["lpw", "webui"] and name in ["text_encoder"]:
                 #     if infer_op != "raw":
                 #         logger.warning(
@@ -494,7 +482,7 @@ class FastDeployDiffusionPipelineMixin:
         self.control_image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor,
             do_convert_rgb=True,
-            do_normalize=False)
+            do_normalize=False, )
         self.dtype = dtype
         self.supported_scheduler = [
             "pndm",
@@ -751,10 +739,11 @@ class FastDeployDiffusionPipelineMixin:
         if latents is None:
             noise = randn_tensor(shape, generator=generator, dtype=self.dtype)
             # if strength is 1. then initialise the latents to noise, else initial to image + noise
-            latents = noise if is_strength_max else self.scheduler.add_noise(
-                image_latents, noise, timestep)
+            latents = (noise if is_strength_max else
+                       self.scheduler.add_noise(image_latents, noise, timestep))
             # if pure noise then scale the initial latents by the  Scheduler's init sigma
-            latents = latents * self.scheduler.init_noise_sigma if is_strength_max else latents
+            latents = (latents * self.scheduler.init_noise_sigma
+                       if is_strength_max else latents)
         else:
             noise = latents
             if str(noise.dtype).replace("paddle.", "") != self.dtype:
@@ -1181,11 +1170,12 @@ class FastDeployRuntimeModel:
         else:
             return False
 
-    def zero_copy_infer(self,
-                        prebinded_inputs: dict,
-                        prebinded_outputs: dict,
-                        share_with_raw_ptr=True,
-                        **kwargs):
+    def zero_copy_infer(
+            self,
+            prebinded_inputs: dict,
+            prebinded_outputs: dict,
+            share_with_raw_ptr=True,
+            **kwargs, ):
         """
         Execute inference without copying data from cpu to gpu.
 
@@ -1284,11 +1274,12 @@ class FastDeployRuntimeModel:
 
         return fd.Runtime(option)
 
-    def _save_pretrained(self,
-                         save_directory: Union[str, Path],
-                         model_file_name: Optional[str]=None,
-                         params_file_name: Optional[str]=None,
-                         **kwargs):
+    def _save_pretrained(
+            self,
+            save_directory: Union[str, Path],
+            model_file_name: Optional[str]=None,
+            params_file_name: Optional[str]=None,
+            **kwargs, ):
         """
         Save a model and its configuration file to a directory, so that it can be re-loaded using the
         [`~FastDeployRuntimeModel.from_pretrained`] class method. It will always save the
@@ -1308,7 +1299,8 @@ class FastDeployRuntimeModel:
         model_file_name = (model_file_name if model_file_name is not None else
                            FASTDEPLOY_MODEL_NAME
                            if not is_onnx_model else ONNX_WEIGHTS_NAME)
-        params_file_name = params_file_name if params_file_name is not None else FASTDEPLOY_WEIGHTS_NAME
+        params_file_name = (params_file_name if params_file_name is not None
+                            else FASTDEPLOY_WEIGHTS_NAME)
 
         src_model_path = self.model_save_dir.joinpath(self.latest_model_name)
         dst_model_path = Path(save_directory).joinpath(model_file_name)
@@ -1415,15 +1407,17 @@ class FastDeployRuntimeModel:
         model_file_name = (model_file_name if model_file_name is not None else
                            FASTDEPLOY_MODEL_NAME
                            if not is_onnx_model else ONNX_WEIGHTS_NAME)
-        params_file_name = params_file_name if params_file_name is not None else FASTDEPLOY_WEIGHTS_NAME
+        params_file_name = (params_file_name if params_file_name is not None
+                            else FASTDEPLOY_WEIGHTS_NAME)
         kwargs["model_format"] = "ONNX" if is_onnx_model else "PADDLE"
 
         # load model from local directory
         if os.path.isdir(pretrained_model_name_or_path):
             model_path = os.path.join(pretrained_model_name_or_path,
                                       model_file_name)
-            params_path = None if is_onnx_model else os.path.join(
-                pretrained_model_name_or_path, params_file_name)
+            params_path = (
+                None if is_onnx_model else
+                os.path.join(pretrained_model_name_or_path, params_file_name))
             model = FastDeployRuntimeModel.load_model(
                 model_path,
                 params_path,

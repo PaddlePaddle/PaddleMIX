@@ -21,6 +21,7 @@ class ModelArguments:
     """
     Parameters for initialization and training
     """
+
     # for initialization
     task_type: str = field(
         default="short",
@@ -49,19 +50,19 @@ class ModelArguments:
         metadata={
             "help":
             "Pretrained vae name or path if not use pretrained model name or path"
-        })
+        }, )
     text_encoder_name_or_path: Optional[str] = field(
         default=None,
         metadata={
             "help":
             "Pretrained text encoder name or path if not use pretrained model name or path"
-        })
+        }, )
     text_encoder_config_file: Optional[str] = field(
         default=None,
         metadata={
             "help":
             "Text encoder config file if not use pretrained text encoder"
-        })
+        }, )
     is_text_encoder_trainable: bool = field(
         default=False, metadata={"help": "Whether or not use ema"})
     unet_name_or_path: Optional[str] = field(
@@ -69,7 +70,7 @@ class ModelArguments:
         metadata={
             "help":
             "Pretrained unet name or path if not use pretrained model name or path"
-        })
+        }, )
     unet_config_file: Optional[str] = field(
         default=None,
         metadata={"help": "Unet config file if not use pretrained unet"})
@@ -80,7 +81,8 @@ class ModelArguments:
         default=0.0155, metadata={"help": "Train or eval scheduler beta end"})
     scheduler_num_train_timesteps: Optional[int] = field(
         default=1000,
-        metadata={"help": "Train or eval scheduler number of train timesteps"})
+        metadata={"help": "Train or eval scheduler number of train timesteps"},
+    )
     eval_scheduler_num_inference_steps: Optional[int] = field(
         default=50,
         metadata={"help": "Eval scheduler number of inference timesteps"})
@@ -92,16 +94,16 @@ class ModelArguments:
         metadata={"help": "enable xformers memory efficient attention"})
     scale_factor: Optional[float] = field(
         default=0.33422927,
-        metadata={"help": "The scale factor in the first stage encoding"})
+        metadata={"help": "The scale factor in the first stage encoding"}, )
     shift_factor: Optional[float] = field(
         default=1.4606637,
-        metadata={"help": "The shift factor in the first stage encoding"})
+        metadata={"help": "The shift factor in the first stage encoding"}, )
     loss_type: str = field(
         default="l1",
         metadata={
             "help":
             "The loss type to use in training. Should be one of ['l2', 'l1']"
-        })
+        }, )
     # for alignmemnt
     latents_path: str = field(
         default=None,
@@ -111,7 +113,7 @@ class ModelArguments:
         metadata={"help": "Whether or not use paddle conv2d init"})
     if_numpy_genarator_random_alignment: bool = field(
         default=False,
-        metadata={"help": "Whether to align random using numpy generator"})
+        metadata={"help": "Whether to align random using numpy generator"}, )
     numpy_genarator_random_seed: Optional[int] = field(
         default=42, metadata={"help": "The random seed for numpy generator"})
     set_seed_for_alignment: bool = field(
@@ -124,6 +126,7 @@ class TrainerArguments:
     """
     Parameters for logging
     """
+
     # for log
     image_logging_steps: Optional[int] = field(
         default=1000, metadata={"help": "Log image every X steps."})
@@ -134,14 +137,15 @@ class VideoFrameDatasetArguments:
     """
     Parameters for dataset
     """
+
     train_data_root: str = field(
         default="/root/data/lvdm/sky",
-        metadata={"help": "The root path of train dataset files"})
+        metadata={"help": "The root path of train dataset files"}, )
     train_subset_split: str = field(
         default="train", metadata={"help": "The train subset split"})
     eval_data_root: str = field(
         default="/root/data/lvdm/sky",
-        metadata={"help": "The root path of validation dataset files"})
+        metadata={"help": "The root path of validation dataset files"}, )
     eval_subset_split: str = field(
         default="train", metadata={"help": "The validation subset split"})
     resolution: int = field(
@@ -154,7 +158,7 @@ class VideoFrameDatasetArguments:
         default="sky", metadata={"help": "The dataset name"})
     spatial_transform: str = field(
         default="center_crop_resize",
-        metadata={"help": "The spatial transform type to use"})
+        metadata={"help": "The spatial transform type to use"}, )
     temporal_transform: str = field(
         default="rand_clips",
         metadata={"help": "The temporal transform type to use"})

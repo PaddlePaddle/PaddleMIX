@@ -21,31 +21,16 @@ from typing import Any, Callable, Optional, Union
 import paddle
 import paddle.nn as nn
 
-from ..utils import (
-    CONFIG_NAME,
-    DIFFUSERS_CACHE,
-    FROM_DIFFUSERS,
-    FROM_HF_HUB,
-    HF_HUB_OFFLINE,
-    LOW_CPU_MEM_USAGE_DEFAULT,
-    PADDLE_WEIGHTS_NAME,
-    PPDIFFUSERS_CACHE,
-    TO_DIFFUSERS,
-    TORCH_SAFETENSORS_WEIGHTS_NAME,
-    TORCH_WEIGHTS_NAME,
-    _add_variant,
-    _get_model_file,
-    deprecate,
-    is_paddlenlp_available,
-    is_safetensors_available,
-    is_torch_available,
-    is_torch_file,
-    logging,
-    smart_load, )
+from ..utils import (CONFIG_NAME, DIFFUSERS_CACHE, FROM_DIFFUSERS, FROM_HF_HUB,
+                     HF_HUB_OFFLINE, LOW_CPU_MEM_USAGE_DEFAULT,
+                     PADDLE_WEIGHTS_NAME, PPDIFFUSERS_CACHE, TO_DIFFUSERS,
+                     TORCH_SAFETENSORS_WEIGHTS_NAME, TORCH_WEIGHTS_NAME,
+                     _add_variant, _get_model_file, deprecate,
+                     is_paddlenlp_available, is_safetensors_available,
+                     is_torch_available, is_torch_file, logging, smart_load)
 from ..version import VERSION as __version__
 from .modeling_pytorch_paddle_utils import (
-    convert_paddle_state_dict_to_pytorch,
-    convert_pytorch_state_dict_to_paddle, )
+    convert_paddle_state_dict_to_pytorch, convert_pytorch_state_dict_to_paddle)
 
 logger = logging.get_logger(__name__)
 
@@ -170,7 +155,7 @@ class ModelMixin(nn.Layer):
                 "1.0.0",
                 deprecation_message,
                 standard_warn=False,
-                stacklevel=3)
+                stacklevel=3, )
             return self._internal_dict[name]
 
         # call PyTorch's https://pytorch.org/docs/stable/_modules/torch/nn/modules/module.html#Module
@@ -599,12 +584,17 @@ class ModelMixin(nn.Layer):
                             "Deleting key {} from state_dict.".format(k))
                         del state_dict[k]
 
-        model, missing_keys, unexpected_keys, mismatched_keys, error_msgs = cls._load_pretrained_model(
+        (
             model,
-            state_dict,
-            model_file,
-            pretrained_model_name_or_path,
-            ignore_mismatched_sizes=ignore_mismatched_sizes, )
+            missing_keys,
+            unexpected_keys,
+            mismatched_keys,
+            error_msgs, ) = cls._load_pretrained_model(
+                model,
+                state_dict,
+                model_file,
+                pretrained_model_name_or_path,
+                ignore_mismatched_sizes=ignore_mismatched_sizes, )
 
         loading_info = {
             "missing_keys": missing_keys,
@@ -663,9 +653,10 @@ class ModelMixin(nn.Layer):
                 if model_key in model_state_dict and list(state_dict[
                         checkpoint_key].shape) != list(model_state_dict[
                             model_key].shape):
-                    mismatched_keys.append(
-                        (checkpoint_key, state_dict[checkpoint_key].shape,
-                         model_state_dict[model_key].shape))
+                    mismatched_keys.append((
+                        checkpoint_key,
+                        state_dict[checkpoint_key].shape,
+                        model_state_dict[model_key].shape, ))
                     del state_dict[checkpoint_key]
             if ignore_mismatched_sizes:
                 mismatched_keys = []
@@ -688,9 +679,7 @@ class ModelMixin(nn.Layer):
         if len(error_msgs) > 0:
             error_msg = "\n\t".join(error_msgs)
             if "size mismatch" in error_msg:
-                error_msg += (
-                    "\n\tYou may consider adding `ignore_mismatched_sizes=True` in the model `from_pretrained` method."
-                )
+                error_msg += "\n\tYou may consider adding `ignore_mismatched_sizes=True` in the model `from_pretrained` method."
             raise RuntimeError(
                 f"Error(s) in loading state_dict for {model.__class__.__name__}:\n\t{error_msg}"
             )

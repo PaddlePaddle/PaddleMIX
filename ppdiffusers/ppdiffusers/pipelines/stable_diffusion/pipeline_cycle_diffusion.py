@@ -20,8 +20,8 @@ import numpy as np
 import paddle
 import PIL
 from packaging import version
-
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...configuration_utils import FrozenDict
 from ...loaders import TextualInversionLoaderMixin
@@ -64,7 +64,8 @@ def preprocess(image):
 def posterior_sample(scheduler, latents, timestep, clean_latents, generator,
                      eta):
     # 1. get previous step value (=t-1)
-    prev_timestep = timestep - scheduler.config.num_train_timesteps // scheduler.num_inference_steps
+    prev_timestep = (timestep - scheduler.config.num_train_timesteps //
+                     scheduler.num_inference_steps)
 
     if prev_timestep <= 0:
         return clean_latents
@@ -90,7 +91,8 @@ def posterior_sample(scheduler, latents, timestep, clean_latents, generator,
 
 def compute_noise(scheduler, prev_latents, latents, timestep, noise_pred, eta):
     # 1. get previous step value (=t-1)
-    prev_timestep = timestep - scheduler.config.num_train_timesteps // scheduler.num_inference_steps
+    prev_timestep = (timestep - scheduler.config.num_train_timesteps //
+                     scheduler.num_inference_steps)
 
     # 2. compute alphas, betas
     alpha_prod_t = scheduler.alphas_cumprod[timestep]
@@ -165,8 +167,8 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             requires_safety_checker: bool=True, ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -202,8 +204,8 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             unet.config, "_ppdiffusers_version") and version.parse(
                 version.parse(unet.config._ppdiffusers_version)
                 .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = (hasattr(unet.config, "sample_size") and
+                                       unet.config.sample_size < 64)
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -296,8 +298,8 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -347,8 +349,8 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -378,13 +380,14 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         return prompt_embeds
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.check_inputs
-    def check_inputs(self,
-                     prompt,
-                     strength,
-                     callback_steps,
-                     negative_prompt=None,
-                     prompt_embeds=None,
-                     negative_prompt_embeds=None):
+    def check_inputs(
+            self,
+            prompt,
+            strength,
+            callback_steps,
+            negative_prompt=None,
+            prompt_embeds=None,
+            negative_prompt_embeds=None, ):
         if strength < 0 or strength > 1:
             raise ValueError(
                 f"The value of strength should in [0.0, 1.0] but is {strength}")
@@ -502,8 +505,8 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
         init_latents = self.vae.config.scaling_factor * init_latents
 
-        if batch_size > init_latents.shape[
-                0] and batch_size % init_latents.shape[0] == 0:
+        if (batch_size > init_latents.shape[0] and
+                batch_size % init_latents.shape[0] == 0):
             # expand init_latents for batch_size
             deprecation_message = (
                 f"You have passed {batch_size} text prompts (`prompt`), but only {init_latents.shape[0]} initial"
@@ -515,14 +518,14 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 "len(prompt) != len(image)",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False, )
             additional_image_per_prompt = batch_size // init_latents.shape[0]
             init_latents = paddle.concat(
                 [init_latents] * additional_image_per_prompt *
                 num_images_per_prompt,
-                axis=0)
-        elif batch_size > init_latents.shape[
-                0] and batch_size % init_latents.shape[0] != 0:
+                axis=0, )
+        elif (batch_size > init_latents.shape[0] and
+              batch_size % init_latents.shape[0] != 0):
             raise ValueError(
                 f"Cannot duplicate `image` of batch size {init_latents.shape[0]} to {batch_size} text prompts."
             )
@@ -630,8 +633,13 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             (nsfw) content, according to the `safety_checker`.
         """
         # 1. Check inputs
-        self.check_inputs(prompt, strength, callback_steps, negative_prompt,
-                          prompt_embeds, negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            strength,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -670,8 +678,12 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
 
         # 6. Prepare latent variables
         latents, clean_latents = self.prepare_latents(
-            image, latent_timestep, batch_size, num_images_per_prompt,
-            prompt_embeds.dtype, generator)
+            image,
+            latent_timestep,
+            batch_size,
+            num_images_per_prompt,
+            prompt_embeds.dtype,
+            generator, )
         source_latents = latents
 
         # 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
@@ -711,7 +723,7 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 concat_noise_pred = self.unet(
                     concat_latent_model_input,
                     t,
-                    encoder_hidden_states=concat_prompt_embeds).sample
+                    encoder_hidden_states=concat_prompt_embeds, ).sample
 
                 # perform guidance
                 (
@@ -732,11 +744,15 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                     t,
                     clean_latents,
                     generator=generator,
-                    **extra_step_kwargs)
+                    **extra_step_kwargs, )
                 # Compute noise.
-                noise = compute_noise(self.scheduler, prev_source_latents,
-                                      source_latents, t, source_noise_pred,
-                                      **extra_step_kwargs)
+                noise = compute_noise(
+                    self.scheduler,
+                    prev_source_latents,
+                    source_latents,
+                    t,
+                    source_noise_pred,
+                    **extra_step_kwargs, )
                 source_latents = prev_source_latents
 
                 # compute the previous noisy sample x_t -> x_t-1

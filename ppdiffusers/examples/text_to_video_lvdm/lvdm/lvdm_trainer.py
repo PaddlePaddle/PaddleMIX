@@ -18,12 +18,9 @@ import sys
 import paddle
 import paddle.amp.auto_cast as autocast
 from paddle.io import DataLoader
-
 from paddlenlp.trainer import Trainer
-from paddlenlp.trainer.integrations import (
-    INTEGRATION_TO_CALLBACK,
-    VisualDLCallback,
-    rewrite_logs, )
+from paddlenlp.trainer.integrations import (INTEGRATION_TO_CALLBACK,
+                                            VisualDLCallback, rewrite_logs)
 from paddlenlp.trainer.utils.helper import nested_detach
 from paddlenlp.utils.log import logger
 
@@ -44,15 +41,17 @@ class VisualDLWithImageCallback(VisualDLCallback):
                 level=args.fp16_opt_level,
                 dtype=amp_dtype, )
         else:
-            ctx_manager = contextlib.nullcontext() if sys.version_info >= (
-                3, 7) else contextlib.suppress()
+            ctx_manager = (contextlib.nullcontext()
+                           if sys.version_info >= (3, 7) else
+                           contextlib.suppress())
 
         return ctx_manager
 
     def on_step_end(self, args, state, control, model=None, **kwargs):
         if hasattr(model, "on_train_batch_end"):
             model.on_train_batch_end()
-        if args.image_logging_steps > 0 and state.global_step % args.image_logging_steps == 0:
+        if (args.image_logging_steps > 0 and
+                state.global_step % args.image_logging_steps == 0):
             control.should_log = True
 
     def on_log(self, args, state, control, logs=None, **kwargs):

@@ -13,9 +13,10 @@
 # limitations under the License.
 
 import math
+import os
 from dataclasses import dataclass, field
 from typing import List, Optional
-import os
+
 import paddle
 from paddlenlp.trainer import TrainingArguments
 
@@ -68,24 +69,25 @@ class SDTrainingArguments(TrainingArguments):
         metadata={"help": "The initial learning rate for Unet Model."})
     text_encoder_learning_rate: float = field(
         default=None,
-        metadata={"help": "The initial learning rate for Text Encoder Model."})
+        metadata={"help": "The initial learning rate for Text Encoder Model."},
+    )
 
     def __post_init__(self):
         super().__post_init__()
-        self.image_logging_steps = ((math.ceil(
-            self.image_logging_steps / self.logging_steps) * self.logging_steps)
-                                    if self.image_logging_steps > 0 else -1)
+        self.image_logging_steps = (
+            (math.ceil(self.image_logging_steps / self.logging_steps) *
+             self.logging_steps) if self.image_logging_steps > 0 else -1)
         self.use_ema = str2bool(os.getenv("FLAG_USE_EMA",
                                           "False")) or self.use_ema
         self.enable_xformers_memory_efficient_attention = (
             str2bool(os.getenv("FLAG_XFORMERS", "False")) or
             self.enable_xformers_memory_efficient_attention)
-        self.recompute = str2bool(os.getenv("FLAG_RECOMPUTE",
-                                            "False")) or self.recompute
-        self.benchmark = str2bool(os.getenv("FLAG_BENCHMARK",
-                                            "False")) or self.benchmark
-        self.to_static = str2bool(os.getenv("FLAG_TO_STATIC",
-                                            "False")) or self.to_static
+        self.recompute = (str2bool(os.getenv("FLAG_RECOMPUTE", "False")) or
+                          self.recompute)
+        self.benchmark = (str2bool(os.getenv("FLAG_BENCHMARK", "False")) or
+                          self.benchmark)
+        self.to_static = (str2bool(os.getenv("FLAG_TO_STATIC", "False")) or
+                          self.to_static)
 
         if self.text_encoder_learning_rate is None:
             self.text_encoder_learning_rate = self.learning_rate
@@ -144,7 +146,8 @@ class SDModelArguments:
         }, )
     input_perturbation: Optional[float] = field(
         default=0,
-        metadata={"help": "The scale of input perturbation. Recommended 0.1."})
+        metadata={"help": "The scale of input perturbation. Recommended 0.1."},
+    )
 
 
 @dataclass
@@ -155,7 +158,7 @@ class SDDataArguments:
 
     file_list: str = field(
         default="./data/filelist/train.filelist.list",
-        metadata={"help": "The name of the file_list."})
+        metadata={"help": "The name of the file_list."}, )
     num_records: int = field(default=10000000, metadata={"help": "num_records"})
     buffer_size: int = field(
         default=100,

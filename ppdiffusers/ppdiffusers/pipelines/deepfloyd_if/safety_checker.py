@@ -15,11 +15,8 @@
 import numpy as np
 import paddle
 import paddle.nn as nn
-
-from paddlenlp.transformers import (
-    CLIPConfig,
-    CLIPVisionModelWithProjection,
-    PretrainedModel, )
+from paddlenlp.transformers import (CLIPConfig, CLIPVisionModelWithProjection,
+                                    PretrainedModel)
 
 from ...utils import logging
 

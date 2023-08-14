@@ -20,7 +20,8 @@ import numpy as np
 import paddle
 
 from ppdiffusers.models import UNet3DConditionModel
-from ppdiffusers.models.attention_processor import AttnProcessor, LoRAAttnProcessor
+from ppdiffusers.models.attention_processor import (AttnProcessor,
+                                                    LoRAAttnProcessor)
 from ppdiffusers.utils import floats_tensor, logging
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 
@@ -35,7 +36,8 @@ def create_lora_layers(model, mock_weights: bool=True):
         has_cross_attention = name.endswith("attn2.processor") and not (
             name.startswith("transformer_in") or
             "temp_attentions" in name.split("."))
-        cross_attention_dim = model.config.cross_attention_dim if has_cross_attention else None
+        cross_attention_dim = (model.config.cross_attention_dim
+                               if has_cross_attention else None)
         if name.startswith("mid_block"):
             hidden_size = model.config.block_out_channels[-1]
         elif name.startswith("up_blocks"):
@@ -81,7 +83,7 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
         return {
             "sample": noise,
             "timestep": time_step,
-            "encoder_hidden_states": encoder_hidden_states
+            "encoder_hidden_states": encoder_hidden_states,
         }
 
     @property
@@ -111,7 +113,7 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
 
     @unittest.skipIf(
         not is_ppxformers_available(),
-        reason="XFormers attention is only available with CUDA and `xformers` installed"
+        reason="XFormers attention is only available with CUDA and `xformers` installed",
     )
     def test_xformers_enable_works(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -119,8 +121,8 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
 
         model.enable_xformers_memory_efficient_attention()
 
-        assert (model.mid_block.attentions[0].transformer_blocks[
-            0].attn1.processor.__class__.__name__ == "XFormersAttnProcessor"
+        assert (model.mid_block.attentions[0].transformer_blocks[0]
+                .attn1.processor.__class__.__name__ == "XFormersAttnProcessor"
                 ), "xformers is not enabled"
 
     # Overriding to set `norm_num_groups` needs to be different for this model.
@@ -310,7 +312,7 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
                 tmpdirname,
                 weight_name="pytorch_lora_weights.bin",
                 use_safetensors=False,
-                from_diffusers=True)
+                from_diffusers=True, )
 
     def test_lora_save_paddle_force_load_safetensors_error(self):
         pass

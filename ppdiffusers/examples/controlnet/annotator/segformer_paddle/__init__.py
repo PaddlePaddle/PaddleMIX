@@ -39,7 +39,7 @@ def parse_args():
         dest="model_path",
         help="The path of model for prediction",
         type=str,
-        default=None)
+        default=None, )
     parser.add_argument(
         "--image_path",
         dest="image_path",
@@ -65,7 +65,7 @@ def parse_args():
         nargs="+",
         help="Scales for augment",
         type=float,
-        default=1.0)
+        default=1.0, )
     parser.add_argument(
         "--flip_horizontal",
         dest="flip_horizontal",
@@ -75,14 +75,14 @@ def parse_args():
         "--flip_vertical",
         dest="flip_vertical",
         help="Whether to use flip vertically augment",
-        action="store_true")
+        action="store_true", )
 
     # sliding window prediction
     parser.add_argument(
         "--is_slide",
         dest="is_slide",
         help="Whether to prediction by sliding window",
-        action="store_true")
+        action="store_true", )
     parser.add_argument(
         "--crop_size",
         dest="crop_size",
@@ -301,8 +301,8 @@ def get_test_config(cfg, args):
 def main(args):
     env_info = get_sys_env()
 
-    if args.device == "gpu" and env_info[
-            "Paddle compiled with cuda"] and env_info["GPUs used"]:
+    if (args.device == "gpu" and env_info["Paddle compiled with cuda"] and
+            env_info["GPUs used"]):
         place = "gpu"
     elif args.device == "xpu" and paddle.is_compiled_with_xpu():
         place = "xpu"
@@ -340,34 +340,37 @@ def main(args):
         **test_config, )
 
 
-checkpoint_file = (
-    "https://bj.bcebos.com/paddleseg/dygraph/cityscapes/segformer_b5_cityscapes_1024x1024_160k/model.pdparams"
-)
+checkpoint_file = "https://bj.bcebos.com/paddleseg/dygraph/cityscapes/segformer_b5_cityscapes_1024x1024_160k/model.pdparams"
 
 
 class SegformerDetector:
     def __init__(self, mode):
-        assert mode in ["cityscapes", "ade20k"
-                        ], f"mode should in {['cityscapes', 'ade20k']}!"
+        assert mode in [
+            "cityscapes",
+            "ade20k",
+        ], f"mode should in {['cityscapes', 'ade20k']}!"
         if mode == "cityscapes":
             segformer_annotator_ckpts_path = os.path.join(annotator_ckpts_path,
                                                           "segformer_model")
             modelpath = os.path.join(segformer_annotator_ckpts_path,
                                      "model.pdparams")
             if not os.path.exists(modelpath):
-                from paddlenlp.utils.downloader import get_path_from_url_with_filelock
+                from paddlenlp.utils.downloader import \
+                    get_path_from_url_with_filelock
 
                 get_path_from_url_with_filelock(
                     checkpoint_file, root_dir=segformer_annotator_ckpts_path)
             self.model_path = modelpath
 
-            cfg = "annotator/segformer_paddle/segformer_b5_cityscapes_1024x1024_160k.yml"
+            cfg = (
+                "annotator/segformer_paddle/segformer_b5_cityscapes_1024x1024_160k.yml"
+            )
         else:
             segformer_annotator_ckpts_path = os.path.join(annotator_ckpts_path,
                                                           "segformer_model")
             modelpath = os.path.join(
                 segformer_annotator_ckpts_path,
-                "segformer_b5_ade20k_512x512_160k.pdparams")
+                "segformer_b5_ade20k_512x512_160k.pdparams", )
 
             self.model_path = modelpath
 

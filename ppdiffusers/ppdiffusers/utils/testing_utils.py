@@ -31,15 +31,10 @@ import PIL.Image
 import PIL.ImageOps
 import requests
 
-from .import_utils import (
-    BACKENDS_MAPPING,
-    is_compel_available,
-    is_fastdeploy_available,
-    is_note_seq_available,
-    is_opencv_available,
-    is_paddle_available,
-    is_paddle_version,
-    is_torch_available, )
+from .import_utils import (BACKENDS_MAPPING, is_compel_available,
+                           is_fastdeploy_available, is_note_seq_available,
+                           is_opencv_available, is_paddle_available,
+                           is_paddle_version, is_torch_available)
 from .logging import get_logger
 
 global_rng = random.Random()
@@ -79,7 +74,9 @@ def paddle_all_close(a, b, *args, **kwargs):
     if not is_paddle_available():
         raise ValueError("Paddle needs to be installed to use this function.")
     if not paddle.allclose(a, b, *args, **kwargs):
-        assert False, f"Max diff is absolute {(a - b).abs().max()}. Diff tensor is {(a - b).abs()}."
+        assert (
+            False
+        ), f"Max diff is absolute {(a - b).abs().max()}. Diff tensor is {(a - b).abs()}."
     return True
 
 
@@ -183,8 +180,9 @@ def require_paddle_2_5(test_case):
     """
     Decorator marking a test that requires Paddle 2.5. These tests are skipped when it isn't installed.
     """
-    return unittest.skipUnless(is_paddle_available() and is_paddle_version(
-        ">=", "2.5.0"), "test requires Paddle 2.5")(test_case)
+    return unittest.skipUnless(
+        is_paddle_available() and is_paddle_version(">=", "2.5.0"),
+        "test requires Paddle 2.5", )(test_case)
 
 
 def require_paddle(test_case):
@@ -238,9 +236,12 @@ def load_numpy(arry: Union[str, np.ndarray],
         # local_path = "/home/patrick_huggingface_co/"
         if local_path is not None:
             # local_path can be passed to correct images of tests
-            return os.path.join(local_path, "/".join([
-                arry.split("/")[-5], arry.split("/")[-2], arry.split("/")[-1]
-            ]))
+            return os.path.join(
+                local_path,
+                "/".join([
+                    arry.split("/")[-5], arry.split("/")[-2],
+                    arry.split("/")[-1]
+                ]), )
         elif arry.startswith("http://") or arry.startswith("https://"):
             response = requests.get(arry)
             response.raise_for_status()
@@ -329,7 +330,7 @@ def export_to_video(video_frames: List[np.ndarray],
     if output_video_path is None:
         output_video_path = tempfile.NamedTemporaryFile(suffix=".mp4").name
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fourcc = cv2.VideoWriter_fourcc(* "mp4v")
     h, w, c = video_frames[0].shape
     video_writer = cv2.VideoWriter(
         output_video_path, fourcc, fps=8, frameSize=(w, h))
@@ -343,7 +344,7 @@ def load_hf_numpy(path) -> np.ndarray:
     if not path.startswith("http://") or path.startswith("https://"):
         path = os.path.join(
             "https://huggingface.co/datasets/fusing/diffusers-testing/resolve/main",
-            urllib.parse.quote(path))
+            urllib.parse.quote(path), )
 
     return load_numpy(path)
 
@@ -352,7 +353,7 @@ def load_ppnlp_numpy(path) -> np.ndarray:
     if not path.startswith("http://") or path.startswith("https://"):
         path = os.path.join(
             "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/diffusers-testing",
-            urllib.parse.quote(path))
+            urllib.parse.quote(path), )
     return load_numpy(path)
 
 
@@ -495,7 +496,9 @@ def pytest_terminal_summary_main(tr, id):
         tr.summary_warnings()  # normal warnings
         tr.summary_warnings()  # final warnings
 
-    tr.reportchars = "wPpsxXEf"  # emulate -rA (used in summary_passes() and short_test_summary())
+    tr.reportchars = (
+        "wPpsxXEf"  # emulate -rA (used in summary_passes() and short_test_summary())
+    )
     with open(report_files["passes"], "w") as f:
         tr._tw = create_terminal_writer(config, f)
         tr.summary_passes()

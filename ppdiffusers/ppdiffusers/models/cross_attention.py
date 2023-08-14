@@ -12,13 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from ..utils import deprecate
-from .attention_processor import (  # noqa: F401
-    Attention, AttentionProcessor, AttnAddedKVProcessor, )
-from .attention_processor import AttnProcessor as AttnProcessorRename  # noqa: F401
-from .attention_processor import (  # noqa: F401
-    AttnProcessor2_5, LoRAAttnProcessor, LoRALinearLayer,
-    LoRAXFormersAttnProcessor, SlicedAttnAddedKVProcessor, SlicedAttnProcessor,
-    XFormersAttnProcessor, )
+from .attention_processor import AttentionProcessor  # noqa: F401
+from .attention_processor import AttnProcessor2_5  # noqa: F401
+from .attention_processor import Attention, AttnAddedKVProcessor
+from .attention_processor import \
+    AttnProcessor as AttnProcessorRename  # noqa: F401
+from .attention_processor import (
+    LoRAAttnProcessor, LoRALinearLayer, LoRAXFormersAttnProcessor,
+    SlicedAttnAddedKVProcessor, SlicedAttnProcessor, XFormersAttnProcessor)
 
 deprecate(
     "cross_attention",

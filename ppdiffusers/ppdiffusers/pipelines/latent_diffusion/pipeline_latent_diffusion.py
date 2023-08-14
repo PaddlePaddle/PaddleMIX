@@ -19,19 +19,16 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import paddle
 import paddle.nn as nn
-
-from paddlenlp.transformers import (
-    PretrainedConfig,
-    PretrainedModel,
-    PretrainedTokenizer,
-    register_base_model, )
-from paddlenlp.transformers.model_outputs import (
-    BaseModelOutputWithPoolingAndCrossAttentions, )
+from paddlenlp.transformers import (PretrainedConfig, PretrainedModel,
+                                    PretrainedTokenizer, register_base_model)
+from paddlenlp.transformers.model_outputs import \
+    BaseModelOutputWithPoolingAndCrossAttentions
 
 from ...configuration_utils import FrozenDict
 from ...models import AutoencoderKL, UNet2DConditionModel, UNet2DModel, VQModel
 from ...schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
-from ...utils import deprecate, logging, randn_tensor, replace_example_docstring
+from ...utils import (deprecate, logging, randn_tensor,
+                      replace_example_docstring)
 from ...utils.initializer_utils import normal_, zeros_
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
@@ -80,8 +77,8 @@ class LDMTextToImagePipeline(DiffusionPipeline):
             scheduler: Union[DDIMScheduler, PNDMScheduler,
                              LMSDiscreteScheduler], ):
         super().__init__()
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -98,8 +95,8 @@ class LDMTextToImagePipeline(DiffusionPipeline):
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if (hasattr(scheduler.config, "clip_sample") and
+                scheduler.config.clip_sample is True):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -124,7 +121,9 @@ class LDMTextToImagePipeline(DiffusionPipeline):
             tokenizer=tokenizer,
             unet=unet,
             scheduler=scheduler)
-        self.vae_scale_factor = 8  # 2 ** (len(self.vqvae.config.block_out_channels) - 1)
+        self.vae_scale_factor = (
+            8  # 2 ** (len(self.vqvae.config.block_out_channels) - 1)
+        )
 
     def _encode_prompt(
             self,
@@ -319,17 +318,20 @@ class LDMTextToImagePipeline(DiffusionPipeline):
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
                     f" {negative_prompt_embeds.shape}.")
 
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -434,9 +436,14 @@ class LDMTextToImagePipeline(DiffusionPipeline):
         """
 
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, height, width, callback_steps,
-                          negative_prompt, prompt_embeds,
-                          negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            height,
+            width,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -484,8 +491,8 @@ class LDMTextToImagePipeline(DiffusionPipeline):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -543,7 +550,7 @@ class LDMBertConfig(PretrainedConfig):
     keys_to_ignore_at_inference = ["past_key_values"]
     attribute_map = {
         "num_attention_heads": "encoder_attention_heads",
-        "hidden_size": "d_model"
+        "hidden_size": "d_model",
     }
 
     def __init__(
@@ -583,7 +590,9 @@ class LDMBertConfig(PretrainedConfig):
         self.classifier_dropout = classifier_dropout
         self.use_cache = use_cache
         self.num_hidden_layers = encoder_layers
-        self.scale_embedding = scale_embedding  # scale factor will be sqrt(d_model) if True
+        self.scale_embedding = (
+            scale_embedding  # scale factor will be sqrt(d_model) if True
+        )
 
         super().__init__(pad_token_id=pad_token_id, **kwargs)
 
@@ -646,11 +655,12 @@ class LDMBertPretrainedModel(PretrainedModel):
 
 
 class LDMBertEmbeddings(nn.Layer):
-    def __init__(self,
-                 vocab_size,
-                 hidden_size=768,
-                 hidden_dropout_prob=0.0,
-                 max_position_embeddings=512):
+    def __init__(
+            self,
+            vocab_size,
+            hidden_size=768,
+            hidden_dropout_prob=0.0,
+            max_position_embeddings=512, ):
         super().__init__()
         self.word_embeddings = nn.Embedding(vocab_size, hidden_size)
         self.position_embeddings = nn.Embedding(max_position_embeddings,
@@ -704,7 +714,7 @@ class TransformerEncoderLayer(nn.TransformerEncoderLayer):
             nhead,
             dropout=attn_dropout,
             weight_attr=weight_attr,
-            bias_attr=False)
+            bias_attr=False, )
 
 
 @register_base_model
@@ -713,9 +723,11 @@ class LDMBertModel(LDMBertPretrainedModel):
 
     def __init__(self, config: LDMBertConfig):
         super().__init__(config)
-        self.embeddings = LDMBertEmbeddings(config.vocab_size, config.d_model,
-                                            config.dropout,
-                                            config.max_position_embeddings)
+        self.embeddings = LDMBertEmbeddings(
+            config.vocab_size,
+            config.d_model,
+            config.dropout,
+            config.max_position_embeddings, )
         encoder_layer = TransformerEncoderLayer(
             config.d_model,
             config.encoder_attention_heads,
@@ -789,11 +801,22 @@ class LDMBertAttention(nn.MultiHeadAttention):
             need_weights=False,
             weight_attr=None,
             bias_attr=None, ):
-        super().__init__(embed_dim, num_heads, dropout, kdim, vdim,
-                         need_weights, weight_attr, bias_attr)
-        assert embed_dim > 0, "Expected embed_dim to be greater than 0, " "but received {}".format(
+        super().__init__(
+            embed_dim,
+            num_heads,
+            dropout,
+            kdim,
+            vdim,
+            need_weights,
+            weight_attr,
+            bias_attr, )
+        assert (
+            embed_dim > 0
+        ), "Expected embed_dim to be greater than 0, " "but received {}".format(
             embed_dim)
-        assert num_heads > 0, "Expected num_heads to be greater than 0, " "but received {}".format(
+        assert (
+            num_heads > 0
+        ), "Expected num_heads to be greater than 0, " "but received {}".format(
             num_heads)
 
         self.embed_dim = embed_dim

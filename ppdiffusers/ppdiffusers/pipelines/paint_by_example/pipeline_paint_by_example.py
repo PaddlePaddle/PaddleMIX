@@ -19,7 +19,6 @@ from typing import Callable, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-
 from paddlenlp.transformers import CLIPImageProcessor
 
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -69,8 +68,8 @@ def prepare_mask_and_masked_image(image, mask):
 
         # Batch single image
         if image.ndim == 3:
-            assert image.shape[
-                0] == 3, "Image outside a batch should be of shape (3, H, W)"
+            assert (image.shape[0] == 3
+                    ), "Image outside a batch should be of shape (3, H, W)"
             image = image.unsqueeze(0)
 
         # Batch and add channel dim for single mask
@@ -85,11 +84,12 @@ def prepare_mask_and_masked_image(image, mask):
             else:
                 mask = mask.unsqueeze(0)
 
-        assert image.ndim == 4 and mask.ndim == 4, "Image and Mask must have 4 dimensions"
-        assert image.shape[-2:] == mask.shape[
-            -2:], "Image and Mask must have the same spatial dimensions"
-        assert image.shape[0] == mask.shape[
-            0], "Image and Mask must have the same batch size"
+        assert (image.ndim == 4 and
+                mask.ndim == 4), "Image and Mask must have 4 dimensions"
+        assert (image.shape[-2:] == mask.shape[-2:]
+                ), "Image and Mask must have the same spatial dimensions"
+        assert (image.shape[0] == mask.shape[0]
+                ), "Image and Mask must have the same batch size"
         assert mask.shape[1] == 1, "Mask image must have a single channel"
 
         # Check image is in [-1, 1]
@@ -254,16 +254,20 @@ class PaintByExamplePipeline(DiffusionPipeline):
                 f" {type(callback_steps)}.")
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = (batch_size, num_channels_latents, height //
-                 self.vae_scale_factor, width // self.vae_scale_factor)
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
+        shape = (
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor, )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -278,9 +282,16 @@ class PaintByExamplePipeline(DiffusionPipeline):
         return latents
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_inpaint.StableDiffusionInpaintPipeline.prepare_mask_latents
-    def prepare_mask_latents(self, mask, masked_image, batch_size, height,
-                             width, dtype, generator,
-                             do_classifier_free_guidance):
+    def prepare_mask_latents(
+            self,
+            mask,
+            masked_image,
+            batch_size,
+            height,
+            width,
+            dtype,
+            generator,
+            do_classifier_free_guidance, ):
         # resize the mask to latents shape as we concatenate the mask to the latents
         # we do that before converting to dtype to avoid breaking in case we're using cpu_offload
         # and half precision
@@ -498,7 +509,8 @@ class PaintByExamplePipeline(DiffusionPipeline):
         # 8. Check that sizes of mask, masked image and latents match
         num_channels_mask = mask.shape[1]
         num_channels_masked_image = masked_image_latents.shape[1]
-        if num_channels_latents + num_channels_mask + num_channels_masked_image != self.unet.config.in_channels:
+        if (num_channels_latents + num_channels_mask + num_channels_masked_image
+                != self.unet.config.in_channels):
             raise ValueError(
                 f"Incorrect configuration settings! The config of `pipeline.unet`: {self.unet.config} expects"
                 f" {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} +"
@@ -515,8 +527,8 @@ class PaintByExamplePipeline(DiffusionPipeline):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
 
                 # concat latents, mask, masked_image_latents in the channel dimension
                 latent_model_input = self.scheduler.scale_model_input(

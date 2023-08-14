@@ -1,6 +1,22 @@
-import paddle
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import numbers
 import random
+
+import paddle
+
 from . import _functional_video as F
 
 
@@ -23,19 +39,20 @@ class RandomCropVideo(paddle.vision.transforms.RandomCrop):
         return F.crop(clip, i, j, h, w)
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(size={self.size})'
+        return f"{self.__class__.__name__}(size={self.size})"
 
 
 class RandomResizedCropVideo(paddle.vision.transforms.RandomResizedCrop):
-    def __init__(self,
-                 size,
-                 scale=(0.08, 1.0),
-                 ratio=(3.0 / 4.0, 4.0 / 3.0),
-                 interpolation_mode='bilinear'):
+    def __init__(
+            self,
+            size,
+            scale=(0.08, 1.0),
+            ratio=(3.0 / 4.0, 4.0 / 3.0),
+            interpolation_mode="bilinear", ):
         if isinstance(size, tuple):
             if len(size) != 2:
                 raise ValueError(
-                    f'size should be tuple (height, width), instead got {size}')
+                    f"size should be tuple (height, width), instead got {size}")
             self.size = size
         else:
             self.size = size, size
@@ -56,9 +73,7 @@ class RandomResizedCropVideo(paddle.vision.transforms.RandomResizedCrop):
                               self.interpolation_mode)
 
     def __repr__(self) -> str:
-        return (
-            f'{self.__class__.__name__}(size={self.size}, interpolation_mode={self.interpolation_mode}, scale={self.scale}, ratio={self.ratio})'
-        )
+        return f"{self.__class__.__name__}(size={self.size}, interpolation_mode={self.interpolation_mode}, scale={self.scale}, ratio={self.ratio})"
 
 
 class CenterCropVideo:
@@ -79,7 +94,7 @@ class CenterCropVideo:
         return F.center_crop(clip, self.crop_size)
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(crop_size={self.crop_size})'
+        return f"{self.__class__.__name__}(crop_size={self.crop_size})"
 
 
 class NormalizeVideo:
@@ -104,9 +119,7 @@ class NormalizeVideo:
         return F.normalize(clip, self.mean, self.std, self.inplace)
 
     def __repr__(self) -> str:
-        return (
-            f'{self.__class__.__name__}(mean={self.mean}, std={self.std}, inplace={self.inplace})'
-        )
+        return f"{self.__class__.__name__}(mean={self.mean}, std={self.std}, inplace={self.inplace})"
 
 
 class ToTensorVideo:
@@ -153,4 +166,4 @@ class RandomHorizontalFlipVideo:
         return clip
 
     def __repr__(self) -> str:
-        return f'{self.__class__.__name__}(p={self.p})'
+        return f"{self.__class__.__name__}(p={self.p})"

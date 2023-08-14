@@ -124,14 +124,13 @@ class DiTPipeline(DiffusionPipeline):
             shape=(batch_size, latent_channels, latent_size, latent_size),
             generator=generator,
             dtype=self.transformer.dtype, )
-        latent_model_input = paddle.concat([latents] *
-                                           2) if guidance_scale > 1 else latents
+        latent_model_input = (paddle.concat([latents] * 2)
+                              if guidance_scale > 1 else latents)
 
         class_labels = paddle.to_tensor(class_labels).flatten()
         class_null = paddle.to_tensor([1000] * batch_size)
-        class_labels_input = paddle.concat(
-            [class_labels, class_null],
-            0) if guidance_scale > 1 else class_labels
+        class_labels_input = (paddle.concat([class_labels, class_null], 0)
+                              if guidance_scale > 1 else class_labels)
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
@@ -164,9 +163,9 @@ class DiTPipeline(DiffusionPipeline):
 
             # perform guidance
             if guidance_scale > 1:
-                eps, rest = noise_pred[:, :
-                                       latent_channels], noise_pred[:,
-                                                                    latent_channels:]
+                eps, rest = (
+                    noise_pred[:, :latent_channels],
+                    noise_pred[:, latent_channels:], )
                 bs = eps.shape[0]
                 # TODO torch.split vs paddle.split
                 cond_eps, uncond_eps = paddle.split(
@@ -183,7 +182,7 @@ class DiTPipeline(DiffusionPipeline):
                 model_output, _ = paddle.split(
                     noise_pred,
                     [latent_channels, noise_pred.shape[1] - latent_channels],
-                    axis=1)
+                    axis=1, )
             else:
                 model_output = noise_pred
 

@@ -17,13 +17,13 @@ from typing import Callable, Dict, List, Optional, Union
 
 import paddle
 import PIL
-
 from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
 
 from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import DDIMScheduler
 from ...utils import logging, randn_tensor
-from ..fastdeploy_utils import FastDeployDiffusionPipelineMixin, FastDeployRuntimeModel
+from ..fastdeploy_utils import (FastDeployDiffusionPipelineMixin,
+                                FastDeployRuntimeModel)
 from . import StableDiffusionPipelineOutput
 
 logger = logging.get_logger(__name__)
@@ -32,7 +32,8 @@ logger = logging.get_logger(__name__)
 def posterior_sample(scheduler, latents, timestep, clean_latents, generator,
                      eta):
     # 1. get previous step value (=t-1)
-    prev_timestep = timestep - scheduler.config.num_train_timesteps // scheduler.num_inference_steps
+    prev_timestep = (timestep - scheduler.config.num_train_timesteps //
+                     scheduler.num_inference_steps)
 
     if prev_timestep <= 0:
         return clean_latents
@@ -58,7 +59,8 @@ def posterior_sample(scheduler, latents, timestep, clean_latents, generator,
 
 def compute_noise(scheduler, prev_latents, latents, timestep, noise_pred, eta):
     # 1. get previous step value (=t-1)
-    prev_timestep = timestep - scheduler.config.num_train_timesteps // scheduler.num_inference_steps
+    prev_timestep = (timestep - scheduler.config.num_train_timesteps //
+                     scheduler.num_inference_steps)
 
     # 2. compute alphas, betas
     alpha_prod_t = scheduler.alphas_cumprod[timestep]
@@ -398,11 +400,15 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
                     t,
                     clean_latents,
                     generator=generator,
-                    **extra_step_kwargs)
+                    **extra_step_kwargs, )
                 # Compute noise.
-                noise = compute_noise(self.scheduler, prev_source_latents,
-                                      source_latents, t, source_noise_pred,
-                                      **extra_step_kwargs)
+                noise = compute_noise(
+                    self.scheduler,
+                    prev_source_latents,
+                    source_latents,
+                    t,
+                    source_noise_pred,
+                    **extra_step_kwargs, )
                 source_latents = prev_source_latents
 
                 # compute the previous noisy sample x_t -> x_t-1
@@ -426,7 +432,7 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
         if not output_type == "latent":
             image = self._decode_vae_latents(
                 latents / self.vae_scaling_factor,
-                infer_op=infer_op_dict.get("vae_decoder", None))
+                infer_op=infer_op_dict.get("vae_decoder", None), )
             image, has_nsfw_concept = self.run_safety_checker(image)
         else:
             image = latents

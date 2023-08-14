@@ -16,20 +16,17 @@ from collections import OrderedDict
 
 import paddle
 import torch
-from diffusers import (StableDiffusionImageVariationPipeline as
-                       DiffusersStableDiffusionImageVariationPipeline, )
+from diffusers import \
+    StableDiffusionImageVariationPipeline as \
+    DiffusersStableDiffusionImageVariationPipeline
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPVisionConfig,
+                                    CLIPVisionModelWithProjection)
 
-from paddlenlp.transformers import (
-    CLIPFeatureExtractor,
-    CLIPVisionConfig,
-    CLIPVisionModelWithProjection, )
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler, )
-from ppdiffusers import (StableDiffusionImageVariationPipeline as
-                         PPDiffusersStableDiffusionImageVariationPipeline, )
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, LMSDiscreteScheduler,
+                         PNDMScheduler)
+from ppdiffusers import \
+    StableDiffusionImageVariationPipeline as \
+    PPDiffusersStableDiffusionImageVariationPipeline
 from ppdiffusers import UNet2DConditionModel
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 

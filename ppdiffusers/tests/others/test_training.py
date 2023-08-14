@@ -17,7 +17,8 @@ import unittest
 
 import paddle
 
-from ppdiffusers import DDIMScheduler, DDPMScheduler, UNet2DConditionModel, UNet2DModel
+from ppdiffusers import (DDIMScheduler, DDPMScheduler, UNet2DConditionModel,
+                         UNet2DModel)
 from ppdiffusers.training_utils import set_seed
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers.utils.testing_utils import slow
@@ -39,14 +40,15 @@ class UNet2DModelTrainingTests(unittest.TestCase):
             beta_start=0.0001,
             beta_end=0.02,
             beta_schedule="linear",
-            clip_sample=True)
+            clip_sample=True, )
         ddim_scheduler = DDIMScheduler(
             num_train_timesteps=1000,
             beta_start=0.0001,
             beta_end=0.02,
             beta_schedule="linear",
-            clip_sample=True)
-        assert ddpm_scheduler.config.num_train_timesteps == ddim_scheduler.config.num_train_timesteps
+            clip_sample=True, )
+        assert (ddpm_scheduler.config.num_train_timesteps ==
+                ddim_scheduler.config.num_train_timesteps)
         set_seed(0)
         clean_images = [
             paddle.randn(shape=(4, 3, 32, 32)).clip(
@@ -105,13 +107,14 @@ class UNet2DConditionModelTrainingTests(unittest.TestCase):
             num_train_timesteps=1000,
             beta_start=0.00085,
             beta_end=0.012,
-            beta_schedule="scaled_linear")
+            beta_schedule="scaled_linear", )
         ddim_scheduler = DDIMScheduler(
             num_train_timesteps=1000,
             beta_start=0.00085,
             beta_end=0.012,
-            beta_schedule="scaled_linear")
-        assert ddpm_scheduler.config.num_train_timesteps == ddim_scheduler.config.num_train_timesteps
+            beta_schedule="scaled_linear", )
+        assert (ddpm_scheduler.config.num_train_timesteps ==
+                ddim_scheduler.config.num_train_timesteps)
         set_seed(0)
         clean_images = [
             paddle.randn(shape=(4, 3, 32, 32)).clip(
@@ -132,7 +135,7 @@ class UNet2DConditionModelTrainingTests(unittest.TestCase):
             ddpm_noise_pred = model(
                 ddpm_noisy_images,
                 timesteps[i],
-                encoder_hidden_states=text_embeddings[i]).sample
+                encoder_hidden_states=text_embeddings[i], ).sample
             loss = paddle.nn.functional.mse_loss(
                 input=ddpm_noise_pred, label=noise[i])
             loss.backward()
@@ -147,7 +150,7 @@ class UNet2DConditionModelTrainingTests(unittest.TestCase):
             ddim_noise_pred = model(
                 ddim_noisy_images,
                 timesteps[i],
-                encoder_hidden_states=text_embeddings[i]).sample
+                encoder_hidden_states=text_embeddings[i], ).sample
             loss = paddle.nn.functional.mse_loss(
                 input=ddim_noise_pred, label=noise[i])
             loss.backward()
@@ -170,7 +173,7 @@ class UNet2DConditionModelTrainingTests(unittest.TestCase):
             num_train_timesteps=1000,
             beta_start=0.00085,
             beta_end=0.012,
-            beta_schedule="scaled_linear")
+            beta_schedule="scaled_linear", )
         set_seed(0)
         clean_images = [
             paddle.randn(shape=(4, 3, 32, 32)).clip(
@@ -193,7 +196,7 @@ class UNet2DConditionModelTrainingTests(unittest.TestCase):
             ddpm_noise_pred = model(
                 ddpm_noisy_images,
                 timesteps[i],
-                encoder_hidden_states=text_embeddings[i]).sample
+                encoder_hidden_states=text_embeddings[i], ).sample
             loss = paddle.nn.functional.mse_loss(
                 input=ddpm_noise_pred, label=noise[i])
             loss.backward()

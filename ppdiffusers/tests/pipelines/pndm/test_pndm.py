@@ -50,7 +50,7 @@ class PNDMPipelineFastTests(unittest.TestCase):
             generator=generator,
             num_inference_steps=20,
             output_type="numpy",
-            return_dict=False)[0]
+            return_dict=False, )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)

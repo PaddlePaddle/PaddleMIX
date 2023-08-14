@@ -181,8 +181,8 @@ def imresize_np(img, scale, antialiasing=True):
     for i in range(out_H):
         idx = int(indices_H[i][0])
         for j in range(out_C):
-            out_1[i, :, j] = img_aug[idx:idx + kernel_width, :, j].transpose(
-                [1, 0]).mv(weights_H[i])
+            out_1[i, :, j] = (img_aug[idx:idx + kernel_width, :, j]
+                              .transpose([1, 0]).mv(weights_H[i]))
 
     # process W dimension
     # symmetric copying

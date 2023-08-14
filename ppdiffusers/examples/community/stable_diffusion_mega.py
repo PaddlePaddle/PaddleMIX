@@ -21,40 +21,30 @@ import numpy as np
 import paddle
 import PIL
 import PIL.Image
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
+                                    CLIPTokenizer)
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers import (
-    AutoencoderKL,
-    ControlNetModel,
-    DDIMScheduler,
-    DDPMScheduler,
-    DEISMultistepScheduler,
-    DiffusionPipeline,
-    DPMSolverMultistepScheduler,
-    DPMSolverSinglestepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    HeunDiscreteScheduler,
-    KDPM2AncestralDiscreteScheduler,
-    KDPM2DiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    UNet2DConditionModel,
-    UniPCMultistepScheduler, )
+    AutoencoderKL, ControlNetModel, DDIMScheduler, DDPMScheduler,
+    DEISMultistepScheduler, DiffusionPipeline, DPMSolverMultistepScheduler,
+    DPMSolverSinglestepScheduler, EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler, HeunDiscreteScheduler,
+    KDPM2AncestralDiscreteScheduler, KDPM2DiscreteScheduler,
+    LMSDiscreteScheduler, PNDMScheduler, UNet2DConditionModel,
+    UniPCMultistepScheduler)
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.image_processor import VaeImageProcessor
-from ppdiffusers.loaders import (
-    FromCkptMixin,
-    LoraLoaderMixin,
-    TextualInversionLoaderMixin, )
-from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
+from ppdiffusers.loaders import (FromCkptMixin, LoraLoaderMixin,
+                                 TextualInversionLoaderMixin)
+from ppdiffusers.pipelines.stable_diffusion import \
+    StableDiffusionPipelineOutput
 from ppdiffusers.pipelines.stable_diffusion.pipeline_cycle_diffusion import (
-    compute_noise,
-    posterior_sample, )
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker, )
+    compute_noise, posterior_sample)
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
+    StableDiffusionSafetyChecker
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
-from ppdiffusers.utils import PIL_INTERPOLATION, deprecate, logging, randn_tensor
+from ppdiffusers.utils import (PIL_INTERPOLATION, deprecate, logging,
+                               randn_tensor)
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -213,10 +203,11 @@ def pad_tokens_and_weights(tokens,
     Pad the tokens (with starting and ending tokens) and weights (with 1.0) to max_length.
     """
     max_embeddings_multiples = (max_length - 2) // (chunk_length - 2)
-    weights_length = max_length if no_boseos_middle else max_embeddings_multiples * chunk_length
+    weights_length = (max_length if no_boseos_middle else
+                      max_embeddings_multiples * chunk_length)
     for i in range(len(tokens)):
-        tokens[i] = [bos] + tokens[i] + [eos] + [pad] * (max_length - 2 -
-                                                         len(tokens[i]))
+        tokens[i] = ([bos] + tokens[i] + [eos] + [pad] *
+                     (max_length - 2 - len(tokens[i])))
         if no_boseos_middle:
             weights[i] = [1.0] + weights[i] + [1.0] * (max_length - 1 -
                                                        len(weights[i]))
@@ -354,8 +345,12 @@ def get_weighted_text_embeddings(
 
     # pad the length of tokens and weights
     # support bert tokenizer
-    bos = pipe.tokenizer.bos_token_id if pipe.tokenizer.bos_token_id is not None else pipe.tokenizer.cls_token_id
-    eos = pipe.tokenizer.eos_token_id if pipe.tokenizer.eos_token_id is not None else pipe.tokenizer.sep_token_id
+    bos = (pipe.tokenizer.bos_token_id
+           if pipe.tokenizer.bos_token_id is not None else
+           pipe.tokenizer.cls_token_id)
+    eos = (pipe.tokenizer.eos_token_id
+           if pipe.tokenizer.eos_token_id is not None else
+           pipe.tokenizer.sep_token_id)
     pad = pipe.tokenizer.pad_token_id
     prompt_tokens, prompt_weights = pad_tokens_and_weights(
         prompt_tokens,
@@ -401,13 +396,15 @@ def get_weighted_text_embeddings(
     if (not skip_parsing) and (not skip_weighting):
         previous_mean = text_embeddings.mean(axis=[-2, -1])
         text_embeddings *= prompt_weights.unsqueeze(-1)
-        text_embeddings *= (previous_mean / text_embeddings.mean(
-            axis=[-2, -1])).unsqueeze(-1).unsqueeze(-1)
+        text_embeddings *= (
+            (previous_mean / text_embeddings.mean(axis=[-2, -1])).unsqueeze(-1)
+            .unsqueeze(-1))
         if uncond_prompt is not None:
             previous_mean = uncond_embeddings.mean(axis=[-2, -1])
             uncond_embeddings *= uncond_weights.unsqueeze(-1)
-            uncond_embeddings *= (previous_mean / uncond_embeddings.mean(
-                axis=[-2, -1])).unsqueeze(-1).unsqueeze(-1)
+            uncond_embeddings *= (
+                (previous_mean / uncond_embeddings.mean(axis=[-2, -1]))
+                .unsqueeze(-1).unsqueeze(-1))
 
     if uncond_prompt is not None:
         return text_embeddings, uncond_embeddings
@@ -461,8 +458,8 @@ def prepare_mask_and_masked_image(image,
 
         # Batch single image
         if image.ndim == 3:
-            assert image.shape[
-                0] == 3, "Image outside a batch should be of shape (3, H, W)"
+            assert (image.shape[0] == 3
+                    ), "Image outside a batch should be of shape (3, H, W)"
             image = image.unsqueeze(0)
 
         # Batch and add channel dim for single mask
@@ -479,11 +476,12 @@ def prepare_mask_and_masked_image(image,
             else:
                 mask = mask.unsqueeze(1)
 
-        assert image.ndim == 4 and mask.ndim == 4, "Image and Mask must have 4 dimensions"
-        assert image.shape[-2:] == mask.shape[
-            -2:], "Image and Mask must have the same spatial dimensions"
-        assert image.shape[0] == mask.shape[
-            0], "Image and Mask must have the same batch size"
+        assert (image.ndim == 4 and
+                mask.ndim == 4), "Image and Mask must have 4 dimensions"
+        assert (image.shape[-2:] == mask.shape[-2:]
+                ), "Image and Mask must have the same spatial dimensions"
+        assert (image.shape[0] == mask.shape[0]
+                ), "Image and Mask must have the same batch size"
 
         # Check image is in [-1, 1]
         if image.min() < -1 or image.max() > 1:
@@ -770,10 +768,11 @@ class CommonMixIn:
         if latents is None:
             noise = randn_tensor(shape, generator=generator, dtype=dtype)
             # if strength is 1. then initialise the latents to noise, else initial to image + noise
-            latents = noise if is_strength_max else self.scheduler.add_noise(
-                image_latents, noise, timestep)
+            latents = (noise if is_strength_max else
+                       self.scheduler.add_noise(image_latents, noise, timestep))
             # if pure noise then scale the initial latents by the  Scheduler's init sigma
-            latents = latents * self.scheduler.init_noise_sigma if is_strength_max else latents
+            latents = (latents * self.scheduler.init_noise_sigma
+                       if is_strength_max else latents)
         else:
             noise = latents
             if str(noise.dtype).replace("paddle.", "") != dtype:
@@ -1077,8 +1076,8 @@ class CommonMixIn:
             config = (self.text_encoder.config
                       if isinstance(self.text_encoder.config, dict) else
                       self.text_encoder.config.to_dict())
-            if config.get("use_attention_mask",
-                          None) is not None and config["use_attention_mask"]:
+            if (config.get("use_attention_mask", None) is not None and
+                    config["use_attention_mask"]):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -1132,8 +1131,8 @@ class CommonMixIn:
             config = (self.text_encoder.config
                       if isinstance(self.text_encoder.config, dict) else
                       self.text_encoder.config.to_dict())
-            if config.get("use_attention_mask",
-                          None) is not None and config["use_attention_mask"]:
+            if (config.get("use_attention_mask", None) is not None and
+                    config["use_attention_mask"]):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -1200,8 +1199,12 @@ class CommonMixIn:
         return extra_step_kwargs
 
 
-class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
-                                  LoraLoaderMixin, TextualInversionLoaderMixin):
+class StableDiffusionMegaPipeline(
+        DiffusionPipeline,
+        CommonMixIn,
+        FromCkptMixin,
+        LoraLoaderMixin,
+        TextualInversionLoaderMixin, ):
     r"""
     Pipeline for mega using Stable Diffusion.
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
@@ -1247,8 +1250,8 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
             feature_extractor: CLIPFeatureExtractor,
             requires_safety_checker: bool=True, ):
         super().__init__()
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -1265,8 +1268,8 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if (hasattr(scheduler.config, "clip_sample") and
+                scheduler.config.clip_sample is True):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -1315,7 +1318,7 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
         self.control_image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor,
             do_convert_rgb=True,
-            do_normalize=False)
+            do_normalize=False, )
         self.supported_scheduler = [
             "pndm",
             "lms",
@@ -1608,8 +1611,8 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 if is_scheduler_support_step_index:
                     latent_model_input = self.scheduler.scale_model_input(
                         latent_model_input, t, step_index=i)
@@ -1648,7 +1651,7 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
                         latents,
                         step_index=i,
                         return_pred_original_sample=False,
-                        **extra_step_kwargs)
+                        **extra_step_kwargs, )
                 else:
                     scheduler_output = self.scheduler.step(
                         noise_pred, t, latents, **extra_step_kwargs)
@@ -1921,8 +1924,8 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -2233,8 +2236,8 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -2545,7 +2548,8 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
             # default case for runwayml/stable-diffusion-inpainting
             num_channels_mask = mask.shape[1]
             num_channels_masked_image = masked_image_latents.shape[1]
-            if num_channels_latents + num_channels_mask + num_channels_masked_image != self.unet.config.in_channels:
+            if (num_channels_latents + num_channels_mask +
+                    num_channels_masked_image != self.unet.config.in_channels):
                 raise ValueError(
                     f"Incorrect configuration settings! The config of `pipeline.unet`: {self.unet.config} expects"
                     f" {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} +"
@@ -2558,7 +2562,8 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
             )
 
         # do_controlnet
-        do_controlnet = controlnet_cond is not None and self.controlnet is not None and is_legacy
+        do_controlnet = (controlnet_cond is not None and
+                         self.controlnet is not None and is_legacy)
         if not do_controlnet:
             guess_mode = False
         if do_controlnet:
@@ -2589,8 +2594,8 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -3027,8 +3032,8 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
         with self.progress_bar(total=sample_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -3071,12 +3076,14 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
             # 8. determine the upscaled width and height for upscaled images
             truncate_width = 0
             truncate_height = 0
-            hr_upscale_to_width, hr_upscale_to_height = self.get_upscaled_width_and_height(
-                width,
-                height,
-                hr_scale=hr_scale,
-                hr_resize_width=hr_resize_width,
-                hr_resize_height=hr_resize_height)
+            (
+                hr_upscale_to_width,
+                hr_upscale_to_height, ) = self.get_upscaled_width_and_height(
+                    width,
+                    height,
+                    hr_scale=hr_scale,
+                    hr_resize_width=hr_resize_width,
+                    hr_resize_height=hr_resize_height, )
             if hr_resize_width != 0 and hr_resize_height != 0:
                 truncate_width = (hr_upscale_to_width - hr_resize_width
                                   ) // self.vae_scale_factor
@@ -3090,7 +3097,10 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
 
         if enable_hr:
             if do_controlnet:
-                control_image, control_conditioning_scale = self.prepare_controlnet_cond(
+                (
+                    control_image,
+                    control_conditioning_scale,
+                ) = self.prepare_controlnet_cond(
                     controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=controlnet_conditioning_scale,
                     width=hr_upscale_to_width,
@@ -3133,9 +3143,9 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
             with self.progress_bar(total=hr_steps) as progress_bar:
                 for i, t in enumerate(timesteps):
                     # expand the latents if we are doing classifier free guidance
-                    latent_model_input = paddle.concat(
-                        [latents] *
-                        2) if do_classifier_free_guidance else latents
+                    latent_model_input = (paddle.concat([latents] * 2)
+                                          if do_classifier_free_guidance else
+                                          latents)
                     latent_model_input = self.scheduler.scale_model_input(
                         latent_model_input, t)
 
@@ -3436,11 +3446,15 @@ class StableDiffusionMegaPipeline(DiffusionPipeline, CommonMixIn, FromCkptMixin,
                     t,
                     clean_latents,
                     generator=generator,
-                    **extra_step_kwargs)
+                    **extra_step_kwargs, )
                 # Compute noise.
-                noise = compute_noise(self.scheduler, prev_source_latents,
-                                      source_latents, t, source_noise_pred,
-                                      **extra_step_kwargs)
+                noise = compute_noise(
+                    self.scheduler,
+                    prev_source_latents,
+                    source_latents,
+                    t,
+                    source_noise_pred,
+                    **extra_step_kwargs, )
                 source_latents = prev_source_latents.cast(dtype)
 
                 # compute the previous noisy sample x_t -> x_t-1

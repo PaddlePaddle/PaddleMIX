@@ -19,18 +19,13 @@ import unittest
 import numpy as np
 import paddle
 
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DiTPipeline,
-    DPMSolverMultistepScheduler,
-    Transformer2DModel, )
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DiTPipeline,
+                         DPMSolverMultistepScheduler, Transformer2DModel)
 from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..pipeline_params import (
-    CLASS_CONDITIONED_IMAGE_GENERATION_BATCH_PARAMS,
-    CLASS_CONDITIONED_IMAGE_GENERATION_PARAMS, )
+from ..pipeline_params import (CLASS_CONDITIONED_IMAGE_GENERATION_BATCH_PARAMS,
+                               CLASS_CONDITIONED_IMAGE_GENERATION_PARAMS)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -66,7 +61,7 @@ class DiTPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         components = {
             "transformer": transformer.eval(),
             "vae": vae.eval(),
-            "scheduler": scheduler
+            "scheduler": scheduler,
         }
         return components
 
@@ -77,7 +72,7 @@ class DiTPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             "class_labels": [1],
             "generator": generator,
             "num_inference_steps": 2,
-            "output_type": "numpy"
+            "output_type": "numpy",
         }
         return inputs
 

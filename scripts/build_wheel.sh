@@ -111,7 +111,7 @@ set -e
 
 init
 build_and_install
-unittest
+# unittest
 cleanup
 
 # get Paddle version

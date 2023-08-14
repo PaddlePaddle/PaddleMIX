@@ -82,8 +82,8 @@ class KarrasVePipeline(DiffusionPipeline):
         model = self.unet
 
         # sample x_0 ~ N(0, sigma_0^2 * I)
-        sample = randn_tensor(
-            shape, generator=generator) * self.scheduler.init_noise_sigma
+        sample = (randn_tensor(
+            shape, generator=generator) * self.scheduler.init_noise_sigma)
 
         self.scheduler.set_timesteps(num_inference_steps)
 

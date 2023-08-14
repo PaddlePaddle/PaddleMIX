@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .frame_dataset import VideoFrameDataset
 from .lvdm_model import LatentVideoDiffusion
 from .lvdm_trainer import LatentVideoDiffusionTrainer
-from .frame_dataset import VideoFrameDataset
 from .webvid_dataset import WebVidDataset

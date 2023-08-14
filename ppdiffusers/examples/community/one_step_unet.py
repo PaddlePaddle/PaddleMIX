@@ -32,7 +32,7 @@ class UnetSchedulerOneForwardPipeline(DiffusionPipeline):
         scheduler_output = self.scheduler.step(model_output, timestep,
                                                image).prev_sample
 
-        result = scheduler_output - scheduler_output + paddle.ones_like(
-            scheduler_output)
+        result = (scheduler_output - scheduler_output +
+                  paddle.ones_like(scheduler_output))
 
         return result

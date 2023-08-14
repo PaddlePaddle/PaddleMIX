@@ -19,14 +19,10 @@ import einops
 import numpy as np
 import paddle
 import PIL
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer,
+                                    CLIPVisionModelWithProjection, GPTTokenizer)
 from PIL import Image
-
-from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPTextModel,
-    CLIPTokenizer,
-    CLIPVisionModelWithProjection,
-    GPTTokenizer, )
 
 from ...models import AutoencoderKL, UViTModel
 from ...pipeline_utils import DiffusionPipeline
@@ -92,7 +88,9 @@ class UniDiffuserPipeline(DiffusionPipeline):
         self.num_channels_latents = vae.latent_channels  # 4
         self.image_encoder_clip_img_dim = image_encoder.config.projection_dim  # 512
         self.text_encoder_seq_len = tokenizer.model_max_length  # 77
-        self.text_encoder_text_dim = text_encoder.config.hidden_size // text_encoder.config.num_attention_heads  # 64
+        self.text_encoder_text_dim = (
+            text_encoder.config.hidden_size //
+            text_encoder.config.num_attention_heads)  # 64
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.check_inputs
     def check_inputs(
@@ -179,7 +177,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
             "B (C H W) -> B C H W",
             C=self.num_channels_latents,
             H=latent_height,
-            W=latent_width)
+            W=latent_width, )
         img_clip = einops.rearrange(
             img_clip,
             "B (L D) -> B L D",
@@ -214,7 +212,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
             "B (C H W) -> B C H W",
             C=self.num_channels_latents,
             H=latent_height,
-            W=latent_width)
+            W=latent_width, )
         img_clip = einops.rearrange(
             img_clip,
             "B (L D) -> B L D",
@@ -224,7 +222,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
             text,
             "B (L D) -> B L D",
             L=self.text_encoder_seq_len,
-            D=self.text_encoder_text_dim)
+            D=self.text_encoder_text_dim, )
         return img_vae, img_clip, text
 
     def _combine_joint(self, img_vae, img_clip, text):
@@ -285,11 +283,12 @@ class UniDiffuserPipeline(DiffusionPipeline):
             ]
             image_latents = paddle.concat(image_latents, axis=0)
         else:
-            image_latents = self.vae.encode(image).latent_dist.sample(
-                generator) * self.vae.scaling_factor
+            image_latents = (
+                self.vae.encode(image).latent_dist.sample(generator) *
+                self.vae.scaling_factor)
 
-        if batch_size > image_latents.shape[
-                0] and batch_size % image_latents.shape[0] != 0:
+        if (batch_size > image_latents.shape[0] and
+                batch_size % image_latents.shape[0] != 0):
             raise ValueError(
                 f"Cannot duplicate `image` of batch size {image_latents.shape[0]} to {batch_size} text prompts."
             )
@@ -314,8 +313,8 @@ class UniDiffuserPipeline(DiffusionPipeline):
         image_latents = self.image_encoder(
             inputs.cast(self.image_encoder.dtype)).image_embeds.unsqueeze(1)
 
-        if batch_size > image_latents.shape[
-                0] and batch_size % image_latents.shape[0] != 0:
+        if (batch_size > image_latents.shape[0] and
+                batch_size % image_latents.shape[0] != 0):
             raise ValueError(
                 f"Cannot duplicate `image` of batch size {image_latents.shape[0]} to {batch_size} text prompts."
             )
@@ -357,18 +356,21 @@ class UniDiffuserPipeline(DiffusionPipeline):
         return latents
 
     # Modified from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_image_vae_latents(self,
-                                  batch_size,
-                                  num_channels_latents,
-                                  height,
-                                  width,
-                                  dtype,
-                                  generator,
-                                  latents=None):
+    def prepare_image_vae_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         # Prepare latents for the VAE embedded image.
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -831,7 +833,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 gen_text = self.caption_decoder.generate_captions(
                     self.caption_tokenizer,
                     text_latents,
-                    use_beam_search=use_beam_search)
+                    use_beam_search=use_beam_search, )
 
         elif mode in ["i2t", "t", "i2t2i"]:
             text_latents = outs
@@ -839,7 +841,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 gen_text = self.caption_decoder.generate_captions(
                     self.caption_tokenizer,
                     text_latents,
-                    use_beam_search=use_beam_search)
+                    use_beam_search=use_beam_search, )
             else:
                 # 'i2t2i' should do 't2i' later
                 # Prepare image CLIP latents

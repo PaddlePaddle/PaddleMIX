@@ -18,14 +18,16 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
 from packaging import version
-
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...configuration_utils import FrozenDict
-from ...loaders import FromCkptMixin, LoraLoaderMixin, TextualInversionLoaderMixin
+from ...loaders import (FromCkptMixin, LoraLoaderMixin,
+                        TextualInversionLoaderMixin)
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import deprecate, logging, randn_tensor, replace_example_docstring
+from ...utils import (deprecate, logging, randn_tensor,
+                      replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
@@ -96,8 +98,8 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             requires_safety_checker: bool=True, ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -114,8 +116,8 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if (hasattr(scheduler.config, "clip_sample") and
+                scheduler.config.clip_sample is True):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -152,8 +154,8 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             unet.config, "_ppdiffusers_version") and version.parse(
                 version.parse(unet.config._ppdiffusers_version)
                 .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = (hasattr(unet.config, "sample_size") and
+                                       unet.config.sample_size < 64)
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -246,8 +248,8 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -297,8 +299,8 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -414,17 +416,20 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
                     f" {negative_prompt_embeds.shape}.")
 
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -534,9 +539,14 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         width = width or self.unet.config.sample_size * self.vae_scale_factor
 
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, height, width, callback_steps,
-                          negative_prompt, prompt_embeds,
-                          negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            height,
+            width,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -584,8 +594,8 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 

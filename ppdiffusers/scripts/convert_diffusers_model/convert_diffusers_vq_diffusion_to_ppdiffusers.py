@@ -18,12 +18,13 @@ from collections import OrderedDict
 import paddle
 import torch
 from diffusers import VQDiffusionPipeline as DiffusersVQDiffusionPipeline
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+
 from ppdiffusers import Transformer2DModel
 from ppdiffusers import VQDiffusionPipeline as PPDiffusersVQDiffusionPipeline
 from ppdiffusers import VQDiffusionScheduler, VQModel
-from ppdiffusers.pipelines.vq_diffusion import LearnedClassifierFreeSamplingEmbeddings
+from ppdiffusers.pipelines.vq_diffusion import \
+    LearnedClassifierFreeSamplingEmbeddings
 
 paddle.set_device("cpu")
 
@@ -138,8 +139,9 @@ def convert_diffusers_vq_diffusion_to_ppdiffusers(pretrained_model_name_or_path,
     pp_transformer.set_dict(transformer_state_dict)
 
     # 3. pp_learned_classifier_free_sampling_embeddings
-    pp_learned_classifier_free_sampling_embeddings = LearnedClassifierFreeSamplingEmbeddings.from_config(
-        diffusers_pipe.learned_classifier_free_sampling_embeddings.config)
+    pp_learned_classifier_free_sampling_embeddings = (
+        LearnedClassifierFreeSamplingEmbeddings.from_config(
+            diffusers_pipe.learned_classifier_free_sampling_embeddings.config))
     pp_learned_classifier_free_sampling_embeddings.set_dict(
         learned_classifier_free_sampling_embeddings_state_dict)
 

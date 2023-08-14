@@ -36,12 +36,13 @@ class Upsample1D(nn.Layer):
             out_channels:
     """
 
-    def __init__(self,
-                 channels,
-                 use_conv=False,
-                 use_conv_transpose=False,
-                 out_channels=None,
-                 name="conv"):
+    def __init__(
+            self,
+            channels,
+            use_conv=False,
+            use_conv_transpose=False,
+            out_channels=None,
+            name="conv", ):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -121,12 +122,13 @@ class Upsample2D(nn.Layer):
         out_channels:
     """
 
-    def __init__(self,
-                 channels,
-                 use_conv=False,
-                 use_conv_transpose=False,
-                 out_channels=None,
-                 name="conv"):
+    def __init__(
+            self,
+            channels,
+            use_conv=False,
+            use_conv_transpose=False,
+            out_channels=None,
+            name="conv", ):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -324,7 +326,7 @@ class FirUpsample2D(nn.Layer):
                 weight,
                 stride=stride,
                 output_padding=output_padding,
-                padding=0)
+                padding=0, )
 
             output = upfirdn2d_native(
                 inverse_conv,
@@ -451,7 +453,7 @@ class KDownsample2D(nn.Layer):
             "kernel",
             paddle.matmul(
                 kernel_1d, kernel_1d, transpose_x=True),
-            persistable=False)
+            persistable=False, )
 
     def forward(self, x):
         x = F.pad(x, (self.pad, ) * 4, self.pad_mode)
@@ -460,7 +462,7 @@ class KDownsample2D(nn.Layer):
                 x.shape[1], x.shape[1], self.kernel.shape[0],
                 self.kernel.shape[1]
             ],
-            dtype=x.dtype)
+            dtype=x.dtype, )
         indices = paddle.arange(x.shape[1])
         # TODO verify this method
         weight[indices, indices] = self.kernel.cast(weight.dtype)
@@ -477,7 +479,7 @@ class KUpsample2D(nn.Layer):
             "kernel",
             paddle.matmul(
                 kernel_1d, kernel_1d, transpose_x=True),
-            persistable=False)
+            persistable=False, )
 
     def forward(self, x):
         x = F.pad(x, ((self.pad + 1) // 2, ) * 4, self.pad_mode)
@@ -486,7 +488,7 @@ class KUpsample2D(nn.Layer):
                 x.shape[1], x.shape[1], self.kernel.shape[0],
                 self.kernel.shape[1]
             ],
-            dtype=x.dtype)
+            dtype=x.dtype, )
         indices = paddle.arange(x.shape[1])
         # TODO verify this method
         weight[indices, indices] = self.kernel.cast(weight.dtype)
@@ -633,7 +635,8 @@ class ResnetBlock2D(nn.Layer):
                 self.downsample = Downsample2D(
                     in_channels, use_conv=False, padding=1, name="op")
 
-        self.use_in_shortcut = self.in_channels != conv_2d_out_channels if use_in_shortcut is None else use_in_shortcut
+        self.use_in_shortcut = (self.in_channels != conv_2d_out_channels
+                                if use_in_shortcut is None else use_in_shortcut)
 
         self.conv_shortcut = None
         if self.use_in_shortcut:
@@ -643,7 +646,7 @@ class ResnetBlock2D(nn.Layer):
                 kernel_size=1,
                 stride=1,
                 padding=0,
-                bias_attr=conv_shortcut_bias)
+                bias_attr=conv_shortcut_bias, )
 
     def forward(self, input_tensor, temb):
         hidden_states = input_tensor
@@ -844,8 +847,12 @@ def dummy_pad(tensor, up_x=0, up_y=0):
                 tensor,
                 paddle.zeros(
                     [
-                        tensor.shape[0], tensor.shape[1], tensor.shape[2],
-                        tensor.shape[3], up_x, tensor.shape[5]
+                        tensor.shape[0],
+                        tensor.shape[1],
+                        tensor.shape[2],
+                        tensor.shape[3],
+                        up_x,
+                        tensor.shape[5],
                     ],
                     dtype=tensor.dtype, ),
             ],
@@ -856,8 +863,12 @@ def dummy_pad(tensor, up_x=0, up_y=0):
                 tensor,
                 paddle.zeros(
                     [
-                        tensor.shape[0], tensor.shape[1], up_y, tensor.shape[3],
-                        tensor.shape[4], tensor.shape[5]
+                        tensor.shape[0],
+                        tensor.shape[1],
+                        up_y,
+                        tensor.shape[3],
+                        tensor.shape[4],
+                        tensor.shape[5],
                     ],
                     dtype=tensor.dtype, ),
             ],
@@ -889,7 +900,7 @@ def upfirdn2d_native(tensor, kernel, up=1, down=1, pad=(0, 0)):
     out = F.pad(
         out,
         [max(pad_x0, 0), max(pad_x1, 0), max(pad_y0, 0), max(pad_y1, 0), 0, 0],
-        data_format="NDHWC")
+        data_format="NDHWC", )
     out = out.squeeze(0)
 
     out = out[:, max(-pad_y0, 0):out.shape[1] - max(-pad_y1, 0), max(
@@ -901,8 +912,10 @@ def upfirdn2d_native(tensor, kernel, up=1, down=1, pad=(0, 0)):
     w = paddle.flip(kernel, [0, 1]).reshape([1, 1, kernel_h, kernel_w])
     out = F.conv2d(out, w)
     out = out.reshape([
-        -1, minor, in_h * up_y + pad_y0 + pad_y1 - kernel_h + 1,
-        in_w * up_x + pad_x0 + pad_x1 - kernel_w + 1
+        -1,
+        minor,
+        in_h * up_y + pad_y0 + pad_y1 - kernel_h + 1,
+        in_w * up_x + pad_x0 + pad_x1 - kernel_w + 1,
     ])
     out = out.transpose([0, 2, 3, 1])
     out = out[:, ::down_y, ::down_x, :]
@@ -932,7 +945,7 @@ class TemporalConvLayer(nn.Layer):
                 in_channels=in_dim,
                 out_channels=out_dim,
                 kernel_size=(3, 1, 1),
-                padding=(1, 0, 0)), )
+                padding=(1, 0, 0), ), )
         self.conv2 = nn.Sequential(
             nn.GroupNorm(
                 num_groups=32, num_channels=out_dim),
@@ -942,7 +955,7 @@ class TemporalConvLayer(nn.Layer):
                 in_channels=out_dim,
                 out_channels=in_dim,
                 kernel_size=(3, 1, 1),
-                padding=(1, 0, 0)), )
+                padding=(1, 0, 0), ), )
         self.conv3 = nn.Sequential(
             nn.GroupNorm(
                 num_groups=32, num_channels=out_dim),
@@ -952,7 +965,7 @@ class TemporalConvLayer(nn.Layer):
                 in_channels=out_dim,
                 out_channels=in_dim,
                 kernel_size=(3, 1, 1),
-                padding=(1, 0, 0)), )
+                padding=(1, 0, 0), ), )
         self.conv4 = nn.Sequential(
             nn.GroupNorm(
                 num_groups=32, num_channels=out_dim),
@@ -962,7 +975,7 @@ class TemporalConvLayer(nn.Layer):
                 in_channels=out_dim,
                 out_channels=in_dim,
                 kernel_size=(3, 1, 1),
-                padding=(1, 0, 0)), )
+                padding=(1, 0, 0), ), )
         zeros_(self.conv4[-1].weight)
         zeros_(self.conv4[-1].bias)
 

@@ -62,7 +62,7 @@ class T5FilmDecoder(ModelMixin, ConfigMixin):
                 d_kv=d_kv,
                 num_heads=num_heads,
                 d_ff=d_ff,
-                dropout_rate=dropout_rate)
+                dropout_rate=dropout_rate, )
             self.decoders.append(lyr)
 
         self.decoder_norm = T5LayerNorm(d_model)
@@ -152,7 +152,7 @@ class DecoderLayer(nn.Layer):
                 d_model=d_model,
                 d_kv=d_kv,
                 num_heads=num_heads,
-                dropout_rate=dropout_rate))
+                dropout_rate=dropout_rate, ))
 
         # cross attention: layer 1
         self.layer.append(
@@ -169,7 +169,7 @@ class DecoderLayer(nn.Layer):
                 d_model=d_model,
                 d_ff=d_ff,
                 dropout_rate=dropout_rate,
-                layer_norm_epsilon=layer_norm_epsilon))
+                layer_norm_epsilon=layer_norm_epsilon, ))
 
     def forward(
             self,
@@ -211,7 +211,7 @@ class T5LayerSelfAttentionCond(nn.Layer):
             heads=num_heads,
             dim_head=d_kv,
             out_bias=False,
-            scale_qk=False)
+            scale_qk=False, )
         self.dropout = nn.Dropout(dropout_rate)
 
     def forward(
@@ -243,7 +243,7 @@ class T5LayerCrossAttention(nn.Layer):
             heads=num_heads,
             dim_head=d_kv,
             out_bias=False,
-            scale_qk=False)
+            scale_qk=False, )
         self.layer_norm = T5LayerNorm(d_model, eps=layer_norm_epsilon)
         self.dropout = nn.Dropout(dropout_rate)
 

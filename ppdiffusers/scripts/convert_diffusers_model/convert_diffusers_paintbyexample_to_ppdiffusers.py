@@ -18,14 +18,15 @@ from collections import OrderedDict
 import paddle
 import torch
 from diffusers import PaintByExamplePipeline as DiffusersPaintByExamplePipeline
-
 # CLIPImageProcessor need paddlenlp latest
 from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionConfig
+
 from ppdiffusers import AutoencoderKL
-from ppdiffusers import PaintByExamplePipeline as PPDiffusersPaintByExamplePipeline
+from ppdiffusers import \
+    PaintByExamplePipeline as PPDiffusersPaintByExamplePipeline
 from ppdiffusers import PNDMScheduler, UNet2DConditionModel
-from ppdiffusers.pipelines.paint_by_example.image_encoder import (
-    PaintByExampleImageEncoder, )
+from ppdiffusers.pipelines.paint_by_example.image_encoder import \
+    PaintByExampleImageEncoder
 
 paddle.set_device("cpu")
 

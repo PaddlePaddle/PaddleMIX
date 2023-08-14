@@ -58,8 +58,9 @@ def set_seed(seed: int):
         paddle.seed(seed)
     # ^^ safe to call this function even if cuda is not available
 
-
     # Adapted from torch-ema https://github.com/fadel/pytorch_ema/blob/master/torch_ema/ema.py#L14
+
+
 class EMAModel:
     """
     Exponential Moving Average of models weights
@@ -110,7 +111,9 @@ class EMAModel:
             use_ema_warmup = True
 
         if kwargs.get("max_value", None) is not None:
-            deprecation_message = "The `max_value` argument is deprecated. Please use `decay` instead."
+            deprecation_message = (
+                "The `max_value` argument is deprecated. Please use `decay` instead."
+            )
             deprecate(
                 "max_value", "1.0.0", deprecation_message, standard_warn=False)
             decay = kwargs["max_value"]
@@ -125,7 +128,8 @@ class EMAModel:
         self.shadow_params = [p.clone().detach() for p in parameters]
 
         if kwargs.get("device", None) is not None:
-            deprecation_message = "The `device` argument is deprecated. Please use `to` instead."
+            deprecation_message = (
+                "The `device` argument is deprecated. Please use `to` instead.")
             deprecate(
                 "device", "1.0.0", deprecation_message, standard_warn=False)
             self.to(device=kwargs["device"])

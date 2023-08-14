@@ -21,15 +21,16 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 import PIL.Image
-
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...loaders import TextualInversionLoaderMixin
 from ...models import AutoencoderKL, ControlNetModel, UNet2DConditionModel
 from ...models.controlnet import ControlNetOutput
 from ...models.modeling_utils import ModelMixin
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import PIL_INTERPOLATION, logging, randn_tensor, replace_example_docstring
+from ...utils import (PIL_INTERPOLATION, logging, randn_tensor,
+                      replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
@@ -179,7 +180,7 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             tokenizer: CLIPTokenizer,
             unet: UNet2DConditionModel,
             controlnet: Union[ControlNetModel, List[ControlNetModel], Tuple[
-                ControlNetModel], MultiControlNetModel],
+                ControlNetModel], MultiControlNetModel, ],
             scheduler: KarrasDiffusionSchedulers,
             safety_checker: StableDiffusionSafetyChecker,
             feature_extractor: CLIPImageProcessor,
@@ -311,8 +312,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             config = (self.text_encoder.config
                       if isinstance(self.text_encoder.config, dict) else
                       self.text_encoder.config.to_dict())
-            if config.get("use_attention_mask",
-                          None) is not None and config["use_attention_mask"]:
+            if (config.get("use_attention_mask", None) is not None and
+                    config["use_attention_mask"]):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -365,8 +366,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
             config = (self.text_encoder.config
                       if isinstance(self.text_encoder.config, dict) else
                       self.text_encoder.config.to_dict())
-            if config.get("use_attention_mask",
-                          None) is not None and config["use_attention_mask"]:
+            if (config.get("use_attention_mask", None) is not None and
+                    config["use_attention_mask"]):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -453,8 +454,9 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                 f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
             )
 
-        if (callback_steps is None) or (callback_steps is not None and (
-                not isinstance(callback_steps, int) or callback_steps <= 0)):
+        if (callback_steps is None) or (
+                callback_steps is not None and
+            (not isinstance(callback_steps, int) or callback_steps <= 0)):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
                 f" {type(callback_steps)}.")
@@ -549,7 +551,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
         image_is_tensor_list = isinstance(image, list) and isinstance(
             image[0], paddle.Tensor)
 
-        if not image_is_pil and not image_is_tensor and not image_is_pil_list and not image_is_tensor_list:
+        if (not image_is_pil and not image_is_tensor and
+                not image_is_pil_list and not image_is_tensor_list):
             raise TypeError(
                 "image must be one of PIL image, paddle tensor, list of PIL images, or list of paddle tensors"
             )
@@ -623,17 +626,20 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
         return image
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -682,7 +688,7 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
                 save_directory,
                 safe_serialization=safe_serialization,
                 variant=variant,
-                to_diffusers=to_diffusers)
+                to_diffusers=to_diffusers, )
         else:
             raise NotImplementedError(
                 "Currently, the `save_pretrained()` is not implemented for Multi-ControlNet."
@@ -891,8 +897,8 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 

@@ -23,25 +23,13 @@ import weakref
 from collections import OrderedDict
 from types import FunctionType, MethodType
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
 from ..utils import (
-    DIFFUSERS_CACHE,
-    FROM_DIFFUSERS,
-    FROM_HF_HUB,
-    HF_HUB_OFFLINE,
-    LOW_CPU_MEM_USAGE_DEFAULT,
-    PPDIFFUSERS_CACHE,
-    TO_DIFFUSERS,
-    _add_variant,
-    _get_model_file,
-    get_logger,
-    is_paddle_available,
-    is_paddlenlp_available,
-    is_ppxformers_available,
-    is_safetensors_available,
-    is_torch_available,
-    is_torch_file,
-    smart_load,
-    str2bool, )
+    DIFFUSERS_CACHE, FROM_DIFFUSERS, FROM_HF_HUB, HF_HUB_OFFLINE,
+    LOW_CPU_MEM_USAGE_DEFAULT, PPDIFFUSERS_CACHE, TO_DIFFUSERS, _add_variant,
+    _get_model_file, get_logger, is_paddle_available, is_paddlenlp_available,
+    is_ppxformers_available, is_safetensors_available, is_torch_available,
+    is_torch_file, smart_load, str2bool)
 
 logger = get_logger(__name__)
 
@@ -231,7 +219,7 @@ if is_paddle_available():
         tensor = paddle.create_parameter(
             data.shape,
             dtype=data.dtype,
-            default_initializer=nn.initializer.Assign(data))
+            default_initializer=nn.initializer.Assign(data), )
         if not requires_grad:
             tensor.stop_gradient = True
         return tensor
@@ -340,7 +328,6 @@ if is_paddle_available():
 
 if is_paddle_available() and is_paddlenlp_available():
     import paddle
-
     import paddlenlp.transformers
     from paddlenlp import __version__
     from paddlenlp.transformers import PretrainedConfig, PretrainedModel
@@ -351,8 +338,8 @@ if is_paddle_available() and is_paddlenlp_available():
         from ..utils.paddle_utils import no_init_weights
 
     if is_ppxformers_available():
-        from paddle.incubate.nn.memory_efficient_attention import (
-            memory_efficient_attention, )
+        from paddle.incubate.nn.memory_efficient_attention import \
+            memory_efficient_attention
         from paddle.nn.functional.flash_attention import flash_attention
 
         sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 +
@@ -391,7 +378,8 @@ if is_paddle_available() and is_paddlenlp_available():
                 head_dim = query.shape[-1]
                 attention_op = "cutlass"
                 if is_support_flash_attention and query.dtype in [
-                        paddle.float16, paddle.bfloat16
+                        paddle.float16,
+                        paddle.bfloat16,
                 ]:
                     if flash_attn_version == 1:
                         if head_dim <= 128:
@@ -415,8 +403,8 @@ if is_paddle_available() and is_paddlenlp_available():
                 else:
                     if attn_mask is not None:
                         attn_mask = paddle.transpose(attn_mask, [0, 2, 1, 3])
-                        if attn_mask.cast("float32").min(
-                        ) == 0 and attn_mask.cast("float32").max() == 1:
+                        if (attn_mask.cast("float32").min() == 0 and
+                                attn_mask.cast("float32").max() == 1):
                             attn_mask = (attn_mask.cast(s.dtype) - 1) * 10000.0
                         s = s + attn_mask
                     p = paddle.nn.functional.softmax(s, axis=-1)
@@ -447,14 +435,15 @@ if is_paddle_available() and is_paddlenlp_available():
                     value,
                     dropout=dropout_p,
                     causal=is_causal,
-                    return_softmax=False)[0]
+                    return_softmax=False, )[0]
             else:
                 raise ValueError(
                     "ppxformers's attention_op shoulde be in ['cutlass', 'flash', 'math']"
                 )
             return output
 
-        paddle.nn.functional.scaled_dot_product_attention_ = scaled_dot_product_attention_
+        paddle.nn.functional.scaled_dot_product_attention_ = (
+            scaled_dot_product_attention_)
 
     @patch_to(nn.Layer, as_prop=True)
     def dtype(parameter: nn.Layer) -> paddle.dtype:
@@ -485,10 +474,8 @@ if is_paddle_available() and is_paddlenlp_available():
         from shutil import copyfile
 
         import sentencepiece as spm
-
-        from paddlenlp.transformers.tokenizer_utils import (
-            AddedToken,
-            PretrainedTokenizer, )
+        from paddlenlp.transformers.tokenizer_utils import (AddedToken,
+                                                            PretrainedTokenizer)
 
         SPIECE_UNDERLINE = "▁"
 
@@ -507,23 +494,25 @@ if is_paddle_available() and is_paddlenlp_available():
             }
             model_input_names = ["input_ids", "attention_mask"]
 
-            def __init__(self,
-                         vocab_file,
-                         bos_token="<s>",
-                         eos_token="</s>",
-                         sep_token="</s>",
-                         cls_token="<s>",
-                         unk_token="<unk>",
-                         pad_token="<pad>",
-                         mask_token="<mask>",
-                         sp_model_kwargs: Optional[Dict[str, Any]]=None,
-                         **kwargs) -> None:
+            def __init__(
+                    self,
+                    vocab_file,
+                    bos_token="<s>",
+                    eos_token="</s>",
+                    sep_token="</s>",
+                    cls_token="<s>",
+                    unk_token="<unk>",
+                    pad_token="<pad>",
+                    mask_token="<mask>",
+                    sp_model_kwargs: Optional[Dict[str, Any]]=None,
+                    **kwargs, ) -> None:
                 # Mask token behave like a normal word, i.e. include the space before it
                 mask_token = (AddedToken(
                     mask_token, lstrip=True, rstrip=False)
                               if isinstance(mask_token, str) else mask_token)
 
-                self.sp_model_kwargs = {} if sp_model_kwargs is None else sp_model_kwargs
+                self.sp_model_kwargs = ({} if sp_model_kwargs is None else
+                                        sp_model_kwargs)
 
                 super().__init__(
                     bos_token=bos_token,
@@ -552,14 +541,14 @@ if is_paddle_available() and is_paddlenlp_available():
                     "<s>": 0,
                     "<pad>": 1,
                     "</s>": 2,
-                    "<unk>": 3
+                    "<unk>": 3,
                 }
 
                 # The first "real" token "," has position 4 in the original fairseq vocab and position 3 in the spm vocab
                 self.fairseq_offset = 1
 
-                self.fairseq_tokens_to_ids["<mask>"] = len(
-                    self.sp_model) + self.fairseq_offset
+                self.fairseq_tokens_to_ids["<mask>"] = (
+                    len(self.sp_model) + self.fairseq_offset)
                 self.fairseq_ids_to_tokens = {
                     v: k
                     for k, v in self.fairseq_tokens_to_ids.items()
@@ -630,12 +619,12 @@ if is_paddle_available() and is_paddlenlp_available():
                     return super().get_special_tokens_mask(
                         token_ids_0=token_ids_0,
                         token_ids_1=token_ids_1,
-                        already_has_special_tokens=True)
+                        already_has_special_tokens=True, )
 
                 if token_ids_1 is None:
                     return [1] + ([0] * len(token_ids_0)) + [1]
-                return [1] + ([0] * len(token_ids_0)) + [1, 1] + (
-                    [0] * len(token_ids_1)) + [1]
+                return ([1] + ([0] * len(token_ids_0)) + [1, 1] +
+                        ([0] * len(token_ids_1)) + [1])
 
             def create_token_type_ids_from_sequences(
                     self,
@@ -663,8 +652,8 @@ if is_paddle_available() and is_paddlenlp_available():
 
             @property
             def vocab_size(self):
-                return len(self.sp_model
-                           ) + self.fairseq_offset + 1  # Add the <mask> token
+                return (len(self.sp_model) + self.fairseq_offset + 1
+                        )  # Add the <mask> token
 
             def get_vocab(self):
                 vocab = {
@@ -798,7 +787,8 @@ if is_paddle_available() and is_paddlenlp_available():
         model_kwargs = kwargs
         # 1. get the PretrainedConfig to init model
         if not isinstance(config, PretrainedConfig):
-            config_path = config if config is not None else pretrained_model_name_or_path
+            config_path = (config if config is not None else
+                           pretrained_model_name_or_path)
 
             # TODO fix config  from_pretrained
             # must from hf hub
@@ -916,12 +906,16 @@ if is_paddle_available() and is_paddlenlp_available():
 
         loaded_state_dict_keys = list(state_dict.keys())
 
-        model, missing_keys, unexpected_keys, mismatched_keys = cls._load_pretrained_model_old(
-            model=model,
-            state_dict=state_dict,
-            loaded_keys=loaded_state_dict_keys,
-            ignore_mismatched_sizes=ignore_mismatched_sizes,
-            dtype=None, )
+        (
+            model,
+            missing_keys,
+            unexpected_keys,
+            mismatched_keys, ) = cls._load_pretrained_model_old(
+                model=model,
+                state_dict=state_dict,
+                loaded_keys=loaded_state_dict_keys,
+                ignore_mismatched_sizes=ignore_mismatched_sizes,
+                dtype=None, )
         loading_info = {
             "missing_keys": missing_keys,
             "unexpected_keys": unexpected_keys,
@@ -1037,8 +1031,9 @@ if is_paddle_available() and is_paddlenlp_available():
         # Make sure we are able to load base models as well as derived models (with heads)
         start_prefix = ""
         model_to_load = model
-        if len(cls.base_model_prefix) > 0 and not hasattr(
-                model, cls.base_model_prefix) and has_prefix_module:
+        if (len(cls.base_model_prefix) > 0 and
+                not hasattr(model, cls.base_model_prefix) and
+                has_prefix_module):
             start_prefix = cls.base_model_prefix + "."
 
         def _find_mismatched_keys(
@@ -1062,9 +1057,10 @@ if is_paddle_available() and is_paddlenlp_available():
                     if (model_key in model_state_dict and
                             state_dict[checkpoint_key].shape !=
                             model_state_dict[model_key].shape):
-                        mismatched_keys.append(
-                            (checkpoint_key, state_dict[checkpoint_key].shape,
-                             model_state_dict[model_key].shape))
+                        mismatched_keys.append((
+                            checkpoint_key,
+                            state_dict[checkpoint_key].shape,
+                            model_state_dict[model_key].shape, ))
                         del state_dict[checkpoint_key]
             return mismatched_keys
 
@@ -1173,15 +1169,16 @@ if is_paddle_available() and is_paddlenlp_available():
     raw_save_pretrained = PretrainedModel.save_pretrained
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path,
-                        *args,
-                        from_hf_hub=False,
-                        subfolder=None,
-                        paddle_dtype=None,
-                        from_diffusers=None,
-                        variant=None,
-                        **kwargs):
+    def from_pretrained(
+            cls,
+            pretrained_model_name_or_path,
+            *args,
+            from_hf_hub=False,
+            subfolder=None,
+            paddle_dtype=None,
+            from_diffusers=None,
+            variant=None,
+            **kwargs, ):
         try:
             if cls.constructed_from_pretrained_config() and (
                     hasattr(cls, "smart_convert") or
@@ -1217,7 +1214,8 @@ if is_paddle_available() and is_paddlenlp_available():
         from safetensors.numpy import save_file as safetensors_numpy_save_file
 
         if is_torch_available():
-            from safetensors.torch import save_file as safetensors_torch_save_file
+            from safetensors.torch import \
+                save_file as safetensors_torch_save_file
 
     if is_torch_available():
         import torch
@@ -1230,8 +1228,8 @@ if is_paddle_available() and is_paddlenlp_available():
             safe_serialization: bool=False,
             variant: Optional[str]=None,
             to_diffusers: Optional[bool]=None, ):
-        from ..models.modeling_pytorch_paddle_utils import (
-            convert_paddle_state_dict_to_pytorch, )
+        from ..models.modeling_pytorch_paddle_utils import \
+            convert_paddle_state_dict_to_pytorch
         from ..models.modeling_utils import convert_state_dict
 
         if to_diffusers is None:
@@ -1342,30 +1340,27 @@ if is_paddle_available() and is_paddlenlp_available():
     PretrainedModel.save_pretrained = save_pretrained
 
     from paddlenlp.transformers import (
-        BertModel,
-        BitBackbone,
-        ClapTextModelWithProjection,
-        CLIPTextModel,
-        CLIPTextModelWithProjection,
-        CLIPVisionModel,
-        CLIPVisionModelWithProjection,
-        DPTForDepthEstimation,
-        SpeechT5HifiGan,
-        T5EncoderModel, )
+        BertModel, BitBackbone, ClapTextModelWithProjection, CLIPTextModel,
+        CLIPTextModelWithProjection, CLIPVisionModel,
+        CLIPVisionModelWithProjection, DPTForDepthEstimation, SpeechT5HifiGan,
+        T5EncoderModel)
 
     if not hasattr(T5EncoderModel, "_keep_in_fp32_modules"):
         T5EncoderModel._keep_in_fp32_modules = ["wo"]
 
-    from ..models.modeling_pytorch_paddle_utils import (
-        convert_pytorch_state_dict_to_paddle_class_method, )
-    from ..pipelines.alt_diffusion.modeling_roberta_series import (
-        RobertaSeriesModelWithTransformation, )
+    from ..models.modeling_pytorch_paddle_utils import \
+        convert_pytorch_state_dict_to_paddle_class_method
+    from ..pipelines.alt_diffusion.modeling_roberta_series import \
+        RobertaSeriesModelWithTransformation
     from ..pipelines.deepfloyd_if.safety_checker import IFSafetyChecker
-    from ..pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertModel
-    from ..pipelines.paint_by_example.image_encoder import PaintByExampleImageEncoder
-    from ..pipelines.stable_diffusion.safety_checker import StableDiffusionSafetyChecker
-    from ..pipelines.stable_diffusion_safe.safety_checker import (
-        SafeStableDiffusionSafetyChecker, )
+    from ..pipelines.latent_diffusion.pipeline_latent_diffusion import \
+        LDMBertModel
+    from ..pipelines.paint_by_example.image_encoder import \
+        PaintByExampleImageEncoder
+    from ..pipelines.stable_diffusion.safety_checker import \
+        StableDiffusionSafetyChecker
+    from ..pipelines.stable_diffusion_safe.safety_checker import \
+        SafeStableDiffusionSafetyChecker
 
     @classmethod
     def clip_smart_convert(cls, state_dict, pd_model):
@@ -1395,7 +1390,10 @@ if is_paddle_available() and is_paddlenlp_available():
             name_mapping_dict.update({".vision_model.": "."})
 
         donot_transpose = [
-            "embeddings", "norm", "concept_embeds", "special_care_embeds"
+            "embeddings",
+            "norm",
+            "concept_embeds",
+            "special_care_embeds",
         ]
         if not hasattr(cls, "paddle_torch_name_mapping"):
             cls.paddle_torch_name_mapping = {}
@@ -1416,7 +1414,7 @@ if is_paddle_available() and is_paddlenlp_available():
             # step5: safety_checker need prefix "clip."
             if "vision_model" in name and cls in [
                     StableDiffusionSafetyChecker,
-                    SafeStableDiffusionSafetyChecker
+                    SafeStableDiffusionSafetyChecker,
             ]:
                 name = "clip." + name
             new_model_state[name] = value
@@ -1534,11 +1532,8 @@ if is_paddle_available() and is_paddlenlp_available():
     else:
         # NEW TRANSFORMERS CLIP MODEL
         from ..pipelines.stable_diffusion.hf_clip_model import (
-            HFCLIPModel,
-            HFCLIPTextModel,
-            HFCLIPTextModelWithProjection,
-            HFCLIPVisionModel,
-            HFCLIPVisionModelWithProjection, )
+            HFCLIPModel, HFCLIPTextModel, HFCLIPTextModelWithProjection,
+            HFCLIPVisionModel, HFCLIPVisionModelWithProjection)
 
         TRANSFORMERS_CLIP_MODEL = [
             HFCLIPModel,
@@ -1561,8 +1556,10 @@ if is_paddle_available() and is_paddlenlp_available():
     # patch get_image_processor_dict support subfolder.
 
     IMAGE_PROCESSOR_NAME = "preprocessor_config.json"
-    from paddlenlp.transformers.feature_extraction_utils import FeatureExtractionMixin
-    from paddlenlp.transformers.image_processing_utils import ImageProcessingMixin
+    from paddlenlp.transformers.feature_extraction_utils import \
+        FeatureExtractionMixin
+    from paddlenlp.transformers.image_processing_utils import \
+        ImageProcessingMixin
 
     @classmethod
     def get_image_processor_dict(cls, pretrained_model_name_or_path, **kwargs):

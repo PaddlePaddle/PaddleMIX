@@ -16,15 +16,18 @@ import inspect
 from typing import Callable, Optional, Union
 
 import paddle
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
+                                    CLIPTokenizer)
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipeline_utils import DiffusionPipeline
-from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker, )
-from ppdiffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from ppdiffusers.pipelines.stable_diffusion import \
+    StableDiffusionPipelineOutput
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
+    StableDiffusionSafetyChecker
+from ppdiffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                    PNDMScheduler)
 from ppdiffusers.utils import deprecate, logging
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -69,8 +72,8 @@ class ComposableStableDiffusionPipeline(DiffusionPipeline):
             safety_checker: StableDiffusionSafetyChecker,
             feature_extractor: CLIPFeatureExtractor, ):
         super().__init__()
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -276,8 +279,9 @@ class ComposableStableDiffusionPipeline(DiffusionPipeline):
             weights = [float(w.strip()) for w in weights.split("|")]
             if len(weights) < num_prompts:
                 weights.append(1.0)
-            assert len(weights) == text_embeddings.shape[
-                0], "weights specified are not equal to the number of prompts"
+            assert (
+                len(weights) == text_embeddings.shape[0]
+            ), "weights specified are not equal to the number of prompts"
             pos_weights = []
             neg_weights = []
             mask = []  # first one is unconditional score
@@ -442,7 +446,7 @@ class ComposableStableDiffusionPipeline(DiffusionPipeline):
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
                 clip_input=safety_checker_input.pixel_values.astype(
-                    text_embeddings.dtype))
+                    text_embeddings.dtype), )
         else:
             has_nsfw_concept = None
 

@@ -152,11 +152,11 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
                 beta_start, beta_end, num_train_timesteps, dtype="float32")
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
-            self.betas = paddle.linspace(
+            self.betas = (paddle.linspace(
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype="float32")**2
+                dtype="float32", )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -171,8 +171,8 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         # For the final step, there is no previous alphas_cumprod because we are already at 0
         # `set_alpha_to_one` decides whether we set this parameter simply to one or
         # whether we use the final alpha of the "non-previous" one.
-        self.final_alpha_cumprod = paddle.to_tensor(
-            1.0) if set_alpha_to_one else self.alphas_cumprod[0]
+        self.final_alpha_cumprod = (paddle.to_tensor(1.0) if set_alpha_to_one
+                                    else self.alphas_cumprod[0])
 
         # standard deviation of the initial noise distribution
         self.init_noise_sigma = 1.0
@@ -200,8 +200,8 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
 
     def _get_variance(self, timestep, prev_timestep):
         alpha_prod_t = self.alphas_cumprod[timestep]
-        alpha_prod_t_prev = self.alphas_cumprod[
-            prev_timestep] if prev_timestep >= 0 else self.final_alpha_cumprod
+        alpha_prod_t_prev = (self.alphas_cumprod[prev_timestep] if
+                             prev_timestep >= 0 else self.final_alpha_cumprod)
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
 
@@ -244,9 +244,9 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
 
         s = s.unsqueeze(
             1)  # (batch_size, 1) because clip will broadcast along axis=0
-        sample = paddle.clip(
-            sample, -s, s
-        ) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
+        sample = (
+            paddle.clip(sample, -s, s) /
+            s)  # "we threshold xt0 to the range [-s, s] and then divide by s"
 
         sample = paddle.reshape(sample, [batch_size, channels, height, width])
         sample = paddle.cast(sample, dtype)
@@ -272,8 +272,8 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         step_ratio = self.config.num_train_timesteps // self.num_inference_steps
         # creates integer timesteps by multiplying by ratio
         # casting to int to avoid issues when num_inference_step is power of 3
-        timesteps = (np.arange(0, num_inference_steps) *
-                     step_ratio).round()[::-1].copy().astype(np.int64)
+        timesteps = ((np.arange(0, num_inference_steps) * step_ratio)
+                     .round()[::-1].copy().astype(np.int64))
         self.timesteps = paddle.to_tensor(timesteps)
         self.timesteps += self.config.steps_offset
 
@@ -330,12 +330,13 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
         # - pred_prev_sample -> "x_t-1"
 
         # 1. get previous step value (=t-1)
-        prev_timestep = timestep - self.config.num_train_timesteps // self.num_inference_steps
+        prev_timestep = (timestep - self.config.num_train_timesteps //
+                         self.num_inference_steps)
 
         # 2. compute alphas, betas
         alpha_prod_t = self.alphas_cumprod[timestep]
-        alpha_prod_t_prev = self.alphas_cumprod[
-            prev_timestep] if prev_timestep >= 0 else self.final_alpha_cumprod
+        alpha_prod_t_prev = (self.alphas_cumprod[prev_timestep] if
+                             prev_timestep >= 0 else self.final_alpha_cumprod)
 
         beta_prod_t = 1 - alpha_prod_t
 
@@ -381,8 +382,8 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
             0.5) * pred_epsilon
 
         # 7. compute x_t without "random noise" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
-        prev_sample = alpha_prod_t_prev**(
-            0.5) * pred_original_sample + pred_sample_direction
+        prev_sample = (alpha_prod_t_prev**
+                       (0.5) * pred_original_sample + pred_sample_direction)
 
         if eta > 0:
             if variance_noise is not None and generator is not None:
@@ -424,7 +425,8 @@ class DDIMScheduler(SchedulerMixin, ConfigMixin):
                 original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
-        noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
+        noisy_samples = (sqrt_alpha_prod * original_samples +
+                         sqrt_one_minus_alpha_prod * noise)
         return noisy_samples
 
     def get_velocity(self,

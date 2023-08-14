@@ -134,7 +134,7 @@ class PipelineTesterMixin:
     def test_pipeline_call_signature(self):
         self.assertTrue(
             hasattr(self.pipeline_class, "__call__"),
-            f"{self.pipeline_class} should have a `__call__` method")
+            f"{self.pipeline_class} should have a `__call__` method", )
 
         parameters = inspect.signature(self.pipeline_class.__call__).parameters
 
@@ -178,7 +178,7 @@ class PipelineTesterMixin:
     def _test_inference_batch_consistent(
             self,
             batch_sizes=[2, 4, 13],
-            additional_params_copy_to_batched_inputs=["num_inference_steps"]):
+            additional_params_copy_to_batched_inputs=["num_inference_steps"], ):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
         pipe.set_progress_bar_config(disable=None)
@@ -250,8 +250,9 @@ class PipelineTesterMixin:
             elif name == "batch_size":
                 batched_inputs[name] = batch_size
             elif name == "generator":
-                batched_inputs[
-                    name] = [self.get_generator(i) for i in range(batch_size)]
+                batched_inputs[name] = [
+                    self.get_generator(i) for i in range(batch_size)
+                ]
             else:
                 batched_inputs[name] = value
 
@@ -309,8 +310,9 @@ class PipelineTesterMixin:
         output_fp16 = pipe_fp16(**self.get_dummy_inputs())[0]
         max_diff = np.abs(to_np(output) - to_np(output_fp16)).max()
         self.assertLess(
-            max_diff, expected_max_diff,
-            "The outputs of the fp16 and fp32 pipelines are too different.")
+            max_diff,
+            expected_max_diff,
+            "The outputs of the fp16 and fp32 pipelines are too different.", )
 
     def test_save_load_float16(self, expected_max_diff=1e-2):
         self._test_save_load_float16(expected_max_diff)
@@ -408,10 +410,11 @@ class PipelineTesterMixin:
     def test_attention_slicing_forward_pass(self):
         self._test_attention_slicing_forward_pass()
 
-    def _test_attention_slicing_forward_pass(self,
-                                             test_max_difference=True,
-                                             test_mean_pixel_difference=True,
-                                             expected_max_diff=5e-3):
+    def _test_attention_slicing_forward_pass(
+            self,
+            test_max_difference=True,
+            test_mean_pixel_difference=True,
+            expected_max_diff=5e-3, ):
         if not self.test_attention_slicing:
             return
 
@@ -428,8 +431,9 @@ class PipelineTesterMixin:
                 to_np(output_with_slicing) - to_np(output_without_slicing)).max(
                 )
             self.assertLess(
-                max_diff, expected_max_diff,
-                "Attention slicing should not affect the inference results")
+                max_diff,
+                expected_max_diff,
+                "Attention slicing should not affect the inference results", )
         if test_mean_pixel_difference:
             assert_mean_pixel_difference(output_with_slicing[0],
                                          output_without_slicing[0])
@@ -441,7 +445,7 @@ class PipelineTesterMixin:
             self,
             test_max_difference=True,
             test_mean_pixel_difference=True,
-            expected_max_diff=1e-2):
+            expected_max_diff=1e-2, ):
         if not self.test_xformers_attention:
             return
         components = self.get_dummy_components()
@@ -460,8 +464,9 @@ class PipelineTesterMixin:
             max_diff = np.abs(output_with_xformers -
                               output_without_xformers).max()
             self.assertLess(
-                max_diff, expected_max_diff,
-                "XFormers attention should not affect the inference results")
+                max_diff,
+                expected_max_diff,
+                "XFormers attention should not affect the inference results", )
         if test_mean_pixel_difference:
             assert_mean_pixel_difference(output_with_xformers[0],
                                          output_without_xformers[0])
@@ -477,7 +482,7 @@ class PipelineTesterMixin:
             self.assertTrue(max_steps is not None and len(max_steps) > 0)
             self.assertTrue(
                 f"{max_steps}/{max_steps}" in stderr,
-                "Progress bar should be enabled and stopped at the max step")
+                "Progress bar should be enabled and stopped at the max step", )
         pipe.set_progress_bar_config(disable=True)
         with io.StringIO() as stderr, contextlib.redirect_stderr(stderr):
             _ = pipe(**inputs)

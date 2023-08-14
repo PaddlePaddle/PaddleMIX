@@ -23,16 +23,14 @@ from tqdm.auto import tqdm
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipeline_utils import DiffusionPipeline
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
-from ppdiffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from ppdiffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                    PNDMScheduler)
 from ppdiffusers.utils import logging
 
 try:
     from ligo.segments import segment
-
-    from paddlenlp.transformers import (
-        CLIPFeatureExtractor,
-        CLIPTextModel,
-        CLIPTokenizer, )
+    from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
+                                        CLIPTokenizer)
 except ImportError:
     raise ImportError(
         "Please install paddlenlp and ligo-segments to use the mixture pipeline")

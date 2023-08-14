@@ -21,19 +21,14 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-
-from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, T5EncoderModel,
+                                    T5Tokenizer)
 
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
-from ...utils import (
-    BACKENDS_MAPPING,
-    PIL_INTERPOLATION,
-    is_bs4_available,
-    is_ftfy_available,
-    logging,
-    randn_tensor,
-    replace_example_docstring, )
+from ...utils import (BACKENDS_MAPPING, PIL_INTERPOLATION, is_bs4_available,
+                      is_ftfy_available, logging, randn_tensor,
+                      replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import IFPipelineOutput
 from .safety_checker import IFSafetyChecker
@@ -136,8 +131,11 @@ class IFImg2ImgPipeline(DiffusionPipeline):
         "\|" + "\\" + "\/" + "\*" + r"]{1,}")  # noqa
 
     _optional_components = [
-        "tokenizer", "text_encoder", "safety_checker", "feature_extractor",
-        "watermarker"
+        "tokenizer",
+        "text_encoder",
+        "safety_checker",
+        "feature_extractor",
+        "watermarker",
     ]
 
     def __init__(
@@ -600,15 +598,15 @@ class IFImg2ImgPipeline(DiffusionPipeline):
             image = numpy_to_pd(image)  # to pd
 
         elif isinstance(image[0], np.ndarray):
-            image = np.concatenate(
+            image = (np.concatenate(
                 image, axis=0) if image[0].ndim == 4 else np.stack(
-                    image, axis=0)
+                    image, axis=0))
             image = numpy_to_pd(image)
 
         elif isinstance(image[0], paddle.Tensor):
-            image = paddle.concat(
+            image = (paddle.concat(
                 image, axis=0) if image[0].ndim == 4 else paddle.stack(
-                    image, axis=0)
+                    image, axis=0))
 
         return image
 
@@ -654,7 +652,7 @@ class IFImg2ImgPipeline(DiffusionPipeline):
             self,
             prompt: Union[str, List[str]]=None,
             image: Union[PIL.Image.Image, paddle.Tensor, np.ndarray, List[
-                PIL.Image.Image], List[paddle.Tensor], List[np.ndarray]]=None,
+                PIL.Image.Image], List[paddle.Tensor], List[np.ndarray], ]=None,
             strength: float=0.7,
             num_inference_steps: int=80,
             timesteps: List[int]=None,
@@ -755,9 +753,14 @@ class IFImg2ImgPipeline(DiffusionPipeline):
         else:
             batch_size = prompt_embeds.shape[0]
 
-        self.check_inputs(prompt, image, batch_size, callback_steps,
-                          negative_prompt, prompt_embeds,
-                          negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            image,
+            batch_size,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
@@ -830,15 +833,15 @@ class IFImg2ImgPipeline(DiffusionPipeline):
                     noise_pred_uncond, _ = noise_pred_uncond.split(
                         [
                             model_input.shape[1],
-                            noise_pred_uncond.shape[1] - model_input.shape[1]
+                            noise_pred_uncond.shape[1] - model_input.shape[1],
                         ],
-                        axis=1)
+                        axis=1, )
                     noise_pred_text, predicted_variance = noise_pred_text.split(
                         [
                             model_input.shape[1],
-                            noise_pred_text.shape[1] - model_input.shape[1]
+                            noise_pred_text.shape[1] - model_input.shape[1],
                         ],
-                        axis=1)
+                        axis=1, )
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
                     noise_pred = paddle.concat(
@@ -894,4 +897,4 @@ class IFImg2ImgPipeline(DiffusionPipeline):
         return IFPipelineOutput(
             images=image,
             nsfw_detected=nsfw_detected,
-            watermark_detected=watermark_detected)
+            watermark_detected=watermark_detected, )

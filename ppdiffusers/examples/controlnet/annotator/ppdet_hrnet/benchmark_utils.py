@@ -24,13 +24,14 @@ LOG_PATH_ROOT = f"{CUR_DIR}/../../output"
 
 
 class PaddleInferBenchmark(object):
-    def __init__(self,
-                 config,
-                 model_info: dict={},
-                 data_info: dict={},
-                 perf_info: dict={},
-                 resource_info: dict={},
-                 **kwargs):
+    def __init__(
+            self,
+            config,
+            model_info: dict={},
+            data_info: dict={},
+            perf_info: dict={},
+            resource_info: dict={},
+            **kwargs, ):
         """
         Construct PaddleInferBenchmark Class to format logs.
         args:

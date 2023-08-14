@@ -15,7 +15,6 @@
 import os
 
 import paddle.inference as paddle_infer
-
 from paddlenlp.utils.downloader import get_path_from_url_with_filelock
 
 
@@ -27,12 +26,13 @@ def checkmodel(model_dir, model_name):
 
 
 class MidasInference:
-    def __init__(self,
-                 model_dir,
-                 model_name="dpt_hybrid",
-                 batchsize=8,
-                 device="GPU",
-                 run_mode="paddle"):
+    def __init__(
+            self,
+            model_dir,
+            model_name="dpt_hybrid",
+            batchsize=8,
+            device="GPU",
+            run_mode="paddle", ):
         checkmodel(model_dir, model_name)
         model_file = os.path.join(model_dir, model_name,
                                   model_name + ".pdmodel")

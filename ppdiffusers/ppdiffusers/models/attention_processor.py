@@ -59,7 +59,8 @@ class Attention(nn.Layer):
             processor: Optional["AttnProcessor"]=None, ):
         super().__init__()
         inner_dim = dim_head * heads
-        cross_attention_dim = cross_attention_dim if cross_attention_dim is not None else query_dim
+        cross_attention_dim = (cross_attention_dim if
+                               cross_attention_dim is not None else query_dim)
         self.upcast_attention = upcast_attention
         self.upcast_softmax = upcast_softmax
 
@@ -106,7 +107,7 @@ class Attention(nn.Layer):
             self.norm_cross = nn.GroupNorm(
                 num_channels=norm_cross_num_channels,
                 num_groups=cross_attention_norm_num_groups,
-                epsilon=1e-5)
+                epsilon=1e-5, )
         else:
             raise ValueError(
                 f"unknown cross_attention_norm: {cross_attention_norm}. Should be None, 'layer_norm' or 'group_norm'"
@@ -141,12 +142,13 @@ class Attention(nn.Layer):
     def set_use_memory_efficient_attention_xformers(
             self,
             use_memory_efficient_attention_xformers: bool,
-            attention_op: Optional[str]=None):
+            attention_op: Optional[str]=None, ):
         is_lora = hasattr(self, "processor") and isinstance(
             self.processor, (LoRAAttnProcessor, LoRAXFormersAttnProcessor))
         is_custom_diffusion = hasattr(self, "processor") and isinstance(
-            self.processor, (CustomDiffusionAttnProcessor,
-                             CustomDiffusionXFormersAttnProcessor))
+            self.processor,
+            (CustomDiffusionAttnProcessor,
+             CustomDiffusionXFormersAttnProcessor), )
         is_added_kv = self.added_kv_proj_dim is not None
         if use_memory_efficient_attention_xformers:
             # if self.added_kv_proj_dim is not None:
@@ -246,9 +248,9 @@ class Attention(nn.Layer):
     def set_processor(self, processor: "AttnProcessor"):
         # if current processor is in `self._sub_layers` and if passed `processor` is not, we need to
         # pop `processor` from `self._sub_layers`
-        if hasattr(self, "processor") and isinstance(
-                self.processor,
-                nn.Layer) and not isinstance(processor, nn.Layer):
+        if (hasattr(self, "processor") and
+                isinstance(self.processor, nn.Layer) and
+                not isinstance(processor, nn.Layer)):
             logger.info(
                 f"You are removing possibly trained weights of {self.processor} with {processor}"
             )
@@ -256,11 +258,12 @@ class Attention(nn.Layer):
 
         self.processor = processor
 
-    def forward(self,
-                hidden_states,
-                encoder_hidden_states=None,
-                attention_mask=None,
-                **cross_attention_kwargs):
+    def forward(
+            self,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            **cross_attention_kwargs, ):
         # The `Attention` class can call different attention processors / attention functions
         # here we simply pass along all tensors to the selected processor class
         # For standard processors that are defined here, `**cross_attention_kwargs` is empty
@@ -358,7 +361,9 @@ class Attention(nn.Layer):
         return attention_mask
 
     def norm_encoder_hidden_states(self, encoder_hidden_states):
-        assert self.norm_cross is not None, "self.norm_cross must be defined to call self.norm_encoder_hidden_states"
+        assert (
+            self.norm_cross is not None
+        ), "self.norm_cross must be defined to call self.norm_encoder_hidden_states"
 
         if isinstance(self.norm_cross, nn.LayerNorm):
             encoder_hidden_states = self.norm_cross(encoder_hidden_states)
@@ -378,12 +383,13 @@ class Attention(nn.Layer):
 
 
 class AttnProcessor:
-    def __call__(self,
-                 attn: Attention,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None,
-                 **cross_attention_kwargs):
+    def __call__(
+            self,
+            attn: Attention,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            **cross_attention_kwargs, ):
         batch_size, sequence_length, _ = (hidden_states.shape
                                           if encoder_hidden_states is None else
                                           encoder_hidden_states.shape)
@@ -483,13 +489,14 @@ class LoRAAttnProcessor(nn.Layer):
         self.to_out_lora = LoRALinearLayer(hidden_size, hidden_size, rank,
                                            network_alpha)
 
-    def __call__(self,
-                 attn: Attention,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None,
-                 scale=1.0,
-                 **cross_attention_kwargs):
+    def __call__(
+            self,
+            attn: Attention,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            scale=1.0,
+            **cross_attention_kwargs, ):
         batch_size, sequence_length, _ = (hidden_states.shape
                                           if encoder_hidden_states is None else
                                           encoder_hidden_states.shape)
@@ -561,12 +568,13 @@ class CustomDiffusionAttnProcessor(nn.Layer):
                     hidden_size, hidden_size, bias_attr=out_bias))
             self.to_out_custom_diffusion.append(nn.Dropout(dropout))
 
-    def __call__(self,
-                 attn: Attention,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None,
-                 **cross_attention_kwargs):
+    def __call__(
+            self,
+            attn: Attention,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            **cross_attention_kwargs, ):
         batch_size, sequence_length, _ = (hidden_states.shape
                                           if encoder_hidden_states is None else
                                           encoder_hidden_states.shape)
@@ -622,12 +630,13 @@ class CustomDiffusionAttnProcessor(nn.Layer):
 
 
 class AttnAddedKVProcessor:
-    def __call__(self,
-                 attn: Attention,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None,
-                 **cross_attention_kwargs):
+    def __call__(
+            self,
+            attn: Attention,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            **cross_attention_kwargs, ):
         residual = hidden_states
         hidden_states = hidden_states.reshape(
             [hidden_states.shape[0], hidden_states.shape[1], -1]).transpose(
@@ -690,12 +699,13 @@ class XFormersAttnAddedKVProcessor:
         assert attention_op in [None, "auto", "cutlass", "flash"]
         self.attention_op = attention_op
 
-    def __call__(self,
-                 attn: Attention,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None,
-                 **cross_attention_kwargs):
+    def __call__(
+            self,
+            attn: Attention,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            **cross_attention_kwargs, ):
         residual = hidden_states
         hidden_states = hidden_states.reshape(
             [hidden_states.shape[0], hidden_states.shape[1], -1]).transpose(
@@ -765,12 +775,13 @@ class XFormersAttnProcessor:
         assert attention_op in [None, "auto", "cutlass", "flash"]
         self.attention_op = attention_op
 
-    def __call__(self,
-                 attn: Attention,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None,
-                 **cross_attention_kwargs):
+    def __call__(
+            self,
+            attn: Attention,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            **cross_attention_kwargs, ):
         batch_size, sequence_length, _ = (hidden_states.shape
                                           if encoder_hidden_states is None else
                                           encoder_hidden_states.shape)
@@ -835,12 +846,13 @@ class LoRAXFormersAttnProcessor(nn.Layer):
 
     """
 
-    def __init__(self,
-                 hidden_size,
-                 cross_attention_dim,
-                 rank=4,
-                 attention_op: Optional[str]=None,
-                 network_alpha=None):
+    def __init__(
+            self,
+            hidden_size,
+            cross_attention_dim,
+            rank=4,
+            attention_op: Optional[str]=None,
+            network_alpha=None, ):
         super().__init__()
 
         self.hidden_size = hidden_size
@@ -857,13 +869,14 @@ class LoRAXFormersAttnProcessor(nn.Layer):
         self.to_out_lora = LoRALinearLayer(hidden_size, hidden_size, rank,
                                            network_alpha)
 
-    def __call__(self,
-                 attn: Attention,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None,
-                 scale=1.0,
-                 **cross_attention_kwargs):
+    def __call__(
+            self,
+            attn: Attention,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            scale=1.0,
+            **cross_attention_kwargs, ):
         batch_size, sequence_length, _ = (hidden_states.shape
                                           if encoder_hidden_states is None else
                                           encoder_hidden_states.shape)
@@ -946,12 +959,13 @@ class CustomDiffusionXFormersAttnProcessor(nn.Layer):
                     hidden_size, hidden_size, bias_attr=out_bias))
             self.to_out_custom_diffusion.append(nn.Dropout(dropout))
 
-    def __call__(self,
-                 attn: Attention,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None,
-                 **cross_attention_kwargs):
+    def __call__(
+            self,
+            attn: Attention,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            **cross_attention_kwargs, ):
         batch_size, sequence_length, _ = (hidden_states.shape
                                           if encoder_hidden_states is None else
                                           encoder_hidden_states.shape)
@@ -1020,12 +1034,13 @@ class SlicedAttnProcessor:
     def __init__(self, slice_size):
         self.slice_size = slice_size
 
-    def __call__(self,
-                 attn: Attention,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None,
-                 **cross_attention_kwargs):
+    def __call__(
+            self,
+            attn: Attention,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            **cross_attention_kwargs, ):
         batch_size, sequence_length, _ = (hidden_states.shape
                                           if encoder_hidden_states is None else
                                           encoder_hidden_states.shape)
@@ -1060,8 +1075,8 @@ class SlicedAttnProcessor:
 
             query_slice = query[start_idx:end_idx]
             key_slice = key[start_idx:end_idx]
-            attn_mask_slice = attention_mask[
-                start_idx:end_idx] if attention_mask is not None else None
+            attn_mask_slice = (attention_mask[start_idx:end_idx]
+                               if attention_mask is not None else None)
 
             attn_slice = attn.get_attention_scores(query_slice, key_slice,
                                                    attn_mask_slice)
@@ -1087,12 +1102,13 @@ class SlicedAttnAddedKVProcessor:
     def __init__(self, slice_size):
         self.slice_size = slice_size
 
-    def __call__(self,
-                 attn: "Attention",
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None,
-                 **cross_attention_kwargs):
+    def __call__(
+            self,
+            attn: "Attention",
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            **cross_attention_kwargs, ):
         residual = hidden_states
         hidden_states = hidden_states.reshape(
             [hidden_states.shape[0], hidden_states.shape[1], -1]).transpose(
@@ -1152,8 +1168,8 @@ class SlicedAttnAddedKVProcessor:
 
             query_slice = query[start_idx:end_idx]
             key_slice = key[start_idx:end_idx]
-            attn_mask_slice = attention_mask[
-                start_idx:end_idx] if attention_mask is not None else None
+            attn_mask_slice = (attention_mask[start_idx:end_idx]
+                               if attention_mask is not None else None)
 
             attn_slice = attn.get_attention_scores(query_slice, key_slice,
                                                    attn_mask_slice)

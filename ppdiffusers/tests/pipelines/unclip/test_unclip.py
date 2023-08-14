@@ -18,26 +18,18 @@ import unittest
 
 import numpy as np
 import paddle
-from ..pipeline_params import (
-    TEXT_TO_IMAGE_BATCH_PARAMS,
-    TEXT_TO_IMAGE_PARAMS, )
-from ..test_pipelines_common import (
-    PipelineTesterMixin,
-    assert_mean_pixel_difference, )
+from paddlenlp.transformers import (CLIPTextConfig, CLIPTextModelWithProjection,
+                                    CLIPTokenizer)
 
-from paddlenlp.transformers import (
-    CLIPTextConfig,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer, )
-from ppdiffusers import (
-    PriorTransformer,
-    UnCLIPPipeline,
-    UnCLIPScheduler,
-    UNet2DConditionModel,
-    UNet2DModel, )
+from ppdiffusers import (PriorTransformer, UnCLIPPipeline, UnCLIPScheduler,
+                         UNet2DConditionModel, UNet2DModel)
 from ppdiffusers.pipelines.unclip.text_proj import UnCLIPTextProjModel
 from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
+
+from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
+from ..test_pipelines_common import (PipelineTesterMixin,
+                                     assert_mean_pixel_difference)
 
 
 class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
@@ -133,13 +125,15 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             "sample_size": 32,
             "in_channels": 3,
             "out_channels": 6,
-            "down_block_types":
-            ("ResnetDownsampleBlock2D", "SimpleCrossAttnDownBlock2D"),
+            "down_block_types": (
+                "ResnetDownsampleBlock2D",
+                "SimpleCrossAttnDownBlock2D", ),
             "up_block_types":
             ("SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"),
             "mid_block_type": "UNetMidBlock2DSimpleCrossAttn",
-            "block_out_channels":
-            (self.block_out_channels_0, self.block_out_channels_0 * 2),
+            "block_out_channels": (
+                self.block_out_channels_0,
+                self.block_out_channels_0 * 2, ),
             "layers_per_block": 1,
             "cross_attention_dim": self.cross_attention_dim,
             "attention_head_dim": 4,
@@ -158,8 +152,9 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             ("ResnetDownsampleBlock2D", "ResnetDownsampleBlock2D"),
             "up_block_types":
             ("ResnetUpsampleBlock2D", "ResnetUpsampleBlock2D"),
-            "block_out_channels":
-            (self.block_out_channels_0, self.block_out_channels_0 * 2),
+            "block_out_channels": (
+                self.block_out_channels_0,
+                self.block_out_channels_0 * 2, ),
             "in_channels": 6,
             "out_channels": 3,
         }
@@ -188,15 +183,15 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             variance_type="fixed_small_log",
             prediction_type="sample",
             num_train_timesteps=1000,
-            clip_sample_range=5.0)
+            clip_sample_range=5.0, )
         decoder_scheduler = UnCLIPScheduler(
             variance_type="learned_range",
             prediction_type="epsilon",
-            num_train_timesteps=1000)
+            num_train_timesteps=1000, )
         super_res_scheduler = UnCLIPScheduler(
             variance_type="fixed_small_log",
             prediction_type="epsilon",
-            num_train_timesteps=1000)
+            num_train_timesteps=1000, )
         components = {
             "prior": prior,
             "decoder": decoder,
@@ -269,15 +264,18 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             dtype=dtype,
             generator=generator,
             latents=None,
-            scheduler=DummyScheduler())
-        shape = (batch_size, decoder.config.in_channels,
-                 decoder.config.sample_size, decoder.config.sample_size)
+            scheduler=DummyScheduler(), )
+        shape = (
+            batch_size,
+            decoder.config.in_channels,
+            decoder.config.sample_size,
+            decoder.config.sample_size, )
         decoder_latents = pipe.prepare_latents(
             shape,
             dtype=dtype,
             generator=generator,
             latents=None,
-            scheduler=DummyScheduler())
+            scheduler=DummyScheduler(), )
         shape = (
             batch_size,
             super_res_first.config.in_channels // 2,
@@ -288,7 +286,7 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             dtype=dtype,
             generator=generator,
             latents=None,
-            scheduler=DummyScheduler())
+            scheduler=DummyScheduler(), )
         pipe.set_progress_bar_config(disable=None)
         prompt = "this is a prompt example"
         generator = paddle.Generator().manual_seed(0)

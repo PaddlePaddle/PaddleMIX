@@ -22,14 +22,8 @@ from paddle.distributed.fleet.utils import recompute
 from .attention import AdaGroupNorm, AttentionBlock
 from .attention_processor import Attention, AttnAddedKVProcessor
 from .dual_transformer_2d import DualTransformer2DModel
-from .resnet import (
-    Downsample2D,
-    FirDownsample2D,
-    FirUpsample2D,
-    KDownsample2D,
-    KUpsample2D,
-    ResnetBlock2D,
-    Upsample2D, )
+from .resnet import (Downsample2D, FirDownsample2D, FirUpsample2D,
+                     KDownsample2D, KUpsample2D, ResnetBlock2D, Upsample2D)
 from .transformer_2d import Transformer2DModel
 
 
@@ -55,8 +49,9 @@ def get_down_block(
         resnet_out_scale_factor=1.0,
         cross_attention_norm=None,
         resnet_pre_temb_non_linearity=False, ):
-    down_block_type = down_block_type[7:] if down_block_type.startswith(
-        "UNetRes") else down_block_type
+    down_block_type = (down_block_type[7:]
+                       if down_block_type.startswith("UNetRes") else
+                       down_block_type)
     if down_block_type == "DownBlock2D":
         return DownBlock2D(
             num_layers=num_layers,
@@ -240,8 +235,8 @@ def get_up_block(
         resnet_out_scale_factor=1.0,
         cross_attention_norm=None,
         resnet_pre_temb_non_linearity=False, ):
-    up_block_type = up_block_type[7:] if up_block_type.startswith(
-        "UNetRes") else up_block_type
+    up_block_type = (up_block_type[7:]
+                     if up_block_type.startswith("UNetRes") else up_block_type)
     if up_block_type == "UpBlock2D":
         return UpBlock2D(
             num_layers=num_layers,
@@ -420,8 +415,8 @@ class UNetMidBlock2D(nn.Layer):
             output_scale_factor: float=1.0,
             resnet_pre_temb_non_linearity: bool=False, ):
         super().__init__()
-        resnet_groups = resnet_groups if resnet_groups is not None else min(
-            in_channels // 4, 32)
+        resnet_groups = (resnet_groups if resnet_groups is not None else
+                         min(in_channels // 4, 32))
         self.add_attention = add_attention
 
         # there is always at least one resnet
@@ -503,8 +498,8 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
 
         self.has_cross_attention = True
         self.attn_num_head_channels = attn_num_head_channels
-        resnet_groups = resnet_groups if resnet_groups is not None else min(
-            in_channels // 4, 32)
+        resnet_groups = (resnet_groups if resnet_groups is not None else
+                         min(in_channels // 4, 32))
 
         # there is always at least one resnet
         resnets = [
@@ -561,12 +556,13 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
         self.attentions = nn.LayerList(attentions)
         self.resnets = nn.LayerList(resnets)
 
-    def forward(self,
-                hidden_states,
-                temb=None,
-                encoder_hidden_states=None,
-                attention_mask=None,
-                cross_attention_kwargs=None):
+    def forward(
+            self,
+            hidden_states,
+            temb=None,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            cross_attention_kwargs=None, ):
         hidden_states = self.resnets[0](hidden_states, temb)
         for attn, resnet in zip(self.attentions, self.resnets[1:]):
             hidden_states = attn(
@@ -602,8 +598,8 @@ class UNetMidBlock2DSimpleCrossAttn(nn.Layer):
         self.has_cross_attention = True
 
         self.attn_num_head_channels = attn_num_head_channels
-        resnet_groups = resnet_groups if resnet_groups is not None else min(
-            in_channels // 4, 32)
+        resnet_groups = (resnet_groups if resnet_groups is not None else
+                         min(in_channels // 4, 32))
 
         self.num_heads = in_channels // self.attn_num_head_channels
 
@@ -662,13 +658,15 @@ class UNetMidBlock2DSimpleCrossAttn(nn.Layer):
         self.attentions = nn.LayerList(attentions)
         self.resnets = nn.LayerList(resnets)
 
-    def forward(self,
-                hidden_states,
-                temb=None,
-                encoder_hidden_states=None,
-                attention_mask=None,
-                cross_attention_kwargs=None):
-        cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
+    def forward(
+            self,
+            hidden_states,
+            temb=None,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            cross_attention_kwargs=None, ):
+        cross_attention_kwargs = (cross_attention_kwargs if
+                                  cross_attention_kwargs is not None else {})
         hidden_states = self.resnets[0](hidden_states, temb)
         for attn, resnet in zip(self.attentions, self.resnets[1:]):
             # attn
@@ -739,7 +737,7 @@ class AttnDownBlock2D(nn.Layer):
                     use_conv=True,
                     out_channels=out_channels,
                     padding=downsample_padding,
-                    name="op")
+                    name="op", )
             ])
         else:
             self.downsamplers = None
@@ -837,7 +835,7 @@ class CrossAttnDownBlock2D(nn.Layer):
                     use_conv=True,
                     out_channels=out_channels,
                     padding=downsample_padding,
-                    name="op")
+                    name="op", )
             ])
         else:
             self.downsamplers = None
@@ -856,7 +854,8 @@ class CrossAttnDownBlock2D(nn.Layer):
         output_states = ()
 
         for resnet, attn in zip(self.resnets, self.attentions):
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (self.training and self.gradient_checkpointing and
+                    not hidden_states.stop_gradient):
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -946,7 +945,7 @@ class DownBlock2D(nn.Layer):
                     use_conv=True,
                     out_channels=out_channels,
                     padding=downsample_padding,
-                    name="op")
+                    name="op", )
             ])
         else:
             self.downsamplers = None
@@ -957,7 +956,8 @@ class DownBlock2D(nn.Layer):
         output_states = ()
 
         for resnet in self.resnets:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (self.training and self.gradient_checkpointing and
+                    not hidden_states.stop_gradient):
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -1025,7 +1025,7 @@ class DownEncoderBlock2D(nn.Layer):
                     use_conv=True,
                     out_channels=out_channels,
                     padding=downsample_padding,
-                    name="op")
+                    name="op", )
             ])
         else:
             self.downsamplers = None
@@ -1095,7 +1095,7 @@ class AttnDownEncoderBlock2D(nn.Layer):
                     use_conv=True,
                     out_channels=out_channels,
                     padding=downsample_padding,
-                    name="op")
+                    name="op", )
             ])
         else:
             self.downsamplers = None
@@ -1348,7 +1348,8 @@ class ResnetDownsampleBlock2D(nn.Layer):
         output_states = ()
 
         for resnet in self.resnets:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (self.training and self.gradient_checkpointing and
+                    not hidden_states.stop_gradient):
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -1462,14 +1463,16 @@ class SimpleCrossAttnDownBlock2D(nn.Layer):
 
         self.gradient_checkpointing = False
 
-    def forward(self,
-                hidden_states,
-                temb=None,
-                encoder_hidden_states=None,
-                attention_mask=None,
-                cross_attention_kwargs=None):
+    def forward(
+            self,
+            hidden_states,
+            temb=None,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            cross_attention_kwargs=None, ):
         output_states = ()
-        cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
+        cross_attention_kwargs = (cross_attention_kwargs if
+                                  cross_attention_kwargs is not None else {})
 
         for resnet, attn in zip(self.resnets, self.attentions):
             # resnet
@@ -1542,7 +1545,8 @@ class KDownBlock2D(nn.Layer):
         output_states = ()
 
         for resnet in self.resnets:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (self.training and self.gradient_checkpointing and
+                    not hidden_states.stop_gradient):
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -1626,16 +1630,18 @@ class KCrossAttnDownBlock2D(nn.Layer):
 
         self.gradient_checkpointing = False
 
-    def forward(self,
-                hidden_states,
-                temb=None,
-                encoder_hidden_states=None,
-                attention_mask=None,
-                cross_attention_kwargs=None):
+    def forward(
+            self,
+            hidden_states,
+            temb=None,
+            encoder_hidden_states=None,
+            attention_mask=None,
+            cross_attention_kwargs=None, ):
         output_states = ()
 
         for resnet, attn in zip(self.resnets, self.attentions):
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (self.training and self.gradient_checkpointing and
+                    not hidden_states.stop_gradient):
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1852,7 +1858,8 @@ class CrossAttnUpBlock2D(nn.Layer):
             hidden_states = paddle.concat(
                 [hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (self.training and self.gradient_checkpointing and
+                    not hidden_states.stop_gradient):
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1949,7 +1956,8 @@ class UpBlock2D(nn.Layer):
             hidden_states = paddle.concat(
                 [hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (self.training and self.gradient_checkpointing and
+                    not hidden_states.stop_gradient):
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -2168,7 +2176,7 @@ class AttnSkipUpBlock2D(nn.Layer):
             self.skip_norm = nn.GroupNorm(
                 num_groups=min(out_channels // 4, 32),
                 num_channels=out_channels,
-                epsilon=resnet_eps)
+                epsilon=resnet_eps, )
             self.act = nn.Silu()
         else:
             self.resnet_up = None
@@ -2277,7 +2285,7 @@ class SkipUpBlock2D(nn.Layer):
             self.skip_norm = nn.GroupNorm(
                 num_groups=min(out_channels // 4, 32),
                 num_channels=out_channels,
-                epsilon=resnet_eps)
+                epsilon=resnet_eps, )
             self.act = nn.Silu()
         else:
             self.resnet_up = None
@@ -2393,7 +2401,8 @@ class ResnetUpsampleBlock2D(nn.Layer):
             hidden_states = paddle.concat(
                 [hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (self.training and self.gradient_checkpointing and
+                    not hidden_states.stop_gradient):
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -2515,7 +2524,8 @@ class SimpleCrossAttnUpBlock2D(nn.Layer):
             upsample_size=None,
             attention_mask=None,
             cross_attention_kwargs=None, ):
-        cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
+        cross_attention_kwargs = (cross_attention_kwargs if
+                                  cross_attention_kwargs is not None else {})
         for resnet, attn in zip(self.resnets, self.attentions):
             # resnet
             # pop res hidden states
@@ -2599,7 +2609,8 @@ class KUpBlock2D(nn.Layer):
                 [hidden_states, res_hidden_states_tuple], axis=1)
 
         for resnet in self.resnets:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (self.training and self.gradient_checkpointing and
+                    not hidden_states.stop_gradient):
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -2715,7 +2726,8 @@ class KCrossAttnUpBlock2D(nn.Layer):
                 [hidden_states, res_hidden_states_tuple], axis=1)
 
         for resnet, attn in zip(self.resnets, self.attentions):
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (self.training and self.gradient_checkpointing and
+                    not hidden_states.stop_gradient):
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -2826,7 +2838,8 @@ class KAttentionBlock(nn.Layer):
             emb=None,
             attention_mask=None,
             cross_attention_kwargs=None, ):
-        cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
+        cross_attention_kwargs = (cross_attention_kwargs if
+                                  cross_attention_kwargs is not None else {})
 
         # 1. Self-Attention
         if self.add_self_attention:

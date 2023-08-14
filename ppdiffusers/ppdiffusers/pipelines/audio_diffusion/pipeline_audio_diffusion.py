@@ -23,11 +23,8 @@ from PIL import Image
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import DDIMScheduler, DDPMScheduler
 from ...utils import randn_tensor
-from ..pipeline_utils import (
-    AudioPipelineOutput,
-    BaseOutput,
-    DiffusionPipeline,
-    ImagePipelineOutput, )
+from ..pipeline_utils import (AudioPipelineOutput, BaseOutput,
+                              DiffusionPipeline, ImagePipelineOutput)
 from .mel import Mel
 
 
@@ -123,8 +120,9 @@ class AudioDiffusionPipeline(DiffusionPipeline):
         step_generator = step_generator or generator
         # For backwards compatibility
         if type(self.unet.config.sample_size) == int:
-            self.unet.config.sample_size = (self.unet.config.sample_size,
-                                            self.unet.config.sample_size)
+            self.unet.config.sample_size = (
+                self.unet.config.sample_size,
+                self.unet.config.sample_size, )
         input_dims = self.get_input_dims()
         self.mel.set_resolution(x_res=input_dims[1], y_res=input_dims[0])
         if noise is None:
@@ -165,8 +163,9 @@ class AudioDiffusionPipeline(DiffusionPipeline):
             mask_start = int(mask_start_secs * pixels_per_second)
             mask_end = int(mask_end_secs * pixels_per_second)
             mask = self.scheduler.add_noise(
-                input_images, noise,
-                paddle.to_tensor(self.scheduler.timesteps[start_step:]))
+                input_images,
+                noise,
+                paddle.to_tensor(self.scheduler.timesteps[start_step:]), )
 
         for step, t in enumerate(
                 self.progress_bar(self.scheduler.timesteps[start_step:])):
@@ -240,7 +239,8 @@ class AudioDiffusionPipeline(DiffusionPipeline):
 
         for t in self.progress_bar(
                 paddle.flip(self.scheduler.timesteps, (0, ))):
-            prev_timestep = t - self.scheduler.num_train_timesteps // self.scheduler.num_inference_steps
+            prev_timestep = (t - self.scheduler.num_train_timesteps //
+                             self.scheduler.num_inference_steps)
             alpha_prod_t = self.scheduler.alphas_cumprod[t]
             alpha_prod_t_prev = (self.scheduler.alphas_cumprod[prev_timestep]
                                  if prev_timestep >= 0 else
@@ -251,8 +251,8 @@ class AudioDiffusionPipeline(DiffusionPipeline):
                 0.5) * model_output
             sample = (sample - pred_sample_direction) * alpha_prod_t_prev**(
                 -0.5)
-            sample = sample * alpha_prod_t**(0.5) + beta_prod_t**(
-                0.5) * model_output
+            sample = (sample * alpha_prod_t**(0.5) + beta_prod_t**
+                      (0.5) * model_output)
 
         return sample
 

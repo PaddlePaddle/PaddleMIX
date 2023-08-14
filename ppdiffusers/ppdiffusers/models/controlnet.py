@@ -25,11 +25,8 @@ from ..utils import BaseOutput, logging
 from .attention_processor import AttentionProcessor, AttnProcessor
 from .embeddings import TimestepEmbedding, Timesteps
 from .modeling_utils import ModelMixin
-from .unet_2d_blocks import (
-    CrossAttnDownBlock2D,
-    DownBlock2D,
-    UNetMidBlock2DCrossAttn,
-    get_down_block, )
+from .unet_2d_blocks import (CrossAttnDownBlock2D, DownBlock2D,
+                             UNetMidBlock2DCrossAttn, get_down_block)
 from .unet_2d_condition import UNet2DConditionModel
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -87,7 +84,7 @@ class ControlNetConditioningEmbedding(nn.Layer):
                 block_out_channels[-1],
                 conditioning_embedding_channels,
                 kernel_size=3,
-                padding=1))
+                padding=1, ))
 
     def forward(self, conditioning):
         embedding = self.conv_in(conditioning)
@@ -166,7 +163,7 @@ class ControlNetModel(ModelMixin, ConfigMixin):
             in_channels,
             block_out_channels[0],
             kernel_size=conv_in_kernel,
-            padding=conv_in_padding)
+            padding=conv_in_padding, )
 
         # time
         time_embed_dim = block_out_channels[0] * 4
@@ -460,8 +457,8 @@ class ControlNetModel(ModelMixin, ConfigMixin):
             # make smallest slice possible
             slice_size = num_sliceable_layers * [1]
 
-        slice_size = num_sliceable_layers * [slice_size] if not isinstance(
-            slice_size, list) else slice_size
+        slice_size = (num_sliceable_layers * [slice_size]
+                      if not isinstance(slice_size, list) else slice_size)
 
         if len(slice_size) != len(sliceable_head_dims):
             raise ValueError(
@@ -578,8 +575,8 @@ class ControlNetModel(ModelMixin, ConfigMixin):
         down_block_res_samples = (sample, )
 
         for downsample_block in self.down_blocks:
-            if hasattr(downsample_block, "has_cross_attention"
-                       ) and downsample_block.has_cross_attention:
+            if (hasattr(downsample_block, "has_cross_attention") and
+                    downsample_block.has_cross_attention):
                 sample, res_samples = downsample_block(
                     hidden_states=sample,
                     temb=emb,
@@ -654,7 +651,7 @@ class ControlNetModel(ModelMixin, ConfigMixin):
 
         return ControlNetOutput(
             down_block_res_samples=down_block_res_samples,
-            mid_block_res_sample=mid_block_res_sample)
+            mid_block_res_sample=mid_block_res_sample, )
 
 
 def zero_module(module):

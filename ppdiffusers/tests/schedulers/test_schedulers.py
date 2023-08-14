@@ -24,13 +24,9 @@ import numpy as np
 import paddle
 
 import ppdiffusers
-from ppdiffusers import (
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    IPNDMScheduler,
-    LMSDiscreteScheduler,
-    VQDiffusionScheduler,
-    logging, )
+from ppdiffusers import (EulerAncestralDiscreteScheduler,
+                         EulerDiscreteScheduler, IPNDMScheduler,
+                         LMSDiscreteScheduler, VQDiffusionScheduler, logging)
 from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
 from ppdiffusers.schedulers.scheduling_utils import SchedulerMixin
 from ppdiffusers.utils.testing_utils import CaptureLogger
@@ -123,8 +119,8 @@ class SchedulerBaseTests(unittest.TestCase):
             "The config attributes {'unexpected': True} were passed to SchedulerObject, but are not expected and"
             " will"
             " be ignored. Please verify your config.json configuration file.\n")
-        assert cap_logger_2.out.replace("SchedulerObject",
-                                        "SchedulerObject2") == cap_logger_3.out
+        assert (cap_logger_2.out.replace("SchedulerObject", "SchedulerObject2")
+                == cap_logger_3.out)
 
     def test_save_load_compatible_schedulers(self):
         SchedulerObject2._compatibles = ["SchedulerObject"]
@@ -199,8 +195,14 @@ class SchedulerBaseTests(unittest.TestCase):
         assert new_obj_3.__class__ == SchedulerObject3
 
         assert cap_logger_1.out == ""
-        assert cap_logger_2.out == "{'f'} was not found in config. Values will be initialized to default values.\n"
-        assert cap_logger_3.out == "{'f'} was not found in config. Values will be initialized to default values.\n"
+        assert (
+            cap_logger_2.out ==
+            "{'f'} was not found in config. Values will be initialized to default values.\n"
+        )
+        assert (
+            cap_logger_3.out ==
+            "{'f'} was not found in config. Values will be initialized to default values.\n"
+        )
 
 
 class SchedulerCommonTest(unittest.TestCase):
@@ -249,9 +251,10 @@ class SchedulerCommonTest(unittest.TestCase):
 
         for scheduler_class in self.scheduler_classes:
             # TODO(Suraj) - delete the following two lines once DDPM, DDIM, and PNDM have timesteps casted to float by default
-            if scheduler_class in (EulerAncestralDiscreteScheduler,
-                                   EulerDiscreteScheduler, LMSDiscreteScheduler
-                                   ):
+            if scheduler_class in (
+                    EulerAncestralDiscreteScheduler,
+                    EulerDiscreteScheduler,
+                    LMSDiscreteScheduler, ):
                 time_step = float(time_step)
 
             scheduler_config = self.get_scheduler_config(**config)
@@ -296,8 +299,8 @@ class SchedulerCommonTest(unittest.TestCase):
             new_output = new_scheduler.step(residual, time_step, sample,
                                             **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
     def check_over_forward(self, time_step=0, **forward_kwargs):
         kwargs = dict(self.forward_default_kwargs)
@@ -306,9 +309,10 @@ class SchedulerCommonTest(unittest.TestCase):
         num_inference_steps = kwargs.pop("num_inference_steps", None)
 
         for scheduler_class in self.scheduler_classes:
-            if scheduler_class in (EulerAncestralDiscreteScheduler,
-                                   EulerDiscreteScheduler, LMSDiscreteScheduler
-                                   ):
+            if scheduler_class in (
+                    EulerAncestralDiscreteScheduler,
+                    EulerDiscreteScheduler,
+                    LMSDiscreteScheduler, ):
                 time_step = float(time_step)
 
             scheduler_config = self.get_scheduler_config()
@@ -347,8 +351,8 @@ class SchedulerCommonTest(unittest.TestCase):
             new_output = new_scheduler.step(residual, time_step, sample,
                                             **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
     def test_from_save_pretrained(self):
         kwargs = dict(self.forward_default_kwargs)
@@ -357,9 +361,10 @@ class SchedulerCommonTest(unittest.TestCase):
 
         for scheduler_class in self.scheduler_classes:
             timestep = 1
-            if scheduler_class in (EulerAncestralDiscreteScheduler,
-                                   EulerDiscreteScheduler, LMSDiscreteScheduler
-                                   ):
+            if scheduler_class in (
+                    EulerAncestralDiscreteScheduler,
+                    EulerDiscreteScheduler,
+                    LMSDiscreteScheduler, ):
                 timestep = float(timestep)
 
             scheduler_config = self.get_scheduler_config()
@@ -398,8 +403,8 @@ class SchedulerCommonTest(unittest.TestCase):
             new_output = new_scheduler.step(residual, timestep, sample,
                                             **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
     def test_compatibles(self):
         for scheduler_class in self.scheduler_classes:
@@ -457,9 +462,10 @@ class SchedulerCommonTest(unittest.TestCase):
         timestep_1 = 1
 
         for scheduler_class in self.scheduler_classes:
-            if scheduler_class in (EulerAncestralDiscreteScheduler,
-                                   EulerDiscreteScheduler, LMSDiscreteScheduler
-                                   ):
+            if scheduler_class in (
+                    EulerAncestralDiscreteScheduler,
+                    EulerDiscreteScheduler,
+                    LMSDiscreteScheduler, ):
                 timestep_0 = float(timestep_0)
                 timestep_1 = float(timestep_1)
 
@@ -524,14 +530,15 @@ class SchedulerCommonTest(unittest.TestCase):
         num_inference_steps = kwargs.pop("num_inference_steps", 50)
 
         timestep = 0
-        if len(self.scheduler_classes) > 0 and self.scheduler_classes[
-                0] == IPNDMScheduler:
+        if (len(self.scheduler_classes) > 0 and
+                self.scheduler_classes[0] == IPNDMScheduler):
             timestep = 1
 
         for scheduler_class in self.scheduler_classes:
-            if scheduler_class in (EulerAncestralDiscreteScheduler,
-                                   EulerDiscreteScheduler, LMSDiscreteScheduler
-                                   ):
+            if scheduler_class in (
+                    EulerAncestralDiscreteScheduler,
+                    EulerDiscreteScheduler,
+                    LMSDiscreteScheduler, ):
                 timestep = float(timestep)
 
             scheduler_config = self.get_scheduler_config()
@@ -618,8 +625,9 @@ class SchedulerCommonTest(unittest.TestCase):
 
     def test_deprecated_kwargs(self):
         for scheduler_class in self.scheduler_classes:
-            has_kwarg_in_model_class = "kwargs" in inspect.signature(
-                scheduler_class.__init__).parameters
+            has_kwarg_in_model_class = (
+                "kwargs" in
+                inspect.signature(scheduler_class.__init__).parameters)
             has_deprecated_kwarg = len(scheduler_class._deprecated_kwargs) > 0
 
             if has_kwarg_in_model_class and not has_deprecated_kwarg:
@@ -695,6 +703,7 @@ class SchedulerCommonTest(unittest.TestCase):
             with self.assertRaises(AttributeError) as error:
                 scheduler.does_not_exist
 
-            assert str(
-                error.exception
-            ) == f"'{type(scheduler).__name__}' object has no attribute 'does_not_exist'"
+            assert (
+                str(error.exception) ==
+                f"'{type(scheduler).__name__}' object has no attribute 'does_not_exist'"
+            )
