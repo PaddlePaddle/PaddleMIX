@@ -118,17 +118,7 @@ class Blip2PretrainedModel(PretrainedModel):
 
     def _init_weights(self, module):
         """Initialize the weights"""
-        factor = self.config.initializer_range
-        if isinstance(module, nn.Conv2D) or isinstance(module, nn.Embedding) or isinstance(module, nn.Linear):
-            normal_(module.weight, mean=0.0, std=factor)
-            if hasattr(module, "bias") and module.bias is not None:
-                zeros_(module.bias)
-
-        elif isinstance(module, nn.LayerNorm):
-            zeros_(module.bias)
-            ones_(module.weight)
-        elif isinstance(module, nn.Linear) and module.bias is not None:
-            zeros_(module.bias)
+        pass
 
     @classmethod
     def init_tokenizer(cls, tokenizer_name="bert-base-uncased"):
@@ -425,7 +415,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                     raise NotImplementedError
             else:
                 if "t5" in config.text_config:
-                    language_model = T5ForConditionalGeneration(
+                    language_model = T5ForConditionalGeneration.from_pretrained(
                         config.text_config, load_state_as_np=True, mp_degree=config.mp_degree
                     )
                 else:

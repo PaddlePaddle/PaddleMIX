@@ -16,8 +16,8 @@ import collections
 import json
 import os
 
-from paddlevlp.utils.env import DATA_HOME
-from paddlevlp.utils.log import logger
+from paddlemix.utils.env import DATA_HOME
+from paddlemix.utils.log import logger
 
 from .dataset import DatasetBuilder
 
