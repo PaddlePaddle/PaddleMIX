@@ -6,11 +6,12 @@
 
 ```python
 from paddlemix import Appflow
-from PIL import Image
+from ppdiffusers.utils import load_image
 task = Appflow(app="auto_label",
                models=["paddlemix/blip2-caption-opt2.7b","GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024"]
                )
-image_pil = Image.open("beauty.png").convert("RGB")
+url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+image_pil = load_image(url)
 result = task(image=image_pil)
 ```
 

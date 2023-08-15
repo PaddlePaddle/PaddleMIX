@@ -78,7 +78,7 @@ python setup.py install
 
 ### 一键预测
 
-PaddleMIX提供[一键预测功能]()，无需训练，直接输入数据即可输出结果：
+PaddleMIX提供一键预测功能，无需训练，直接输入数据即可输出结果：
 
 ```python
 >>> from paddlemix import Appflow

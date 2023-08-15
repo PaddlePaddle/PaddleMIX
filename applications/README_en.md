@@ -78,7 +78,7 @@ Taking open world detection segmentation as an example:
 
 ### Appflow
 
-PaddleMIX provides [Appflow]() without training, and can directly input data to output results:
+PaddleMIX provides Appflow without training, and can directly input data to output results:
 
 ```python
 >>> from paddlemix import Appflow

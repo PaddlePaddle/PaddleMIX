@@ -3,7 +3,7 @@
 ```python
 from paddlemix import Appflow
 from PIL import Image
-from ppdiffusers.utils import load_image
+
 
 prompt = "An astronaut riding a horse."
 
@@ -21,4 +21,3 @@ imageio.mimsave("text_to_video_generation-synth-result-astronaut_riding_a_horse.
 | An astronaut riding a horse.|![text_to_video_generation-synth-result-astronaut_riding_a_horse](https://github.com/LokeZhou/PaddleMIX/assets/13300429/21a21062-4ec3-489a-971b-7daa4305106e) |
 
 </div>
-
