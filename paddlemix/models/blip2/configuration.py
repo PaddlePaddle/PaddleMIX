@@ -108,12 +108,12 @@ class Blip2VisionConfig(PretrainedConfig):
         self.epsilon = epsilon
         self.gradient_checkpointing = gradient_checkpointing
 
-        self.in_chans = kwargs.get("in_chans", 3)
-        self.class_num = kwargs.get("class_num", 1000)
-        self.qk_scale = kwargs.get("qk_scale", None)
-        self.attn_drop_rate = kwargs.get("attn_drop_rate=", 0.0)
-        self.drop_path_rate = kwargs.get("drop_path_rate", 0.0)
-        self.norm_layer = kwargs.get("norm_layer", "nn.LayerNorm")
+        self.in_chans = kwargs.get('in_chans', 3)
+        self.class_num = kwargs.get('class_num', 1000)
+        self.qk_scale = kwargs.get('qk_scale', None)
+        self.attn_drop_rate = kwargs.get('attn_drop_rate=', 0.)
+        self.drop_path_rate = kwargs.get('drop_path_rate', 0.)
+        self.norm_layer = kwargs.get('norm_layer', 'nn.LayerNorm')
 
     @classmethod
     def from_pretrained(cls,
@@ -336,7 +336,7 @@ class Blip2Config(PretrainedConfig):
         # self.use_decoder_only_language_model = self.text_config.model_type in CONFIGURATION_MODEL_MAPPING
         self.initializer_factor = 1.0
         self.initializer_range = 0.02
-        self.freeze_vit = kwargs.get("freeze_vit", True)
+        self.freeze_vit = kwargs.get('freeze_vit', True)
 
     @classmethod
     def from_vision_qformer_text_configs(
