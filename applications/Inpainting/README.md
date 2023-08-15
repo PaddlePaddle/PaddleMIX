@@ -46,3 +46,32 @@ result = task(image=image_pil,inpaint_prompt="bus is changed to A school bus par
 | ![bus](https://github.com/LokeZhou/PaddleMIX/assets/13300429/95f73037-097e-4712-95be-17d5ca489f11) |  bus is changed to A school bus parked on the roadside | ![chat_inpainting_seg](https://github.com/LokeZhou/PaddleMIX/assets/13300429/dedf9943-6ef2-42df-b4ad-b8336208b283)| ![chat_inpainting](https://github.com/LokeZhou/PaddleMIX/assets/13300429/1e3c2cdb-8202-41ee-acc9-b56e6b53005c)|
 
 </div>
+
+### 文本引导的图像编辑（Text-Guided Image Inpainting)
+
+```python
+from paddlemix import Appflow
+from PIL import Image
+from ppdiffusers.utils import load_image
+img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
+
+image = load_image(img_url)
+mask_image = load_image(mask_url)
+paddle.seed(1024)
+
+prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
+
+app = Appflow(app='inpainting',models=['stabilityai/stable-diffusion-2-inpainting'])
+image = app(inpaint_prompt=prompt,image=image,seg_masks=mask_image)['result']
+
+image.save("a_yellow_cat.png")
+```
+
+<div align="center">
+
+| Input Image | Inpaint Prompt | Mask | Inpaint Image |
+|:----:|:----:|:----:|:----:|
+|  | Face of a yellow cat, high resolution, sitting on a park bench| | |
+
+</div>
