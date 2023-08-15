@@ -1,20 +1,38 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
-import numpy as np
-from tqdm import tqdm
-import paddle
+
 import cv2
+import numpy as np
+import paddle
+from tqdm import tqdm
 
 try:
     import accimage
 except ImportError:
     accimage = None
-from PIL import Image
-from typing import Any, Dict, List, Optional, Tuple, Union
 import math
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+from PIL import Image
+
 try:
     import av
+
     av.logging.set_level(av.logging.ERROR)
-    if not hasattr(av.video.frame.VideoFrame, 'pict_type'):
+    if not hasattr(av.video.frame.VideoFrame, "pict_type"):
         av = ImportError(
             """Your version of PyAV is too old for the necessary video operations."""
         )
@@ -28,15 +46,16 @@ def _check_av_available() -> None:
         raise av
 
 
-def write_video(filename: str,
-                video_array: paddle.Tensor,
-                fps: float,
-                video_codec: str='libx264',
-                options: Optional[Dict[str, Any]]=None,
-                audio_array: Optional[paddle.Tensor]=None,
-                audio_fps: Optional[float]=None,
-                audio_codec: Optional[str]=None,
-                audio_options: Optional[Dict[str, Any]]=None) -> None:
+def write_video(
+        filename: str,
+        video_array: paddle.Tensor,
+        fps: float,
+        video_codec: str="libx264",
+        options: Optional[Dict[str, Any]]=None,
+        audio_array: Optional[paddle.Tensor]=None,
+        audio_fps: Optional[float]=None,
+        audio_codec: Optional[str]=None,
+        audio_options: Optional[Dict[str, Any]]=None, ) -> None:
     """
     Writes a 4d tensor in [T, H, W, C] format in a video file
 
@@ -54,36 +73,36 @@ def write_video(filename: str,
         audio_options (Dict): dictionary containing options to be passed into the PyAV audio stream
     """
     _check_av_available()
-    video_array = paddle.to_tensor(data=video_array).astype('uint8').numpy()
+    video_array = paddle.to_tensor(data=video_array).astype("uint8").numpy()
     if isinstance(fps, float):
         fps = np.round(fps)
-    with av.open(filename, mode='w') as container:
+    with av.open(filename, mode="w") as container:
         stream = container.add_stream(video_codec, rate=fps)
         stream.width = video_array.shape[2]
         stream.height = video_array.shape[1]
-        stream.pix_fmt = 'yuv420p' if video_codec != 'libx264rgb' else 'rgb24'
+        stream.pix_fmt = "yuv420p" if video_codec != "libx264rgb" else "rgb24"
         stream.options = options or {}
         if audio_array is not None:
             audio_format_dtypes = {
-                'dbl': '<f8',
-                'dblp': '<f8',
-                'flt': '<f4',
-                'fltp': '<f4',
-                's16': '<i2',
-                's16p': '<i2',
-                's32': '<i4',
-                's32p': '<i4',
-                'u8': 'u1',
-                'u8p': 'u1'
+                "dbl": "<f8",
+                "dblp": "<f8",
+                "flt": "<f4",
+                "fltp": "<f4",
+                "s16": "<i2",
+                "s16p": "<i2",
+                "s32": "<i4",
+                "s32p": "<i4",
+                "u8": "u1",
+                "u8p": "u1",
             }
             a_stream = container.add_stream(audio_codec, rate=audio_fps)
             a_stream.options = audio_options or {}
             num_channels = audio_array.shape[0]
-            audio_layout = 'stereo' if num_channels > 1 else 'mono'
+            audio_layout = "stereo" if num_channels > 1 else "mono"
             audio_sample_fmt = container.streams.audio[0].format.name
             format_dtype = np.dtype(audio_format_dtypes[audio_sample_fmt])
-            audio_array = paddle.to_tensor(
-                data=audio_array).numpy().astype(format_dtype)
+            audio_array = (
+                paddle.to_tensor(data=audio_array).numpy().astype(format_dtype))
             frame = av.AudioFrame.from_ndarray(
                 audio_array, format=audio_sample_fmt, layout=audio_layout)
             frame.sample_rate = audio_fps
@@ -92,8 +111,8 @@ def write_video(filename: str,
             for packet in a_stream.encode():
                 container.mux(packet)
         for img in video_array:
-            frame = av.VideoFrame.from_ndarray(img, format='rgb24')
-            frame.pict_type = 'NONE'
+            frame = av.VideoFrame.from_ndarray(img, format="rgb24")
+            frame.pict_type = "NONE"
             for packet in stream.encode(frame):
                 container.mux(packet)
         for packet in stream.encode():
@@ -101,13 +120,14 @@ def write_video(filename: str,
 
 
 @paddle.no_grad()
-def make_grid(tensor: Union[paddle.Tensor, List[paddle.Tensor]],
-              nrow: int=8,
-              padding: int=2,
-              normalize: bool=False,
-              value_range: Optional[Tuple[int, int]]=None,
-              scale_each: bool=False,
-              pad_value: float=0.0) -> paddle.Tensor:
+def make_grid(
+        tensor: Union[paddle.Tensor, List[paddle.Tensor]],
+        nrow: int=8,
+        padding: int=2,
+        normalize: bool=False,
+        value_range: Optional[Tuple[int, int]]=None,
+        scale_each: bool=False,
+        pad_value: float=0.0, ) -> paddle.Tensor:
     """
     Make a grid of images.
 
@@ -134,11 +154,11 @@ def make_grid(tensor: Union[paddle.Tensor, List[paddle.Tensor]],
             for t in tensor:
                 if not paddle.is_tensor(x=t):
                     raise TypeError(
-                        f'tensor or list of tensors expected, got a list containing {type(t)}'
+                        f"tensor or list of tensors expected, got a list containing {type(t)}"
                     )
         else:
             raise TypeError(
-                f'tensor or list of tensors expected, got {type(tensor)}')
+                f"tensor or list of tensors expected, got {type(tensor)}")
     if isinstance(tensor, list):
         tensor = paddle.stack(x=tensor, axis=0)
     if tensor.dim() == 2:
@@ -153,7 +173,7 @@ def make_grid(tensor: Union[paddle.Tensor, List[paddle.Tensor]],
         tensor = tensor.clone()
         if value_range is not None and not isinstance(value_range, tuple):
             raise TypeError(
-                'value_range has to be a tuple (min, max) if specified. min and max are numbers'
+                "value_range has to be a tuple (min, max) if specified. min and max are numbers"
             )
 
         def norm_ip(img, low, high):
@@ -172,7 +192,7 @@ def make_grid(tensor: Union[paddle.Tensor, List[paddle.Tensor]],
         else:
             norm_range(tensor, value_range)
     if not isinstance(tensor, paddle.Tensor):
-        raise TypeError('tensor should be of type torch.Tensor')
+        raise TypeError("tensor should be of type torch.Tensor")
     if tensor.shape[0] == 1:
         return tensor.squeeze(axis=0)
     nmaps = tensor.shape[0]
@@ -184,7 +204,7 @@ def make_grid(tensor: Union[paddle.Tensor, List[paddle.Tensor]],
     grid = paddle.full(
         shape=(num_channels, height * ymaps + padding, width * xmaps + padding),
         fill_value=pad_value,
-        dtype=tensor.dtype)
+        dtype=tensor.dtype, )
     k = 0
     for y in range(ymaps):
         for x in range(xmaps):
@@ -192,16 +212,18 @@ def make_grid(tensor: Union[paddle.Tensor, List[paddle.Tensor]],
                 break
             start_0 = (grid.shape[1] + y * height + padding
                        if y * height + padding < 0 else y * height + padding)
-            start_1 = (paddle.slice(grid, [1], [start_0], [
-                start_0 + height - padding
-            ]).shape[2] + x * width + padding
+            start_1 = (paddle.slice(grid, [1], [start_0],
+                                    [start_0 + height - padding]).shape[2] + x *
+                       width + padding
                        if x * width + padding < 0 else x * width + padding)
             paddle.assign(
                 tensor[k],
                 output=paddle.slice(
                     paddle.slice(grid, [1], [start_0],
-                                 [start_0 + height - padding]), [2], [start_1],
-                    [start_1 + width - padding]))
+                                 [start_0 + height - padding]),
+                    [2],
+                    [start_1],
+                    [start_1 + width - padding], ), )
             k = k + 1
     return grid
 
@@ -243,13 +265,13 @@ def to_tensor(pic) -> paddle.Tensor:
             return paddle.divide(
                 img.cast(default_float_dtype),
                 paddle.to_tensor(
-                    255, dtype=paddle.float32))
+                    255, dtype=paddle.float32), )
         else:
             return img
-    mode_to_nptype = {'I': np.int32, 'I;16': np.int16, 'F': np.float32}
+    mode_to_nptype = {"I": np.int32, "I;16": np.int16, "F": np.float32}
     img = paddle.to_tensor(data=np.array(
         pic, mode_to_nptype.get(pic.mode, np.uint8), copy=True))
-    if pic.mode == '1':
+    if pic.mode == "1":
         img = 255 * img
     img = img.reshape([pic.size[1], pic.size[0], get_image_num_channels(pic)])
     img = img.transpose(perm=(2, 0, 1))
@@ -261,7 +283,7 @@ def to_tensor(pic) -> paddle.Tensor:
 
 def load_num_videos(data_path, num_videos):
     if isinstance(data_path, str):
-        videos = np.load(data_path)['arr_0']
+        videos = np.load(data_path)["arr_0"]
     elif isinstance(data_path, np.ndarray):
         videos = data_path
     else:
@@ -276,19 +298,21 @@ def fill_with_black_squares(video, desired_len: int) -> paddle.Tensor:
         return video
     return paddle.concat(
         x=[
-            video, paddle.zeros_like(x=video[0]).unsqueeze(
-                axis=0).tile(repeat_times=[desired_len - len(video), 1, 1, 1])
+            video,
+            paddle.zeros_like(x=video[0]).unsqueeze(axis=0)
+            .tile(repeat_times=[desired_len - len(video), 1, 1, 1]),
         ],
-        axis=0)
+        axis=0, )
 
 
-def npz_to_video_grid(data_path,
-                      out_path,
-                      num_frames=None,
-                      fps=8,
-                      num_videos=None,
-                      nrow=None,
-                      verbose=True):
+def npz_to_video_grid(
+        data_path,
+        out_path,
+        num_frames=None,
+        fps=8,
+        num_videos=None,
+        nrow=None,
+        verbose=True, ):
     if isinstance(data_path, str):
         videos = load_num_videos(data_path, num_videos)
     elif isinstance(data_path, np.ndarray):
@@ -311,7 +335,7 @@ def npz_to_video_grid(data_path,
         videos = [
             fill_with_black_squares(v, num_frames)
             for v in tqdm(
-                videos_th, desc='Adding empty frames')
+                videos_th, desc="Adding empty frames")
         ]
     else:
         videos = [fill_with_black_squares(v, num_frames) for v in videos_th]
@@ -322,39 +346,39 @@ def npz_to_video_grid(data_path,
         frame_grids = [
             make_grid(
                 fs, nrow=nrow) for fs in tqdm(
-                    frame_grids, desc='Making grids')
+                    frame_grids, desc="Making grids")
         ]
 
     else:
         frame_grids = [make_grid(fs, nrow=nrow) for fs in frame_grids]
 
-    if os.path.dirname(out_path) != '':
+    if os.path.dirname(out_path) != "":
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    if isinstance('uint8', paddle.dtype):
-        dtype = 'uint8'
-    elif isinstance('uint8',
-                    str) and 'uint8' not in ['cpu', 'cuda', 'ipu', 'xpu']:
-        dtype = 'uint8'
-    elif isinstance('uint8', paddle.Tensor):
-        dtype = 'uint8'.dtype
+    if isinstance("uint8", paddle.dtype):
+        dtype = "uint8"
+    elif isinstance("uint8",
+                    str) and "uint8" not in ["cpu", "cuda", "ipu", "xpu"]:
+        dtype = "uint8"
+    elif isinstance("uint8", paddle.Tensor):
+        dtype = "uint8".dtype
     else:
         dtype = (paddle.stack(x=frame_grids) * 255).dtype
-    frame_grids = (paddle.stack(x=frame_grids) * 255).transpose(
-        perm=[0, 2, 3, 1]).cast(dtype)
+    frame_grids = ((paddle.stack(x=frame_grids) * 255).transpose(
+        perm=[0, 2, 3, 1]).cast(dtype))
     write_video(
         out_path,
         frame_grids,
         fps=fps,
-        video_codec='h264',
-        options={'crf': '10'})
+        video_codec="h264",
+        options={"crf": "10"})
 
 
 def savenp2sheet(imgs, savepath, nrow=None):
-    """ save multiple imgs (in numpy array type) to a img sheet.
+    """save multiple imgs (in numpy array type) to a img sheet.
         img sheet is one row.
 
-    imgs: 
-        np array of size [N, H, W, 3] or List[array] with array size = [H,W,3] 
+    imgs:
+        np array of size [N, H, W, 3] or List[array] with array size = [H,W,3]
     """
     if imgs.ndim == 4:
         img_list = [imgs[i] for i in range(imgs.shape[0])]
@@ -379,54 +403,55 @@ def savenp2sheet(imgs, savepath, nrow=None):
         for i in range(n_rows)
     ])
     cv2.imwrite(savepath, imgsheet)
-    print(f'saved in {savepath}')
+    print(f"saved in {savepath}")
 
 
 def npz_to_imgsheet_5d(data_path, res_dir, nrow=None):
     if isinstance(data_path, str):
-        imgs = np.load(data_path)['arr_0']
+        imgs = np.load(data_path)["arr_0"]
     elif isinstance(data_path, np.ndarray):
         imgs = data_path
     else:
         raise Exception
     if os.path.isdir(res_dir):
-        res_path = os.path.join(res_dir, f'samples.jpg')
+        res_path = os.path.join(res_dir, f"samples.jpg")
     else:
-        assert res_dir.endswith('.jpg')
+        assert res_dir.endswith(".jpg")
         res_path = res_dir
     imgs = np.concatenate([imgs[i] for i in range(imgs.shape[0])], axis=0)
     savenp2sheet(imgs, res_path, nrow=nrow)
 
 
-def save_results(videos,
-                 save_dir,
-                 save_name='results',
-                 save_fps=8,
-                 save_mp4=True,
-                 save_npz=False,
-                 save_mp4_sheet=False,
-                 save_jpg=False):
+def save_results(
+        videos,
+        save_dir,
+        save_name="results",
+        save_fps=8,
+        save_mp4=True,
+        save_npz=False,
+        save_mp4_sheet=False,
+        save_jpg=False, ):
     if save_mp4:
-        save_subdir = os.path.join(save_dir, 'videos')
+        save_subdir = os.path.join(save_dir, "videos")
         os.makedirs(save_subdir, exist_ok=True)
-        shape_str = 'x'.join([str(x) for x in videos[0:1, (...)].shape])
+        shape_str = "x".join([str(x) for x in videos[0:1, (...)].shape])
         for i in range(videos.shape[0]):
             npz_to_video_grid(
                 videos[i:i + 1, (...)],
                 os.path.join(save_subdir,
-                             f'{save_name}_{i:03d}_{shape_str}.mp4'),
-                fps=save_fps)
-        print(f'Successfully saved videos in {save_subdir}')
-    shape_str = 'x'.join([str(x) for x in videos.shape])
+                             f"{save_name}_{i:03d}_{shape_str}.mp4"),
+                fps=save_fps, )
+        print(f"Successfully saved videos in {save_subdir}")
+    shape_str = "x".join([str(x) for x in videos.shape])
     if save_npz:
-        save_path = os.path.join(save_dir, f'{save_name}_{shape_str}.npz')
+        save_path = os.path.join(save_dir, f"{save_name}_{shape_str}.npz")
         np.savez(save_path, videos)
-        print(f'Successfully saved npz in {save_path}')
+        print(f"Successfully saved npz in {save_path}")
     if save_mp4_sheet:
-        save_path = os.path.join(save_dir, f'{save_name}_{shape_str}.mp4')
+        save_path = os.path.join(save_dir, f"{save_name}_{shape_str}.mp4")
         npz_to_video_grid(videos, save_path, fps=save_fps)
-        print(f'Successfully saved mp4 sheet in {save_path}')
+        print(f"Successfully saved mp4 sheet in {save_path}")
     if save_jpg:
-        save_path = os.path.join(save_dir, f'{save_name}_{shape_str}.jpg')
+        save_path = os.path.join(save_dir, f"{save_name}_{shape_str}.jpg")
         npz_to_imgsheet_5d(videos, save_path, nrow=videos.shape[1])
-        print(f'Successfully saved jpg sheet in {save_path}')
+        print(f"Successfully saved jpg sheet in {save_path}")

@@ -19,21 +19,17 @@ import unittest
 
 import numpy as np
 import paddle
+from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionConfig
 from PIL import Image
 
-from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionConfig
-from ppdiffusers import (
-    AutoencoderKL,
-    PaintByExamplePipeline,
-    PNDMScheduler,
-    UNet2DConditionModel, )
+from ppdiffusers import (AutoencoderKL, PaintByExamplePipeline, PNDMScheduler,
+                         UNet2DConditionModel)
 from ppdiffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
 from ppdiffusers.utils import floats_tensor, load_image, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..pipeline_params import (
-    IMAGE_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
-    IMAGE_GUIDED_IMAGE_INPAINTING_PARAMS, )
+from ..pipeline_params import (IMAGE_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
+                               IMAGE_GUIDED_IMAGE_INPAINTING_PARAMS)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -99,8 +95,9 @@ class PaintByExamplePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image = image.cpu().transpose(perm=[0, 2, 3, 1])[0]
         init_image = Image.fromarray(np.uint8(image)).convert("RGB").resize(
             (64, 64))
-        mask_image = Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
-            (64, 64))
+        mask_image = (
+            Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
+                (64, 64)))
         example_image = Image.fromarray(np.uint8(image)).convert("RGB").resize(
             (32, 32))
         generator = paddle.Generator().manual_seed(seed)
@@ -126,8 +123,15 @@ class PaintByExamplePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.82595694, 0.51862055, 0.5474039, 0.2411496, 0.20220888, 0.3430622,
-            0.3558151, 0.06606945, 0.4550809
+            0.82595694,
+            0.51862055,
+            0.5474039,
+            0.2411496,
+            0.20220888,
+            0.3430622,
+            0.3558151,
+            0.06606945,
+            0.4550809,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 

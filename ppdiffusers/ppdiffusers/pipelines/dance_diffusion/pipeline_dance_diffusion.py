@@ -67,7 +67,8 @@ class DanceDiffusionPipeline(DiffusionPipeline):
             True, otherwise a `tuple. When returning a tuple, the first element is a list with the generated images.
         """
         if audio_length_in_s is None:
-            audio_length_in_s = self.unet.config.sample_size / self.unet.config.sample_rate
+            audio_length_in_s = (self.unet.config.sample_size /
+                                 self.unet.config.sample_rate)
         sample_size = audio_length_in_s * self.unet.config.sample_rate
         down_scale_factor = 2**len(self.unet.up_blocks)
         if sample_size < 3 * down_scale_factor:

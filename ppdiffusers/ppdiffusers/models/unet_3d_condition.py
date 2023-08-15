@@ -26,14 +26,9 @@ from .attention_processor import AttentionProcessor, AttnProcessor
 from .embeddings import TimestepEmbedding, Timesteps
 from .modeling_utils import ModelMixin
 from .transformer_temporal import TransformerTemporalModel
-from .unet_3d_blocks import (
-    CrossAttnDownBlock3D,
-    CrossAttnUpBlock3D,
-    DownBlock3D,
-    UNetMidBlock3DCrossAttn,
-    UpBlock3D,
-    get_down_block,
-    get_up_block, )
+from .unet_3d_blocks import (CrossAttnDownBlock3D, CrossAttnUpBlock3D,
+                             DownBlock3D, UNetMidBlock3DCrossAttn, UpBlock3D,
+                             get_down_block, get_up_block)
 
 logger = logging.get_logger(__name__)
 
@@ -93,9 +88,11 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin,
                 "CrossAttnDownBlock3D",
                 "CrossAttnDownBlock3D",
                 "DownBlock3D", ),
-            up_block_types: Tuple[str]=("UpBlock3D", "CrossAttnUpBlock3D",
-                                        "CrossAttnUpBlock3D",
-                                        "CrossAttnUpBlock3D"),
+            up_block_types: Tuple[str]=(
+                "UpBlock3D",
+                "CrossAttnUpBlock3D",
+                "CrossAttnUpBlock3D",
+                "CrossAttnUpBlock3D", ),
             block_out_channels: Tuple[int]=(320, 640, 1280, 1280),
             layers_per_block: int=2,
             downsample_padding: int=1,
@@ -298,8 +295,8 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin,
             # make smallest slice possible
             slice_size = num_sliceable_layers * [1]
 
-        slice_size = num_sliceable_layers * [slice_size] if not isinstance(
-            slice_size, list) else slice_size
+        slice_size = (num_sliceable_layers * [slice_size]
+                      if not isinstance(slice_size, list) else slice_size)
 
         if len(slice_size) != len(sliceable_head_dims):
             raise ValueError(
@@ -371,8 +368,9 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin,
         self.set_attn_processor(AttnProcessor())
 
     def _set_gradient_checkpointing(self, module, value=False):
-        if isinstance(module, (CrossAttnDownBlock3D, DownBlock3D,
-                               CrossAttnUpBlock3D, UpBlock3D)):
+        if isinstance(
+                module,
+            (CrossAttnDownBlock3D, DownBlock3D, CrossAttnUpBlock3D, UpBlock3D)):
             module.gradient_checkpointing = value
 
     def forward(
@@ -459,8 +457,8 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin,
         # 3. down
         down_block_res_samples = (sample, )
         for downsample_block in self.down_blocks:
-            if hasattr(downsample_block, "has_cross_attention"
-                       ) and downsample_block.has_cross_attention:
+            if (hasattr(downsample_block, "has_cross_attention") and
+                    downsample_block.has_cross_attention):
                 sample, res_samples = downsample_block(
                     hidden_states=sample,
                     temb=emb,
@@ -476,7 +474,8 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin,
             new_down_block_res_samples = ()
             for down_block_res_sample, down_block_additional_residual in zip(
                     down_block_res_samples, down_block_additional_residuals):
-                down_block_res_sample = down_block_res_sample + down_block_additional_residual
+                down_block_res_sample = (
+                    down_block_res_sample + down_block_additional_residual)
                 new_down_block_res_samples += (down_block_res_sample, )
             down_block_res_samples = new_down_block_res_samples
         # 4. mid
@@ -500,8 +499,8 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin,
             # upsample size, we do it here
             if not is_final_block and forward_upsample_size:
                 upsample_size = down_block_res_samples[-1].shape[2:]
-            if hasattr(upsample_block, "has_cross_attention"
-                       ) and upsample_block.has_cross_attention:
+            if (hasattr(upsample_block, "has_cross_attention") and
+                    upsample_block.has_cross_attention):
                 sample = upsample_block(
                     hidden_states=sample,
                     temb=emb,
@@ -524,8 +523,9 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin,
             sample = self.conv_act(sample)
         sample = self.conv_out(sample)
         # reshape to (batch, channel, framerate, width, height)
-        sample = sample[None, :].reshape((-1, num_frames) + tuple(sample.shape[
-            1:])).transpose([0, 2, 1, 3, 4])
+        sample = (sample[None, :]
+                  .reshape((-1, num_frames) + tuple(sample.shape[1:]))
+                  .transpose([0, 2, 1, 3, 4]))
         if not return_dict:
             return (sample, )
         return UNet3DConditionOutput(sample=sample)

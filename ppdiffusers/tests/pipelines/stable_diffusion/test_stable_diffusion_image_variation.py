@@ -19,24 +19,20 @@ import unittest
 
 import numpy as np
 import paddle
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPVisionConfig,
+                                    CLIPVisionModelWithProjection)
 from PIL import Image
-from ..pipeline_params import (
-    IMAGE_VARIATION_BATCH_PARAMS,
-    IMAGE_VARIATION_PARAMS, )
-from ..test_pipelines_common import PipelineTesterMixin
 
-from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPVisionConfig,
-    CLIPVisionModelWithProjection, )
-from ppdiffusers import (
-    AutoencoderKL,
-    DPMSolverMultistepScheduler,
-    PNDMScheduler,
-    StableDiffusionImageVariationPipeline,
-    UNet2DConditionModel, )
-from ppdiffusers.utils import floats_tensor, load_image, load_numpy, nightly, slow
+from ppdiffusers import (AutoencoderKL, DPMSolverMultistepScheduler,
+                         PNDMScheduler, StableDiffusionImageVariationPipeline,
+                         UNet2DConditionModel)
+from ppdiffusers.utils import (floats_tensor, load_image, load_numpy, nightly,
+                               slow)
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
+
+from ..pipeline_params import (IMAGE_VARIATION_BATCH_PARAMS,
+                               IMAGE_VARIATION_PARAMS)
+from ..test_pipelines_common import PipelineTesterMixin
 
 
 class StableDiffusionImageVariationPipelineFastTests(PipelineTesterMixin,
@@ -111,8 +107,15 @@ class StableDiffusionImageVariationPipelineFastTests(PipelineTesterMixin,
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.22073305, 0.22751817, 0.32176197, 0.26315716, 0.25681925,
-            0.41432184, 0.2454437, 0.10104704, 0.32165903
+            0.22073305,
+            0.22751817,
+            0.32176197,
+            0.26315716,
+            0.25681925,
+            0.41432184,
+            0.2454437,
+            0.10104704,
+            0.32165903,
         ])
 
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
@@ -128,8 +131,15 @@ class StableDiffusionImageVariationPipelineFastTests(PipelineTesterMixin,
         image_slice = image[-1, -3:, -3:, -1]
         assert image.shape == (2, 64, 64, 3)
         expected_slice = np.array([
-            0.61040395, 0.7414253, 0.5950623, 0.5843509, 0.25609648, 0.28481025,
-            0.61782926, 0.3014974, 0.35131538
+            0.61040395,
+            0.7414253,
+            0.5950623,
+            0.5843509,
+            0.25609648,
+            0.28481025,
+            0.61782926,
+            0.3014974,
+            0.35131538,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
@@ -193,8 +203,15 @@ class StableDiffusionImageVariationPipelineSlowTests(unittest.TestCase):
                 assert latents.shape == (1, 4, 64, 64)
                 latents_slice = latents[0, -3:, -3:, -1]
                 expected_slice = np.array([
-                    -0.1621, 0.2837, -0.7979, -0.1221, -1.3057, 0.7681, -2.1191,
-                    0.0464, 1.6309
+                    -0.1621,
+                    0.2837,
+                    -0.7979,
+                    -0.1221,
+                    -1.3057,
+                    0.7681,
+                    -2.1191,
+                    0.0464,
+                    1.6309,
                 ])
                 assert np.abs(latents_slice.flatten() - expected_slice).max(
                 ) < 0.05
@@ -203,8 +220,15 @@ class StableDiffusionImageVariationPipelineSlowTests(unittest.TestCase):
                 assert latents.shape == (1, 4, 64, 64)
                 latents_slice = latents[0, -3:, -3:, -1]
                 expected_slice = np.array([
-                    0.6299, 1.75, 1.1992, -2.1582, -1.8994, 0.7334, -0.709,
-                    1.0137, 1.5273
+                    0.6299,
+                    1.75,
+                    1.1992,
+                    -2.1582,
+                    -1.8994,
+                    0.7334,
+                    -0.709,
+                    1.0137,
+                    1.5273,
                 ])
                 assert np.abs(latents_slice.flatten() - expected_slice).max(
                 ) < 0.05
@@ -213,7 +237,7 @@ class StableDiffusionImageVariationPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionImageVariationPipeline.from_pretrained(
             "fusing/sd-image-variations-diffusers",
             safety_checker=None,
-            paddle_dtype=paddle.float16)
+            paddle_dtype=paddle.float16, )
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
         inputs = self.get_inputs(dtype="float16")

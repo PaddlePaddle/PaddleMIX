@@ -15,11 +15,8 @@
 
 import paddle
 import paddle.nn.functional as F
-
-from paddlenlp.transformers import (
-    CLIPPretrainedModel,
-    CLIPVisionConfig,
-    CLIPVisionModel, )
+from paddlenlp.transformers import (CLIPPretrainedModel, CLIPVisionConfig,
+                                    CLIPVisionModel)
 
 from ...utils import logging
 
@@ -42,7 +39,7 @@ class SafeStableDiffusionSafetyChecker(CLIPPretrainedModel):
 
         self.vision_projection = paddle.create_parameter(
             (config.hidden_size, config.projection_dim),
-            dtype=paddle.get_default_dtype())
+            dtype=paddle.get_default_dtype(), )
 
         self.register_buffer("concept_embeds",
                              paddle.ones([17, config.projection_dim]))
@@ -58,10 +55,11 @@ class SafeStableDiffusionSafetyChecker(CLIPPretrainedModel):
         image_embeds = paddle.matmul(pooled_output, self.vision_projection)
 
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloa16
-        special_cos_dist = cosine_distance(
-            image_embeds, self.special_care_embeds).astype("float32").numpy()
-        cos_dist = cosine_distance(
-            image_embeds, self.concept_embeds).astype("float32").numpy()
+        special_cos_dist = (
+            cosine_distance(image_embeds, self.special_care_embeds)
+            .astype("float32").numpy())
+        cos_dist = (cosine_distance(
+            image_embeds, self.concept_embeds).astype("float32").numpy())
 
         result = []
         batch_size = image_embeds.shape[0]
@@ -70,7 +68,7 @@ class SafeStableDiffusionSafetyChecker(CLIPPretrainedModel):
                 "special_scores": {},
                 "special_care": [],
                 "concept_scores": {},
-                "bad_concepts": []
+                "bad_concepts": [],
             }
 
             # increase this value to create a stronger `nfsw` filter
@@ -118,7 +116,8 @@ class SafeStableDiffusionSafetyChecker(CLIPPretrainedModel):
         # at the cost of increasing the possibility of filtering benign images
         adjustment = 0.0
 
-        special_scores = special_cos_dist - self.special_care_embeds_weights + adjustment
+        special_scores = (
+            special_cos_dist - self.special_care_embeds_weights + adjustment)
         # special_scores = special_scores.round(decimals=3)
         special_care = paddle.any(special_scores > 0, axis=1)
         special_adjustment = special_care * 0.01

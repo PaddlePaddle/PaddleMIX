@@ -19,11 +19,8 @@ from typing import List, Optional, Union
 import numpy as np
 import paddle
 
-from ...utils import (
-    BaseOutput,
-    OptionalDependencyNotAvailable,
-    is_paddle_available,
-    is_paddlenlp_available, )
+from ...utils import (BaseOutput, OptionalDependencyNotAvailable,
+                      is_paddle_available, is_paddlenlp_available)
 
 
 @dataclass

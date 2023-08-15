@@ -22,31 +22,19 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 import paddle.optimizer
 import PIL
-
-from paddlenlp.transformers import (
-    BlipForConditionalGeneration,
-    BlipProcessor,
-    CLIPImageProcessor,
-    CLIPTextModel,
-    CLIPTokenizer, )
+from paddlenlp.transformers import (BlipForConditionalGeneration, BlipProcessor,
+                                    CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...loaders import TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...models.attention_processor import Attention
-from ...schedulers import (
-    DDIMScheduler,
-    DDPMScheduler,
-    EulerAncestralDiscreteScheduler,
-    LMSDiscreteScheduler, )
+from ...schedulers import (DDIMScheduler, DDPMScheduler,
+                           EulerAncestralDiscreteScheduler,
+                           LMSDiscreteScheduler)
 from ...schedulers.scheduling_ddim_inverse import DDIMInverseScheduler
-from ...utils import (
-    PIL_INTERPOLATION,
-    BaseOutput,
-    deprecate,
-    logging,
-    randint_tensor,
-    randn_tensor,
-    replace_example_docstring, )
+from ...utils import (PIL_INTERPOLATION, BaseOutput, deprecate, logging,
+                      randint_tensor, randn_tensor, replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
@@ -333,7 +321,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             unet: UNet2DConditionModel,
             scheduler: Union[DDPMScheduler, DDIMScheduler,
                              EulerAncestralDiscreteScheduler,
-                             LMSDiscreteScheduler],
+                             LMSDiscreteScheduler, ],
             feature_extractor: CLIPImageProcessor,
             safety_checker: StableDiffusionSafetyChecker,
             inverse_scheduler: DDIMInverseScheduler,
@@ -434,8 +422,8 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -485,8 +473,8 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -590,16 +578,20 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             )
 
     #  Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = (batch_size, num_channels_latents, height //
-                 self.vae_scale_factor, width // self.vae_scale_factor)
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
+        shape = (
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor, )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -699,7 +691,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                     "len(prompt) != len(image)",
                     "1.0.0",
                     deprecation_message,
-                    standard_warn=False)
+                    standard_warn=False, )
                 additional_latents_per_image = batch_size // latents.shape[0]
                 latents = paddle.concat(
                     [latents] * additional_latents_per_image, axis=0)
@@ -921,8 +913,8 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -965,8 +957,8 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -1158,13 +1150,13 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
         self.unet = prepare_unet(self.unet)
 
         # 7. Denoising loop where we obtain the cross-attention maps.
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.inverse_scheduler.order
+        num_warmup_steps = (
+            len(timesteps) - num_inference_steps * self.inverse_scheduler.order)
         with self.progress_bar(total=num_inference_steps - 1) as progress_bar:
             for i, t in enumerate(timesteps[:-1]):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.inverse_scheduler.scale_model_input(
                     latent_model_input, t)
 

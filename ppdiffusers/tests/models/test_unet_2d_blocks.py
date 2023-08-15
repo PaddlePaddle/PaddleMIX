@@ -16,27 +16,13 @@
 import unittest
 
 from ppdiffusers.models.unet_2d_blocks import (
-    AttnDownBlock2D,
-    AttnDownEncoderBlock2D,
-    AttnSkipDownBlock2D,
-    AttnSkipUpBlock2D,
-    AttnUpBlock2D,
-    AttnUpDecoderBlock2D,
-    CrossAttnDownBlock2D,
-    CrossAttnUpBlock2D,
-    DownBlock2D,
-    DownEncoderBlock2D,
-    ResnetDownsampleBlock2D,
-    ResnetUpsampleBlock2D,
-    SimpleCrossAttnDownBlock2D,
-    SimpleCrossAttnUpBlock2D,
-    SkipDownBlock2D,
-    SkipUpBlock2D,
-    UNetMidBlock2D,
-    UNetMidBlock2DCrossAttn,
-    UNetMidBlock2DSimpleCrossAttn,
-    UpBlock2D,
-    UpDecoderBlock2D, )
+    AttnDownBlock2D, AttnDownEncoderBlock2D, AttnSkipDownBlock2D,
+    AttnSkipUpBlock2D, AttnUpBlock2D, AttnUpDecoderBlock2D,
+    CrossAttnDownBlock2D, CrossAttnUpBlock2D, DownBlock2D, DownEncoderBlock2D,
+    ResnetDownsampleBlock2D, ResnetUpsampleBlock2D, SimpleCrossAttnDownBlock2D,
+    SimpleCrossAttnUpBlock2D, SkipDownBlock2D, SkipUpBlock2D, UNetMidBlock2D,
+    UNetMidBlock2DCrossAttn, UNetMidBlock2DSimpleCrossAttn, UpBlock2D,
+    UpDecoderBlock2D)
 
 from .test_unet_blocks_common import UNetBlockTesterMixin
 

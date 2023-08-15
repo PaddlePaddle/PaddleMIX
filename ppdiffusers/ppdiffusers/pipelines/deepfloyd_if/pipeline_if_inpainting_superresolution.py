@@ -22,19 +22,14 @@ import numpy as np
 import paddle
 import paddle.nn.functional as F
 import PIL
-
-from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, T5EncoderModel,
+                                    T5Tokenizer)
 
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
-from ...utils import (
-    BACKENDS_MAPPING,
-    PIL_INTERPOLATION,
-    is_bs4_available,
-    is_ftfy_available,
-    logging,
-    randn_tensor,
-    replace_example_docstring, )
+from ...utils import (BACKENDS_MAPPING, PIL_INTERPOLATION, is_bs4_available,
+                      is_ftfy_available, logging, randn_tensor,
+                      replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import IFPipelineOutput
 from .safety_checker import IFSafetyChecker
@@ -141,8 +136,11 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         "\|" + "\\" + "\/" + "\*" + r"]{1,}")  # noqa
 
     _optional_components = [
-        "tokenizer", "text_encoder", "safety_checker", "feature_extractor",
-        "watermarker"
+        "tokenizer",
+        "text_encoder",
+        "safety_checker",
+        "feature_extractor",
+        "watermarker",
     ]
 
     def __init__(
@@ -678,15 +676,15 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             image = numpy_to_pd(image)  # to pd
 
         elif isinstance(image[0], np.ndarray):
-            image = np.concatenate(
+            image = (np.concatenate(
                 image, axis=0) if image[0].ndim == 4 else np.stack(
-                    image, axis=0)
+                    image, axis=0))
             image = numpy_to_pd(image)
 
         elif isinstance(image[0], paddle.Tensor):
-            image = paddle.concat(
+            image = (paddle.concat(
                 image, axis=0) if image[0].ndim == 4 else paddle.stack(
-                    image, axis=0)
+                    image, axis=0))
 
         return image
 
@@ -790,14 +788,15 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         return timesteps, num_inference_steps - t_start
 
     # Copied from ppdiffusers.pipelines.deepfloyd_if.pipeline_if_inpainting.IFInpaintingPipeline.prepare_intermediate_images
-    def prepare_intermediate_images(self,
-                                    image,
-                                    timestep,
-                                    batch_size,
-                                    num_images_per_prompt,
-                                    dtype,
-                                    mask_image,
-                                    generator=None):
+    def prepare_intermediate_images(
+            self,
+            image,
+            timestep,
+            batch_size,
+            num_images_per_prompt,
+            dtype,
+            mask_image,
+            generator=None, ):
         image_batch_size, channels, height, width = image.shape
 
         batch_size = batch_size * num_images_per_prompt
@@ -826,9 +825,9 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             image: Union[PIL.Image.Image, np.ndarray, paddle.Tensor],
             original_image: Union[PIL.Image.Image, paddle.Tensor, np.ndarray,
                                   List[PIL.Image.Image], List[
-                                      paddle.Tensor], List[np.ndarray]]=None,
+                                      paddle.Tensor], List[np.ndarray], ]=None,
             mask_image: Union[PIL.Image.Image, paddle.Tensor, np.ndarray, List[
-                PIL.Image.Image], List[paddle.Tensor], List[np.ndarray]]=None,
+                PIL.Image.Image], List[paddle.Tensor], List[np.ndarray], ]=None,
             strength: float=0.8,
             prompt: Union[str, List[str]]=None,
             num_inference_steps: int=100,
@@ -1045,11 +1044,10 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
                         intermediate_images,
                         upscaled.cast(intermediate_images.dtype)
                     ],
-                    axis=1)
+                    axis=1, )
 
-                model_input = paddle.concat(
-                    [model_input] *
-                    2) if do_classifier_free_guidance else model_input
+                model_input = (paddle.concat([model_input] * 2)
+                               if do_classifier_free_guidance else model_input)
                 model_input = self.scheduler.scale_model_input(model_input, t)
 
                 # predict the noise residual
@@ -1067,15 +1065,16 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
                         [
                             model_input.shape[1] // 2,
                             noise_pred_uncond.shape[1] - model_input.shape[1] //
-                            2
+                            2,
                         ],
-                        axis=1)
+                        axis=1, )
                     noise_pred_text, predicted_variance = noise_pred_text.split(
                         [
                             model_input.shape[1] // 2,
-                            noise_pred_text.shape[1] - model_input.shape[1] // 2
+                            noise_pred_text.shape[1] - model_input.shape[1] //
+                            2,
                         ],
-                        axis=1)
+                        axis=1, )
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
                     noise_pred = paddle.concat(
@@ -1137,4 +1136,4 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
         return IFPipelineOutput(
             images=image,
             nsfw_detected=nsfw_detected,
-            watermark_detected=watermark_detected)
+            watermark_detected=watermark_detected, )

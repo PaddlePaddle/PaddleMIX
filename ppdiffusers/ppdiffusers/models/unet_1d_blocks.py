@@ -20,7 +20,8 @@ import paddle.nn.functional as F
 from paddle import nn
 
 from ..utils import is_ppxformers_available
-from .resnet import Downsample1D, ResidualTemporalBlock1D, Upsample1D, rearrange_dims
+from .resnet import (Downsample1D, ResidualTemporalBlock1D, Upsample1D,
+                     rearrange_dims)
 
 
 class DownResnetBlock1D(nn.Layer):
@@ -288,8 +289,14 @@ class OutValueFunctionBlock(nn.Layer):
 _kernels = {
     "linear": [1 / 8, 3 / 8, 3 / 8, 1 / 8],
     "cubic": [
-        -0.01171875, -0.03515625, 0.11328125, 0.43359375, 0.43359375,
-        0.11328125, -0.03515625, -0.01171875
+        -0.01171875,
+        -0.03515625,
+        0.11328125,
+        0.43359375,
+        0.43359375,
+        0.11328125,
+        -0.03515625,
+        -0.01171875,
     ],
     "lanczos3": [
         0.003689131001010537,
@@ -325,7 +332,7 @@ class Downsample1d(nn.Layer):
                 hidden_states.shape[1], hidden_states.shape[1],
                 self.kernel.shape[0]
             ],
-            dtype=hidden_states.dtype)
+            dtype=hidden_states.dtype, )
         indices = paddle.arange(hidden_states.shape[1])
         weight[indices, indices] = self.kernel.cast(weight.dtype)
         return F.conv1d(hidden_states, weight, stride=2)
@@ -348,7 +355,7 @@ class Upsample1d(nn.Layer):
                 hidden_states.shape[1], hidden_states.shape[1],
                 self.kernel.shape[0]
             ],
-            dtype=hidden_states.dtype)
+            dtype=hidden_states.dtype, )
         indices = paddle.arange(hidden_states.shape[1])
         weight[indices, indices] = self.kernel.cast(weight.dtype)
         return F.conv1d_transpose(
@@ -390,7 +397,7 @@ class SelfAttention1d(nn.Layer):
     def set_use_memory_efficient_attention_xformers(
             self,
             use_memory_efficient_attention_xformers: bool,
-            attention_op: Optional[str]=None):
+            attention_op: Optional[str]=None, ):
         # remove this PR: https://github.com/PaddlePaddle/Paddle/pull/56045
         # if self.head_size > 128 and attention_op == "flash":
         #     attention_op = "cutlass"
@@ -412,7 +419,8 @@ class SelfAttention1d(nn.Layer):
                 except Exception as e:
                     raise e
 
-        self._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
+        self._use_memory_efficient_attention_xformers = (
+            use_memory_efficient_attention_xformers)
         self._attention_op = attention_op
 
     def forward(self, hidden_states):
@@ -446,8 +454,8 @@ class SelfAttention1d(nn.Layer):
                 training=self.training,
                 attention_op=self._attention_op, )
         else:
-            attention_scores = paddle.matmul(
-                query_proj, key_proj, transpose_y=True) * self.scale
+            attention_scores = (paddle.matmul(
+                query_proj, key_proj, transpose_y=True) * self.scale)
             attention_probs = F.softmax(
                 attention_scores.cast("float32"),
                 axis=-1).cast(attention_scores.dtype)
@@ -488,8 +496,8 @@ class ResConvBlock(nn.Layer):
             self.gelu_2 = nn.GELU()
 
     def forward(self, hidden_states):
-        residual = self.conv_skip(
-            hidden_states) if self.has_conv_skip else hidden_states
+        residual = (self.conv_skip(hidden_states)
+                    if self.has_conv_skip else hidden_states)
 
         hidden_states = self.conv_1(hidden_states)
         hidden_states = self.group_norm_1(hidden_states)
@@ -704,8 +712,13 @@ class UpBlock1DNoSkip(nn.Layer):
         return hidden_states
 
 
-def get_down_block(down_block_type, num_layers, in_channels, out_channels,
-                   temb_channels, add_downsample):
+def get_down_block(
+        down_block_type,
+        num_layers,
+        in_channels,
+        out_channels,
+        temb_channels,
+        add_downsample, ):
     if down_block_type == "DownResnetBlock1D":
         return DownResnetBlock1D(
             in_channels=in_channels,
@@ -743,8 +756,14 @@ def get_up_block(up_block_type, num_layers, in_channels, out_channels,
     raise ValueError(f"{up_block_type} does not exist.")
 
 
-def get_mid_block(mid_block_type, num_layers, in_channels, mid_channels,
-                  out_channels, embed_dim, add_downsample):
+def get_mid_block(
+        mid_block_type,
+        num_layers,
+        in_channels,
+        mid_channels,
+        out_channels,
+        embed_dim,
+        add_downsample, ):
     if mid_block_type == "MidResTemporalBlock1D":
         return MidResTemporalBlock1D(
             num_layers=num_layers,
@@ -761,7 +780,7 @@ def get_mid_block(mid_block_type, num_layers, in_channels, mid_channels,
         return UNetMidBlock1D(
             in_channels=in_channels,
             mid_channels=mid_channels,
-            out_channels=out_channels)
+            out_channels=out_channels, )
     raise ValueError(f"{mid_block_type} does not exist.")
 
 

@@ -40,7 +40,7 @@ class BottleneckResnetBlock(paddle.nn.Layer):
                 out_channels=mid_c,
                 kernel_size=proj_ksize,
                 stride=1,
-                padding=proj_pad)
+                padding=proj_pad, )
         else:
             self.conv1 = None
         if out_c != mid_c:
@@ -49,7 +49,7 @@ class BottleneckResnetBlock(paddle.nn.Layer):
                 out_channels=out_c,
                 kernel_size=proj_ksize,
                 stride=1,
-                padding=proj_pad)
+                padding=proj_pad, )
         else:
             self.conv2 = None
         self.block1 = paddle.nn.Conv2D(
@@ -64,14 +64,14 @@ class BottleneckResnetBlock(paddle.nn.Layer):
             out_channels=mid_c,
             kernel_size=ksize,
             stride=1,
-            padding=ps)
+            padding=ps, )
         if sk is False:
             self.conv_shortcut = paddle.nn.Conv2D(
                 in_channels=in_c,
                 out_channels=mid_c,
                 kernel_size=ksize,
                 stride=1,
-                padding=ps)
+                padding=ps, )
         else:
             self.conv_shortcut = None
         self.down = down

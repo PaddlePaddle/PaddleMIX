@@ -17,18 +17,14 @@ from collections import OrderedDict
 
 import paddle
 import torch
-from diffusers import (StableDiffusionUpscalePipeline as
-                       DiffusersStableDiffusionUpscalePipeline, )
-
+from diffusers import \
+    StableDiffusionUpscalePipeline as DiffusersStableDiffusionUpscalePipeline
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DDPMScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler, )
-from ppdiffusers import (StableDiffusionUpscalePipeline as
-                         PPDiffusersStableDiffusionUpscalePipeline, )
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
+                         LMSDiscreteScheduler, PNDMScheduler)
+from ppdiffusers import \
+    StableDiffusionUpscalePipeline as PPDiffusersStableDiffusionUpscalePipeline
 from ppdiffusers import UNet2DConditionModel
 
 paddle.set_device("cpu")

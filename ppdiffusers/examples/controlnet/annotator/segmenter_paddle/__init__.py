@@ -39,7 +39,7 @@ def parse_args():
         dest="model_path",
         help="The path of model for prediction",
         type=str,
-        default=None)
+        default=None, )
     parser.add_argument(
         "--image_path",
         dest="image_path",
@@ -65,7 +65,7 @@ def parse_args():
         nargs="+",
         help="Scales for augment",
         type=float,
-        default=1.0)
+        default=1.0, )
     parser.add_argument(
         "--flip_horizontal",
         dest="flip_horizontal",
@@ -75,14 +75,14 @@ def parse_args():
         "--flip_vertical",
         dest="flip_vertical",
         help="Whether to use flip vertically augment",
-        action="store_true")
+        action="store_true", )
 
     # sliding window prediction
     parser.add_argument(
         "--is_slide",
         dest="is_slide",
         help="Whether to prediction by sliding window",
-        action="store_true")
+        action="store_true", )
     parser.add_argument(
         "--crop_size",
         dest="crop_size",
@@ -301,8 +301,8 @@ def get_test_config(cfg, args):
 def main(args):
     env_info = get_sys_env()
 
-    if args.device == "gpu" and env_info[
-            "Paddle compiled with cuda"] and env_info["GPUs used"]:
+    if (args.device == "gpu" and env_info["Paddle compiled with cuda"] and
+            env_info["GPUs used"]):
         place = "gpu"
     elif args.device == "xpu" and paddle.is_compiled_with_xpu():
         place = "xpu"
@@ -340,9 +340,7 @@ def main(args):
         **test_config, )
 
 
-checkpoint_file = (
-    "https://paddleseg.bj.bcebos.com/dygraph/ade20k/segmenter_vit_base_linear_ade20k_512x512_160k/model.pdparams"
-)
+checkpoint_file = "https://paddleseg.bj.bcebos.com/dygraph/ade20k/segmenter_vit_base_linear_ade20k_512x512_160k/model.pdparams"
 
 
 class SegmenterDetector:
@@ -352,7 +350,8 @@ class SegmenterDetector:
         modelpath = os.path.join(segmenter_annotator_ckpts_path,
                                  "model.pdparams")
         if not os.path.exists(modelpath):
-            from paddlenlp.utils.downloader import get_path_from_url_with_filelock
+            from paddlenlp.utils.downloader import \
+                get_path_from_url_with_filelock
 
             get_path_from_url_with_filelock(
                 checkpoint_file, root_dir=segmenter_annotator_ckpts_path)

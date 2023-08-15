@@ -89,8 +89,9 @@ class DeprecateTester(unittest.TestCase):
 
     def test_deprecate_args_no_kwarg(self):
         with self.assertWarns(FutureWarning) as warning:
-            deprecate(("deprecated_arg_1", self.higher_version, "Hey"),
-                      ("deprecated_arg_2", self.higher_version, "Hey"))
+            deprecate(
+                ("deprecated_arg_1", self.higher_version, "Hey"),
+                ("deprecated_arg_2", self.higher_version, "Hey"), )
         assert (
             str(warning.warnings[0].message) ==
             f"`deprecated_arg_1` is deprecated and will be removed in version {self.higher_version}. Hey"
@@ -154,7 +155,7 @@ class DeprecateTester(unittest.TestCase):
             deprecate(
                 ("deprecated_arg", self.higher_version,
                  "This message is better!!!"),
-                standard_warn=False)
+                standard_warn=False, )
         assert str(warning.warning) == "This message is better!!!"
 
     def test_deprecate_stacklevel(self):
@@ -162,6 +163,6 @@ class DeprecateTester(unittest.TestCase):
             deprecate(
                 ("deprecated_arg", self.higher_version,
                  "This message is better!!!"),
-                standard_warn=False)
+                standard_warn=False, )
         assert str(warning.warning) == "This message is better!!!"
         assert "test_utils.py" in warning.filename

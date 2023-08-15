@@ -17,7 +17,6 @@ from typing import Callable, List, Optional, Tuple, Union
 
 import paddle
 import paddle.nn as nn
-
 from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 
 from ...configuration_utils import ConfigMixin, register_to_config
@@ -42,16 +41,18 @@ class LearnedClassifierFreeSamplingEmbeddings(ModelMixin, ConfigMixin):
     """
 
     @register_to_config
-    def __init__(self,
-                 learnable: bool,
-                 hidden_size: Optional[int]=None,
-                 length: Optional[int]=None):
+    def __init__(
+            self,
+            learnable: bool,
+            hidden_size: Optional[int]=None,
+            length: Optional[int]=None, ):
         super().__init__()
 
         self.learnable = learnable
 
         if self.learnable:
-            assert hidden_size is not None, "learnable=True requires `hidden_size` to be set"
+            assert (hidden_size is not None
+                    ), "learnable=True requires `hidden_size` to be set"
             assert length is not None, "learnable=True requires `length` to be set"
 
             embeddings = paddle.zeros([length, hidden_size])
@@ -151,7 +152,8 @@ class VQDiffusionPipeline(DiffusionPipeline):
 
         if do_classifier_free_guidance:
             if self.learned_classifier_free_sampling_embeddings.learnable:
-                negative_prompt_embeds = self.learned_classifier_free_sampling_embeddings.embeddings
+                negative_prompt_embeds = (
+                    self.learned_classifier_free_sampling_embeddings.embeddings)
                 negative_prompt_embeds = negative_prompt_embeds.unsqueeze(
                     0).tile([batch_size, 1, 1])
             else:
@@ -167,8 +169,9 @@ class VQDiffusionPipeline(DiffusionPipeline):
                 negative_prompt_embeds = self.text_encoder(
                     uncond_input.input_ids)[0]
                 # See comment for normalizing text embeddings
-                negative_prompt_embeds = negative_prompt_embeds / negative_prompt_embeds.norm(
-                    axis=-1, keepdim=True)
+                negative_prompt_embeds = (negative_prompt_embeds /
+                                          negative_prompt_embeds.norm(
+                                              axis=-1, keepdim=True))
 
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
@@ -293,8 +296,8 @@ class VQDiffusionPipeline(DiffusionPipeline):
 
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
             # expand the sample if we are doing classifier free guidance
-            latent_model_input = paddle.concat(
-                [sample] * 2) if do_classifier_free_guidance else sample
+            latent_model_input = (paddle.concat([sample] * 2)
+                                  if do_classifier_free_guidance else sample)
 
             # predict the un-noised image
             # model_output == `log_p_x_0`
@@ -324,8 +327,11 @@ class VQDiffusionPipeline(DiffusionPipeline):
                 callback(i, t, sample)
 
         embedding_channels = self.vqvae.config.vq_embed_dim
-        embeddings_shape = (batch_size, self.transformer.height,
-                            self.transformer.width, embedding_channels)
+        embeddings_shape = (
+            batch_size,
+            self.transformer.height,
+            self.transformer.width,
+            embedding_channels, )
         embeddings = self.vqvae.quantize.get_codebook_entry(
             sample, shape=embeddings_shape)
         image = self.vqvae.decode(embeddings, force_not_quantize=True).sample

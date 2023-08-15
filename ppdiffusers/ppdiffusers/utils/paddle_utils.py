@@ -81,8 +81,8 @@ if is_paddle_available():
     @paddle.jit.not_to_static
     def randn_pt(shape, dtype=None, name=None, **kwargs):
         generator = kwargs.get("generator", None)
-        is_bfloat16 = "bfloat16" in str(
-            dtype) or "bfloat16" in paddle.get_default_dtype()
+        is_bfloat16 = ("bfloat16" in str(dtype) or
+                       "bfloat16" in paddle.get_default_dtype())
         if is_bfloat16:
             if generator is None:
                 return randn(

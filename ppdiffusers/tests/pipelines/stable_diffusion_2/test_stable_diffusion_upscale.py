@@ -19,15 +19,11 @@ import unittest
 
 import numpy as np
 import paddle
+from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DDPMScheduler,
-    StableDiffusionUpscalePipeline,
-    UNet2DConditionModel, )
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
+                         StableDiffusionUpscalePipeline, UNet2DConditionModel)
 from ppdiffusers.utils import floats_tensor, load_image, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
@@ -56,8 +52,10 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             sample_size=32,
             in_channels=7,
             out_channels=4,
-            down_block_types=("DownBlock2D", "CrossAttnDownBlock2D",
-                              "CrossAttnDownBlock2D"),
+            down_block_types=(
+                "DownBlock2D",
+                "CrossAttnDownBlock2D",
+                "CrossAttnDownBlock2D", ),
             up_block_types=("CrossAttnUpBlock2D", "CrossAttnUpBlock2D",
                             "UpBlock2D"),
             cross_attention_dim=32,
@@ -76,7 +74,9 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             in_channels=3,
             out_channels=3,
             down_block_types=[
-                "DownEncoderBlock2D", "DownEncoderBlock2D", "DownEncoderBlock2D"
+                "DownEncoderBlock2D",
+                "DownEncoderBlock2D",
+                "DownEncoderBlock2D",
             ],
             up_block_types=[
                 "UpDecoderBlock2D", "UpDecoderBlock2D", "UpDecoderBlock2D"
@@ -149,8 +149,15 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
         assert image.shape == (1, expected_height_width, expected_height_width,
                                3)
         expected_slice = np.array([
-            0.0, 0.0, 0.3616839, 0.0, 0.04877859, 0.59195685, 0.23902711,
-            0.00838843, 0.5172206
+            0.0,
+            0.0,
+            0.3616839,
+            0.0,
+            0.04877859,
+            0.59195685,
+            0.23902711,
+            0.00838843,
+            0.5172206,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
@@ -229,7 +236,7 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             image=low_res_image,
             generator=generator,
             num_inference_steps=2,
-            output_type="np").images
+            output_type="np", ).images
         expected_height_width = low_res_image.size[0] * 4
         assert image.shape == (1, expected_height_width, expected_height_width,
                                3)

@@ -19,11 +19,8 @@ import numpy as np
 import paddle
 import paddle.nn
 
-from ppdiffusers.models.attention import (
-    GEGLU,
-    AdaLayerNorm,
-    ApproximateGELU,
-    AttentionBlock, )
+from ppdiffusers.models.attention import (GEGLU, AdaLayerNorm, ApproximateGELU,
+                                          AttentionBlock)
 from ppdiffusers.models.embeddings import get_timestep_embedding
 from ppdiffusers.models.resnet import Downsample2D, ResnetBlock2D, Upsample2D
 from ppdiffusers.models.transformer_2d import Transformer2DModel
@@ -52,7 +49,7 @@ class EmbeddingsTests(unittest.TestCase):
             embedding_dim,
             flip_sin_to_cos=False,
             downscale_freq_shift=1,
-            max_period=10000)
+            max_period=10000, )
         assert paddle.allclose(t1.cpu(), t2.cpu(), atol=0.01)
 
     def test_timestep_flip_sin_cos(self):
@@ -107,8 +104,15 @@ class EmbeddingsTests(unittest.TestCase):
         assert paddle.allclose(
             t3[23:26, 47:50].flatten().cpu(),
             paddle.to_tensor([
-                -0.9801, -0.9464, -0.9349, -0.3952, 0.8887, -0.9709, 0.5299,
-                -0.2853, -0.9927
+                -0.9801,
+                -0.9464,
+                -0.9349,
+                -0.3952,
+                0.8887,
+                -0.9709,
+                0.5299,
+                -0.2853,
+                -0.9927,
             ]),
             atol=0.01, )
 
@@ -447,7 +451,7 @@ class AttentionBlockTests(unittest.TestCase):
             num_head_channels=1,
             rescale_output_factor=1.0,
             eps=1e-06,
-            norm_num_groups=32)
+            norm_num_groups=32, )
         with paddle.no_grad():
             attention_scores = attentionBlock(sample)
         assert attention_scores.shape == [1, 32, 64, 64]
@@ -502,7 +506,7 @@ class Transformer2DModelTests(unittest.TestCase):
             num_attention_heads=1,
             attention_head_dim=32,
             dropout=0.0,
-            cross_attention_dim=None)
+            cross_attention_dim=None, )
         with paddle.no_grad():
             attention_scores = spatial_transformer_block(sample).sample
         assert attention_scores.shape == [1, 32, 64, 64]
@@ -529,7 +533,7 @@ class Transformer2DModelTests(unittest.TestCase):
             num_attention_heads=2,
             attention_head_dim=32,
             dropout=0.0,
-            cross_attention_dim=64)
+            cross_attention_dim=64, )
         with paddle.no_grad():
             context = paddle.randn(shape=[1, 4, 64])
             attention_scores = spatial_transformer_block(sample, context).sample
@@ -606,7 +610,7 @@ class Transformer2DModelTests(unittest.TestCase):
             num_attention_heads=2,
             attention_head_dim=16,
             dropout=0.3,
-            cross_attention_dim=None).eval()
+            cross_attention_dim=None, ).eval()
         with paddle.no_grad():
             attention_scores = spatial_transformer_block(sample).sample
         assert attention_scores.shape == [1, 32, 64, 64]
@@ -633,7 +637,7 @@ class Transformer2DModelTests(unittest.TestCase):
             num_attention_heads=1,
             attention_head_dim=32,
             num_vector_embeds=num_embed,
-            sample_size=16).eval()
+            sample_size=16, ).eval()
         with paddle.no_grad():
             attention_scores = spatial_transformer_block(sample).sample
         assert attention_scores.shape == [1, num_embed - 1, 32]
@@ -652,74 +656,80 @@ class Transformer2DModelTests(unittest.TestCase):
     def test_spatial_transformer_default_norm_layers(self):
         spatial_transformer_block = Transformer2DModel(
             num_attention_heads=1, attention_head_dim=32, in_channels=32)
-        assert spatial_transformer_block.transformer_blocks[
-            0].norm1.__class__ == paddle.nn.LayerNorm
-        assert spatial_transformer_block.transformer_blocks[
-            0].norm3.__class__ == paddle.nn.LayerNorm
+        assert (spatial_transformer_block.transformer_blocks[0].norm1.__class__
+                == paddle.nn.LayerNorm)
+        assert (spatial_transformer_block.transformer_blocks[0].norm3.__class__
+                == paddle.nn.LayerNorm)
 
     def test_spatial_transformer_ada_norm_layers(self):
         spatial_transformer_block = Transformer2DModel(
             num_attention_heads=1,
             attention_head_dim=32,
             in_channels=32,
-            num_embeds_ada_norm=5)
-        assert spatial_transformer_block.transformer_blocks[
-            0].norm1.__class__ == AdaLayerNorm
-        assert spatial_transformer_block.transformer_blocks[
-            0].norm3.__class__ == paddle.nn.LayerNorm
+            num_embeds_ada_norm=5, )
+        assert (spatial_transformer_block.transformer_blocks[0].norm1.__class__
+                == AdaLayerNorm)
+        assert (spatial_transformer_block.transformer_blocks[0].norm3.__class__
+                == paddle.nn.LayerNorm)
 
     def test_spatial_transformer_default_ff_layers(self):
         spatial_transformer_block = Transformer2DModel(
             num_attention_heads=1, attention_head_dim=32, in_channels=32)
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            0].__class__ == GEGLU
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            1].__class__ == paddle.nn.Dropout
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            2].__class__ == paddle.nn.Linear
+        assert (
+            spatial_transformer_block.transformer_blocks[0].ff.net[0].__class__
+            == GEGLU)
+        assert (
+            spatial_transformer_block.transformer_blocks[0].ff.net[1].__class__
+            == paddle.nn.Dropout)
+        assert (
+            spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__
+            == paddle.nn.Linear)
         dim = 32
         inner_dim = 128
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            0].proj.weight.shape[0] == dim
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            0].proj.weight.shape[1] == inner_dim * 2
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            2].weight.shape[0] == inner_dim
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            2].weight.shape[1] == dim
+        assert (spatial_transformer_block.transformer_blocks[0].ff.net[0]
+                .proj.weight.shape[0] == dim)
+        assert (spatial_transformer_block.transformer_blocks[0].ff.net[0]
+                .proj.weight.shape[1] == inner_dim * 2)
+        assert (spatial_transformer_block.transformer_blocks[0].ff.net[2]
+                .weight.shape[0] == inner_dim)
+        assert (spatial_transformer_block.transformer_blocks[0].ff.net[2]
+                .weight.shape[1] == dim)
 
     def test_spatial_transformer_geglu_approx_ff_layers(self):
         spatial_transformer_block = Transformer2DModel(
             num_attention_heads=1,
             attention_head_dim=32,
             in_channels=32,
-            activation_fn="geglu-approximate")
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            0].__class__ == ApproximateGELU
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            1].__class__ == paddle.nn.Dropout
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            2].__class__ == paddle.nn.Linear
+            activation_fn="geglu-approximate", )
+        assert (
+            spatial_transformer_block.transformer_blocks[0].ff.net[0].__class__
+            == ApproximateGELU)
+        assert (
+            spatial_transformer_block.transformer_blocks[0].ff.net[1].__class__
+            == paddle.nn.Dropout)
+        assert (
+            spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__
+            == paddle.nn.Linear)
         dim = 32
         inner_dim = 128
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            0].proj.weight.shape[0] == dim
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            0].proj.weight.shape[1] == inner_dim
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            2].weight.shape[0] == inner_dim
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[
-            2].weight.shape[1] == dim
+        assert (spatial_transformer_block.transformer_blocks[0].ff.net[0]
+                .proj.weight.shape[0] == dim)
+        assert (spatial_transformer_block.transformer_blocks[0].ff.net[0]
+                .proj.weight.shape[1] == inner_dim)
+        assert (spatial_transformer_block.transformer_blocks[0].ff.net[2]
+                .weight.shape[0] == inner_dim)
+        assert (spatial_transformer_block.transformer_blocks[0].ff.net[2]
+                .weight.shape[1] == dim)
 
     def test_spatial_transformer_attention_bias(self):
         spatial_transformer_block = Transformer2DModel(
             num_attention_heads=1,
             attention_head_dim=32,
             in_channels=32,
-            attention_bias=True)
-        assert spatial_transformer_block.transformer_blocks[
-            0].attn1.to_q.bias is not None
-        assert spatial_transformer_block.transformer_blocks[
-            0].attn1.to_k.bias is not None
-        assert spatial_transformer_block.transformer_blocks[
-            0].attn1.to_v.bias is not None
+            attention_bias=True, )
+        assert (spatial_transformer_block.transformer_blocks[0].attn1.to_q.bias
+                is not None)
+        assert (spatial_transformer_block.transformer_blocks[0].attn1.to_k.bias
+                is not None)
+        assert (spatial_transformer_block.transformer_blocks[0].attn1.to_v.bias
+                is not None)

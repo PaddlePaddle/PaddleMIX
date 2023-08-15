@@ -27,37 +27,30 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 from datasets import DatasetDict, load_dataset
 from huggingface_hub import HfFolder, Repository, create_repo, whoami
-from paddle.distributed.fleet.utils.hybrid_parallel_util import (
-    fused_allreduce_gradients, )
+from paddle.distributed.fleet.utils.hybrid_parallel_util import \
+    fused_allreduce_gradients
 from paddle.io import BatchSampler, DataLoader, DistributedBatchSampler
 from paddle.optimizer import AdamW
 from paddle.vision import BaseTransform, transforms
-from tqdm.auto import tqdm
-
 from paddlenlp.trainer import set_seed
 from paddlenlp.transformers import AutoTokenizer, PretrainedConfig
 from paddlenlp.utils.downloader import get_path_from_url_with_filelock
 from paddlenlp.utils.log import logger
-from ppdiffusers import (
-    AutoencoderKL,
-    DDPMScheduler,
-    DiffusionPipeline,
-    UNet2DConditionModel,
-    is_ppxformers_available, )
+from tqdm.auto import tqdm
+
+from ppdiffusers import (AutoencoderKL, DDPMScheduler, DiffusionPipeline,
+                         UNet2DConditionModel, is_ppxformers_available)
 from ppdiffusers.optimization import get_scheduler
-from ppdiffusers.training_utils import (
-    EMAModel,
-    freeze_params,
-    main_process_first,
-    unwrap_model, )
+from ppdiffusers.training_utils import (EMAModel, freeze_params,
+                                        main_process_first, unwrap_model)
 from ppdiffusers.utils import PPDIFFUSERS_CACHE, check_min_version
 
 check_min_version("0.16.1")
 
 
 def url_or_path_join(*path_list):
-    return os.path.join(*path_list) if os.path.isdir(os.path.join(
-        *path_list)) else "/".join(path_list)
+    return (os.path.join(*path_list)
+            if os.path.isdir(os.path.join(*path_list)) else "/".join(path_list))
 
 
 class Lambda(BaseTransform):
@@ -82,8 +75,8 @@ def import_model_class_from_model_name_or_path(
 
         return CLIPTextModel
     elif model_class == "RobertaSeriesModelWithTransformation":
-        from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
-            RobertaSeriesModelWithTransformation, )
+        from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import \
+            RobertaSeriesModelWithTransformation
 
         return RobertaSeriesModelWithTransformation
     elif model_class == "BertModel":
@@ -91,8 +84,8 @@ def import_model_class_from_model_name_or_path(
 
         return BertModel
     elif model_class == "LDMBertModel":
-        from ppdiffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import (
-            LDMBertModel, )
+        from ppdiffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import \
+            LDMBertModel
 
         return LDMBertModel
     else:
@@ -176,7 +169,7 @@ def parse_args(input_args=None):
         "--image_column",
         type=str,
         default="image",
-        help="The column of the dataset containing an image.")
+        help="The column of the dataset containing an image.", )
     parser.add_argument(
         "--caption_column",
         type=str,
@@ -244,7 +237,7 @@ def parse_args(input_args=None):
         "--train_batch_size",
         type=int,
         default=16,
-        help="Batch size (per device) for the training dataloader.")
+        help="Batch size (per device) for the training dataloader.", )
     parser.add_argument("--num_train_epochs", type=int, default=100)
     parser.add_argument(
         "--max_train_steps",
@@ -286,7 +279,7 @@ def parse_args(input_args=None):
         "--lr_warmup_steps",
         type=int,
         default=500,
-        help="Number of steps for the warmup in the lr scheduler.")
+        help="Number of steps for the warmup in the lr scheduler.", )
     parser.add_argument(
         "--snr_gamma",
         type=float,
@@ -303,7 +296,7 @@ def parse_args(input_args=None):
         "--lr_power",
         type=float,
         default=1.0,
-        help="Power factor of the polynomial scheduler.")
+        help="Power factor of the polynomial scheduler.", )
     parser.add_argument(
         "--use_ema", action="store_true", help="Whether to use EMA model.")
     parser.add_argument(
@@ -321,12 +314,12 @@ def parse_args(input_args=None):
         "--adam_beta1",
         type=float,
         default=0.9,
-        help="The beta1 parameter for the Adam optimizer.")
+        help="The beta1 parameter for the Adam optimizer.", )
     parser.add_argument(
         "--adam_beta2",
         type=float,
         default=0.999,
-        help="The beta2 parameter for the Adam optimizer.")
+        help="The beta2 parameter for the Adam optimizer.", )
     parser.add_argument(
         "--adam_weight_decay",
         type=float,
@@ -336,18 +329,18 @@ def parse_args(input_args=None):
         "--adam_epsilon",
         type=float,
         default=1e-08,
-        help="Epsilon value for the Adam optimizer")
+        help="Epsilon value for the Adam optimizer", )
     parser.add_argument(
         "--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument(
         "--push_to_hub",
         action="store_true",
-        help="Whether or not to push the model to the Hub.")
+        help="Whether or not to push the model to the Hub.", )
     parser.add_argument(
         "--hub_token",
         type=str,
         default=None,
-        help="The token to use to push to the Model Hub.")
+        help="The token to use to push to the Model Hub.", )
     parser.add_argument(
         "--hub_model_id",
         type=str,
@@ -366,7 +359,7 @@ def parse_args(input_args=None):
         type=str,
         default="visualdl",
         choices=["tensorboard", "visualdl"],
-        help="Log writer type.")
+        help="Log writer type.", )
     parser.add_argument(
         "--checkpointing_steps",
         type=int,
@@ -375,7 +368,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--enable_xformers_memory_efficient_attention",
         action="store_true",
-        help="Whether or not to use xformers.")
+        help="Whether or not to use xformers.", )
     parser.add_argument(
         "--noise_offset",
         type=float,
@@ -460,10 +453,10 @@ def main():
         args.pretrained_model_name_or_path, subfolder="scheduler")
     text_encoder = text_encoder_cls.from_pretrained(
         url_or_path_join(args.pretrained_model_name_or_path, "text_encoder"))
-    text_config = text_encoder.config if isinstance(
-        text_encoder.config, dict) else text_encoder.config.to_dict()
-    if text_config.get("use_attention_mask",
-                       None) is not None and text_config["use_attention_mask"]:
+    text_config = (text_encoder.config if isinstance(text_encoder.config, dict)
+                   else text_encoder.config.to_dict())
+    if (text_config.get("use_attention_mask", None) is not None and
+            text_config["use_attention_mask"]):
         use_attention_mask = True
     else:
         use_attention_mask = False
@@ -558,8 +551,8 @@ def main():
     # 6. Get the column names for input/target.
     dataset_columns = DATASET_NAME_MAPPING.get(args.dataset_name, None)
     if args.image_column is None:
-        image_column = dataset_columns[
-            0] if dataset_columns is not None else column_names[0]
+        image_column = (dataset_columns[0]
+                        if dataset_columns is not None else column_names[0])
     else:
         image_column = args.image_column
         if image_column not in column_names:
@@ -567,8 +560,8 @@ def main():
                 f"--image_column' value '{args.image_column}' needs to be one of: {', '.join(column_names)}"
             )
     if args.caption_column is None:
-        caption_column = dataset_columns[
-            1] if dataset_columns is not None else column_names[1]
+        caption_column = (dataset_columns[1]
+                          if dataset_columns is not None else column_names[1])
     else:
         caption_column = args.caption_column
         if caption_column not in column_names:
@@ -619,8 +612,8 @@ def main():
 
     with main_process_first():
         if args.max_train_samples is not None:
-            dataset["train"] = dataset["train"].shuffle(
-                seed=args.seed).select(range(args.max_train_samples))
+            dataset["train"] = (dataset["train"].shuffle(seed=args.seed)
+                                .select(range(args.max_train_samples)))
         # Set the training transforms
         train_dataset = dataset["train"].with_transform(preprocess_train)
 
@@ -628,12 +621,13 @@ def main():
         pixel_values = paddle.stack(
             [example["pixel_values"] for example in examples]).cast("float32")
         input_ids = [example["input_ids"] for example in examples]
-        input_ids = tokenizer.pad({
-            "input_ids": input_ids
-        },
-                                  padding="max_length",
-                                  max_length=tokenizer.model_max_length,
-                                  return_tensors="pd").input_ids
+        input_ids = tokenizer.pad(
+            {
+                "input_ids": input_ids
+            },
+            padding="max_length",
+            max_length=tokenizer.model_max_length,
+            return_tensors="pd", ).input_ids
         return {
             "input_ids": input_ids,
             "pixel_values": pixel_values,
@@ -649,7 +643,7 @@ def main():
         train_dataset,
         batch_sampler=train_sampler,
         collate_fn=collate_fn,
-        num_workers=args.dataloader_num_workers)
+        num_workers=args.dataloader_num_workers, )
 
     # Scheduler and math around the number of training steps.
     num_update_steps_per_epoch = math.ceil(
@@ -702,7 +696,8 @@ def main():
         writer = get_report_to(args)
 
     # Train!
-    total_batch_size = args.train_batch_size * num_processes * args.gradient_accumulation_steps
+    total_batch_size = (args.train_batch_size * num_processes *
+                        args.gradient_accumulation_steps)
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
@@ -767,8 +762,9 @@ def main():
                                                 if sys.version_info >= (3, 7)
                                                 else contextlib.suppress())
             else:
-                unet_ctx_manager = contextlib.nullcontext(
-                ) if sys.version_info >= (3, 7) else contextlib.suppress()
+                unet_ctx_manager = (contextlib.nullcontext()
+                                    if sys.version_info >= (3, 7) else
+                                    contextlib.suppress())
                 text_encoder_ctx_manager = (contextlib.nullcontext()
                                             if sys.version_info >= (3, 7) else
                                             contextlib.suppress())
@@ -803,7 +799,7 @@ def main():
                         loss = F.mse_loss(
                             model_pred.cast("float32"),
                             target.cast("float32"),
-                            reduction="mean")
+                            reduction="mean", )
                     else:
                         # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
                         # Since we predict the noise instead of x_0, the original formulation is slightly changed.
@@ -814,16 +810,16 @@ def main():
                                 snr,
                                 args.snr_gamma * paddle.ones_like(timesteps)
                             ],
-                            axis=1).min(1)[0] / snr)
+                            axis=1, ).min(1)[0] / snr)
                         # We first calculate the original loss. Then we mean over the non-batch dimensions and
                         # rebalance the sample-wise losses with their respective loss weights.
                         # Finally, we take the mean of the rebalanced loss.
                         loss = F.mse_loss(
                             model_pred.cast("float32"),
                             target.cast("float32"),
-                            reduction="none")
-                        loss = loss.mean(axis=list(range(1, len(
-                            loss.shape)))) * mse_loss_weights
+                            reduction="none", )
+                        loss = (loss.mean(axis=list(range(1, len(loss.shape))))
+                                * mse_loss_weights)
                         loss = loss.mean()
 
                     if args.gradient_accumulation_steps > 1:

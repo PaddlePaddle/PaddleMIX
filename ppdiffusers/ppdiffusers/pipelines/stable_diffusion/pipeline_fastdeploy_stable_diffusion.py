@@ -17,13 +17,13 @@ from typing import Callable, Dict, List, Optional, Union
 
 import paddle
 import PIL
-
 from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
 
 from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging
-from ..fastdeploy_utils import FastDeployDiffusionPipelineMixin, FastDeployRuntimeModel
+from ..fastdeploy_utils import (FastDeployDiffusionPipelineMixin,
+                                FastDeployRuntimeModel)
 from . import StableDiffusionPipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -263,8 +263,8 @@ class FastDeployStableDiffusionPipeline(DiffusionPipeline,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 if is_scheduler_support_step_index:
                     latent_model_input = self.scheduler.scale_model_input(
                         latent_model_input, t, step_index=i)
@@ -301,7 +301,7 @@ class FastDeployStableDiffusionPipeline(DiffusionPipeline,
                         latents,
                         step_index=i,
                         return_pred_original_sample=False,
-                        **extra_step_kwargs)
+                        **extra_step_kwargs, )
                 else:
                     scheduler_output = self.scheduler.step(
                         noise_pred, t, latents, **extra_step_kwargs)
@@ -320,7 +320,7 @@ class FastDeployStableDiffusionPipeline(DiffusionPipeline,
         if not output_type == "latent":
             image = self._decode_vae_latents(
                 latents / self.vae_scaling_factor,
-                infer_op=infer_op_dict.get("vae_decoder", None))
+                infer_op=infer_op_dict.get("vae_decoder", None), )
             image, has_nsfw_concept = self.run_safety_checker(image)
         else:
             image = latents

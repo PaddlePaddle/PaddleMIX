@@ -18,11 +18,13 @@ from collections import OrderedDict
 import paddle
 import torch
 from diffusers import LDMTextToImagePipeline as DiffusersLDMTextToImagePipeline
-
 from paddlenlp.transformers import BertTokenizer
+
 from ppdiffusers import AutoencoderKL, DDIMScheduler, LDMBertModel
-from ppdiffusers import LDMTextToImagePipeline as PPDiffusersLDMTextToImagePipeline
-from ppdiffusers import LMSDiscreteScheduler, PNDMScheduler, UNet2DConditionModel
+from ppdiffusers import \
+    LDMTextToImagePipeline as PPDiffusersLDMTextToImagePipeline
+from ppdiffusers import (LMSDiscreteScheduler, PNDMScheduler,
+                         UNet2DConditionModel)
 
 paddle.set_device("cpu")
 
@@ -151,7 +153,7 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(
             bert=pp_bert,
             tokenizer=pp_tokenizer,
             unet=pp_unet,
-            scheduler=pp_scheduler)
+            scheduler=pp_scheduler, )
 
         # 7. save_pretrained
         paddle_pipe.save_pretrained(output_path)

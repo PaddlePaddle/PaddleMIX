@@ -20,27 +20,19 @@ import paddle
 import paddle.nn.functional as F
 import PIL
 from einops import rearrange
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPModel,
+                                    CLIPTextModel, CLIPTokenizer)
 from tqdm import tqdm
 
-from paddlenlp.transformers import (
-    CLIPFeatureExtractor,
-    CLIPModel,
-    CLIPTextModel,
-    CLIPTokenizer, )
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DiffusionPipeline,
-    DPMSolverMultistepScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    UNet2DConditionModel, )
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DiffusionPipeline,
+                         DPMSolverMultistepScheduler, LMSDiscreteScheduler,
+                         PNDMScheduler, UNet2DConditionModel)
 from ppdiffusers.loaders import FromCkptMixin
-from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
-    StableDiffusionPipelineOutput, )
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker, )
-from ppdiffusers.utils import PIL_INTERPOLATION, randn_tensor, logging
+from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import \
+    StableDiffusionPipelineOutput
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
+    StableDiffusionSafetyChecker
+from ppdiffusers.utils import PIL_INTERPOLATION, logging, randn_tensor
 
 logger = logging.get_logger(__name__)
 
@@ -112,7 +104,7 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
             tokenizer: CLIPTokenizer,
             unet: UNet2DConditionModel,
             scheduler: Union[PNDMScheduler, LMSDiscreteScheduler, DDIMScheduler,
-                             DPMSolverMultistepScheduler],
+                             DPMSolverMultistepScheduler, ],
             feature_extractor: CLIPFeatureExtractor,
             safety_checker: StableDiffusionSafetyChecker,
             blip_model=None,
@@ -240,9 +232,9 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
 
     def get_clip_image_embeddings(self, image, batch_size):
         clip_image_input = self.feature_extractor.preprocess(image)
-        clip_image_features = (paddle.to_tensor(
-            data=clip_image_input["pixel_values"][0]).unsqueeze(axis=0).astype(
-                dtype="float16"))
+        clip_image_features = (
+            paddle.to_tensor(data=clip_image_input["pixel_values"][0])
+            .unsqueeze(axis=0).astype(dtype="float16"))
         image_embeddings_clip = self.clip_model.get_image_features(
             clip_image_features)
         image_embeddings_clip = image_embeddings_clip / image_embeddings_clip.norm(
@@ -270,8 +262,9 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
         noise_pred = self.unet(
             latent_model_input, timestep,
             encoder_hidden_states=text_embeddings).sample
-        if isinstance(self.scheduler, (PNDMScheduler, DDIMScheduler,
-                                       DPMSolverMultistepScheduler)):
+        if isinstance(
+                self.scheduler,
+            (PNDMScheduler, DDIMScheduler, DPMSolverMultistepScheduler)):
             alpha_prod_t = self.scheduler.alphas_cumprod[timestep]
             beta_prod_t = 1 - alpha_prod_t
 
@@ -304,9 +297,9 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
         image_embeddings_clip = self.clip_model.get_image_features(image)
         image_embeddings_clip = image_embeddings_clip / image_embeddings_clip.norm(
             p=2, axis=-1, keepdim=True)
-        loss = spherical_dist_loss(
-            image_embeddings_clip,
-            original_image_embeddings_clip).mean() * clip_guidance_scale
+        loss = (spherical_dist_loss(image_embeddings_clip,
+                                    original_image_embeddings_clip).mean() *
+                clip_guidance_scale)
         grads = -paddle.autograd.grad(loss, latents)[0]
         if isinstance(self.scheduler, LMSDiscreteScheduler):
             latents = latents.detach() + grads * sigma**2
@@ -393,13 +386,19 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
 
         # Preprocess image
         preprocessed_content_image = preprocess(content_image, width, height)
-        content_latents = self.prepare_latents(preprocessed_content_image,
-                                               latent_timestep, batch_size,
-                                               text_embeddings.dtype, generator)
+        content_latents = self.prepare_latents(
+            preprocessed_content_image,
+            latent_timestep,
+            batch_size,
+            text_embeddings.dtype,
+            generator, )
         preprocessed_style_image = preprocess(style_image, width, height)
-        style_latents = self.prepare_latents(preprocessed_style_image,
-                                             latent_timestep, batch_size,
-                                             text_embeddings.dtype, generator)
+        style_latents = self.prepare_latents(
+            preprocessed_style_image,
+            latent_timestep,
+            batch_size,
+            text_embeddings.dtype,
+            generator, )
         latents = slerp(slerp_latent_style_strength, content_latents,
                         style_latents)
         if clip_guidance_scale > 0:
@@ -407,9 +406,10 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
                 content_image, batch_size)
             style_clip_image_embedding = self.get_clip_image_embeddings(
                 style_image, batch_size)
-            clip_image_embeddings = slerp(slerp_clip_image_style_strength,
-                                          content_clip_image_embedding,
-                                          style_clip_image_embedding)
+            clip_image_embeddings = slerp(
+                slerp_clip_image_style_strength,
+                content_clip_image_embedding,
+                style_clip_image_embedding, )
 
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
@@ -426,7 +426,7 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
                 uncond_tokens,
                 padding="max_length",
                 max_length=max_length,
-                return_tensors="pd")
+                return_tensors="pd", )
             uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0]
             # duplicate unconditional embeddings for each generation per prompt
             uncond_embeddings = uncond_embeddings.repeat_interleave(
@@ -444,7 +444,10 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
         # for 1-to-1 results reproducibility with the CompVis implementation.
         # However this currently doesn't work in `mps`.
         latents_shape = [
-            batch_size, self.unet.config.in_channels, height // 8, width // 8
+            batch_size,
+            self.unet.config.in_channels,
+            height // 8,
+            width // 8,
         ]
         latents_dtype = text_embeddings.dtype
         if latents is None:
@@ -477,8 +480,8 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
         # with self.progress_bar(total=num_inference_steps):
         for i, t in tqdm(enumerate(timesteps)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(
-                x=[latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = (paddle.concat(x=[latents] * 2)
+                                  if do_classifier_free_guidance else latents)
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
 

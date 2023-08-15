@@ -21,18 +21,12 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-
 from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DDPMScheduler,
-    LDMBertModel,
-    T2IAdapter,
-    UNet2DConditionModel,
-    is_ppxformers_available, )
 
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
+                         LDMBertModel, T2IAdapter, UNet2DConditionModel,
+                         is_ppxformers_available)
 # from ppdiffusers.initializer import reset_initialized_parameter
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.training_utils import freeze_params
@@ -116,7 +110,7 @@ class AdapterLDM(nn.Layer):
             beta_start=0.00085,
             beta_end=0.012,
             beta_schedule="scaled_linear",
-            num_train_timesteps=1000)
+            num_train_timesteps=1000, )
         self.eval_scheduler = DDIMScheduler(
             beta_start=0.00085,
             beta_end=0.012,
@@ -130,8 +124,8 @@ class AdapterLDM(nn.Layer):
             self.model_ema = LitEma(self.adapter)
         self.adapter_conditioning_scale = 1.0
 
-        if model_args.enable_xformers_memory_efficient_attention and is_ppxformers_available(
-        ):
+        if (model_args.enable_xformers_memory_efficient_attention and
+                is_ppxformers_available()):
             try:
                 self.unet.enable_xformers_memory_efficient_attention()
                 self.adapter.enable_xformers_memory_efficient_attention()
@@ -193,7 +187,7 @@ class AdapterLDM(nn.Layer):
             t = paddle.to_tensor(
                 generator.randint(
                     0, self.noise_scheduler.num_train_timesteps, size=(bs, )),
-                dtype="int64")
+                dtype="int64", )
         elif timestep_sample_schedule == "cosine":
             t = paddle.to_tensor(generator.rand(bs))
             t = paddle.cos(x=np.pi / 2.0 *
@@ -265,18 +259,19 @@ class AdapterLDM(nn.Layer):
     def decode_control_image(self, adapter_cond=None, **kwargs):
         adapter_cond = self.control_image_processor.process_model_forward(
             adapter_cond)  # (0, 1)
-        return 255 * (adapter_cond.transpose(
-            [0, 2, 3, 1])).cast("float32").numpy().round()
+        return (255 * (adapter_cond.transpose(
+            [0, 2, 3, 1])).cast("float32").numpy().round())
 
     @paddle.no_grad()
-    def log_image(self,
-                  input_ids=None,
-                  adapter_cond=None,
-                  height=512,
-                  width=512,
-                  eta=0.0,
-                  guidance_scale=9,
-                  **kwargs):
+    def log_image(
+            self,
+            input_ids=None,
+            adapter_cond=None,
+            height=512,
+            width=512,
+            eta=0.0,
+            guidance_scale=9,
+            **kwargs, ):
         adapter_cond = self.control_image_processor.process_model_forward(
             adapter_cond)
         self.eval()
@@ -319,8 +314,8 @@ class AdapterLDM(nn.Layer):
 
             for t in self.eval_scheduler.timesteps:
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
 
                 # ddim donot use this
                 latent_model_input = self.eval_scheduler.scale_model_input(

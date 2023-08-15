@@ -137,8 +137,9 @@ def convert_paddle_state_dict_to_pytorch(pd_state_dict, paddle_model: nn.Layer):
             pd_key = pd_key.replace(new_key, old_key)
         if hasattr(paddle_model, "paddle_torch_name_mapping"):
             pd_key = paddle_model.paddle_torch_name_mapping.get(pd_key, pd_key)
-        pytorch_state_dict[pd_key] = pd_tensor.contiguous() if hasattr(
-            pd_tensor, "contiguous") else pd_tensor
+        pytorch_state_dict[pd_key] = (pd_tensor.contiguous()
+                                      if hasattr(pd_tensor, "contiguous") else
+                                      pd_tensor)
     return pytorch_state_dict
 
 

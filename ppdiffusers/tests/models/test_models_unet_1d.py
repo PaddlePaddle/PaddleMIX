@@ -75,8 +75,11 @@ class UNet1DModelTests(ModelTesterMixin, unittest.TestCase):
             "freq_shift": 1.0,
             "out_block_type": "OutConv1DBlock",
             "mid_block_type": "MidResTemporalBlock1D",
-            "down_block_types": ("DownResnetBlock1D", "DownResnetBlock1D",
-                                 "DownResnetBlock1D", "DownResnetBlock1D"),
+            "down_block_types": (
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
+                "DownResnetBlock1D", ),
             "up_block_types":
             ("UpResnetBlock1D", "UpResnetBlock1D", "UpResnetBlock1D"),
             "act_fn": "mish",
@@ -88,7 +91,7 @@ class UNet1DModelTests(ModelTesterMixin, unittest.TestCase):
         model, loading_info = UNet1DModel.from_pretrained(
             "bglick13/hopper-medium-v2-value-function-hor32",
             output_loading_info=True,
-            subfolder="unet")
+            subfolder="unet", )
         self.assertIsNotNone(model)
         self.assertEqual(len(loading_info["missing_keys"]), 0)
         image = model(**self.dummy_input)
@@ -198,8 +201,10 @@ class UNetRLModelTests(ModelTesterMixin, unittest.TestCase):
             "in_channels": 14,
             "out_channels": 14,
             "down_block_types": [
-                "DownResnetBlock1D", "DownResnetBlock1D", "DownResnetBlock1D",
-                "DownResnetBlock1D"
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
             ],
             "up_block_types": [],
             "out_block_type": "ValueFunction",
@@ -220,7 +225,7 @@ class UNetRLModelTests(ModelTesterMixin, unittest.TestCase):
         value_function, vf_loading_info = UNet1DModel.from_pretrained(
             "bglick13/hopper-medium-v2-value-function-hor32",
             output_loading_info=True,
-            subfolder="value_function")
+            subfolder="value_function", )
         self.assertIsNotNone(value_function)
         self.assertEqual(len(vf_loading_info["missing_keys"]), 0)
         image = value_function(**self.dummy_input)
@@ -230,7 +235,7 @@ class UNetRLModelTests(ModelTesterMixin, unittest.TestCase):
         value_function, vf_loading_info = UNet1DModel.from_pretrained(
             "bglick13/hopper-medium-v2-value-function-hor32",
             output_loading_info=True,
-            subfolder="value_function")
+            subfolder="value_function", )
         paddle.seed(0)
         num_features = value_function.config.in_channels
         seq_len = 14

@@ -143,7 +143,7 @@ class PatchEmbed(nn.Layer):
             embed_dim,
             kernel_size=(patch_size, patch_size),
             stride=patch_size,
-            bias_attr=bias)
+            bias_attr=bias, )
         if layer_norm:
             # elementwise_affine=False  -> weight_attr=False, bias_attr=False
             self.norm = nn.LayerNorm(
@@ -158,7 +158,7 @@ class PatchEmbed(nn.Layer):
             self.register_buffer(
                 "pos_embed",
                 paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0),
-                persistable=False)
+                persistable=False, )
 
     def forward(self, latent):
         latent = self.proj(latent)
@@ -258,12 +258,13 @@ class Timesteps(nn.Layer):
 class GaussianFourierProjection(nn.Layer):
     """Gaussian Fourier embeddings for noise levels."""
 
-    def __init__(self,
-                 embedding_size: int=256,
-                 scale: float=1.0,
-                 set_W_to_weight=True,
-                 log=True,
-                 flip_sin_to_cos=False):
+    def __init__(
+            self,
+            embedding_size: int=256,
+            scale: float=1.0,
+            set_W_to_weight=True,
+            log=True,
+            flip_sin_to_cos=False, ):
         super().__init__()
         self.register_buffer("weight", paddle.randn((embedding_size, )) * scale)
         self.log = log
@@ -443,7 +444,7 @@ class AttentionPooling(nn.Layer):
         self.positional_embedding = self.create_parameter(
             (1, embed_dim),
             default_initializer=nn.initializer.Assign(
-                paddle.randn((1, embed_dim)) / embed_dim**0.5))
+                paddle.randn((1, embed_dim)) / embed_dim**0.5), )
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.q_proj = nn.Linear(embed_dim, embed_dim)
         self.v_proj = nn.Linear(embed_dim, embed_dim)

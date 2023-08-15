@@ -146,10 +146,11 @@ class SchedulerMixin:
         return cls.from_config(
             config, return_unused_kwargs=return_unused_kwargs, **kwargs)
 
-    def save_pretrained(self,
-                        save_directory: Union[str, os.PathLike],
-                        push_to_hub: bool=False,
-                        **kwargs):
+    def save_pretrained(
+            self,
+            save_directory: Union[str, os.PathLike],
+            push_to_hub: bool=False,
+            **kwargs, ):
         """
         Save a scheduler configuration object to the directory `save_directory`, so that it can be re-loaded using the
         [`~SchedulerMixin.from_pretrained`] class method.

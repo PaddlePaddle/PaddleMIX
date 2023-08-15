@@ -16,9 +16,9 @@
 import paddle
 from clip_guided_stable_diffusion import CLIPGuidedStableDiffusion
 from IPython.display import display
+from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
 from PIL import Image
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
 from ppdiffusers import LMSDiscreteScheduler, StableDiffusionPipeline
 
 
@@ -32,9 +32,10 @@ def image_grid(imgs, rows, cols):
     return grid
 
 
-def create_clip_guided_pipeline(model_id="CompVis/stable-diffusion-v1-4",
-                                clip_model_id="openai/clip-vit-large-patch14",
-                                scheduler="plms"):
+def create_clip_guided_pipeline(
+        model_id="CompVis/stable-diffusion-v1-4",
+        clip_model_id="openai/clip-vit-large-patch14",
+        scheduler="plms", ):
     pipeline = StableDiffusionPipeline.from_pretrained(
         model_id, paddle_dtype=paddle.float16)
 

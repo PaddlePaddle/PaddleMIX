@@ -35,7 +35,7 @@ def argsparser():
         "--image_dir",
         type=str,
         default=None,
-        help="Dir of image file, `image_file` has a higher priority.")
+        help="Dir of image file, `image_file` has a higher priority.", )
     parser.add_argument(
         "--batch_size", type=int, default=1, help="batch_size for inference.")
     parser.add_argument(
@@ -55,12 +55,12 @@ def argsparser():
         "--output_dir",
         type=str,
         default="output",
-        help="Directory of output visualization files.")
+        help="Directory of output visualization files.", )
     parser.add_argument(
         "--run_mode",
         type=str,
         default="paddle",
-        help="mode of running(paddle/trt_fp32/trt_fp16/trt_int8)")
+        help="mode of running(paddle/trt_fp32/trt_fp16/trt_int8)", )
     parser.add_argument(
         "--device",
         type=str,
@@ -71,7 +71,7 @@ def argsparser():
         "--use_gpu",
         type=ast.literal_eval,
         default=False,
-        help="Deprecated, please use `--device`.")
+        help="Deprecated, please use `--device`.", )
     parser.add_argument(
         "--run_benchmark",
         type=ast.literal_eval,
@@ -81,7 +81,7 @@ def argsparser():
         "--enable_mkldnn",
         type=ast.literal_eval,
         default=False,
-        help="Whether use mkldnn with CPU.")
+        help="Whether use mkldnn with CPU.", )
     parser.add_argument(
         "--enable_mkldnn_bfloat16",
         type=ast.literal_eval,
@@ -111,7 +111,7 @@ def argsparser():
         "--save_images",
         type=ast.literal_eval,
         default=True,
-        help="Save visualization image results.")
+        help="Save visualization image results.", )
     parser.add_argument(
         "--save_mot_txts",
         action="store_true",
@@ -119,7 +119,7 @@ def argsparser():
     parser.add_argument(
         "--save_mot_txt_per_img",
         action="store_true",
-        help="Save tracking results (txt) for each image.")
+        help="Save tracking results (txt) for each image.", )
     parser.add_argument(
         "--scaled",
         type=bool,
@@ -138,7 +138,7 @@ def argsparser():
         "--reid_batch_size",
         type=int,
         default=50,
-        help="max batch_size for reid model inference.")
+        help="max batch_size for reid model inference.", )
     parser.add_argument(
         "--use_dark",
         type=ast.literal_eval,
@@ -149,17 +149,17 @@ def argsparser():
         "--action_file",
         type=str,
         default=None,
-        help="Path of input file for action recognition.")
+        help="Path of input file for action recognition.", )
     parser.add_argument(
         "--window_size",
         type=int,
         default=50,
-        help="Temporal size of skeleton feature for action recognition.")
+        help="Temporal size of skeleton feature for action recognition.", )
     parser.add_argument(
         "--random_pad",
         type=ast.literal_eval,
         default=False,
-        help="Whether do random padding for action recognition.")
+        help="Whether do random padding for action recognition.", )
     parser.add_argument(
         "--save_results",
         action="store_true",
@@ -180,7 +180,7 @@ def argsparser():
         nargs="+",
         type=int,
         default=[640, 640],
-        help="Height of the sliced image.")
+        help="Height of the sliced image.", )
     parser.add_argument(
         "--overlap_ratio",
         nargs="+",
@@ -197,12 +197,12 @@ def argsparser():
         "--match_threshold",
         type=float,
         default=0.6,
-        help="Combine method matching threshold.")
+        help="Combine method matching threshold.", )
     parser.add_argument(
         "--match_metric",
         type=str,
         default="ios",
-        help="Combine method matching metric, choose in ['iou', 'ios'].")
+        help="Combine method matching metric, choose in ['iou', 'ios'].", )
     return parser
 
 
@@ -256,14 +256,14 @@ class Timer(Times):
         print("------------------ Inference Time Info ----------------------")
         print("total_time(ms): {}, img_num: {}".format(total_time * 1000,
                                                        self.img_num))
-        preprocess_time = round(pre_time / max(1, self.img_num),
-                                4) if average else pre_time
-        postprocess_time = round(post_time / max(1, self.img_num),
-                                 4) if average else post_time
-        inference_time = round(infer_time / max(1, self.img_num),
-                               4) if average else infer_time
-        tracking_time = round(track_time / max(1, self.img_num),
-                              4) if average else track_time
+        preprocess_time = (round(pre_time / max(1, self.img_num), 4)
+                           if average else pre_time)
+        postprocess_time = (round(post_time / max(1, self.img_num), 4)
+                            if average else post_time)
+        inference_time = (round(infer_time / max(1, self.img_num), 4)
+                          if average else infer_time)
+        tracking_time = (round(track_time / max(1, self.img_num), 4)
+                         if average else track_time)
 
         average_latency = total_time / max(1, self.img_num)
         qps = 0
@@ -274,13 +274,18 @@ class Timer(Times):
         if self.with_tracker:
             print(
                 "preprocess_time(ms): {:.2f}, inference_time(ms): {:.2f}, postprocess_time(ms): {:.2f}, tracking_time(ms): {:.2f}".
-                format(preprocess_time * 1000, inference_time * 1000,
-                       postprocess_time * 1000, tracking_time * 1000))
+                format(
+                    preprocess_time * 1000,
+                    inference_time * 1000,
+                    postprocess_time * 1000,
+                    tracking_time * 1000, ))
         else:
             print(
                 "preprocess_time(ms): {:.2f}, inference_time(ms): {:.2f}, postprocess_time(ms): {:.2f}".
-                format(preprocess_time * 1000, inference_time * 1000,
-                       postprocess_time * 1000))
+                format(
+                    preprocess_time * 1000,
+                    inference_time * 1000,
+                    postprocess_time * 1000, ))
 
     def report(self, average=False):
         dic = {}
@@ -289,17 +294,18 @@ class Timer(Times):
         post_time = self.postprocess_time_s.value()
         track_time = self.tracking_time_s.value()
 
-        dic["preprocess_time_s"] = round(pre_time / max(1, self.img_num),
-                                         4) if average else pre_time
-        dic["inference_time_s"] = round(infer_time / max(1, self.img_num),
-                                        4) if average else infer_time
-        dic["postprocess_time_s"] = round(post_time / max(1, self.img_num),
-                                          4) if average else post_time
+        dic["preprocess_time_s"] = (round(pre_time / max(1, self.img_num), 4)
+                                    if average else pre_time)
+        dic["inference_time_s"] = (round(infer_time / max(1, self.img_num), 4)
+                                   if average else infer_time)
+        dic["postprocess_time_s"] = (round(post_time / max(1, self.img_num), 4)
+                                     if average else post_time)
         dic["img_num"] = self.img_num
         total_time = pre_time + infer_time + post_time
         if self.with_tracker:
-            dic["tracking_time_s"] = round(track_time / max(1, self.img_num),
-                                           4) if average else track_time
+            dic["tracking_time_s"] = (
+                round(track_time / max(1, self.img_num), 4)
+                if average else track_time)
             total_time = total_time + track_time
         dic["total_time_s"] = round(total_time, 4)
         return dic

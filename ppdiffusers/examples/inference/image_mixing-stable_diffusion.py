@@ -17,8 +17,8 @@ from io import BytesIO
 import paddle
 import PIL
 import requests
-
 from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
+
 from ppdiffusers import DiffusionPipeline
 
 

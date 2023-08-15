@@ -19,20 +19,16 @@ import unittest
 
 import numpy as np
 import paddle
+from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    PNDMScheduler,
-    StableDiffusionInpaintPipeline,
-    UNet2DConditionModel, )
+from ppdiffusers import (AutoencoderKL, PNDMScheduler,
+                         StableDiffusionInpaintPipeline, UNet2DConditionModel)
 from ppdiffusers.utils import floats_tensor, load_image
 from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
 
-from ..pipeline_params import (
-    TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
-    TEXT_GUIDED_IMAGE_INPAINTING_PARAMS, )
+from ..pipeline_params import (TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
+                               TEXT_GUIDED_IMAGE_INPAINTING_PARAMS)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -97,8 +93,9 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin,
         image = image.cpu().transpose(perm=[0, 2, 3, 1])[0]
         init_image = Image.fromarray(np.uint8(image)).convert("RGB").resize(
             (64, 64))
-        mask_image = Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
-            (64, 64))
+        mask_image = (
+            Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
+                (64, 64)))
         generator = paddle.Generator().manual_seed(seed)
 
         inputs = {
@@ -121,8 +118,15 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin,
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.58470726, 0.49302375, 0.3954028, 0.4068969, 0.33668613,
-            0.50350493, 0.34411103, 0.25261122, 0.4531455
+            0.58470726,
+            0.49302375,
+            0.3954028,
+            0.4068969,
+            0.33668613,
+            0.50350493,
+            0.34411103,
+            0.25261122,
+            0.4531455,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
@@ -158,7 +162,7 @@ class StableDiffusionInpaintPipelineIntegrationTests(unittest.TestCase):
             image=init_image,
             mask_image=mask_image,
             generator=generator,
-            output_type="np")
+            output_type="np", )
         image = output.images[0]
         assert image.shape == (512, 512, 3)
         image = image[-3:, -3:, -1]
@@ -192,7 +196,7 @@ class StableDiffusionInpaintPipelineIntegrationTests(unittest.TestCase):
             image=init_image,
             mask_image=mask_image,
             generator=generator,
-            output_type="np")
+            output_type="np", )
         image = output.images[0]
         assert image.shape == (512, 512, 3)
         image = image[-3:, -3:, -1]

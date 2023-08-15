@@ -20,15 +20,18 @@ from typing import Callable, List, Optional, Union
 
 import numpy as np
 import paddle
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
+                                    CLIPTokenizer)
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipeline_utils import DiffusionPipeline
-from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker, )
-from ppdiffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from ppdiffusers.pipelines.stable_diffusion import \
+    StableDiffusionPipelineOutput
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
+    StableDiffusionSafetyChecker
+from ppdiffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                    PNDMScheduler)
 from ppdiffusers.utils import deprecate, logging
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -98,8 +101,8 @@ class StableDiffusionWalkPipeline(DiffusionPipeline):
             feature_extractor: CLIPFeatureExtractor, ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -339,8 +342,10 @@ class StableDiffusionWalkPipeline(DiffusionPipeline):
         # for 1-to-1 results reproducibility with the CompVis implementation.
         # However this currently doesn't work in `mps`.
         latents_shape = [
-            batch_size * num_images_per_prompt, self.unet.in_channels,
-            height // 8, width // 8
+            batch_size * num_images_per_prompt,
+            self.unet.in_channels,
+            height // 8,
+            width // 8,
         ]
         latents_dtype = text_embeddings.dtype
         if latents is None:
@@ -375,8 +380,8 @@ class StableDiffusionWalkPipeline(DiffusionPipeline):
 
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(
-                [latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = (paddle.concat([latents] * 2)
+                                  if do_classifier_free_guidance else latents)
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
 
@@ -413,7 +418,7 @@ class StableDiffusionWalkPipeline(DiffusionPipeline):
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
                 clip_input=safety_checker_input.pixel_values.astype(
-                    text_embeddings.dtype))
+                    text_embeddings.dtype), )
         else:
             has_nsfw_concept = None
 
@@ -521,13 +526,14 @@ class StableDiffusionWalkPipeline(DiffusionPipeline):
                 noise = slerp(float(t), noise_a, noise_b)
                 embed = paddle.lerp(embed_a, embed_b, t)
 
-                noise_batch = noise if noise_batch is None else paddle.concat(
-                    [noise_batch, noise], axis=0)
-                embeds_batch = embed if embeds_batch is None else paddle.concat(
-                    [embeds_batch, embed], axis=0)
+                noise_batch = (noise if noise_batch is None else paddle.concat(
+                    [noise_batch, noise], axis=0))
+                embeds_batch = (embed
+                                if embeds_batch is None else paddle.concat(
+                                    [embeds_batch, embed], axis=0))
 
-                batch_is_ready = embeds_batch.shape[
-                    0] == batch_size or i + 1 == T.shape[0]
+                batch_is_ready = (embeds_batch.shape[0] == batch_size or
+                                  i + 1 == T.shape[0])
                 if batch_is_ready:
                     outputs = self(
                         latents=noise_batch,

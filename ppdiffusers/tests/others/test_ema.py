@@ -39,19 +39,22 @@ class EMAModelTests(unittest.TestCase):
             unet.parameters(),
             decay=decay,
             model_cls=UNet2DConditionModel,
-            model_config=unet.config)
+            model_config=unet.config, )
         return unet, ema_unet
 
     def get_dummy_inputs(self):
         noisy_latents = paddle.randn(
-            (self.batch_size, self.num_in_channels, self.latent_height,
-             self.latent_width),
-            generator=self.generator)
+            (
+                self.batch_size,
+                self.num_in_channels,
+                self.latent_height,
+                self.latent_width, ),
+            generator=self.generator, )
         timesteps = paddle.randint(
             0, 1000, shape=(self.batch_size, ), generator=self.generator)
         encoder_hidden_states = paddle.randn(
             (self.batch_size, self.prompt_length, self.text_encoder_hidden_dim),
-            generator=self.generator)
+            generator=self.generator, )
         return noisy_latents, timesteps, encoder_hidden_states
 
     def simulate_backprop(self, unet):

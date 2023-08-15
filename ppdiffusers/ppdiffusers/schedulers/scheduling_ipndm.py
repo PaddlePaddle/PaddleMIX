@@ -42,9 +42,10 @@ class IPNDMScheduler(SchedulerMixin, ConfigMixin):
     order = 1
 
     @register_to_config
-    def __init__(self,
-                 num_train_timesteps: int=1000,
-                 trained_betas: Optional[Union[np.ndarray, List[float]]]=None):
+    def __init__(
+            self,
+            num_train_timesteps: int=1000,
+            trained_betas: Optional[Union[np.ndarray, List[float]]]=None, ):
         # set `betas`, `alphas`, `timesteps`
         self.set_timesteps(num_train_timesteps)
 
@@ -118,8 +119,8 @@ class IPNDMScheduler(SchedulerMixin, ConfigMixin):
         timestep_index = (self.timesteps == timestep).nonzero().item()
         prev_timestep_index = timestep_index + 1
 
-        ets = sample * self.betas[timestep_index] + model_output * self.alphas[
-            timestep_index]
+        ets = (sample * self.betas[timestep_index] + model_output *
+               self.alphas[timestep_index])
         self.ets.append(ets)
 
         if len(self.ets) == 1:

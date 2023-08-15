@@ -19,10 +19,10 @@ import warnings
 
 import numpy as np
 import paddle
-from tqdm.auto import trange
-
 from paddlenlp.trainer.argparser import strtobool
 from paddlenlp.utils.log import logger
+from tqdm.auto import trange
+
 from ppdiffusers import DiffusionPipeline
 from ppdiffusers.utils import load_image
 
@@ -40,12 +40,12 @@ def parse_arguments():
         "--inference_steps",
         type=int,
         default=50,
-        help="The number of unet inference steps.")
+        help="The number of unet inference steps.", )
     parser.add_argument(
         "--benchmark_steps",
         type=int,
         default=1,
-        help="The number of performance benchmark steps.")
+        help="The number of performance benchmark steps.", )
     parser.add_argument(
         "--task_name",
         type=str,
@@ -80,7 +80,7 @@ def parse_arguments():
         type=str,
         default="raw",
         choices=["raw", "cutlass", "flash", "all"],
-        help="attention_type.")
+        help="attention_type.", )
     parser.add_argument(
         "--device_id",
         type=int,
@@ -170,7 +170,8 @@ def main(args):
         height = args.height
         hr_resize_width = args.hr_resize_width
         hr_resize_height = args.hr_resize_height
-        folder = f"attn_{attention_type}_fp16" if args.use_fp16 else f"attn_{attention_type}_fp32"
+        folder = (f"attn_{attention_type}_fp16"
+                  if args.use_fp16 else f"attn_{attention_type}_fp32")
         os.makedirs(folder, exist_ok=True)
         if args.task_name in ["text2img", "all"]:
             # text2img
@@ -237,9 +238,7 @@ def main(args):
             images[0].save(f"{folder}/img2img.png")
 
         if args.task_name in ["inpaint", "inpaint_legacy", "all"]:
-            img_url = (
-                "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
-            )
+            img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
             mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
             init_image = load_image(img_url)
             mask_image = load_image(mask_url)
@@ -289,9 +288,7 @@ def main(args):
 
         if args.task_name in ["cycle_diffusion", "all"]:
             pipe.change_scheduler("ddim")
-            image_url = (
-                "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/ride_on_horse.png"
-            )
+            image_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/ride_on_horse.png"
             init_image = load_image(image_url)
             source_prompt = "An astronaut riding a horse"
             prompt = "An astronaut riding an elephant"

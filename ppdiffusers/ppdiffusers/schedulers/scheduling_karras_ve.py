@@ -129,11 +129,12 @@ class KarrasVeScheduler(SchedulerMixin, ConfigMixin):
                      **(i / (num_inference_steps - 1))) for i in self.timesteps]
         self.schedule = paddle.to_tensor(schedule, dtype=paddle.float32)
 
-    def add_noise_to_input(self,
-                           sample: paddle.Tensor,
-                           sigma: float,
-                           generator: Optional[paddle.Generator]=None) -> Tuple[
-                               paddle.Tensor, float]:
+    def add_noise_to_input(
+            self,
+            sample: paddle.Tensor,
+            sigma: float,
+            generator: Optional[paddle.Generator]=None, ) -> Tuple[
+                paddle.Tensor, float]:
         """
         Explicit Langevin-like "churn" step of adding noise to the sample according to a factor gamma_i ≥ 0 to reach a
         higher noise level sigma_hat = sigma_i + gamma_i*sigma_i.
@@ -190,7 +191,7 @@ class KarrasVeScheduler(SchedulerMixin, ConfigMixin):
         return KarrasVeOutput(
             prev_sample=sample_prev,
             derivative=derivative,
-            pred_original_sample=pred_original_sample)
+            pred_original_sample=pred_original_sample, )
 
     def step_correct(
             self,
@@ -228,7 +229,7 @@ class KarrasVeScheduler(SchedulerMixin, ConfigMixin):
         return KarrasVeOutput(
             prev_sample=sample_prev,
             derivative=derivative,
-            pred_original_sample=pred_original_sample)
+            pred_original_sample=pred_original_sample, )
 
     def add_noise(self, original_samples, noise, timesteps):
         raise NotImplementedError()

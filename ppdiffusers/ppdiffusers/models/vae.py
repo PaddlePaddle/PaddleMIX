@@ -111,7 +111,7 @@ class Encoder(nn.Layer):
         self.conv_norm_out = nn.GroupNorm(
             num_channels=block_out_channels[-1],
             num_groups=norm_num_groups,
-            epsilon=1e-6)
+            epsilon=1e-6, )
         self.conv_act = nn.Silu()
 
         conv_out_channels = 2 * out_channels if double_z else out_channels
@@ -277,14 +277,15 @@ class VectorQuantizer(nn.Layer):
     # NOTE: due to a bug the beta term was applied to the wrong term. for
     # backwards compatibility we use the buggy version by default, but you can
     # specify legacy=False to fix it.
-    def __init__(self,
-                 n_e,
-                 vq_embed_dim,
-                 beta,
-                 remap=None,
-                 unknown_index="random",
-                 sane_index_shape=False,
-                 legacy=True):
+    def __init__(
+            self,
+            n_e,
+            vq_embed_dim,
+            beta,
+            remap=None,
+            unknown_index="random",
+            sane_index_shape=False,
+            legacy=True, ):
         super().__init__()
         self.n_e = n_e
         self.vq_embed_dim = vq_embed_dim
@@ -294,7 +295,8 @@ class VectorQuantizer(nn.Layer):
         self.embedding = nn.Embedding(
             self.n_e,
             self.vq_embed_dim,
-            weight_attr=nn.initializer.Uniform(-1.0 / self.n_e, 1.0 / self.n_e))
+            weight_attr=nn.initializer.Uniform(-1.0 / self.n_e, 1.0 / self.n_e),
+        )
 
         self.remap = remap
         if self.remap is not None:
@@ -424,7 +426,7 @@ class DiagonalGaussianDistribution(object):
             if other is None:
                 return 0.5 * paddle.sum(
                     paddle.pow(self.mean, 2) + self.var - 1.0 - self.logvar,
-                    axis=[1, 2, 3])
+                    axis=[1, 2, 3], )
             else:
                 return 0.5 * paddle.sum(
                     paddle.pow(self.mean - other.mean, 2) / other.var + self.var
@@ -435,9 +437,10 @@ class DiagonalGaussianDistribution(object):
         if self.deterministic:
             return paddle.to_tensor([0.0])
         logtwopi = np.log(2.0 * np.pi)
-        return 0.5 * paddle.sum(logtwopi + self.logvar + paddle.pow(
-            sample - self.mean, 2) / self.var,
-                                axis=axis)
+        return 0.5 * paddle.sum(
+            logtwopi + self.logvar + paddle.pow(sample - self.mean, 2) /
+            self.var,
+            axis=axis, )
 
     def mode(self):
         return self.mean

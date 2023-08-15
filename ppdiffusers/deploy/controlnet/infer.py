@@ -23,11 +23,12 @@ import paddle
 import cv2
 import fastdeploy as fd
 import numpy as np
+from paddlenlp.trainer.argparser import strtobool
 from PIL import Image
 from tqdm.auto import trange
 
-from paddlenlp.trainer.argparser import strtobool
-from ppdiffusers import DiffusionPipeline, FastDeployStableDiffusionMegaPipeline
+from ppdiffusers import (DiffusionPipeline,
+                         FastDeployStableDiffusionMegaPipeline)
 from ppdiffusers.utils import load_image
 
 
@@ -52,12 +53,12 @@ def parse_arguments():
         "--inference_steps",
         type=int,
         default=50,
-        help="The number of unet inference steps.")
+        help="The number of unet inference steps.", )
     parser.add_argument(
         "--benchmark_steps",
         type=int,
         default=1,
-        help="The number of performance benchmark steps.")
+        help="The number of performance benchmark steps.", )
     parser.add_argument(
         "--backend",
         type=str,
@@ -161,12 +162,12 @@ def parse_arguments():
         "--low_threshold",
         type=int,
         default=100,
-        help="The value of Canny low threshold.")
+        help="The value of Canny low threshold.", )
     parser.add_argument(
         "--high_threshold",
         type=int,
         default=200,
-        help="The value of Canny high threshold.")
+        help="The value of Canny high threshold.", )
     return parser.parse_args()
 
 
@@ -222,9 +223,11 @@ def create_paddle_inference_runtime(
         if dynamic_shape is not None:
             option.paddle_infer_option.collect_trt_shape = True
             for key, shape_dict in dynamic_shape.items():
-                option.trt_option.set_shape(key, shape_dict["min_shape"],
-                                            shape_dict.get("opt_shape", None),
-                                            shape_dict.get("max_shape", None))
+                option.trt_option.set_shape(
+                    key,
+                    shape_dict["min_shape"],
+                    shape_dict.get("opt_shape", None),
+                    shape_dict.get("max_shape", None), )
     return option
 
 
@@ -330,12 +333,24 @@ def main(args):
     }
     unet_dynamic_shape = {
         "sample": {
-            "min_shape":
-            [1, unet_in_channels, min_image_size // 8, min_image_size // 8],
-            "max_shape":
-            [2, unet_in_channels, max_image_size // 8, max_image_size // 8],
-            "opt_shape":
-            [2, unet_in_channels, min_image_size // 8, min_image_size // 8],
+            "min_shape": [
+                1,
+                unet_in_channels,
+                min_image_size // 8,
+                min_image_size // 8,
+            ],
+            "max_shape": [
+                2,
+                unet_in_channels,
+                max_image_size // 8,
+                max_image_size // 8,
+            ],
+            "opt_shape": [
+                2,
+                unet_in_channels,
+                min_image_size // 8,
+                min_image_size // 8,
+            ],
         },
         "timestep": {
             "min_shape": [1],
@@ -382,19 +397,19 @@ def main(args):
             text_encoder=create_trt_runtime(
                 dynamic_shape=text_encoder_dynamic_shape,
                 use_fp16=args.use_fp16,
-                device_id=args.device_id),
+                device_id=args.device_id, ),
             vae_encoder=create_trt_runtime(
                 dynamic_shape=vae_encoder_dynamic_shape,
                 use_fp16=args.use_fp16,
-                device_id=args.device_id),
+                device_id=args.device_id, ),
             vae_decoder=create_trt_runtime(
                 dynamic_shape=vae_decoder_dynamic_shape,
                 use_fp16=args.use_fp16,
-                device_id=args.device_id),
+                device_id=args.device_id, ),
             unet=create_trt_runtime(
                 dynamic_shape=unet_dynamic_shape,
                 use_fp16=args.use_fp16,
-                device_id=args.device_id), )
+                device_id=args.device_id, ), )
     elif args.backend == "paddle" or args.backend == "paddle_tensorrt":
         args.use_trt = args.backend == "paddle_tensorrt"
         runtime_options = dict(
@@ -451,7 +466,8 @@ def main(args):
             "text_encoder": infer_op,
             "unet": infer_op,
         }
-        folder = f"infer_op_{infer_op}_fp16" if args.use_fp16 else f"infer_op_{infer_op}_fp32"
+        folder = (f"infer_op_{infer_op}_fp16"
+                  if args.use_fp16 else f"infer_op_{infer_op}_fp32")
         os.makedirs(folder, exist_ok=True)
 
         if args.task_name in ["text2img_control", "all"]:
@@ -535,9 +551,7 @@ def main(args):
             images[0].save(f"{folder}/img2img_control.png")
 
         if args.task_name in ["inpaint_legacy_control", "all"]:
-            img_url = (
-                "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
-            )
+            img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
             mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
             init_image = load_image(img_url)
             mask_image = load_image(mask_url)

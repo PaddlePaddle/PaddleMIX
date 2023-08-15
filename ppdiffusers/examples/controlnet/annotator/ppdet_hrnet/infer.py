@@ -25,17 +25,16 @@ import yaml
 from paddle.inference import Config, create_predictor
 
 from .benchmark_utils import PaddleInferBenchmark
-from .keypoint_preprocess import EvalAffine, TopDownEvalAffine, expand_crop  # noqa F401
+from .keypoint_preprocess import (
+    EvalAffine,
+    TopDownEvalAffine,  # noqa F401
+    expand_crop)
 from .picodet_postprocess import PicoDetPostProcess
-from .preprocess import (  # noqa F401
-    LetterBoxResize, NormalizeImage, Pad, PadStride, Permute, Resize,
-    WarpAffine, decode_image, preprocess, )
-from .utils import (
-    Timer,
-    argsparser,
-    coco_clsid2catid,
-    get_current_memory_mb,
-    multiclass_nms, )
+from .preprocess import Pad  # noqa F401
+from .preprocess import (LetterBoxResize, NormalizeImage, PadStride, Permute,
+                         Resize, WarpAffine, decode_image, preprocess)
+from .utils import (Timer, argsparser, coco_clsid2catid, get_current_memory_mb,
+                    multiclass_nms)
 from .visualize import visualize_box_mask
 
 # Global dictionary
@@ -80,7 +79,7 @@ def bench_log(detector, img_list, model_info, batch_size=1, name=None):
     data_info = {
         "batch_size": batch_size,
         "shape": "dynamic_shape",
-        "data_num": perf_info["img_num"]
+        "data_num": perf_info["img_num"],
     }
     log = PaddleInferBenchmark(detector.config, model_info, data_info,
                                perf_info, mems)
@@ -342,18 +341,20 @@ class Detector(object):
                 boxes_num = result["boxes_num"][_ind]
                 ed = st + boxes_num
                 shift_amount = slice_image_result.starting_pixels[_ind]
-                result["boxes"][st:ed][:, 2:4] = result["boxes"][
-                    st:ed][:, 2:4] + shift_amount
-                result["boxes"][st:ed][:, 4:6] = result["boxes"][
-                    st:ed][:, 4:6] + shift_amount
+                result["boxes"][st:ed][:, 2:4] = (
+                    result["boxes"][st:ed][:, 2:4] + shift_amount)
+                result["boxes"][st:ed][:, 4:6] = (
+                    result["boxes"][st:ed][:, 4:6] + shift_amount)
                 merged_bboxs.append(result["boxes"][st:ed])
                 st = ed
 
             merged_results = {"boxes": []}
             if combine_method == "nms":
                 final_boxes = multiclass_nms(
-                    np.concatenate(merged_bboxs), num_classes, match_threshold,
-                    match_metric)
+                    np.concatenate(merged_bboxs),
+                    num_classes,
+                    match_threshold,
+                    match_metric, )
                 merged_results["boxes"] = np.concatenate(final_boxes)
             elif combine_method == "concat":
                 merged_results["boxes"] = np.concatenate(merged_bboxs)
@@ -381,12 +382,13 @@ class Detector(object):
                 img_list, results, use_coco_category=FLAGS.use_coco_category)
         return results
 
-    def predict_image(self,
-                      image_list,
-                      run_benchmark=False,
-                      repeats=1,
-                      visual=True,
-                      save_results=False):
+    def predict_image(
+            self,
+            image_list,
+            run_benchmark=False,
+            repeats=1,
+            visual=True,
+            save_results=False, ):
         batch_loop_cnt = math.ceil(float(len(image_list)) / self.batch_size)
         results = []
         for i in range(batch_loop_cnt):
@@ -466,7 +468,7 @@ class Detector(object):
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
         out_path = os.path.join(self.output_dir, video_out_name)
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        fourcc = cv2.VideoWriter_fourcc(* "mp4v")
         writer = cv2.VideoWriter(out_path, fourcc, fps, (width, height))
         index = 1
         while 1:
@@ -510,9 +512,12 @@ class Detector(object):
                         "category_id": coco_clsid2catid[int(box[0])]
                         if use_coco_category else int(box[0]),
                         "file_name": file_name,
-                        "bbox":
-                        [box[2], box[3], box[4] - box[2],
-                         box[5] - box[3]],  # xyxy -> xywh
+                        "bbox": [
+                            box[2],
+                            box[3],
+                            box[4] - box[2],
+                            box[5] - box[3],
+                        ],  # xyxy -> xywh
                         "score": box[1],
                     } for box in boxes
                 ])
@@ -934,15 +939,15 @@ def load_predictor(
         if use_dynamic_shape:
             min_input_shape = {
                 "image": [batch_size, 3, trt_min_shape, trt_min_shape],
-                "scale_factor": [batch_size, 2]
+                "scale_factor": [batch_size, 2],
             }
             max_input_shape = {
                 "image": [batch_size, 3, trt_max_shape, trt_max_shape],
-                "scale_factor": [batch_size, 2]
+                "scale_factor": [batch_size, 2],
             }
             opt_input_shape = {
                 "image": [batch_size, 3, trt_opt_shape, trt_opt_shape],
-                "scale_factor": [batch_size, 2]
+                "scale_factor": [batch_size, 2],
             }
             config.set_trt_dynamic_shape_info(min_input_shape, max_input_shape,
                                               opt_input_shape)
@@ -964,7 +969,8 @@ def get_test_images(infer_dir, infer_img):
     """
     Get image path list in TEST mode
     """
-    assert infer_img is not None or infer_dir is not None, "--image_file or --image_dir should be set"
+    assert (infer_img is not None or
+            infer_dir is not None), "--image_file or --image_dir should be set"
     assert infer_img is None or os.path.isfile(
         infer_img), "{} is not a file".format(infer_img)
     assert infer_dir is None or os.path.isdir(
@@ -1062,7 +1068,8 @@ def main():
     else:
         # predict from image
         if FLAGS.image_dir is None and FLAGS.image_file is not None:
-            assert FLAGS.batch_size == 1, "batch_size should be 1, when image_file is not None"
+            assert (FLAGS.batch_size == 1
+                    ), "batch_size should be 1, when image_file is not None"
         img_list = get_test_images(FLAGS.image_dir, FLAGS.image_file)
         if FLAGS.slice_infer:
             detector.predict_image_slice(
@@ -1080,7 +1087,7 @@ def main():
                 FLAGS.run_benchmark,
                 repeats=100,
                 visual=FLAGS.save_images,
-                save_results=FLAGS.save_results)
+                save_results=FLAGS.save_results, )
         if not FLAGS.run_benchmark:
             detector.det_times.info(average=True)
         else:
@@ -1088,7 +1095,7 @@ def main():
             model_dir = FLAGS.model_dir
             model_info = {
                 "model_name": model_dir.strip("/").split("/")[-1],
-                "precision": mode.split("_")[-1]
+                "precision": mode.split("_")[-1],
             }
             bench_log(detector, img_list, model_info, name="DET")
 
@@ -1099,8 +1106,12 @@ if __name__ == "__main__":
     FLAGS = parser.parse_args()
     print_arguments(FLAGS)
     FLAGS.device = FLAGS.device.upper()
-    assert FLAGS.device in ["CPU", "GPU", "XPU", "NPU"
-                            ], "device should be CPU, GPU, XPU or NPU"
+    assert FLAGS.device in [
+        "CPU",
+        "GPU",
+        "XPU",
+        "NPU",
+    ], "device should be CPU, GPU, XPU or NPU"
     assert not FLAGS.use_gpu, "use_gpu has been deprecated, please use --device"
 
     assert not (

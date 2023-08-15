@@ -50,7 +50,7 @@ class ScoreSdeVeipelineFastTests(unittest.TestCase):
             num_inference_steps=2,
             output_type="numpy",
             generator=generator,
-            return_dict=False)[0]
+            return_dict=False, )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)

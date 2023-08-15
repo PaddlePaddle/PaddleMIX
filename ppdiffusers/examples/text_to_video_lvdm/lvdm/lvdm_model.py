@@ -16,28 +16,25 @@ import contextlib
 import inspect
 import json
 import os
-from einops import rearrange, repeat
-
 import random
+
 import numpy as np
 import paddle
 import paddle.nn as nn
-
+from einops import rearrange, repeat
 from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
-from ppdiffusers import (
-    AutoencoderKL,
-    LVDMAutoencoderKL,
-    DDIMScheduler,
-    DDPMScheduler,
-    LVDMUNet3DModel,
-    is_ppxformers_available, )
 
-from ppdiffusers.initializer import normal_, reset_initialized_parameter, zeros_, xavier_uniform_
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
+                         LVDMAutoencoderKL, LVDMUNet3DModel,
+                         is_ppxformers_available)
+from ppdiffusers.initializer import (normal_, reset_initialized_parameter,
+                                     xavier_uniform_, zeros_)
 from ppdiffusers.models.ema import LitEma
-from ppdiffusers.training_utils import freeze_params
-from ppdiffusers.models.lvdm_attention_temporal import RelativePosition, TemporalCrossAttention
+from ppdiffusers.models.lvdm_attention_temporal import (RelativePosition,
+                                                        TemporalCrossAttention)
 from ppdiffusers.models.lvdm_distributions import DiagonalGaussianDistribution
+from ppdiffusers.training_utils import freeze_params
 
 
 def set_seed(seed: int=1234, args=None):
@@ -48,14 +45,16 @@ def set_seed(seed: int=1234, args=None):
 
     if args is not None:
         if args.use_hybrid_parallel:
-            from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+            from paddle.distributed.fleet.meta_parallel import \
+                get_rng_state_tracker
 
             random.seed(args.seed + args.dataset_rank)
             np.random.seed(args.seed + args.dataset_rank)
             paddle.seed(args.seed + args.dataset_rank)
 
             # local_seed/ global_seed is used to control dropout in ModelParallel
-            local_seed = args.seed + 59999 + args.tensor_parallel_rank * 10 + args.pipeline_parallel_rank * 1000
+            local_seed = (args.seed + 59999 + args.tensor_parallel_rank * 10 +
+                          args.pipeline_parallel_rank * 1000)
             global_seed = args.seed + 100003 + args.dataset_rank
             tracker = get_rng_state_tracker()
 
@@ -81,28 +80,28 @@ def split_video_to_clips(video, clip_length, drop_left=True):
     if video_length % clip_length != 0 and drop_left:
         video = video[:, :, :video_length // clip_length * clip_length, :, :]
         print(
-            f'[split_video_to_clips] Drop frames from {shape} to {video.shape}')
+            f"[split_video_to_clips] Drop frames from {shape} to {video.shape}")
     nclips = video_length // clip_length
     clips = rearrange(
-        video, 'b c (nc cl) h w -> (b nc) c cl h w', cl=clip_length, nc=nclips)
+        video, "b c (nc cl) h w -> (b nc) c cl h w", cl=clip_length, nc=nclips)
     return clips
 
 
 def merge_clips_to_videos(clips, bs):
     nclips = clips.shape[0] // bs
-    video = rearrange(clips, '(b nc) c t h w -> b c (nc t) h w', nc=nclips)
+    video = rearrange(clips, "(b nc) c t h w -> b c (nc t) h w", nc=nclips)
     return video
 
 
 class LatentVideoDiffusion(nn.Layer):
     def __init__(self, model_args):
         super().__init__()
-        #initialization
-        assert model_args.task_type in ['short', 'text2video']
+        # initialization
+        assert model_args.task_type in ["short", "text2video"]
         self.task_type = model_args.task_type
 
         # init tokenizer
-        if model_args.task_type == 'text2video':
+        if model_args.task_type == "text2video":
             tokenizer_name_or_path = (
                 model_args.tokenizer_name_or_path
                 if model_args.pretrained_model_name_or_path is None else
@@ -183,8 +182,8 @@ class LatentVideoDiffusion(nn.Layer):
         if self.use_ema:
             self.model_ema = LitEma(self.unet)
 
-        if model_args.enable_xformers_memory_efficient_attention and is_ppxformers_available(
-        ):
+        if (model_args.enable_xformers_memory_efficient_attention and
+                is_ppxformers_available()):
             try:
                 self.unet.enable_xformers_memory_efficient_attention()
             except Exception as e:
@@ -202,7 +201,8 @@ class LatentVideoDiffusion(nn.Layer):
             self.register_buffer("preconfig_latents",
                                  paddle.load(model_args.latents_path))
 
-        self.if_numpy_genarator_random_alignment = model_args.if_numpy_genarator_random_alignment
+        self.if_numpy_genarator_random_alignment = (
+            model_args.if_numpy_genarator_random_alignment)
         if self.if_numpy_genarator_random_alignment:
             self.generator = np.random.RandomState(
                 model_args.numpy_genarator_random_seed)
@@ -264,23 +264,23 @@ class LatentVideoDiffusion(nn.Layer):
 
     @paddle.no_grad()
     def encode_first_stage(self, x):
-        if self.vae_type == '2d' and x.dim() == 5:
+        if self.vae_type == "2d" and x.dim() == 5:
             b, _, t, _, _ = x.shape
-            x = rearrange(x, 'b c t h w -> (b t) c h w')
+            x = rearrange(x, "b c t h w -> (b t) c h w")
             results = self.vae.encode(x).latent_dist.sample()
-            results = rearrange(results, '(b t) c h w -> b c t h w', b=b, t=t)
+            results = rearrange(results, "(b t) c h w -> b c t h w", b=b, t=t)
         else:
             results = self.vae.encode(x).latent_dist.sample()
         return results
 
     def encode_latents(self, x):
         b, _, t, h, w = x.shape
-        if self.vae_type == '2d':
-            x = rearrange(x, 'b c t h w -> (b t) c h w')
+        if self.vae_type == "2d":
+            x = rearrange(x, "b c t h w -> (b t) c h w")
         encoder_posterior = self.encode_first_stage(x)
         z = self.get_first_stage_encoding(encoder_posterior).detach()
-        if self.vae_type == '2d':
-            z = rearrange(z, '(b t) c h w -> b c t h w', b=b, t=t)
+        if self.vae_type == "2d":
+            z = rearrange(z, "(b t) c h w -> b c t h w", b=b, t=t)
         return z
 
     # for latents decode
@@ -336,7 +336,7 @@ class LatentVideoDiffusion(nn.Layer):
                                       return_cpu=True,
                                       **kwargs):
         b, _, t, _, _ = z.shape
-        z = rearrange(z, 'b c t h w -> (b t) c h w')
+        z = rearrange(z, "b c t h w -> (b t) c h w")
         if decode_bs is None:
             results = self.decode(z, **kwargs)
         else:
@@ -349,32 +349,33 @@ class LatentVideoDiffusion(nn.Layer):
                 results = paddle.concat(
                     x=[self.decode(z_, **kwargs) for z_ in z], axis=0)
         results = rearrange(
-            results, '(b t) c h w -> b c t h w', b=b, t=t).contiguous()
+            results, "(b t) c h w -> b c t h w", b=b, t=t).contiguous()
         return results
 
     @paddle.no_grad()
-    def decode_latents(self,
-                       z,
-                       decode_bs=16,
-                       return_cpu=True,
-                       bs=None,
-                       decode_single_video_allframes=False,
-                       max_z_t=None,
-                       overlapped_length=0,
-                       **kwargs):
+    def decode_latents(
+            self,
+            z,
+            decode_bs=16,
+            return_cpu=True,
+            bs=None,
+            decode_single_video_allframes=False,
+            max_z_t=None,
+            overlapped_length=0,
+            **kwargs, ):
         b, _, t, _, _ = z.shape
-        if self.encoder_type == '2d' and z.dim() == 5:
+        if self.encoder_type == "2d" and z.dim() == 5:
             return self.decode_first_stage_2DAE_video(
                 z, decode_bs=decode_bs, return_cpu=return_cpu, **kwargs)
         if decode_single_video_allframes:
             z = paddle.split(x=z, num_or_sections=z.shape[0] // 1, axis=0)
             cat_dim = 0
         elif max_z_t is not None:
-            if self.encoder_type == '3d':
+            if self.encoder_type == "3d":
                 z = paddle.split(
                     x=z, num_or_sections=z.shape[2] // max_z_t, axis=2)
                 cat_dim = 2
-            if self.encoder_type == '2d':
+            if self.encoder_type == "2d":
                 z = paddle.split(
                     x=z, num_or_sections=z.shape[0] // max_z_t, axis=0)
                 cat_dim = 0
@@ -401,21 +402,21 @@ class LatentVideoDiffusion(nn.Layer):
         return results
 
     def get_loss(self, pred, target, mean=True, mask=None):
-        if self.loss_type == 'l1':
+        if self.loss_type == "l1":
             loss = (target - pred).abs()
             if mean:
                 loss = loss.mean()
-        elif self.loss_type == 'l2':
+        elif self.loss_type == "l2":
             if mean:
                 loss = paddle.nn.functional.mse_loss(target, pred)
             else:
                 loss = paddle.nn.functional.mse_loss(
-                    target, pred, reduction='none')
+                    target, pred, reduction="none")
         else:
             raise NotImplementedError("unknown loss type '{loss_type}'")
         if mask is not None:
-            assert (mean is False)
-            assert (loss.shape[2:] == mask.shape[2:])  #thw need be the same
+            assert mean is False
+            assert loss.shape[2:] == mask.shape[2:]  # thw need be the same
             loss = loss * mask
         return loss
 
@@ -437,7 +438,7 @@ class LatentVideoDiffusion(nn.Layer):
                         self.generator.randint(
                             0,
                             self.noise_scheduler.num_train_timesteps,
-                            size=(latents.shape[0], )),
+                            size=(latents.shape[0], ), ),
                         dtype="int64", )
                     noise = paddle.to_tensor(
                         self.generator.randn(*latents.shape), dtype="float32")
@@ -483,14 +484,15 @@ class LatentVideoDiffusion(nn.Layer):
         return videos_frames
 
     @paddle.no_grad()
-    def log_text2video_sample_frames(self,
-                                     input_ids=None,
-                                     height=256,
-                                     width=256,
-                                     eta=1.0,
-                                     guidance_scale=9,
-                                     num_frames=16,
-                                     **kwargs):
+    def log_text2video_sample_frames(
+            self,
+            input_ids=None,
+            height=256,
+            width=256,
+            eta=1.0,
+            guidance_scale=9,
+            num_frames=16,
+            **kwargs, ):
         self.eval()
         with self.ema_scope():
             if height % 8 != 0 or width % 8 != 0:
@@ -518,8 +520,11 @@ class LatentVideoDiffusion(nn.Layer):
                 latents = self.preconfig_latents
             else:
                 shape = [
-                    input_ids.shape[0], self.unet.in_channels, num_frames,
-                    height // 8, width // 8
+                    input_ids.shape[0],
+                    self.unet.in_channels,
+                    num_frames,
+                    height // 8,
+                    width // 8,
                 ]
                 latents = paddle.randn(shape)
 
@@ -531,8 +536,8 @@ class LatentVideoDiffusion(nn.Layer):
 
             for t in self.eval_scheduler.timesteps:
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
 
                 # ddim donot use this
                 latent_model_input = self.eval_scheduler.scale_model_input(
@@ -589,8 +594,11 @@ class LatentVideoDiffusion(nn.Layer):
                 latents = self.preconfig_latents
             else:
                 shape = [
-                    batch_size, self.unet.in_channels, num_frames, height // 8,
-                    width // 8
+                    batch_size,
+                    self.unet.in_channels,
+                    num_frames,
+                    height // 8,
+                    width // 8,
                 ]
                 latents = paddle.randn(shape)
 

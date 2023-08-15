@@ -20,8 +20,8 @@ import gradio as gr
 import paddle
 from annotator.openpose import OpenposePaddleDetector
 from annotator.util import HWC3, resize_image
-
 from paddlenlp.trainer import set_seed as seed_everything
+
 from ppdiffusers import ControlNetModel, StableDiffusionControlNetPipeline
 
 apply_openpose = OpenposePaddleDetector()
@@ -104,20 +104,20 @@ with block:
                     minimum=256,
                     maximum=768,
                     value=512,
-                    step=64)
+                    step=64, )
                 strength = gr.Slider(
                     label="Control Strength",
                     minimum=0.0,
                     maximum=2.0,
                     value=1.0,
-                    step=0.01)
+                    step=0.01, )
                 guess_mode = gr.Checkbox(label="Guess Mode", value=False)
                 detect_resolution = gr.Slider(
                     label="OpenPose Resolution",
                     minimum=128,
                     maximum=1024,
                     value=512,
-                    step=1)
+                    step=1, )
                 ddim_steps = gr.Slider(
                     label="Steps", minimum=1, maximum=100, value=20, step=1)
                 scale = gr.Slider(
@@ -125,7 +125,7 @@ with block:
                     minimum=0.1,
                     maximum=30.0,
                     value=9.0,
-                    step=0.1)
+                    step=0.1, )
                 seed = gr.Slider(
                     label="Seed",
                     minimum=-1,

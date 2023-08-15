@@ -54,7 +54,7 @@ def scatter_reduce(
             values=paddle.to_tensor(
                 1.0, dtype=input.dtype),
             axis=dim,
-            reduce="add")
+            reduce="add", )
         input = input / input_div
     elif reduce in ["prod", "mul", "multiply"]:
         input = paddle.put_along_axis(
@@ -121,10 +121,10 @@ def bipartite_soft_matching_random2d(
             axis=2,
             indices=rand_idx,
             values=-paddle.ones_like(
-                rand_idx, dtype=rand_idx.dtype))
-        idx_buffer_view = (
-            idx_buffer_view.reshape([hsy, wsx, sy, sx]).transpose(
-                [0, 2, 1, 3]).reshape([hsy * sy, wsx * sx]))
+                rand_idx, dtype=rand_idx.dtype), )
+        idx_buffer_view = (idx_buffer_view.reshape([hsy, wsx, sy, sx])
+                           .transpose([0, 2, 1, 3])
+                           .reshape([hsy * sy, wsx * sx]))
 
         # Image is not divisible by sx or sy so we need to move it into a new buffer
         if (hsy * sy) < h or (wsx * sx) < w:
@@ -270,11 +270,16 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
             if self.use_ada_layer_norm:
                 norm_hidden_states = self.norm1(hidden_states, timestep)
             elif self.use_ada_layer_norm_zero:
-                norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(
-                    hidden_states,
-                    timestep,
-                    class_labels,
-                    hidden_dtype=hidden_states.dtype)
+                (
+                    norm_hidden_states,
+                    gate_msa,
+                    shift_mlp,
+                    scale_mlp,
+                    gate_mlp, ) = self.norm1(
+                        hidden_states,
+                        timestep,
+                        class_labels,
+                        hidden_dtype=hidden_states.dtype, )
             else:
                 norm_hidden_states = self.norm1(hidden_states)
 
@@ -282,7 +287,9 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
             norm_hidden_states = m_a(norm_hidden_states)
 
             # 1. Self-Attention
-            cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
+            cross_attention_kwargs = (cross_attention_kwargs
+                                      if cross_attention_kwargs is not None else
+                                      {})
             attn_output = self.attn1(
                 norm_hidden_states,
                 encoder_hidden_states=encoder_hidden_states
@@ -315,8 +322,9 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
             norm_hidden_states = self.norm3(hidden_states)
 
             if self.use_ada_layer_norm_zero:
-                norm_hidden_states = norm_hidden_states * (
-                    1 + scale_mlp[:, None]) + shift_mlp[:, None]
+                norm_hidden_states = (
+                    norm_hidden_states *
+                    (1 + scale_mlp[:, None]) + shift_mlp[:, None])
 
             # (6) ToMe m_m
             norm_hidden_states = m_m(norm_hidden_states)

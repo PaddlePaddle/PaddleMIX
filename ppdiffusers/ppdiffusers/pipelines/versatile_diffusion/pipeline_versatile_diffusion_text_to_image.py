@@ -17,11 +17,8 @@ import inspect
 from typing import Callable, List, Optional, Union
 
 import paddle
-
-from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer, )
+from paddlenlp.transformers import (CLIPImageProcessor,
+                                    CLIPTextModelWithProjection, CLIPTokenizer)
 
 from ...models import AutoencoderKL, Transformer2DModel, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
@@ -98,16 +95,21 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
             if isinstance(module, Transformer2DModel):
                 parent_name, index = name.rsplit(".", 1)
                 index = int(index)
-                self.image_unet.get_sublayer(parent_name)[
-                    index], self.text_unet.get_sublayer(parent_name)[index] = (
+                (
+                    self.image_unet.get_sublayer(parent_name)[index],
+                    self.text_unet.get_sublayer(parent_name)[index], ) = (
                         self.text_unet.get_sublayer(parent_name)[index],
                         self.image_unet.get_sublayer(parent_name)[index], )
 
     def remove_unused_weights(self):
         self.register_modules(text_unet=None)
 
-    def _encode_prompt(self, prompt, num_images_per_prompt,
-                       do_classifier_free_guidance, negative_prompt):
+    def _encode_prompt(
+            self,
+            prompt,
+            num_images_per_prompt,
+            do_classifier_free_guidance,
+            negative_prompt, ):
         r"""
         Encodes the prompt into text encoder hidden states.
 
@@ -151,8 +153,8 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
                 f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-        if hasattr(self.text_encoder.config, "use_attention_mask"
-                   ) and self.text_encoder.config.use_attention_mask:
+        if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                self.text_encoder.config.use_attention_mask):
             attention_mask = text_inputs.attention_mask
         else:
             attention_mask = None
@@ -195,8 +197,8 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -301,17 +303,20 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
                     f" {negative_prompt_embeds.shape}.")
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -454,8 +459,8 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
         # 7. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(
-                [latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = (paddle.concat([latents] * 2)
+                                  if do_classifier_free_guidance else latents)
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
 

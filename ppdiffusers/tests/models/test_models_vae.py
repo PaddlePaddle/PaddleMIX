@@ -20,12 +20,8 @@ import paddle
 from parameterized import parameterized
 
 from ppdiffusers import AutoencoderKL
-from ppdiffusers.utils import (
-    floats_tensor,
-    load_ppnlp_numpy,
-    paddle_all_close,
-    require_paddle_gpu,
-    slow, )
+from ppdiffusers.utils import (floats_tensor, load_ppnlp_numpy,
+                               paddle_all_close, require_paddle_gpu, slow)
 
 from .test_modeling_common import ModelTesterMixin
 
@@ -123,8 +119,10 @@ class AutoencoderKLTests(ModelTesterMixin, unittest.TestCase):
         generator = paddle.Generator().manual_seed(0)
         image = paddle.randn(
             shape=[
-                1, model.config.in_channels, model.config.sample_size,
-                model.config.sample_size
+                1,
+                model.config.in_channels,
+                model.config.sample_size,
+                model.config.sample_size,
             ],
             generator=paddle.Generator().manual_seed(0), )
         with paddle.no_grad():
@@ -279,16 +277,24 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
 
     @parameterized.expand([
         [
-            13, [
-                -0.2051, -0.1803, -0.2311, -0.2114, -0.3292, -0.3574, -0.2953,
-                -0.3323
-            ]
+            13,
+            [
+                -0.2051,
+                -0.1803,
+                -0.2311,
+                -0.2114,
+                -0.3292,
+                -0.3574,
+                -0.2953,
+                -0.3323,
+            ],
         ],
         [
-            37, [
+            37,
+            [
                 -0.2632, -0.2625, -0.2199, -0.2741, -0.4539, -0.499, -0.372,
                 -0.4925
-            ]
+            ],
         ],
     ])
     @require_paddle_gpu
@@ -304,16 +310,24 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
 
     @parameterized.expand([
         [
-            27, [
+            27,
+            [
                 -0.0369, 0.0207, -0.0776, -0.0682, -0.1747, -0.193, -0.1465,
                 -0.2039
-            ]
+            ],
         ],
         [
-            16, [
-                -0.1628, -0.2134, -0.2747, -0.2642, -0.3774, -0.4404, -0.3687,
-                -0.4277
-            ]
+            16,
+            [
+                -0.1628,
+                -0.2134,
+                -0.2747,
+                -0.2642,
+                -0.3774,
+                -0.4404,
+                -0.3687,
+                -0.4277,
+            ],
         ],
     ])
     @require_paddle_gpu
@@ -363,16 +377,32 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
 
     @parameterized.expand([
         [
-            33, [
-                -0.3001, 0.0918, -2.6984, -3.972, -3.2099, -5.0353, 1.7338,
-                -0.2065, 3.4267
-            ]
+            33,
+            [
+                -0.3001,
+                0.0918,
+                -2.6984,
+                -3.972,
+                -3.2099,
+                -5.0353,
+                1.7338,
+                -0.2065,
+                3.4267,
+            ],
         ],
         [
-            47, [
-                -1.503, -4.3871, -6.0355, -9.1157, -1.6661, -2.7853, 2.1607,
-                -5.0823, 2.5633
-            ]
+            47,
+            [
+                -1.503,
+                -4.3871,
+                -6.0355,
+                -9.1157,
+                -1.6661,
+                -2.7853,
+                2.1607,
+                -5.0823,
+                2.5633,
+            ],
         ],
     ])
     def test_stable_diffusion_encode_sample(self, seed, expected_slice):

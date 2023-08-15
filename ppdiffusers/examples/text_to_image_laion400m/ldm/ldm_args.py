@@ -17,7 +17,6 @@ from dataclasses import asdict, dataclass, field
 from typing import Optional
 
 import paddle
-
 from paddlenlp.utils.log import logger
 
 
@@ -30,7 +29,7 @@ class ModelArguments:
     # use pretrained vae kl-8.ckpt (CompVis/stable-diffusion-v1-4/vae)
     vae_name_or_path: Optional[str] = field(
         default="CompVis/stable-diffusion-v1-4/vae",
-        metadata={"help": "pretrained_vae_name_or_path"})
+        metadata={"help": "pretrained_vae_name_or_path"}, )
     text_encoder_config_file: Optional[str] = field(
         default="./config/ldmbert.json",
         metadata={"help": "text_encoder_config_file"})
@@ -53,7 +52,7 @@ class ModelArguments:
         metadata={
             "help":
             "Path to pretrained model or model, when we want to resume training."
-        })
+        }, )
     image_logging_steps: Optional[int] = field(
         default=1000, metadata={"help": "Log image every X steps."})
     enable_xformers_memory_efficient_attention: bool = field(
@@ -85,7 +84,7 @@ class DataArguments:
 
     file_list: str = field(
         default="./data/filelist/train.filelist.list",
-        metadata={"help": "The name of the file_list."})
+        metadata={"help": "The name of the file_list."}, )
     resolution: int = field(
         default=256,
         metadata={
@@ -165,7 +164,7 @@ class NoTrainerTrainingArguments:
         default=23,
         metadata={
             "help": "Random seed that will be set at the beginning of training."
-        })
+        }, )
     dataloader_num_workers: int = field(
         default=6,
         metadata={
@@ -177,7 +176,7 @@ class NoTrainerTrainingArguments:
         metadata={
             "help":
             "The list of integrations to report the results and logs to."
-        })
+        }, )
     recompute: bool = field(
         default=False,
         metadata={

@@ -28,13 +28,8 @@ from huggingface_hub.utils import is_jinja_available
 from ..version import VERSION as __version__
 from .constants import DIFFUSERS_CACHE, HUGGINGFACE_CO_RESOLVE_ENDPOINT
 from .import_utils import (
-    ENV_VARS_TRUE_VALUES,
-    _fastdeploy_version,
-    _paddle_version,
-    _torch_version,
-    is_fastdeploy_available,
-    is_paddle_available,
-    is_torch_available, )
+    ENV_VARS_TRUE_VALUES, _fastdeploy_version, _paddle_version, _torch_version,
+    is_fastdeploy_available, is_paddle_available, is_torch_available)
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -199,8 +194,8 @@ else:
         cache_version = 0
 
 if cache_version < 1:
-    old_cache_is_not_empty = os.path.isdir(old_diffusers_cache) and len(
-        os.listdir(old_diffusers_cache)) > 0
+    old_cache_is_not_empty = (os.path.isdir(old_diffusers_cache) and
+                              len(os.listdir(old_diffusers_cache)) > 0)
     if old_cache_is_not_empty:
         logger.warning(
             "The cache for model files in Diffusers v0.14.0 has moved to a new location. Moving your "

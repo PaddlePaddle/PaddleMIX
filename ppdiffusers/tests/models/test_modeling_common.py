@@ -50,7 +50,7 @@ class ModelUtilsTest(unittest.TestCase):
             model = UNet2DConditionModel.from_pretrained(
                 "hf-internal-testing/tiny-stable-diffusion-torch",
                 subfolder="unet",
-                local_files_only=True)
+                local_files_only=True, )
         for p1, p2 in zip(orig_model.parameters(), model.parameters()):
             if (p1 != p2).cast("int64").sum() > 0:
                 assert False, "Parameters not the same!"
@@ -70,10 +70,10 @@ class ModelUtilsTest(unittest.TestCase):
                     from_diffusers=True, )
 
             download_requests = [r.method for r in m.request_history]
-            assert download_requests.count(
-                "HEAD") == 2, "2 HEAD requests one for config, one for model"
-            assert download_requests.count(
-                "GET") == 2, "2 GET requests one for config, one for model"
+            assert (download_requests.count("HEAD") == 2
+                    ), "2 HEAD requests one for config, one for model"
+            assert (download_requests.count("GET") == 2
+                    ), "2 GET requests one for config, one for model"
 
             with requests_mock.mock(real_http=True) as m:
                 UNet2DConditionModel.from_pretrained(
@@ -183,9 +183,10 @@ class ModelTesterMixin:
         with self.assertRaises(AttributeError) as error:
             model.does_not_exist
 
-        assert str(
-            error.exception
-        ) == f"'{type(model).__name__}' object has no attribute 'does_not_exist'"
+        assert (
+            str(error.exception) ==
+            f"'{type(model).__name__}' object has no attribute 'does_not_exist'"
+        )
 
     def test_from_save_pretrained_variant(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -359,7 +360,7 @@ class ModelTesterMixin:
                     paddle.allclose(
                         set_nan_tensor_to_zero(tuple_object),
                         set_nan_tensor_to_zero(dict_object),
-                        atol=1e-05),
+                        atol=1e-05, ),
                     msg=f"Tuple and dict output are not equal. Difference: {paddle.max(x=paddle.abs(x=tuple_object - dict_object))}. Tuple has `nan`: {paddle.isnan(x=tuple_object).any()} and `inf`: {paddle.isinf(x=tuple_object)}. Dict has `nan`: {paddle.isnan(x=dict_object).any()} and `inf`: {paddle.isinf(x=dict_object)}.",
                 )
 
@@ -383,8 +384,8 @@ class ModelTesterMixin:
         self.assertFalse(model.is_gradient_checkpointing)
 
     def test_deprecated_kwargs(self):
-        has_kwarg_in_model_class = "kwargs" in inspect.signature(
-            self.model_class.__init__).parameters
+        has_kwarg_in_model_class = (
+            "kwargs" in inspect.signature(self.model_class.__init__).parameters)
         has_deprecated_kwarg = len(self.model_class._deprecated_kwargs) > 0
         if has_kwarg_in_model_class and not has_deprecated_kwarg:
             raise ValueError(

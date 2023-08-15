@@ -19,16 +19,12 @@ import random
 import paddle
 import pandas as pd
 from paddle.utils.download import get_path_from_url
+from paddlenlp.transformers import CLIPTextModel
 from tqdm.auto import tqdm
 
-from paddlenlp.transformers import CLIPTextModel
-from ppdiffusers import (
-    DDIMScheduler,
-    EulerAncestralDiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    StableDiffusionPipeline,
-    UNet2DConditionModel, )
+from ppdiffusers import (DDIMScheduler, EulerAncestralDiscreteScheduler,
+                         LMSDiscreteScheduler, PNDMScheduler,
+                         StableDiffusionPipeline, UNet2DConditionModel)
 from ppdiffusers.utils import DOWNLOAD_SERVER, PPDIFFUSERS_CACHE
 
 base_url = DOWNLOAD_SERVER + "/CompVis/data/"
@@ -140,12 +136,12 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="unet_model_name_or_path.")
+        help="unet_model_name_or_path.", )
     parser.add_argument(
         "--text_encoder_model_name_or_path",
         default=None,
         type=str,
-        help="text_encoder_model_name_or_path.")
+        help="text_encoder_model_name_or_path.", )
     parser.add_argument(
         "--file",
         default="coco30k",
@@ -186,7 +182,7 @@ if __name__ == "__main__":
         default=[1.5, 2, 3, 4, 5, 6, 7, 8],
         nargs="+",
         type=str,
-        help="guidance_scales list.")
+        help="guidance_scales list.", )
     parser.add_argument("--height", default=256, type=int, help="height.")
     parser.add_argument("--width", default=256, type=int, help="width.")
     args = parser.parse_args()

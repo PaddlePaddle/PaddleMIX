@@ -18,15 +18,11 @@ import os
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-
 from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DDPMScheduler,
-    UNet2DConditionModel,
-    is_ppxformers_available, )
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
+                         UNet2DConditionModel, is_ppxformers_available)
 from ppdiffusers.initializer import reset_initialized_parameter, zeros_
 from ppdiffusers.models.attention import AttentionBlock
 from ppdiffusers.models.ema import LitEma
@@ -169,7 +165,7 @@ class StableDiffusionModel(nn.Layer):
         model_pred = self.unet(
             sample=noisy_latents,
             timestep=timesteps,
-            encoder_hidden_states=encoder_hidden_states).sample
+            encoder_hidden_states=encoder_hidden_states, ).sample
 
         # Get the target for loss depending on the prediction type
         if self.model_args.prediction_type == "epsilon":
@@ -193,7 +189,7 @@ class StableDiffusionModel(nn.Layer):
             snr = self.compute_snr(timesteps)
             mse_loss_weights = (paddle.stack(
                 [snr, self.model_args.snr_gamma * paddle.ones_like(timesteps)],
-                axis=1).min(axis=1)[0] / snr)
+                axis=1, ).min(axis=1)[0] / snr)
             # We first calculate the original loss. Then we mean over the non-batch dimensions and
             # rebalance the sample-wise losses with their respective loss weights.
             # Finally, we take the mean of the rebalanced loss.
@@ -221,7 +217,8 @@ class StableDiffusionModel(nn.Layer):
                 original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
-        noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
+        noisy_samples = (sqrt_alpha_prod * original_samples +
+                         sqrt_one_minus_alpha_prod * noise)
         return noisy_samples
 
     def get_velocity(self,
@@ -287,14 +284,15 @@ class StableDiffusionModel(nn.Layer):
         return image
 
     @paddle.no_grad()
-    def log_image(self,
-                  input_ids=None,
-                  height=256,
-                  width=256,
-                  eta=0.0,
-                  guidance_scale=7.5,
-                  max_batch=8,
-                  **kwargs):
+    def log_image(
+            self,
+            input_ids=None,
+            height=256,
+            width=256,
+            eta=0.0,
+            guidance_scale=7.5,
+            max_batch=8,
+            **kwargs, ):
         self.eval()
         with self.ema_scope():
             if height % 8 != 0 or width % 8 != 0:
@@ -327,8 +325,8 @@ class StableDiffusionModel(nn.Layer):
             if accepts_eta:
                 extra_step_kwargs["eta"] = eta
             for t in self.eval_scheduler.timesteps:
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.eval_scheduler.scale_model_input(
                     latent_model_input, t)
                 noise_pred = self.unet(

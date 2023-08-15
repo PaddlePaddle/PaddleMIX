@@ -19,29 +19,20 @@ import unittest
 
 import numpy as np
 import paddle
-from ..pipeline_params import (
-    IMAGE_VARIATION_BATCH_PARAMS,
-    IMAGE_VARIATION_PARAMS, )
-from ..test_pipelines_common import (
-    PipelineTesterMixin,
-    assert_mean_pixel_difference, )
-
 from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPTextConfig,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-    CLIPVisionConfig,
-    CLIPVisionModelWithProjection, )
-from ppdiffusers import (
-    DiffusionPipeline,
-    UnCLIPImageVariationPipeline,
-    UnCLIPScheduler,
-    UNet2DConditionModel,
-    UNet2DModel, )
+    CLIPImageProcessor, CLIPTextConfig, CLIPTextModelWithProjection,
+    CLIPTokenizer, CLIPVisionConfig, CLIPVisionModelWithProjection)
+
+from ppdiffusers import (DiffusionPipeline, UnCLIPImageVariationPipeline,
+                         UnCLIPScheduler, UNet2DConditionModel, UNet2DModel)
 from ppdiffusers.pipelines.unclip.text_proj import UnCLIPTextProjModel
 from ppdiffusers.utils import floats_tensor, slow
 from ppdiffusers.utils.testing_utils import load_image, require_paddle_gpu
+
+from ..pipeline_params import (IMAGE_VARIATION_BATCH_PARAMS,
+                               IMAGE_VARIATION_PARAMS)
+from ..test_pipelines_common import (PipelineTesterMixin,
+                                     assert_mean_pixel_difference)
 
 
 class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
@@ -50,8 +41,10 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
     params = IMAGE_VARIATION_PARAMS - {"height", "width", "guidance_scale"}
     batch_params = IMAGE_VARIATION_BATCH_PARAMS
     required_optional_params = frozenset([
-        "generator", "return_dict", "decoder_num_inference_steps",
-        "super_res_num_inference_steps"
+        "generator",
+        "return_dict",
+        "decoder_num_inference_steps",
+        "super_res_num_inference_steps",
     ])
     test_xformers_attention = False
 
@@ -128,13 +121,15 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
             "sample_size": 32,
             "in_channels": 3,
             "out_channels": 6,
-            "down_block_types":
-            ("ResnetDownsampleBlock2D", "SimpleCrossAttnDownBlock2D"),
+            "down_block_types": (
+                "ResnetDownsampleBlock2D",
+                "SimpleCrossAttnDownBlock2D", ),
             "up_block_types":
             ("SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"),
             "mid_block_type": "UNetMidBlock2DSimpleCrossAttn",
-            "block_out_channels":
-            (self.block_out_channels_0, self.block_out_channels_0 * 2),
+            "block_out_channels": (
+                self.block_out_channels_0,
+                self.block_out_channels_0 * 2, ),
             "layers_per_block": 1,
             "cross_attention_dim": self.cross_attention_dim,
             "attention_head_dim": 4,
@@ -153,8 +148,9 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
             ("ResnetDownsampleBlock2D", "ResnetDownsampleBlock2D"),
             "up_block_types":
             ("ResnetUpsampleBlock2D", "ResnetUpsampleBlock2D"),
-            "block_out_channels":
-            (self.block_out_channels_0, self.block_out_channels_0 * 2),
+            "block_out_channels": (
+                self.block_out_channels_0,
+                self.block_out_channels_0 * 2, ),
             "in_channels": 6,
             "out_channels": 3,
         }
@@ -181,11 +177,11 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         decoder_scheduler = UnCLIPScheduler(
             variance_type="learned_range",
             prediction_type="epsilon",
-            num_train_timesteps=1000)
+            num_train_timesteps=1000, )
         super_res_scheduler = UnCLIPScheduler(
             variance_type="fixed_small_log",
             prediction_type="epsilon",
-            num_train_timesteps=1000)
+            num_train_timesteps=1000, )
         feature_extractor = CLIPImageProcessor(crop_size=32, size=32)
         image_encoder = self.dummy_image_encoder
         return {
@@ -211,8 +207,8 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         if pil_image:
             input_image = input_image * 0.5 + 0.5
             input_image = input_image.clip(min=0, max=1)
-            input_image = input_image.cpu().transpose(
-                perm=[0, 2, 3, 1]).cast("float32").numpy()
+            input_image = (input_image.cpu().transpose(
+                perm=[0, 2, 3, 1]).cast("float32").numpy())
             input_image = DiffusionPipeline.numpy_to_pil(input_image)[0]
         return {
             "image": input_image,
@@ -287,7 +283,8 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         image = output.images
         tuple_pipeline_inputs = self.get_dummy_inputs(pil_image=True)
         tuple_pipeline_inputs["image"] = [
-            tuple_pipeline_inputs["image"], tuple_pipeline_inputs["image"]
+            tuple_pipeline_inputs["image"],
+            tuple_pipeline_inputs["image"],
         ]
         image_from_tuple = pipe(**tuple_pipeline_inputs, return_dict=False)[0]
         image_slice = image[0, -3:, -3:, -1]
@@ -318,15 +315,17 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         generator = paddle.Generator().manual_seed(0)
         dtype = pipe.decoder.dtype
         batch_size = 1
-        shape = (batch_size, pipe.decoder.config.in_channels,
-                 pipe.decoder.config.sample_size,
-                 pipe.decoder.config.sample_size)
+        shape = (
+            batch_size,
+            pipe.decoder.config.in_channels,
+            pipe.decoder.config.sample_size,
+            pipe.decoder.config.sample_size, )
         decoder_latents = pipe.prepare_latents(
             shape,
             dtype=dtype,
             generator=generator,
             latents=None,
-            scheduler=DummyScheduler())
+            scheduler=DummyScheduler(), )
         shape = (
             batch_size,
             pipe.super_res_first.config.in_channels // 2,
@@ -337,12 +336,12 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
             dtype=dtype,
             generator=generator,
             latents=None,
-            scheduler=DummyScheduler())
+            scheduler=DummyScheduler(), )
         pipeline_inputs = self.get_dummy_inputs(pil_image=False)
         img_out_1 = pipe(
             **pipeline_inputs,
             decoder_latents=decoder_latents,
-            super_res_latents=super_res_latents).images
+            super_res_latents=super_res_latents, ).images
         pipeline_inputs = self.get_dummy_inputs(pil_image=False)
         image = pipeline_inputs.pop("image")
         image_embeddings = pipe.image_encoder(image).image_embeds

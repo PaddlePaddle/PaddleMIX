@@ -127,7 +127,7 @@ class PreconfigEulerAncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype=paddle.float32)**2)
+                dtype=paddle.float32, )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -220,15 +220,16 @@ class PreconfigEulerAncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
                 self.sigma_down.append(sigma_down)
             self.latent_scales = 1 / ((self.sigmas**2 + 1)**0.5)
 
-    def step(self,
-             model_output: paddle.Tensor,
-             timestep: Union[float, paddle.Tensor],
-             sample: paddle.Tensor,
-             generator: Optional[Union[paddle.Generator, List[
-                 paddle.Generator]]]=None,
-             return_dict: bool=True,
-             **kwargs) -> Union[PreconfigEulerAncestralDiscreteSchedulerOutput,
-                                Tuple]:
+    def step(
+            self,
+            model_output: paddle.Tensor,
+            timestep: Union[float, paddle.Tensor],
+            sample: paddle.Tensor,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
+            return_dict: bool=True,
+            **kwargs, ) -> Union[PreconfigEulerAncestralDiscreteSchedulerOutput,
+                                 Tuple]:
         """
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
         process from the learned model outputs (most often the predicted noise).

@@ -21,8 +21,8 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 from paddle.nn import functional as F
-
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...loaders import TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -131,11 +131,12 @@ class AttendExciteAttnProcessor:
         self.attnstore = attnstore
         self.place_in_unet = place_in_unet
 
-    def __call__(self,
-                 attn: Attention,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None):
+    def __call__(
+            self,
+            attn: Attention,
+            hidden_states,
+            encoder_hidden_states=None,
+            attention_mask=None, ):
         batch_size, sequence_length, _ = hidden_states.shape
         attention_mask = attn.prepare_attention_mask(
             attention_mask, sequence_length, batch_size)
@@ -143,7 +144,9 @@ class AttendExciteAttnProcessor:
         query = attn.to_q(hidden_states)
 
         is_cross = encoder_hidden_states is not None
-        encoder_hidden_states = encoder_hidden_states if encoder_hidden_states is not None else hidden_states
+        encoder_hidden_states = (encoder_hidden_states
+                                 if encoder_hidden_states is not None else
+                                 hidden_states)
         key = attn.to_k(encoder_hidden_states)
         value = attn.to_v(encoder_hidden_states)
 
@@ -302,8 +305,8 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -353,8 +356,8 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -507,16 +510,20 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
             )
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = (batch_size, num_channels_latents, height //
-                 self.vae_scale_factor, width // self.vae_scale_factor)
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
+        shape = (
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor, )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -882,8 +889,9 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                         self.unet.clear_gradients()
 
                         # Get max activation value for each subject token
-                        max_attention_per_index = self._aggregate_and_get_max_attention_per_token(
-                            indices=index, )
+                        max_attention_per_index = (
+                            self._aggregate_and_get_max_attention_per_token(
+                                indices=index, ))
 
                         loss = self._compute_loss(
                             max_attention_per_index=max_attention_per_index)
@@ -891,7 +899,11 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                         # If this is an iterative refinement step, verify we have reached the desired threshold for all
                         if i in thresholds.keys() and loss > 1.0 - thresholds[
                                 i]:
-                            loss, latent, max_attention_per_index = self._perform_iterative_refinement_step(
+                            (
+                                loss,
+                                latent,
+                                max_attention_per_index,
+                            ) = self._perform_iterative_refinement_step(
                                 latents=latent,
                                 indices=index,
                                 loss=loss,
@@ -915,8 +927,8 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline,
                     latents = paddle.concat(updated_latents, axis=0)
 
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -998,8 +1010,8 @@ class GaussianSmoothing(nn.Layer):
         ])
         for size, std, mgrid in zip(kernel_size, sigma, meshgrids):
             mean = (size - 1) / 2
-            kernel *= 1 / (std * math.sqrt(
-                2 * math.pi)) * paddle.exp(-(((mgrid - mean) / (2 * std))**2))
+            kernel *= (1 / (std * math.sqrt(2 * math.pi)) *
+                       paddle.exp(-(((mgrid - mean) / (2 * std))**2)))
 
         # Make sure sum of values in gaussian kernel equals 1.
         kernel = kernel / paddle.sum(kernel)

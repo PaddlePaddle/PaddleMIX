@@ -13,13 +13,13 @@
 # limitations under the License.
 
 import math
+import os
 import types
 from dataclasses import dataclass, field
 from typing import List, Optional
 
 import torch
 from transformers.trainer import TrainingArguments
-import os
 from transformers.utils.logging import get_logger
 
 __all__ = [
@@ -46,7 +46,8 @@ def str2bool(v):
 
 if not str2bool(os.getenv("FLAG_SDP", "True")):
     if hasattr(torch.nn.functional, "scaled_dot_product_attention"):
-        torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
+        torch.nn.functional.scaled_dot_product_attention_ = (
+            torch.nn.functional.scaled_dot_product_attention)
         del torch.nn.functional.scaled_dot_product_attention
         print(
             "Removed `torch.nn.functional.scaled_dot_product_attention`, we will use default attention implement."
@@ -89,19 +90,19 @@ class SDTrainingArguments(TrainingArguments):
 
     def __post_init__(self):
         super().__post_init__()
-        self.image_logging_steps = ((math.ceil(
-            self.image_logging_steps / self.logging_steps) * self.logging_steps)
-                                    if self.image_logging_steps > 0 else -1)
+        self.image_logging_steps = (
+            (math.ceil(self.image_logging_steps / self.logging_steps) *
+             self.logging_steps) if self.image_logging_steps > 0 else -1)
         self.use_ema = str2bool(os.getenv("FLAG_USE_EMA",
                                           "False")) or self.use_ema
         self.enable_xformers_memory_efficient_attention = (
             str2bool(os.getenv("FLAG_XFORMERS", "False")) or
             self.enable_xformers_memory_efficient_attention)
-        self.recompute = str2bool(os.getenv("FLAG_RECOMPUTE",
-                                            "False")) or self.recompute
+        self.recompute = (str2bool(os.getenv("FLAG_RECOMPUTE", "False")) or
+                          self.recompute)
         self.gradient_checkpointing = self.gradient_checkpointing or self.recompute
-        self.benchmark = str2bool(os.getenv("FLAG_BENCHMARK",
-                                            "False")) or self.benchmark
+        self.benchmark = (str2bool(os.getenv("FLAG_BENCHMARK", "False")) or
+                          self.benchmark)
 
     def print_config(self, args=None, key=""):
         """
@@ -169,7 +170,8 @@ class SDModelArguments:
         }, )
     input_perturbation: Optional[float] = field(
         default=0,
-        metadata={"help": "The scale of input perturbation. Recommended 0.1."})
+        metadata={"help": "The scale of input perturbation. Recommended 0.1."},
+    )
 
 
 @dataclass
@@ -180,7 +182,7 @@ class SDDataArguments:
 
     file_list: str = field(
         default="./data/filelist/train.filelist.list",
-        metadata={"help": "The name of the file_list."})
+        metadata={"help": "The name of the file_list."}, )
     num_records: int = field(default=10000000, metadata={"help": "num_records"})
     buffer_size: int = field(
         default=100,

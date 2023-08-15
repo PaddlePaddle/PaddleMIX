@@ -28,18 +28,12 @@ except ImportError:
         "OmegaConf is required to convert the SD checkpoints. Please install it with `pip install OmegaConf`."
     )
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+
 from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    HeunDiscreteScheduler,
-    LMSDiscreteScheduler,
-    LVDMAutoencoderKL,
-    LVDMUNet3DModel,
-    PNDMScheduler,
-    LVDMUncondPipeline, )
+    AutoencoderKL, DDIMScheduler, DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler, EulerDiscreteScheduler,
+    HeunDiscreteScheduler, LMSDiscreteScheduler, LVDMAutoencoderKL,
+    LVDMUncondPipeline, LVDMUNet3DModel, PNDMScheduler)
 
 paddle.set_device("cpu")
 MZ_ZIP_LOCAL_DIR_HEADER_SIZE = 30
@@ -299,13 +293,13 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="Path to the checkpoint to convert.")
+        help="Path to the checkpoint to convert.", )
     parser.add_argument(
         "--vae_checkpoint_path",
         default=None,
         type=str,
         required=False,
-        help="Path to the checkpoint to convert.")
+        help="Path to the checkpoint to convert.", )
     parser.add_argument(
         "--original_config_file",
         default=None,
@@ -337,17 +331,17 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="Path to the output model.")
+        help="Path to the output model.", )
     args = parser.parse_args()
 
     # image_size = 512
-    checkpoint = torch.load(args.checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(args.checkpoint_path, map_location="cpu")
     checkpoint = checkpoint.get("state_dict", checkpoint)
 
     vae_checkpoint = None
     if args.vae_checkpoint_path:
         vae_checkpoint = torch.load(
-            args.vae_checkpoint_path, map_location='cpu')
+            args.vae_checkpoint_path, map_location="cpu")
         vae_checkpoint = vae_checkpoint.get("state_dict", vae_checkpoint)
 
     original_config = OmegaConf.load(args.original_config_file)
@@ -399,7 +393,7 @@ if __name__ == "__main__":
         checkpoint,
         diffusers_unet_config,
         path=args.checkpoint_path,
-        extract_ema=args.extract_ema)
+        extract_ema=args.extract_ema, )
     unet = LVDMUNet3DModel.from_config(diffusers_unet_config)
     ppdiffusers_unet_checkpoint = convert_diffusers_vae_unet_to_ppdiffusers(
         unet, diffusers_unet_checkpoint)

@@ -19,21 +19,16 @@ import unittest
 
 import numpy as np
 import paddle
+from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    StableDiffusionInpaintPipelineLegacy,
-    UNet2DConditionModel,
-    UNet2DModel,
-    VQModel, )
+from ppdiffusers import (AutoencoderKL, DDIMScheduler,
+                         DPMSolverMultistepScheduler, LMSDiscreteScheduler,
+                         PNDMScheduler, StableDiffusionInpaintPipelineLegacy,
+                         UNet2DConditionModel, UNet2DModel, VQModel)
 from ppdiffusers.utils import floats_tensor, load_image, nightly, slow
-from ppdiffusers.utils.testing_utils import load_numpy, preprocess_image, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import (load_numpy, preprocess_image,
+                                             require_paddle_gpu)
 
 
 class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
@@ -155,8 +150,9 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
             "hf-internal-testing/tiny-random-clip")
         image = self.dummy_image.cpu().transpose(perm=[0, 2, 3, 1])[0]
         init_image = Image.fromarray(np.uint8(image)).convert("RGB")
-        mask_image = Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
-            (32, 32))
+        mask_image = (
+            Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
+                (32, 32)))
         sd_pipe = StableDiffusionInpaintPipelineLegacy(
             unet=unet,
             scheduler=scheduler,
@@ -191,8 +187,15 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
         expected_slice = np.array([
-            0.01514593, 0.46352747, 0.34991893, 0.29177475, 0.5415823,
-            0.56992227, 0.39533705, 0.67953515, 0.5445507
+            0.01514593,
+            0.46352747,
+            0.34991893,
+            0.29177475,
+            0.5415823,
+            0.56992227,
+            0.39533705,
+            0.67953515,
+            0.5445507,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
@@ -239,12 +242,26 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
         image_slice_1 = images[1, -3:, -3:, -1].flatten()
 
         expected_slice_0 = np.array([
-            0.50299895, 0.6465979, 0.3489662, 0.28862774, 0.59657216,
-            0.41669005, 0.19621253, 0.27549136, 0.39040852
+            0.50299895,
+            0.6465979,
+            0.3489662,
+            0.28862774,
+            0.59657216,
+            0.41669005,
+            0.19621253,
+            0.27549136,
+            0.39040852,
         ])
         expected_slice_1 = np.array([
-            0.70079666, 0.5616544, 0.5304112, 0.38820785, 0.3118701, 0.47477302,
-            0.37215403, 0.3785481, 0.50153226
+            0.70079666,
+            0.5616544,
+            0.5304112,
+            0.38820785,
+            0.3118701,
+            0.47477302,
+            0.37215403,
+            0.3785481,
+            0.50153226,
         ])
 
         assert np.abs(expected_slice_0 - image_slice_0).max() < 1e-2
@@ -259,8 +276,9 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
             "hf-internal-testing/tiny-random-clip")
         image = self.dummy_image.cpu().transpose(perm=[0, 2, 3, 1])[0]
         init_image = Image.fromarray(np.uint8(image)).convert("RGB")
-        mask_image = Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
-            (32, 32))
+        mask_image = (
+            Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
+                (32, 32)))
         sd_pipe = StableDiffusionInpaintPipelineLegacy(
             unet=unet,
             scheduler=scheduler,
@@ -286,8 +304,15 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
         expected_slice = np.array([
-            0., 0.43941003, 0.32130337, 0.31442684, 0.566114, 0.56392324,
-            0.3946159, 0.6844422, 0.5345681
+            0.0,
+            0.43941003,
+            0.32130337,
+            0.31442684,
+            0.566114,
+            0.56392324,
+            0.3946159,
+            0.6844422,
+            0.5345681,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
@@ -300,8 +325,9 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
             "hf-internal-testing/tiny-random-clip")
         image = self.dummy_image.cpu().transpose(perm=[0, 2, 3, 1])[0]
         init_image = Image.fromarray(np.uint8(image)).convert("RGB")
-        mask_image = Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
-            (32, 32))
+        mask_image = (
+            Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
+                (32, 32)))
         sd_pipe = StableDiffusionInpaintPipelineLegacy(
             unet=unet,
             scheduler=scheduler,
@@ -317,7 +343,7 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
             num_inference_steps=2,
             output_type="np",
             image=init_image,
-            mask_image=mask_image).images
+            mask_image=mask_image, ).images
         assert images.shape == (1, 32, 32, 3)
         batch_size = 2
         images = sd_pipe(
@@ -325,7 +351,7 @@ class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
             num_inference_steps=2,
             output_type="np",
             image=init_image,
-            mask_image=mask_image).images
+            mask_image=mask_image, ).images
         assert images.shape == (batch_size, 32, 32, 3)
         num_images_per_prompt = 2
         images = sd_pipe(
@@ -383,8 +409,15 @@ class StableDiffusionInpaintLegacyPipelineSlowTests(unittest.TestCase):
         image_slice = image[0, 253:256, 253:256, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
         expected_slice = np.array([
-            0.27226633, 0.29068208, 0.3450312, 0.21444553, 0.26328486,
-            0.34392387, 0.18026042, 0.24961185, 0.3214044
+            0.27226633,
+            0.29068208,
+            0.3450312,
+            0.21444553,
+            0.26328486,
+            0.34392387,
+            0.18026042,
+            0.24961185,
+            0.3214044,
         ])
         assert np.abs(expected_slice - image_slice).max() < 0.0001
 
@@ -411,12 +444,26 @@ class StableDiffusionInpaintLegacyPipelineSlowTests(unittest.TestCase):
         image_slice_1 = image[1, 253:256, 253:256, -1].flatten()
 
         expected_slice_0 = np.array([
-            0.27526367, 0.29158682, 0.35184938, 0.21504477, 0.26708275, 0.35169,
-            0.18185198, 0.2572803, 0.32425082
+            0.27526367,
+            0.29158682,
+            0.35184938,
+            0.21504477,
+            0.26708275,
+            0.35169,
+            0.18185198,
+            0.2572803,
+            0.32425082,
         ])
         expected_slice_1 = np.array([
-            0., 0.18929192, 0.7068148, 0.07977328, 0.13444492, 0.5016247,
-            0.49761847, 0.2830933, 0.36412603
+            0.0,
+            0.18929192,
+            0.7068148,
+            0.07977328,
+            0.13444492,
+            0.5016247,
+            0.49761847,
+            0.2830933,
+            0.36412603,
         ])
 
         assert np.abs(expected_slice_0 - image_slice_0).max() < 1e-4
@@ -433,8 +480,15 @@ class StableDiffusionInpaintLegacyPipelineSlowTests(unittest.TestCase):
         image_slice = image[0, 253:256, 253:256, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
         expected_slice = np.array([
-            0.29036117, 0.28907132, 0.32839334, 0.26510137, 0.2820784,
-            0.31148806, 0.29358387, 0.29515788, 0.28257304
+            0.29036117,
+            0.28907132,
+            0.32839334,
+            0.26510137,
+            0.2820784,
+            0.31148806,
+            0.29358387,
+            0.29515788,
+            0.28257304,
         ])
         assert np.abs(expected_slice - image_slice).max() < 0.0001
 
@@ -451,8 +505,15 @@ class StableDiffusionInpaintLegacyPipelineSlowTests(unittest.TestCase):
                 assert latents.shape == (1, 4, 64, 64)
                 latents_slice = latents[0, -3:, -3:, -1]
                 expected_slice = np.array([
-                    -0.103, 1.415, -0.02197, -0.5103, -0.5903, 0.1953, 0.75,
-                    0.3477, -1.356
+                    -0.103,
+                    1.415,
+                    -0.02197,
+                    -0.5103,
+                    -0.5903,
+                    0.1953,
+                    0.75,
+                    0.3477,
+                    -1.356,
                 ])
                 assert np.abs(latents_slice.flatten() - expected_slice).max(
                 ) < 0.001
@@ -461,8 +522,15 @@ class StableDiffusionInpaintLegacyPipelineSlowTests(unittest.TestCase):
                 assert latents.shape == (1, 4, 64, 64)
                 latents_slice = latents[0, -3:, -3:, -1]
                 expected_slice = np.array([
-                    0.4802, 1.154, 0.628, 0.2322, 0.2593, -0.1455, 0.7075,
-                    -0.1617, -0.5615
+                    0.4802,
+                    1.154,
+                    0.628,
+                    0.2322,
+                    0.2593,
+                    -0.1455,
+                    0.7075,
+                    -0.1617,
+                    -0.5615,
                 ])
                 assert np.abs(latents_slice.flatten() - expected_slice).max(
                 ) < 0.001
@@ -471,7 +539,7 @@ class StableDiffusionInpaintLegacyPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionInpaintPipelineLegacy.from_pretrained(
             "CompVis/stable-diffusion-v1-4",
             safety_checker=None,
-            paddle_dtype=paddle.float16)
+            paddle_dtype=paddle.float16, )
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
         inputs = self.get_inputs()

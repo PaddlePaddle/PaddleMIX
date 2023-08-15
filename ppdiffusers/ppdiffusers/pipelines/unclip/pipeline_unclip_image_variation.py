@@ -18,12 +18,9 @@ from typing import List, Optional, Union
 import paddle
 import paddle.nn.functional as F
 import PIL
-
-from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-    CLIPVisionModelWithProjection, )
+from paddlenlp.transformers import (CLIPImageProcessor,
+                                    CLIPTextModelWithProjection, CLIPTokenizer,
+                                    CLIPVisionModelWithProjection)
 
 from ...models import UNet2DConditionModel, UNet2DModel
 from ...pipelines import DiffusionPipeline, ImagePipelineOutput
@@ -175,8 +172,10 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
             negative_prompt_embeds_text_encoder_output = self.text_encoder(
                 uncond_input.input_ids)
 
-            negative_prompt_embeds = negative_prompt_embeds_text_encoder_output.text_embeds
-            uncond_text_encoder_hidden_states = negative_prompt_embeds_text_encoder_output.last_hidden_state
+            negative_prompt_embeds = (
+                negative_prompt_embeds_text_encoder_output.text_embeds)
+            uncond_text_encoder_hidden_states = (
+                negative_prompt_embeds_text_encoder_output.last_hidden_state)
 
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
 
@@ -189,8 +188,9 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
             seq_len = uncond_text_encoder_hidden_states.shape[1]
             uncond_text_encoder_hidden_states = uncond_text_encoder_hidden_states.tile(
                 [1, num_images_per_prompt, 1])
-            uncond_text_encoder_hidden_states = uncond_text_encoder_hidden_states.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
+            uncond_text_encoder_hidden_states = (
+                uncond_text_encoder_hidden_states.reshape(
+                    [batch_size * num_images_per_prompt, seq_len, -1]))
 
             # duplicate uncond_text_mask for each generation per prompt
             seq_len = uncond_text_mask.shape[1]
@@ -213,10 +213,11 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
 
         return prompt_embeds, text_encoder_hidden_states, text_mask
 
-    def _encode_image(self,
-                      image,
-                      num_images_per_prompt,
-                      image_embeddings: Optional[paddle.Tensor]=None):
+    def _encode_image(
+            self,
+            image,
+            num_images_per_prompt,
+            image_embeddings: Optional[paddle.Tensor]=None, ):
 
         dtype = self.image_encoder.dtype
 
@@ -318,10 +319,11 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
             text_encoder_hidden_states=text_encoder_hidden_states,
             do_classifier_free_guidance=do_classifier_free_guidance, )
 
-        decoder_text_mask = F.pad(text_mask.unsqueeze(0),
-                                  (self.text_proj.clip_extra_context_tokens, 0),
-                                  value=1,
-                                  data_format="NCL").squeeze(0)
+        decoder_text_mask = F.pad(
+            text_mask.unsqueeze(0),
+            (self.text_proj.clip_extra_context_tokens, 0),
+            value=1,
+            data_format="NCL", ).squeeze(0)
 
         self.decoder_scheduler.set_timesteps(decoder_num_inference_steps)
         decoder_timesteps_tensor = self.decoder_scheduler.timesteps
@@ -357,15 +359,16 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
                 noise_pred_uncond, _ = noise_pred_uncond.split(
                     [
                         latent_model_input.shape[1],
-                        noise_pred_uncond.shape[1] - latent_model_input.shape[1]
+                        noise_pred_uncond.shape[1] -
+                        latent_model_input.shape[1],
                     ],
-                    axis=1)
+                    axis=1, )
                 noise_pred_text, predicted_variance = noise_pred_text.split(
                     [
                         latent_model_input.shape[1],
-                        noise_pred_text.shape[1] - latent_model_input.shape[1]
+                        noise_pred_text.shape[1] - latent_model_input.shape[1],
                     ],
-                    axis=1)
+                    axis=1, )
                 noise_pred = noise_pred_uncond + decoder_guidance_scale * (
                     noise_pred_text - noise_pred_uncond)
                 noise_pred = paddle.concat(
@@ -382,7 +385,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
                 t,
                 decoder_latents,
                 prev_timestep=prev_timestep,
-                generator=generator).prev_sample
+                generator=generator, ).prev_sample
 
         decoder_latents = decoder_latents.clip(-1, 1)
 
@@ -416,7 +419,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
             size=[height, width],
             mode="bicubic",
             align_corners=False,
-            **interpolate_antialias)
+            **interpolate_antialias, )
 
         for i, t in enumerate(self.progress_bar(super_res_timesteps_tensor)):
             # no classifier free guidance
@@ -431,7 +434,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
                     super_res_latents,
                     image_upscaled.cast(super_res_latents.dtype)
                 ],
-                axis=1)
+                axis=1, )
 
             noise_pred = unet(
                 sample=latent_model_input,
@@ -448,7 +451,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
                 t,
                 super_res_latents,
                 prev_timestep=prev_timestep,
-                generator=generator).prev_sample
+                generator=generator, ).prev_sample
 
         image = super_res_latents
 

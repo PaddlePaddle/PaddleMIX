@@ -18,7 +18,6 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 
 from ...loaders import TextualInversionLoaderMixin
@@ -158,8 +157,8 @@ class TextToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 logger.warning(
                     f"The following part of your input was truncated because CLIP can only handle sequences up to {self.tokenizer.model_max_length} tokens: {removed_text}"
                 )
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -200,9 +199,9 @@ class TextToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
-                return_tensors="pd")
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+                return_tensors="pd", )
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -231,8 +230,9 @@ class TextToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         latents = latents.transpose([0, 2, 1, 3, 4]).reshape(
             (batch_size * num_frames, channels, height, width))
         image = self.vae.decode(latents).sample
-        video = (image[None, :].reshape((batch_size, num_frames, -1) + tuple(
-            image.shape[2:])).transpose([0, 2, 1, 3, 4]))
+        video = (image[None, :]
+                 .reshape((batch_size, num_frames, -1) + tuple(image.shape[2:]))
+                 .transpose([0, 2, 1, 3, 4]))
         video = video.cast("float32")
         return video
 
@@ -294,15 +294,16 @@ class TextToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                     f"`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}."
                 )
 
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        num_frames,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            num_frames,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = (
             batch_size,
             num_channels_latents,
@@ -415,9 +416,14 @@ class TextToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         width = width or self.unet.config.sample_size * self.vae_scale_factor
         num_images_per_prompt = 1
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, height, width, callback_steps,
-                          negative_prompt, prompt_embeds,
-                          negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            height,
+            width,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
@@ -463,8 +469,8 @@ class TextToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
                 # predict the noise residual
@@ -488,9 +494,9 @@ class TextToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents,
                                               **extra_step_kwargs).prev_sample
-                latents = latents[None, :].reshape(
-                    (bsz, frames, channel, width, height)).transpose(
-                        [0, 2, 1, 3, 4])
+                latents = (latents[None, :].reshape(
+                    (bsz, frames, channel, width, height))
+                           .transpose([0, 2, 1, 3, 4]))
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or (
                     (i + 1) > num_warmup_steps and

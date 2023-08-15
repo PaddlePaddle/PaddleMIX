@@ -28,47 +28,25 @@ import paddle
 import PIL
 import requests_mock
 import safetensors.torch
+from paddlenlp.transformers import (
+    CLIPImageProcessor, CLIPModel, CLIPTextConfig, CLIPTextModel, CLIPTokenizer)
 from parameterized import parameterized
 from PIL import Image
 from requests.exceptions import HTTPError
 
-from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPModel,
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPTokenizer, )
 from ppdiffusers import (
-    AutoencoderKL,
-    DDIMPipeline,
-    DDIMScheduler,
-    DDPMPipeline,
-    DDPMScheduler,
-    DiffusionPipeline,
-    DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    StableDiffusionImg2ImgPipeline,
-    StableDiffusionInpaintPipelineLegacy,
-    StableDiffusionPipeline,
-    UNet2DConditionModel,
-    UNet2DModel,
-    logging, )
+    AutoencoderKL, DDIMPipeline, DDIMScheduler, DDPMPipeline, DDPMScheduler,
+    DiffusionPipeline, DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler, EulerDiscreteScheduler,
+    LMSDiscreteScheduler, PNDMScheduler, StableDiffusionImg2ImgPipeline,
+    StableDiffusionInpaintPipelineLegacy, StableDiffusionPipeline,
+    UNet2DConditionModel, UNet2DModel, logging)
 from ppdiffusers.schedulers.scheduling_utils import SCHEDULER_CONFIG_NAME
-from ppdiffusers.utils import (
-    CONFIG_NAME,
-    TORCH_WEIGHTS_NAME,
-    floats_tensor,
-    nightly,
-    slow, )
-from ppdiffusers.utils.testing_utils import (
-    CaptureLogger,
-    get_tests_dir,
-    require_compel,
-    require_paddle_gpu,
-    require_torch, )
+from ppdiffusers.utils import (CONFIG_NAME, TORCH_WEIGHTS_NAME, floats_tensor,
+                               nightly, slow)
+from ppdiffusers.utils.testing_utils import (CaptureLogger, get_tests_dir,
+                                             require_compel, require_paddle_gpu,
+                                             require_torch)
 
 
 class DownloadTests(unittest.TestCase):
@@ -83,8 +61,8 @@ class DownloadTests(unittest.TestCase):
 
             download_requests = [r.method for r in m.request_history]
             assert download_requests.count("HEAD") == 15, "15 calls to files"
-            assert download_requests.count(
-                "GET") == 17, "15 calls to files + model_info + model_index.json"
+            assert (download_requests.count("GET") == 17
+                    ), "15 calls to files + model_info + model_index.json"
             assert (
                 len(download_requests) == 32
             ), "2 calls per file (15 files) + send_telemetry, model_info and model_index.json"
@@ -140,8 +118,8 @@ class DownloadTests(unittest.TestCase):
             # 15 - 2 because no call to config or model file for `safety_checker`
             assert download_requests.count("HEAD") == 13, "13 calls to files"
             # 17 - 2 because no call to config or model file for `safety_checker`
-            assert download_requests.count(
-                "GET") == 15, "13 calls to files + model_info + model_index.json"
+            assert (download_requests.count("GET") == 15
+                    ), "13 calls to files + model_info + model_index.json"
             assert (
                 len(download_requests) == 28
             ), "2 calls per file (13 files) + send_telemetry, model_info and model_index.json"
@@ -190,7 +168,7 @@ class DownloadTests(unittest.TestCase):
         _, local_path = StableDiffusionPipeline.from_pretrained(
             "hf-internal-testing/tiny-stable-diffusion-torch",
             safety_checker=None,
-            return_cached_folder=True)
+            return_cached_folder=True, )
         pipe_2 = StableDiffusionPipeline.from_pretrained(local_path)
         generator = paddle.Generator().manual_seed(0)
         out = pipe(
@@ -368,7 +346,7 @@ class DownloadTests(unittest.TestCase):
             pipe = StableDiffusionPipeline.from_pretrained(
                 "hf-internal-testing/tiny-stable-diffusion-torch",
                 safety_checker=None,
-                local_files_only=True)
+                local_files_only=True, )
             comps = {
                 k: v
                 for k, v in pipe.components.items() if hasattr(v, "parameters")
@@ -387,12 +365,11 @@ class DownloadTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmpdirname:
                 tmpdirname = StableDiffusionPipeline.download(
                     "hf-internal-testing/stable-diffusion-all-variants",
-                    cache_dir=tmpdirname)
+                    cache_dir=tmpdirname, )
                 all_root_files = [t[-1] for t in os.walk(tmpdirname)]
                 files = [item for sublist in all_root_files for item in sublist]
-                assert len(
-                    files
-                ) == 15, f"We should only download 15 files, not {len(files)}"
+                assert (len(files) == 15
+                        ), f"We should only download 15 files, not {len(files)}"
                 assert not any(f.endswith(other_format) for f in files)
                 assert not any(len(f.split(".")) == 3 for f in files)
         ppdiffusers.utils.import_utils._safetensors_available = True
@@ -409,7 +386,7 @@ class DownloadTests(unittest.TestCase):
                 StableDiffusionPipeline.from_pretrained(
                     "hf-internal-testing/stable-diffusion-all-variants",
                     cache_dir=tmpdirname,
-                    variant=variant)
+                    variant=variant, )
                 all_root_files = [
                     t[-1]
                     for t in os.walk(
@@ -417,12 +394,11 @@ class DownloadTests(unittest.TestCase):
                                      os.listdir(tmpdirname)[0], "snapshots"))
                 ]
                 files = [item for sublist in all_root_files for item in sublist]
-                assert len(
-                    files
-                ) == 15, f"We should only download 15 files, not {len(files)}"
-                assert len([
+                assert (len(files) == 15
+                        ), f"We should only download 15 files, not {len(files)}"
+                assert (len([
                     f for f in files if f.endswith(f"{variant}{this_format}")
-                ]) == 4
+                ]) == 4)
                 assert not any(
                     f.endswith(this_format) and
                     not f.endswith(f"{variant}{this_format}") for f in files)
@@ -441,22 +417,21 @@ class DownloadTests(unittest.TestCase):
                 tmpdirname = StableDiffusionPipeline.download(
                     "hf-internal-testing/stable-diffusion-all-variants",
                     cache_dir=tmpdirname,
-                    variant=variant)
+                    variant=variant, )
                 all_root_files = [t[-1] for t in os.walk(tmpdirname)]
                 files = [item for sublist in all_root_files for item in sublist]
 
                 unet_files = os.listdir(os.path.join(tmpdirname, "unet"))
-                assert len(
-                    files
-                ) == 15, f"We should only download 15 files, not {len(files)}"
+                assert (len(files) == 15
+                        ), f"We should only download 15 files, not {len(files)}"
                 assert f"diffusion_pytorch_model.{variant}{this_format}" in unet_files
-                assert len([
+                assert (len([
                     f for f in files if f.endswith(f"{variant}{this_format}")
-                ]) == 1
-                assert sum(
+                ]) == 1)
+                assert (sum(
                     f.endswith(this_format) and
                     not f.endswith(f"{variant}{this_format}")
-                    for f in files) == 3
+                    for f in files) == 3)
                 assert not any(f.endswith(other_format) for f in files)
         ppdiffusers.utils.import_utils._safetensors_available = True
 
@@ -507,8 +482,9 @@ class DownloadTests(unittest.TestCase):
 
             token = pipe.tokenizer.convert_tokens_to_ids("<*>")
             assert token == num_tokens, "Added token must be at spot `num_tokens`"
-            assert pipe.text_encoder.get_input_embeddings().weight[-1].sum(
-            ).item() == 32
+            assert (
+                pipe.text_encoder.get_input_embeddings().weight[-1].sum().item()
+                == 32)
             assert pipe._maybe_convert_prompt("<*>", pipe.tokenizer) == "<*>"
 
             prompt = "hey <*>"
@@ -527,8 +503,9 @@ class DownloadTests(unittest.TestCase):
 
             token = pipe.tokenizer.convert_tokens_to_ids("<**>")
             assert token == num_tokens + 1, "Added token must be at spot `num_tokens`"
-            assert pipe.text_encoder.get_input_embeddings().weight[-1].sum(
-            ).item() == 64
+            assert (
+                pipe.text_encoder.get_input_embeddings().weight[-1].sum().item()
+                == 64)
             assert pipe._maybe_convert_prompt("<**>", pipe.tokenizer) == "<**>"
 
             prompt = "hey <**>"
@@ -539,8 +516,9 @@ class DownloadTests(unittest.TestCase):
             # multi token load
             ten = {
                 "<***>": torch.cat([
-                    3 * torch.ones((1, 32)), 4 * torch.ones((1, 32)),
-                    5 * torch.ones((1, 32))
+                    3 * torch.ones((1, 32)),
+                    4 * torch.ones((1, 32)),
+                    5 * torch.ones((1, 32)),
                 ])
             }
             torch.save(ten, os.path.join(tmpdirname, "learned_embeds.bin"))
@@ -554,14 +532,17 @@ class DownloadTests(unittest.TestCase):
             assert token == num_tokens + 2, "Added token must be at spot `num_tokens`"
             assert token_1 == num_tokens + 3, "Added token must be at spot `num_tokens`"
             assert token_2 == num_tokens + 4, "Added token must be at spot `num_tokens`"
-            assert pipe.text_encoder.get_input_embeddings().weight[-3].sum(
-            ).item() == 96
-            assert pipe.text_encoder.get_input_embeddings().weight[-2].sum(
-            ).item() == 128
-            assert pipe.text_encoder.get_input_embeddings().weight[-1].sum(
-            ).item() == 160
-            assert pipe._maybe_convert_prompt(
-                "<***>", pipe.tokenizer) == "<***> <***>_1 <***>_2"
+            assert (
+                pipe.text_encoder.get_input_embeddings().weight[-3].sum().item()
+                == 96)
+            assert (
+                pipe.text_encoder.get_input_embeddings().weight[-2].sum().item()
+                == 128)
+            assert (
+                pipe.text_encoder.get_input_embeddings().weight[-1].sum().item()
+                == 160)
+            assert (pipe._maybe_convert_prompt("<***>", pipe.tokenizer) ==
+                    "<***> <***>_1 <***>_2")
 
             prompt = "hey <***>"
             out = pipe(
@@ -572,8 +553,9 @@ class DownloadTests(unittest.TestCase):
             ten = {
                 "string_to_param": {
                     "*": torch.cat([
-                        3 * torch.ones((1, 32)), 4 * torch.ones((1, 32)),
-                        5 * torch.ones((1, 32))
+                        3 * torch.ones((1, 32)),
+                        4 * torch.ones((1, 32)),
+                        5 * torch.ones((1, 32)),
                     ])
                 },
                 "name": "<****>",
@@ -590,14 +572,17 @@ class DownloadTests(unittest.TestCase):
             assert token == num_tokens + 5, "Added token must be at spot `num_tokens`"
             assert token_1 == num_tokens + 6, "Added token must be at spot `num_tokens`"
             assert token_2 == num_tokens + 7, "Added token must be at spot `num_tokens`"
-            assert pipe.text_encoder.get_input_embeddings().weight[-3].sum(
-            ).item() == 96
-            assert pipe.text_encoder.get_input_embeddings().weight[-2].sum(
-            ).item() == 128
-            assert pipe.text_encoder.get_input_embeddings().weight[-1].sum(
-            ).item() == 160
-            assert pipe._maybe_convert_prompt(
-                "<****>", pipe.tokenizer) == "<****> <****>_1 <****>_2"
+            assert (
+                pipe.text_encoder.get_input_embeddings().weight[-3].sum().item()
+                == 96)
+            assert (
+                pipe.text_encoder.get_input_embeddings().weight[-2].sum().item()
+                == 128)
+            assert (
+                pipe.text_encoder.get_input_embeddings().weight[-1].sum().item()
+                == 160)
+            assert (pipe._maybe_convert_prompt("<****>", pipe.tokenizer) ==
+                    "<****> <****>_1 <****>_2")
 
             prompt = "hey <****>"
             out = pipe(
@@ -610,7 +595,7 @@ class DownloadTests(unittest.TestCase):
             # pipeline has Flax weights
             tmpdirname = DiffusionPipeline.download(
                 "hf-internal-testing/tiny-stable-diffusion-pipe-ignore-files",
-                cache_dir=tmpdirname)
+                cache_dir=tmpdirname, )
             files = []
             for root, ds, fs in os.walk(tmpdirname):
                 for f in fs:
@@ -631,7 +616,7 @@ class CustomPipelineTests(unittest.TestCase):
     def test_load_custom_pipeline(self):
         pipeline = DiffusionPipeline.from_pretrained(
             "google/ddpm-cifar10-32",
-            custom_pipeline="junnyu/ppdiffusers-dummy-pipeline")
+            custom_pipeline="junnyu/ppdiffusers-dummy-pipeline", )
         pipeline = pipeline
         assert pipeline.__class__.__name__ == "CustomPipeline"
 
@@ -659,7 +644,7 @@ class CustomPipelineTests(unittest.TestCase):
     def test_run_custom_pipeline(self):
         pipeline = DiffusionPipeline.from_pretrained(
             "google/ddpm-cifar10-32",
-            custom_pipeline="junnyu/ppdiffusers-dummy-pipeline")
+            custom_pipeline="junnyu/ppdiffusers-dummy-pipeline", )
         pipeline = pipeline
         images, output_str = pipeline(num_inference_steps=2, output_type="np")
         assert images[0].shape == (1, 32, 32, 3)
@@ -699,7 +684,7 @@ class CustomPipelineTests(unittest.TestCase):
             clip_model_id,
             paddle_dtype=paddle.float16,
             from_hf_hub=False,
-            from_diffusers=False)
+            from_diffusers=False, )
         pipeline = DiffusionPipeline.from_pretrained(
             "CompVis/stable-diffusion-v1-4",
             custom_pipeline="clip_guided_stable_diffusion",
@@ -834,8 +819,8 @@ class PipelineFastTests(unittest.TestCase):
         generator = paddle.Generator().manual_seed(0)
         out_image = pipeline(
             generator=generator, num_inference_steps=2, output_type="np").images
-        sample_size = (sample_size, sample_size) if isinstance(
-            sample_size, int) else sample_size
+        sample_size = ((sample_size, sample_size)
+                       if isinstance(sample_size, int) else sample_size)
         assert out_image.shape == (1, *sample_size, 3)
 
     def test_stable_diffusion_components(self):
@@ -848,8 +833,9 @@ class PipelineFastTests(unittest.TestCase):
             "hf-internal-testing/tiny-random-clip")
         image = self.dummy_image().cpu().transpose(perm=[0, 2, 3, 1])[0]
         init_image = Image.fromarray(np.uint8(image)).convert("RGB")
-        mask_image = Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
-            (32, 32))
+        mask_image = (
+            Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
+                (32, 32)))
         inpaint = StableDiffusionInpaintPipelineLegacy(
             unet=unet,
             scheduler=scheduler,
@@ -874,7 +860,7 @@ class PipelineFastTests(unittest.TestCase):
             generator=generator,
             num_inference_steps=2,
             output_type="np",
-            image=init_image).images
+            image=init_image, ).images
         image_text2img = text2img(
             [prompt],
             generator=generator,
@@ -1005,7 +991,7 @@ class PipelineFastTests(unittest.TestCase):
         pipeline = StableDiffusionPipeline.from_pretrained(
             "hf-internal-testing/tiny-stable-diffusion-torch",
             from_hf_hub=True,
-            from_diffusers=True)
+            from_diffusers=True, )
         with tempfile.TemporaryDirectory() as tmpdirname:
             pipeline.save_pretrained(
                 tmpdirname, safe_serialization=True, to_diffusers=True)
@@ -1034,7 +1020,7 @@ class PipelineFastTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdirname:
             _ = StableDiffusionPipeline.from_pretrained(
                 "hf-internal-testing/diffusers-stable-diffusion-tiny-all",
-                cache_dir=tmpdirname)
+                cache_dir=tmpdirname, )
             path = os.path.join(
                 tmpdirname,
                 "models--hf-internal-testing--diffusers-stable-diffusion-tiny-all",
@@ -1053,7 +1039,7 @@ class PipelineFastTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdirname:
             _ = StableDiffusionPipeline.from_pretrained(
                 "hf-internal-testing/diffusers-stable-diffusion-tiny-all",
-                cache_dir=tmpdirname)
+                cache_dir=tmpdirname, )
             path = os.path.join(
                 tmpdirname,
                 "models--hf-internal-testing--diffusers-stable-diffusion-tiny-all",
@@ -1090,7 +1076,7 @@ class PipelineFastTests(unittest.TestCase):
                 tmpdirname,
                 feature_extractor=None,
                 safety_checker=None,
-                requires_safety_checker=False)
+                requires_safety_checker=False, )
             assert sd.config.requires_safety_checker is False
             assert sd.config.safety_checker == (None, None)
             assert sd.config.feature_extractor == (None, None)
@@ -1225,8 +1211,8 @@ class PipelineSlowTests(unittest.TestCase):
             generator=generator, num_inference_steps=5,
             output_type="numpy").images
 
-        assert np.abs(image - new_image).sum(
-        ) < 1e-5, "Models don't give the same forward pass"
+        assert (np.abs(image - new_image).sum() < 1e-5
+                ), "Models don't give the same forward pass"
 
     def test_from_pretrained_hub(self):
         model_path = "google/ddpm-cifar10-32"
@@ -1245,8 +1231,8 @@ class PipelineSlowTests(unittest.TestCase):
         new_image = ddpm_from_hub(
             generator=generator, num_inference_steps=5,
             output_type="numpy").images
-        assert np.abs(image - new_image).sum(
-        ) < 1e-05, "Models don't give the same forward pass"
+        assert (np.abs(image - new_image).sum() < 1e-05
+                ), "Models don't give the same forward pass"
 
     def test_from_pretrained_hub_pass_model(self):
         model_path = "google/ddpm-cifar10-32"
@@ -1267,8 +1253,8 @@ class PipelineSlowTests(unittest.TestCase):
         new_image = ddpm_from_hub(
             generator=generator, num_inference_steps=5,
             output_type="numpy").images
-        assert np.abs(image - new_image).sum(
-        ) < 1e-05, "Models don't give the same forward pass"
+        assert (np.abs(image - new_image).sum() < 1e-05
+                ), "Models don't give the same forward pass"
 
     def test_output_format(self):
         model_path = "google/ddpm-cifar10-32"

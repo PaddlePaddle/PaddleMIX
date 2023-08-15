@@ -20,8 +20,8 @@ from typing import Callable, List, Optional, Union
 import numpy as np
 import paddle
 from packaging import version
-
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...configuration_utils import FrozenDict
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -82,8 +82,8 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             " bodily fluids, blood, obscene gestures, illegal activity, drug use, theft, vandalism, weapons, child"
             " abuse, brutality, cruelty")
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -100,8 +100,8 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if (hasattr(scheduler.config, "clip_sample") and
+                scheduler.config.clip_sample is True):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -138,8 +138,8 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             unet.config, "_ppdiffusers_version") and version.parse(
                 version.parse(unet.config._ppdiffusers_version)
                 .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = (hasattr(unet.config, "sample_size") and
+                                       unet.config.sample_size < 64)
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -234,8 +234,8 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
                 f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-        if hasattr(self.text_encoder.config, "use_attention_mask"
-                   ) and self.text_encoder.config.use_attention_mask:
+        if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                self.text_encoder.config.use_attention_mask):
             attention_mask = text_inputs.attention_mask
         else:
             attention_mask = None
@@ -278,8 +278,8 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -432,16 +432,20 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                     f" {negative_prompt_embeds.shape}.")
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = (batch_size, num_channels_latents, height //
-                 self.vae_scale_factor, width // self.vae_scale_factor)
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
+        shape = (
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor, )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -479,12 +483,13 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             scale = paddle.clip(
                 paddle.abs((noise_pred_text - noise_pred_safety_concept)) *
                 sld_guidance_scale,
-                max=1.0)
+                max=1.0, )
 
             # Equation 6
             safety_concept_scale = paddle.where(
                 (noise_pred_text - noise_pred_safety_concept) >= sld_threshold,
-                paddle.zeros_like(scale), scale)
+                paddle.zeros_like(scale),
+                scale, )
 
             # Equation 4
             noise_guidance_safety = paddle.multiply(
@@ -492,11 +497,12 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                 safety_concept_scale)
 
             # Equation 7
-            noise_guidance_safety = noise_guidance_safety + sld_momentum_scale * safety_momentum
+            noise_guidance_safety = (
+                noise_guidance_safety + sld_momentum_scale * safety_momentum)
 
             # Equation 8
-            safety_momentum = sld_mom_beta * safety_momentum + (
-                1 - sld_mom_beta) * noise_guidance_safety
+            safety_momentum = (sld_mom_beta * safety_momentum +
+                               (1 - sld_mom_beta) * noise_guidance_safety)
 
             if i >= sld_warmup_steps:  # Warmup
                 # Equation 3
@@ -614,14 +620,18 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
         # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
 
-        enable_safety_guidance = sld_guidance_scale > 1.0 and do_classifier_free_guidance
+        enable_safety_guidance = (sld_guidance_scale > 1.0 and
+                                  do_classifier_free_guidance)
         if not enable_safety_guidance:
             warnings.warn("Safety checker disabled!")
 
         # 3. Encode input prompt
         prompt_embeds = self._encode_prompt(
-            prompt, num_images_per_prompt, do_classifier_free_guidance,
-            negative_prompt, enable_safety_guidance)
+            prompt,
+            num_images_per_prompt,
+            do_classifier_free_guidance,
+            negative_prompt,
+            enable_safety_guidance, )
 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
@@ -663,8 +673,9 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                 if do_classifier_free_guidance:
                     noise_pred_out = noise_pred.chunk(
                         (3 if enable_safety_guidance else 2))
-                    noise_pred_uncond, noise_pred_text = noise_pred_out[
-                        0], noise_pred_out[1]
+                    noise_pred_uncond, noise_pred_text = (
+                        noise_pred_out[0],
+                        noise_pred_out[1], )
 
                     # default classifier free guidance
                     noise_guidance = noise_pred_text - noise_pred_uncond
@@ -680,7 +691,7 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                             paddle.abs(
                                 (noise_pred_text - noise_pred_safety_concept)) *
                             sld_guidance_scale,
-                            max=1.0)
+                            max=1.0, )
 
                         # Equation 6
                         safety_concept_scale = paddle.where(
@@ -692,14 +703,17 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                         # Equation 4
                         noise_guidance_safety = paddle.multiply(
                             (noise_pred_safety_concept - noise_pred_uncond),
-                            safety_concept_scale)
+                            safety_concept_scale, )
 
                         # Equation 7
-                        noise_guidance_safety = noise_guidance_safety + sld_momentum_scale * safety_momentum
+                        noise_guidance_safety = (
+                            noise_guidance_safety + sld_momentum_scale *
+                            safety_momentum)
 
                         # Equation 8
-                        safety_momentum = sld_mom_beta * safety_momentum + (
-                            1 - sld_mom_beta) * noise_guidance_safety
+                        safety_momentum = (
+                            sld_mom_beta * safety_momentum +
+                            (1 - sld_mom_beta) * noise_guidance_safety)
 
                         if i >= sld_warmup_steps:  # Warmup
                             # Equation 3

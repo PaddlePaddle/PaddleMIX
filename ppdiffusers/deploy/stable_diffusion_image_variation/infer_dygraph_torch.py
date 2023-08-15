@@ -18,25 +18,19 @@ import time
 
 import torch
 
-torch.nn.functional.scaled_dot_product_attention_ = torch.nn.functional.scaled_dot_product_attention
+torch.nn.functional.scaled_dot_product_attention_ = (
+    torch.nn.functional.scaled_dot_product_attention)
 delattr(torch.nn.functional, "scaled_dot_product_attention")
 import numpy as np
 from diffusers import (
-    DDIMScheduler,
-    DDPMScheduler,
-    DEISMultistepScheduler,
-    DPMSolverMultistepScheduler,
-    DPMSolverSinglestepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    HeunDiscreteScheduler,
-    KDPM2AncestralDiscreteScheduler,
-    KDPM2DiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    StableDiffusionImageVariationPipeline,
-    UniPCMultistepScheduler, )
-from diffusers.models.attention_processor import AttnProcessor, AttnProcessor2_0
+    DDIMScheduler, DDPMScheduler, DEISMultistepScheduler,
+    DPMSolverMultistepScheduler, DPMSolverSinglestepScheduler,
+    EulerAncestralDiscreteScheduler, EulerDiscreteScheduler,
+    HeunDiscreteScheduler, KDPM2AncestralDiscreteScheduler,
+    KDPM2DiscreteScheduler, LMSDiscreteScheduler, PNDMScheduler,
+    StableDiffusionImageVariationPipeline, UniPCMultistepScheduler)
+from diffusers.models.attention_processor import (AttnProcessor,
+                                                  AttnProcessor2_0)
 from diffusers.utils import load_image
 from tqdm.auto import trange
 
@@ -114,12 +108,12 @@ def parse_arguments():
         "--inference_steps",
         type=int,
         default=50,
-        help="The number of unet inference steps.")
+        help="The number of unet inference steps.", )
     parser.add_argument(
         "--benchmark_steps",
         type=int,
         default=10,
-        help="The number of performance benchmark steps.")
+        help="The number of performance benchmark steps.", )
     parser.add_argument(
         "--parse_prompt_type",
         type=str,
@@ -133,7 +127,7 @@ def parse_arguments():
         "--channels_last",
         type=strtobool,
         default=False,
-        help="Wheter to use channels_last")
+        help="Wheter to use channels_last", )
     parser.add_argument(
         "--use_fp16",
         type=strtobool,
@@ -248,9 +242,11 @@ def main(args):
         args.attention_type = [args.attention_type]
 
     for attention_type in args.attention_type:
-        attn_prrocessor_cls = AttnProcessor if attention_type == "raw" else AttnProcessor2_0
+        attn_prrocessor_cls = (AttnProcessor
+                               if attention_type == "raw" else AttnProcessor2_0)
         if attention_type == "sdp":
-            torch.nn.functional.scaled_dot_product_attention = torch.nn.functional.scaled_dot_product_attention_
+            torch.nn.functional.scaled_dot_product_attention = (
+                torch.nn.functional.scaled_dot_product_attention_)
 
         set_attn_processor(pipe.unet, attn_prrocessor_cls())
         set_attn_processor(pipe.vae, attn_prrocessor_cls())
@@ -266,13 +262,12 @@ def main(args):
         height = args.height
         pipe.set_progress_bar_config(disable=True)
 
-        folder = f"torch_attn_{attention_type}_fp16" if args.use_fp16 else f"torch_attn_{attention_type}_fp32"
+        folder = (f"torch_attn_{attention_type}_fp16"
+                  if args.use_fp16 else f"torch_attn_{attention_type}_fp32")
         os.makedirs(folder, exist_ok=True)
 
         # image_vairation
-        img_url = (
-            "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
-        )
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
         init_image = load_image(img_url).resize((width, height))
         time_costs = []
         # warmup

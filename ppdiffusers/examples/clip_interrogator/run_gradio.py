@@ -19,11 +19,9 @@ import argparse
 
 import gradio as gr
 import paddle
-from clip_interrogator import (
-    BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
-    CLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
-    Config,
-    Interrogator, )
+from clip_interrogator import (BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
+                               CLIP_PRETRAINED_MODEL_ARCHIVE_LIST, Config,
+                               Interrogator)
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -71,7 +69,7 @@ paddle.set_device(device)
 config = Config(
     cache_path="cache",
     clip_pretrained_model_name_or_path=args.clip,
-    blip_pretrained_model_name_or_path=args.blip)
+    blip_pretrained_model_name_or_path=args.blip, )
 ci = Interrogator(config)
 
 
@@ -86,12 +84,16 @@ def inference(
         blip_top_p,
         blip_repetition_penalty,
         blip_num_beams, ):
-    if clip_pretrained_model_name_or_path != ci.config.clip_pretrained_model_name_or_path:
-        ci.config.clip_pretrained_model_name_or_path = clip_pretrained_model_name_or_path
+    if (clip_pretrained_model_name_or_path !=
+            ci.config.clip_pretrained_model_name_or_path):
+        ci.config.clip_pretrained_model_name_or_path = (
+            clip_pretrained_model_name_or_path)
         ci.load_clip_model()
 
-    if blip_pretrained_model_name_or_path != ci.config.blip_pretrained_model_name_or_path:
-        ci.config.blip_pretrained_model_name_or_path = blip_pretrained_model_name_or_path
+    if (blip_pretrained_model_name_or_path !=
+            ci.config.blip_pretrained_model_name_or_path):
+        ci.config.blip_pretrained_model_name_or_path = (
+            blip_pretrained_model_name_or_path)
         ci.load_blip_model()
 
     ci.config.blip_min_length = int(blip_min_length)

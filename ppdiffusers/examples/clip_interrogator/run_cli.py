@@ -21,11 +21,9 @@ import os
 
 import paddle
 import requests
-from clip_interrogator import (
-    BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
-    CLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
-    Config,
-    Interrogator, )
+from clip_interrogator import (BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
+                               CLIP_PRETRAINED_MODEL_ARCHIVE_LIST, Config,
+                               Interrogator)
 from PIL import Image
 
 
@@ -65,7 +63,7 @@ def main():
         "--mode",
         default="best",
         choices=["best", "classic", "fast"],
-        help="best, classic, or fast")
+        help="best, classic, or fast", )
 
     args = parser.parse_args()
     if not args.folder and not args.image:
@@ -100,7 +98,7 @@ def main():
     # generate a nice prompt
     config = Config(
         clip_pretrained_model_name_or_path=args.clip,
-        blip_pretrained_model_name_or_path=args.blip)
+        blip_pretrained_model_name_or_path=args.blip, )
     ci = Interrogator(config)
 
     # process single image

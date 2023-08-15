@@ -24,10 +24,8 @@ from zipfile import ZipFile
 import numpy as np
 
 from .constants import get_map_location_default
-from .import_utils import (
-    is_paddle_available,
-    is_safetensors_available,
-    is_torch_available, )
+from .import_utils import (is_paddle_available, is_safetensors_available,
+                           is_torch_available)
 from .logging import get_logger
 
 logger = get_logger(__name__)
@@ -275,8 +273,9 @@ def convert_to_paddle(state_dict, return_numpy=False, return_global_step=False):
                     if hasattr(v, "numpy") else
                     paddle.to_tensor(v).cast(paddle.bfloat16))
             else:
-                pd_state_dict[k] = paddle.to_tensor(v.numpy()) if hasattr(
-                    v, "numpy") else paddle.to_tensor(v)
+                pd_state_dict[k] = (paddle.to_tensor(v.numpy())
+                                    if hasattr(v, "numpy") else
+                                    paddle.to_tensor(v))
         else:
             pd_state_dict[k] = v.numpy() if hasattr(v, "numpy") else v
 

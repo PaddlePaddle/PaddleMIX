@@ -84,8 +84,10 @@ class DDIMPipeline(DiffusionPipeline):
                 self.unet.config.sample_size,
                 self.unet.config.sample_size, )
         else:
-            image_shape = (batch_size, self.unet.config.in_channels,
-                           *self.unet.config.sample_size)
+            image_shape = (
+                batch_size,
+                self.unet.config.in_channels,
+                *self.unet.config.sample_size, )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
@@ -110,7 +112,7 @@ class DDIMPipeline(DiffusionPipeline):
                 image,
                 eta=eta,
                 use_clipped_model_output=use_clipped_model_output,
-                generator=generator).prev_sample
+                generator=generator, ).prev_sample
         image = (image / 2 + 0.5).clip(min=0, max=1)
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
 

@@ -20,16 +20,12 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    UNet2DConditionModel, )
-from ppdiffusers.pipelines.semantic_stable_diffusion import (
-    SemanticStableDiffusionPipeline as StableDiffusionPipeline, )
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, LMSDiscreteScheduler,
+                         PNDMScheduler, UNet2DConditionModel)
+from ppdiffusers.pipelines.semantic_stable_diffusion import \
+    SemanticStableDiffusionPipeline as StableDiffusionPipeline
 from ppdiffusers.utils import floats_tensor, nightly
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
@@ -133,7 +129,7 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             generator=generator,
             guidance_scale=6.0,
             num_inference_steps=2,
-            output_type="np")
+            output_type="np", )
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = sd_pipe(
@@ -147,8 +143,15 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.28401083, 0.23724163, 0.38141036, 0.2201719, 0.26111937,
-            0.5176592, 0.25668317, 0.25036532, 0.47986418
+            0.28401083,
+            0.23724163,
+            0.38141036,
+            0.2201719,
+            0.26111937,
+            0.5176592,
+            0.25668317,
+            0.25036532,
+            0.47986418,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
@@ -194,7 +197,7 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             generator=generator,
             guidance_scale=6.0,
             num_inference_steps=2,
-            output_type="np")
+            output_type="np", )
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = sd_pipe(
@@ -208,8 +211,15 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array([
-            0.18612236, 0.24176982, 0.36099488, 0.21807766, 0.27262795,
-            0.51991826, 0.22258872, 0.22143877, 0.4452843
+            0.18612236,
+            0.24176982,
+            0.36099488,
+            0.21807766,
+            0.27262795,
+            0.51991826,
+            0.22258872,
+            0.22143877,
+            0.4452843,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.02
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(

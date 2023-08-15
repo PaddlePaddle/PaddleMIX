@@ -19,11 +19,11 @@ scheduler = LMSDiscreteScheduler(
     beta_start=0.00085,
     beta_end=0.012,
     beta_schedule="scaled_linear",
-    num_train_timesteps=1000)
+    num_train_timesteps=1000, )
 pipeline = DiffusionPipeline.from_pretrained(
     "CompVis/stable-diffusion-v1-4",
     scheduler=scheduler,
-    custom_pipeline="mixture_tiling.py")
+    custom_pipeline="mixture_tiling.py", )
 pipeline
 
 # Mixture of Diffusers generation

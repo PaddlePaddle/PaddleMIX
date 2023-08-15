@@ -18,9 +18,8 @@ import os
 import tempfile
 import unittest.mock as mock
 
-from requests.exceptions import HTTPError
-
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
+from requests.exceptions import HTTPError
 
 
 class ConfigTester(object):

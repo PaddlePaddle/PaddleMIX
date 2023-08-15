@@ -17,19 +17,17 @@ from collections import OrderedDict
 
 import paddle
 import torch
-from diffusers import (StableDiffusionDepth2ImgPipeline as
-                       DiffusersStableDiffusionDepth2ImgPipeline, )
+from diffusers import \
+    StableDiffusionDepth2ImgPipeline as \
+    DiffusersStableDiffusionDepth2ImgPipeline
+from paddlenlp.transformers import (CLIPTextConfig, CLIPTextModel,
+                                    CLIPTokenizer, DPTConfig,
+                                    DPTForDepthEstimation, DPTImageProcessor)
 
-from paddlenlp.transformers import (
-    CLIPTextConfig,
-    CLIPTextModel,
-    CLIPTokenizer,
-    DPTConfig,
-    DPTForDepthEstimation,
-    DPTImageProcessor, )
 from ppdiffusers import AutoencoderKL, PNDMScheduler
-from ppdiffusers import (StableDiffusionDepth2ImgPipeline as
-                         PPDiffusersStableDiffusionDepth2ImgPipeline, )
+from ppdiffusers import \
+    StableDiffusionDepth2ImgPipeline as \
+    PPDiffusersStableDiffusionDepth2ImgPipeline
 from ppdiffusers import UNet2DConditionModel
 
 paddle.set_device("cpu")

@@ -36,7 +36,10 @@ class IPNDMSchedulerTest(SchedulerCommonTest):
         sample = self.dummy_sample
         residual = 0.1 * sample
         dummy_past_residuals = [
-            residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05
+            residual + 0.2,
+            residual + 0.15,
+            residual + 0.1,
+            residual + 0.05,
         ]
 
         for scheduler_class in self.scheduler_classes:
@@ -61,16 +64,16 @@ class IPNDMSchedulerTest(SchedulerCommonTest):
             new_output = new_scheduler.step(residual, time_step, sample,
                                             **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
             output = scheduler.step(residual, time_step, sample,
                                     **kwargs).prev_sample
             new_output = new_scheduler.step(residual, time_step, sample,
                                             **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
     def test_from_save_pretrained(self):
         pass
@@ -81,7 +84,10 @@ class IPNDMSchedulerTest(SchedulerCommonTest):
         sample = self.dummy_sample
         residual = 0.1 * sample
         dummy_past_residuals = [
-            residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05
+            residual + 0.2,
+            residual + 0.15,
+            residual + 0.1,
+            residual + 0.05,
         ]
 
         for scheduler_class in self.scheduler_classes:
@@ -109,16 +115,16 @@ class IPNDMSchedulerTest(SchedulerCommonTest):
             new_output = new_scheduler.step(residual, time_step, sample,
                                             **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
             output = scheduler.step(residual, time_step, sample,
                                     **kwargs).prev_sample
             new_output = new_scheduler.step(residual, time_step, sample,
                                             **kwargs).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert (paddle.sum(paddle.abs(output - new_output)) < 1e-5
+                    ), "Scheduler outputs are not identical"
 
     def full_loop(self, **config):
         scheduler_class = self.scheduler_classes[0]
@@ -161,7 +167,10 @@ class IPNDMSchedulerTest(SchedulerCommonTest):
 
             # copy over dummy past residuals (must be done after set_timesteps)
             dummy_past_residuals = [
-                residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05
+                residual + 0.2,
+                residual + 0.15,
+                residual + 0.1,
+                residual + 0.05,
             ]
             scheduler.ets = dummy_past_residuals[:]
 

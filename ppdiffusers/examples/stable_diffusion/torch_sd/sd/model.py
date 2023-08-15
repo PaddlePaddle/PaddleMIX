@@ -17,7 +17,8 @@ import inspect
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, UNet2DConditionModel
+from diffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
+                       UNet2DConditionModel)
 from transformers import AutoTokenizer, CLIPTextModel
 from transformers.utils.logging import get_logger
 
@@ -36,7 +37,7 @@ class LitEma(nn.Module):
             "num_updates",
             torch.tensor(
                 0, dtype=torch.int) if use_num_upates else torch.tensor(
-                    -1, dtype=torch.int))
+                    -1, dtype=torch.int), )
 
         for name, p in model.named_parameters():
             if p.requires_grad:
@@ -66,8 +67,8 @@ class LitEma(nn.Module):
                     sname = self.m_name2s_name[key]
                     shadow_params[sname] = shadow_params[sname].type_as(m_param[
                         key])
-                    shadow_params[sname].sub_(one_minus_decay * (
-                        shadow_params[sname] - m_param[key]))
+                    shadow_params[sname].sub_(
+                        one_minus_decay * (shadow_params[sname] - m_param[key]))
                 else:
                     assert key not in self.m_name2s_name
 
@@ -133,7 +134,7 @@ class StableDiffusionModel(nn.Module):
             tokenizer_name_or_path,
             **tokenizer_kwargs,
             subfolder="tokenizer",
-            use_fast=False)
+            use_fast=False, )
         self.vae = AutoencoderKL.from_pretrained(
             vae_name_or_path, subfolder="vae")
         self.text_encoder = CLIPTextModel.from_pretrained(
@@ -219,7 +220,7 @@ class StableDiffusionModel(nn.Module):
             noise += self.model_args.noise_offset * torch.randn(
                 (latents.shape[0], latents.shape[1], 1, 1),
                 dtype=noise.dtype,
-                device=noise.device)
+                device=noise.device, )
         if self.model_args.input_perturbation:
             new_noise = noise + self.model_args.input_perturbation * torch.randn_like(
                 noise)
@@ -246,7 +247,7 @@ class StableDiffusionModel(nn.Module):
             sample=noisy_latents,
             timestep=timesteps,
             encoder_hidden_states=encoder_hidden_states,
-            return_dict=False)[0]
+            return_dict=False, )[0]
 
         # Get the target for loss depending on the prediction type
         if self.model_args.prediction_type == "epsilon":
@@ -259,9 +260,9 @@ class StableDiffusionModel(nn.Module):
 
         # compute loss
         if self.model_args.snr_gamma is None:
-            loss = F.mse_loss(
-                model_pred.float(), target.float(),
-                reduction="none").mean([1, 2, 3]).mean()
+            loss = (F.mse_loss(
+                model_pred.float(), target.float(), reduction="none")
+                    .mean([1, 2, 3]).mean())
         else:
             # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
             # Since we predict the noise instead of x_0, the original formulation is slightly changed.
@@ -296,7 +297,8 @@ class StableDiffusionModel(nn.Module):
                 original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
-        noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
+        noisy_samples = (sqrt_alpha_prod * original_samples +
+                         sqrt_one_minus_alpha_prod * noise)
         return noisy_samples
 
     def get_velocity(self,
@@ -347,14 +349,15 @@ class StableDiffusionModel(nn.Module):
         return image
 
     @torch.no_grad()
-    def log_image(self,
-                  input_ids=None,
-                  height=256,
-                  width=256,
-                  eta=0.0,
-                  guidance_scale=7.5,
-                  max_batch=8,
-                  **kwargs):
+    def log_image(
+            self,
+            input_ids=None,
+            height=256,
+            width=256,
+            eta=0.0,
+            guidance_scale=7.5,
+            max_batch=8,
+            **kwargs, ):
         self.eval()
         with self.ema_scope():
             if height % 8 != 0 or width % 8 != 0:
@@ -376,13 +379,15 @@ class StableDiffusionModel(nn.Module):
                     return_tensors="pt", )
                 uncond_embeddings = self.text_encoder(
                     uncond_input.input_ids.to(device=input_ids.device),
-                    return_dict=False)[0]
+                    return_dict=False, )[0]
                 text_embeddings = torch.cat(
                     [uncond_embeddings, text_embeddings], dim=0)
 
-            latents = torch.randn(
-                (input_ids.shape[0], self.unet.config.in_channels, height // 8,
-                 width // 8)).to(device=input_ids.device)
+            latents = torch.randn((
+                input_ids.shape[0],
+                self.unet.config.in_channels,
+                height // 8,
+                width // 8, )).to(device=input_ids.device)
             latents = latents * self.eval_scheduler.init_noise_sigma
             accepts_eta = "eta" in set(
                 inspect.signature(self.eval_scheduler.step).parameters.keys())
@@ -390,15 +395,15 @@ class StableDiffusionModel(nn.Module):
             if accepts_eta:
                 extra_step_kwargs["eta"] = eta
             for t in self.eval_scheduler.timesteps:
-                latent_model_input = torch.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (torch.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.eval_scheduler.scale_model_input(
                     latent_model_input, t)
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=text_embeddings,
-                    return_dict=False)[0]
+                    return_dict=False, )[0]
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred = noise_pred_uncond + guidance_scale * (

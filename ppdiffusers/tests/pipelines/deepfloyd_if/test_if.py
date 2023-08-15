@@ -19,21 +19,15 @@ import unittest
 import paddle
 
 from ppdiffusers import (
-    IFImg2ImgPipeline,
-    IFImg2ImgSuperResolutionPipeline,
-    IFInpaintingPipeline,
-    IFInpaintingSuperResolutionPipeline,
-    IFPipeline,
-    IFSuperResolutionPipeline, )
+    IFImg2ImgPipeline, IFImg2ImgSuperResolutionPipeline, IFInpaintingPipeline,
+    IFInpaintingSuperResolutionPipeline, IFPipeline, IFSuperResolutionPipeline)
 from ppdiffusers.models.attention_processor import AttnAddedKVProcessor
-from ppdiffusers.utils.testing_utils import (
-    floats_tensor,
-    load_numpy,
-    require_paddle_gpu,
-    slow, )
+from ppdiffusers.utils.testing_utils import (floats_tensor, load_numpy,
+                                             require_paddle_gpu, slow)
 
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
-from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
+from ..test_pipelines_common import (PipelineTesterMixin,
+                                     assert_mean_pixel_difference)
 from . import IFPipelineTesterMixin
 
 
@@ -104,7 +98,7 @@ class IFPipelineSlowTests(unittest.TestCase):
             variant="fp16",
             paddle_dtype=paddle.float16,
             text_encoder=None,
-            tokenizer=None)
+            tokenizer=None, )
 
         # pre compute text embeddings and remove T5 to save memory
 

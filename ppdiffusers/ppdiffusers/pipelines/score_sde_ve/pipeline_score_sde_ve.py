@@ -70,8 +70,8 @@ class ScoreSdeVePipeline(DiffusionPipeline):
 
         model = self.unet
 
-        sample = randn_tensor(
-            shape, generator=generator) * self.scheduler.init_noise_sigma
+        sample = (randn_tensor(
+            shape, generator=generator) * self.scheduler.init_noise_sigma)
 
         self.scheduler.set_timesteps(num_inference_steps)
         self.scheduler.set_sigmas(num_inference_steps)

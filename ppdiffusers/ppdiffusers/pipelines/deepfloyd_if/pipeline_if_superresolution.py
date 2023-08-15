@@ -22,18 +22,13 @@ import numpy as np
 import paddle
 import paddle.nn.functional as F
 import PIL
-
-from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
+from paddlenlp.transformers import (CLIPImageProcessor, T5EncoderModel,
+                                    T5Tokenizer)
 
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
-from ...utils import (
-    BACKENDS_MAPPING,
-    is_bs4_available,
-    is_ftfy_available,
-    logging,
-    randn_tensor,
-    replace_example_docstring, )
+from ...utils import (BACKENDS_MAPPING, is_bs4_available, is_ftfy_available,
+                      logging, randn_tensor, replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import IFPipelineOutput
 from .safety_checker import IFSafetyChecker
@@ -95,8 +90,11 @@ class IFSuperResolutionPipeline(DiffusionPipeline):
         "\|" + "\\" + "\/" + "\*" + r"]{1,}")  # noqa
 
     _optional_components = [
-        "tokenizer", "text_encoder", "safety_checker", "feature_extractor",
-        "watermarker"
+        "tokenizer",
+        "text_encoder",
+        "safety_checker",
+        "feature_extractor",
+        "watermarker",
     ]
 
     def __init__(
@@ -512,7 +510,8 @@ class IFSuperResolutionPipeline(DiffusionPipeline):
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
                     f" {negative_prompt_embeds.shape}.")
 
-        if noise_level < 0 or noise_level >= self.image_noising_scheduler.config.num_train_timesteps:
+        if (noise_level < 0 or noise_level >=
+                self.image_noising_scheduler.config.num_train_timesteps):
             raise ValueError(
                 f"`noise_level`: {noise_level} must be a valid timestep in `self.noising_scheduler`, [0, {self.image_noising_scheduler.config.num_train_timesteps})"
             )
@@ -782,11 +781,10 @@ class IFSuperResolutionPipeline(DiffusionPipeline):
                         intermediate_images,
                         upscaled.cast(intermediate_images.dtype)
                     ],
-                    axis=1)
+                    axis=1, )
 
-                model_input = paddle.concat(
-                    [model_input] *
-                    2) if do_classifier_free_guidance else model_input
+                model_input = (paddle.concat([model_input] * 2)
+                               if do_classifier_free_guidance else model_input)
                 model_input = self.scheduler.scale_model_input(model_input, t)
 
                 # predict the noise residual
@@ -805,15 +803,16 @@ class IFSuperResolutionPipeline(DiffusionPipeline):
                         [
                             model_input.shape[1] // 2,
                             noise_pred_uncond.shape[1] - model_input.shape[1] //
-                            2
+                            2,
                         ],
-                        axis=1)
+                        axis=1, )
                     noise_pred_text, predicted_variance = noise_pred_text.split(
                         [
                             model_input.shape[1] // 2,
-                            noise_pred_text.shape[1] - model_input.shape[1] // 2
+                            noise_pred_text.shape[1] - model_input.shape[1] //
+                            2,
                         ],
-                        axis=1)
+                        axis=1, )
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
                     noise_pred = paddle.concat(
@@ -825,7 +824,7 @@ class IFSuperResolutionPipeline(DiffusionPipeline):
                     t,
                     intermediate_images,
                     **extra_step_kwargs,
-                    return_dict=False)[0]
+                    return_dict=False, )[0]
 
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or (
@@ -872,4 +871,4 @@ class IFSuperResolutionPipeline(DiffusionPipeline):
         return IFPipelineOutput(
             images=image,
             nsfw_detected=nsfw_detected,
-            watermark_detected=watermark_detected)
+            watermark_detected=watermark_detected, )

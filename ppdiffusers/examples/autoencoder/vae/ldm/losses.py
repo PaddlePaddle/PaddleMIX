@@ -22,7 +22,8 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle.utils.download import get_weights_path_from_url
 
-from ppdiffusers.initializer import constant_, normal_, reset_initialized_parameter
+from ppdiffusers.initializer import (constant_, normal_,
+                                     reset_initialized_parameter)
 
 model_urls = {
     "vgg16": (
@@ -58,10 +59,10 @@ class ActNorm(nn.Layer):
     @paddle.no_grad()
     def initialize(self, input):
         flatten = input.transpose([1, 0, 2, 3]).reshape([input.shape[1], -1])
-        mean = flatten.mean(1).unsqueeze(1).unsqueeze(2).unsqueeze(3).transpose(
-            [1, 0, 2, 3])
-        std = flatten.std(1).unsqueeze(1).unsqueeze(2).unsqueeze(3).transpose(
-            [1, 0, 2, 3])
+        mean = (flatten.mean(1).unsqueeze(1).unsqueeze(2).unsqueeze(3)
+                .transpose([1, 0, 2, 3]))
+        std = (flatten.std(1).unsqueeze(1).unsqueeze(2).unsqueeze(3)
+               .transpose([1, 0, 2, 3]))
 
         self.loc.set_value(-mean)
         self.scale.set_value(1 / (std + 1e-6))
@@ -169,9 +170,8 @@ class NLayerDiscriminator(nn.Layer):
             norm_layer = nn.BatchNorm2D
         else:
             norm_layer = ActNorm
-        if type(
-                norm_layer
-        ) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
+        if (type(norm_layer) == functools.
+                partial):  # no need to use bias as BatchNorm2d has affine parameters
             use_bias = norm_layer.func != nn.BatchNorm2D
         else:
             use_bias = norm_layer != nn.BatchNorm2D
@@ -377,8 +377,8 @@ class LPIPS(nn.Layer):
 
             if pretrained:
                 if model_path is None:
-                    model_path = get_weights_path_from_url(
-                        *model_urls["vgg_netlin"])
+                    model_path = get_weights_path_from_url(*model_urls[
+                        "vgg_netlin"])
                 if verbose:
                     print("Loading model from: %s" % model_path)
                 import warnings
@@ -393,7 +393,7 @@ class LPIPS(nn.Layer):
             param.stop_gradient = True
 
     def forward(self, in0, in1, retPerLayer=False, normalize=False):
-        if normalize:  # turn on this flag if input is [0,1] so it can be adjusted to [-1, +1]
+        if (normalize):  # turn on this flag if input is [0,1] so it can be adjusted to [-1, +1]
             in0 = 2 * in0 - 1
             in1 = 2 * in1 - 1
 
@@ -557,7 +557,8 @@ class LPIPSWithDiscriminator(nn.Layer):
                 self.disc_factor,
                 global_step,
                 threshold=self.discriminator_iter_start)
-            loss = weighted_nll_loss + self.kl_weight * kl_loss + d_weight * disc_factor * g_loss
+            loss = (weighted_nll_loss + self.kl_weight * kl_loss + d_weight *
+                    disc_factor * g_loss)
 
             log = {
                 "{}/total_loss".format(split):

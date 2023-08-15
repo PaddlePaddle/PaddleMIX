@@ -21,7 +21,8 @@ import numpy as np
 import paddle
 
 from ppdiffusers import VersatileDiffusionPipeline
-from ppdiffusers.utils.testing_utils import load_image, require_paddle_gpu, nightly
+from ppdiffusers.utils.testing_utils import (load_image, nightly,
+                                             require_paddle_gpu)
 
 
 class VersatileDiffusionMegaPipelineFastTests(unittest.TestCase):
@@ -66,8 +67,8 @@ class VersatileDiffusionMegaPipelineIntegrationTests(unittest.TestCase):
             guidance_scale=7.5,
             num_inference_steps=2,
             output_type="numpy", ).images
-        assert np.abs(image - new_image).sum(
-        ) < 1e-05, "Models don't have the same forward pass"
+        assert (np.abs(image - new_image).sum() < 1e-05
+                ), "Models don't have the same forward pass"
 
     def test_inference_dual_guided_then_text_to_image(self):
         pipe = VersatileDiffusionPipeline.from_pretrained(
@@ -108,13 +109,20 @@ class VersatileDiffusionMegaPipelineIntegrationTests(unittest.TestCase):
             generator=generator,
             guidance_scale=7.5,
             num_inference_steps=50,
-            output_type="numpy").images
+            output_type="numpy", ).images
         image_slice = image[0, 253:256, 253:256, -1]
         assert image.shape == (1, 512, 512, 3)
         # expected_slice = np.array([0.3367, 0.3169, 0.2656, 0.387, 0.479, 0.3796, 0.4009, 0.4878, 0.4778])
         expected_slice = np.array([
-            0.0390625, 0.00854492, 0.0, 0.03930664, 0.00878906, 0.04711914,
-            0.03686523, 0.0, 0.0246582
+            0.0390625,
+            0.00854492,
+            0.0,
+            0.03930664,
+            0.00878906,
+            0.04711914,
+            0.03686523,
+            0.0,
+            0.0246582,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.1
         image = pipe.image_variation(
@@ -123,7 +131,14 @@ class VersatileDiffusionMegaPipelineIntegrationTests(unittest.TestCase):
         assert image.shape == (1, 512, 512, 3)
         # expected_slice = np.array([0.3076, 0.3123, 0.3284, 0.3782, 0.377, 0.3894, 0.4297, 0.4331, 0.4456])
         expected_slice = np.array([
-            0.34472656, 0.1940918, 0.10546875, 0.38134766, 0.24560547,
-            0.13208008, 0.38867188, 0.30566406, 0.18188477
+            0.34472656,
+            0.1940918,
+            0.10546875,
+            0.38134766,
+            0.24560547,
+            0.13208008,
+            0.38867188,
+            0.30566406,
+            0.18188477,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.1

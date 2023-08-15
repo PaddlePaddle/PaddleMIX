@@ -32,30 +32,24 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 import requests
 from huggingface_hub import HfFolder, create_repo, upload_folder, whoami
-from paddle.distributed.fleet.utils.hybrid_parallel_util import (
-    fused_allreduce_gradients, )
-from paddle.io import BatchSampler, DataLoader, Dataset, DistributedBatchSampler
+from paddle.distributed.fleet.utils.hybrid_parallel_util import \
+    fused_allreduce_gradients
+from paddle.io import (BatchSampler, DataLoader, Dataset,
+                       DistributedBatchSampler)
 from paddle.optimizer import AdamW
 from paddle.vision import BaseTransform, transforms
-from PIL import Image
-from tqdm.auto import tqdm
-
 from paddlenlp.trainer import set_seed
 from paddlenlp.transformers import AutoTokenizer, PretrainedConfig
 from paddlenlp.utils.log import logger
-from ppdiffusers import (
-    AutoencoderKL,
-    DDPMScheduler,
-    DiffusionPipeline,
-    DPMSolverMultistepScheduler,
-    UNet2DConditionModel,
-    is_ppxformers_available, )
+from PIL import Image
+from tqdm.auto import tqdm
+
+from ppdiffusers import (AutoencoderKL, DDPMScheduler, DiffusionPipeline,
+                         DPMSolverMultistepScheduler, UNet2DConditionModel,
+                         is_ppxformers_available)
 from ppdiffusers.loaders import AttnProcsLayers, LoraLoaderMixin
 from ppdiffusers.models.attention_processor import (
-    AttnProcessor,
-    AttnProcessor2_5,
-    LoRAAttnProcessor,
-    LoRAAttnProcessor2_5, )
+    AttnProcessor, AttnProcessor2_5, LoRAAttnProcessor, LoRAAttnProcessor2_5)
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import freeze_params, unwrap_model
 from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE, check_min_version
@@ -96,16 +90,17 @@ def _retry(
 
 
 def url_or_path_join(*path_list):
-    return os.path.join(*path_list) if os.path.isdir(os.path.join(
-        *path_list)) else "/".join(path_list)
+    return (os.path.join(*path_list)
+            if os.path.isdir(os.path.join(*path_list)) else "/".join(path_list))
 
 
-def save_model_card(repo_id: str,
-                    images=None,
-                    base_model=str,
-                    train_text_encoder=False,
-                    prompt=str,
-                    repo_folder=None):
+def save_model_card(
+        repo_id: str,
+        images=None,
+        base_model=str,
+        train_text_encoder=False,
+        prompt=str,
+        repo_folder=None, ):
     img_str = ""
     for i, image in enumerate(images):
         image.save(os.path.join(repo_folder, f"image_{i}.png"))
@@ -151,8 +146,8 @@ def import_model_class_from_model_name_or_path(
 
         return CLIPTextModel
     elif model_class == "RobertaSeriesModelWithTransformation":
-        from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
-            RobertaSeriesModelWithTransformation, )
+        from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import \
+            RobertaSeriesModelWithTransformation
 
         return RobertaSeriesModelWithTransformation
     elif model_class == "BertModel":
@@ -160,8 +155,8 @@ def import_model_class_from_model_name_or_path(
 
         return BertModel
     elif model_class == "LDMBertModel":
-        from ppdiffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import (
-            LDMBertModel, )
+        from ppdiffusers.pipelines.latent_diffusion.pipeline_latent_diffusion import \
+            LDMBertModel
 
         return LDMBertModel
     else:
@@ -235,7 +230,7 @@ def parse_args(input_args=None):
         "--validation_prompt",
         type=str,
         default=None,
-        help="A prompt that is sampled during training for inference.")
+        help="A prompt that is sampled during training for inference.", )
     parser.add_argument(
         "--num_validation_images",
         type=int,
@@ -259,7 +254,7 @@ def parse_args(input_args=None):
         "--prior_loss_weight",
         type=float,
         default=1.0,
-        help="The weight of prior preservation loss.")
+        help="The weight of prior preservation loss.", )
     parser.add_argument(
         "--num_class_images",
         type=int,
@@ -321,7 +316,7 @@ def parse_args(input_args=None):
         "--train_batch_size",
         type=int,
         default=4,
-        help="Batch size (per device) for the training dataloader.")
+        help="Batch size (per device) for the training dataloader.", )
     parser.add_argument(
         "--train_text_encoder",
         action="store_true",
@@ -331,7 +326,7 @@ def parse_args(input_args=None):
         "--sample_batch_size",
         type=int,
         default=4,
-        help="Batch size (per device) for sampling images.")
+        help="Batch size (per device) for sampling images.", )
     parser.add_argument("--num_train_epochs", type=int, default=1)
     parser.add_argument(
         "--max_train_steps",
@@ -378,7 +373,7 @@ def parse_args(input_args=None):
         "--lr_warmup_steps",
         type=int,
         default=500,
-        help="Number of steps for the warmup in the lr scheduler.")
+        help="Number of steps for the warmup in the lr scheduler.", )
     parser.add_argument(
         "--lr_num_cycles",
         type=int,
@@ -389,7 +384,7 @@ def parse_args(input_args=None):
         "--lr_power",
         type=float,
         default=1.0,
-        help="Power factor of the polynomial scheduler.")
+        help="Power factor of the polynomial scheduler.", )
     parser.add_argument(
         "--dataloader_num_workers",
         type=int,
@@ -401,12 +396,12 @@ def parse_args(input_args=None):
         "--adam_beta1",
         type=float,
         default=0.9,
-        help="The beta1 parameter for the Adam optimizer.")
+        help="The beta1 parameter for the Adam optimizer.", )
     parser.add_argument(
         "--adam_beta2",
         type=float,
         default=0.999,
-        help="The beta2 parameter for the Adam optimizer.")
+        help="The beta2 parameter for the Adam optimizer.", )
     parser.add_argument(
         "--adam_weight_decay",
         type=float,
@@ -416,18 +411,18 @@ def parse_args(input_args=None):
         "--adam_epsilon",
         type=float,
         default=1e-08,
-        help="Epsilon value for the Adam optimizer")
+        help="Epsilon value for the Adam optimizer", )
     parser.add_argument(
         "--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
     parser.add_argument(
         "--push_to_hub",
         action="store_true",
-        help="Whether or not to push the model to the Hub.")
+        help="Whether or not to push the model to the Hub.", )
     parser.add_argument(
         "--hub_token",
         type=str,
         default=None,
-        help="The token to use to push to the Model Hub.")
+        help="The token to use to push to the Model Hub.", )
     parser.add_argument(
         "--hub_model_id",
         type=str,
@@ -450,7 +445,7 @@ def parse_args(input_args=None):
     parser.add_argument(
         "--enable_xformers_memory_efficient_attention",
         action="store_true",
-        help="Whether or not to use xformers.")
+        help="Whether or not to use xformers.", )
     parser.add_argument(
         "--noise_offset",
         type=float,
@@ -638,9 +633,9 @@ def main():
             pipeline = DiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
                 safety_checker=None,
-                requires_safety_checker=False)
-            if args.enable_xformers_memory_efficient_attention and is_ppxformers_available(
-            ):
+                requires_safety_checker=False, )
+            if (args.enable_xformers_memory_efficient_attention and
+                    is_ppxformers_available()):
                 try:
                     pipeline.unet.enable_xformers_memory_efficient_attention()
                 except Exception as e:
@@ -663,17 +658,20 @@ def main():
             sample_dataloader = DataLoader(
                 sample_dataset,
                 batch_sampler=batch_sampler,
-                num_workers=args.dataloader_num_workers)
+                num_workers=args.dataloader_num_workers, )
 
             for example in tqdm(
                     sample_dataloader,
                     desc="Generating class images",
-                    disable=not is_main_process):
+                    disable=not is_main_process, ):
                 images = pipeline(example["prompt"]).images
 
                 for i, image in enumerate(images):
                     hash_image = hashlib.sha1(image.tobytes()).hexdigest()
-                    image_filename = class_images_dir / f"{example['index'][i] + cur_class_images}-{hash_image}.jpg"
+                    image_filename = (
+                        class_images_dir /
+                        f"{example['index'][i] + cur_class_images}-{hash_image}.jpg"
+                    )
                     image.save(image_filename)
             pipeline.to("cpu")
             del pipeline
@@ -692,8 +690,9 @@ def main():
                 url_or_path_join(args.pretrained_model_name_or_path,
                                  "tokenizer"))
         except KeyError as e:
-            if 'XLMRobertaTokenizer' in str(e):
+            if "XLMRobertaTokenizer" in str(e):
                 from paddlenlp.transformers import XLMRobertaTokenizer
+
                 tokenizer = XLMRobertaTokenizer.from_pretrained(
                     url_or_path_join(args.pretrained_model_name_or_path,
                                      "tokenizer"))
@@ -709,10 +708,10 @@ def main():
         args.pretrained_model_name_or_path, subfolder="scheduler")
     text_encoder = text_encoder_cls.from_pretrained(
         url_or_path_join(args.pretrained_model_name_or_path, "text_encoder"))
-    text_config = text_encoder.config if isinstance(
-        text_encoder.config, dict) else text_encoder.config.to_dict()
-    if text_config.get("use_attention_mask",
-                       None) is not None and text_config["use_attention_mask"]:
+    text_config = (text_encoder.config if isinstance(text_encoder.config, dict)
+                   else text_encoder.config.to_dict())
+    if (text_config.get("use_attention_mask", None) is not None and
+            text_config["use_attention_mask"]):
         use_attention_mask = True
     else:
         use_attention_mask = False
@@ -751,8 +750,8 @@ def main():
     # Set correct lora layers
     unet_lora_attn_procs = {}
     for name, attn_processor in unet.attn_processors.items():
-        cross_attention_dim = None if name.endswith(
-            "attn1.processor") else unet.config.cross_attention_dim
+        cross_attention_dim = (None if name.endswith("attn1.processor") else
+                               unet.config.cross_attention_dim)
         if name.startswith("mid_block"):
             hidden_size = unet.config.block_out_channels[-1]
         elif name.startswith("up_blocks"):
@@ -826,12 +825,13 @@ def main():
 
         pixel_values = paddle.stack(pixel_values).astype("float32")
 
-        input_ids = tokenizer.pad({
-            "input_ids": input_ids
-        },
-                                  padding="max_length",
-                                  max_length=tokenizer.model_max_length,
-                                  return_tensors="pd").input_ids
+        input_ids = tokenizer.pad(
+            {
+                "input_ids": input_ids
+            },
+            padding="max_length",
+            max_length=tokenizer.model_max_length,
+            return_tensors="pd", ).input_ids
 
         return {
             "input_ids": input_ids,
@@ -848,7 +848,7 @@ def main():
         train_dataset,
         batch_sampler=train_sampler,
         collate_fn=collate_fn,
-        num_workers=args.dataloader_num_workers)
+        num_workers=args.dataloader_num_workers, )
 
     # Scheduler and math around the number of training steps.
     num_update_steps_per_epoch = math.ceil(
@@ -902,7 +902,8 @@ def main():
         writer = get_report_to(args)
 
     # Train!
-    total_batch_size = args.train_batch_size * num_processes * args.gradient_accumulation_steps
+    total_batch_size = (args.train_batch_size * num_processes *
+                        args.gradient_accumulation_steps)
 
     logger.info("***** Running training *****")
     logger.info(f"  Num examples = {len(train_dataset)}")
@@ -959,8 +960,9 @@ def main():
                 # gradient_checkpointing + grad_acc, no_sync every where
                 unet_ctx_manager = unet.no_sync()
             else:
-                unet_ctx_manager = contextlib.nullcontext(
-                ) if sys.version_info >= (3, 7) else contextlib.suppress()
+                unet_ctx_manager = (contextlib.nullcontext()
+                                    if sys.version_info >= (3, 7) else
+                                    contextlib.suppress())
 
             if use_attention_mask:
                 attention_mask = (
@@ -1044,7 +1046,8 @@ def main():
                     break
 
         if is_main_process:
-            if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
+            if (args.validation_prompt is not None and
+                    epoch % args.validation_epochs == 0):
                 logger.info(
                     f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
                     f" {args.validation_prompt}.")
@@ -1060,13 +1063,13 @@ def main():
                 pipeline.set_progress_bar_config(disable=True)
 
                 # run inference
-                generator = paddle.Generator().manual_seed(
-                    args.seed) if args.seed else None
+                generator = (paddle.Generator().manual_seed(args.seed)
+                             if args.seed else None)
                 images = [
                     pipeline(
                         args.validation_prompt,
                         num_inference_steps=25,
-                        generator=generator).images[0]
+                        generator=generator, ).images[0]
                     for _ in range(args.num_validation_images)
                 ]
                 np_images = np.stack([np.asarray(img) for img in images])
@@ -1096,7 +1099,7 @@ def main():
         pipeline = DiffusionPipeline.from_pretrained(
             args.pretrained_model_name_or_path,
             safety_checker=None,
-            requires_safety_checker=False)
+            requires_safety_checker=False, )
         pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
             pipeline.scheduler.config)
         # load attention processors
@@ -1135,7 +1138,7 @@ def main():
                 func_kwargs={
                     "repo_id": repo_id,
                     "exist_ok": True,
-                    "token": args.hub_token
+                    "token": args.hub_token,
                 },
                 base_wait_time=1.0,
                 max_retries=5,

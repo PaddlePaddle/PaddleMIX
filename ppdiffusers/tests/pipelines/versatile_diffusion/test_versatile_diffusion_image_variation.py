@@ -19,7 +19,8 @@ import numpy as np
 import paddle
 
 from ppdiffusers import VersatileDiffusionImageVariationPipeline
-from ppdiffusers.utils.testing_utils import load_image, require_paddle_gpu, slow
+from ppdiffusers.utils.testing_utils import (load_image, require_paddle_gpu,
+                                             slow)
 
 
 class VersatileDiffusionImageVariationPipelineFastTests(unittest.TestCase):
@@ -43,11 +44,18 @@ class VersatileDiffusionImageVariationPipelineIntegrationTests(
             generator=generator,
             guidance_scale=7.5,
             num_inference_steps=50,
-            output_type="numpy").images
+            output_type="numpy", ).images
         image_slice = image[0, 253:256, 253:256, -1]
         assert image.shape == (1, 512, 512, 3)
         expected_slice = np.array([
-            0.12047189, 0.19138041, 0.22884357, 0.08833978, 0.1594424,
-            0.16826832, 0.07032129, 0.14926612, 0.12981007
+            0.12047189,
+            0.19138041,
+            0.22884357,
+            0.08833978,
+            0.1594424,
+            0.16826832,
+            0.07032129,
+            0.14926612,
+            0.12981007,
         ])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01

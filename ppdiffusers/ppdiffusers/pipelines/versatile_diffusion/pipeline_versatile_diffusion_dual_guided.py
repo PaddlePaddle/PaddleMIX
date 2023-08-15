@@ -19,18 +19,12 @@ from typing import Callable, List, Optional, Tuple, Union
 import numpy as np
 import paddle
 import PIL
+from paddlenlp.transformers import (CLIPImageProcessor,
+                                    CLIPTextModelWithProjection, CLIPTokenizer,
+                                    CLIPVisionModelWithProjection)
 
-from paddlenlp.transformers import (
-    CLIPImageProcessor,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-    CLIPVisionModelWithProjection, )
-
-from ...models import (
-    AutoencoderKL,
-    DualTransformer2DModel,
-    Transformer2DModel,
-    UNet2DConditionModel, )
+from ...models import (AutoencoderKL, DualTransformer2DModel,
+                       Transformer2DModel, UNet2DConditionModel)
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging, randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
@@ -201,8 +195,8 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
                 f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-        if hasattr(self.text_encoder.config, "use_attention_mask"
-                   ) and self.text_encoder.config.use_attention_mask:
+        if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                self.text_encoder.config.use_attention_mask):
             attention_mask = text_inputs.attention_mask
         else:
             attention_mask = None
@@ -229,8 +223,8 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -349,13 +343,15 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
         return extra_step_kwargs
 
     def check_inputs(self, prompt, image, height, width, callback_steps):
-        if not isinstance(prompt, str) and not isinstance(
-                prompt, PIL.Image.Image) and not isinstance(prompt, list):
+        if (not isinstance(prompt, str) and
+                not isinstance(prompt, PIL.Image.Image) and
+                not isinstance(prompt, list)):
             raise ValueError(
                 f"`prompt` has to be of type `str` `PIL.Image` or `list` but is {type(prompt)}"
             )
-        if not isinstance(image, str) and not isinstance(
-                image, PIL.Image.Image) and not isinstance(image, list):
+        if (not isinstance(image, str) and
+                not isinstance(image, PIL.Image.Image) and
+                not isinstance(image, list)):
             raise ValueError(
                 f"`image` has to be of type `str` `PIL.Image` or `list` but is {type(image)}"
             )
@@ -373,16 +369,20 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
                 f" {type(callback_steps)}.")
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = (batch_size, num_channels_latents, height //
-                 self.vae_scale_factor, width // self.vae_scale_factor)
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
+        shape = (
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor, )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -564,8 +564,8 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
         # 8. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(
-                [latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = (paddle.concat([latents] * 2)
+                                  if do_classifier_free_guidance else latents)
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
 

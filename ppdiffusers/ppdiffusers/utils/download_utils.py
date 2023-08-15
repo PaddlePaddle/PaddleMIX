@@ -28,10 +28,8 @@ import requests
 from filelock import FileLock
 from huggingface_hub import hf_hub_download
 from huggingface_hub.file_download import _chmod_and_replace, http_get
-from huggingface_hub.utils import (
-    EntryNotFoundError,
-    RepositoryNotFoundError,
-    RevisionNotFoundError, )
+from huggingface_hub.utils import (EntryNotFoundError, RepositoryNotFoundError,
+                                   RevisionNotFoundError)
 from huggingface_hub.utils import tqdm as hf_tqdm
 from packaging import version
 from requests import HTTPError
@@ -39,13 +37,10 @@ from tqdm.auto import tqdm as base_tqdm
 from tqdm.contrib.concurrent import thread_map
 
 from ..version import VERSION as __version__
-from .constants import (
-    DEPRECATED_REVISION_ARGS,
-    HUGGINGFACE_CO_RESOLVE_ENDPOINT,
-    PPDIFFUSERS_CACHE,
-    PPNLP_BOS_RESOLVE_ENDPOINT,
-    TORCH_SAFETENSORS_WEIGHTS_NAME,
-    WEIGHTS_NAME, )
+from .constants import (DEPRECATED_REVISION_ARGS,
+                        HUGGINGFACE_CO_RESOLVE_ENDPOINT, PPDIFFUSERS_CACHE,
+                        PPNLP_BOS_RESOLVE_ENDPOINT,
+                        TORCH_SAFETENSORS_WEIGHTS_NAME, WEIGHTS_NAME)
 from .logging import get_logger
 
 
@@ -117,7 +112,9 @@ REPO_TYPES = ["model"]
 DEFAULT_REVISION = "main"
 # REPO_ID_SEPARATOR = "--"
 REGEX_COMMIT_HASH = re.compile(r"^[0-9a-f]{40}$")
-PPDIFFUSERS_BOS_URL_TEMPLATE = PPNLP_BOS_RESOLVE_ENDPOINT + "/{repo_type}/community/{repo_id}/{revision}/{filename}"
+PPDIFFUSERS_BOS_URL_TEMPLATE = (
+    PPNLP_BOS_RESOLVE_ENDPOINT +
+    "/{repo_type}/community/{repo_id}/{revision}/{filename}")
 
 ALLOW_PATTERNS_MAPPING = {
     "scheduler": ["scheduler_config.json", ],

@@ -72,14 +72,18 @@ def get_images_form_urls(ids_list,
     for i, id in enumerate(tqdm(ids_list)):
         if dataset_base_name == "artv4_openpose_test13":
             if type == "原图":
-                img_url = dataset_base_name_one_type_one_url_base + f"{id}/{id}_final00_control.png"
+                img_url = (dataset_base_name_one_type_one_url_base +
+                           f"{id}/{id}_final00_control.png")
             elif type == "Openpose控制图":
-                img_url = dataset_base_name_one_type_two_url_base + f"{id}/{id}_final00_control_openpose.png"
+                img_url = (dataset_base_name_one_type_two_url_base +
+                           f"{id}/{id}_final00_control_openpose.png")
         if dataset_base_name == "artv4_openpose_test2":
             if type == "原图":
-                img_url = dataset_base_name_two_type_one_url_base + f"{id}/{id}_final00_control.png"
+                img_url = (dataset_base_name_two_type_one_url_base +
+                           f"{id}/{id}_final00_control.png")
             elif type == "Openpose控制图":
-                img_url = dataset_base_name_two_type_one_url_base + f"{id}/{id}_final00_control_openpose.png"
+                img_url = (dataset_base_name_two_type_one_url_base +
+                           f"{id}/{id}_final00_control_openpose.png")
         in_image = load_image(img_url)
         if is_resize:
             in_image = in_image.resize((512, 512))

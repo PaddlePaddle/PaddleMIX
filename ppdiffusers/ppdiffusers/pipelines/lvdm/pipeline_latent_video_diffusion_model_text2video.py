@@ -13,19 +13,19 @@
 # limitations under the License.
 
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Union
 import os
+from typing import Any, Callable, Dict, List, Optional, Union
+
 import numpy as np
-from einops import rearrange
-
 import paddle
-
+from einops import rearrange
 from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 
 from ...configuration_utils import FrozenDict
 from ...models import LVDMAutoencoderKL, LVDMUNet3DModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import deprecate, logging, randn_tensor, replace_example_docstring
+from ...utils import (deprecate, logging, randn_tensor,
+                      replace_example_docstring)
 from ..pipeline_utils import DiffusionPipeline
 from . import VideoPipelineOutput
 from .video_save import save_results
@@ -66,16 +66,16 @@ def split_video_to_clips(video, clip_length, drop_left=True):
     if video_length % clip_length != 0 and drop_left:
         video = video[:, :, :video_length // clip_length * clip_length, :, :]
         print(
-            f'[split_video_to_clips] Drop frames from {shape} to {video.shape}')
+            f"[split_video_to_clips] Drop frames from {shape} to {video.shape}")
     nclips = video_length // clip_length
     clips = rearrange(
-        video, 'b c (nc cl) h w -> (b nc) c cl h w', cl=clip_length, nc=nclips)
+        video, "b c (nc cl) h w -> (b nc) c cl h w", cl=clip_length, nc=nclips)
     return clips
 
 
 def merge_clips_to_videos(clips, bs):
     nclips = clips.shape[0] // bs
-    video = rearrange(clips, '(b nc) c t h w -> b c (nc t) h w', nc=nclips)
+    video = rearrange(clips, "(b nc) c t h w -> b c (nc t) h w", nc=nclips)
     return video
 
 
@@ -112,8 +112,8 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
             scheduler: KarrasDiffusionSchedulers, ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -130,8 +130,8 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if (hasattr(scheduler.config, "clip_sample") and
+                scheduler.config.clip_sample is True):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -161,7 +161,7 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def decode(self, z, **kwargs):
-        z = 1.0 / kwargs['scale_factor'] * z - kwargs['shift_factor']
+        z = 1.0 / kwargs["scale_factor"] * z - kwargs["shift_factor"]
         results = self.vae.decode(z).sample
         return results
 
@@ -211,7 +211,7 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                                       return_cpu=True,
                                       **kwargs):
         b, _, t, _, _ = z.shape
-        z = rearrange(z, 'b c t h w -> (b t) c h w')
+        z = rearrange(z, "b c t h w -> (b t) c h w")
         if decode_bs is None:
             results = self.decode(z, **kwargs)
         else:
@@ -224,32 +224,33 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                 results = paddle.concat(
                     x=[self.decode(z_, **kwargs) for z_ in z], axis=0)
         results = rearrange(
-            results, '(b t) c h w -> b c t h w', b=b, t=t).contiguous()
+            results, "(b t) c h w -> b c t h w", b=b, t=t).contiguous()
         return results
 
     @paddle.no_grad()
-    def decode_latents(self,
-                       z,
-                       decode_bs=16,
-                       return_cpu=True,
-                       bs=None,
-                       decode_single_video_allframes=False,
-                       max_z_t=None,
-                       overlapped_length=0,
-                       **kwargs):
+    def decode_latents(
+            self,
+            z,
+            decode_bs=16,
+            return_cpu=True,
+            bs=None,
+            decode_single_video_allframes=False,
+            max_z_t=None,
+            overlapped_length=0,
+            **kwargs, ):
         b, _, t, _, _ = z.shape
-        if kwargs['encoder_type'] == '2d' and z.dim() == 5:
+        if kwargs["encoder_type"] == "2d" and z.dim() == 5:
             return self.decode_first_stage_2DAE_video(
                 z, decode_bs=decode_bs, return_cpu=return_cpu, **kwargs)
         if decode_single_video_allframes:
             z = paddle.split(x=z, num_or_sections=z.shape[0] // 1, axis=0)
             cat_dim = 0
         elif max_z_t is not None:
-            if kwargs['encoder_type'] == '3d':
+            if kwargs["encoder_type"] == "3d":
                 z = paddle.split(
                     x=z, num_or_sections=z.shape[2] // max_z_t, axis=2)
                 cat_dim = 2
-            if kwargs['encoder_type'] == '2d':
+            if kwargs["encoder_type"] == "2d":
                 z = paddle.split(
                     x=z, num_or_sections=z.shape[0] // max_z_t, axis=0)
                 cat_dim = 0
@@ -283,13 +284,13 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         else:
             sample = sample.transpose(perm=[0, 2, 3, 1])
 
-        if isinstance('uint8', paddle.dtype):
-            dtype = 'uint8'
-        elif isinstance('uint8',
-                        str) and 'uint8' not in ['cpu', 'cuda', 'ipu', 'xpu']:
-            dtype = 'uint8'
-        elif isinstance('uint8', paddle.Tensor):
-            dtype = 'uint8'.dtype
+        if isinstance("uint8", paddle.dtype):
+            dtype = "uint8"
+        elif isinstance("uint8",
+                        str) and "uint8" not in ["cpu", "cuda", "ipu", "xpu"]:
+            dtype = "uint8"
+        elif isinstance("uint8", paddle.Tensor):
+            dtype = "uint8".dtype
         else:
             dtype = ((sample + 1) * 127.5).clip(min=0, max=255).dtype
         sample = ((sample + 1) * 127.5).clip(min=0, max=255).cast(dtype)
@@ -354,8 +355,8 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -399,8 +400,8 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -497,15 +498,16 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
                     f" {negative_prompt_embeds.shape}.")
 
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        num_frames,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            num_frames,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = [
             batch_size, num_channels_latents, num_frames, height // 8,
             width // 8
@@ -548,7 +550,7 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
             save_dir=None,
             save_name=None,
             num_frames: Optional[int]=16,
-            encoder_type='2d',
+            encoder_type="2d",
             scale_factor=0.18215,
             shift_factor=0, ):
         r"""
@@ -609,10 +611,10 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                 `self.processor` in ppdiffusers.cross_attention.
             save_dir (`str` or `List[str]`, *optional*):
                 If provided, will save videos generated to *save_dir*. Otherwise will save them to the current path.
-            save_name (`str` or `List[str]`, *optional*): 
+            save_name (`str` or `List[str]`, *optional*):
                 If provided, will save videos generated to *save_name*.
             num_frames (`int`, *optional*, defaults to 16):
-                Number of frames of the video. If None, will generate 16 frames per video.    
+                Number of frames of the video. If None, will generate 16 frames per video.
             encoder_type (`str`, *optional*, defaults to `"2d"`):
                 If provided, will use the specified encoder to generate the video, chosen from [`2d`, `3d`].
             scale_factor (`float`, *optional*, defaults to 0.18215):
@@ -631,9 +633,14 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
             )
 
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, height, width, callback_steps,
-                          negative_prompt, prompt_embeds,
-                          negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            height,
+            width,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds, )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -682,8 +689,8 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -713,9 +720,9 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                         callback(i, t, latents)
         all_videos = []
         extra_decode_kwargs = {
-            'encoder_type': encoder_type,
-            'scale_factor': scale_factor,
-            'shift_factor': shift_factor,
+            "encoder_type": encoder_type,
+            "scale_factor": scale_factor,
+            "shift_factor": shift_factor,
         }
         sampled_videos = self.decode_latents(
             latents, decode_bs=1, return_cpu=False, **extra_decode_kwargs)
@@ -737,9 +744,9 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
             videos_frames.append(video_frames)
 
         if not save_name:
-            save_name = f'defaul_video'
+            save_name = f"defaul_video"
         if not save_dir:
-            save_dir = '.'
+            save_dir = "."
         os.makedirs(save_dir, exist_ok=True)
         save_results(
             all_videos, save_dir=save_dir, save_name=save_name, save_fps=8)

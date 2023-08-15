@@ -26,20 +26,14 @@ except ImportError:
     raise ImportError(
         "OmegaConf is required to convert the SD checkpoints. Please install it with `pip install OmegaConf`."
     )
-from transformers import CLIPTextModel as HFCLIPTextModel
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+from transformers import CLIPTextModel as HFCLIPTextModel
+
 from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    HeunDiscreteScheduler,
-    LMSDiscreteScheduler,
-    LVDMUNet3DModel,
-    LVDMAutoencoderKL,
-    LVDMTextToVideoPipeline,
-    PNDMScheduler, )
+    AutoencoderKL, DDIMScheduler, DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler, EulerDiscreteScheduler,
+    HeunDiscreteScheduler, LMSDiscreteScheduler, LVDMAutoencoderKL,
+    LVDMTextToVideoPipeline, LVDMUNet3DModel, PNDMScheduler)
 
 paddle.set_device("cpu")
 MZ_ZIP_LOCAL_DIR_HEADER_SIZE = 30
@@ -205,12 +199,13 @@ def renew_vae_attention_paths(old_list, n_shave_prefix_segments=0):
     return mapping
 
 
-def assign_to_checkpoint(paths,
-                         checkpoint,
-                         old_checkpoint,
-                         attention_paths_to_split=None,
-                         additional_replacements=None,
-                         config=None):
+def assign_to_checkpoint(
+        paths,
+        checkpoint,
+        old_checkpoint,
+        attention_paths_to_split=None,
+        additional_replacements=None,
+        config=None, ):
     """
     This does the final conversion step: take locally converted weights and apply a global renaming
     to them. It splits attention layers, and takes into account additional replacements
@@ -246,7 +241,8 @@ def assign_to_checkpoint(paths,
         new_path = path["new"]
 
         # These have already been assigned
-        if attention_paths_to_split is not None and new_path in attention_paths_to_split:
+        if (attention_paths_to_split is not None and
+                new_path in attention_paths_to_split):
             continue
 
         # Global renaming happens here
@@ -488,7 +484,7 @@ def convert_ldm_vae_checkpoint(checkpoint, vae_checkpoint, config):
             new_checkpoint,
             vae_state_dict,
             additional_replacements=[meta_path],
-            config=config)
+            config=config, )
 
     mid_resnets = [key for key in vae_state_dict if "encoder.mid.block" in key]
     num_mid_res_blocks = 2
@@ -507,7 +503,7 @@ def convert_ldm_vae_checkpoint(checkpoint, vae_checkpoint, config):
             new_checkpoint,
             vae_state_dict,
             additional_replacements=[meta_path],
-            config=config)
+            config=config, )
 
     mid_attentions = [
         key for key in vae_state_dict if "encoder.mid.attn" in key
@@ -519,7 +515,7 @@ def convert_ldm_vae_checkpoint(checkpoint, vae_checkpoint, config):
         new_checkpoint,
         vae_state_dict,
         additional_replacements=[meta_path],
-        config=config)
+        config=config, )
     conv_attn_to_linear(new_checkpoint)
 
     for i in range(num_up_blocks):
@@ -547,7 +543,7 @@ def convert_ldm_vae_checkpoint(checkpoint, vae_checkpoint, config):
             new_checkpoint,
             vae_state_dict,
             additional_replacements=[meta_path],
-            config=config)
+            config=config, )
 
     mid_resnets = [key for key in vae_state_dict if "decoder.mid.block" in key]
     num_mid_res_blocks = 2
@@ -566,7 +562,7 @@ def convert_ldm_vae_checkpoint(checkpoint, vae_checkpoint, config):
             new_checkpoint,
             vae_state_dict,
             additional_replacements=[meta_path],
-            config=config)
+            config=config, )
 
     mid_attentions = [
         key for key in vae_state_dict if "decoder.mid.attn" in key
@@ -578,7 +574,7 @@ def convert_ldm_vae_checkpoint(checkpoint, vae_checkpoint, config):
         new_checkpoint,
         vae_state_dict,
         additional_replacements=[meta_path],
-        config=config)
+        config=config, )
     conv_attn_to_linear(new_checkpoint)
     return new_checkpoint
 
@@ -700,19 +696,19 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="Path to the checkpoint to convert.")
+        help="Path to the checkpoint to convert.", )
     parser.add_argument(
         "--vae_checkpoint_path",
         default=None,
         type=str,
         required=False,
-        help="Path to the checkpoint to convert.")
+        help="Path to the checkpoint to convert.", )
     parser.add_argument(
         "--vae_type",
-        default='2d',
+        default="2d",
         type=str,
         required=False,
-        help="The type of vae, chosen from [`2d `, `3d`].")
+        help="The type of vae, chosen from [`2d `, `3d`].", )
     parser.add_argument(
         "--original_config_file",
         default=None,
@@ -744,18 +740,18 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="Path to the output model.")
+        help="Path to the output model.", )
     args = parser.parse_args()
 
     image_size = 512
     # checkpoint = load_torch(args.checkpoint_path)
-    checkpoint = torch.load(args.checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(args.checkpoint_path, map_location="cpu")
     checkpoint = checkpoint.get("state_dict", checkpoint)
 
     vae_checkpoint = None
     if args.vae_checkpoint_path:
         vae_checkpoint = torch.load(
-            args.vae_checkpoint_path, map_location='cpu')
+            args.vae_checkpoint_path, map_location="cpu")
         vae_checkpoint = vae_checkpoint.get("state_dict", vae_checkpoint)
 
     original_config = OmegaConf.load(args.original_config_file)
@@ -806,7 +802,7 @@ if __name__ == "__main__":
         checkpoint,
         diffusers_unet_config,
         path=args.checkpoint_path,
-        extract_ema=args.extract_ema)
+        extract_ema=args.extract_ema, )
     unet = LVDMUNet3DModel.from_config(diffusers_unet_config)
     ppdiffusers_unet_checkpoint = convert_diffusers_vae_unet_to_ppdiffusers(
         unet, diffusers_unet_checkpoint)
@@ -814,7 +810,7 @@ if __name__ == "__main__":
     unet.load_dict(ppdiffusers_unet_checkpoint)
 
     # 2. Convert the AutoencoderKL model.
-    if args.vae_type == '2d':
+    if args.vae_type == "2d":
         vae_config = create_vae_diffusers_config(
             original_config, image_size=image_size)
         diffusers_vae_checkpoint = convert_ldm_vae_checkpoint(

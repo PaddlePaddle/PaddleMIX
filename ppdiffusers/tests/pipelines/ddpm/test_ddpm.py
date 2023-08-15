@@ -50,7 +50,7 @@ class DDPMPipelineFastTests(unittest.TestCase):
             generator=generator,
             num_inference_steps=2,
             output_type="numpy",
-            return_dict=False)[0]
+            return_dict=False, )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
@@ -86,8 +86,8 @@ class DDPMPipelineFastTests(unittest.TestCase):
         image_eps_slice = image_eps[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
         tolerance = 0.01
-        assert np.abs(image_slice.flatten() - image_eps_slice.flatten()).max(
-        ) < tolerance
+        assert (np.abs(image_slice.flatten() - image_eps_slice.flatten()).max()
+                < tolerance)
 
 
 @slow

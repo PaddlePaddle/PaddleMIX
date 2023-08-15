@@ -16,7 +16,8 @@ import unittest
 
 import paddle
 
-from ppdiffusers.models.attention_processor import Attention, AttnAddedKVProcessor
+from ppdiffusers.models.attention_processor import (Attention,
+                                                    AttnAddedKVProcessor)
 
 
 class AttnAddedKVProcessorTests(unittest.TestCase):
@@ -67,7 +68,7 @@ class AttnAddedKVProcessorTests(unittest.TestCase):
 
         forward_args = self.get_forward_arguments(
             query_dim=constructor_args["query_dim"],
-            added_kv_proj_dim=constructor_args["added_kv_proj_dim"])
+            added_kv_proj_dim=constructor_args["added_kv_proj_dim"], )
 
         self_and_cross_attn_out = attn(**forward_args)
 
@@ -84,7 +85,7 @@ class AttnAddedKVProcessorTests(unittest.TestCase):
 
         forward_args = self.get_forward_arguments(
             query_dim=constructor_args["query_dim"],
-            added_kv_proj_dim=constructor_args["added_kv_proj_dim"])
+            added_kv_proj_dim=constructor_args["added_kv_proj_dim"], )
 
         only_cross_attn_out = attn(**forward_args)
 

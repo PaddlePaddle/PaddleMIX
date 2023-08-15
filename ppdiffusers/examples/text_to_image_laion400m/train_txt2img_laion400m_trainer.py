@@ -16,14 +16,10 @@ import math
 import os
 
 import paddle
-from ldm import (
-    DataArguments,
-    LatentDiffusionModel,
-    LatentDiffusionTrainer,
-    ModelArguments,
-    TextImagePair, )
-
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
+from ldm import (DataArguments, LatentDiffusionModel, LatentDiffusionTrainer,
+                 ModelArguments, TextImagePair)
+from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
+                               get_last_checkpoint)
 from paddlenlp.utils.log import logger
 
 
@@ -48,16 +44,16 @@ def main():
 
     # Detecting last checkpoint.
     last_checkpoint = None
-    if os.path.isdir(
-            training_args.output_dir
-    ) and training_args.do_train and not training_args.overwrite_output_dir:
+    if (os.path.isdir(training_args.output_dir) and training_args.do_train and
+            not training_args.overwrite_output_dir):
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
         if last_checkpoint is None and len(
                 os.listdir(training_args.output_dir)) > 0:
             raise ValueError(
                 f"Output directory ({training_args.output_dir}) already exists and is not empty. "
                 "Use --overwrite_output_dir to overcome.")
-        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+        elif (last_checkpoint is not None and
+              training_args.resume_from_checkpoint is None):
             logger.info(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
@@ -81,7 +77,7 @@ def main():
         pixel_values = paddle.static.InputSpec(
             name="pixel_values",
             shape=[-1, 3, data_args.resolution, data_args.resolution],
-            dtype="float32")
+            dtype="float32", )
         specs = [input_ids, pixel_values]
         paddle.jit.ignore_module([os])
         model = paddle.jit.to_static(model, input_spec=specs)
@@ -92,7 +88,7 @@ def main():
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        tokenizer=model.tokenizer)
+        tokenizer=model.tokenizer, )
     # must set recompute after trainer init
     trainer.model.set_recompute(training_args.recompute)
     params_to_train = itertools.chain(trainer.model.text_encoder.parameters(),

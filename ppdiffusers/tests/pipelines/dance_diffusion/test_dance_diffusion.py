@@ -23,9 +23,8 @@ from ppdiffusers import DanceDiffusionPipeline, IPNDMScheduler, UNet1DModel
 from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..pipeline_params import (
-    UNCONDITIONAL_AUDIO_GENERATION_BATCH_PARAMS,
-    UNCONDITIONAL_AUDIO_GENERATION_PARAMS, )
+from ..pipeline_params import (UNCONDITIONAL_AUDIO_GENERATION_BATCH_PARAMS,
+                               UNCONDITIONAL_AUDIO_GENERATION_PARAMS)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -107,8 +106,12 @@ class PipelineIntegrationTests(unittest.TestCase):
         audio_slice = audio[0, -3:, -3:]
         assert audio.shape == (1, 2, pipe.unet.sample_size)
         expected_slice = np.array([
-            -0.15758808, -0.15257765, -0.12701476, -0.26994032, -0.27616554,
-            -0.24865153
+            -0.15758808,
+            -0.15257765,
+            -0.12701476,
+            -0.26994032,
+            -0.27616554,
+            -0.24865153,
         ])
         assert np.abs(audio_slice.flatten() - expected_slice).max() < 0.01
 
@@ -126,7 +129,11 @@ class PipelineIntegrationTests(unittest.TestCase):
         assert audio.shape == (1, 2, pipe.unet.sample_size)
         # scheduler use fp32
         expected_slice = np.array([
-            -0.15350387, -0.14624646, -0.12091318, -0.25969276, -0.26154587,
-            -0.23359495
+            -0.15350387,
+            -0.14624646,
+            -0.12091318,
+            -0.25969276,
+            -0.26154587,
+            -0.23359495,
         ])
         assert np.abs(audio_slice.flatten() - expected_slice).max() < 0.05

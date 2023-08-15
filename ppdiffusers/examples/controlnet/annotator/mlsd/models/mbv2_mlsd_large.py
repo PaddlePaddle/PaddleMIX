@@ -93,7 +93,7 @@ class BlockTypeC(paddle.nn.Layer):
                 out_channels=in_c,
                 kernel_size=3,
                 padding=5,
-                dilation=5),
+                dilation=5, ),
             paddle.nn.BatchNorm2D(
                 num_features=in_c,
                 momentum=1 - 0.1,
@@ -201,7 +201,7 @@ class InvertedResidual(paddle.nn.Layer):
                 kernel_size=1,
                 stride=1,
                 padding=0,
-                bias_attr=False),
+                bias_attr=False, ),
             paddle.nn.BatchNorm2D(
                 num_features=oup,
                 momentum=1 - 0.1,
@@ -237,11 +237,15 @@ class MobileNetV2(paddle.nn.Layer):
         last_channel = 1280
         width_mult = 1.0
         round_nearest = 8
-        inverted_residual_setting = [[1, 16, 1, 1], [6, 24, 2, 2],
-                                     [6, 32, 3,
-                                      2], [6, 64, 4, 2], [6, 96, 3, 1]]
-        if len(inverted_residual_setting) == 0 or len(inverted_residual_setting[
-                0]) != 4:
+        inverted_residual_setting = [
+            [1, 16, 1, 1],
+            [6, 24, 2, 2],
+            [6, 32, 3, 2],
+            [6, 64, 4, 2],
+            [6, 96, 3, 1],
+        ]
+        if (len(inverted_residual_setting) == 0 or
+                len(inverted_residual_setting[0]) != 4):
             raise ValueError(
                 "inverted_residual_setting should be non-empty or a 4-element list, got {}".
                 format(inverted_residual_setting))

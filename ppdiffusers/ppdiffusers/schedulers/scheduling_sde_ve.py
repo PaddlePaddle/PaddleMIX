@@ -113,15 +113,17 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
                 final timestep value (overrides value given at Scheduler instantiation).
 
         """
-        sampling_eps = sampling_eps if sampling_eps is not None else self.config.sampling_eps
+        sampling_eps = (sampling_eps if sampling_eps is not None else
+                        self.config.sampling_eps)
 
         self.timesteps = paddle.linspace(1, sampling_eps, num_inference_steps)
 
-    def set_sigmas(self,
-                   num_inference_steps: int,
-                   sigma_min: float=None,
-                   sigma_max: float=None,
-                   sampling_eps: float=None):
+    def set_sigmas(
+            self,
+            num_inference_steps: int,
+            sigma_min: float=None,
+            sigma_max: float=None,
+            sampling_eps: float=None, ):
         """
         Sets the noise scales used for the diffusion chain. Supporting function to be run before inference.
 
@@ -140,7 +142,8 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         """
         sigma_min = sigma_min if sigma_min is not None else self.config.sigma_min
         sigma_max = sigma_max if sigma_max is not None else self.config.sigma_max
-        sampling_eps = sampling_eps if sampling_eps is not None else self.config.sampling_eps
+        sampling_eps = (sampling_eps if sampling_eps is not None else
+                        self.config.sampling_eps)
         if self.timesteps is None:
             self.set_timesteps(num_inference_steps, sampling_eps)
 
@@ -208,9 +211,12 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         #  equation 6: sample noise for the diffusion term of
         noise = randn_tensor(
             sample.shape, generator=generator, dtype=sample.dtype)
-        prev_sample_mean = sample - drift  # subtract because `dt` is a small negative timestep
+        prev_sample_mean = (
+            sample - drift
+        )  # subtract because `dt` is a small negative timestep
         # TODO is the variable diffusion the correct scaling term for the noise?
-        prev_sample = prev_sample_mean + diffusion * noise  # add impact of diffusion field g
+        prev_sample = (prev_sample_mean + diffusion * noise
+                       )  # add impact of diffusion field g
 
         if not return_dict:
             return (prev_sample, prev_sample_mean)
@@ -278,9 +284,9 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
             timesteps: paddle.Tensor, ) -> paddle.Tensor:
         # Make sure sigmas and timesteps have the same dtype as original_samples
         sigmas = self.discrete_sigmas[timesteps]
-        noise = paddle.randn(
+        noise = (paddle.randn(
             original_samples.shape,
-            dtype=original_samples.dtype) * sigmas[:, None, None, None]
+            dtype=original_samples.dtype) * sigmas[:, None, None, None])
         noisy_samples = noise + original_samples
         return noisy_samples
 

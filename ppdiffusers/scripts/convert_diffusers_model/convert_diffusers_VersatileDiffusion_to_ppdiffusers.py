@@ -17,23 +17,16 @@ from collections import OrderedDict
 
 import paddle
 import torch
-from diffusers import VersatileDiffusionPipeline as DiffusersVersatileDiffusionPipeline
-
+from diffusers import \
+    VersatileDiffusionPipeline as DiffusersVersatileDiffusionPipeline
 from paddlenlp.transformers import (
-    CLIPFeatureExtractor,
-    CLIPTextConfig,
-    CLIPTextModelWithProjection,
-    CLIPTokenizer,
-    CLIPVisionConfig,
-    CLIPVisionModelWithProjection, )
-from ppdiffusers import (
-    AutoencoderKL,
-    DDIMScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler,
-    UNet2DConditionModel, )
-from ppdiffusers import (VersatileDiffusionPipeline as
-                         PPDiffusersVersatileDiffusionPipeline, )
+    CLIPFeatureExtractor, CLIPTextConfig, CLIPTextModelWithProjection,
+    CLIPTokenizer, CLIPVisionConfig, CLIPVisionModelWithProjection)
+
+from ppdiffusers import (AutoencoderKL, DDIMScheduler, LMSDiscreteScheduler,
+                         PNDMScheduler, UNet2DConditionModel)
+from ppdiffusers import \
+    VersatileDiffusionPipeline as PPDiffusersVersatileDiffusionPipeline
 from ppdiffusers.pipelines.versatile_diffusion import UNetFlatConditionModel
 
 paddle.set_device("cpu")

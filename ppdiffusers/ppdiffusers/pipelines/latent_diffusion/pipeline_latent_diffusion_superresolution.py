@@ -21,12 +21,8 @@ import PIL
 
 from ...models import UNet2DModel, VQModel
 from ...schedulers import (
-    DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler, )
+    DDIMScheduler, DPMSolverMultistepScheduler, EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler, LMSDiscreteScheduler, PNDMScheduler)
 from ...utils import PIL_INTERPOLATION, randn_tensor
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 

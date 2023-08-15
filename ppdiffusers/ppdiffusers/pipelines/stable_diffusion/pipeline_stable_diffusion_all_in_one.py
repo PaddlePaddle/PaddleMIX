@@ -25,20 +25,17 @@ import paddle
 import PIL
 import PIL.Image
 from packaging import version
-
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...configuration_utils import FrozenDict
-from ...loaders import FromCkptMixin, LoraLoaderMixin, TextualInversionLoaderMixin
+from ...loaders import (FromCkptMixin, LoraLoaderMixin,
+                        TextualInversionLoaderMixin)
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import (
-    DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler,
-    EulerDiscreteScheduler,
-    LMSDiscreteScheduler,
-    PNDMScheduler, )
+    DDIMScheduler, DPMSolverMultistepScheduler, EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler, LMSDiscreteScheduler, PNDMScheduler)
 from ...utils import PIL_INTERPOLATION, deprecate, logging
 from ...utils.testing_utils import load_image
 from . import StableDiffusionPipelineOutput
@@ -233,10 +230,11 @@ def pad_tokens_and_weights(tokens,
     Pad the tokens (with starting and ending tokens) and weights (with 1.0) to max_length.
     """
     max_embeddings_multiples = (max_length - 2) // (chunk_length - 2)
-    weights_length = max_length if no_boseos_middle else max_embeddings_multiples * chunk_length
+    weights_length = (max_length if no_boseos_middle else
+                      max_embeddings_multiples * chunk_length)
     for i in range(len(tokens)):
-        tokens[i] = [bos] + tokens[i] + [eos] + [pad] * (max_length - 2 -
-                                                         len(tokens[i]))
+        tokens[i] = ([bos] + tokens[i] + [eos] + [pad] *
+                     (max_length - 2 - len(tokens[i])))
         if no_boseos_middle:
             weights[i] = [1.0] + weights[i] + [1.0] * (max_length - 1 -
                                                        len(weights[i]))
@@ -256,10 +254,11 @@ def pad_tokens_and_weights(tokens,
     return tokens, weights
 
 
-def get_unweighted_text_embeddings(pipe: DiffusionPipeline,
-                                   text_input: paddle.Tensor,
-                                   chunk_length: int,
-                                   no_boseos_middle: Optional[bool]=True):
+def get_unweighted_text_embeddings(
+        pipe: DiffusionPipeline,
+        text_input: paddle.Tensor,
+        chunk_length: int,
+        no_boseos_middle: Optional[bool]=True, ):
     """
     When the length of tokens is a multiple of the capacity of the text encoder,
     it should be split into chunks and sent to the text encoder individually.
@@ -304,7 +303,7 @@ def get_weighted_text_embeddings(
         no_boseos_middle: Optional[bool]=False,
         skip_parsing: Optional[bool]=False,
         skip_weighting: Optional[bool]=False,
-        **kwargs):
+        **kwargs, ):
     r"""
     Prompts can be assigned with local weights using brackets. For example,
     prompt 'A (very beautiful) masterpiece' highlights the words 'very beautiful',
@@ -367,16 +366,21 @@ def get_weighted_text_embeddings(
         max_length = max(max_length,
                          max([len(token) for token in uncond_tokens]))
 
-    max_embeddings_multiples = min(max_embeddings_multiples, (max_length - 1) //
-                                   (pipe.tokenizer.model_max_length - 2) + 1)
+    max_embeddings_multiples = min(
+        max_embeddings_multiples,
+        (max_length - 1) // (pipe.tokenizer.model_max_length - 2) + 1, )
     max_embeddings_multiples = max(1, max_embeddings_multiples)
     max_length = (pipe.tokenizer.model_max_length - 2
                   ) * max_embeddings_multiples + 2
 
     # pad the length of tokens and weights
     # support bert tokenizer
-    bos = pipe.tokenizer.bos_token_id if pipe.tokenizer.bos_token_id is not None else pipe.tokenizer.cls_token_id
-    eos = pipe.tokenizer.eos_token_id if pipe.tokenizer.eos_token_id is not None else pipe.tokenizer.sep_token_id
+    bos = (pipe.tokenizer.bos_token_id
+           if pipe.tokenizer.bos_token_id is not None else
+           pipe.tokenizer.cls_token_id)
+    eos = (pipe.tokenizer.eos_token_id
+           if pipe.tokenizer.eos_token_id is not None else
+           pipe.tokenizer.sep_token_id)
     pad = pipe.tokenizer.pad_token_id
     prompt_tokens, prompt_weights = pad_tokens_and_weights(
         prompt_tokens,
@@ -505,8 +509,8 @@ class StableDiffusionPipelineAllinOne(DiffusionPipeline,
             safety_checker: StableDiffusionSafetyChecker,
             feature_extractor: CLIPFeatureExtractor,
             requires_safety_checker: bool=False, ):
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -523,8 +527,8 @@ class StableDiffusionPipelineAllinOne(DiffusionPipeline,
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if (hasattr(scheduler.config, "clip_sample") and
+                scheduler.config.clip_sample is True):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -559,8 +563,8 @@ class StableDiffusionPipelineAllinOne(DiffusionPipeline,
             unet.config, "_ppdiffusers_version") and version.parse(
                 version.parse(unet.config._ppdiffusers_version)
                 .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = (hasattr(unet.config, "sample_size") and
+                                       unet.config.sample_size < 64)
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -595,8 +599,10 @@ class StableDiffusionPipelineAllinOne(DiffusionPipeline,
 
     def __init__additional__(self):
         if not hasattr(self, "vae_scale_factor"):
-            setattr(self, "vae_scale_factor", 2
-                    **(len(self.vae.config.block_out_channels) - 1))
+            setattr(
+                self,
+                "vae_scale_factor",
+                2**(len(self.vae.config.block_out_channels) - 1), )
 
     def __call__(self, *args, **kwargs):
         return self.text2image(*args, **kwargs)
@@ -931,8 +937,8 @@ class StableDiffusionPipelineAllinOne(DiffusionPipeline,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -1137,8 +1143,8 @@ class StableDiffusionPipelineAllinOne(DiffusionPipeline,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 
@@ -1361,8 +1367,8 @@ class StableDiffusionPipelineAllinOne(DiffusionPipeline,
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
 

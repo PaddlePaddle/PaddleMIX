@@ -24,29 +24,16 @@ import paddle.nn as nn
 from huggingface_hub import hf_hub_download
 from huggingface_hub.file_download import _request_wrapper, hf_raise_for_status
 
-from .models.attention_processor import (
-    CustomDiffusionAttnProcessor,
-    CustomDiffusionXFormersAttnProcessor,
-    LoRAAttnProcessor, )
+from .models.attention_processor import (CustomDiffusionAttnProcessor,
+                                         CustomDiffusionXFormersAttnProcessor,
+                                         LoRAAttnProcessor)
 from .models.modeling_utils import convert_state_dict
-from .utils import (
-    DIFFUSERS_CACHE,
-    FROM_DIFFUSERS,
-    FROM_HF_HUB,
-    HF_HUB_OFFLINE,
-    PPDIFFUSERS_CACHE,
-    TEXT_ENCODER_ATTN_MODULE,
-    TO_DIFFUSERS,
-    _get_model_file,
-    is_paddlenlp_available,
-    is_safetensors_available,
-    is_torch_available,
-    is_torch_file,
-    logging,
-    ppdiffusers_url_download,
-    safetensors_load,
-    smart_load,
-    torch_load, )
+from .utils import (DIFFUSERS_CACHE, FROM_DIFFUSERS, FROM_HF_HUB,
+                    HF_HUB_OFFLINE, PPDIFFUSERS_CACHE, TEXT_ENCODER_ATTN_MODULE,
+                    TO_DIFFUSERS, _get_model_file, is_paddlenlp_available,
+                    is_safetensors_available, is_torch_available, is_torch_file,
+                    logging, ppdiffusers_url_download, safetensors_load,
+                    smart_load, torch_load)
 
 logger = logging.get_logger(__name__)
 
@@ -136,10 +123,11 @@ class UNet2DConditionLoadersMixin:
     text_encoder_name = TEXT_ENCODER_NAME
     unet_name = UNET_NAME
 
-    def load_attn_procs(self,
-                        pretrained_model_name_or_path_or_dict: Union[str, Dict[
-                            str, paddle.Tensor]],
-                        **kwargs):
+    def load_attn_procs(
+            self,
+            pretrained_model_name_or_path_or_dict: Union[str, Dict[
+                str, paddle.Tensor]],
+            **kwargs, ):
         r"""
         Load pretrained attention processor layers into `UNet2DConditionModel`. Attention processor layers have to be
         defined in
@@ -363,7 +351,7 @@ class UNet2DConditionLoadersMixin:
                         train_kv=False,
                         train_q_out=False,
                         hidden_size=None,
-                        cross_attention_dim=None)
+                        cross_attention_dim=None, )
                 else:
                     cross_attention_dim = value_dict[
                         "to_k_custom_diffusion.weight"].shape[
@@ -371,7 +359,9 @@ class UNet2DConditionLoadersMixin:
                     hidden_size = value_dict[
                         "to_k_custom_diffusion.weight"].shape[
                             1]  # 0 -> 1, torch vs paddle nn.Linear
-                    train_q_out = True if "to_q_custom_diffusion.weight" in value_dict else False
+                    train_q_out = (True if
+                                   "to_q_custom_diffusion.weight" in value_dict
+                                   else False)
                     attn_processors[key] = CustomDiffusionAttnProcessor(
                         train_kv=True,
                         train_q_out=train_q_out,
@@ -445,8 +435,11 @@ class UNet2DConditionLoadersMixin:
             model_to_save = AttnProcsLayers({
                 y: x
                 for (y, x) in self.attn_processors.items()
-                if isinstance(x, (CustomDiffusionAttnProcessor,
-                                  CustomDiffusionXFormersAttnProcessor))
+                if isinstance(
+                    x,
+                    (
+                        CustomDiffusionAttnProcessor,
+                        CustomDiffusionXFormersAttnProcessor, ), )
             })
             state_dict = model_to_save.state_dict()
             for name, attn in self.attn_processors.items():
@@ -463,9 +456,12 @@ class UNet2DConditionLoadersMixin:
                                    if is_custom_diffusion else
                                    TORCH_LORA_WEIGHT_NAME_SAFE)
                 else:
-                    weight_name = TORCH_CUSTOM_DIFFUSION_WEIGHT_NAME if is_custom_diffusion else TORCH_LORA_WEIGHT_NAME
+                    weight_name = (TORCH_CUSTOM_DIFFUSION_WEIGHT_NAME
+                                   if is_custom_diffusion else
+                                   TORCH_LORA_WEIGHT_NAME)
             else:
-                weight_name = PADDLE_CUSTOM_DIFFUSION_WEIGHT_NAME if is_custom_diffusion else PADDLE_LORA_WEIGHT_NAME
+                weight_name = (PADDLE_CUSTOM_DIFFUSION_WEIGHT_NAME if
+                               is_custom_diffusion else PADDLE_LORA_WEIGHT_NAME)
 
         # choose save_function
         if save_function is None:
@@ -570,7 +566,7 @@ class TextualInversionLoaderMixin:
             self,
             pretrained_model_name_or_path: Union[str, Dict[str, paddle.Tensor]],
             token: Optional[str]=None,
-            **kwargs):
+            **kwargs, ):
         r"""
         Load textual inversion embeddings into the text encoder of stable diffusion pipelines. Both `diffusers` and
         `Automatic1111` formats are supported (see example below).
@@ -833,10 +829,11 @@ class LoraLoaderMixin:
     text_encoder_name = TEXT_ENCODER_NAME
     unet_name = UNET_NAME
 
-    def load_lora_weights(self,
-                          pretrained_model_name_or_path_or_dict: Union[
-                              str, Dict[str, paddle.Tensor]],
-                          **kwargs):
+    def load_lora_weights(
+            self,
+            pretrained_model_name_or_path_or_dict: Union[str, Dict[
+                str, paddle.Tensor]],
+            **kwargs, ):
         r"""
         Load pretrained attention processor layers (such as LoRA) into [`UNet2DConditionModel`] and
         [`CLIPTextModel`](https://huggingface.co/docs/transformers/model_doc/clip#transformers.CLIPTextModel)).
@@ -1005,7 +1002,7 @@ class LoraLoaderMixin:
             self.unet.load_attn_procs(
                 unet_lora_state_dict,
                 network_alpha=network_alpha,
-                from_diffusers=from_diffusers)
+                from_diffusers=from_diffusers, )
 
             # Load the layers corresponding to text encoder and make necessary adjustments.
             text_encoder_keys = [
@@ -1057,7 +1054,10 @@ class LoraLoaderMixin:
                 include_self=True):
             if name.endswith(TEXT_ENCODER_ATTN_MODULE):
                 # Loop over the LoRA layers
-                for _, text_encoder_attr in self._lora_attn_processor_attr_to_text_encoder_attr.items(
+                for (
+                        _,
+                        text_encoder_attr,
+                ) in self._lora_attn_processor_attr_to_text_encoder_attr.items(
                 ):
                     # Retrieve the q/k/v/out projection of nn.MultiHeadAttention
                     module = attn_module.get_sublayer(text_encoder_attr)
@@ -1089,7 +1089,10 @@ class LoraLoaderMixin:
                 include_self=True):
             if name.endswith(TEXT_ENCODER_ATTN_MODULE):
                 # Loop over the LoRA layers
-                for attn_proc_attr, text_encoder_attr in self._lora_attn_processor_attr_to_text_encoder_attr.items(
+                for (
+                        attn_proc_attr,
+                        text_encoder_attr,
+                ) in self._lora_attn_processor_attr_to_text_encoder_attr.items(
                 ):
                     # Retrieve the q/k/v/out projection of nn.MultiHeadAttention and its corresponding LoRA layer.
                     module = attn_module.get_sublayer(text_encoder_attr)
@@ -1127,7 +1130,7 @@ class LoraLoaderMixin:
             self,
             pretrained_model_name_or_path_or_dict: Union[str, Dict[
                 str, paddle.Tensor]],
-            **kwargs):
+            **kwargs, ):
         r"""
         Load pretrained attention processor layers for
         [`CLIPTextModel`](https://huggingface.co/docs/transformers/model_doc/clip#transformers.CLIPTextModel).
@@ -1579,8 +1582,8 @@ class FromCkptMixin:
         ```
         """
         # import here to avoid circular dependency
-        from .pipelines.stable_diffusion.convert_from_ckpt import (
-            download_from_original_stable_diffusion_ckpt, )
+        from .pipelines.stable_diffusion.convert_from_ckpt import \
+            download_from_original_stable_diffusion_ckpt
 
         from_hf_hub = "huggingface.co" in pretrained_model_link_or_path or "hf.co"
         cache_dir = (kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub
@@ -1636,8 +1639,10 @@ class FromCkptMixin:
                    for p in ["huggingface.co", "hf.co"]):
                 # remove huggingface url
                 for prefix in [
-                        "https://huggingface.co/", "huggingface.co/", "hf.co/",
-                        "https://hf.co/"
+                        "https://huggingface.co/",
+                        "huggingface.co/",
+                        "hf.co/",
+                        "https://hf.co/",
                 ]:
                     if pretrained_model_link_or_path.startswith(prefix):
                         pretrained_model_link_or_path = pretrained_model_link_or_path[

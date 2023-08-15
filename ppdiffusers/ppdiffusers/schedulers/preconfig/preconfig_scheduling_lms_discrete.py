@@ -125,7 +125,7 @@ class PreconfigLMSDiscreteScheduler(SchedulerMixin, ConfigMixin):
                 beta_start**0.5,
                 beta_end**0.5,
                 num_train_timesteps,
-                dtype=paddle.float32)**2)
+                dtype=paddle.float32, )**2)
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -240,13 +240,14 @@ class PreconfigLMSDiscreteScheduler(SchedulerMixin, ConfigMixin):
                     for curr_order in range(order)
                 ])
 
-    def step(self,
-             model_output: paddle.Tensor,
-             timestep: Union[float, paddle.Tensor],
-             sample: paddle.Tensor,
-             order: int=4,
-             return_dict: bool=True,
-             **kwargs) -> Union[PreconfigLMSDiscreteSchedulerOutput, Tuple]:
+    def step(
+            self,
+            model_output: paddle.Tensor,
+            timestep: Union[float, paddle.Tensor],
+            sample: paddle.Tensor,
+            order: int=4,
+            return_dict: bool=True,
+            **kwargs, ) -> Union[PreconfigLMSDiscreteSchedulerOutput, Tuple]:
         """
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
         process from the learned model outputs (most often the predicted noise).

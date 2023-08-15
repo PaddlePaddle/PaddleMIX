@@ -168,10 +168,12 @@ def draw_handpose(canvas, all_hand_peaks, show_number=False):
             if show_number:
                 cv2.putText(
                     canvas,
-                    str(i), (x, y),
+                    str(i),
+                    (x, y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.3, (0, 0, 0),
-                    lineType=cv2.LINE_AA)
+                    0.3,
+                    (0, 0, 0),
+                    lineType=cv2.LINE_AA, )
     return canvas
 
 

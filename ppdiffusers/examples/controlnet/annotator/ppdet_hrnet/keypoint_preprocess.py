@@ -209,18 +209,22 @@ class TopDownEvalAffine(object):
         scale = im_info["scale"] if "scale" in im_info else imshape
         if self.use_udp:
             trans = get_warp_matrix(
-                rot, center * 2.0,
-                [self.trainsize[0] - 1.0, self.trainsize[1] - 1.0], scale)
+                rot,
+                center * 2.0,
+                [self.trainsize[0] - 1.0, self.trainsize[1] - 1.0],
+                scale, )
             image = cv2.warpAffine(
                 image,
-                trans, (int(self.trainsize[0]), int(self.trainsize[1])),
-                flags=cv2.INTER_LINEAR)
+                trans,
+                (int(self.trainsize[0]), int(self.trainsize[1])),
+                flags=cv2.INTER_LINEAR, )
         else:
             trans = get_affine_transform(center, scale, rot, self.trainsize)
             image = cv2.warpAffine(
                 image,
-                trans, (int(self.trainsize[0]), int(self.trainsize[1])),
-                flags=cv2.INTER_LINEAR)
+                trans,
+                (int(self.trainsize[0]), int(self.trainsize[1])),
+                flags=cv2.INTER_LINEAR, )
 
         return image, im_info
 

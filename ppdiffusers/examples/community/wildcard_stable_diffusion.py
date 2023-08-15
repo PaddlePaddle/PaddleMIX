@@ -21,16 +21,18 @@ from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Union
 
 import paddle
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
+                                    CLIPTokenizer)
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipeline_utils import DiffusionPipeline
-from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
-    StableDiffusionPipelineOutput, )
-from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker, )
-from ppdiffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import \
+    StableDiffusionPipelineOutput
+from ppdiffusers.pipelines.stable_diffusion.safety_checker import \
+    StableDiffusionSafetyChecker
+from ppdiffusers.schedulers import (DDIMScheduler, LMSDiscreteScheduler,
+                                    PNDMScheduler)
 from ppdiffusers.utils import deprecate, logging
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -62,7 +64,7 @@ def grab_wildcard_values(wildcard_option_dict: Dict[str, List[str]]={},
 def replace_prompt_with_wildcards(
         prompt: str,
         wildcard_option_dict: Dict[str, List[str]]={},
-        wildcard_files: List[str]=[]):
+        wildcard_files: List[str]=[], ):
     new_prompt = prompt
 
     # get wildcard options
@@ -134,8 +136,8 @@ class WildcardStableDiffusionPipeline(DiffusionPipeline):
             feature_extractor: CLIPFeatureExtractor, ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -361,8 +363,10 @@ class WildcardStableDiffusionPipeline(DiffusionPipeline):
         # for 1-to-1 results reproducibility with the CompVis implementation.
         # However this currently doesn't work in `mps`.
         latents_shape = [
-            batch_size * num_images_per_prompt, self.unet.in_channels,
-            height // 8, width // 8
+            batch_size * num_images_per_prompt,
+            self.unet.in_channels,
+            height // 8,
+            width // 8,
         ]
         latents_dtype = text_embeddings.dtype
         if latents is None:
@@ -398,8 +402,8 @@ class WildcardStableDiffusionPipeline(DiffusionPipeline):
 
         for i, t in enumerate(self.progress_bar(timesteps_tensor)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(
-                [latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = (paddle.concat([latents] * 2)
+                                  if do_classifier_free_guidance else latents)
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
 
@@ -436,7 +440,7 @@ class WildcardStableDiffusionPipeline(DiffusionPipeline):
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
                 clip_input=safety_checker_input.pixel_values.astype(
-                    text_embeddings.dtype))
+                    text_embeddings.dtype), )
         else:
             has_nsfw_concept = None
 

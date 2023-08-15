@@ -21,8 +21,8 @@ import paddle
 import paddle.nn.functional as F
 import PIL
 from packaging import version
-
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
+from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPTextModel,
+                                    CLIPTokenizer)
 
 from ...configuration_utils import FrozenDict
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -71,8 +71,8 @@ def prepare_mask_and_masked_image(image, mask):
 
         # Batch single image
         if image.ndim == 3:
-            assert image.shape[
-                0] == 3, "Image outside a batch should be of shape (3, H, W)"
+            assert (image.shape[0] == 3
+                    ), "Image outside a batch should be of shape (3, H, W)"
             image = image.unsqueeze(0)
 
         # Batch and add channel dim for single mask
@@ -89,11 +89,12 @@ def prepare_mask_and_masked_image(image, mask):
             else:
                 mask = mask.unsqueeze(1)
 
-        assert image.ndim == 4 and mask.ndim == 4, "Image and Mask must have 4 dimensions"
-        assert image.shape[-2:] == mask.shape[
-            -2:], "Image and Mask must have the same spatial dimensions"
-        assert image.shape[0] == mask.shape[
-            0], "Image and Mask must have the same batch size"
+        assert (image.ndim == 4 and
+                mask.ndim == 4), "Image and Mask must have 4 dimensions"
+        assert (image.shape[-2:] == mask.shape[-2:]
+                ), "Image and Mask must have the same spatial dimensions"
+        assert (image.shape[0] == mask.shape[0]
+                ), "Image and Mask must have the same batch size"
 
         # Check image is in [-1, 1]
         if image.min() < -1 or image.max() > 1:
@@ -186,8 +187,8 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
             requires_safety_checker: bool=True, ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if (hasattr(scheduler.config, "steps_offset") and
+                scheduler.config.steps_offset != 1):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
@@ -204,9 +205,8 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(
-                scheduler.config,
-                "skip_prk_steps") and scheduler.config.skip_prk_steps is False:
+        if (hasattr(scheduler.config, "skip_prk_steps") and
+                scheduler.config.skip_prk_steps is False):
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration"
                 " `skip_prk_steps`. `skip_prk_steps` should be set to True in the configuration file. Please make"
@@ -218,7 +218,7 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
                 "skip_prk_steps not set",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False, )
             new_config = dict(scheduler.config)
             new_config["skip_prk_steps"] = True
             scheduler._internal_dict = FrozenDict(new_config)
@@ -243,8 +243,8 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
             unet.config, "_ppdiffusers_version") and version.parse(
                 version.parse(unet.config._ppdiffusers_version)
                 .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_sample_size_less_64 = (hasattr(unet.config, "sample_size") and
+                                       unet.config.sample_size < 64)
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -334,8 +334,8 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
@@ -380,8 +380,8 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
                 truncation=True,
                 return_tensors="pd", )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if (hasattr(self.text_encoder.config, "use_attention_mask") and
+                    self.text_encoder.config.use_attention_mask):
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
@@ -502,17 +502,20 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
                     f" {negative_prompt_embeds.shape}.")
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+            self,
+            batch_size,
+            num_channels_latents,
+            height,
+            width,
+            dtype,
+            generator,
+            latents=None, ):
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -527,9 +530,16 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    def prepare_mask_latents(self, mask, masked_image, batch_size, height,
-                             width, dtype, generator,
-                             do_classifier_free_guidance):
+    def prepare_mask_latents(
+            self,
+            mask,
+            masked_image,
+            batch_size,
+            height,
+            width,
+            dtype,
+            generator,
+            do_classifier_free_guidance, ):
         # resize the mask to latents shape as we concatenate the mask to the latents
         # we do that before converting to dtype to avoid breaking in case we're using cpu_offload
         # and half precision
@@ -778,7 +788,8 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
         # 8. Check that sizes of mask, masked image and latents match
         num_channels_mask = mask.shape[1]
         num_channels_masked_image = masked_image_latents.shape[1]
-        if num_channels_latents + num_channels_mask + num_channels_masked_image != self.unet.config.in_channels:
+        if (num_channels_latents + num_channels_mask + num_channels_masked_image
+                != self.unet.config.in_channels):
             raise ValueError(
                 f"Incorrect configuration settings! The config of `pipeline.unet`: {self.unet.config} expects"
                 f" {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} +"
@@ -795,8 +806,8 @@ class StableDiffusionInpaintPipeline(DiffusionPipeline):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = (paddle.concat([latents] * 2) if
+                                      do_classifier_free_guidance else latents)
 
                 # concat latents, mask, masked_image_latents in the channel dimension
                 latent_model_input = self.scheduler.scale_model_input(
