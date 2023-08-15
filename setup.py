@@ -35,7 +35,7 @@ def read_version():
 
 
 def read_readme():
-    “”“read readme”“”
+    “”“read readme of paddlemix”“”
     return read("README.md")
 
 
