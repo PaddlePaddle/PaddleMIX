@@ -37,9 +37,12 @@ class StableDiffusionInpaintTask(AppTask):
         assert inpaint_prompt is not None, f"The inpaint_prompt is None"
 
         self._org_size = image.size
-        merge_mask = paddle.sum(seg_masks, axis=0).unsqueeze(0)
-        merge_mask = merge_mask > 0
-        mask_pil = Image.fromarray(merge_mask[0][0].cpu().numpy())
+        if isinstance(seg_masks, paddle.Tensor):
+            merge_mask = paddle.sum(seg_masks, axis=0).unsqueeze(0)
+            merge_mask = merge_mask > 0
+            mask_pil = Image.fromarray(merge_mask[0][0].cpu().numpy())
+        else:
+            mask_pil = seg_masks
 
         inputs['image'] = image.resize(self._resize)
         mask_pil = mask_pil.resize(self._resize)
