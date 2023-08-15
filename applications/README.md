@@ -32,12 +32,13 @@
 Appflow提供丰富的开箱即用工具集，覆盖跨模态多场景应用，提供产业级的效果与极致的推理性能。
 ```python
 from paddlemix import Appflow
-from PIL import Image
-task = Appflow(app="openset_det_sam",
-               models=["GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024"]
+
+paddle.seed(1024)
+task = Appflow(app="text2image_generation",
+               models=["stabilityai/stable-diffusion-2"]
                )
-image_pil = Image.open("beauty.png").convert("RGB")
-result = task(image=image_pil,prompt="women")
+prompt = "a photo of an astronaut riding a horse on mars."
+result = task(prompt=prompt)['result']
 ```
 
 

@@ -32,12 +32,13 @@
 Appflow provides a rich set of out of the box tools that cover cross modal and multi scenario applications, providing industry level effects and ultimate reasoning performance.
 ```python
 from paddlemix import Appflow
-from PIL import Image
-task = Appflow(task="openset_det_sam",
-               models=["GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024"]
+
+paddle.seed(1024)
+task = Appflow(app="text2image_generation",
+               models=["stabilityai/stable-diffusion-2"]
                )
-image_pil = Image.open("beauty.png").convert("RGB")
-result = task(image=image_pil,prompt="women")
+prompt = "a photo of an astronaut riding a horse on mars."
+result = task(prompt=prompt)['result']
 ```
 
 ### Multi Modal And Scenario

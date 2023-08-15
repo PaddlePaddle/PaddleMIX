@@ -5,7 +5,6 @@
 
 ```python
 from paddlemix import Appflow
-from PIL import Image
 
 paddle.seed(1024)
 task = Appflow(app="text2image_generation",
@@ -23,4 +22,3 @@ result = task(prompt=prompt)['result']
 |:----:|:----:|
 | a photo of an astronaut riding a horse on mars | ![astronaut_rides_horse_sd](https://github.com/LokeZhou/PaddleMIX/assets/13300429/457ca26c-452e-4692-bf5f-515ea41920d7) |
 </div>
-
