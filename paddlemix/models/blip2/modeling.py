@@ -865,6 +865,54 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         query_output = query_outputs[0]
         return query_output
 
+    @paddle.no_grad()
+    def predict_answers(self,
+                        pixel_values: paddle.Tensor,
+                        input_ids: Optional[paddle.Tensor]=None,
+                        attention_mask: Optional[paddle.Tensor]=None,
+                        max_len=10,
+                        min_len=1,
+                        **kwargs):
+        batch_size = pixel_values.shape[0]
+        image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
+        image_attention_mask = paddle.ones(
+            image_embeds.shape[:-1], dtype="int64")
+
+        query_tokens = self.Qformer.query_tokens.expand(
+            [image_embeds.shape[0], -1, -1])
+        query_outputs = self.Qformer.bert(
+            query_embeds=query_tokens,
+            encoder_hidden_states=image_embeds,
+            encoder_attention_mask=image_attention_mask,
+            return_dict=True, )
+        query_output = query_outputs.last_hidden_state
+
+        language_model_inputs = self.Qformer.language_projection(query_output)
+        language_attention_mask = paddle.ones(
+            language_model_inputs.shape[:-1], dtype="int64")
+
+        attention_mask = paddle.concat(
+            [language_attention_mask, attention_mask], axis=1)
+        # concatenate query embeddings with prompt embeddings
+        inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
+        inputs_embeds = paddle.concat(
+            [language_model_inputs, inputs_embeds], axis=1)
+
+        outputs = self.language_model.generate(
+            inputs_embeds=inputs_embeds,
+            attention_mask=attention_mask,
+            do_sample=False,
+            decode_strategy="greedy_search",
+            temperature=1,
+            num_beams=5,
+            max_length=max_len,
+            min_length=min_len,
+            eos_token_id=50118,
+            repetition_penalty=1,
+            length_penalty=0, )
+
+        return outputs
+
 
 from contextlib import contextmanager
 

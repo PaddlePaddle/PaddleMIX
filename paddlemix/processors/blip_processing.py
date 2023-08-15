@@ -131,7 +131,7 @@ class Blip2Processor(ProcessorMixin):
                 padding="longest",
                 truncation=True,
                 max_length=max_length,
-                return_attention_mask=True, )
+                return_attention_mask=True)
         else:
             text_encoding = None
             # eos_token_id = None
@@ -234,7 +234,7 @@ class BlipTextProcessor(BaseTextProcessor):
         if do_caption:
             results = [self.prompt + self.pre_caption(t) for t in text]
         if do_question:
-            results = [self.pre_question(t) for t in text]
+            results = [self.prompt.format(self.pre_question(t)) for t in text]
         if mode == "train":
             results = [res + "\n" for res in results]
         return results
