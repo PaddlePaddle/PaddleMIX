@@ -54,21 +54,6 @@ class DataArguments:
         metadata={"help": "The name of the task to use (via the datasets library)."},
     )
 
-    image_size: int = field(
-        default=224,
-        metadata={"help": "image size for training"},
-    )
-
-    train_data: str = field(
-        default="",
-        metadata={"help": "The traindata list path."},
-    )
-
-    precomputed_text_emb: str = field(
-        default="open_clip_vit_g_14",
-        metadata={"help": "precomputed_text_emb name."},
-    )
-
 
 @dataclass
 class ModelArguments:
@@ -120,10 +105,6 @@ class PreTrainingArguments(TrainingArguments):
         metadata={"help": " context length for text."},
     )
     optimizer: str = field(default="lamb", metadata={"help": "optimizer setting, [lamb/adamw]"})
-    dp_degree: int = field(
-        default=2,
-        metadata={"help": " data parallel degrees."},
-    )
     last_epoch: int = field(default=-1, metadata={"help": "the last epoch to resume"})
     gather_with_grad: bool = field(
         default=False,
@@ -214,7 +195,7 @@ def main_worker(training_args, model_args, data_args):
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("float32")
 
-    train_dataset = load_dataset("coco_clip", splits="train")
+    train_dataset = load_dataset(data_args.task_name, splits="train")
     image_processor = CLIPImageProcessor.from_pretrained(model_args.model_name_or_path)
     text_processor = CLIPTextProcessor.from_pretrained(model_args.model_name_or_path)
     tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)

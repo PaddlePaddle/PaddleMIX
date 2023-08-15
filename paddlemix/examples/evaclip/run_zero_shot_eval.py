@@ -47,11 +47,6 @@ class DataArguments:
         metadata={"help": "Path to IN1K data."},
     )
 
-    precomputed_text_emb: str = field(
-        default="open_clip_vit_g_14",
-        metadata={"help": "precomputed_text_emb name."},
-    )
-
 
 @dataclass
 class ModelArguments:

@@ -238,8 +238,8 @@ def get_parameters(args, model, assigner, tower):
 
 
 def get_assigner(args, model):
-    visual_ld = args.visual_ld if args.visual_ld else args.ld
-    text_ld = args.text_ld if args.text_ld else args.ld
+    visual_ld = args.visual_ld if args.visual_ld else args.layer_decay
+    text_ld = args.text_ld if args.text_ld else args.layer_decay
     if visual_ld < 1.0:
         visual_num_layers = model.visual.get_num_layers()
         assigner_visual = LayerDecayValueAssigner(
