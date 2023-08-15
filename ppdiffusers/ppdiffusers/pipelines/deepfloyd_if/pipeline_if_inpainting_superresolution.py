@@ -24,7 +24,7 @@ import paddle.nn.functional as F
 import PIL
 
 from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
-
+from ...loaders import LoraLoaderMixin
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
 from ...utils import (
@@ -123,7 +123,7 @@ EXAMPLE_DOC_STRING = """
     """
 
 
-class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
+class IFInpaintingSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
     tokenizer: T5Tokenizer
     text_encoder: T5EncoderModel
 
@@ -697,7 +697,9 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
             image = [image]
 
         if isinstance(image[0], PIL.Image.Image):
-            image = [np.array(i).astype(np.float32) / 255.0 for i in image]
+            image = [
+                np.array(i).astype(np.float32) / 127.5 - 1.0 for i in image
+            ]
 
             image = np.stack(image, axis=0)  # to np
             image = paddle.to_tensor(image.transpose(0, 3, 1, 2))
@@ -1057,7 +1059,8 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
                     t,
                     encoder_hidden_states=prompt_embeds,
                     class_labels=noise_level,
-                    cross_attention_kwargs=cross_attention_kwargs, ).sample
+                    cross_attention_kwargs=cross_attention_kwargs,
+                    return_dict=False, )[0]
 
                 # perform guidance
                 if do_classifier_free_guidance:
@@ -1080,12 +1083,22 @@ class IFInpaintingSuperResolutionPipeline(DiffusionPipeline):
                     noise_pred = paddle.concat(
                         [noise_pred, predicted_variance], axis=1)
 
+                if self.scheduler.config.variance_type not in [
+                        "learned", "learned_range"
+                ]:
+                    noise_pred, _ = noise_pred.split(
+                        noise_pred.shape[1] // intermediate_images.shape[1],
+                        axis=1)
+
                 # compute the previous noisy sample x_t -> x_t-1
                 prev_intermediate_images = intermediate_images
 
                 intermediate_images = self.scheduler.step(
-                    noise_pred, t, intermediate_images,
-                    **extra_step_kwargs).prev_sample
+                    noise_pred,
+                    t,
+                    intermediate_images,
+                    **extra_step_kwargs,
+                    return_dict=False)[0]
 
                 intermediate_images = (
                     1 - mask_image

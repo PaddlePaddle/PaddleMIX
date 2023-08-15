@@ -1,4 +1,5 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,12 +22,15 @@ from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 
 class DDPMPipeline(DiffusionPipeline):
-    """
-    This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
-    library implements for all the pipelines (such as downloading or saving, running on a particular device, etc.)
+    r"""
+    Pipeline for image generation.
+
+    This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
+    implemented for all pipelines (downloading, saving, running on a particular device, etc.).
 
     Parameters:
-        unet ([`UNet2DModel`]): U-Net architecture to denoise the encoded image.
+        unet ([`UNet2DModel`]):
+            A `UNet2DModel` to denoise the encoded image latents.
         scheduler ([`SchedulerMixin`]):
             A scheduler to be used in combination with `unet` to denoise the encoded image. Can be one of
             [`DDPMScheduler`], or [`DDIMScheduler`].
@@ -45,7 +49,9 @@ class DDPMPipeline(DiffusionPipeline):
             num_inference_steps: int=1000,
             output_type: Optional[str]="pil",
             return_dict: bool=True, ) -> Union[ImagePipelineOutput, Tuple]:
-        """
+        r"""
+        The call function to the pipeline for generation.
+
         Args:
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
@@ -55,14 +61,29 @@ class DDPMPipeline(DiffusionPipeline):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             output_type (`str`, *optional*, defaults to `"pil"`):
-                The output format of the generate image. Choose between
-                [PIL](https://pillow.readthedocs.io/en/stable/): `PIL.Image.Image` or `np.array`.
+                The output format of the generated image. Choose between `PIL.Image` or `np.array`.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~pipelines.ImagePipelineOutput`] instead of a plain tuple.
 
+        Example:
+
+        ```py
+        >>> from ppdiffusers import DDPMPipeline
+
+        >>> # load model and scheduler
+        >>> pipe = DDPMPipeline.from_pretrained("google/ddpm-cat-256")
+
+        >>> # run pipeline in inference (sample random noise and denoise)
+        >>> image = pipe().images[0]
+
+        >>> # save image
+        >>> image.save("ddpm_generated_image.png")
+        ```
+
         Returns:
-            [`~pipelines.ImagePipelineOutput`] or `tuple`: [`~pipelines.utils.ImagePipelineOutput`] if `return_dict` is
-            True, otherwise a `tuple. When returning a tuple, the first element is a list with the generated images.
+            [`~pipelines.ImagePipelineOutput`] or `tuple`:
+                If `return_dict` is `True`, [`~pipelines.ImagePipelineOutput`] is returned, otherwise a `tuple` is
+                returned where the first element is a list with the generated images
         """
         # Sample gaussian noise to begin loop
         if isinstance(self.unet.config.sample_size, int):

@@ -18,7 +18,8 @@ from dataclasses import dataclass
 from typing import List, Optional, Union
 
 import numpy as np
-import PIL.Image
+import PIL
+from PIL import Image
 
 from ...utils import BaseOutput, OptionalDependencyNotAvailable, is_paddle_available, is_paddlenlp_available
 

@@ -23,7 +23,7 @@ import paddle
 import PIL
 
 from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
-
+from ...loaders import LoraLoaderMixin
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
 from ...utils import (
@@ -119,7 +119,7 @@ EXAMPLE_DOC_STRING = """
 """
 
 
-class IFImg2ImgPipeline(DiffusionPipeline):
+class IFImg2ImgPipeline(DiffusionPipeline, LoraLoaderMixin):
     tokenizer: T5Tokenizer
     text_encoder: T5EncoderModel
 
@@ -821,7 +821,8 @@ class IFImg2ImgPipeline(DiffusionPipeline):
                     model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
-                    cross_attention_kwargs=cross_attention_kwargs, ).sample
+                    cross_attention_kwargs=cross_attention_kwargs,
+                    return_dict=False, )[0]
 
                 # perform guidance
                 if do_classifier_free_guidance:
@@ -843,10 +844,19 @@ class IFImg2ImgPipeline(DiffusionPipeline):
                     noise_pred = paddle.concat(
                         [noise_pred, predicted_variance], axis=1)
 
+                if self.scheduler.config.variance_type not in [
+                        "learned", "learned_range"
+                ]:
+                    noise_pred, _ = noise_pred.split(
+                        noise_pred.shape[1] // model_input.shape[1], axis=1)
+
                 # compute the previous noisy sample x_t -> x_t-1
                 intermediate_images = self.scheduler.step(
-                    noise_pred, t, intermediate_images,
-                    **extra_step_kwargs).prev_sample
+                    noise_pred,
+                    t,
+                    intermediate_images,
+                    **extra_step_kwargs,
+                    return_dict=False)[0]
 
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or (

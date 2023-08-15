@@ -13,38 +13,63 @@
 # limitations under the License.
 
 import inspect
+import warnings
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
 import PIL
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
-
-# from ...loaders import TextualInversionLoaderMixin
+from ...image_processor import VaeImageProcessor
+from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, MultiAdapter, T2IAdapter, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import PIL_INTERPOLATION, logging, randn_tensor, replace_example_docstring
+from ...utils import (
+    PIL_INTERPOLATION,
+    BaseOutput,
+    logging,
+    randn_tensor,
+    replace_example_docstring, )
 from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion import StableDiffusionPipelineOutput
 from ..stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 
-logger = logging.get_logger(__name__)
+
+@dataclass
+class StableDiffusionAdapterPipelineOutput(BaseOutput):
+    """
+    Args:
+        images (`List[PIL.Image.Image]` or `np.ndarray`)
+            List of denoised PIL images of length `batch_size` or numpy array of shape `(batch_size, height, width,
+            num_channels)`. PIL images or numpy array present the denoised images of the diffusion pipeline.
+        nsfw_content_detected (`List[bool]`)
+            List of flags denoting whether the corresponding generated image likely represents "not-safe-for-work"
+            (nsfw) content, or `None` if safety checking could not be performed.
+    """
+
+    images: Union[List[PIL.Image.Image], np.ndarray]
+    nsfw_content_detected: Optional[List[bool]]
+
+
+logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
         >>> from PIL import Image
         >>> from ppdiffusers.utils import load_image
+        >>> import paddle
+        >>> from ppdiffusers import StableDiffusionAdapterPipeline, T2IAdapter
 
-        >>> image = load_image("https://huggingface.co/RzZ/sd-v1-4-adapter-color/resolve/main/color_ref.png")
+        >>> image = load_image(
+        ...     "https://huggingface.co/datasets/diffusers/docs-images/resolve/main/t2i-adapter/color_ref.png"
+        ... )
 
         >>> color_palette = image.resize((8, 8))
         >>> color_palette = color_palette.resize((512, 512), resample=Image.Resampling.NEAREST)
 
-        >>> import paddle
-        >>> from ppdiffusers import StableDiffusionAdapterPipeline, T2IAdapter
-
-        >>> adapter = T2IAdapter.from_pretrained("RzZ/sd-v1-4-adapter-color")
+        >>> adapter = T2IAdapter.from_pretrained("TencentARC/t2iadapter_color_sd14v1", paddle_dtype=paddle.float16)
         >>> pipe = StableDiffusionAdapterPipeline.from_pretrained(
         ...     "CompVis/stable-diffusion-v1-4",
         ...     adapter=adapter,
@@ -54,66 +79,40 @@ EXAMPLE_DOC_STRING = """
         >>> out_image = pipe(
         ...     "At night, glowing cubes in front of the beach",
         ...     image=color_palette,
-        ...     generator=generator,
         ... ).images[0]
         ```
 """
 
 
-def is_power_of_two(n):
-    if n <= 0:
-        return False
-    else:
-        return n & (n - 1) == 0
-
-
-def resize(images: PIL.Image.Image, img_size: int) -> PIL.Image.Image:
-    w, h = images.size
-
-    coef = w / h
-
-    w, h = img_size, img_size
-
-    if coef >= 1:
-        w = int(round(img_size / 8 * coef) * 8)
-    else:
-        h = int(round(img_size / 8 / coef) * 8)
-
-    images = images.resize(
-        (w, h), resample=PIL_INTERPOLATION["bicubic"], reducing_gap=None)
-
-    return images
-
-
-def preprocess(image):
+def _preprocess_adapter_image(image, height, width):
     if isinstance(image, paddle.Tensor):
         return image
     elif isinstance(image, PIL.Image.Image):
         image = [image]
+
     if isinstance(image[0], PIL.Image.Image):
-        w, h = image[0].size
-        w, h = (x - x % 8 for x in (w, h))
         image = [
-            np.array(i.resize(
-                (w, h), resample=PIL_INTERPOLATION["lanczos"])) for i in image
+            np.array(
+                i.resize(
+                    (width, height), resample=PIL_INTERPOLATION["lanczos"]))
+            for i in image
         ]
-        image = [(i[None, ..., None] if i.ndim == 2 else i[None, ...])
-                 for i in image]
+        image = [
+            i[None, ..., None] if i.ndim == 2 else i[None, ...] for i in image
+        ]  # expand [h, w] or [h, w, c] to [b, h, w, c]
         image = np.concatenate(image, axis=0)
         image = np.array(image).astype(np.float32) / 255.0
         image = image.transpose(0, 3, 1, 2)
-        image = paddle.to_tensor(data=image)
-    elif isinstance(image[0], paddle.Tensor):
+        image = paddle.to_tensor(image)
+    elif isinstance(image[0], torch.Tensor):
         if image[0].ndim == 3:
-            image = paddle.stack(x=image, axis=0)
+            image = torch.stack(image, dim=0)
         elif image[0].ndim == 4:
-            image = paddle.concat(x=image, axis=0)
+            image = torch.cat(image, dim=0)
         else:
             raise ValueError(
                 f"Invalid image tensor! Expecting image tensor with 3 or 4 dimension, but recive: {image[0].ndim}"
             )
-    else:
-        raise ValueError("Invalid image type!")
     return image
 
 

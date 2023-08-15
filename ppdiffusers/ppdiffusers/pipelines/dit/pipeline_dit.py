@@ -31,16 +31,18 @@ from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 class DiTPipeline(DiffusionPipeline):
     r"""
-    This pipeline inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
-    library implements for all the pipelines (such as downloading or saving, running on a particular device, etc.)
+    Pipeline for image generation based on a Transformer backbone instead of a UNet.
+
+    This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
+    implemented for all pipelines (downloading, saving, running on a particular device, etc.).
 
     Parameters:
         transformer ([`Transformer2DModel`]):
-            Class conditioned Transformer in Diffusion model to denoise the encoded image latents.
+            A class conditioned `Transformer2DModel` to denoise the encoded image latents.
         vae ([`AutoencoderKL`]):
-            Variational Auto-Encoder (VAE) Model to encode and decode images to and from latent representations.
+            Variational Auto-Encoder (VAE) model to encode and decode images to and from latent representations.
         scheduler ([`DDIMScheduler`]):
-            A scheduler to be used in combination with `dit` to denoise the encoded image latents.
+            A scheduler to be used in combination with `transformer` to denoise the encoded image latents.
     """
 
     def __init__(
@@ -66,13 +68,15 @@ class DiTPipeline(DiffusionPipeline):
     def get_label_ids(self, label: Union[str, List[str]]) -> List[int]:
         r"""
 
-        Map label strings, *e.g.* from ImageNet, to corresponding class ids.
+        Map label strings from ImageNet to corresponding class ids.
 
         Parameters:
-            label (`str` or `dict` of `str`): label strings to be mapped to class ids.
+            label (`str` or `dict` of `str`):
+                Label strings to be mapped to class ids.
 
         Returns:
-            `list` of `int`: Class ids to be processed by pipeline.
+            `list` of `int`:
+                Class ids to be processed by pipeline.
         """
 
         if not isinstance(label, list):
@@ -97,23 +101,52 @@ class DiTPipeline(DiffusionPipeline):
             output_type: Optional[str]="pil",
             return_dict: bool=True, ) -> Union[ImagePipelineOutput, Tuple]:
         r"""
-        Function invoked when calling the pipeline for generation.
+        The call function to the pipeline for generation.
 
         Args:
             class_labels (List[int]):
-                List of imagenet class labels for the images to be generated.
+                List of ImageNet class labels for the images to be generated.
             guidance_scale (`float`, *optional*, defaults to 4.0):
-                Scale of the guidance signal.
+                A higher guidance scale value encourages the model to generate images closely linked to the text
+                `prompt` at the expense of lower image quality. Guidance scale is enabled when `guidance_scale > 1`.
             generator (`paddle.Generator`, *optional*):
-                A [paddle generator] to make generation deterministic.
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+                generation deterministic.
             num_inference_steps (`int`, *optional*, defaults to 250):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             output_type (`str`, *optional*, defaults to `"pil"`):
-                The output format of the generate image. Choose between
-                [PIL](https://pillow.readthedocs.io/en/stable/): `PIL.Image.Image` or `np.array`.
+                The output format of the generated image. Choose between `PIL.Image` or `np.array`.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`ImagePipelineOutput`] instead of a plain tuple.
+
+        Examples:
+
+        ```py
+        >>> from ppdiffusers import DiTPipeline, DPMSolverMultistepScheduler
+        >>> import paddle
+
+        >>> pipe = DiTPipeline.from_pretrained("facebook/DiT-XL-2-256", paddle_dtype=paddle.float16)
+        >>> pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+
+        >>> # pick words from Imagenet class labels
+        >>> pipe.labels  # to print all available words
+
+        >>> # pick words that exist in ImageNet
+        >>> words = ["white shark", "umbrella"]
+
+        >>> class_ids = pipe.get_label_ids(words)
+
+        >>> generator = paddle.Generator().manual_seed(33)
+        >>> output = pipe(class_labels=class_ids, num_inference_steps=25, generator=generator)
+
+        >>> image = output.images[0]  # label 'white shark'
+        ```
+
+        Returns:
+            [`~pipelines.ImagePipelineOutput`] or `tuple`:
+                If `return_dict` is `True`, [`~pipelines.ImagePipelineOutput`] is returned, otherwise a `tuple` is
+                returned where the first element is a list with the generated images
         """
 
         batch_size = len(class_labels)
