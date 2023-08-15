@@ -58,7 +58,7 @@ image.save("versatile-diffusion-red_car.png")
 
 
 
-### [文本引导的图像变换（Image-to-Image Text-Guided Generation）
+### 文本引导的图像变换（Image-to-Image Text-Guided Generation）
 
 ```python
 from paddlemix import Appflow
@@ -89,5 +89,3 @@ image.save("image_Kurisu_img2img.png")
 |:----:|:----:|:----:| :----:|
 | Kurisu Makise, looking at viewer, long hair, standing, 1girl, hair ornament, hair flower, cute, jacket, white flower, white dress | lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry | ![image_Kurisu](https://github.com/LokeZhou/PaddleMIX/assets/13300429/9596c6b9-2dea-4a66-9419-b60332a08cd1)|![image_Kurisu_img2img](https://github.com/LokeZhou/PaddleMIX/assets/13300429/f4fa0efe-bce2-4bea-b6f6-19591af7e423) |
 </div>
-
-
