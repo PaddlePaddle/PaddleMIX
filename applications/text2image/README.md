@@ -21,5 +21,6 @@ result = task(prompt=prompt)['result']
 
 | prompt | Generated Image |
 |:----:|:----:|
-| a photo of an astronaut riding a horse on mars |  |
+| a photo of an astronaut riding a horse on mars | ![astronaut_rides_horse_sd](https://github.com/LokeZhou/PaddleMIX/assets/13300429/457ca26c-452e-4692-bf5f-515ea41920d7) |
 </div>
+
