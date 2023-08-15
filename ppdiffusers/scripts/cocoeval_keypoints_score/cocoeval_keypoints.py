@@ -20,18 +20,8 @@ from pycocotools.cocoeval import COCOeval
 # This script references https://cocodataset.org/#keypoints-eval.
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-g",
-        "--gt",
-        type=str,
-        help="Assign the groud true path.",
-        default=None)
-    parser.add_argument(
-        "-d",
-        "--dt",
-        type=str,
-        help="Assign the detection result path.",
-        default=None)
+    parser.add_argument("-g", "--gt", type=str, help="Assign the groud true path.", default=None)
+    parser.add_argument("-d", "--dt", type=str, help="Assign the detection result path.", default=None)
     args = parser.parse_args()
 
     cocoGt = COCO(args.gt)

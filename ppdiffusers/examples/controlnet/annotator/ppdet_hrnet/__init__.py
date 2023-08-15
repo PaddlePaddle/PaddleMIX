@@ -39,13 +39,12 @@ def keypoint_to_openpose_kpts(coco_keypoints_list):
     l_shoulder_keypoint = coco_keypoints_list[l_shoulder_index]
     r_shoulder_keypoint = coco_keypoints_list[r_shoulder_index]
 
-    neck_keypoint_y = int(
-        (l_shoulder_keypoint[1] + r_shoulder_keypoint[1]) / 2.0)
-    neck_keypoint_x = int(
-        (l_shoulder_keypoint[0] + r_shoulder_keypoint[0]) / 2.0)
+    neck_keypoint_y = int((l_shoulder_keypoint[1] + r_shoulder_keypoint[1]) / 2.0)
+    neck_keypoint_x = int((l_shoulder_keypoint[0] + r_shoulder_keypoint[0]) / 2.0)
     neck_keypoint = [
-        neck_keypoint_x, neck_keypoint_y,
-        min(l_shoulder_keypoint[2], r_shoulder_keypoint[2])
+        neck_keypoint_x,
+        neck_keypoint_y,
+        min(l_shoulder_keypoint[2], r_shoulder_keypoint[2]),
     ]
     open_pose_neck_index = 1
     openpose_kpts.insert(open_pose_neck_index, neck_keypoint)
@@ -64,33 +63,24 @@ class PPDetDetector:
             img_scalarfactor = detect_resolution / min(oriImg.shape[:2])
             result = self.ppdetpose_pred(oriImg)
             result["candidate"] = result["candidate"] * img_scalarfactor
-            oriImg = cv2.resize(
-                oriImg, (0, 0), fx=img_scalarfactor, fy=img_scalarfactor)
+            oriImg = cv2.resize(oriImg, (0, 0), fx=img_scalarfactor, fy=img_scalarfactor)
             canvas = oriImg.copy()
             canvas.fill(0)
-            canvas = self.body_estimation.draw_pose(canvas, result["candidate"],
-                                                    result["subset"])
+            canvas = self.body_estimation.draw_pose(canvas, result["candidate"], result["subset"])
             if hand:
-                hands_list = util.hand_detect(result["candidate"],
-                                              result["subset"], oriImg)
+                hands_list = util.hand_detect(result["candidate"], result["subset"], oriImg)
                 all_hand_peaks = []
                 for x, y, w, is_left in hands_list:
-                    scale_search = [
-                        x * img_scalarfactor for x in [0.5, 1.0, 1.5, 2.0]
-                    ]
+                    scale_search = [x * img_scalarfactor for x in [0.5, 1.0, 1.5, 2.0]]
                     peaks = self.hand_estimation.hand_estimation(
-                        oriImg[y:y + w, x:x + w, ::-1],
-                        scale_search=scale_search)
-                    peaks[:, 0] = np.where(peaks[:, 0] == 0, peaks[:, 0],
-                                           peaks[:, 0] + x)
-                    peaks[:, 1] = np.where(peaks[:, 1] == 0, peaks[:, 1],
-                                           peaks[:, 1] + y)
+                        oriImg[y : y + w, x : x + w, ::-1], scale_search=scale_search
+                    )
+                    peaks[:, 0] = np.where(peaks[:, 0] == 0, peaks[:, 0], peaks[:, 0] + x)
+                    peaks[:, 1] = np.where(peaks[:, 1] == 0, peaks[:, 1], peaks[:, 1] + y)
                     all_hand_peaks.append(peaks)
                 canvas = util.draw_handpose(canvas, all_hand_peaks)
 
-            return canvas, dict(
-                candidate=result["candidate"].tolist(),
-                subset=result["subset"].tolist())
+            return canvas, dict(candidate=result["candidate"].tolist(), subset=result["subset"].tolist())
 
     def ppdetpose_pred(self, image, kpt_threshold=0.3):
         poseres = self.ppdetpose.ppdet_hrnet_infer(image)
@@ -104,7 +94,12 @@ class PPDetDetector:
             for idx, item in enumerate(openpose_kpts):
                 if item[2] > kpt_threshold:
                     subset[kptid][idx] = posnum
-                    kpt = np.array(item + [posnum, ])
+                    kpt = np.array(
+                        item
+                        + [
+                            posnum,
+                        ]
+                    )
                     candidate = np.vstack((candidate, kpt))
                     posnum += 1
         return {"candidate": candidate, "subset": subset}

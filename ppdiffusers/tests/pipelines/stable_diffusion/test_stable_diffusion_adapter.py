@@ -18,25 +18,26 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+
 from ppdiffusers import (
     AutoencoderKL,
     PNDMScheduler,
     StableDiffusionAdapterPipeline,
     T2IAdapter,
-    UNet2DConditionModel, )
+    UNet2DConditionModel,
+)
 from ppdiffusers.utils import floats_tensor, load_image, load_numpy, slow
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 
 from ..pipeline_params import (
     TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
-    TEXT_GUIDED_IMAGE_VARIATION_PARAMS, )
+    TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
+)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
-class StableDiffusionAdapterPipelineFastTests(PipelineTesterMixin,
-                                              unittest.TestCase):
+class StableDiffusionAdapterPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionAdapterPipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS
@@ -51,7 +52,8 @@ class StableDiffusionAdapterPipelineFastTests(PipelineTesterMixin,
             out_channels=4,
             down_block_types=("CrossAttnDownBlock2D", "DownBlock2D"),
             up_block_types=("CrossAttnUpBlock2D", "UpBlock2D"),
-            cross_attention_dim=32, )
+            cross_attention_dim=32,
+        )
         scheduler = PNDMScheduler(skip_prk_steps=True)
         paddle.Generator().manual_seed(seed=0)
         vae = AutoencoderKL(
@@ -60,7 +62,8 @@ class StableDiffusionAdapterPipelineFastTests(PipelineTesterMixin,
             out_channels=3,
             down_block_types=["DownEncoderBlock2D", "DownEncoderBlock2D"],
             up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D"],
-            latent_channels=4, )
+            latent_channels=4,
+        )
         vae_scale_factor = 2
         paddle.Generator().manual_seed(seed=0)
         text_encoder_config = CLIPTextConfig(
@@ -72,10 +75,10 @@ class StableDiffusionAdapterPipelineFastTests(PipelineTesterMixin,
             num_attention_heads=4,
             num_hidden_layers=5,
             pad_token_id=1,
-            vocab_size=1000, )
+            vocab_size=1000,
+        )
         text_encoder = CLIPTextModel(text_encoder_config)
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         paddle.Generator().manual_seed(seed=0)
         adapter = T2IAdapter(
             block_out_channels=[32, 64],
@@ -84,7 +87,8 @@ class StableDiffusionAdapterPipelineFastTests(PipelineTesterMixin,
             kernel_size=1,
             res_block_skip=True,
             use_conv=False,
-            input_scale_factor=vae_scale_factor, )
+            input_scale_factor=vae_scale_factor,
+        )
         components = {
             "adapter": adapter,
             "unet": unet,
@@ -118,23 +122,30 @@ class StableDiffusionAdapterPipelineFastTests(PipelineTesterMixin,
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([
-            0.9088084, 0.6012194, 0.43046606, 0.7228667, 0.46428588, 0.30164504,
-            0.508494, 0.6241546, 0.55453974
-        ])
+        expected_slice = np.array(
+            [
+                0.9088084,
+                0.6012194,
+                0.43046606,
+                0.7228667,
+                0.46428588,
+                0.30164504,
+                0.508494,
+                0.6241546,
+                0.55453974,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
 
     def test_attention_slicing_forward_pass(self):
-        return self._test_attention_slicing_forward_pass(
-            expected_max_diff=0.002)
+        return self._test_attention_slicing_forward_pass(expected_max_diff=0.002)
 
     @unittest.skipIf(
         not is_ppxformers_available(),
         reason="XFormers attention is only available with CUDA and `xformers` installed",
     )
     def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(
-            expected_max_diff=0.002)
+        self._test_xformers_attention_forwardGenerator_pass(expected_max_diff=0.002)
 
     def test_inference_batch_single_identical(self):
         self._test_inference_batch_single_identical(expected_max_diff=0.002)
@@ -150,16 +161,12 @@ class StableDiffusionAdapterPipelineSlowTests(unittest.TestCase):
     def get_inputs(self, revision="segmentation", dtype="float32", seed=0):
         generator = paddle.Generator().manual_seed(seed)
         image_urls = {
-            "segmentation":
-            "https://huggingface.co/RzZ/sd-v1-4-adapter-pipeline/resolve/segmentation/sample_input.png",
-            "keypose":
-            "https://huggingface.co/RzZ/sd-v1-4-adapter-pipeline/resolve/keypose/sample_input.png",
-            "depth":
-            "https://huggingface.co/RzZ/sd-v1-4-adapter-pipeline/resolve/depth/sample_input.png",
+            "segmentation": "https://huggingface.co/RzZ/sd-v1-4-adapter-pipeline/resolve/segmentation/sample_input.png",
+            "keypose": "https://huggingface.co/RzZ/sd-v1-4-adapter-pipeline/resolve/keypose/sample_input.png",
+            "depth": "https://huggingface.co/RzZ/sd-v1-4-adapter-pipeline/resolve/depth/sample_input.png",
         }
         prompt_by_rev = {
-            "segmentation":
-            "A black Honda motorcycle parked in front of a garage",
+            "segmentation": "A black Honda motorcycle parked in front of a garage",
             "keypose": "An astronaut on the moon",
             "depth": "An office room with nice view",
         }
@@ -177,9 +184,8 @@ class StableDiffusionAdapterPipelineSlowTests(unittest.TestCase):
     def test_stable_diffusion_segmentation_adapter(self):
         adapter = T2IAdapter.from_pretrained("RzZ/sd-v1-4-adapter-seg")
         pipe = StableDiffusionAdapterPipeline.from_pretrained(
-            "CompVis/stable-diffusion-v1-4",
-            adapter=adapter,
-            safety_checker=None)
+            "CompVis/stable-diffusion-v1-4", adapter=adapter, safety_checker=None
+        )
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
         inputs = self.get_inputs(revision="segmentation")
@@ -193,9 +199,8 @@ class StableDiffusionAdapterPipelineSlowTests(unittest.TestCase):
     def test_stable_diffusion_keypose_adapter(self):
         adapter = T2IAdapter.from_pretrained("RzZ/sd-v1-4-adapter-keypose")
         pipe = StableDiffusionAdapterPipeline.from_pretrained(
-            "CompVis/stable-diffusion-v1-4",
-            adapter=adapter,
-            safety_checker=None)
+            "CompVis/stable-diffusion-v1-4", adapter=adapter, safety_checker=None
+        )
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
         inputs = self.get_inputs(revision="keypose")
@@ -209,9 +214,8 @@ class StableDiffusionAdapterPipelineSlowTests(unittest.TestCase):
     def test_stable_diffusion_depth_adapter(self):
         adapter = T2IAdapter.from_pretrained("RzZ/sd-v1-4-adapter-depth")
         pipe = StableDiffusionAdapterPipeline.from_pretrained(
-            "CompVis/stable-diffusion-v1-4",
-            adapter=adapter,
-            safety_checker=None)
+            "CompVis/stable-diffusion-v1-4", adapter=adapter, safety_checker=None
+        )
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
         inputs = self.get_inputs(revision="depth")

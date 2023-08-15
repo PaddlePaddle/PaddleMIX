@@ -46,14 +46,14 @@ class PNDMPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            batch_size: int=1,
-            num_inference_steps: int=50,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            **kwargs, ) -> Union[ImagePipelineOutput, Tuple]:
+        self,
+        batch_size: int = 1,
+        num_inference_steps: int = 50,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        **kwargs,
+    ) -> Union[ImagePipelineOutput, Tuple]:
         r"""
         Args:
             batch_size (`int`, `optional`, defaults to 1): The number of images to generate.
@@ -76,9 +76,14 @@ class PNDMPipeline(DiffusionPipeline):
 
         # Sample gaussian noise to begin loop
         image = randn_tensor(
-            (batch_size, self.unet.config.in_channels,
-             self.unet.config.sample_size, self.unet.config.sample_size),
-            generator=generator, )
+            (
+                batch_size,
+                self.unet.config.in_channels,
+                self.unet.config.sample_size,
+                self.unet.config.sample_size,
+            ),
+            generator=generator,
+        )
 
         self.scheduler.set_timesteps(num_inference_steps)
         for t in self.progress_bar(self.scheduler.timesteps):
@@ -92,6 +97,6 @@ class PNDMPipeline(DiffusionPipeline):
             image = self.numpy_to_pil(image)
 
         if not return_dict:
-            return (image, )
+            return (image,)
 
         return ImagePipelineOutput(images=image)

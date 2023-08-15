@@ -33,7 +33,8 @@ class DDPMPipelineFastTests(unittest.TestCase):
             in_channels=3,
             out_channels=3,
             down_block_types=("DownBlock2D", "AttnDownBlock2D"),
-            up_block_types=("AttnUpBlock2D", "UpBlock2D"), )
+            up_block_types=("AttnUpBlock2D", "UpBlock2D"),
+        )
         return model
 
     def test_fast_inference(self):
@@ -42,33 +43,33 @@ class DDPMPipelineFastTests(unittest.TestCase):
         ddpm = DDPMPipeline(unet=unet, scheduler=scheduler)
         ddpm.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(0)
-        image = ddpm(
-            generator=generator, num_inference_steps=2,
-            output_type="numpy").images
+        image = ddpm(generator=generator, num_inference_steps=2, output_type="numpy").images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = ddpm(
             generator=generator,
             num_inference_steps=2,
             output_type="numpy",
-            return_dict=False)[0]
+            return_dict=False,
+        )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        expected_slice = np.array([
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.007474243640899658,
-            0.0,
-            0.007990598678588867,
-            0.9972629547119141,
-            0.6665917634963989,
-        ])
+        expected_slice = np.array(
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.007474243640899658,
+                0.0,
+                0.007990598678588867,
+                0.9972629547119141,
+                0.6665917634963989,
+            ]
+        )
         print(image_slice.flatten().tolist())
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
     def test_inference_predict_sample(self):
         unet = self.dummy_uncond_unet
@@ -76,18 +77,14 @@ class DDPMPipelineFastTests(unittest.TestCase):
         ddpm = DDPMPipeline(unet=unet, scheduler=scheduler)
         ddpm.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(0)
-        image = ddpm(
-            generator=generator, num_inference_steps=2,
-            output_type="numpy").images
+        image = ddpm(generator=generator, num_inference_steps=2, output_type="numpy").images
         generator = paddle.Generator().manual_seed(0)
-        image_eps = ddpm(
-            generator=generator, num_inference_steps=2, output_type="numpy")[0]
+        image_eps = ddpm(generator=generator, num_inference_steps=2, output_type="numpy")[0]
         image_slice = image[0, -3:, -3:, -1]
         image_eps_slice = image_eps[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
         tolerance = 0.01
-        assert np.abs(image_slice.flatten() - image_eps_slice.flatten()).max(
-        ) < tolerance
+        assert np.abs(image_slice.flatten() - image_eps_slice.flatten()).max() < tolerance
 
 
 @slow
@@ -103,8 +100,5 @@ class DDPMPipelineIntegrationTests(unittest.TestCase):
         image = ddpm(generator=generator, output_type="numpy").images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        expected_slice = np.array([
-            0.4454, 0.2025, 0.0315, 0.3023, 0.2575, 0.1031, 0.0953, 0.1604,
-            0.2020
-        ])
+        expected_slice = np.array([0.4454, 0.2025, 0.0315, 0.3023, 0.2575, 0.1031, 0.0953, 0.1604, 0.2020])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01

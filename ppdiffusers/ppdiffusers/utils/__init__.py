@@ -47,7 +47,8 @@ from .constants import (
     TORCH_WEIGHTS_NAME,
     WEIGHTS_NAME,
     get_map_location_default,
-    str2bool, )
+    str2bool,
+)
 from .deprecation_utils import deprecate
 from .doc_utils import replace_example_docstring
 from .download_utils import (
@@ -55,7 +56,8 @@ from .download_utils import (
     _get_model_file,
     bos_hf_download,
     ppdiffusers_bos_dir_download,
-    ppdiffusers_url_download, )
+    ppdiffusers_url_download,
+)
 from .dynamic_modules_utils import get_class_from_dynamic_module
 from .hub_utils import HF_HUB_OFFLINE, extract_commit_hash, http_user_agent
 from .import_utils import (
@@ -87,7 +89,8 @@ from .import_utils import (
     is_unidecode_available,
     is_visualdl_available,
     is_wandb_available,
-    requires_backends, )
+    requires_backends,
+)
 
 # custom load_utils
 from .load_utils import is_torch_file, safetensors_load, smart_load, torch_load
@@ -111,7 +114,8 @@ if is_paddle_available():
         parse_flag_from_env,
         print_tensor_test,
         require_paddle_gpu,
-        slow, )
+        slow,
+    )
 
 if is_torch_available():
     from .testing_utils import require_torch

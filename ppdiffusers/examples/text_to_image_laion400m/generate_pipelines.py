@@ -16,15 +16,16 @@ import argparse
 import json
 
 import paddle
-
 from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.utils.log import logger
+
 from ppdiffusers import (
     AutoencoderKL,
     DDIMScheduler,
     LDMBertModel,
     LDMTextToImagePipeline,
-    UNet2DConditionModel, )
+    UNet2DConditionModel,
+)
 from ppdiffusers.pipelines.latent_diffusion import LDMBertConfig
 
 
@@ -34,27 +35,32 @@ def parse_args():
         "--model_file",
         type=str,
         default="./model_state.pdparams",
-        help="path to pretrained model_state.pdparams")
+        help="path to pretrained model_state.pdparams",
+    )
     parser.add_argument(
         "--output_path",
         type=str,
         default="./ldm_pipelines",
-        help="the output path of pipeline.")
+        help="the output path of pipeline.",
+    )
     parser.add_argument(
         "--vae_name_or_path",
         type=str,
         default="CompVis/stable-diffusion-v1-4/vae",
-        help="pretrained_vae_name_or_path.", )
+        help="pretrained_vae_name_or_path.",
+    )
     parser.add_argument(
         "--text_encoder_config_file",
         type=str,
         default="./config/ldmbert.json",
-        help="text_encoder_config_file.")
+        help="text_encoder_config_file.",
+    )
     parser.add_argument(
         "--unet_config_file",
         type=str,
         default="./config/unet.json",
-        help="unet_config_file.")
+        help="unet_config_file.",
+    )
     parser.add_argument(
         "--tokenizer_name_or_path",
         type=str,
@@ -65,12 +71,9 @@ def parse_args():
         "--model_max_length",
         type=int,
         default=77,
-        help="Pretrained tokenizer model_max_length.")
-    parser.add_argument(
-        "--device",
-        type=str,
-        default=None,
-        help="Device to use. Like gpu:0 or cpu")
+        help="Pretrained tokenizer model_max_length.",
+    )
+    parser.add_argument("--device", type=str, default=None, help="Device to use. Like gpu:0 or cpu")
 
     return parser.parse_args()
 
@@ -123,17 +126,17 @@ def check_keys(model, state_dict):
 
 
 def build_pipelines(
-        model_file,
-        output_path,
-        vae_name_or_path,
-        unet_config_file,
-        text_encoder_config_file,
-        tokenizer_name_or_path="bert-base-uncased",
-        model_max_length=77, ):
+    model_file,
+    output_path,
+    vae_name_or_path,
+    unet_config_file,
+    text_encoder_config_file,
+    tokenizer_name_or_path="bert-base-uncased",
+    model_max_length=77,
+):
     vae = AutoencoderKL.from_config(vae_name_or_path)
     unet = UNet2DConditionModel(**read_json(unet_config_file))
-    tokenizer = AutoTokenizer.from_pretrained(
-        tokenizer_name_or_path, model_max_length=model_max_length)
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path, model_max_length=model_max_length)
     text_encoder_config = read_json(text_encoder_config_file)
     vocab_size = text_encoder_config["vocab_size"]
     max_position_embeddings = text_encoder_config["max_position_embeddings"]
@@ -147,8 +150,7 @@ def build_pipelines(
         logger.info(
             f"The tokenizer's model_max_length {tokenizer.model_max_length}, while the text encoder's max_position_embeddings is {max_position_embeddings}, we will use {tokenizer.model_max_length} as max_position_embeddings!"
         )
-        text_encoder_config[
-            "max_position_embeddings"] = tokenizer.model_max_length
+        text_encoder_config["max_position_embeddings"] = tokenizer.model_max_length
     cofnig = LDMBertConfig(**text_encoder_config)
     text_encoder = LDMBertModel(cofnig)
     scheduler = DDIMScheduler(
@@ -158,7 +160,8 @@ def build_pipelines(
         # Make sure the scheduler compatible with DDIM
         clip_sample=False,
         set_alpha_to_one=False,
-        steps_offset=1, )
+        steps_offset=1,
+    )
     unet_dict, vae_dict, text_encoder_dict = extract_paramaters(model_file)
     check_keys(unet, unet_dict)
     check_keys(vae, vae_dict)
@@ -171,7 +174,8 @@ def build_pipelines(
         tokenizer=tokenizer,
         scheduler=scheduler,
         vqvae=vae,
-        unet=unet)
+        unet=unet,
+    )
     pipe.save_pretrained(output_path)
 
 
@@ -186,4 +190,5 @@ if __name__ == "__main__":
         unet_config_file=args.unet_config_file,
         text_encoder_config_file=args.text_encoder_config_file,
         tokenizer_name_or_path=args.tokenizer_name_or_path,
-        model_max_length=args.model_max_length, )
+        model_max_length=args.model_max_length,
+    )

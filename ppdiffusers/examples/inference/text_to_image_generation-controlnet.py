@@ -21,15 +21,13 @@ from ppdiffusers.utils import load_image
 controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny")
 
 pipe = StableDiffusionControlNetPipeline.from_pretrained(
-    "runwayml/stable-diffusion-v1-5",
-    controlnet=controlnet,
-    safety_checker=None)
+    "runwayml/stable-diffusion-v1-5", controlnet=controlnet, safety_checker=None
+)
 
 resolution = 512
 image = np.array(
-    load_image(
-        "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png"
-    ))
+    load_image("https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/control_bird_canny_demo.png")
+)
 image = cv2.Canny(image, 100, 200)
 image = image[:, :, None]
 image = np.concatenate([image, image, image], axis=2)
@@ -43,5 +41,6 @@ image = pipe(
     num_inference_steps=50,
     height=resolution,
     width=resolution,
-    controlnet_conditioning_scale=1.0, ).images[0]
+    controlnet_conditioning_scale=1.0,
+).images[0]
 image.save("text_to_image_generation-controlnet-result-bird_canny.png")

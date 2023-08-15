@@ -89,11 +89,9 @@ def get_relative_imports(module_file):
         content = f.read()
 
     # Imports of the form `import .xxx`
-    relative_imports = re.findall(
-        "^\s*import\s+\.(\S+)\s*$", content, flags=re.MULTILINE)
+    relative_imports = re.findall("^\s*import\s+\.(\S+)\s*$", content, flags=re.MULTILINE)
     # Imports of the form `from .xxx import yyy`
-    relative_imports += re.findall(
-        "^\s*from\s+\.(\S+)\s+import", content, flags=re.MULTILINE)
+    relative_imports += re.findall("^\s*from\s+\.(\S+)\s+import", content, flags=re.MULTILINE)
     # Unique-ify
     return list(set(relative_imports))
 
@@ -118,9 +116,7 @@ def get_relative_import_files(module_file):
 
         module_path = Path(module_file).parent
         new_import_files = [str(module_path / m) for m in new_imports]
-        new_import_files = [
-            f for f in new_import_files if f not in all_relative_imports
-        ]
+        new_import_files = [f for f in new_import_files if f not in all_relative_imports]
         files_to_check = [f"{f}.py" for f in new_import_files]
 
         no_change = len(new_import_files) == 0
@@ -139,8 +135,7 @@ def check_imports(filename):
     # Imports of the form `import xxx`
     imports = re.findall("^\s*import\s+(\S+)\s*$", content, flags=re.MULTILINE)
     # Imports of the form `from xxx import yyy`
-    imports += re.findall(
-        "^\s*from\s+(\S+)\s+import", content, flags=re.MULTILINE)
+    imports += re.findall("^\s*from\s+(\S+)\s+import", content, flags=re.MULTILINE)
     # Only keep the top-level module
     imports = [imp.split(".")[0] for imp in imports if not imp.startswith(".")]
 
@@ -189,29 +184,33 @@ def find_pipeline_class(loaded_module):
 
     pipeline_class = None
     for cls_name, cls in cls_members.items():
-        if (cls_name != DiffusionPipeline.__name__ and
-                issubclass(cls, DiffusionPipeline) and
-                cls.__module__.split(".")[0] != "ppdiffusers"):
+        if (
+            cls_name != DiffusionPipeline.__name__
+            and issubclass(cls, DiffusionPipeline)
+            and cls.__module__.split(".")[0] != "ppdiffusers"
+        ):
             if pipeline_class is not None:
                 raise ValueError(
                     f"Multiple classes that inherit from {DiffusionPipeline.__name__} have been found:"
                     f" {pipeline_class.__name__}, and {cls_name}. Please make sure to define only one in"
-                    f" {loaded_module}.")
+                    f" {loaded_module}."
+                )
             pipeline_class = cls
 
     return pipeline_class
 
 
 def get_cached_module_file(
-        pretrained_model_name_or_path: Union[str, os.PathLike],
-        module_file: str,
-        cache_dir: Optional[Union[str, os.PathLike]]=None,
-        force_download: bool=False,
-        resume_download: bool=False,
-        proxies: Optional[Dict[str, str]]=None,
-        use_auth_token: Optional[Union[bool, str]]=None,
-        revision: Optional[str]=None,
-        local_files_only: bool=False, ):
+    pretrained_model_name_or_path: Union[str, os.PathLike],
+    module_file: str,
+    cache_dir: Optional[Union[str, os.PathLike]] = None,
+    force_download: bool = False,
+    resume_download: bool = False,
+    proxies: Optional[Dict[str, str]] = None,
+    use_auth_token: Optional[Union[bool, str]] = None,
+    revision: Optional[str] = None,
+    local_files_only: bool = False,
+):
     """
     Prepares Downloads a module from a local folder or a distant repo and returns its path inside the cached
     Transformers module.
@@ -262,8 +261,7 @@ def get_cached_module_file(
     # Download and cache module_file from the repo `pretrained_model_name_or_path` of grab it if it's a local file.
     pretrained_model_name_or_path = str(pretrained_model_name_or_path)
 
-    module_file_or_url = os.path.join(pretrained_model_name_or_path,
-                                      module_file)
+    module_file_or_url = os.path.join(pretrained_model_name_or_path, module_file)
 
     if os.path.isfile(module_file_or_url):
         resolved_module_file = module_file_or_url
@@ -275,8 +273,7 @@ def get_cached_module_file(
             logger.info(f"Defaulting to main: {revision}.")
 
         # community pipeline on GitHub
-        github_url = COMMUNITY_PIPELINES_URL.format(
-            revision=revision, pipeline=pretrained_model_name_or_path)
+        github_url = COMMUNITY_PIPELINES_URL.format(revision=revision, pipeline=pretrained_model_name_or_path)
         try:
             resolved_module_file = cached_download(
                 github_url,
@@ -285,13 +282,12 @@ def get_cached_module_file(
                 proxies=proxies,
                 resume_download=resume_download,
                 local_files_only=local_files_only,
-                use_auth_token=False, )
+                use_auth_token=False,
+            )
             submodule = "git"
             module_file = pretrained_model_name_or_path + ".py"
         except EnvironmentError:
-            logger.error(
-                f"Could not locate the {module_file} inside {pretrained_model_name_or_path}."
-            )
+            logger.error(f"Could not locate the {module_file} inside {pretrained_model_name_or_path}.")
             raise
     else:
         try:
@@ -304,13 +300,11 @@ def get_cached_module_file(
                 proxies=proxies,
                 resume_download=resume_download,
                 local_files_only=local_files_only,
-                use_auth_token=use_auth_token, )
-            submodule = os.path.join(
-                "local", "--".join(pretrained_model_name_or_path.split("/")))
-        except EnvironmentError:
-            logger.error(
-                f"Could not locate the {module_file} inside {pretrained_model_name_or_path}."
+                use_auth_token=use_auth_token,
             )
+            submodule = os.path.join("local", "--".join(pretrained_model_name_or_path.split("/")))
+        except EnvironmentError:
+            logger.error(f"Could not locate the {module_file} inside {pretrained_model_name_or_path}.")
             raise
 
     # Check we have all the requirements in our environment
@@ -329,7 +323,8 @@ def get_cached_module_file(
             module_needed = f"{module_needed}.py"
             shutil.copy(
                 os.path.join(pretrained_model_name_or_path, module_needed),
-                submodule_path / module_needed)
+                submodule_path / module_needed,
+            )
     else:
         # Get the commit hash
         # TODO: we will get this info in the etag soon, so retrieve it from there and not here.
@@ -340,8 +335,7 @@ def get_cached_module_file(
         else:
             token = None
 
-        commit_hash = model_info(
-            pretrained_model_name_or_path, revision=revision, token=token).sha
+        commit_hash = model_info(pretrained_model_name_or_path, revision=revision, token=token).sha
 
         # The module file will end up being placed in a subfolder with the git hash of the repo. This way we get the
         # benefit of versioning.
@@ -363,22 +357,24 @@ def get_cached_module_file(
                     proxies=proxies,
                     use_auth_token=use_auth_token,
                     revision=revision,
-                    local_files_only=local_files_only, )
+                    local_files_only=local_files_only,
+                )
     return os.path.join(full_submodule, module_file)
 
 
 def get_class_from_dynamic_module(
-        pretrained_model_name_or_path: Union[str, os.PathLike],
-        module_file: str,
-        class_name: Optional[str]=None,
-        cache_dir: Optional[Union[str, os.PathLike]]=None,
-        force_download: bool=False,
-        resume_download: bool=False,
-        proxies: Optional[Dict[str, str]]=None,
-        use_auth_token: Optional[Union[bool, str]]=None,
-        revision: Optional[str]=None,
-        local_files_only: bool=False,
-        **kwargs, ):
+    pretrained_model_name_or_path: Union[str, os.PathLike],
+    module_file: str,
+    class_name: Optional[str] = None,
+    cache_dir: Optional[Union[str, os.PathLike]] = None,
+    force_download: bool = False,
+    resume_download: bool = False,
+    proxies: Optional[Dict[str, str]] = None,
+    use_auth_token: Optional[Union[bool, str]] = None,
+    revision: Optional[str] = None,
+    local_files_only: bool = False,
+    **kwargs,
+):
     """
     Extracts a class from a module file, present in the local folder or repository of a model.
 
@@ -451,5 +447,6 @@ def get_class_from_dynamic_module(
         proxies=proxies,
         use_auth_token=use_auth_token,
         revision=revision,
-        local_files_only=local_files_only, )
+        local_files_only=local_files_only,
+    )
     return get_class_in_module(class_name, final_module.replace(".py", ""))

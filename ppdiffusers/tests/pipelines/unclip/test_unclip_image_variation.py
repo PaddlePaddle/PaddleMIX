@@ -19,40 +19,42 @@ import unittest
 
 import numpy as np
 import paddle
-from ..pipeline_params import (
-    IMAGE_VARIATION_BATCH_PARAMS,
-    IMAGE_VARIATION_PARAMS, )
-from ..test_pipelines_common import (
-    PipelineTesterMixin,
-    assert_mean_pixel_difference, )
-
 from paddlenlp.transformers import (
     CLIPImageProcessor,
     CLIPTextConfig,
     CLIPTextModelWithProjection,
     CLIPTokenizer,
     CLIPVisionConfig,
-    CLIPVisionModelWithProjection, )
+    CLIPVisionModelWithProjection,
+)
+
 from ppdiffusers import (
     DiffusionPipeline,
     UnCLIPImageVariationPipeline,
     UnCLIPScheduler,
     UNet2DConditionModel,
-    UNet2DModel, )
+    UNet2DModel,
+)
 from ppdiffusers.pipelines.unclip.text_proj import UnCLIPTextProjModel
 from ppdiffusers.utils import floats_tensor, slow
 from ppdiffusers.utils.testing_utils import load_image, require_paddle_gpu
 
+from ..pipeline_params import IMAGE_VARIATION_BATCH_PARAMS, IMAGE_VARIATION_PARAMS
+from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
 
-class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
-                                            unittest.TestCase):
+
+class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = UnCLIPImageVariationPipeline
     params = IMAGE_VARIATION_PARAMS - {"height", "width", "guidance_scale"}
     batch_params = IMAGE_VARIATION_BATCH_PARAMS
-    required_optional_params = frozenset([
-        "generator", "return_dict", "decoder_num_inference_steps",
-        "super_res_num_inference_steps"
-    ])
+    required_optional_params = frozenset(
+        [
+            "generator",
+            "return_dict",
+            "decoder_num_inference_steps",
+            "super_res_num_inference_steps",
+        ]
+    )
     test_xformers_attention = False
 
     @property
@@ -77,8 +79,7 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
 
     @property
     def dummy_tokenizer(self):
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         return tokenizer
 
     @property
@@ -94,7 +95,8 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
             num_attention_heads=4,
             num_hidden_layers=5,
             pad_token_id=1,
-            vocab_size=1000, )
+            vocab_size=1000,
+        )
         return CLIPTextModelWithProjection(config)
 
     @property
@@ -107,7 +109,8 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
             num_attention_heads=4,
             image_size=32,
             intermediate_size=37,
-            patch_size=1, )
+            patch_size=1,
+        )
         return CLIPVisionModelWithProjection(config)
 
     @property
@@ -128,13 +131,16 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
             "sample_size": 32,
             "in_channels": 3,
             "out_channels": 6,
-            "down_block_types":
-            ("ResnetDownsampleBlock2D", "SimpleCrossAttnDownBlock2D"),
-            "up_block_types":
-            ("SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"),
+            "down_block_types": (
+                "ResnetDownsampleBlock2D",
+                "SimpleCrossAttnDownBlock2D",
+            ),
+            "up_block_types": ("SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"),
             "mid_block_type": "UNetMidBlock2DSimpleCrossAttn",
-            "block_out_channels":
-            (self.block_out_channels_0, self.block_out_channels_0 * 2),
+            "block_out_channels": (
+                self.block_out_channels_0,
+                self.block_out_channels_0 * 2,
+            ),
             "layers_per_block": 1,
             "cross_attention_dim": self.cross_attention_dim,
             "attention_head_dim": 4,
@@ -149,12 +155,12 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         return {
             "sample_size": 64,
             "layers_per_block": 1,
-            "down_block_types":
-            ("ResnetDownsampleBlock2D", "ResnetDownsampleBlock2D"),
-            "up_block_types":
-            ("ResnetUpsampleBlock2D", "ResnetUpsampleBlock2D"),
-            "block_out_channels":
-            (self.block_out_channels_0, self.block_out_channels_0 * 2),
+            "down_block_types": ("ResnetDownsampleBlock2D", "ResnetDownsampleBlock2D"),
+            "up_block_types": ("ResnetUpsampleBlock2D", "ResnetUpsampleBlock2D"),
+            "block_out_channels": (
+                self.block_out_channels_0,
+                self.block_out_channels_0 * 2,
+            ),
             "in_channels": 6,
             "out_channels": 3,
         }
@@ -181,11 +187,13 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         decoder_scheduler = UnCLIPScheduler(
             variance_type="learned_range",
             prediction_type="epsilon",
-            num_train_timesteps=1000)
+            num_train_timesteps=1000,
+        )
         super_res_scheduler = UnCLIPScheduler(
             variance_type="fixed_small_log",
             prediction_type="epsilon",
-            num_train_timesteps=1000)
+            num_train_timesteps=1000,
+        )
         feature_extractor = CLIPImageProcessor(crop_size=32, size=32)
         image_encoder = self.dummy_image_encoder
         return {
@@ -211,8 +219,7 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         if pil_image:
             input_image = input_image * 0.5 + 0.5
             input_image = input_image.clip(min=0, max=1)
-            input_image = input_image.cpu().transpose(
-                perm=[0, 2, 3, 1]).cast("float32").numpy()
+            input_image = input_image.cpu().transpose(perm=[0, 2, 3, 1]).cast("float32").numpy()
             input_image = DiffusionPipeline.numpy_to_pil(input_image)[0]
         return {
             "image": input_image,
@@ -234,20 +241,21 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([
-            2.7585030e-03,
-            2.6383996e-04,
-            9.9801058e-01,
-            2.6383996e-04,
-            9.9531418e-01,
-            9.9220645e-01,
-            3.6702752e-03,
-            9.9970925e-01,
-            9.9973619e-01,
-        ])
+        expected_slice = np.array(
+            [
+                2.7585030e-03,
+                2.6383996e-04,
+                9.9801058e-01,
+                2.6383996e-04,
+                9.9531418e-01,
+                9.9220645e-01,
+                3.6702752e-03,
+                9.9970925e-01,
+                9.9973619e-01,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
     def test_unclip_image_variation_input_image(self):
         components = self.get_dummy_components()
@@ -261,52 +269,54 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([
-            5.2168965e-04,
-            9.9861604e-01,
-            9.9755847e-01,
-            9.9804187e-01,
-            9.9411416e-01,
-            9.9248302e-01,
-            9.9973619e-01,
-            9.9777901e-01,
-            9.9973619e-01,
-        ])
+        expected_slice = np.array(
+            [
+                5.2168965e-04,
+                9.9861604e-01,
+                9.9755847e-01,
+                9.9804187e-01,
+                9.9411416e-01,
+                9.9248302e-01,
+                9.9973619e-01,
+                9.9777901e-01,
+                9.9973619e-01,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
     def test_unclip_image_variation_input_list_images(self):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
         pipe.set_progress_bar_config(disable=None)
         pipeline_inputs = self.get_dummy_inputs(pil_image=True)
-        pipeline_inputs[
-            "image"] = [pipeline_inputs["image"], pipeline_inputs["image"]]
+        pipeline_inputs["image"] = [pipeline_inputs["image"], pipeline_inputs["image"]]
         output = pipe(**pipeline_inputs)
         image = output.images
         tuple_pipeline_inputs = self.get_dummy_inputs(pil_image=True)
         tuple_pipeline_inputs["image"] = [
-            tuple_pipeline_inputs["image"], tuple_pipeline_inputs["image"]
+            tuple_pipeline_inputs["image"],
+            tuple_pipeline_inputs["image"],
         ]
         image_from_tuple = pipe(**tuple_pipeline_inputs, return_dict=False)[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (2, 64, 64, 3)
-        expected_slice = np.array([
-            5.2201748e-04,
-            9.9861759e-01,
-            9.9755961e-01,
-            9.9804127e-01,
-            9.9411547e-01,
-            9.9248385e-01,
-            9.9973619e-01,
-            9.9777836e-01,
-            9.9973619e-01,
-        ])
+        expected_slice = np.array(
+            [
+                5.2201748e-04,
+                9.9861759e-01,
+                9.9755961e-01,
+                9.9804127e-01,
+                9.9411547e-01,
+                9.9248385e-01,
+                9.9973619e-01,
+                9.9777836e-01,
+                9.9973619e-01,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
     def test_unclip_passed_image_embed(self):
         class DummyScheduler:
@@ -318,31 +328,38 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         generator = paddle.Generator().manual_seed(0)
         dtype = pipe.decoder.dtype
         batch_size = 1
-        shape = (batch_size, pipe.decoder.config.in_channels,
-                 pipe.decoder.config.sample_size,
-                 pipe.decoder.config.sample_size)
+        shape = (
+            batch_size,
+            pipe.decoder.config.in_channels,
+            pipe.decoder.config.sample_size,
+            pipe.decoder.config.sample_size,
+        )
         decoder_latents = pipe.prepare_latents(
             shape,
             dtype=dtype,
             generator=generator,
             latents=None,
-            scheduler=DummyScheduler())
+            scheduler=DummyScheduler(),
+        )
         shape = (
             batch_size,
             pipe.super_res_first.config.in_channels // 2,
             pipe.super_res_first.config.sample_size,
-            pipe.super_res_first.config.sample_size, )
+            pipe.super_res_first.config.sample_size,
+        )
         super_res_latents = pipe.prepare_latents(
             shape,
             dtype=dtype,
             generator=generator,
             latents=None,
-            scheduler=DummyScheduler())
+            scheduler=DummyScheduler(),
+        )
         pipeline_inputs = self.get_dummy_inputs(pil_image=False)
         img_out_1 = pipe(
             **pipeline_inputs,
             decoder_latents=decoder_latents,
-            super_res_latents=super_res_latents).images
+            super_res_latents=super_res_latents,
+        ).images
         pipeline_inputs = self.get_dummy_inputs(pil_image=False)
         image = pipeline_inputs.pop("image")
         image_embeddings = pipe.image_encoder(image).image_embeds
@@ -350,7 +367,8 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
             **pipeline_inputs,
             decoder_latents=decoder_latents,
             super_res_latents=super_res_latents,
-            image_embeddings=image_embeddings, ).images
+            image_embeddings=image_embeddings,
+        ).images
         assert np.abs(img_out_1 - img_out_2).max() < 0.0001
 
     def test_attention_slicing_forward_pass(self):
@@ -359,8 +377,8 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin,
         expected_max_diff = 1e-2
 
         self._test_attention_slicing_forward_pass(
-            test_max_difference=test_max_difference,
-            expected_max_diff=expected_max_diff)
+            test_max_difference=test_max_difference, expected_max_diff=expected_max_diff
+        )
 
     def test_inference_batch_single_identical(self):
         test_max_difference = False
@@ -399,11 +417,9 @@ class UnCLIPImageVariationPipelineIntegrationTests(unittest.TestCase):
         input_image = load_image(
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/unclip/cat.png"
         )
-        expected_image = np.array([[0.09096909, 0.13343304, 0.26244187],
-                                   [0.15095001, 0.19459972, 0.3182609]])
+        expected_image = np.array([[0.09096909, 0.13343304, 0.26244187], [0.15095001, 0.19459972, 0.3182609]])
         # TODO(wugaosheng): test this function
-        pipeline = UnCLIPImageVariationPipeline.from_pretrained(
-            "kakaobrain/karlo-v1-alpha-image-variations")
+        pipeline = UnCLIPImageVariationPipeline.from_pretrained("kakaobrain/karlo-v1-alpha-image-variations")
         pipeline.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(0)
         output = pipeline(input_image, generator=generator, output_type="np")

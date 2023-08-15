@@ -16,29 +16,40 @@ import math
 import os
 
 import paddle
-from lvdm import (
-    LatentVideoDiffusion,
-    LatentVideoDiffusionTrainer,
-    VideoFrameDataset, )
-from lvdm.lvdm_args_short import VideoFrameDatasetArguments, TrainerArguments, ModelArguments
-
+from lvdm import LatentVideoDiffusion, LatentVideoDiffusionTrainer, VideoFrameDataset
+from lvdm.lvdm_args_short import (
+    ModelArguments,
+    TrainerArguments,
+    VideoFrameDatasetArguments,
+)
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 from paddlenlp.utils.log import logger
 
 
 def main():
-    parser = PdArgumentParser((ModelArguments, VideoFrameDatasetArguments,
-                               TrainerArguments, TrainingArguments))
-    model_args, data_args, trainer_args, training_args = parser.parse_args_into_dataclasses(
+    parser = PdArgumentParser(
+        (
+            ModelArguments,
+            VideoFrameDatasetArguments,
+            TrainerArguments,
+            TrainingArguments,
+        )
     )
+    (
+        model_args,
+        data_args,
+        trainer_args,
+        training_args,
+    ) = parser.parse_args_into_dataclasses()
     # report to custom_visualdl
     training_args.report_to = ["custom_visualdl"]
     training_args.resolution = data_args.resolution
 
     training_args.image_logging_steps = trainer_args.image_logging_steps = (
-        (math.ceil(trainer_args.image_logging_steps /
-                   training_args.logging_steps) * training_args.logging_steps)
-        if trainer_args.image_logging_steps > 0 else -1)
+        (math.ceil(trainer_args.image_logging_steps / training_args.logging_steps) * training_args.logging_steps)
+        if trainer_args.image_logging_steps > 0
+        else -1
+    )
 
     training_args.print_config(model_args, "Model")
     training_args.print_config(trainer_args, "Trainer")
@@ -48,15 +59,13 @@ def main():
 
     # Detecting last checkpoint.
     last_checkpoint = None
-    if os.path.isdir(
-            training_args.output_dir
-    ) and training_args.do_train and not training_args.overwrite_output_dir:
+    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
-        if last_checkpoint is None and len(
-                os.listdir(training_args.output_dir)) > 0:
+        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
             raise ValueError(
                 f"Output directory ({training_args.output_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome.")
+                "Use --overwrite_output_dir to overcome."
+            )
         elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
             logger.info(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
@@ -73,7 +82,8 @@ def main():
         subset_split=data_args.train_subset_split,
         spatial_transform=data_args.spatial_transform,
         clip_step=data_args.clip_step,
-        temporal_transform=data_args.temporal_transform, )
+        temporal_transform=data_args.temporal_transform,
+    )
     eval_dataset = VideoFrameDataset(
         data_root=data_args.eval_data_root,
         resolution=data_args.resolution,
@@ -82,13 +92,15 @@ def main():
         subset_split=data_args.eval_subset_split,
         spatial_transform=data_args.spatial_transform,
         clip_step=data_args.clip_step,
-        temporal_transform=data_args.temporal_transform, )
+        temporal_transform=data_args.temporal_transform,
+    )
 
     trainer = LatentVideoDiffusionTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        eval_dataset=eval_dataset)
+        eval_dataset=eval_dataset,
+    )
 
     # must set recompute after trainer init
     trainer.model.set_recompute(training_args.recompute)

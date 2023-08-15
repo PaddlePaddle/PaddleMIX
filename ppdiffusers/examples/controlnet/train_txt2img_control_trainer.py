@@ -21,8 +21,8 @@ from control import (
     ControlNetTrainer,
     DataArguments,
     Fill50kDataset,
-    ModelArguments, )
-
+    ModelArguments,
+)
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 from paddlenlp.utils.log import logger
 
@@ -33,15 +33,14 @@ def unfreeze_params(params):
 
 
 def main():
-    parser = PdArgumentParser(
-        (ModelArguments, DataArguments, TrainingArguments))
+    parser = PdArgumentParser((ModelArguments, DataArguments, TrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
     # report to custom_visualdl
     training_args.report_to = ["custom_visualdl"]
     training_args.resolution = data_args.resolution
     training_args.image_logging_steps = model_args.image_logging_steps = (
-        math.ceil(model_args.image_logging_steps / training_args.logging_steps)
-        * training_args.logging_steps)
+        math.ceil(model_args.image_logging_steps / training_args.logging_steps) * training_args.logging_steps
+    )
     training_args.print_config(model_args, "Model")
     training_args.print_config(data_args, "Data")
 
@@ -49,15 +48,13 @@ def main():
 
     # Detecting last checkpoint.
     last_checkpoint = None
-    if os.path.isdir(
-            training_args.output_dir
-    ) and training_args.do_train and not training_args.overwrite_output_dir:
+    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
-        if last_checkpoint is None and len(
-                os.listdir(training_args.output_dir)) > 0:
+        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
             raise ValueError(
                 f"Output directory ({training_args.output_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome.")
+                "Use --overwrite_output_dir to overcome."
+            )
         elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
             logger.info(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
@@ -71,7 +68,8 @@ def main():
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        tokenizer=model.tokenizer)
+        tokenizer=model.tokenizer,
+    )
     # must set recompute after trainer init
     trainer.model.set_recompute(training_args.recompute)
 
@@ -80,7 +78,8 @@ def main():
             trainer.model.controlnet.parameters(),
             trainer.model.unet.up_blocks.parameters(),
             trainer.model.unet.conv_norm_out.parameters(),
-            trainer.model.unet.conv_out.parameters(), )
+            trainer.model.unet.conv_out.parameters(),
+        )
         unfreeze_params(params_to_train)
     else:
         params_to_train = trainer.model.controlnet.parameters()

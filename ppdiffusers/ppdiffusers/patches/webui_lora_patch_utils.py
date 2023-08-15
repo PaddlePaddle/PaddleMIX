@@ -42,7 +42,7 @@ def convert_pt_to_pd(state, dtype):
             if val.ndim == 2:
                 val = val.T
             if val.ndim == 0:
-                val = val.reshape((1, ))
+                val = val.reshape((1,))
             new_state[b] = val.cast(dtype)
         else:
             print(f"We find {a} not in state_dict and we will continue!")
@@ -87,12 +87,10 @@ def save_lora(pipe_or_module, save_directory, WEIGHT_NAME=None):
 
     if is_torch_available():
         save_function = safetensors.torch.save_file
-        outdict = convert_state_dict(
-            convert_pd_to_pt(outdict), framework="torch")
+        outdict = convert_state_dict(convert_pd_to_pt(outdict), framework="torch")
     else:
         save_function = safetensors.numpy.save_file
-        outdict = convert_state_dict(
-            convert_pd_to_pt(outdict), framework="numpy")
+        outdict = convert_state_dict(convert_pd_to_pt(outdict), framework="numpy")
 
     save_function(outdict, os.path.join(save_directory, WEIGHT_NAME))
     del outdict
@@ -116,15 +114,16 @@ def set_lora_enabled(pipe_or_module, enable=True):
 
 @patch_to([DiffusionPipeline, nn.Layer])
 def apply_lora(
-        pipe_or_module,
-        lora_weight_or_path=None,
-        rank=4,
-        alpha=None,
-        multiplier=1.0,
-        text_encoder_target_replace_modules=["TransformerEncoderLayer"],
-        unet_target_replace_modules=["Transformer2DModel", "Attention"],
-        enable_lora=True,
-        **kwargs, ):
+    pipe_or_module,
+    lora_weight_or_path=None,
+    rank=4,
+    alpha=None,
+    multiplier=1.0,
+    text_encoder_target_replace_modules=["TransformerEncoderLayer"],
+    unet_target_replace_modules=["Transformer2DModel", "Attention"],
+    enable_lora=True,
+    **kwargs,
+):
     resume_download = kwargs.pop("resume_download", False)
     force_download = kwargs.pop("force_download", False)
     paddle_dtype = kwargs.pop("paddle_dtype", None)
@@ -143,17 +142,16 @@ def apply_lora(
         lora_weight_or_path = str(lora_weight_or_path)
         if os.path.isfile(lora_weight_or_path):
             lora_weight_or_path = lora_weight_or_path
-        elif lora_weight_or_path.startswith(
-                "http://") or lora_weight_or_path.startswith("https://"):
+        elif lora_weight_or_path.startswith("http://") or lora_weight_or_path.startswith("https://"):
             lora_weight_or_path = ppdiffusers_url_download(
                 lora_weight_or_path,
                 cache_dir=cache_dir,
                 resume_download=resume_download,
-                force_download=force_download, )
+                force_download=force_download,
+            )
         else:
             raise EnvironmentError(f"Please check your {lora_weight_or_path}.")
-        lora_weight_or_path = convert_pt_to_pd(
-            smart_load(lora_weight_or_path), paddle_dtype)
+        lora_weight_or_path = convert_pt_to_pd(smart_load(lora_weight_or_path), paddle_dtype)
 
         mayberanklist = []
         maybealphalist = []
@@ -176,17 +174,13 @@ def apply_lora(
             if len(mayberanklist) > 20:
                 break
         if len(set(mayberanklist)) > 1:
-            print(
-                f"Can't guess rank! Here are the rank list {mayberanklist}. We will use default rank {rank}."
-            )
+            print(f"Can't guess rank! Here are the rank list {mayberanklist}. We will use default rank {rank}.")
         else:
             rank = mayberanklist[0]
         print(f"|---------------Currently, rank is {rank}!")
 
         if len(set(maybealphalist)) > 1:
-            print(
-                f"Can't guess alpha! Here are the rank list {maybealphalist}. We will use default alpha {alpha}"
-            )
+            print(f"Can't guess alpha! Here are the rank list {maybealphalist}. We will use default alpha {alpha}")
         else:
             alpha = maybealphalist[0]
         print(f"|---------------Currently, alpha is {alpha}!")
@@ -194,47 +188,50 @@ def apply_lora(
     waitlist = []
     if isinstance(pipe_or_module, nn.Layer):
         waitlist.append(
-            (pipe_or_module,
-             text_encoder_target_replace_modules + unet_target_replace_modules))
+            (
+                pipe_or_module,
+                text_encoder_target_replace_modules + unet_target_replace_modules,
+            )
+        )
     else:
         if hasattr(pipe_or_module, "text_encoder"):
-            waitlist.append((pipe_or_module.text_encoder,
-                             text_encoder_target_replace_modules))
+            waitlist.append((pipe_or_module.text_encoder, text_encoder_target_replace_modules))
         if hasattr(pipe_or_module, "unet"):
             waitlist.append((pipe_or_module.unet, unet_target_replace_modules))
     lora_modules = {}
     for each_module, target_replace_modules in waitlist:
         for name1, module in each_module.named_sublayers(include_self=True):
             if module.__class__.__name__ in target_replace_modules:
-                for name2, child_module in module.named_sublayers(
-                        include_self=True):
+                for name2, child_module in module.named_sublayers(include_self=True):
                     if not getattr(child_module, "is_lora_linear", False) and (
-                            child_module.__class__.__name__ == "Linear" or
-                        (child_module.__class__.__name__ == "Conv2D" and
-                         list(child_module._kernel_size) == [1, 1])):
+                        child_module.__class__.__name__ == "Linear"
+                        or (child_module.__class__.__name__ == "Conv2D" and list(child_module._kernel_size) == [1, 1])
+                    ):
                         # if we apply lora multi
-                        if hasattr(child_module,
-                                   "merged") and child_module.merged:
+                        if hasattr(child_module, "merged") and child_module.merged:
                             with paddle.no_grad():
                                 if child_module.is_conv:
                                     new_weight = (
-                                        child_module.weight.squeeze([-1, -2]) -
-                                        child_module.lora_up.weight.squeeze(
-                                            [-1, -2])
-                                        @child_module.lora_down.weight.squeeze(
-                                            [-1, -2]) * child_module.multiplier
-                                        * child_module.scale).unsqueeze(
-                                            [-1, -2])
+                                        child_module.weight.squeeze([-1, -2])
+                                        - child_module.lora_up.weight.squeeze([-1, -2])
+                                        @ child_module.lora_down.weight.squeeze([-1, -2])
+                                        * child_module.multiplier
+                                        * child_module.scale
+                                    ).unsqueeze([-1, -2])
                                 else:
-                                    new_weight = (child_module.weight -
-                                                  child_module.lora_down.weight
-                                                  @child_module.lora_up.weight *
-                                                  child_module.multiplier *
-                                                  child_module.scale)
+                                    new_weight = (
+                                        child_module.weight
+                                        - child_module.lora_down.weight
+                                        @ child_module.lora_up.weight
+                                        * child_module.multiplier
+                                        * child_module.scale
+                                    )
                                 child_module.weight.set_value(new_weight)
 
-                        in_features, out_features = child_module.weight.shape[
-                            0], child_module.weight.shape[1]
+                        in_features, out_features = (
+                            child_module.weight.shape[0],
+                            child_module.weight.shape[1],
+                        )
                         child_module.is_conv = False
                         child_module.merged = False
 
@@ -248,15 +245,11 @@ def apply_lora(
                             )
 
                         if child_module.is_conv:
-                            child_module.lora_down = nn.Conv2D(
-                                in_features, rank, [1, 1], bias_attr=False)
-                            child_module.lora_up = nn.Conv2D(
-                                rank, out_features, [1, 1], bias_attr=False)
+                            child_module.lora_down = nn.Conv2D(in_features, rank, [1, 1], bias_attr=False)
+                            child_module.lora_up = nn.Conv2D(rank, out_features, [1, 1], bias_attr=False)
                         else:
-                            child_module.lora_down = nn.Linear(
-                                in_features, rank, bias_attr=False)
-                            child_module.lora_up = nn.Linear(
-                                rank, out_features, bias_attr=False)
+                            child_module.lora_down = nn.Linear(in_features, rank, bias_attr=False)
+                            child_module.lora_up = nn.Linear(rank, out_features, bias_attr=False)
                         child_module.lora_down.is_lora_linear = True
                         child_module.lora_up.is_lora_linear = True
                         child_module.rank = rank
@@ -266,13 +259,10 @@ def apply_lora(
                             alpha = alpha.detach().cast("float32").numpy()
                         alpha = rank if alpha is None or alpha == 0 else alpha
                         child_module.scale = alpha / child_module.rank
-                        child_module.register_buffer(
-                            "alpha", paddle.to_tensor(
-                                alpha, dtype="float32"))
+                        child_module.register_buffer("alpha", paddle.to_tensor(alpha, dtype="float32"))
 
                         # same as microsoft's
-                        kaiming_uniform_(
-                            child_module.lora_down.weight, a=math.sqrt(5))
+                        kaiming_uniform_(child_module.lora_down.weight, a=math.sqrt(5))
                         zeros_(child_module.lora_up.weight)
                         child_module.multiplier = multiplier
 
@@ -285,44 +275,47 @@ def apply_lora(
                                     with paddle.no_grad():
                                         if self.is_conv:
                                             new_weight = (
-                                                self.weight.squeeze([-1, -2]) -
-                                                self.lora_up.weight.squeeze(
-                                                    [-1, -2])
-                                                @self.lora_down.weight.squeeze(
-                                                    [-1, -2]) * self.multiplier
-                                                * self.scale).unsqueeze(
-                                                    [-1, -2])
+                                                self.weight.squeeze([-1, -2])
+                                                - self.lora_up.weight.squeeze([-1, -2])
+                                                @ self.lora_down.weight.squeeze([-1, -2])
+                                                * self.multiplier
+                                                * self.scale
+                                            ).unsqueeze([-1, -2])
                                         else:
                                             new_weight = (
-                                                self.weight -
-                                                self.lora_down.weight
-                                                @self.lora_up.weight *
-                                                self.multiplier * self.scale)
+                                                self.weight
+                                                - self.lora_down.weight
+                                                @ self.lora_up.weight
+                                                * self.multiplier
+                                                * self.scale
+                                            )
                                         self.weight.set_value(new_weight)
                                         self.merged = False
                                 if not self.enable_lora:
                                     return self.raw_forward(x)
-                                return (self.raw_forward(x) +
-                                        self.lora_up(self.lora_down(x)) *
-                                        self.multiplier * self.scale)
+                                return (
+                                    self.raw_forward(x)
+                                    + self.lora_up(self.lora_down(x)) * self.multiplier * self.scale
+                                )
                             else:
                                 if self.enable_lora and not self.merged:
                                     with paddle.no_grad():
                                         if self.is_conv:
                                             new_weight = (
-                                                self.weight.squeeze([-1, -2]) +
-                                                self.lora_up.weight.squeeze(
-                                                    [-1, -2])
-                                                @self.lora_down.weight.squeeze(
-                                                    [-1, -2]) * self.multiplier
-                                                * self.scale).unsqueeze(
-                                                    [-1, -2])
+                                                self.weight.squeeze([-1, -2])
+                                                + self.lora_up.weight.squeeze([-1, -2])
+                                                @ self.lora_down.weight.squeeze([-1, -2])
+                                                * self.multiplier
+                                                * self.scale
+                                            ).unsqueeze([-1, -2])
                                         else:
                                             new_weight = (
-                                                self.weight +
-                                                self.lora_down.weight
-                                                @self.lora_up.weight *
-                                                self.multiplier * self.scale)
+                                                self.weight
+                                                + self.lora_down.weight
+                                                @ self.lora_up.weight
+                                                * self.multiplier
+                                                * self.scale
+                                            )
                                         self.weight.set_value(new_weight)
                                         self.merged = True
 
@@ -330,25 +323,25 @@ def apply_lora(
                                     with paddle.no_grad():
                                         if self.is_conv:
                                             new_weight = (
-                                                self.weight.squeeze([-1, -2]) -
-                                                self.lora_up.weight.squeeze(
-                                                    [-1, -2])
-                                                @self.lora_down.weight.squeeze(
-                                                    [-1, -2]) * self.multiplier
-                                                * self.scale).unsqueeze(
-                                                    [-1, -2])
+                                                self.weight.squeeze([-1, -2])
+                                                - self.lora_up.weight.squeeze([-1, -2])
+                                                @ self.lora_down.weight.squeeze([-1, -2])
+                                                * self.multiplier
+                                                * self.scale
+                                            ).unsqueeze([-1, -2])
                                         else:
                                             new_weight = (
-                                                self.weight -
-                                                self.lora_down.weight
-                                                @self.lora_up.weight *
-                                                self.multiplier * self.scale)
+                                                self.weight
+                                                - self.lora_down.weight
+                                                @ self.lora_up.weight
+                                                * self.multiplier
+                                                * self.scale
+                                            )
                                         self.weight.set_value(new_weight)
                                         self.merged = False
                                 return self.raw_forward(x)
 
-                        child_module.forward = MethodType(forward_lora,
-                                                          child_module)
+                        child_module.forward = MethodType(forward_lora, child_module)
                         child_module.lora_down.training = child_module.training
                         child_module.lora_up.training = child_module.training
                         child_module.to(dtype=paddle_dtype)
@@ -438,11 +431,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_0_mlp_fc1.alpha",
-        "text_model.transformer.layers.0.linear1.alpha"
+        "text_model.transformer.layers.0.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_0_mlp_fc2.alpha",
-        "text_model.transformer.layers.0.linear2.alpha"
+        "text_model.transformer.layers.0.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_1_self_attn_q_proj.lora_down.weight",
@@ -510,11 +503,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_1_mlp_fc1.alpha",
-        "text_model.transformer.layers.1.linear1.alpha"
+        "text_model.transformer.layers.1.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_1_mlp_fc2.alpha",
-        "text_model.transformer.layers.1.linear2.alpha"
+        "text_model.transformer.layers.1.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_2_self_attn_q_proj.lora_down.weight",
@@ -582,11 +575,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_2_mlp_fc1.alpha",
-        "text_model.transformer.layers.2.linear1.alpha"
+        "text_model.transformer.layers.2.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_2_mlp_fc2.alpha",
-        "text_model.transformer.layers.2.linear2.alpha"
+        "text_model.transformer.layers.2.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_3_self_attn_q_proj.lora_down.weight",
@@ -654,11 +647,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_3_mlp_fc1.alpha",
-        "text_model.transformer.layers.3.linear1.alpha"
+        "text_model.transformer.layers.3.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_3_mlp_fc2.alpha",
-        "text_model.transformer.layers.3.linear2.alpha"
+        "text_model.transformer.layers.3.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_4_self_attn_q_proj.lora_down.weight",
@@ -726,11 +719,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_4_mlp_fc1.alpha",
-        "text_model.transformer.layers.4.linear1.alpha"
+        "text_model.transformer.layers.4.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_4_mlp_fc2.alpha",
-        "text_model.transformer.layers.4.linear2.alpha"
+        "text_model.transformer.layers.4.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_5_self_attn_q_proj.lora_down.weight",
@@ -798,11 +791,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_5_mlp_fc1.alpha",
-        "text_model.transformer.layers.5.linear1.alpha"
+        "text_model.transformer.layers.5.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_5_mlp_fc2.alpha",
-        "text_model.transformer.layers.5.linear2.alpha"
+        "text_model.transformer.layers.5.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_6_self_attn_q_proj.lora_down.weight",
@@ -870,11 +863,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_6_mlp_fc1.alpha",
-        "text_model.transformer.layers.6.linear1.alpha"
+        "text_model.transformer.layers.6.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_6_mlp_fc2.alpha",
-        "text_model.transformer.layers.6.linear2.alpha"
+        "text_model.transformer.layers.6.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_7_self_attn_q_proj.lora_down.weight",
@@ -942,11 +935,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_7_mlp_fc1.alpha",
-        "text_model.transformer.layers.7.linear1.alpha"
+        "text_model.transformer.layers.7.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_7_mlp_fc2.alpha",
-        "text_model.transformer.layers.7.linear2.alpha"
+        "text_model.transformer.layers.7.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_8_self_attn_q_proj.lora_down.weight",
@@ -1014,11 +1007,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_8_mlp_fc1.alpha",
-        "text_model.transformer.layers.8.linear1.alpha"
+        "text_model.transformer.layers.8.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_8_mlp_fc2.alpha",
-        "text_model.transformer.layers.8.linear2.alpha"
+        "text_model.transformer.layers.8.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_9_self_attn_q_proj.lora_down.weight",
@@ -1086,11 +1079,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_9_mlp_fc1.alpha",
-        "text_model.transformer.layers.9.linear1.alpha"
+        "text_model.transformer.layers.9.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_9_mlp_fc2.alpha",
-        "text_model.transformer.layers.9.linear2.alpha"
+        "text_model.transformer.layers.9.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_10_self_attn_q_proj.lora_down.weight",
@@ -1158,11 +1151,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_10_mlp_fc1.alpha",
-        "text_model.transformer.layers.10.linear1.alpha"
+        "text_model.transformer.layers.10.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_10_mlp_fc2.alpha",
-        "text_model.transformer.layers.10.linear2.alpha"
+        "text_model.transformer.layers.10.linear2.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_11_self_attn_q_proj.lora_down.weight",
@@ -1230,11 +1223,11 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_te_text_model_encoder_layers_11_mlp_fc1.alpha",
-        "text_model.transformer.layers.11.linear1.alpha"
+        "text_model.transformer.layers.11.linear1.alpha",
     ],
     [
         "lora_te_text_model_encoder_layers_11_mlp_fc2.alpha",
-        "text_model.transformer.layers.11.linear2.alpha"
+        "text_model.transformer.layers.11.linear2.alpha",
     ],
     [
         "lora_unet_down_blocks_0_attentions_0_proj_in.lora_down.weight",
@@ -1818,7 +1811,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_0_proj_in.lora_up.weight",
-        "up_blocks.1.attentions.0.proj_in.lora_up.weight"
+        "up_blocks.1.attentions.0.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_1_attentions_0_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -1906,7 +1899,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_0_proj_out.lora_up.weight",
-        "up_blocks.1.attentions.0.proj_out.lora_up.weight"
+        "up_blocks.1.attentions.0.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_1_attentions_1_proj_in.lora_down.weight",
@@ -1914,7 +1907,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_1_proj_in.lora_up.weight",
-        "up_blocks.1.attentions.1.proj_in.lora_up.weight"
+        "up_blocks.1.attentions.1.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_1_attentions_1_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2002,7 +1995,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_1_proj_out.lora_up.weight",
-        "up_blocks.1.attentions.1.proj_out.lora_up.weight"
+        "up_blocks.1.attentions.1.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_1_attentions_2_proj_in.lora_down.weight",
@@ -2010,7 +2003,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_2_proj_in.lora_up.weight",
-        "up_blocks.1.attentions.2.proj_in.lora_up.weight"
+        "up_blocks.1.attentions.2.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_1_attentions_2_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2098,7 +2091,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_1_attentions_2_proj_out.lora_up.weight",
-        "up_blocks.1.attentions.2.proj_out.lora_up.weight"
+        "up_blocks.1.attentions.2.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_0_proj_in.lora_down.weight",
@@ -2106,7 +2099,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_0_proj_in.lora_up.weight",
-        "up_blocks.2.attentions.0.proj_in.lora_up.weight"
+        "up_blocks.2.attentions.0.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_0_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2194,7 +2187,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_0_proj_out.lora_up.weight",
-        "up_blocks.2.attentions.0.proj_out.lora_up.weight"
+        "up_blocks.2.attentions.0.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_1_proj_in.lora_down.weight",
@@ -2202,7 +2195,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_1_proj_in.lora_up.weight",
-        "up_blocks.2.attentions.1.proj_in.lora_up.weight"
+        "up_blocks.2.attentions.1.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_1_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2290,7 +2283,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_1_proj_out.lora_up.weight",
-        "up_blocks.2.attentions.1.proj_out.lora_up.weight"
+        "up_blocks.2.attentions.1.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_2_proj_in.lora_down.weight",
@@ -2298,7 +2291,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_2_proj_in.lora_up.weight",
-        "up_blocks.2.attentions.2.proj_in.lora_up.weight"
+        "up_blocks.2.attentions.2.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_2_attentions_2_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2386,7 +2379,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_2_attentions_2_proj_out.lora_up.weight",
-        "up_blocks.2.attentions.2.proj_out.lora_up.weight"
+        "up_blocks.2.attentions.2.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_0_proj_in.lora_down.weight",
@@ -2394,7 +2387,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_0_proj_in.lora_up.weight",
-        "up_blocks.3.attentions.0.proj_in.lora_up.weight"
+        "up_blocks.3.attentions.0.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_0_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2482,7 +2475,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_0_proj_out.lora_up.weight",
-        "up_blocks.3.attentions.0.proj_out.lora_up.weight"
+        "up_blocks.3.attentions.0.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_1_proj_in.lora_down.weight",
@@ -2490,7 +2483,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_1_proj_in.lora_up.weight",
-        "up_blocks.3.attentions.1.proj_in.lora_up.weight"
+        "up_blocks.3.attentions.1.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_1_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2578,7 +2571,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_1_proj_out.lora_up.weight",
-        "up_blocks.3.attentions.1.proj_out.lora_up.weight"
+        "up_blocks.3.attentions.1.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_2_proj_in.lora_down.weight",
@@ -2586,7 +2579,7 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_2_proj_in.lora_up.weight",
-        "up_blocks.3.attentions.2.proj_in.lora_up.weight"
+        "up_blocks.3.attentions.2.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_up_blocks_3_attentions_2_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2674,15 +2667,15 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_up_blocks_3_attentions_2_proj_out.lora_up.weight",
-        "up_blocks.3.attentions.2.proj_out.lora_up.weight"
+        "up_blocks.3.attentions.2.proj_out.lora_up.weight",
     ],
     [
         "lora_unet_mid_block_attentions_0_proj_in.lora_down.weight",
-        "mid_block.attentions.0.proj_in.lora_down.weight"
+        "mid_block.attentions.0.proj_in.lora_down.weight",
     ],
     [
         "lora_unet_mid_block_attentions_0_proj_in.lora_up.weight",
-        "mid_block.attentions.0.proj_in.lora_up.weight"
+        "mid_block.attentions.0.proj_in.lora_up.weight",
     ],
     [
         "lora_unet_mid_block_attentions_0_transformer_blocks_0_attn1_to_q.lora_down.weight",
@@ -2766,10 +2759,10 @@ safetensors_weight_mapping = [
     ],
     [
         "lora_unet_mid_block_attentions_0_proj_out.lora_down.weight",
-        "mid_block.attentions.0.proj_out.lora_down.weight"
+        "mid_block.attentions.0.proj_out.lora_down.weight",
     ],
     [
         "lora_unet_mid_block_attentions_0_proj_out.lora_up.weight",
-        "mid_block.attentions.0.proj_out.lora_up.weight"
+        "mid_block.attentions.0.proj_out.lora_up.weight",
     ],
 ]

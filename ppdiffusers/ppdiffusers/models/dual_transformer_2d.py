@@ -47,35 +47,40 @@ class DualTransformer2DModel(nn.Layer):
     """
 
     def __init__(
-            self,
-            num_attention_heads: int=16,
-            attention_head_dim: int=88,
-            in_channels: Optional[int]=None,
-            num_layers: int=1,
-            dropout: float=0.0,
-            norm_num_groups: int=32,
-            cross_attention_dim: Optional[int]=None,
-            attention_bias: bool=False,
-            sample_size: Optional[int]=None,
-            num_vector_embeds: Optional[int]=None,
-            activation_fn: str="geglu",
-            num_embeds_ada_norm: Optional[int]=None, ):
+        self,
+        num_attention_heads: int = 16,
+        attention_head_dim: int = 88,
+        in_channels: Optional[int] = None,
+        num_layers: int = 1,
+        dropout: float = 0.0,
+        norm_num_groups: int = 32,
+        cross_attention_dim: Optional[int] = None,
+        attention_bias: bool = False,
+        sample_size: Optional[int] = None,
+        num_vector_embeds: Optional[int] = None,
+        activation_fn: str = "geglu",
+        num_embeds_ada_norm: Optional[int] = None,
+    ):
         super().__init__()
-        self.transformers = nn.LayerList([
-            Transformer2DModel(
-                num_attention_heads=num_attention_heads,
-                attention_head_dim=attention_head_dim,
-                in_channels=in_channels,
-                num_layers=num_layers,
-                dropout=dropout,
-                norm_num_groups=norm_num_groups,
-                cross_attention_dim=cross_attention_dim,
-                attention_bias=attention_bias,
-                sample_size=sample_size,
-                num_vector_embeds=num_vector_embeds,
-                activation_fn=activation_fn,
-                num_embeds_ada_norm=num_embeds_ada_norm, ) for _ in range(2)
-        ])
+        self.transformers = nn.LayerList(
+            [
+                Transformer2DModel(
+                    num_attention_heads=num_attention_heads,
+                    attention_head_dim=attention_head_dim,
+                    in_channels=in_channels,
+                    num_layers=num_layers,
+                    dropout=dropout,
+                    norm_num_groups=norm_num_groups,
+                    cross_attention_dim=cross_attention_dim,
+                    attention_bias=attention_bias,
+                    sample_size=sample_size,
+                    num_vector_embeds=num_vector_embeds,
+                    activation_fn=activation_fn,
+                    num_embeds_ada_norm=num_embeds_ada_norm,
+                )
+                for _ in range(2)
+            ]
+        )
 
         # Variables that can be set by a pipeline:
 
@@ -91,13 +96,14 @@ class DualTransformer2DModel(nn.Layer):
         self.transformer_index_for_condition = [1, 0]
 
     def forward(
-            self,
-            hidden_states,
-            encoder_hidden_states,
-            timestep=None,
-            attention_mask=None,
-            cross_attention_kwargs=None,
-            return_dict: bool=True, ):
+        self,
+        hidden_states,
+        encoder_hidden_states,
+        timestep=None,
+        attention_mask=None,
+        cross_attention_kwargs=None,
+        return_dict: bool = True,
+    ):
         """
         Args:
             hidden_states ( When discrete, `paddle.Tensor` of shape `(batch size, num latent pixels)`.
@@ -125,23 +131,22 @@ class DualTransformer2DModel(nn.Layer):
         # attention_mask is not used yet
         for i in range(2):
             # for each of the two transformers, pass the corresponding condition tokens
-            condition_state = encoder_hidden_states[:, tokens_start:tokens_start
-                                                    + self.condition_lengths[i]]
+            condition_state = encoder_hidden_states[:, tokens_start : tokens_start + self.condition_lengths[i]]
             transformer_index = self.transformer_index_for_condition[i]
             encoded_state = self.transformers[transformer_index](
                 input_states,
                 encoder_hidden_states=condition_state,
                 timestep=timestep,
                 cross_attention_kwargs=cross_attention_kwargs,
-                return_dict=False, )[0]
+                return_dict=False,
+            )[0]
             encoded_states.append(encoded_state - input_states)
             tokens_start += self.condition_lengths[i]
 
-        output_states = encoded_states[0] * self.mix_ratio + encoded_states[
-            1] * (1 - self.mix_ratio)
+        output_states = encoded_states[0] * self.mix_ratio + encoded_states[1] * (1 - self.mix_ratio)
         output_states = output_states + input_states
 
         if not return_dict:
-            return (output_states, )
+            return (output_states,)
 
         return Transformer2DModelOutput(sample=output_states)

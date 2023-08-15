@@ -15,10 +15,8 @@
 from ppdiffusers import StableDiffusionPipelineSafe
 from ppdiffusers.pipelines.stable_diffusion_safe import SafetyConfig
 
-pipe = StableDiffusionPipelineSafe.from_pretrained(
-    "runwayml/stable-diffusion-v1-5")
+pipe = StableDiffusionPipelineSafe.from_pretrained("runwayml/stable-diffusion-v1-5")
 print(pipe.safety_concept)
 prompt = "the four horsewomen of the apocalypse, painting by tom of finland, gaston bussiere, craig mullins, j. c. leyendecker"
 out = pipe(prompt=prompt, **SafetyConfig.MAX)
-out.images[0].save(
-    "text_to_image_generation-stable_diffusion_safe-result.png.png")
+out.images[0].save("text_to_image_generation-stable_diffusion_safe-result.png.png")

@@ -45,7 +45,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
     """
 
     def alpha_bar(time_step):
-        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2)**2
+        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2) ** 2
 
     betas = []
     for i in range(num_diffusion_timesteps):
@@ -125,40 +125,43 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            num_train_timesteps: int=1000,
-            beta_start: float=0.0001,
-            beta_end: float=0.02,
-            beta_schedule: str="linear",
-            trained_betas: Optional[Union[np.ndarray, List[float]]]=None,
-            solver_order: int=2,
-            prediction_type: str="epsilon",
-            thresholding: bool=False,
-            dynamic_thresholding_ratio: float=0.995,
-            sample_max_value: float=1.0,
-            predict_x0: bool=True,
-            solver_type: str="bh2",
-            lower_order_final: bool=True,
-            disable_corrector: List[int]=[],
-            solver_p: SchedulerMixin=None, ):
+        self,
+        num_train_timesteps: int = 1000,
+        beta_start: float = 0.0001,
+        beta_end: float = 0.02,
+        beta_schedule: str = "linear",
+        trained_betas: Optional[Union[np.ndarray, List[float]]] = None,
+        solver_order: int = 2,
+        prediction_type: str = "epsilon",
+        thresholding: bool = False,
+        dynamic_thresholding_ratio: float = 0.995,
+        sample_max_value: float = 1.0,
+        predict_x0: bool = True,
+        solver_type: str = "bh2",
+        lower_order_final: bool = True,
+        disable_corrector: List[int] = [],
+        solver_p: SchedulerMixin = None,
+    ):
         if trained_betas is not None:
             self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
         elif beta_schedule == "linear":
-            self.betas = paddle.linspace(
-                beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
+            self.betas = paddle.linspace(beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
-            self.betas = (paddle.linspace(
-                beta_start**0.5,
-                beta_end**0.5,
-                num_train_timesteps,
-                dtype=paddle.float32)**2)
+            self.betas = (
+                paddle.linspace(
+                    beta_start**0.5,
+                    beta_end**0.5,
+                    num_train_timesteps,
+                    dtype=paddle.float32,
+                )
+                ** 2
+            )
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
         else:
-            raise NotImplementedError(
-                f"{beta_schedule} does is not implemented for {self.__class__}")
+            raise NotImplementedError(f"{beta_schedule} does is not implemented for {self.__class__}")
 
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = paddle.cumprod(self.alphas, 0)
@@ -174,16 +177,12 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             if solver_type in ["midpoint", "heun", "logrho"]:
                 self.register_to_config(solver_type="bh1")
             else:
-                raise NotImplementedError(
-                    f"{solver_type} does is not implemented for {self.__class__}"
-                )
+                raise NotImplementedError(f"{solver_type} does is not implemented for {self.__class__}")
 
         self.predict_x0 = predict_x0
         # setable values
         self.num_inference_steps = None
-        timesteps = np.linspace(
-            0, num_train_timesteps - 1, num_train_timesteps,
-            dtype=np.float32)[::-1].copy()
+        timesteps = np.linspace(0, num_train_timesteps - 1, num_train_timesteps, dtype=np.float32)[::-1].copy()
         self.timesteps = paddle.to_tensor(timesteps)
         self.model_outputs = [None] * solver_order
         self.timestep_list = [None] * solver_order
@@ -200,9 +199,12 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             num_inference_steps (`int`):
                 the number of diffusion steps used when generating samples with a pre-trained model.
         """
-        timesteps = (np.linspace(0, self.config.num_train_timesteps - 1,
-                                 num_inference_steps + 1).round()[::-1][:-1]
-                     .copy().astype(np.int64))
+        timesteps = (
+            np.linspace(0, self.config.num_train_timesteps - 1, num_inference_steps + 1)
+            .round()[::-1][:-1]
+            .copy()
+            .astype(np.int64)
+        )
 
         # when num_inference_steps == num_train_timesteps, we can end up with
         # duplicates in timesteps.
@@ -213,7 +215,9 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
         self.num_inference_steps = len(timesteps)
 
-        self.model_outputs = [None, ] * self.config.solver_order
+        self.model_outputs = [
+            None,
+        ] * self.config.solver_order
         self.lower_order_nums = 0
         self.last_sample = None
         if self.solver_p:
@@ -241,8 +245,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
         abs_sample = sample.abs()  # "a certain percentile absolute pixel value"
 
-        s = paddle.quantile(
-            abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
+        s = paddle.quantile(abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
         # paddle.clip donot support min > max
         if self.config.sample_max_value < 1:
             s = paddle.ones_like(s) * self.config.sample_max_value
@@ -250,21 +253,15 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             s = paddle.clip(
                 s, min=1, max=self.config.sample_max_value
             )  # When clip to min=1, equivalent to standard clipping to [-1, 1]
-        s = s.unsqueeze(
-            1)  # (batch_size, 1) because clip will broadcast along axis=0
-        sample = paddle.clip(
-            sample, -s, s
-        ) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
+        s = s.unsqueeze(1)  # (batch_size, 1) because clip will broadcast along axis=0
+        sample = paddle.clip(sample, -s, s) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
 
         sample = paddle.reshape(sample, [batch_size, channels, height, width])
         sample = paddle.cast(sample, dtype)
 
         return sample
 
-    def convert_model_output(self,
-                             model_output: paddle.Tensor,
-                             timestep: int,
-                             sample: paddle.Tensor) -> paddle.Tensor:
+    def convert_model_output(self, model_output: paddle.Tensor, timestep: int, sample: paddle.Tensor) -> paddle.Tensor:
         r"""
         Convert the model output to the corresponding type that the algorithm PC needs.
 
@@ -279,19 +276,18 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         """
         if self.predict_x0:
             if self.config.prediction_type == "epsilon":
-                alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[
-                    timestep]
+                alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[timestep]
                 x0_pred = (sample - sigma_t * model_output) / alpha_t
             elif self.config.prediction_type == "sample":
                 x0_pred = model_output
             elif self.config.prediction_type == "v_prediction":
-                alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[
-                    timestep]
+                alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[timestep]
                 x0_pred = alpha_t * sample - sigma_t * model_output
             else:
                 raise ValueError(
                     f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, `sample`, or"
-                    " `v_prediction` for the UniPCMultistepScheduler.")
+                    " `v_prediction` for the UniPCMultistepScheduler."
+                )
 
             if self.config.thresholding:
                 x0_pred = self._threshold_sample(x0_pred)
@@ -301,26 +297,26 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             if self.config.prediction_type == "epsilon":
                 return model_output
             elif self.config.prediction_type == "sample":
-                alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[
-                    timestep]
+                alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[timestep]
                 epsilon = (sample - alpha_t * model_output) / sigma_t
                 return epsilon
             elif self.config.prediction_type == "v_prediction":
-                alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[
-                    timestep]
+                alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[timestep]
                 epsilon = alpha_t * model_output + sigma_t * sample
                 return epsilon
             else:
                 raise ValueError(
                     f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, `sample`, or"
-                    " `v_prediction` for the UniPCMultistepScheduler.")
+                    " `v_prediction` for the UniPCMultistepScheduler."
+                )
 
     def multistep_uni_p_bh_update(
-            self,
-            model_output: paddle.Tensor,
-            prev_timestep: int,
-            sample: paddle.Tensor,
-            order: int, ) -> paddle.Tensor:
+        self,
+        model_output: paddle.Tensor,
+        prev_timestep: int,
+        sample: paddle.Tensor,
+        order: int,
+    ) -> paddle.Tensor:
         """
         One step for the UniP (B(h) version). Alternatively, `self.solver_p` is used if is specified.
 
@@ -423,12 +419,13 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         return x_t
 
     def multistep_uni_c_bh_update(
-            self,
-            this_model_output: paddle.Tensor,
-            this_timestep: int,
-            last_sample: paddle.Tensor,
-            this_sample: paddle.Tensor,
-            order: int, ) -> paddle.Tensor:
+        self,
+        this_model_output: paddle.Tensor,
+        this_timestep: int,
+        last_sample: paddle.Tensor,
+        this_sample: paddle.Tensor,
+        order: int,
+    ) -> paddle.Tensor:
         """
         One step for the UniC (B(h) version).
 
@@ -511,8 +508,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         if self.predict_x0:
             x_t_ = sigma_t / sigma_s0 * x - alpha_t * h_phi_1 * m0
             if D1s is not None:
-                corr_res = paddle.einsum("k,bkchw->bchw",
-                                         rhos_c[:-1].squeeze(1), D1s)
+                corr_res = paddle.einsum("k,bkchw->bchw", rhos_c[:-1].squeeze(1), D1s)
             else:
                 corr_res = 0
             D1_t = model_t - m0
@@ -520,8 +516,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         else:
             x_t_ = alpha_t / alpha_s0 * x - sigma_t * h_phi_1 * m0
             if D1s is not None:
-                corr_res = paddle.einsum("k,bkchw->bchw",
-                                         rhos_c[:-1].squeeze(1), D1s)
+                corr_res = paddle.einsum("k,bkchw->bchw", rhos_c[:-1].squeeze(1), D1s)
             else:
                 corr_res = 0
             D1_t = model_t - m0
@@ -530,11 +525,12 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         return x_t
 
     def step(
-            self,
-            model_output: paddle.Tensor,
-            timestep: int,
-            sample: paddle.Tensor,
-            return_dict: bool=True, ) -> Union[SchedulerOutput, Tuple]:
+        self,
+        model_output: paddle.Tensor,
+        timestep: int,
+        sample: paddle.Tensor,
+        return_dict: bool = True,
+    ) -> Union[SchedulerOutput, Tuple]:
         """
         Step function propagating the sample with the multistep UniPC.
 
@@ -562,23 +558,22 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         else:
             step_index = step_index.item()
 
-        use_corrector = (step_index > 0 and
-                         step_index - 1 not in self.disable_corrector and
-                         self.last_sample is not None)
+        use_corrector = (
+            step_index > 0 and step_index - 1 not in self.disable_corrector and self.last_sample is not None
+        )
 
-        model_output_convert = self.convert_model_output(model_output, timestep,
-                                                         sample)
+        model_output_convert = self.convert_model_output(model_output, timestep, sample)
         if use_corrector:
             sample = self.multistep_uni_c_bh_update(
                 this_model_output=model_output_convert,
                 this_timestep=timestep,
                 last_sample=self.last_sample,
                 this_sample=sample,
-                order=self.this_order, )
+                order=self.this_order,
+            )
 
         # now prepare to run the predictor
-        prev_timestep = 0 if step_index == len(
-            self.timesteps) - 1 else self.timesteps[step_index + 1]
+        prev_timestep = 0 if step_index == len(self.timesteps) - 1 else self.timesteps[step_index + 1]
 
         for i in range(self.config.solver_order - 1):
             self.model_outputs[i] = self.model_outputs[i + 1]
@@ -588,13 +583,11 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         self.timestep_list[-1] = timestep
 
         if self.config.lower_order_final:
-            this_order = min(self.config.solver_order,
-                             len(self.timesteps) - step_index)
+            this_order = min(self.config.solver_order, len(self.timesteps) - step_index)
         else:
             this_order = self.config.solver_order
 
-        self.this_order = min(this_order,
-                              self.lower_order_nums + 1)  # warmup for multistep
+        self.this_order = min(this_order, self.lower_order_nums + 1)  # warmup for multistep
         assert self.this_order > 0
 
         self.last_sample = sample
@@ -602,18 +595,18 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             model_output=model_output,  # pass the original non-converted model output, in case solver-p is used
             prev_timestep=prev_timestep,
             sample=sample,
-            order=self.this_order, )
+            order=self.this_order,
+        )
 
         if self.lower_order_nums < self.config.solver_order:
             self.lower_order_nums += 1
 
         if not return_dict:
-            return (prev_sample, )
+            return (prev_sample,)
 
         return SchedulerOutput(prev_sample=prev_sample)
 
-    def scale_model_input(self, sample: paddle.Tensor, *args,
-                          **kwargs) -> paddle.Tensor:
+    def scale_model_input(self, sample: paddle.Tensor, *args, **kwargs) -> paddle.Tensor:
         """
         Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
         current timestep.
@@ -628,22 +621,22 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     # Copied from ppdiffusers.schedulers.scheduling_ddpm.DDPMScheduler.add_noise
     def add_noise(
-            self,
-            original_samples: paddle.Tensor,
-            noise: paddle.Tensor,
-            timesteps: paddle.Tensor, ) -> paddle.Tensor:
+        self,
+        original_samples: paddle.Tensor,
+        noise: paddle.Tensor,
+        timesteps: paddle.Tensor,
+    ) -> paddle.Tensor:
         # Make sure alphas_cumprod and timestep have same dtype as original_samples
         alphas_cumprod = self.alphas_cumprod.cast(original_samples.dtype)
 
-        sqrt_alpha_prod = alphas_cumprod[timesteps]**0.5
+        sqrt_alpha_prod = alphas_cumprod[timesteps] ** 0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()
         while len(sqrt_alpha_prod.shape) < len(original_samples.shape):
             sqrt_alpha_prod = sqrt_alpha_prod.unsqueeze(-1)
 
-        sqrt_one_minus_alpha_prod = (1 - alphas_cumprod[timesteps])**0.5
+        sqrt_one_minus_alpha_prod = (1 - alphas_cumprod[timesteps]) ** 0.5
         sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.flatten()
-        while len(sqrt_one_minus_alpha_prod.shape) < len(
-                original_samples.shape):
+        while len(sqrt_one_minus_alpha_prod.shape) < len(original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
         noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise

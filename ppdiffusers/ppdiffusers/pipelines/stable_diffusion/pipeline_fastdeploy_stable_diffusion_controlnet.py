@@ -16,12 +16,12 @@
 from .pipeline_fastdeploy_stable_diffusion import FastDeployStableDiffusionPipeline
 
 
-class FastDeployStableDiffusionControlNetPipeline(
-        FastDeployStableDiffusionPipeline):
+class FastDeployStableDiffusionControlNetPipeline(FastDeployStableDiffusionPipeline):
     def __call__(
-            self,
-            *args,
-            **kwargs, ):
+        self,
+        *args,
+        **kwargs,
+    ):
         controlnet_cond = kwargs.pop("controlnet_cond", None)
         image = kwargs.pop("image", None)
         if controlnet_cond is None:

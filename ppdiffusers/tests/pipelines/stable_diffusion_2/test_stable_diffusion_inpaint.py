@@ -19,25 +19,26 @@ import unittest
 
 import numpy as np
 import paddle
+from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from ppdiffusers import (
     AutoencoderKL,
     PNDMScheduler,
     StableDiffusionInpaintPipeline,
-    UNet2DConditionModel, )
+    UNet2DConditionModel,
+)
 from ppdiffusers.utils import floats_tensor, load_image
 from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
 
 from ..pipeline_params import (
     TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
-    TEXT_GUIDED_IMAGE_INPAINTING_PARAMS, )
+    TEXT_GUIDED_IMAGE_INPAINTING_PARAMS,
+)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
-class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin,
-                                               unittest.TestCase):
+class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionInpaintPipeline
     params = TEXT_GUIDED_IMAGE_INPAINTING_PARAMS
     batch_params = TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS
@@ -54,7 +55,8 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin,
             up_block_types=("CrossAttnUpBlock2D", "UpBlock2D"),
             cross_attention_dim=32,
             attention_head_dim=(2, 4),
-            use_linear_projection=True, )
+            use_linear_projection=True,
+        )
         scheduler = PNDMScheduler(skip_prk_steps=True)
         paddle.seed(0)
         vae = AutoencoderKL(
@@ -64,7 +66,8 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin,
             down_block_types=["DownEncoderBlock2D", "DownEncoderBlock2D"],
             up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D"],
             latent_channels=4,
-            sample_size=128, )
+            sample_size=128,
+        )
         paddle.seed(0)
         text_encoder_config = CLIPTextConfig(
             bos_token_id=0,
@@ -77,10 +80,10 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin,
             pad_token_id=1,
             vocab_size=1000,
             hidden_act="gelu",
-            projection_dim=512, )
+            projection_dim=512,
+        )
         text_encoder = CLIPTextModel(text_encoder_config).eval()
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         components = {
             "unet": unet,
             "scheduler": scheduler,
@@ -95,10 +98,8 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin,
     def get_dummy_inputs(self, seed=0):
         image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed))
         image = image.cpu().transpose(perm=[0, 2, 3, 1])[0]
-        init_image = Image.fromarray(np.uint8(image)).convert("RGB").resize(
-            (64, 64))
-        mask_image = Image.fromarray(np.uint8(image + 4)).convert("RGB").resize(
-            (64, 64))
+        init_image = Image.fromarray(np.uint8(image)).convert("RGB").resize((64, 64))
+        mask_image = Image.fromarray(np.uint8(image + 4)).convert("RGB").resize((64, 64))
         generator = paddle.Generator().manual_seed(seed)
 
         inputs = {
@@ -120,10 +121,19 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin,
         image = sd_pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([
-            0.58470726, 0.49302375, 0.3954028, 0.4068969, 0.33668613,
-            0.50350493, 0.34411103, 0.25261122, 0.4531455
-        ])
+        expected_slice = np.array(
+            [
+                0.58470726,
+                0.49302375,
+                0.3954028,
+                0.4068969,
+                0.33668613,
+                0.50350493,
+                0.34411103,
+                0.25261122,
+                0.4531455,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
 
@@ -147,8 +157,7 @@ class StableDiffusionInpaintPipelineIntegrationTests(unittest.TestCase):
         #     'https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/yellow_cat_sitting_on_a_park_bench.npy'
         #     )
         model_id = "stabilityai/stable-diffusion-2-inpainting"
-        pipe = StableDiffusionInpaintPipeline.from_pretrained(
-            model_id, safety_checker=None)
+        pipe = StableDiffusionInpaintPipeline.from_pretrained(model_id, safety_checker=None)
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
         prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
@@ -158,7 +167,8 @@ class StableDiffusionInpaintPipelineIntegrationTests(unittest.TestCase):
             image=init_image,
             mask_image=mask_image,
             generator=generator,
-            output_type="np")
+            output_type="np",
+        )
         image = output.images[0]
         assert image.shape == (512, 512, 3)
         image = image[-3:, -3:, -1]
@@ -182,7 +192,8 @@ class StableDiffusionInpaintPipelineIntegrationTests(unittest.TestCase):
         #     )
         model_id = "stabilityai/stable-diffusion-2-inpainting"
         pipe = StableDiffusionInpaintPipeline.from_pretrained(
-            model_id, paddle_dtype=paddle.float16, safety_checker=None)
+            model_id, paddle_dtype=paddle.float16, safety_checker=None
+        )
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
         prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
@@ -192,7 +203,8 @@ class StableDiffusionInpaintPipelineIntegrationTests(unittest.TestCase):
             image=init_image,
             mask_image=mask_image,
             generator=generator,
-            output_type="np")
+            output_type="np",
+        )
         image = output.images[0]
         assert image.shape == (512, 512, 3)
         image = image[-3:, -3:, -1]

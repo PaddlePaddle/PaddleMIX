@@ -67,35 +67,28 @@ except ImportError:
 from inception import InceptionV3
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument(
-    "--batch-size", type=int, default=50, help="Batch size to use")
+parser.add_argument("--batch-size", type=int, default=50, help="Batch size to use")
 parser.add_argument(
     "--num-workers",
     type=int,
-    help=("Number of processes to use for data loading. "
-          "Defaults to `min(8, num_cpus)`"))
-parser.add_argument(
-    "--device",
-    type=str,
-    default=None,
-    help="Device to use. Like gpu, gpu:0 or cpu")
+    help=("Number of processes to use for data loading. " "Defaults to `min(8, num_cpus)`"),
+)
+parser.add_argument("--device", type=str, default=None, help="Device to use. Like gpu, gpu:0 or cpu")
 parser.add_argument(
     "--dims",
     type=int,
     default=2048,
     choices=list(InceptionV3.BLOCK_INDEX_BY_DIM),
-    help=("Dimensionality of Inception features to use. "
-          "By default, uses pool3 features"), )
+    help=("Dimensionality of Inception features to use. " "By default, uses pool3 features"),
+)
 parser.add_argument(
     "path",
     type=str,
     nargs=2,
-    help=("Paths to the generated images or "
-          "to .npz statistic files"))
+    help=("Paths to the generated images or " "to .npz statistic files"),
+)
 
-IMAGE_EXTENSIONS = {
-    "bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"
-}
+IMAGE_EXTENSIONS = {"bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"}
 
 
 class ImagePathDataset(paddle.io.Dataset):
@@ -136,8 +129,7 @@ def get_activations(files, model, batch_size=50, dims=2048, num_workers=1):
     model.eval()
 
     if batch_size > len(files):
-        print(("Warning: batch size is bigger than the data size. "
-               "Setting batch size to data size"))
+        print(("Warning: batch size is bigger than the data size. " "Setting batch size to data size"))
         batch_size = len(files)
 
     dataset = ImagePathDataset(files, transforms=TF.ToTensor())
@@ -146,7 +138,8 @@ def get_activations(files, model, batch_size=50, dims=2048, num_workers=1):
         batch_size=batch_size,
         shuffle=False,
         drop_last=False,
-        num_workers=num_workers)
+        num_workers=num_workers,
+    )
 
     pred_arr = np.empty((len(files), dims))
 
@@ -165,7 +158,7 @@ def get_activations(files, model, batch_size=50, dims=2048, num_workers=1):
 
         pred = pred.squeeze(3).squeeze(2).cpu().numpy()
 
-        pred_arr[start_idx:start_idx + pred.shape[0]] = pred
+        pred_arr[start_idx : start_idx + pred.shape[0]] = pred
 
         start_idx = start_idx + pred.shape[0]
 
@@ -208,8 +201,7 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     # Product might be almost singular
     covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
     if not np.isfinite(covmean).all():
-        msg = ("fid calculation produces singular product; "
-               "adding %s to diagonal of cov estimates") % eps
+        msg = ("fid calculation produces singular product; " "adding %s to diagonal of cov estimates") % eps
         print(msg)
         offset = np.eye(sigma1.shape[0]) * eps
         covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
@@ -226,11 +218,7 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     return diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
 
 
-def calculate_activation_statistics(files,
-                                    model,
-                                    batch_size=50,
-                                    dims=2048,
-                                    num_workers=1):
+def calculate_activation_statistics(files, model, batch_size=50, dims=2048, num_workers=1):
     """Calculation of the statistics used by the FID.
     Params:
     -- files       : List of image files paths
@@ -259,13 +247,8 @@ def compute_statistics_of_path(path, model, batch_size, dims, num_workers=1):
             m, s = f["mu"][:], f["sigma"][:]
     else:
         path = pathlib.Path(path)
-        files = sorted([
-            file
-            for ext in IMAGE_EXTENSIONS
-            for file in path.glob("*.{}".format(ext))
-        ])
-        m, s = calculate_activation_statistics(files, model, batch_size, dims,
-                                               num_workers)
+        files = sorted([file for ext in IMAGE_EXTENSIONS for file in path.glob("*.{}".format(ext))])
+        m, s = calculate_activation_statistics(files, model, batch_size, dims, num_workers)
 
     return m, s
 
@@ -280,10 +263,8 @@ def calculate_fid_given_paths(paths, batch_size, dims, num_workers=1):
 
     model = InceptionV3([block_idx])
 
-    m1, s1 = compute_statistics_of_path(paths[0], model, batch_size, dims,
-                                        num_workers)
-    m2, s2 = compute_statistics_of_path(paths[1], model, batch_size, dims,
-                                        num_workers)
+    m1, s1 = compute_statistics_of_path(paths[0], model, batch_size, dims, num_workers)
+    m2, s2 = compute_statistics_of_path(paths[1], model, batch_size, dims, num_workers)
     fid_value = calculate_frechet_distance(m1, s1, m2, s2)
 
     return fid_value
@@ -300,8 +281,7 @@ def main():
     else:
         num_workers = args.num_workers
 
-    fid_value = calculate_fid_given_paths(args.path, args.batch_size, args.dims,
-                                          num_workers)
+    fid_value = calculate_fid_given_paths(args.path, args.batch_size, args.dims, num_workers)
     print("FID: ", fid_value)
 
 

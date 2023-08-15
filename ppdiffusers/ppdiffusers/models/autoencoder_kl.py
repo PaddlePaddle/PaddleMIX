@@ -69,29 +69,30 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            in_channels: int=3,
-            out_channels: int=3,
-            down_block_types: Tuple[str]=("DownEncoderBlock2D", ),
-            down_block_out_channels: Tuple[int]=None,
-            up_block_types: Tuple[str]=("UpDecoderBlock2D", ),
-            up_block_out_channels: Tuple[int]=None,
-            block_out_channels: Tuple[int]=(64, ),
-            layers_per_block: int=1,
-            act_fn: str="silu",
-            latent_channels: int=4,
-            norm_num_groups: int=32,
-            sample_size: int=32,
-            scaling_factor: float=0.18215, ):
+        self,
+        in_channels: int = 3,
+        out_channels: int = 3,
+        down_block_types: Tuple[str] = ("DownEncoderBlock2D",),
+        down_block_out_channels: Tuple[int] = None,
+        up_block_types: Tuple[str] = ("UpDecoderBlock2D",),
+        up_block_out_channels: Tuple[int] = None,
+        block_out_channels: Tuple[int] = (64,),
+        layers_per_block: int = 1,
+        act_fn: str = "silu",
+        latent_channels: int = 4,
+        norm_num_groups: int = 32,
+        sample_size: int = 32,
+        scaling_factor: float = 0.18215,
+    ):
         super().__init__()
         # if down_block_out_channels not givien, we will use block_out_channels
-        _down_block_out_channels = (self.config.block_out_channels
-                                    if down_block_out_channels is None else
-                                    self.config.down_block_out_channels)
+        _down_block_out_channels = (
+            self.config.block_out_channels if down_block_out_channels is None else self.config.down_block_out_channels
+        )
         # if up_block_out_channels not givien, we will use block_out_channels
-        _up_block_out_channels = (self.config.block_out_channels
-                                  if up_block_out_channels is None else
-                                  self.config.up_block_out_channels)
+        _up_block_out_channels = (
+            self.config.block_out_channels if up_block_out_channels is None else self.config.up_block_out_channels
+        )
 
         # pass init params to Encoder
         self.encoder = Encoder(
@@ -102,7 +103,8 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
             layers_per_block=layers_per_block,
             act_fn=act_fn,
             norm_num_groups=norm_num_groups,
-            double_z=True, )
+            double_z=True,
+        )
 
         # pass init params to Decoder
         self.decoder = Decoder(
@@ -112,7 +114,8 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
             block_out_channels=_up_block_out_channels,
             layers_per_block=layers_per_block,
             norm_num_groups=norm_num_groups,
-            act_fn=act_fn, )
+            act_fn=act_fn,
+        )
 
         self.quant_conv = nn.Conv2D(2 * latent_channels, 2 * latent_channels, 1)
         self.post_quant_conv = nn.Conv2D(latent_channels, latent_channels, 1)
@@ -122,18 +125,19 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
 
         # only relevant if vae tiling is enabled
         self.tile_sample_min_size = self.config.sample_size
-        sample_size = (self.config.sample_size[0]
-                       if isinstance(self.config.sample_size, (list, tuple))
-                       else self.config.sample_size)
-        self.tile_latent_min_size = int(sample_size /
-                                        (2**(len(_up_block_out_channels) - 1)))
+        sample_size = (
+            self.config.sample_size[0]
+            if isinstance(self.config.sample_size, (list, tuple))
+            else self.config.sample_size
+        )
+        self.tile_latent_min_size = int(sample_size / (2 ** (len(_up_block_out_channels) - 1)))
         self.tile_overlap_factor = 0.25
 
     def _set_gradient_checkpointing(self, module, value=False):
         if isinstance(module, (Encoder, Decoder)):
             module.gradient_checkpointing = value
 
-    def enable_tiling(self, use_tiling: bool=True):
+    def enable_tiling(self, use_tiling: bool = True):
         r"""
         Enable tiled VAE decoding. When this option is enabled, the VAE will split the input tensor into tiles to
         compute decoding and encoding in several steps. This is useful to save a large amount of memory and to allow
@@ -163,12 +167,10 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
         self.use_slicing = False
 
     @apply_forward_hook
-    def encode(self, x: paddle.Tensor,
-               return_dict: bool=True) -> AutoencoderKLOutput:
+    def encode(self, x: paddle.Tensor, return_dict: bool = True) -> AutoencoderKLOutput:
         # TODO junnyu, support float16
         x = x.cast(self.encoder.conv_in.weight.dtype)
-        if self.use_tiling and (x.shape[-1] > self.tile_sample_min_size or
-                                x.shape[-2] > self.tile_sample_min_size):
+        if self.use_tiling and (x.shape[-1] > self.tile_sample_min_size or x.shape[-2] > self.tile_sample_min_size):
             return self.tiled_encode(x, return_dict=return_dict)
 
         h = self.encoder(x)
@@ -176,57 +178,49 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
         posterior = DiagonalGaussianDistribution(moments)
 
         if not return_dict:
-            return (posterior, )
+            return (posterior,)
 
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def _decode(self, z: paddle.Tensor,
-                return_dict: bool=True) -> Union[DecoderOutput, paddle.Tensor]:
-        if self.use_tiling and (z.shape[-1] > self.tile_latent_min_size or
-                                z.shape[-2] > self.tile_latent_min_size):
+    def _decode(self, z: paddle.Tensor, return_dict: bool = True) -> Union[DecoderOutput, paddle.Tensor]:
+        if self.use_tiling and (z.shape[-1] > self.tile_latent_min_size or z.shape[-2] > self.tile_latent_min_size):
             return self.tiled_decode(z, return_dict=return_dict)
 
         z = self.post_quant_conv(z)
         dec = self.decoder(z)
 
         if not return_dict:
-            return (dec, )
+            return (dec,)
 
         return DecoderOutput(sample=dec)
 
     @apply_forward_hook
-    def decode(self, z: paddle.Tensor,
-               return_dict: bool=True) -> Union[DecoderOutput, paddle.Tensor]:
+    def decode(self, z: paddle.Tensor, return_dict: bool = True) -> Union[DecoderOutput, paddle.Tensor]:
         # TODO junnyu, add this to support pure fp16
         z = z.cast(self.post_quant_conv.weight.dtype)
         if self.use_slicing and z.shape[0] > 1:
             # split、chunk paddle vs pytorch may have some difference
-            decoded_slices = [
-                self._decode(z_slice).sample for z_slice in z.chunk(z.shape[0])
-            ]
+            decoded_slices = [self._decode(z_slice).sample for z_slice in z.chunk(z.shape[0])]
             decoded = paddle.concat(decoded_slices)
         else:
             decoded = self._decode(z).sample
 
         if not return_dict:
-            return (decoded, )
+            return (decoded,)
 
         return DecoderOutput(sample=decoded)
 
     def blend_v(self, a, b, blend_extent):
         for y in range(min(a.shape[2], b.shape[2], blend_extent)):
-            b[:, :, y, :] = a[:, :, -blend_extent + y, :] * (
-                1 - y / blend_extent) + b[:, :, y, :] * (y / blend_extent)
+            b[:, :, y, :] = a[:, :, -blend_extent + y, :] * (1 - y / blend_extent) + b[:, :, y, :] * (y / blend_extent)
         return b
 
     def blend_h(self, a, b, blend_extent):
         for x in range(min(a.shape[3], b.shape[3], blend_extent)):
-            b[:, :, :, x] = a[:, :, :, -blend_extent + x] * (
-                1 - x / blend_extent) + b[:, :, :, x] * (x / blend_extent)
+            b[:, :, :, x] = a[:, :, :, -blend_extent + x] * (1 - x / blend_extent) + b[:, :, :, x] * (x / blend_extent)
         return b
 
-    def tiled_encode(self, x: paddle.Tensor,
-                     return_dict: bool=True) -> AutoencoderKLOutput:
+    def tiled_encode(self, x: paddle.Tensor, return_dict: bool = True) -> AutoencoderKLOutput:
         r"""Encode a batch of images using a tiled encoder.
         Args:
         When this option is enabled, the VAE will split the input tensor into tiles to compute encoding in several
@@ -237,8 +231,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
             x (`paddle.Tensor`): Input batch of images. return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`AutoencoderKLOutput`] instead of a plain tuple.
         """
-        overlap_size = int(self.tile_sample_min_size *
-                           (1 - self.tile_overlap_factor))
+        overlap_size = int(self.tile_sample_min_size * (1 - self.tile_overlap_factor))
         blend_extent = int(self.tile_latent_min_size * self.tile_overlap_factor)
         row_limit = self.tile_latent_min_size - blend_extent
 
@@ -247,8 +240,12 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
         for i in range(0, x.shape[2], overlap_size):
             row = []
             for j in range(0, x.shape[3], overlap_size):
-                tile = x[:, :, i:i + self.tile_sample_min_size, j:j +
-                         self.tile_sample_min_size]
+                tile = x[
+                    :,
+                    :,
+                    i : i + self.tile_sample_min_size,
+                    j : j + self.tile_sample_min_size,
+                ]
                 tile = self.encoder(tile)
                 tile = self.quant_conv(tile)
                 row.append(tile)
@@ -270,13 +267,11 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
         posterior = DiagonalGaussianDistribution(moments)
 
         if not return_dict:
-            return (posterior, )
+            return (posterior,)
 
         return AutoencoderKLOutput(latent_dist=posterior)
 
-    def tiled_decode(
-            self, z: paddle.Tensor,
-            return_dict: bool=True) -> Union[DecoderOutput, paddle.Tensor]:
+    def tiled_decode(self, z: paddle.Tensor, return_dict: bool = True) -> Union[DecoderOutput, paddle.Tensor]:
         r"""Decode a batch of images using a tiled decoder.
         Args:
         When this option is enabled, the VAE will split the input tensor into tiles to compute decoding in several
@@ -288,8 +283,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
             `True`):
                 Whether or not to return a [`DecoderOutput`] instead of a plain tuple.
         """
-        overlap_size = int(self.tile_latent_min_size *
-                           (1 - self.tile_overlap_factor))
+        overlap_size = int(self.tile_latent_min_size * (1 - self.tile_overlap_factor))
         blend_extent = int(self.tile_sample_min_size * self.tile_overlap_factor)
         row_limit = self.tile_sample_min_size - blend_extent
 
@@ -299,8 +293,12 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
         for i in range(0, z.shape[2], overlap_size):
             row = []
             for j in range(0, z.shape[3], overlap_size):
-                tile = z[:, :, i:i + self.tile_latent_min_size, j:j +
-                         self.tile_latent_min_size]
+                tile = z[
+                    :,
+                    :,
+                    i : i + self.tile_latent_min_size,
+                    j : j + self.tile_latent_min_size,
+                ]
                 tile = self.post_quant_conv(tile)
                 decoded = self.decoder(tile)
                 row.append(decoded)
@@ -320,17 +318,17 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
 
         dec = paddle.concat(result_rows, axis=2)
         if not return_dict:
-            return (dec, )
+            return (dec,)
 
         return DecoderOutput(sample=dec)
 
     def forward(
-            self,
-            sample: paddle.Tensor,
-            sample_posterior: bool=False,
-            return_dict: bool=True,
-            generator: Optional[paddle.Generator]=None, ) -> Union[
-                DecoderOutput, paddle.Tensor]:
+        self,
+        sample: paddle.Tensor,
+        sample_posterior: bool = False,
+        return_dict: bool = True,
+        generator: Optional[paddle.Generator] = None,
+    ) -> Union[DecoderOutput, paddle.Tensor]:
         r"""
         Args:
             sample (`paddle.Tensor`): Input sample.
@@ -348,6 +346,6 @@ class AutoencoderKL(ModelMixin, ConfigMixin):
         dec = self.decode(z).sample
 
         if not return_dict:
-            return (dec, )
+            return (dec,)
 
         return DecoderOutput(sample=dec)

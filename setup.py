@@ -46,7 +46,7 @@ def read_requirements():
 
 setup(
     name="paddlemix",
-    packages=(find_packages()+ find_packages(where="./ppdiffusers",exclude=['tests','tests.*'])),
+    packages=(find_packages() + find_packages(where="./ppdiffusers", exclude=["tests", "tests.*"])),
     package_dir={
         "": ".",
         "ppdiffusers": "./ppdiffusers/ppdiffusers",
@@ -58,12 +58,10 @@ setup(
     long_description=read_readme(),
     long_description_content_type="text/markdown",
     url="",
-    keywords=["paddle","paddlemix"],
+    keywords=["paddle", "paddlemix"],
     install_requires=REQUIRED_PACKAGES,
     python_requires=">=3.6",
-    entry_points={
-        "console_scripts": ["ppdiffusers-cli=ppdiffusers.commands.ppdiffusers_cli:main"]
-    },
+    entry_points={"console_scripts": ["ppdiffusers-cli=ppdiffusers.commands.ppdiffusers_cli:main"]},
     classifiers=[
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
@@ -75,4 +73,3 @@ setup(
     ],
     license="Apache 2.0",
 )
-

@@ -47,13 +47,12 @@ def keypoint_to_openpose_kpts(coco_keypoints_list):
     l_shoulder_keypoint = coco_keypoints_list[l_shoulder_index]
     r_shoulder_keypoint = coco_keypoints_list[r_shoulder_index]
 
-    neck_keypoint_y = int(
-        (l_shoulder_keypoint[1] + r_shoulder_keypoint[1]) / 2.0)
-    neck_keypoint_x = int(
-        (l_shoulder_keypoint[0] + r_shoulder_keypoint[0]) / 2.0)
+    neck_keypoint_y = int((l_shoulder_keypoint[1] + r_shoulder_keypoint[1]) / 2.0)
+    neck_keypoint_x = int((l_shoulder_keypoint[0] + r_shoulder_keypoint[0]) / 2.0)
     neck_keypoint = [
-        neck_keypoint_x, neck_keypoint_y,
-        min(l_shoulder_keypoint[2], r_shoulder_keypoint[2])
+        neck_keypoint_x,
+        neck_keypoint_y,
+        min(l_shoulder_keypoint[2], r_shoulder_keypoint[2]),
     ]
     open_pose_neck_index = 1
     openpose_kpts.insert(open_pose_neck_index, neck_keypoint)
@@ -72,16 +71,19 @@ class PPDetDetector:
             img_scalarfactor = detect_resolution / min(oriImg.shape[:2])
             result, poseres = self.ppdetpose_pred(oriImg)
             result["candidate"] = result["candidate"] * img_scalarfactor
-            oriImg = cv2.resize(
-                oriImg, (0, 0), fx=img_scalarfactor, fy=img_scalarfactor)
+            oriImg = cv2.resize(oriImg, (0, 0), fx=img_scalarfactor, fy=img_scalarfactor)
             canvas = oriImg.copy()
             canvas.fill(0)
-            canvas = self.body_estimation.draw_pose(canvas, result["candidate"],
-                                                    result["subset"])
+            canvas = self.body_estimation.draw_pose(canvas, result["candidate"], result["subset"])
 
-            return canvas, dict(
-                candidate=result["candidate"].tolist(),
-                subset=result["subset"].tolist()), poseres
+            return (
+                canvas,
+                dict(
+                    candidate=result["candidate"].tolist(),
+                    subset=result["subset"].tolist(),
+                ),
+                poseres,
+            )
 
     def ppdetpose_pred(self, image, kpt_threshold=0.3):
         poseres = self.ppdetpose.ppdet_hrnet_infer(image)
@@ -95,7 +97,12 @@ class PPDetDetector:
             for idx, item in enumerate(openpose_kpts):
                 if item[2] > kpt_threshold:
                     subset[kptid][idx] = posnum
-                    kpt = np.array(item + [posnum, ])
+                    kpt = np.array(
+                        item
+                        + [
+                            posnum,
+                        ]
+                    )
                     candidate = np.vstack((candidate, kpt))
                     posnum += 1
         return {"candidate": candidate, "subset": subset}, poseres
@@ -133,8 +140,10 @@ def resize_image(input_image, resolution):
     H = int(np.round(H / 64.0)) * 64
     W = int(np.round(W / 64.0)) * 64
     img = cv2.resize(
-        input_image, (W, H),
-        interpolation=cv2.INTER_LANCZOS4 if k > 1 else cv2.INTER_AREA)
+        input_image,
+        (W, H),
+        interpolation=cv2.INTER_LANCZOS4 if k > 1 else cv2.INTER_AREA,
+    )
     return img
 
 
@@ -147,11 +156,7 @@ def get_keypoints_result_coco_format(paths, detector, do_gt):
         out_dir_path = pathlib.Path(paths[2])
         if not os.path.exists(out_dir_path):
             os.makedirs(out_dir_path)
-    files = sorted([
-        file
-        for ext in IMAGE_EXTENSIONS
-        for file in in_dir_path.glob("*.{}".format(ext))
-    ])
+    files = sorted([file for ext in IMAGE_EXTENSIONS for file in in_dir_path.glob("*.{}".format(ext))])
     output = []
     index = -1
     for file in tqdm(files):
@@ -161,8 +166,7 @@ def get_keypoints_result_coco_format(paths, detector, do_gt):
         input_image = HWC3(im)
         canvas, keypoints_result, poseres = detector(input_image)
         if len(paths) == 3:
-            Image.fromarray(canvas).save(
-                os.path.join(out_dir_path, os.path.basename(file)))
+            Image.fromarray(canvas).save(os.path.join(out_dir_path, os.path.basename(file)))
         if len(poseres["keypoint"][0]) == 0:
             sample_dict = {
                 "image_id": index,
@@ -205,76 +209,72 @@ def get_keypoints_result_coco_format(paths, detector, do_gt):
                 json.dumps(
                     {
                         "annotations": output,
-                        "images": [{
-                            "id": item
-                        } for item in list(range(index + 1))],
-                        "categories": [{
-                            "supercategory": "person",
-                            "id": 1,
-                            "name": "person",
-                            "keypoints": [
-                                "nose",
-                                "left_eye",
-                                "right_eye",
-                                "left_ear",
-                                "right_ear",
-                                "left_shoulder",
-                                "right_shoulder",
-                                "left_elbow",
-                                "right_elbow",
-                                "left_wrist",
-                                "right_wrist",
-                                "left_hip",
-                                "right_hip",
-                                "left_knee",
-                                "right_knee",
-                                "left_ankle",
-                                "right_ankle",
-                            ],
-                            "skeleton": [
-                                [16, 14],
-                                [14, 12],
-                                [17, 15],
-                                [15, 13],
-                                [12, 13],
-                                [6, 12],
-                                [7, 13],
-                                [6, 7],
-                                [6, 8],
-                                [7, 9],
-                                [8, 10],
-                                [9, 11],
-                                [2, 3],
-                                [1, 2],
-                                [1, 3],
-                                [2, 4],
-                                [3, 5],
-                                [4, 6],
-                                [5, 7],
-                            ],
-                        }],
+                        "images": [{"id": item} for item in list(range(index + 1))],
+                        "categories": [
+                            {
+                                "supercategory": "person",
+                                "id": 1,
+                                "name": "person",
+                                "keypoints": [
+                                    "nose",
+                                    "left_eye",
+                                    "right_eye",
+                                    "left_ear",
+                                    "right_ear",
+                                    "left_shoulder",
+                                    "right_shoulder",
+                                    "left_elbow",
+                                    "right_elbow",
+                                    "left_wrist",
+                                    "right_wrist",
+                                    "left_hip",
+                                    "right_hip",
+                                    "left_knee",
+                                    "right_knee",
+                                    "left_ankle",
+                                    "right_ankle",
+                                ],
+                                "skeleton": [
+                                    [16, 14],
+                                    [14, 12],
+                                    [17, 15],
+                                    [15, 13],
+                                    [12, 13],
+                                    [6, 12],
+                                    [7, 13],
+                                    [6, 7],
+                                    [6, 8],
+                                    [7, 9],
+                                    [8, 10],
+                                    [9, 11],
+                                    [2, 3],
+                                    [1, 2],
+                                    [1, 3],
+                                    [2, 4],
+                                    [3, 5],
+                                    [4, 6],
+                                    [5, 7],
+                                ],
+                            }
+                        ],
                     },
-                    indent=4, ))
+                    indent=4,
+                )
+            )
         else:
             json_file.write(json.dumps(output, indent=4))
 
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument(
-    "--do_gt",
-    action="store_true",
-    help="whether to predict unseen future data")
+parser.add_argument("--do_gt", action="store_true", help="whether to predict unseen future data")
 parser.add_argument(
     "path",
     type=str,
     nargs=3,
-    help=(
-        "Paths to the input images dir, output json file, and output openpose images dir"
-    ))
+    help=("Paths to the input images dir, output json file, and output openpose images dir"),
+)
 
-IMAGE_EXTENSIONS = {
-    "bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"
-}
+IMAGE_EXTENSIONS = {"bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"}
 
 if __name__ == "__main__":
     args = parser.parse_args()

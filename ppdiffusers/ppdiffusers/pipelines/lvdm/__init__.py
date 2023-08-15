@@ -23,7 +23,8 @@ from ...utils import (
     BaseOutput,
     OptionalDependencyNotAvailable,
     is_paddle_available,
-    is_paddlenlp_available, )
+    is_paddlenlp_available,
+)
 
 
 @dataclass
@@ -48,5 +49,7 @@ try:
 except OptionalDependencyNotAvailable:
     from ...utils.dummy_paddle_and_paddlenlp_objects import *
 else:
+    from .pipeline_latent_video_diffusion_model_text2video import (
+        LVDMTextToVideoPipeline,
+    )
     from .pipeline_latent_video_diffusion_model_uncond import LVDMUncondPipeline
-    from .pipeline_latent_video_diffusion_model_text2video import LVDMTextToVideoPipeline

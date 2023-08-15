@@ -40,8 +40,7 @@ def convert_to_ppdiffusers(controlnet, dtype="float32"):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Pytorch model weights to Paddle model weights.")
+    parser = argparse.ArgumentParser(description="Pytorch model weights to Paddle model weights.")
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -52,11 +51,11 @@ if __name__ == "__main__":
         "--output_path",
         type=str,
         default="paddle_models/sd-controlnet-canny",
-        help="The output path.", )
+        help="The output path.",
+    )
     args = parser.parse_args()
 
-    th_controlnet = DiffusersControlNetModel.from_pretrained(
-        args.pretrained_model_name_or_path)
+    th_controlnet = DiffusersControlNetModel.from_pretrained(args.pretrained_model_name_or_path)
     controlnet_state_dict = convert_to_ppdiffusers(th_controlnet)
     pp_controlnet = PPDiffusersControlNetModel.from_config(th_controlnet.config)
     pp_controlnet.set_dict(controlnet_state_dict)

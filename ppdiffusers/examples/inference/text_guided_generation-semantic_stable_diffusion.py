@@ -16,8 +16,7 @@ import paddle
 
 from ppdiffusers import SemanticStableDiffusionPipeline
 
-pipe = SemanticStableDiffusionPipeline.from_pretrained(
-    "runwayml/stable-diffusion-v1-5")
+pipe = SemanticStableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5")
 pipe.set_progress_bar_config(disable=None)
 prompt = "a photo of a cat"
 edit = {
@@ -38,6 +37,7 @@ output = pipe(
     guidance_scale=guidance_scale,
     num_inference_steps=50,
     width=512,
-    height=512, )
+    height=512,
+)
 image = output.images[0]
 image.save("text_guided_generation-semantic_stable_diffusion-result.png")

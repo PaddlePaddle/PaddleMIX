@@ -66,7 +66,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
     """
 
     def alpha_bar(time_step):
-        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2)**2
+        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2) ** 2
 
     betas = []
     for i in range(num_diffusion_timesteps):
@@ -114,39 +114,41 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            num_train_timesteps: int=1000,
-            beta_start: float=0.0001,
-            beta_end: float=0.02,
-            beta_schedule: str="linear",
-            trained_betas: Optional[Union[np.ndarray, List[float]]]=None,
-            prediction_type: str="epsilon",
-            interpolation_type: str="linear",
-            use_karras_sigmas: Optional[bool]=False, ):
+        self,
+        num_train_timesteps: int = 1000,
+        beta_start: float = 0.0001,
+        beta_end: float = 0.02,
+        beta_schedule: str = "linear",
+        trained_betas: Optional[Union[np.ndarray, List[float]]] = None,
+        prediction_type: str = "epsilon",
+        interpolation_type: str = "linear",
+        use_karras_sigmas: Optional[bool] = False,
+    ):
         if trained_betas is not None:
             self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
         elif beta_schedule == "linear":
-            self.betas = paddle.linspace(
-                beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
+            self.betas = paddle.linspace(beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
-            self.betas = (paddle.linspace(
-                beta_start**0.5,
-                beta_end**0.5,
-                num_train_timesteps,
-                dtype=paddle.float32)**2)
+            self.betas = (
+                paddle.linspace(
+                    beta_start**0.5,
+                    beta_end**0.5,
+                    num_train_timesteps,
+                    dtype=paddle.float32,
+                )
+                ** 2
+            )
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
         else:
-            raise NotImplementedError(
-                f"{beta_schedule} does is not implemented for {self.__class__}")
+            raise NotImplementedError(f"{beta_schedule} does is not implemented for {self.__class__}")
 
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = paddle.cumprod(self.alphas, 0)
 
-        sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod)**
-                          0.5)
+        sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod) ** 0.5)
         sigmas = np.concatenate([sigmas[::-1], [0.0]]).astype(np.float32)
         self.sigmas = paddle.to_tensor(sigmas)
 
@@ -155,16 +157,12 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         # setable values
         self.num_inference_steps = None
-        timesteps = np.linspace(
-            0, num_train_timesteps - 1, num_train_timesteps,
-            dtype=float)[::-1].copy()
+        timesteps = np.linspace(0, num_train_timesteps - 1, num_train_timesteps, dtype=float)[::-1].copy()
         self.timesteps = paddle.to_tensor(timesteps, dtype=paddle.float32)
         self.is_scale_input_called = False
         self.use_karras_sigmas = use_karras_sigmas
 
-    def scale_model_input(
-            self, sample: paddle.Tensor,
-            timestep: Union[float, paddle.Tensor]) -> paddle.Tensor:
+    def scale_model_input(self, sample: paddle.Tensor, timestep: Union[float, paddle.Tensor]) -> paddle.Tensor:
         """
         Scales the denoising model input by `(sigma**2 + 1) ** 0.5` to match the Euler algorithm.
 
@@ -178,7 +176,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         step_index = (self.timesteps == timestep).nonzero().item()
         sigma = self.sigmas[step_index]
 
-        sample = sample / ((sigma**2 + 1)**0.5)
+        sample = sample / ((sigma**2 + 1) ** 0.5)
 
         self.is_scale_input_called = True
         return sample
@@ -193,31 +191,23 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         """
         self.num_inference_steps = num_inference_steps
 
-        timesteps = np.linspace(
-            0,
-            self.config.num_train_timesteps - 1,
-            num_inference_steps,
-            dtype=float)[::-1].copy()
-        sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod)**
-                          0.5)
+        timesteps = np.linspace(0, self.config.num_train_timesteps - 1, num_inference_steps, dtype=float)[::-1].copy()
+        sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod) ** 0.5)
         log_sigmas = np.log(sigmas)
 
         if self.config.interpolation_type == "linear":
             sigmas = np.interp(timesteps, np.arange(0, len(sigmas)), sigmas)
         elif self.config.interpolation_type == "log_linear":
-            sigmas = paddle.linspace(
-                np.log(sigmas[-1]), np.log(sigmas[0]),
-                num_inference_steps + 1).exp()
+            sigmas = paddle.linspace(np.log(sigmas[-1]), np.log(sigmas[0]), num_inference_steps + 1).exp()
         else:
             raise ValueError(
                 f"{self.config.interpolation_type} is not implemented. Please specify interpolation_type to either"
-                " 'linear' or 'log_linear'")
+                " 'linear' or 'log_linear'"
+            )
 
         if self.use_karras_sigmas:
-            sigmas = self._convert_to_karras(
-                in_sigmas=sigmas, num_inference_steps=self.num_inference_steps)
-            timesteps = np.array(
-                [self._sigma_to_t(sigma, log_sigmas) for sigma in sigmas])
+            sigmas = self._convert_to_karras(in_sigmas=sigmas, num_inference_steps=self.num_inference_steps)
+            timesteps = np.array([self._sigma_to_t(sigma, log_sigmas) for sigma in sigmas])
 
         sigmas = np.concatenate([sigmas, [0.0]]).astype(np.float32)
         self.sigmas = paddle.to_tensor(sigmas)
@@ -231,9 +221,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         dists = log_sigma - log_sigmas[:, np.newaxis]
 
         # get sigmas range
-        low_idx = np.cumsum(
-            (dists >= 0),
-            axis=0).argmax(axis=0).clip(max=log_sigmas.shape[0] - 2)
+        low_idx = np.cumsum((dists >= 0), axis=0).argmax(axis=0).clip(max=log_sigmas.shape[0] - 2)
         high_idx = low_idx + 1
 
         low = log_sigmas[low_idx]
@@ -248,8 +236,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         t = t.reshape(sigma.shape)
         return t
 
-    def _convert_to_karras(self, in_sigmas: paddle.Tensor,
-                           num_inference_steps) -> paddle.Tensor:
+    def _convert_to_karras(self, in_sigmas: paddle.Tensor, num_inference_steps) -> paddle.Tensor:
         """Constructs the noise schedule of Karras et al. (2022)."""
 
         sigma_min = in_sigmas[-1].item()
@@ -257,24 +244,23 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         rho = 7.0  # 7.0 is the value used in the paper
         ramp = np.linspace(0, 1, num_inference_steps)
-        min_inv_rho = sigma_min**(1 / rho)
-        max_inv_rho = sigma_max**(1 / rho)
-        sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho))**rho
+        min_inv_rho = sigma_min ** (1 / rho)
+        max_inv_rho = sigma_max ** (1 / rho)
+        sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho)) ** rho
         return sigmas
 
     def step(
-            self,
-            model_output: paddle.Tensor,
-            timestep: Union[float, paddle.Tensor],
-            sample: paddle.Tensor,
-            s_churn: float=0.0,
-            s_tmin: float=0.0,
-            s_tmax: float=float("inf"),
-            s_noise: float=1.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            return_dict: bool=True, ) -> Union[EulerDiscreteSchedulerOutput,
-                                               Tuple]:
+        self,
+        model_output: paddle.Tensor,
+        timestep: Union[float, paddle.Tensor],
+        sample: paddle.Tensor,
+        s_churn: float = 0.0,
+        s_tmin: float = 0.0,
+        s_tmax: float = float("inf"),
+        s_noise: float = 1.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        return_dict: bool = True,
+    ) -> Union[EulerDiscreteSchedulerOutput, Tuple]:
         """
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
         process from the learned model outputs (most often the predicted noise).
@@ -301,22 +287,21 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         if not self.is_scale_input_called:
             logger.warning(
                 "The `scale_model_input` function should be called before `step` to ensure correct denoising. "
-                "See `StableDiffusionPipeline` for a usage example.")
+                "See `StableDiffusionPipeline` for a usage example."
+            )
 
         step_index = (self.timesteps == timestep).nonzero().item()
         sigma = self.sigmas[step_index]
 
-        gamma = min(s_churn / (len(self.sigmas) - 1),
-                    2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
+        gamma = min(s_churn / (len(self.sigmas) - 1), 2**0.5 - 1) if s_tmin <= sigma <= s_tmax else 0.0
 
-        noise = randn_tensor(
-            model_output.shape, dtype=model_output.dtype, generator=generator)
+        noise = randn_tensor(model_output.shape, dtype=model_output.dtype, generator=generator)
 
         eps = noise * s_noise
         sigma_hat = sigma * (gamma + 1)
 
         if gamma > 0:
-            sample = sample + eps * (sigma_hat**2 - sigma**2)**0.5
+            sample = sample + eps * (sigma_hat**2 - sigma**2) ** 0.5
 
         # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise
         # NOTE: "original_sample" should not be an expected prediction_type but is left in for
@@ -327,8 +312,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
             pred_original_sample = sample - sigma_hat * model_output
         elif self.config.prediction_type == "v_prediction":
             # * c_out + input * c_skip
-            pred_original_sample = model_output * (-sigma / (sigma**2 + 1)**0.5
-                                                   ) + (sample / (sigma**2 + 1))
+            pred_original_sample = model_output * (-sigma / (sigma**2 + 1) ** 0.5) + (sample / (sigma**2 + 1))
         else:
             raise ValueError(
                 f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, or `v_prediction`"
@@ -342,22 +326,21 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         prev_sample = sample + derivative * dt
 
         if not return_dict:
-            return (prev_sample, )
+            return (prev_sample,)
 
-        return EulerDiscreteSchedulerOutput(
-            prev_sample=prev_sample, pred_original_sample=pred_original_sample)
+        return EulerDiscreteSchedulerOutput(prev_sample=prev_sample, pred_original_sample=pred_original_sample)
 
     def add_noise(
-            self,
-            original_samples: paddle.Tensor,
-            noise: paddle.Tensor,
-            timesteps: paddle.Tensor, ) -> paddle.Tensor:
+        self,
+        original_samples: paddle.Tensor,
+        noise: paddle.Tensor,
+        timesteps: paddle.Tensor,
+    ) -> paddle.Tensor:
         # Make sure sigmas and timesteps have the same dtype as original_samples
         sigmas = self.sigmas.cast(original_samples.dtype)
 
         schedule_timesteps = self.timesteps
-        step_indices = [(schedule_timesteps == t).nonzero().item()
-                        for t in timesteps]
+        step_indices = [(schedule_timesteps == t).nonzero().item() for t in timesteps]
 
         sigma = sigmas[step_indices].flatten()
         while len(sigma.shape) < len(original_samples.shape):

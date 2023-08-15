@@ -20,11 +20,11 @@ import warnings
 import cv2
 import numpy as np
 import paddle
+from paddlenlp.trainer.argparser import strtobool
+from paddlenlp.utils.log import logger
 from PIL import Image
 from tqdm.auto import trange
 
-from paddlenlp.trainer.argparser import strtobool
-from paddlenlp.utils.log import logger
 from ppdiffusers import ControlNetModel, DiffusionPipeline
 from ppdiffusers.utils import load_image
 
@@ -60,12 +60,14 @@ def parse_arguments():
         "--inference_steps",
         type=int,
         default=50,
-        help="The number of unet inference steps.")
+        help="The number of unet inference steps.",
+    )
     parser.add_argument(
         "--benchmark_steps",
         type=int,
         default=1,
-        help="The number of performance benchmark steps.")
+        help="The number of performance benchmark steps.",
+    )
     parser.add_argument(
         "--task_name",
         type=str,
@@ -87,12 +89,9 @@ def parse_arguments():
             "raw",
             "lpw",
         ],
-        help="The parse_prompt_type can be one of [raw, lpw]. ", )
-    parser.add_argument(
-        "--use_fp16",
-        type=strtobool,
-        default=True,
-        help="Wheter to use FP16 mode")
+        help="The parse_prompt_type can be one of [raw, lpw]. ",
+    )
+    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
     parser.add_argument(
         "--guess_mode",
         type=strtobool,
@@ -104,12 +103,9 @@ def parse_arguments():
         type=str,
         default="raw",
         choices=["raw", "cutlass", "flash", "all"],
-        help="attention_type.")
-    parser.add_argument(
-        "--device_id",
-        type=int,
-        default=0,
-        help="The selected gpu id. -1 means use cpu")
+        help="attention_type.",
+    )
+    parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
         "--scheduler",
         type=str,
@@ -129,31 +125,24 @@ def parse_arguments():
             "kdpm2-ancestral",
             "kdpm2",
         ],
-        help="The scheduler type of stable diffusion.", )
-    parser.add_argument(
-        "--height", type=int, default=512, help="Height of input image")
-    parser.add_argument(
-        "--width", type=int, default=512, help="Width of input image")
-    parser.add_argument(
-        "--hr_resize_height",
-        type=int,
-        default=768,
-        help="HR Height of input image")
-    parser.add_argument(
-        "--hr_resize_width",
-        type=int,
-        default=768,
-        help="HR Width of input image")
+        help="The scheduler type of stable diffusion.",
+    )
+    parser.add_argument("--height", type=int, default=512, help="Height of input image")
+    parser.add_argument("--width", type=int, default=512, help="Width of input image")
+    parser.add_argument("--hr_resize_height", type=int, default=768, help="HR Height of input image")
+    parser.add_argument("--hr_resize_width", type=int, default=768, help="HR Width of input image")
     parser.add_argument(
         "--low_threshold",
         type=int,
         default=100,
-        help="The value of Canny low threshold.")
+        help="The value of Canny low threshold.",
+    )
     parser.add_argument(
         "--high_threshold",
         type=int,
         default=200,
-        help="The value of Canny high threshold.")
+        help="The value of Canny high threshold.",
+    )
     return parser.parse_args()
 
 
@@ -165,8 +154,8 @@ def main(args):
     seed = 1024
     paddle_dtype = paddle.float16 if args.use_fp16 else paddle.float32
     controlnet = ControlNetModel.from_pretrained(
-        args.controlnet_pretrained_model_name_or_path,
-        paddle_dtype=paddle_dtype)
+        args.controlnet_pretrained_model_name_or_path, paddle_dtype=paddle_dtype
+    )
     pipe = DiffusionPipeline.from_pretrained(
         args.pretrained_model_name_or_path,
         controlnet=controlnet,
@@ -174,7 +163,8 @@ def main(args):
         feature_extractor=None,
         requires_safety_checker=False,
         paddle_dtype=paddle_dtype,
-        custom_pipeline="stable_diffusion_mega", )
+        custom_pipeline="stable_diffusion_mega",
+    )
     pipe.set_progress_bar_config(disable=True)
     pipe.change_scheduler(args.scheduler)
     parse_prompt_type = args.parse_prompt_type
@@ -200,9 +190,7 @@ def main(args):
                     raise ValueError(e)
 
         if not args.use_fp16 and attention_type == "flash":
-            print(
-                "Flash attention is not supported dtype=float32! Please use float16 or bfloat16. We will skip this!"
-            )
+            print("Flash attention is not supported dtype=float32! Please use float16 or bfloat16. We will skip this!")
             continue
         guess_mode = args.guess_mode
         width = args.width
@@ -228,7 +216,8 @@ def main(args):
                 controlnet_cond=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
                 guess_mode=guess_mode,
-                parse_prompt_type=parse_prompt_type, )
+                parse_prompt_type=parse_prompt_type,
+            )
             print("==> Test text2img_control performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -241,7 +230,8 @@ def main(args):
                     controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
                     guess_mode=guess_mode,
-                    parse_prompt_type=parse_prompt_type, ).images
+                    parse_prompt_type=parse_prompt_type,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -267,7 +257,8 @@ def main(args):
                 controlnet_cond=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
                 guess_mode=guess_mode,
-                parse_prompt_type=parse_prompt_type, )
+                parse_prompt_type=parse_prompt_type,
+            )
             print("==> Test img2img_control performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -281,7 +272,8 @@ def main(args):
                     controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
                     guess_mode=guess_mode,
-                    parse_prompt_type=parse_prompt_type, ).images
+                    parse_prompt_type=parse_prompt_type,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -312,7 +304,8 @@ def main(args):
                 controlnet_cond=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
                 guess_mode=guess_mode,
-                parse_prompt_type=parse_prompt_type, )
+                parse_prompt_type=parse_prompt_type,
+            )
             print(f"==> Test {task_name} performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -327,7 +320,8 @@ def main(args):
                     controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
                     guess_mode=guess_mode,
-                    parse_prompt_type=parse_prompt_type, ).images
+                    parse_prompt_type=parse_prompt_type,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -359,7 +353,8 @@ def main(args):
                 controlnet_cond=controlnet_cond,
                 controlnet_conditioning_scale=1.0,
                 guess_mode=guess_mode,
-                parse_prompt_type=parse_prompt_type, )
+                parse_prompt_type=parse_prompt_type,
+            )
             print("==> Test hiresfix_control performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -376,7 +371,8 @@ def main(args):
                     controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=1.0,
                     guess_mode=guess_mode,
-                    parse_prompt_type=parse_prompt_type, ).images
+                    parse_prompt_type=parse_prompt_type,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")

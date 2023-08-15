@@ -16,7 +16,8 @@
 from ...utils import (
     OptionalDependencyNotAvailable,
     is_paddle_available,
-    is_paddlenlp_available, )
+    is_paddlenlp_available,
+)
 
 try:
     if not (is_paddlenlp_available() and is_paddle_available()):
@@ -26,13 +27,17 @@ except OptionalDependencyNotAvailable:
         VersatileDiffusionDualGuidedPipeline,
         VersatileDiffusionImageVariationPipeline,
         VersatileDiffusionPipeline,
-        VersatileDiffusionTextToImagePipeline, )
+        VersatileDiffusionTextToImagePipeline,
+    )
 else:
     from .modeling_text_unet import UNetFlatConditionModel
     from .pipeline_versatile_diffusion import VersatileDiffusionPipeline
     from .pipeline_versatile_diffusion_dual_guided import (
-        VersatileDiffusionDualGuidedPipeline, )
+        VersatileDiffusionDualGuidedPipeline,
+    )
     from .pipeline_versatile_diffusion_image_variation import (
-        VersatileDiffusionImageVariationPipeline, )
+        VersatileDiffusionImageVariationPipeline,
+    )
     from .pipeline_versatile_diffusion_text_to_image import (
-        VersatileDiffusionTextToImagePipeline, )
+        VersatileDiffusionTextToImagePipeline,
+    )

@@ -32,34 +32,38 @@ class StableUnCLIPImageNormalizer(ModelMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            embedding_dim: int=768, ):
+        self,
+        embedding_dim: int = 768,
+    ):
         super().__init__()
 
         self.mean = self.create_parameter(
             (1, embedding_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0))
+            default_initializer=nn.initializer.Constant(0.0),
+        )
         self.std = self.create_parameter(
             (1, embedding_dim),
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(1.0))
+            default_initializer=nn.initializer.Constant(1.0),
+        )
 
     def to(
-            self,
-            device: Optional[str]=None,
-            dtype: Optional[paddle.dtype]=None, ):
+        self,
+        device: Optional[str] = None,
+        dtype: Optional[paddle.dtype] = None,
+    ):
         if dtype is not None:
             self.mean = self.create_parameter(
                 self.mean.shape,
                 dtype=dtype,
-                default_initializer=paddle.nn.initializer.Assign(
-                    self.mean.numpy()), )
+                default_initializer=paddle.nn.initializer.Assign(self.mean.numpy()),
+            )
             self.std = self.create_parameter(
                 self.std.shape,
                 dtype=dtype,
-                default_initializer=paddle.nn.initializer.Assign(self.std.numpy(
-                )))
+                default_initializer=paddle.nn.initializer.Assign(self.std.numpy()),
+            )
         if device is not None:
             self.mean._to(device)
             self.std._to(device)

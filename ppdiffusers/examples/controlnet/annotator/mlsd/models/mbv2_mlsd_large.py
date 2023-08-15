@@ -20,35 +20,36 @@ class BlockTypeA(paddle.nn.Layer):
     def __init__(self, in_c1, in_c2, out_c1, out_c2, upscale=True):
         super(BlockTypeA, self).__init__()
         self.conv1 = paddle.nn.Sequential(
-            paddle.nn.Conv2D(
-                in_channels=in_c2, out_channels=out_c2, kernel_size=1),
+            paddle.nn.Conv2D(in_channels=in_c2, out_channels=out_c2, kernel_size=1),
             paddle.nn.BatchNorm2D(
                 num_features=out_c2,
                 momentum=1 - 0.1,
                 epsilon=1e-05,
                 weight_attr=None,
                 bias_attr=None,
-                use_global_stats=True, ),
-            paddle.nn.ReLU(), )
+                use_global_stats=True,
+            ),
+            paddle.nn.ReLU(),
+        )
         self.conv2 = paddle.nn.Sequential(
-            paddle.nn.Conv2D(
-                in_channels=in_c1, out_channels=out_c1, kernel_size=1),
+            paddle.nn.Conv2D(in_channels=in_c1, out_channels=out_c1, kernel_size=1),
             paddle.nn.BatchNorm2D(
                 num_features=out_c1,
                 momentum=1 - 0.1,
                 epsilon=1e-05,
                 weight_attr=None,
                 bias_attr=None,
-                use_global_stats=True, ),
-            paddle.nn.ReLU(), )
+                use_global_stats=True,
+            ),
+            paddle.nn.ReLU(),
+        )
         self.upscale = upscale
 
     def forward(self, a, b):
         b = self.conv1(b)
         a = self.conv2(a)
         if self.upscale:
-            b = paddle.nn.functional.interpolate(
-                x=b, scale_factor=2.0, mode="bilinear", align_corners=True)
+            b = paddle.nn.functional.interpolate(x=b, scale_factor=2.0, mode="bilinear", align_corners=True)
         return paddle.concat(x=(a, b), axis=1)
 
 
@@ -56,27 +57,29 @@ class BlockTypeB(paddle.nn.Layer):
     def __init__(self, in_c, out_c):
         super(BlockTypeB, self).__init__()
         self.conv1 = paddle.nn.Sequential(
-            paddle.nn.Conv2D(
-                in_channels=in_c, out_channels=in_c, kernel_size=3, padding=1),
+            paddle.nn.Conv2D(in_channels=in_c, out_channels=in_c, kernel_size=3, padding=1),
             paddle.nn.BatchNorm2D(
                 num_features=in_c,
                 momentum=1 - 0.1,
                 epsilon=1e-05,
                 weight_attr=None,
                 bias_attr=None,
-                use_global_stats=True, ),
-            paddle.nn.ReLU(), )
+                use_global_stats=True,
+            ),
+            paddle.nn.ReLU(),
+        )
         self.conv2 = paddle.nn.Sequential(
-            paddle.nn.Conv2D(
-                in_channels=in_c, out_channels=out_c, kernel_size=3, padding=1),
+            paddle.nn.Conv2D(in_channels=in_c, out_channels=out_c, kernel_size=3, padding=1),
             paddle.nn.BatchNorm2D(
                 num_features=out_c,
                 momentum=1 - 0.1,
                 epsilon=1e-05,
                 weight_attr=None,
                 bias_attr=None,
-                use_global_stats=True, ),
-            paddle.nn.ReLU(), )
+                use_global_stats=True,
+            ),
+            paddle.nn.ReLU(),
+        )
 
     def forward(self, x):
         x = self.conv1(x) + x
@@ -93,28 +96,31 @@ class BlockTypeC(paddle.nn.Layer):
                 out_channels=in_c,
                 kernel_size=3,
                 padding=5,
-                dilation=5),
+                dilation=5,
+            ),
             paddle.nn.BatchNorm2D(
                 num_features=in_c,
                 momentum=1 - 0.1,
                 epsilon=1e-05,
                 weight_attr=None,
                 bias_attr=None,
-                use_global_stats=True, ),
-            paddle.nn.ReLU(), )
+                use_global_stats=True,
+            ),
+            paddle.nn.ReLU(),
+        )
         self.conv2 = paddle.nn.Sequential(
-            paddle.nn.Conv2D(
-                in_channels=in_c, out_channels=in_c, kernel_size=3, padding=1),
+            paddle.nn.Conv2D(in_channels=in_c, out_channels=in_c, kernel_size=3, padding=1),
             paddle.nn.BatchNorm2D(
                 num_features=in_c,
                 momentum=1 - 0.1,
                 epsilon=1e-05,
                 weight_attr=None,
                 bias_attr=None,
-                use_global_stats=True, ),
-            paddle.nn.ReLU(), )
-        self.conv3 = paddle.nn.Conv2D(
-            in_channels=in_c, out_channels=out_c, kernel_size=1)
+                use_global_stats=True,
+            ),
+            paddle.nn.ReLU(),
+        )
+        self.conv3 = paddle.nn.Conv2D(in_channels=in_c, out_channels=out_c, kernel_size=1)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -143,8 +149,7 @@ def _make_divisible(v, divisor, min_value=None):
 
 
 class ConvBNReLU(paddle.nn.Sequential):
-    def __init__(self, in_planes, out_planes, kernel_size=3, stride=1,
-                 groups=1):
+    def __init__(self, in_planes, out_planes, kernel_size=3, stride=1, groups=1):
         self.channel_pad = out_planes - in_planes
         self.stride = stride
         if stride == 2:
@@ -159,23 +164,23 @@ class ConvBNReLU(paddle.nn.Sequential):
                 stride=stride,
                 padding=padding,
                 groups=groups,
-                bias_attr=False, ),
+                bias_attr=False,
+            ),
             paddle.nn.BatchNorm2D(
                 num_features=out_planes,
                 momentum=1 - 0.1,
                 epsilon=1e-05,
                 weight_attr=None,
                 bias_attr=None,
-                use_global_stats=True, ),
-            paddle.nn.ReLU6(), )
+                use_global_stats=True,
+            ),
+            paddle.nn.ReLU6(),
+        )
         self.max_pool = paddle.nn.MaxPool2D(kernel_size=stride, stride=stride)
 
     def forward(self, x):
         if self.stride == 2:
-            x = paddle.nn.functional.pad(x=x,
-                                         pad=(0, 1, 0, 1),
-                                         mode="constant",
-                                         value=0)
+            x = paddle.nn.functional.pad(x=x, pad=(0, 1, 0, 1), mode="constant", value=0)
         for module in self:
             if not isinstance(module, paddle.nn.MaxPool2D):
                 x = module(x)
@@ -192,24 +197,27 @@ class InvertedResidual(paddle.nn.Layer):
         layers = []
         if expand_ratio != 1:
             layers.append(ConvBNReLU(inp, hidden_dim, kernel_size=1))
-        layers.extend([
-            ConvBNReLU(
-                hidden_dim, hidden_dim, stride=stride, groups=hidden_dim),
-            paddle.nn.Conv2D(
-                in_channels=hidden_dim,
-                out_channels=oup,
-                kernel_size=1,
-                stride=1,
-                padding=0,
-                bias_attr=False),
-            paddle.nn.BatchNorm2D(
-                num_features=oup,
-                momentum=1 - 0.1,
-                epsilon=1e-05,
-                weight_attr=None,
-                bias_attr=None,
-                use_global_stats=True, ),
-        ])
+        layers.extend(
+            [
+                ConvBNReLU(hidden_dim, hidden_dim, stride=stride, groups=hidden_dim),
+                paddle.nn.Conv2D(
+                    in_channels=hidden_dim,
+                    out_channels=oup,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    bias_attr=False,
+                ),
+                paddle.nn.BatchNorm2D(
+                    num_features=oup,
+                    momentum=1 - 0.1,
+                    epsilon=1e-05,
+                    weight_attr=None,
+                    bias_attr=None,
+                    use_global_stats=True,
+                ),
+            ]
+        )
         self.conv = paddle.nn.Sequential(*layers)
 
     def forward(self, x):
@@ -237,26 +245,27 @@ class MobileNetV2(paddle.nn.Layer):
         last_channel = 1280
         width_mult = 1.0
         round_nearest = 8
-        inverted_residual_setting = [[1, 16, 1, 1], [6, 24, 2, 2],
-                                     [6, 32, 3,
-                                      2], [6, 64, 4, 2], [6, 96, 3, 1]]
-        if len(inverted_residual_setting) == 0 or len(inverted_residual_setting[
-                0]) != 4:
+        inverted_residual_setting = [
+            [1, 16, 1, 1],
+            [6, 24, 2, 2],
+            [6, 32, 3, 2],
+            [6, 64, 4, 2],
+            [6, 96, 3, 1],
+        ]
+        if len(inverted_residual_setting) == 0 or len(inverted_residual_setting[0]) != 4:
             raise ValueError(
-                "inverted_residual_setting should be non-empty or a 4-element list, got {}".
-                format(inverted_residual_setting))
-        input_channel = _make_divisible(input_channel * width_mult,
-                                        round_nearest)
-        self.last_channel = _make_divisible(last_channel * max(1.0, width_mult),
-                                            round_nearest)
+                "inverted_residual_setting should be non-empty or a 4-element list, got {}".format(
+                    inverted_residual_setting
+                )
+            )
+        input_channel = _make_divisible(input_channel * width_mult, round_nearest)
+        self.last_channel = _make_divisible(last_channel * max(1.0, width_mult), round_nearest)
         features = [ConvBNReLU(4, input_channel, stride=2)]
         for t, c, n, s in inverted_residual_setting:
             output_channel = _make_divisible(c * width_mult, round_nearest)
             for i in range(n):
                 stride = s if i == 0 else 1
-                features.append(
-                    block(
-                        input_channel, output_channel, stride, expand_ratio=t))
+                features.append(block(input_channel, output_channel, stride, expand_ratio=t))
                 input_channel = output_channel
         self.features = paddle.nn.Sequential(*features)
         self.fpn_selected = [1, 3, 6, 10, 13]
@@ -291,8 +300,7 @@ class MobileV2_MLSD_Large(paddle.nn.Layer):
     def __init__(self):
         super(MobileV2_MLSD_Large, self).__init__()
         self.backbone = MobileNetV2()
-        self.block15 = BlockTypeA(
-            in_c1=64, in_c2=96, out_c1=64, out_c2=64, upscale=False)
+        self.block15 = BlockTypeA(in_c1=64, in_c2=96, out_c1=64, out_c2=64, upscale=False)
         self.block16 = BlockTypeB(128, 64)
         self.block17 = BlockTypeA(in_c1=32, in_c2=64, out_c1=64, out_c2=64)
         self.block18 = BlockTypeB(128, 64)

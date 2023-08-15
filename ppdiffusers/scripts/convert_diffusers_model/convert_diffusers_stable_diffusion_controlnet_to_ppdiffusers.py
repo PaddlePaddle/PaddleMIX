@@ -17,23 +17,27 @@ from collections import OrderedDict
 
 import paddle
 import torch
-from diffusers import (StableDiffusionControlNetPipeline as
-                       DiffusersStableDiffusionControlNetPipeline, )
-
+from diffusers import (
+    StableDiffusionControlNetPipeline as DiffusersStableDiffusionControlNetPipeline,
+)
 from paddlenlp.transformers import (
     CLIPFeatureExtractor,
     CLIPTextConfig,
     CLIPTextModel,
     CLIPTokenizer,
-    CLIPVisionConfig, )
+    CLIPVisionConfig,
+)
+
 from ppdiffusers import (
     AutoencoderKL,
     ControlNetModel,
     DDIMScheduler,
     LMSDiscreteScheduler,
-    PNDMScheduler, )
-from ppdiffusers import (StableDiffusionControlNetPipeline as
-                         PPDiffusersStableDiffusionControlNetPipeline, )
+    PNDMScheduler,
+)
+from ppdiffusers import (
+    StableDiffusionControlNetPipeline as PPDiffusersStableDiffusionControlNetPipeline,
+)
 from ppdiffusers import UNet2DConditionModel
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
@@ -74,9 +78,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True):
         ".vision_model.": ".",
     }
     ignore_value = ["position_ids"]
-    donot_transpose = [
-        "embeddings", "norm", "concept_embeds", "special_care_embeds"
-    ]
+    donot_transpose = ["embeddings", "norm", "concept_embeds", "special_care_embeds"]
 
     for name, value in clip.state_dict().items():
         # step1: ignore position_ids
@@ -90,7 +92,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True):
             name = name.replace(hf_name, ppnlp_name)
         # step4: 0d tensor -> 1d tensor
         if name == "logit_scale":
-            value = value.reshape((1, ))
+            value = value.reshape((1,))
         # step5: safety_checker need prefix "clip."
         if "vision_model" in name:
             name = "clip." + name
@@ -115,26 +117,25 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True):
             "vision_heads": clip.config.vision_config.num_attention_heads,
             "vision_embed_dim": clip.config.vision_config.hidden_size,
             "vision_patch_size": clip.config.vision_config.patch_size,
-            "vision_mlp_ratio": clip.config.vision_config.intermediate_size //
-            clip.config.vision_config.hidden_size,
+            "vision_mlp_ratio": clip.config.vision_config.intermediate_size // clip.config.vision_config.hidden_size,
             "vision_hidden_act": clip.config.vision_config.hidden_act,
             "projection_dim": clip.config.projection_dim,
         }
     return new_model_state, new_config
 
 
-def convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(
-        pretrained_model_name_or_path, output_path=None):
+def convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(pretrained_model_name_or_path, output_path=None):
     # 0. load diffusers pipe and convert to ppdiffusers weights format
     diffusers_pipe = DiffusersStableDiffusionControlNetPipeline.from_pretrained(
-        pretrained_model_name_or_path, use_auth_token=True)
-    requires_safety_checker = getattr(diffusers_pipe, "requires_safety_checker",
-                                      False)
+        pretrained_model_name_or_path, use_auth_token=True
+    )
+    requires_safety_checker = getattr(diffusers_pipe, "requires_safety_checker", False)
     vae_state_dict = convert_to_ppdiffusers(diffusers_pipe.vae)
     unet_state_dict = convert_to_ppdiffusers(diffusers_pipe.unet)
     controlnet_state_dict = convert_to_ppdiffusers(diffusers_pipe.controlnet)
     text_encoder_state_dict, text_encoder_config = convert_hf_clip_to_ppnlp_clip(
-        diffusers_pipe.text_encoder, is_text_encoder=True)
+        diffusers_pipe.text_encoder, is_text_encoder=True
+    )
 
     # 1. vae
     pp_vae = AutoencoderKL.from_config(diffusers_pipe.vae.config)
@@ -147,14 +148,12 @@ def convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(
     pp_unet.set_dict(unet_state_dict)
 
     # 3. controlnet
-    pp_controlnet = ControlNetModel.from_config(
-        diffusers_pipe.controlnet.config)
+    pp_controlnet = ControlNetModel.from_config(diffusers_pipe.controlnet.config)
 
     pp_controlnet.set_dict(controlnet_state_dict)
 
     # 4. text_encoder
-    pp_text_encoder = CLIPTextModel(
-        CLIPTextConfig.from_dict(text_encoder_config))
+    pp_text_encoder = CLIPTextModel(CLIPTextConfig.from_dict(text_encoder_config))
     pp_text_encoder.set_dict(text_encoder_state_dict)
 
     # 5. scheduler
@@ -170,12 +169,10 @@ def convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(
             set_alpha_to_one=False,
             steps_offset=1,
             # Make sure the scheduler compatible with PNDM
-            skip_prk_steps=True, )
+            skip_prk_steps=True,
+        )
     elif "lms" in scheduler_type:
-        pp_scheduler = LMSDiscreteScheduler(
-            beta_start=beta_start,
-            beta_end=beta_end,
-            beta_schedule="scaled_linear")
+        pp_scheduler = LMSDiscreteScheduler(beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear")
     elif "ddim" in scheduler_type:
         pp_scheduler = DDIMScheduler(
             beta_start=beta_start,
@@ -184,7 +181,8 @@ def convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(
             # Make sure the scheduler compatible with DDIM
             clip_sample=False,
             set_alpha_to_one=False,
-            steps_offset=1, )
+            steps_offset=1,
+        )
     else:
         raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
 
@@ -197,12 +195,14 @@ def convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(
             # 7. feature_extractor
             # diffusers_pipe.feature_extractor.save_pretrained(tmpdirname)
             pp_feature_extractor = CLIPFeatureExtractor.from_pretrained(
-                "CompVis/stable-diffusion-v1-4/feature_extractor")
+                "CompVis/stable-diffusion-v1-4/feature_extractor"
+            )
             # 8. safety_checker
-            safety_checker_state_dict, safety_checker_config = convert_hf_clip_to_ppnlp_clip(
-                diffusers_pipe.safety_checker, is_text_encoder=False)
-            pp_safety_checker = StableDiffusionSafetyChecker(
-                CLIPVisionConfig.from_dict(safety_checker_config))
+            (
+                safety_checker_state_dict,
+                safety_checker_config,
+            ) = convert_hf_clip_to_ppnlp_clip(diffusers_pipe.safety_checker, is_text_encoder=False)
+            pp_safety_checker = StableDiffusionSafetyChecker(CLIPVisionConfig.from_dict(safety_checker_config))
             pp_safety_checker.set_dict(safety_checker_state_dict)
             # 9. create ppdiffusers pipe
             paddle_pipe = PPDiffusersStableDiffusionControlNetPipeline(
@@ -213,7 +213,8 @@ def convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(
                 controlnet=pp_controlnet,
                 safety_checker=pp_safety_checker,
                 feature_extractor=pp_feature_extractor,
-                scheduler=pp_scheduler, )
+                scheduler=pp_scheduler,
+            )
         else:
             # 9. create ppdiffusers pipe
             paddle_pipe = PPDiffusersStableDiffusionControlNetPipeline(
@@ -225,7 +226,8 @@ def convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(
                 safety_checker=None,
                 feature_extractor=None,
                 scheduler=pp_scheduler,
-                requires_safety_checker=False, )
+                requires_safety_checker=False,
+            )
         if "runwayml/stable-diffusion-inpainting" in pretrained_model_name_or_path:
             _internal_dict = dict(paddle_pipe._internal_dict)
             if _internal_dict["_ppdiffusers_version"] == "0.0.0":
@@ -237,8 +239,7 @@ def convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Pytorch model weights to Paddle model weights.")
+    parser = argparse.ArgumentParser(description="Pytorch model weights to Paddle model weights.")
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -249,7 +250,9 @@ if __name__ == "__main__":
         "--output_path",
         type=str,
         default="control_sd15_canny-ppdiffusers",
-        help="The model output path.", )
+        help="The model output path.",
+    )
     args = parser.parse_args()
     ppdiffusers_pipe = convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(
-        args.pretrained_model_name_or_path, args.output_path)
+        args.pretrained_model_name_or_path, args.output_path
+    )

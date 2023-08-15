@@ -42,15 +42,15 @@ class DDIMPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            batch_size: int=1,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            eta: float=0.0,
-            num_inference_steps: int=50,
-            use_clipped_model_output: Optional[bool]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True, ) -> Union[ImagePipelineOutput, Tuple]:
+        self,
+        batch_size: int = 1,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        eta: float = 0.0,
+        num_inference_steps: int = 50,
+        use_clipped_model_output: Optional[bool] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+    ) -> Union[ImagePipelineOutput, Tuple]:
         """
         Args:
             batch_size (`int`, *optional*, defaults to 1):
@@ -82,17 +82,20 @@ class DDIMPipeline(DiffusionPipeline):
                 batch_size,
                 self.unet.config.in_channels,
                 self.unet.config.sample_size,
-                self.unet.config.sample_size, )
+                self.unet.config.sample_size,
+            )
         else:
-            image_shape = (batch_size, self.unet.config.in_channels,
-                           *self.unet.config.sample_size)
+            image_shape = (
+                batch_size,
+                self.unet.config.in_channels,
+                *self.unet.config.sample_size,
+            )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
 
-        image = randn_tensor(
-            image_shape, generator=generator, dtype=self.unet.dtype)
+        image = randn_tensor(image_shape, generator=generator, dtype=self.unet.dtype)
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
@@ -110,7 +113,8 @@ class DDIMPipeline(DiffusionPipeline):
                 image,
                 eta=eta,
                 use_clipped_model_output=use_clipped_model_output,
-                generator=generator).prev_sample
+                generator=generator,
+            ).prev_sample
         image = (image / 2 + 0.5).clip(min=0, max=1)
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
 
@@ -118,5 +122,5 @@ class DDIMPipeline(DiffusionPipeline):
             image = self.numpy_to_pil(image)
 
         if not return_dict:
-            return (image, )
+            return (image,)
         return ImagePipelineOutput(images=image)

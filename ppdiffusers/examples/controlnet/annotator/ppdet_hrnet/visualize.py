@@ -42,8 +42,7 @@ def visualize_box_mask(im, results, labels, threshold=0.5):
     elif isinstance(im, np.ndarray):
         im = Image.fromarray(im)
     if "masks" in results and "boxes" in results and len(results["boxes"]) > 0:
-        im = draw_mask(
-            im, results["boxes"], results["masks"], labels, threshold=threshold)
+        im = draw_mask(im, results["boxes"], results["masks"], labels, threshold=threshold)
     if "boxes" in results and len(results["boxes"]) > 0:
         im = draw_box(im, results["boxes"], labels, threshold=threshold)
     if "segm" in results:
@@ -53,7 +52,8 @@ def visualize_box_mask(im, results, labels, threshold=0.5):
             results["label"],
             results["score"],
             labels,
-            threshold=threshold)
+            threshold=threshold,
+        )
     return im
 
 
@@ -74,7 +74,7 @@ def get_color_map_list(num_classes):
             color_map[i * 3 + 2] |= ((lab >> 2) & 1) << (7 - j)
             j += 1
             lab >>= 3
-    color_map = [color_map[i:i + 3] for i in range(0, len(color_map), 3)]
+    color_map = [color_map[i : i + 3] for i in range(0, len(color_map), 3)]
     return color_map
 
 
@@ -141,40 +141,31 @@ def draw_box(im, np_boxes, labels, threshold=0.5):
 
         if len(bbox) == 4:
             xmin, ymin, xmax, ymax = bbox
-            print("class_id:{:d}, confidence:{:.4f}, left_top:[{:.2f},{:.2f}],"
-                  "right_bottom:[{:.2f},{:.2f}]".format(
-                      int(clsid), score, xmin, ymin, xmax, ymax))
+            print(
+                "class_id:{:d}, confidence:{:.4f}, left_top:[{:.2f},{:.2f}],"
+                "right_bottom:[{:.2f},{:.2f}]".format(int(clsid), score, xmin, ymin, xmax, ymax)
+            )
             # draw bbox
             draw.line(
-                [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin),
-                 (xmin, ymin)],
+                [(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin), (xmin, ymin)],
                 width=draw_thickness,
-                fill=color, )
+                fill=color,
+            )
         elif len(bbox) == 8:
             x1, y1, x2, y2, x3, y3, x4, y4 = bbox
-            draw.line(
-                [(x1, y1), (x2, y2), (x3, y3), (x4, y4), (x1, y1)],
-                width=2,
-                fill=color)
+            draw.line([(x1, y1), (x2, y2), (x3, y3), (x4, y4), (x1, y1)], width=2, fill=color)
             xmin = min(x1, x2, x3, x4)
             ymin = min(y1, y2, y3, y4)
 
         # draw label
         text = "{} {:.4f}".format(labels[clsid], score)
         tw, th = draw.textsize(text)
-        draw.rectangle(
-            [(xmin + 1, ymin - th), (xmin + tw + 1, ymin)], fill=color)
+        draw.rectangle([(xmin + 1, ymin - th), (xmin + tw + 1, ymin)], fill=color)
         draw.text((xmin + 1, ymin - th), text, fill=(255, 255, 255))
     return im
 
 
-def draw_segm(im,
-              np_segms,
-              np_label,
-              np_score,
-              labels,
-              threshold=0.5,
-              alpha=0.7):
+def draw_segm(im, np_segms, np_label, np_score, labels, threshold=0.5, alpha=0.7):
     """
     Draw segmentation on image
     """
@@ -204,19 +195,26 @@ def draw_segm(im,
         sum_y = np.sum(mask, axis=1)
         y = np.where(sum_y > 0.5)[0]
         x0, x1, y0, y1 = x[0], x[-1], y[0], y[-1]
-        cv2.rectangle(im, (x0, y0), (x1, y1),
-                      tuple(color_mask.astype("int32").tolist()), 1)
+        cv2.rectangle(im, (x0, y0), (x1, y1), tuple(color_mask.astype("int32").tolist()), 1)
         bbox_text = "%s %.2f" % (labels[clsid], score)
         t_size = cv2.getTextSize(bbox_text, 0, 0.3, thickness=1)[0]
-        cv2.rectangle(im, (x0, y0), (x0 + t_size[0], y0 - t_size[1] - 3),
-                      tuple(color_mask.astype("int32").tolist()), -1)
+        cv2.rectangle(
+            im,
+            (x0, y0),
+            (x0 + t_size[0], y0 - t_size[1] - 3),
+            tuple(color_mask.astype("int32").tolist()),
+            -1,
+        )
         cv2.putText(
             im,
-            bbox_text, (x0, y0 - 2),
+            bbox_text,
+            (x0, y0 - 2),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.3, (0, 0, 0),
+            0.3,
+            (0, 0, 0),
             1,
-            lineType=cv2.LINE_AA)
+            lineType=cv2.LINE_AA,
+        )
     return Image.fromarray(im.astype("uint8"))
 
 
@@ -226,20 +224,21 @@ def get_color(idx):
     return color
 
 
-def visualize_pose(imgfile,
-                   results,
-                   visual_thresh=0.6,
-                   save_name="pose.jpg",
-                   save_dir="output",
-                   returnimg=False,
-                   ids=None):
+def visualize_pose(
+    imgfile,
+    results,
+    visual_thresh=0.6,
+    save_name="pose.jpg",
+    save_dir="output",
+    returnimg=False,
+    ids=None,
+):
     try:
         import matplotlib.pyplot as plt
 
         plt.switch_backend("agg")
     except Exception as e:
-        print("Matplotlib not found, please install matplotlib."
-              "for example: `pip install matplotlib`.")
+        print("Matplotlib not found, please install matplotlib." "for example: `pip install matplotlib`.")
         raise e
     skeletons, _ = results["keypoint"]
     skeletons = np.array(skeletons)
@@ -316,8 +315,7 @@ def visualize_pose(imgfile,
         bboxs = results["bbox"]
         for j, rect in enumerate(bboxs):
             xmin, ymin, xmax, ymax = rect
-            color = colors[0] if color_set is None else colors[color_set[j] %
-                                                               len(colors)]
+            color = colors[0] if color_set is None else colors[color_set[j] % len(colors)]
             cv2.rectangle(img, (xmin, ymin), (xmax, ymax), color, 1)
 
     canvas = img.copy()
@@ -326,9 +324,7 @@ def visualize_pose(imgfile,
             if skeletons[j][i, 2] < visual_thresh:
                 continue
             if ids is None:
-                color = colors[i] if color_set is None else colors[color_set[j]
-                                                                   %
-                                                                   len(colors)]
+                color = colors[i] if color_set is None else colors[color_set[j] % len(colors)]
             else:
                 color = get_color(ids[j])
 
@@ -337,15 +333,15 @@ def visualize_pose(imgfile,
                 tuple(skeletons[j][i, 0:2].astype("int32")),
                 2,
                 color,
-                thickness=-1)
+                thickness=-1,
+            )
 
     stickwidth = 2
 
     for i in range(NUM_EDGES):
         for j in range(len(skeletons)):
             edge = EDGES[i]
-            if skeletons[j][edge[0], 2] < visual_thresh or skeletons[j][edge[
-                    1], 2] < visual_thresh:
+            if skeletons[j][edge[0], 2] < visual_thresh or skeletons[j][edge[1], 2] < visual_thresh:
                 continue
 
             cur_canvas = canvas.copy()
@@ -353,23 +349,18 @@ def visualize_pose(imgfile,
             Y = [skeletons[j][edge[0], 0], skeletons[j][edge[1], 0]]
             mX = np.mean(X)
             mY = np.mean(Y)
-            length = ((X[0] - X[1])**2 + (Y[0] - Y[1])**2)**0.5
+            length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5
             angle = math.degrees(math.atan2(X[0] - X[1], Y[0] - Y[1]))
-            polygon = cv2.ellipse2Poly((int(mY), int(mX)),
-                                       (int(length / 2), stickwidth),
-                                       int(angle), 0, 360, 1)
+            polygon = cv2.ellipse2Poly((int(mY), int(mX)), (int(length / 2), stickwidth), int(angle), 0, 360, 1)
             if ids is None:
-                color = colors[i] if color_set is None else colors[color_set[j]
-                                                                   %
-                                                                   len(colors)]
+                color = colors[i] if color_set is None else colors[color_set[j] % len(colors)]
             else:
                 color = get_color(ids[j])
             cv2.fillConvexPoly(cur_canvas, polygon, color)
             canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
     if returnimg:
         return canvas
-    save_name = os.path.join(
-        save_dir, os.path.splitext(os.path.basename(imgfile))[0] + "_vis.jpg")
+    save_name = os.path.join(save_dir, os.path.splitext(os.path.basename(imgfile))[0] + "_vis.jpg")
     plt.imsave(save_name, canvas[:, :, ::-1])
     print("keypoint visualize image saved to: " + save_name)
     plt.close()
@@ -407,6 +398,8 @@ def visualize_attr(im, results, boxes=None, is_mtmct=False):
                 text,
                 text_loc,
                 cv2.FONT_ITALIC,
-                text_scale, (0, 255, 255),
-                thickness=text_thickness)
+                text_scale,
+                (0, 255, 255),
+                thickness=text_thickness,
+            )
     return im

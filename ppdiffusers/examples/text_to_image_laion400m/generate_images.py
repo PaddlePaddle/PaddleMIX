@@ -25,7 +25,8 @@ from ppdiffusers import (
     EulerAncestralDiscreteScheduler,
     LDMTextToImagePipeline,
     LMSDiscreteScheduler,
-    PNDMScheduler, )
+    PNDMScheduler,
+)
 
 
 def batchify(data, batch_size=16):
@@ -40,18 +41,19 @@ def batchify(data, batch_size=16):
 
 
 def generate_images(
-        model_name_or_path,
-        batch_size=16,
-        file="coco30k.csv",
-        save_path="output",
-        seed=42,
-        scheduler_type="ddim",
-        eta=0.0,
-        num_inference_steps=50,
-        guidance_scales=[3, 4, 5, 6, 7, 8],
-        height=256,
-        width=256,
-        device="gpu", ):
+    model_name_or_path,
+    batch_size=16,
+    file="coco30k.csv",
+    save_path="output",
+    seed=42,
+    scheduler_type="ddim",
+    eta=0.0,
+    num_inference_steps=50,
+    guidance_scales=[3, 4, 5, 6, 7, 8],
+    height=256,
+    width=256,
+    device="gpu",
+):
     paddle.set_device(device)
     pipe = LDMTextToImagePipeline.from_pretrained(model_name_or_path)
     pipe.set_progress_bar_config(disable=True)
@@ -65,17 +67,14 @@ def generate_images(
             set_alpha_to_one=False,
             steps_offset=1,
             # Make sure the scheduler compatible with PNDM
-            skip_prk_steps=True, )
+            skip_prk_steps=True,
+        )
     elif scheduler_type == "lms":
-        scheduler = LMSDiscreteScheduler(
-            beta_start=beta_start,
-            beta_end=beta_end,
-            beta_schedule="scaled_linear")
+        scheduler = LMSDiscreteScheduler(beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear")
     elif scheduler_type == "euler-ancestral":
         scheduler = EulerAncestralDiscreteScheduler(
-            beta_start=beta_start,
-            beta_end=beta_end,
-            beta_schedule="scaled_linear")
+            beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear"
+        )
     elif scheduler_type == "ddim":
         scheduler = DDIMScheduler(
             beta_start=beta_start,
@@ -84,7 +83,8 @@ def generate_images(
             # Make sure the scheduler compatible with DDIM
             clip_sample=False,
             set_alpha_to_one=False,
-            steps_offset=1, )
+            steps_offset=1,
+        )
     else:
         raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
     pipe.scheduler = scheduler
@@ -106,7 +106,8 @@ def generate_images(
                 eta=eta,
                 height=height,
                 width=width,
-                num_inference_steps=num_inference_steps, )[0]
+                num_inference_steps=num_inference_steps,
+            )[0]
             for image in images:
                 path = os.path.join(new_save_path, "{:05d}_000.png".format(i))
                 image.save(path)
@@ -120,17 +121,20 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="model_name_or_path.")
+        help="model_name_or_path.",
+    )
     parser.add_argument(
         "--file",
         default="./coco30k.tsv",
         type=str,
-        help="eval file.", )
+        help="eval file.",
+    )
     parser.add_argument(
         "--seed",
         default=42,
         type=int,
-        help="random seed.", )
+        help="random seed.",
+    )
     parser.add_argument(
         "--scheduler_type",
         default="ddim",
@@ -140,22 +144,20 @@ if __name__ == "__main__":
     )
     parser.add_argument("--device", default="gpu", type=str, help="device")
     parser.add_argument("--batch_size", default=16, type=int, help="batch_size")
-    parser.add_argument(
-        "--num_inference_steps",
-        default=50,
-        type=int,
-        help="num_inference_steps")
+    parser.add_argument("--num_inference_steps", default=50, type=int, help="num_inference_steps")
     parser.add_argument(
         "--save_path",
         default="output/1.5b_ldm/12w.pd",
         type=str,
-        help="Path to the output file.")
+        help="Path to the output file.",
+    )
     parser.add_argument(
         "--guidance_scales",
         default=[3, 4, 5, 6, 7, 8],
         nargs="+",
         type=str,
-        help="guidance_scales list.")
+        help="guidance_scales list.",
+    )
     parser.add_argument("--height", default=256, type=int, help="height.")
     parser.add_argument("--width", default=256, type=int, help="width.")
     args = parser.parse_args()
@@ -174,4 +176,5 @@ if __name__ == "__main__":
         scheduler_type=args.scheduler_type,
         height=args.height,
         width=args.width,
-        device=args.device, )
+        device=args.device,
+    )

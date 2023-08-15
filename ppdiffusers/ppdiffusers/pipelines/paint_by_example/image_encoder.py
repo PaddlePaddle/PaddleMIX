@@ -14,11 +14,11 @@
 # limitations under the License.
 import paddle
 from paddle import nn
-
 from paddlenlp.transformers import (
     CLIPPretrainedModel,
     CLIPVisionConfig,
-    CLIPVisionModel, )
+    CLIPVisionModel,
+)
 
 from ...models.attention import BasicTransformerBlock
 from ...utils import logging
@@ -45,8 +45,8 @@ class PaintByExampleImageEncoder(CLIPPretrainedModel):
         self.uncond_vector = self.create_parameter(
             [1, 1, self.projection_dim],
             dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Assign(
-                paddle.rand((1, 1, self.projection_dim))), )
+            default_initializer=nn.initializer.Assign(paddle.rand((1, 1, self.projection_dim))),
+        )
 
     def forward(self, pixel_values, return_uncond_vector=False):
         clip_output = self.model(pixel_values=pixel_values)
@@ -66,14 +66,18 @@ class PaintByExampleMapper(nn.Layer):
         num_layers = (config.num_hidden_layers + 1) // 5
         hid_size = config.hidden_size
         num_heads = 1
-        self.blocks = nn.LayerList([
-            BasicTransformerBlock(
-                hid_size,
-                num_heads,
-                hid_size,
-                activation_fn="gelu",
-                attention_bias=True) for _ in range(num_layers)
-        ])
+        self.blocks = nn.LayerList(
+            [
+                BasicTransformerBlock(
+                    hid_size,
+                    num_heads,
+                    hid_size,
+                    activation_fn="gelu",
+                    attention_bias=True,
+                )
+                for _ in range(num_layers)
+            ]
+        )
 
     def forward(self, hidden_states):
         for block in self.blocks:

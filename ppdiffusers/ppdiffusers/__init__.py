@@ -35,7 +35,8 @@ from .utils import (
     is_torch_available,
     is_unidecode_available,
     is_visualdl_available,
-    logging, )
+    logging,
+)
 from .version import VERSION as __version__
 
 try:
@@ -68,7 +69,8 @@ else:
         UNet2DConditionModel,
         UNet2DModel,
         UNet3DConditionModel,
-        VQModel, )
+        VQModel,
+    )
     from .optimization import (
         get_constant_schedule,
         get_constant_schedule_with_warmup,
@@ -76,7 +78,8 @@ else:
         get_cosine_with_hard_restarts_schedule_with_warmup,
         get_linear_schedule_with_warmup,
         get_polynomial_decay_schedule_with_warmup,
-        get_scheduler, )
+        get_scheduler,
+    )
     from .pipelines import (
         AudioPipelineOutput,
         DanceDiffusionPipeline,
@@ -91,7 +94,8 @@ else:
         PNDMPipeline,
         RePaintPipeline,
         ScoreSdeVePipeline,
-        TextPipelineOutput, )
+        TextPipelineOutput,
+    )
     from .schedulers import (
         DDIMInverseScheduler,
         DDIMScheduler,
@@ -113,10 +117,12 @@ else:
         ScoreSdeVeScheduler,
         UnCLIPScheduler,
         UniPCMultistepScheduler,
-        VQDiffusionScheduler, )
+        VQDiffusionScheduler,
+    )
     from .schedulers.preconfig import (
         PreconfigEulerAncestralDiscreteScheduler,
-        PreconfigLMSDiscreteScheduler, )
+        PreconfigLMSDiscreteScheduler,
+    )
     from .training_utils import EMAModel
 
 try:
@@ -145,8 +151,8 @@ else:
         IFPipeline,
         IFSuperResolutionPipeline,
         LDMTextToImagePipeline,
-        LVDMUncondPipeline,
         LVDMTextToVideoPipeline,
+        LVDMUncondPipeline,
         PaintByExamplePipeline,
         SemanticStableDiffusionPipeline,
         StableDiffusionAdapterPipeline,
@@ -179,13 +185,13 @@ else:
         VersatileDiffusionImageVariationPipeline,
         VersatileDiffusionPipeline,
         VersatileDiffusionTextToImagePipeline,
-        VQDiffusionPipeline, )
+        VQDiffusionPipeline,
+    )
     from .pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertModel
     from .pipelines.unidiffuser.caption_decoder import CaptionDecoder
 
 try:
-    if not (is_paddle_available() and is_paddlenlp_available() and
-            is_k_diffusion_available()):
+    if not (is_paddle_available() and is_paddlenlp_available() and is_k_diffusion_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_and_paddlenlp_and_k_diffusion_objects import *  # noqa F403
@@ -193,8 +199,7 @@ else:
     from .pipelines import StableDiffusionKDiffusionPipeline
 
 try:
-    if not (is_paddle_available() and is_paddlenlp_available() and
-            is_fastdeploy_available()):
+    if not (is_paddle_available() and is_paddlenlp_available() and is_fastdeploy_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_and_paddlenlp_and_fastdeploy_objects import *  # noqa F403
@@ -208,7 +213,8 @@ else:
         FastDeployStableDiffusionInpaintPipelineLegacy,
         FastDeployStableDiffusionMegaPipeline,
         FastDeployStableDiffusionPipeline,
-        FastDeployStableDiffusionUpscalePipeline, )
+        FastDeployStableDiffusionUpscalePipeline,
+    )
 
 try:
     if not (is_paddle_available() and is_librosa_available()):
@@ -219,8 +225,7 @@ else:
     from .pipelines import AudioDiffusionPipeline, Mel
 
 try:
-    if not (is_paddle_available() and is_paddlenlp_available() and
-            is_note_seq_available()):
+    if not (is_paddle_available() and is_paddlenlp_available() and is_note_seq_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_and_paddlenlp_and_note_seq_objects import *  # noqa F403
@@ -228,8 +233,7 @@ else:
     from .pipelines import SpectrogramDiffusionPipeline
 
 try:
-    if not (is_paddle_available() and is_paddlenlp_available() and
-            is_einops_available()):
+    if not (is_paddle_available() and is_paddlenlp_available() and is_einops_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_and_paddlenlp_and_einops_objects import *  # noqa F403

@@ -12,19 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from ..utils import deprecate
-from .attention_processor import (  # noqa: F401
-    Attention, AttentionProcessor, AttnAddedKVProcessor, )
+from .attention_processor import AttentionProcessor  # noqa: F401
+from .attention_processor import AttnProcessor2_5  # noqa: F401
+from .attention_processor import Attention, AttnAddedKVProcessor
 from .attention_processor import AttnProcessor as AttnProcessorRename  # noqa: F401
-from .attention_processor import (  # noqa: F401
-    AttnProcessor2_5, LoRAAttnProcessor, LoRALinearLayer,
-    LoRAXFormersAttnProcessor, SlicedAttnAddedKVProcessor, SlicedAttnProcessor,
-    XFormersAttnProcessor, )
+from .attention_processor import (
+    LoRAAttnProcessor,
+    LoRAXFormersAttnProcessor,
+    SlicedAttnAddedKVProcessor,
+    SlicedAttnProcessor,
+    XFormersAttnProcessor,
+)
 
 deprecate(
     "cross_attention",
     "0.18.0",
     "Importing from cross_attention is deprecated. Please import from diffusers.models.attention_processor instead.",
-    standard_warn=False, )
+    standard_warn=False,
+)
 
 AttnProcessor = AttentionProcessor
 
@@ -32,86 +37,54 @@ AttnProcessor = AttentionProcessor
 class CrossAttention(Attention):
     def __init__(self, *args, **kwargs):
         deprecation_message = f"{self.__class__.__name__} is deprecated and will be removed in `0.18.0`. Please use `from diffusers.models.attention_processor import {''.join(self.__class__.__name__.split('Cross'))} instead."
-        deprecate(
-            "cross_attention",
-            "0.18.0",
-            deprecation_message,
-            standard_warn=False)
+        deprecate("cross_attention", "0.18.0", deprecation_message, standard_warn=False)
         super().__init__(*args, **kwargs)
 
 
 class CrossAttnProcessor(AttnProcessorRename):
     def __init__(self, *args, **kwargs):
         deprecation_message = f"{self.__class__.__name__} is deprecated and will be removed in `0.18.0`. Please use `from diffusers.models.attention_processor import {''.join(self.__class__.__name__.split('Cross'))} instead."
-        deprecate(
-            "cross_attention",
-            "0.18.0",
-            deprecation_message,
-            standard_warn=False)
+        deprecate("cross_attention", "0.18.0", deprecation_message, standard_warn=False)
         super().__init__(*args, **kwargs)
 
 
 class LoRACrossAttnProcessor(LoRAAttnProcessor):
     def __init__(self, *args, **kwargs):
         deprecation_message = f"{self.__class__.__name__} is deprecated and will be removed in `0.18.0`. Please use `from diffusers.models.attention_processor import {''.join(self.__class__.__name__.split('Cross'))} instead."
-        deprecate(
-            "cross_attention",
-            "0.18.0",
-            deprecation_message,
-            standard_warn=False)
+        deprecate("cross_attention", "0.18.0", deprecation_message, standard_warn=False)
         super().__init__(*args, **kwargs)
 
 
 class CrossAttnAddedKVProcessor(AttnAddedKVProcessor):
     def __init__(self, *args, **kwargs):
         deprecation_message = f"{self.__class__.__name__} is deprecated and will be removed in `0.18.0`. Please use `from diffusers.models.attention_processor import {''.join(self.__class__.__name__.split('Cross'))} instead."
-        deprecate(
-            "cross_attention",
-            "0.18.0",
-            deprecation_message,
-            standard_warn=False)
+        deprecate("cross_attention", "0.18.0", deprecation_message, standard_warn=False)
         super().__init__(*args, **kwargs)
 
 
 class XFormersCrossAttnProcessor(XFormersAttnProcessor):
     def __init__(self, *args, **kwargs):
         deprecation_message = f"{self.__class__.__name__} is deprecated and will be removed in `0.18.0`. Please use `from diffusers.models.attention_processor import {''.join(self.__class__.__name__.split('Cross'))} instead."
-        deprecate(
-            "cross_attention",
-            "0.18.0",
-            deprecation_message,
-            standard_warn=False)
+        deprecate("cross_attention", "0.18.0", deprecation_message, standard_warn=False)
         super().__init__(*args, **kwargs)
 
 
 class LoRAXFormersCrossAttnProcessor(LoRAXFormersAttnProcessor):
     def __init__(self, *args, **kwargs):
         deprecation_message = f"{self.__class__.__name__} is deprecated and will be removed in `0.18.0`. Please use `from diffusers.models.attention_processor import {''.join(self.__class__.__name__.split('Cross'))} instead."
-        deprecate(
-            "cross_attention",
-            "0.18.0",
-            deprecation_message,
-            standard_warn=False)
+        deprecate("cross_attention", "0.18.0", deprecation_message, standard_warn=False)
         super().__init__(*args, **kwargs)
 
 
 class SlicedCrossAttnProcessor(SlicedAttnProcessor):
     def __init__(self, *args, **kwargs):
         deprecation_message = f"{self.__class__.__name__} is deprecated and will be removed in `0.18.0`. Please use `from diffusers.models.attention_processor import {''.join(self.__class__.__name__.split('Cross'))} instead."
-        deprecate(
-            "cross_attention",
-            "0.18.0",
-            deprecation_message,
-            standard_warn=False)
+        deprecate("cross_attention", "0.18.0", deprecation_message, standard_warn=False)
         super().__init__(*args, **kwargs)
 
 
 class SlicedCrossAttnAddedKVProcessor(SlicedAttnAddedKVProcessor):
     def __init__(self, *args, **kwargs):
         deprecation_message = f"{self.__class__.__name__} is deprecated and will be removed in `0.18.0`. Please use `from diffusers.models.attention_processor import {''.join(self.__class__.__name__.split('Cross'))} instead."
-        deprecate(
-            "cross_attention",
-            "0.18.0",
-            deprecation_message,
-            standard_warn=False)
+        deprecate("cross_attention", "0.18.0", deprecation_message, standard_warn=False)
         super().__init__(*args, **kwargs)

@@ -31,7 +31,8 @@ from huggingface_hub.file_download import _chmod_and_replace, http_get
 from huggingface_hub.utils import (
     EntryNotFoundError,
     RepositoryNotFoundError,
-    RevisionNotFoundError, )
+    RevisionNotFoundError,
+)
 from huggingface_hub.utils import tqdm as hf_tqdm
 from packaging import version
 from requests import HTTPError
@@ -45,11 +46,12 @@ from .constants import (
     PPDIFFUSERS_CACHE,
     PPNLP_BOS_RESOLVE_ENDPOINT,
     TORCH_SAFETENSORS_WEIGHTS_NAME,
-    WEIGHTS_NAME, )
+    WEIGHTS_NAME,
+)
 from .logging import get_logger
 
 
-def _add_variant(weights_name: str, variant: Optional[str]=None) -> str:
+def _add_variant(weights_name: str, variant: Optional[str] = None) -> str:
     if variant is not None:
         splits = weights_name.split(".")
         splits = splits[:-1] + [variant] + splits[-1:]
@@ -60,36 +62,34 @@ def _add_variant(weights_name: str, variant: Optional[str]=None) -> str:
 
 # https://github.com/huggingface/diffusers/blob/da2ce1a6b92f48cabe9e9d3944c4ee8b007b2871/src/diffusers/utils/hub_utils.py#L246
 def _get_model_file(
-        pretrained_model_name_or_path,
-        *,
-        weights_name,
-        subfolder,
-        cache_dir,
-        force_download=False,
-        revision=None,
-        proxies=None,
-        resume_download=False,
-        local_files_only=None,
-        use_auth_token=None,
-        user_agent=None,
-        commit_hash=None,
-        file_lock_timeout=-1,
-        from_hf_hub=False, ):
+    pretrained_model_name_or_path,
+    *,
+    weights_name,
+    subfolder,
+    cache_dir,
+    force_download=False,
+    revision=None,
+    proxies=None,
+    resume_download=False,
+    local_files_only=None,
+    use_auth_token=None,
+    user_agent=None,
+    commit_hash=None,
+    file_lock_timeout=-1,
+    from_hf_hub=False,
+):
     pretrained_model_name_or_path = str(pretrained_model_name_or_path)
     if os.path.isfile(pretrained_model_name_or_path):
         return pretrained_model_name_or_path
     elif os.path.isdir(pretrained_model_name_or_path):
-        if os.path.isfile(
-                os.path.join(pretrained_model_name_or_path, weights_name)):
+        if os.path.isfile(os.path.join(pretrained_model_name_or_path, weights_name)):
             # Load from a PyTorch checkpoint
-            model_file = os.path.join(pretrained_model_name_or_path,
-                                      weights_name)
+            model_file = os.path.join(pretrained_model_name_or_path, weights_name)
             return model_file
         elif subfolder is not None and os.path.isfile(
-                os.path.join(pretrained_model_name_or_path, subfolder,
-                             weights_name)):
-            model_file = os.path.join(pretrained_model_name_or_path, subfolder,
-                                      weights_name)
+            os.path.join(pretrained_model_name_or_path, subfolder, weights_name)
+        ):
+            model_file = os.path.join(pretrained_model_name_or_path, subfolder, weights_name)
             return model_file
         else:
             raise EnvironmentError(
@@ -110,7 +110,8 @@ def _get_model_file(
             use_auth_token=use_auth_token,
             user_agent=user_agent,
             file_lock_timeout=file_lock_timeout,
-            commit_hash=commit_hash, )
+            commit_hash=commit_hash,
+        )
 
 
 REPO_TYPES = ["model"]
@@ -120,7 +121,9 @@ REGEX_COMMIT_HASH = re.compile(r"^[0-9a-f]{40}$")
 PPDIFFUSERS_BOS_URL_TEMPLATE = PPNLP_BOS_RESOLVE_ENDPOINT + "/{repo_type}/community/{repo_id}/{revision}/{filename}"
 
 ALLOW_PATTERNS_MAPPING = {
-    "scheduler": ["scheduler_config.json", ],
+    "scheduler": [
+        "scheduler_config.json",
+    ],
     "text_encoder": [
         "model_state.pdparams",
         "config.json",
@@ -193,12 +196,13 @@ logger = get_logger(__name__)
 
 
 def ppdiffusers_bos_url(
-        repo_id: str,
-        filename: str,
-        *,
-        subfolder: Optional[str]=None,
-        repo_type: Optional[str]=None,
-        revision: Optional[str]=None, ) -> str:
+    repo_id: str,
+    filename: str,
+    *,
+    subfolder: Optional[str] = None,
+    repo_type: Optional[str] = None,
+    revision: Optional[str] = None,
+) -> str:
     if subfolder == "":
         subfolder = None
     if subfolder is not None:
@@ -215,9 +219,9 @@ def ppdiffusers_bos_url(
     return PPDIFFUSERS_BOS_URL_TEMPLATE.format(
         repo_type=repo_type,
         repo_id=repo_id,
-        revision=quote(
-            revision, safe=""),
-        filename=quote(filename), ).replace(f"/{DEFAULT_REVISION}/", "/")
+        revision=quote(revision, safe=""),
+        filename=quote(filename),
+    ).replace(f"/{DEFAULT_REVISION}/", "/")
 
 
 def repo_folder_name(*, repo_id: str, repo_type: str) -> str:
@@ -232,16 +236,17 @@ def repo_folder_name(*, repo_id: str, repo_type: str) -> str:
 
 
 def ppdiffusers_bos_download(
-        repo_id: str,
-        filename: str,
-        *,
-        subfolder: Optional[str]=None,
-        repo_type: Optional[str]=None,
-        revision: Optional[str]=None,
-        cache_dir: Union[str, Path, None]=None,
-        force_download: bool=False,
-        resume_download: bool=False,
-        file_lock_timeout: int=-1, ):
+    repo_id: str,
+    filename: str,
+    *,
+    subfolder: Optional[str] = None,
+    repo_type: Optional[str] = None,
+    revision: Optional[str] = None,
+    cache_dir: Union[str, Path, None] = None,
+    force_download: bool = False,
+    resume_download: bool = False,
+    file_lock_timeout: int = -1,
+):
     if cache_dir is None:
         cache_dir = PPDIFFUSERS_CACHE
     if revision is None:
@@ -259,12 +264,8 @@ def ppdiffusers_bos_download(
         repo_type = REPO_TYPES[0]
 
     if repo_type not in REPO_TYPES:
-        raise ValueError(
-            f"Invalid repo type: {repo_type}. Accepted repo types are:"
-            f" {str(REPO_TYPES)}")
-    storage_folder = os.path.join(
-        cache_dir, repo_folder_name(
-            repo_id=repo_id, repo_type=repo_type))
+        raise ValueError(f"Invalid repo type: {repo_type}. Accepted repo types are:" f" {str(REPO_TYPES)}")
+    storage_folder = os.path.join(cache_dir, repo_folder_name(repo_id=repo_id, repo_type=repo_type))
     os.makedirs(storage_folder, exist_ok=True)
 
     # cross platform transcription of filename, to be used as a local file path.
@@ -278,8 +279,7 @@ def ppdiffusers_bos_download(
     if os.path.exists(pointer_path) and not force_download:
         return pointer_path
 
-    url_to_download = ppdiffusers_bos_url(
-        repo_id, filename, repo_type=repo_type, revision=revision)
+    url_to_download = ppdiffusers_bos_url(repo_id, filename, repo_type=repo_type, revision=revision)
 
     blob_path = os.path.join(storage_folder, filename)
     # Prevent parallel downloads of the same file with a lock.
@@ -315,10 +315,8 @@ def ppdiffusers_bos_download(
                 resume_size = 0
         else:
             temp_file_manager = partial(  # type: ignore
-                tempfile.NamedTemporaryFile,
-                mode="wb",
-                dir=cache_dir,
-                delete=False)
+                tempfile.NamedTemporaryFile, mode="wb", dir=cache_dir, delete=False
+            )
             resume_size = 0
 
         # Download to temporary file, then copy to cache dir once finished.
@@ -331,7 +329,8 @@ def ppdiffusers_bos_download(
                 temp_file,
                 proxies=None,
                 resume_size=resume_size,
-                headers=None, )
+                headers=None,
+            )
 
         logger.info("storing %s in cache at %s", url_to_download, blob_path)
         _chmod_and_replace(temp_file.name, blob_path)
@@ -344,12 +343,13 @@ def ppdiffusers_bos_download(
 
 
 def ppdiffusers_url_download(
-        url_to_download: str,
-        cache_dir: Union[str, Path, None]=None,
-        filename: Optional[str]=None,
-        force_download: bool=False,
-        resume_download: bool=False,
-        file_lock_timeout: int=-1, ):
+    url_to_download: str,
+    cache_dir: Union[str, Path, None] = None,
+    filename: Optional[str] = None,
+    force_download: bool = False,
+    resume_download: bool = False,
+    file_lock_timeout: int = -1,
+):
     if cache_dir is None:
         cache_dir = PPDIFFUSERS_CACHE
     if isinstance(cache_dir, Path):
@@ -389,10 +389,8 @@ def ppdiffusers_url_download(
                 resume_size = 0
         else:
             temp_file_manager = partial(  # type: ignore
-                tempfile.NamedTemporaryFile,
-                mode="wb",
-                dir=cache_dir,
-                delete=False)
+                tempfile.NamedTemporaryFile, mode="wb", dir=cache_dir, delete=False
+            )
             resume_size = 0
 
         # Download to temporary file, then copy to cache dir once finished.
@@ -405,7 +403,8 @@ def ppdiffusers_url_download(
                 temp_file,
                 proxies=None,
                 resume_size=resume_size,
-                headers=None, )
+                headers=None,
+            )
 
         logger.info("storing %s in cache at %s", url_to_download, file_path)
         _chmod_and_replace(temp_file.name, file_path)
@@ -417,28 +416,29 @@ def ppdiffusers_url_download(
 
 
 def bos_hf_download(
-        pretrained_model_name_or_path,
-        *,
-        filename,
-        subfolder,
-        cache_dir,
-        force_download=False,
-        revision=None,
-        from_hf_hub=False,
-        proxies=None,
-        resume_download=False,
-        local_files_only=None,
-        use_auth_token=None,
-        user_agent=None,
-        file_lock_timeout=-1,
-        commit_hash=None, ):
+    pretrained_model_name_or_path,
+    *,
+    filename,
+    subfolder,
+    cache_dir,
+    force_download=False,
+    revision=None,
+    from_hf_hub=False,
+    proxies=None,
+    resume_download=False,
+    local_files_only=None,
+    use_auth_token=None,
+    user_agent=None,
+    file_lock_timeout=-1,
+    commit_hash=None,
+):
     if from_hf_hub:
         # 1. First check if deprecated way of loading from branches is used
-        if (revision in DEPRECATED_REVISION_ARGS and
-            (filename == WEIGHTS_NAME or
-             filename == TORCH_SAFETENSORS_WEIGHTS_NAME) and
-                version.parse(version.parse(__version__).base_version) >=
-                version.parse("0.17.0")):
+        if (
+            revision in DEPRECATED_REVISION_ARGS
+            and (filename == WEIGHTS_NAME or filename == TORCH_SAFETENSORS_WEIGHTS_NAME)
+            and version.parse(version.parse(__version__).base_version) >= version.parse("0.17.0")
+        ):
             try:
                 model_file = hf_hub_download(
                     pretrained_model_name_or_path,
@@ -451,15 +451,18 @@ def bos_hf_download(
                     use_auth_token=use_auth_token,
                     user_agent=user_agent,
                     subfolder=subfolder,
-                    revision=revision or commit_hash, )
+                    revision=revision or commit_hash,
+                )
                 warnings.warn(
                     f"Loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'` is deprecated. Loading instead from `revision='main'` with `variant={revision}`. Loading model variants via `revision='{revision}'` will be removed in diffusers v1. Please use `variant='{revision}'` instead.",
-                    FutureWarning, )
+                    FutureWarning,
+                )
                 return model_file
             except:  # noqa: E722
                 warnings.warn(
                     f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'`. This behavior is deprecated and will be removed in diffusers v1. One should use `variant='{revision}'` instead. However, it appears that {pretrained_model_name_or_path} currently does not have a {_add_variant(filename, revision)} file in the 'main' branch of {pretrained_model_name_or_path}. \n The Diffusers team and community would be very grateful if you could open an issue: https://github.com/huggingface/diffusers/issues/new with the title '{pretrained_model_name_or_path} is missing {_add_variant(filename, revision)}' so that the correct variant file can be added.",
-                    FutureWarning, )
+                    FutureWarning,
+                )
         # 2. Load model file as usual
         try:
             model_file = hf_hub_download(
@@ -473,7 +476,8 @@ def bos_hf_download(
                 use_auth_token=use_auth_token,
                 user_agent=user_agent,
                 subfolder=subfolder,
-                revision=revision, )
+                revision=revision,
+            )
             return model_file
 
         except RepositoryNotFoundError:
@@ -481,7 +485,8 @@ def bos_hf_download(
                 f"{pretrained_model_name_or_path} is not a local folder and is not a valid model identifier "
                 "listed on 'https://huggingface.co/models'\nIf this is a private repository, make sure to pass a "
                 "token having permission to this repo with `use_auth_token` or log in with `huggingface-cli "
-                "login`.")
+                "login`."
+            )
         except RevisionNotFoundError:
             raise EnvironmentError(
                 f"{revision} is not a valid git identifier (branch name, tag name or commit id) that exists for "
@@ -489,9 +494,7 @@ def bos_hf_download(
                 f"'https://huggingface.co/{pretrained_model_name_or_path}' for available revisions."
             )
         except EntryNotFoundError:
-            raise EnvironmentError(
-                f"{pretrained_model_name_or_path} does not appear to have a file named {filename}."
-            )
+            raise EnvironmentError(f"{pretrained_model_name_or_path} does not appear to have a file named {filename}.")
         except HTTPError as err:
             raise EnvironmentError(
                 f"There was a specific connection error when trying to load {pretrained_model_name_or_path}:\n{err}"
@@ -509,7 +512,8 @@ def bos_hf_download(
                 f"Can't load the model for '{pretrained_model_name_or_path}'. If you were trying to load it from "
                 "'https://huggingface.co/models', make sure you don't have a local directory with the same name. "
                 f"Otherwise, make sure '{pretrained_model_name_or_path}' is the correct path to a directory "
-                f"containing a file named {filename}")
+                f"containing a file named {filename}"
+            )
         except KeyboardInterrupt:
             raise EnvironmentError(
                 "You have interrupted the download, if you want to continue the download, you can set `resume_download=True`!"
@@ -524,7 +528,8 @@ def bos_hf_download(
                 resume_download=resume_download,
                 subfolder=subfolder,
                 revision=revision,
-                file_lock_timeout=file_lock_timeout, )
+                file_lock_timeout=file_lock_timeout,
+            )
             return model_file
         except HTTPError as err:
             raise EnvironmentError(
@@ -532,13 +537,15 @@ def bos_hf_download(
                 f"There was a specific connection error when trying to load '{pretrained_model_name_or_path}'! "
                 f"We couldn't connect to '{PPNLP_BOS_RESOLVE_ENDPOINT}' to load this model, couldn't find it "
                 f"in the cached files and it looks like '{pretrained_model_name_or_path}' is not the path to a "
-                f"directory containing a file named '{filename}'.")
+                f"directory containing a file named '{filename}'."
+            )
         except EnvironmentError:
             raise EnvironmentError(
                 f"Can't load the model for '{pretrained_model_name_or_path}'. If you were trying to load it from "
                 f"'{PPNLP_BOS_RESOLVE_ENDPOINT}', make sure you don't have a local directory with the same name. "
                 f"Otherwise, make sure '{pretrained_model_name_or_path}' is the correct path to a directory "
-                f"containing a file named '{filename}'")
+                f"containing a file named '{filename}'"
+            )
         except KeyboardInterrupt:
             raise EnvironmentError(
                 "You have interrupted the download, if you want to continue the download, you can set `resume_download=True`!"
@@ -565,20 +572,21 @@ def url_file_exists(url: str) -> bool:
 
 
 def ppdiffusers_bos_dir_download(
-        repo_id: str,
-        *,
-        revision: Optional[str]=None,
-        repo_type: Optional[str]=None,
-        cache_dir: Union[str, Path, None]=None,
-        force_download: bool=False,
-        resume_download: bool=False,
-        folder_names: Optional[Union[List[str], str]]=None,
-        max_workers: int=1,
-        tqdm_class: Optional[base_tqdm]=None,
-        variant: Optional[str]=None,
-        is_fastdeploy_model: Optional[str]=False,
-        file_lock_timeout: int=-1,
-        local_files_only: bool=False, ) -> str:
+    repo_id: str,
+    *,
+    revision: Optional[str] = None,
+    repo_type: Optional[str] = None,
+    cache_dir: Union[str, Path, None] = None,
+    force_download: bool = False,
+    resume_download: bool = False,
+    folder_names: Optional[Union[List[str], str]] = None,
+    max_workers: int = 1,
+    tqdm_class: Optional[base_tqdm] = None,
+    variant: Optional[str] = None,
+    is_fastdeploy_model: Optional[str] = False,
+    file_lock_timeout: int = -1,
+    local_files_only: bool = False,
+) -> str:
     # update repo id must end with @fastdeploy
     if is_fastdeploy_model and not repo_id.endswith("@fastdeploy"):
         repo_id = f"{repo_id}@fastdeploy"
@@ -588,12 +596,9 @@ def ppdiffusers_bos_dir_download(
 
     filtered_repo_files = [["model_index.json", None]]
     for subfolder in folder_names:
-        allow_patterns = ALLOW_PATTERNS_MAPPING.get(
-            subfolder, ALLOW_PATTERNS_MAPPING["others"])
+        allow_patterns = ALLOW_PATTERNS_MAPPING.get(subfolder, ALLOW_PATTERNS_MAPPING["others"])
         if is_fastdeploy_model:
-            allow_patterns = [
-                ap for ap in allow_patterns if "pdparams" not in ap
-            ]
+            allow_patterns = [ap for ap in allow_patterns if "pdparams" not in ap]
             allow_patterns.extend(["inference.pdiparams", "inference.pdmodel"])
         for filename in allow_patterns:
             need_to_check_no_variant_file = False
@@ -605,25 +610,31 @@ def ppdiffusers_bos_dir_download(
             url = ppdiffusers_bos_url(
                 repo_id,
                 filename=filename,
-                subfolder=subfolder, )
+                subfolder=subfolder,
+            )
             if url_file_exists(url):
                 # exist file
-                filtered_repo_files.append([
-                    filename,
-                    subfolder,
-                ])
+                filtered_repo_files.append(
+                    [
+                        filename,
+                        subfolder,
+                    ]
+                )
             else:
                 if need_to_check_no_variant_file:
                     url = ppdiffusers_bos_url(
                         repo_id,
                         filename=raw_filename,
-                        subfolder=subfolder, )
+                        subfolder=subfolder,
+                    )
                     if url_file_exists(url):
                         # exist file
-                        filtered_repo_files.append([
-                            raw_filename,
-                            subfolder,
-                        ])
+                        filtered_repo_files.append(
+                            [
+                                raw_filename,
+                                subfolder,
+                            ]
+                        )
 
     def _inner_ppdiffusers_bos_download(repo_file_list):
         filename, _subfolder = repo_file_list
@@ -636,7 +647,8 @@ def ppdiffusers_bos_dir_download(
             revision=revision,
             resume_download=resume_download,
             force_download=force_download,
-            file_lock_timeout=file_lock_timeout, )
+            file_lock_timeout=file_lock_timeout,
+        )
 
     thread_map(
         _inner_ppdiffusers_bos_download,
@@ -644,5 +656,6 @@ def ppdiffusers_bos_dir_download(
         desc=f"Fetching {len(filtered_repo_files)} files",
         max_workers=max_workers,
         # User can use its own tqdm class or the default one from `huggingface_hub.utils`
-        tqdm_class=tqdm_class or hf_tqdm, )
+        tqdm_class=tqdm_class or hf_tqdm,
+    )
     return os.path.join(cache_dir, repo_id)

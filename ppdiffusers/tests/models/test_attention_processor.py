@@ -20,7 +20,7 @@ from ppdiffusers.models.attention_processor import Attention, AttnAddedKVProcess
 
 
 class AttnAddedKVProcessorTests(unittest.TestCase):
-    def get_constructor_arguments(self, only_cross_attention: bool=False):
+    def get_constructor_arguments(self, only_cross_attention: bool = False):
         query_dim = 10
 
         if only_cross_attention:
@@ -58,8 +58,7 @@ class AttnAddedKVProcessorTests(unittest.TestCase):
 
         paddle.seed(0)
 
-        constructor_args = self.get_constructor_arguments(
-            only_cross_attention=False)
+        constructor_args = self.get_constructor_arguments(only_cross_attention=False)
         attn = Attention(**constructor_args)
 
         self.assertTrue(attn.to_k is not None)
@@ -67,7 +66,8 @@ class AttnAddedKVProcessorTests(unittest.TestCase):
 
         forward_args = self.get_forward_arguments(
             query_dim=constructor_args["query_dim"],
-            added_kv_proj_dim=constructor_args["added_kv_proj_dim"])
+            added_kv_proj_dim=constructor_args["added_kv_proj_dim"],
+        )
 
         self_and_cross_attn_out = attn(**forward_args)
 
@@ -75,8 +75,7 @@ class AttnAddedKVProcessorTests(unittest.TestCase):
 
         paddle.seed(0)
 
-        constructor_args = self.get_constructor_arguments(
-            only_cross_attention=True)
+        constructor_args = self.get_constructor_arguments(only_cross_attention=True)
         attn = Attention(**constructor_args)
 
         self.assertTrue(attn.to_k is None)
@@ -84,7 +83,8 @@ class AttnAddedKVProcessorTests(unittest.TestCase):
 
         forward_args = self.get_forward_arguments(
             query_dim=constructor_args["query_dim"],
-            added_kv_proj_dim=constructor_args["added_kv_proj_dim"])
+            added_kv_proj_dim=constructor_args["added_kv_proj_dim"],
+        )
 
         only_cross_attn_out = attn(**forward_args)
 

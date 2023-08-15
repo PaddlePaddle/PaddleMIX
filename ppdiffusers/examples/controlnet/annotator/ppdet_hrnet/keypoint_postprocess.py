@@ -50,14 +50,11 @@ class HrHRNetPostProcess(object):
         right = np.clip(x + 1, 0, W - 1)
         up = np.clip(y - 1, 0, H - 1)
         down = np.clip(y + 1, 0, H - 1)
-        offset_y = np.where(heatmap[j, down, x] > heatmap[j, up, x], 0.25,
-                            -0.25)
-        offset_x = np.where(heatmap[j, y, right] > heatmap[j, y, left], 0.25,
-                            -0.25)
+        offset_y = np.where(heatmap[j, down, x] > heatmap[j, up, x], 0.25, -0.25)
+        offset_x = np.where(heatmap[j, y, right] > heatmap[j, y, left], 0.25, -0.25)
         return offset_y + 0.5, offset_x + 0.5
 
-    def __call__(self, heatmap, tagmap, heat_k, inds_k, original_height,
-                 original_width):
+    def __call__(self, heatmap, tagmap, heat_k, inds_k, original_height, original_width):
 
         N, J, H, W = heatmap.shape
         assert N == 1, "only support batch size 1"
@@ -67,14 +64,19 @@ class HrHRNetPostProcess(object):
         inds_np = inds_k[0]
         y = inds_np // W
         x = inds_np % W
-        tags = tagmap[np.arange(J)[None, :].repeat(self.max_num_people),
-                      y.flatten(), x.flatten()].reshape(J, -1, tagmap.shape[-1])
+        tags = tagmap[np.arange(J)[None, :].repeat(self.max_num_people), y.flatten(), x.flatten()].reshape(
+            J, -1, tagmap.shape[-1]
+        )
         coords = np.stack((y, x), axis=2)
         # threshold
         mask = heats > self.heat_thresh
         # cluster
         cluster = defaultdict(
-            lambda: {"coords": np.zeros((J, 2), dtype=np.float32), "scores": np.zeros(J, dtype=np.float32), "tags": []}
+            lambda: {
+                "coords": np.zeros((J, 2), dtype=np.float32),
+                "scores": np.zeros(J, dtype=np.float32),
+                "tags": [],
+            }
         )
         for jid, m in enumerate(mask):
             num_valid = m.sum()
@@ -90,11 +92,8 @@ class HrHRNetPostProcess(object):
                     cluster[key]["scores"][jid] = heats[jid, i]
                     cluster[key]["coords"][jid] = coords[jid, i]
                 continue
-            candidates = list(cluster.keys())[:self.max_num_people]
-            centroids = [
-                np.mean(
-                    cluster[k]["tags"], axis=0) for k in candidates
-            ]
+            candidates = list(cluster.keys())[: self.max_num_people]
+            centroids = [np.mean(cluster[k]["tags"], axis=0) for k in candidates]
             num_clusters = len(centroids)
             # shape is (num_valid, num_clusters, tag_dim)
             dist = valid_tags[:, None, :] - np.array(centroids)[None, ...]
@@ -103,14 +102,16 @@ class HrHRNetPostProcess(object):
             cost = np.round(l2_dist) * 100 - heats[jid, m, None]
             # pad the cost matrix, otherwise new pose are ignored
             if num_valid > num_clusters:
-                cost = np.pad(cost, ((0, 0), (0, num_valid - num_clusters)),
-                              "constant",
-                              constant_values=((0, 0), (0, 1e-10)))
+                cost = np.pad(
+                    cost,
+                    ((0, 0), (0, num_valid - num_clusters)),
+                    "constant",
+                    constant_values=((0, 0), (0, 1e-10)),
+                )
             rows, cols = linear_sum_assignment(cost)
             for y, x in zip(rows, cols):
                 tag = tags[jid, y]
-                if y < num_valid and x < num_clusters and l2_dist[
-                        y, x] < self.tag_thresh:
+                if y < num_valid and x < num_clusters and l2_dist[y, x] < self.tag_thresh:
                     key = candidates[x]  # merge to cluster
                 else:
                     key = tag[0]  # initialize new cluster
@@ -145,7 +146,7 @@ class HrHRNetPostProcess(object):
         if True:
             for pid, coords in enumerate(pose_coords):
                 tag_mean = np.array(pose_tags[pid]).mean(axis=0)
-                norm = np.sum((tagmap - tag_mean)**2, axis=3)**0.5
+                norm = np.sum((tagmap - tag_mean) ** 2, axis=3) ** 0.5
                 score = heatmap - np.round(norm)  # (J, H, W)
                 flat_score = score.reshape(J, -1)
                 max_inds = np.argmax(flat_score, axis=1)
@@ -161,9 +162,7 @@ class HrHRNetPostProcess(object):
                 pose_coords[pid][salvage_joints, 0] = y
                 pose_coords[pid][salvage_joints, 1] = x
                 pose_kpts[pid][salvage_joints, 2] = max_scores[salvage_joints]
-        pose_kpts[..., :2] = transpred(pose_coords[..., :2][..., ::-1],
-                                       original_height, original_width,
-                                       min(H, W))
+        pose_kpts[..., :2] = transpred(pose_coords[..., :2][..., ::-1], original_height, original_width, min(H, W))
         return pose_kpts, mean_score
 
 
@@ -187,9 +186,7 @@ def warp_affine_joints(joints, mat):
     joints = np.array(joints)
     shape = joints.shape
     joints = joints.reshape(-1, 2)
-    return np.dot(np.concatenate(
-        (joints, joints[:, 0:1] * 0 + 1), axis=1),
-                  mat.T).reshape(shape)
+    return np.dot(np.concatenate((joints, joints[:, 0:1] * 0 + 1), axis=1), mat.T).reshape(shape)
 
 
 class HRNetPostProcess(object):
@@ -218,8 +215,7 @@ class HRNetPostProcess(object):
             preds: numpy.ndarray([batch_size, num_joints, 2]), keypoints coords
             maxvals: numpy.ndarray([batch_size, num_joints, 2]), the maximum confidence of the keypoints
         """
-        assert isinstance(heatmaps,
-                          np.ndarray), "heatmaps should be numpy.ndarray"
+        assert isinstance(heatmaps, np.ndarray), "heatmaps should be numpy.ndarray"
         assert heatmaps.ndim == 4, "batch_images should be 4-ndim"
 
         batch_size = heatmaps.shape[0]
@@ -269,10 +265,8 @@ class HRNetPostProcess(object):
             dx = 0.5 * (hm[py][px + 1] - hm[py][px - 1])
             dy = 0.5 * (hm[py + 1][px] - hm[py - 1][px])
             dxx = 0.25 * (hm[py][px + 2] - 2 * hm[py][px] + hm[py][px - 2])
-            dxy = 0.25 * (hm[py + 1][px + 1] - hm[py - 1][px + 1] -
-                          hm[py + 1][px - 1] + hm[py - 1][px - 1])
-            dyy = 0.25 * (
-                hm[py + 2 * 1][px] - 2 * hm[py][px] + hm[py - 2 * 1][px])
+            dxy = 0.25 * (hm[py + 1][px + 1] - hm[py - 1][px + 1] - hm[py + 1][px - 1] + hm[py - 1][px - 1])
+            dyy = 0.25 * (hm[py + 2 * 1][px] - 2 * hm[py][px] + hm[py - 2 * 1][px])
             derivative = np.matrix([[dx], [dy]])
             hessian = np.matrix([[dxx, dxy], [dxy, dyy]])
             if dxx * dyy - dxy**2 != 0:
@@ -323,25 +317,24 @@ class HRNetPostProcess(object):
                     px = int(math.floor(coords[n][p][0] + 0.5))
                     py = int(math.floor(coords[n][p][1] + 0.5))
                     if 1 < px < heatmap_width - 1 and 1 < py < heatmap_height - 1:
-                        diff = np.array([
-                            hm[py][px + 1] - hm[py][px - 1],
-                            hm[py + 1][px] - hm[py - 1][px]
-                        ])
+                        diff = np.array(
+                            [
+                                hm[py][px + 1] - hm[py][px - 1],
+                                hm[py + 1][px] - hm[py - 1][px],
+                            ]
+                        )
                         coords[n][p] += np.sign(diff) * 0.25
         preds = coords.copy()
 
         # Transform back
         for i in range(coords.shape[0]):
-            preds[i] = transform_preds(coords[i], center[i], scale[i],
-                                       [heatmap_width, heatmap_height])
+            preds[i] = transform_preds(coords[i], center[i], scale[i], [heatmap_width, heatmap_height])
 
         return preds, maxvals
 
     def __call__(self, output, center, scale):
         preds, maxvals = self.get_final_preds(output, center, scale)
-        return np.concatenate(
-            (preds, maxvals), axis=-1), np.mean(
-                maxvals, axis=1)
+        return np.concatenate((preds, maxvals), axis=-1), np.mean(maxvals, axis=1)
 
 
 def transform_preds(coords, center, scale, output_size):

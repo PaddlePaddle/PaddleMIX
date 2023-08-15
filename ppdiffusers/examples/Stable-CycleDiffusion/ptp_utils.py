@@ -22,13 +22,9 @@ import paddle
 
 def register_attention_control(model, controller):
     def ca_forward(self, place_in_unet):
-        def forward(hidden_states,
-                    encoder_hidden_states=None,
-                    attention_mask=None,
-                    **cross_attention_kwargs):
+        def forward(hidden_states, encoder_hidden_states=None, attention_mask=None, **cross_attention_kwargs):
             batch_size, sequence_length, _ = hidden_states.shape
-            attention_mask = self.prepare_attention_mask(
-                attention_mask, sequence_length, batch_size)
+            attention_mask = self.prepare_attention_mask(attention_mask, sequence_length, batch_size)
 
             query = self.to_q(hidden_states)
             query = self.head_to_batch_dim(query)
@@ -41,11 +37,9 @@ def register_attention_control(model, controller):
             key = self.head_to_batch_dim(key)
             value = self.head_to_batch_dim(value)
 
-            attention_probs = self.get_attention_scores(query, key,
-                                                        attention_mask)
+            attention_probs = self.get_attention_scores(query, key, attention_mask)
 
-            attention_probs = controller(attention_probs, is_cross,
-                                         place_in_unet)
+            attention_probs = controller(attention_probs, is_cross, place_in_unet)
 
             hidden_states = paddle.matmul(attention_probs, value)
             hidden_states = self.batch_to_head_dim(hidden_states)
@@ -82,17 +76,12 @@ def register_attention_control(model, controller):
 def get_word_inds(text: str, word_place: int, tokenizer):
     split_text = text.split(" ")
     if type(word_place) is str:
-        word_place = [
-            i for i, word in enumerate(split_text) if word_place == word
-        ]
+        word_place = [i for i, word in enumerate(split_text) if word_place == word]
     elif type(word_place) is int:
         word_place = [word_place]
     out = []
     if len(word_place) > 0:
-        words_encode = [
-            tokenizer.decode([item]).strip("#")
-            for item in tokenizer.encode(text).input_ids
-        ][1:-1]
+        words_encode = [tokenizer.decode([item]).strip("#") for item in tokenizer.encode(text).input_ids][1:-1]
         cur_len, ptr = 0, 0
 
         for i in range(len(words_encode)):
@@ -105,14 +94,15 @@ def get_word_inds(text: str, word_place: int, tokenizer):
     return np.array(out)
 
 
-def update_alpha_time_word(alpha,
-                           bounds: Union[float, Tuple[float, float]],
-                           prompt_ind: int,
-                           word_inds: Optional[paddle.Tensor]=None):
+def update_alpha_time_word(
+    alpha,
+    bounds: Union[float, Tuple[float, float]],
+    prompt_ind: int,
+    word_inds: Optional[paddle.Tensor] = None,
+):
     if type(bounds) is float or bounds == 0:
         bounds = 0, bounds
-    start, end = int(bounds[0] * alpha.shape[0]), int(bounds[1] *
-                                                      alpha.shape[0])
+    start, end = int(bounds[0] * alpha.shape[0]), int(bounds[1] * alpha.shape[0])
     if word_inds is None:
         word_inds = paddle.arange(alpha.shape[2])
     alpha[:start, prompt_ind, word_inds] = 0
@@ -122,32 +112,26 @@ def update_alpha_time_word(alpha,
 
 
 def get_time_words_attention_alpha(
-        prompts,
-        num_steps,
-        cross_replace_steps: Union[float, Tuple[float, float], Dict[str, Tuple[
-            float, float]]],
-        tokenizer,
-        max_num_words=77, ):
+    prompts,
+    num_steps,
+    cross_replace_steps: Union[float, Tuple[float, float], Dict[str, Tuple[float, float]]],
+    tokenizer,
+    max_num_words=77,
+):
     if type(cross_replace_steps) is not dict:
         cross_replace_steps = {"default_": cross_replace_steps}
     if "default_" not in cross_replace_steps:
         cross_replace_steps["default_"] = (0.0, 1.0)
-    alpha_time_words = paddle.zeros(
-        [num_steps + 1, len(prompts) - 1, max_num_words])
+    alpha_time_words = paddle.zeros([num_steps + 1, len(prompts) - 1, max_num_words])
     for i in range(len(prompts) - 1):
-        alpha_time_words = update_alpha_time_word(
-            alpha_time_words, cross_replace_steps["default_"], i)
+        alpha_time_words = update_alpha_time_word(alpha_time_words, cross_replace_steps["default_"], i)
     for key, item in cross_replace_steps.items():
         if key != "default_":
-            inds = [
-                get_word_inds(prompts[i], key, tokenizer)
-                for i in range(1, len(prompts))
-            ]
+            inds = [get_word_inds(prompts[i], key, tokenizer) for i in range(1, len(prompts))]
             for i, ind in enumerate(inds):
                 if len(ind) > 0:
-                    alpha_time_words = update_alpha_time_word(alpha_time_words,
-                                                              item, i, ind)
+                    alpha_time_words = update_alpha_time_word(alpha_time_words, item, i, ind)
     alpha_time_words = alpha_time_words.reshape(
-        [num_steps + 1, len(prompts) - 1, 1, 1,
-         max_num_words])  # time, batch, heads, pixels, words
+        [num_steps + 1, len(prompts) - 1, 1, 1, max_num_words]
+    )  # time, batch, heads, pixels, words
     return alpha_time_words

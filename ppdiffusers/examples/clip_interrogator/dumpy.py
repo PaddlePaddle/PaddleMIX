@@ -18,7 +18,8 @@ from clip_interrogator import (
     BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
     CLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
     Config,
-    Interrogator, )
+    Interrogator,
+)
 
 blip_pretrained_model_name_or_path = "Salesforce/blip-image-captioning-base"
 clip_pretrained_model_name_or_path = "openai/clip-vit-large-patch14"
@@ -40,16 +41,18 @@ if blip_pretrained_model_name_or_path not in BLIP_PRETRAINED_MODEL_ARCHIVE_LIST:
 config = Config(
     blip_num_beams=64,
     blip_pretrained_model_name_or_path=blip_pretrained_model_name_or_path,
-    clip_pretrained_model_name_or_path=clip_pretrained_model_name_or_path, )
+    clip_pretrained_model_name_or_path=clip_pretrained_model_name_or_path,
+)
 ci = Interrogator(config)
 
 
 def inference(image, mode, best_max_flavors=32):
-    ci.config.chunk_size = (2048 if ci.config.clip_pretrained_model_name_or_path
-                            == "openai/clip-vit-large-patch14" else 1024)
+    ci.config.chunk_size = (
+        2048 if ci.config.clip_pretrained_model_name_or_path == "openai/clip-vit-large-patch14" else 1024
+    )
     ci.config.flavor_intermediate_count = (
-        2048 if ci.config.clip_pretrained_model_name_or_path ==
-        "openai/clip-vit-large-patch14" else 1024)
+        2048 if ci.config.clip_pretrained_model_name_or_path == "openai/clip-vit-large-patch14" else 1024
+    )
     image = image.convert("RGB")
     if mode == "best":
         return ci.interrogate(image, max_flavors=int(best_max_flavors))
@@ -61,16 +64,17 @@ def inference(image, mode, best_max_flavors=32):
 
 inputs = [
     gr.inputs.Image(type="pil"),
-    gr.Radio(
-        ["best", "fast", "classic"], label="", value="best"),
-    gr.Number(
-        value=16, label="best mode max flavors"),
+    gr.Radio(["best", "fast", "classic"], label="", value="best"),
+    gr.Number(value=16, label="best mode max flavors"),
 ]
-outputs = [gr.outputs.Textbox(label="Output"), ]
+outputs = [
+    gr.outputs.Textbox(label="Output"),
+]
 
 io = gr.Interface(
     inference,
     inputs,
     outputs,
-    allow_flagging=False, )
+    allow_flagging=False,
+)
 io.launch(debug=False, server_name="0.0.0.0", server_port=8586)

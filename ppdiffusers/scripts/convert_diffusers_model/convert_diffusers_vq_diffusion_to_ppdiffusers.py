@@ -18,8 +18,8 @@ from collections import OrderedDict
 import paddle
 import torch
 from diffusers import VQDiffusionPipeline as DiffusersVQDiffusionPipeline
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+
 from ppdiffusers import Transformer2DModel
 from ppdiffusers import VQDiffusionPipeline as PPDiffusersVQDiffusionPipeline
 from ppdiffusers import VQDiffusionScheduler, VQModel
@@ -61,9 +61,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True):
         ".vision_model.": ".",
     }
     ignore_value = ["position_ids"]
-    donot_transpose = [
-        "embeddings", "norm", "concept_embeds", "special_care_embeds"
-    ]
+    donot_transpose = ["embeddings", "norm", "concept_embeds", "special_care_embeds"]
 
     for name, value in clip.state_dict().items():
         # step1: ignore position_ids
@@ -77,7 +75,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True):
             name = name.replace(hf_name, ppnlp_name)
         # step4: 0d tensor -> 1d tensor
         if name == "logit_scale":
-            value = value.reshape((1, ))
+            value = value.reshape((1,))
         # step5: safety_checker need prefix "clip."
         if "vision_model" in name:
             name = "clip." + name
@@ -102,20 +100,17 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True):
             "vision_heads": clip.config.vision_config.num_attention_heads,
             "vision_embed_dim": clip.config.vision_config.hidden_size,
             "vision_patch_size": clip.config.vision_config.patch_size,
-            "vision_mlp_ratio": clip.config.vision_config.intermediate_size //
-            clip.config.vision_config.hidden_size,
+            "vision_mlp_ratio": clip.config.vision_config.intermediate_size // clip.config.vision_config.hidden_size,
             "vision_hidden_act": clip.config.vision_config.hidden_act,
             "projection_dim": clip.config.projection_dim,
         }
     return new_model_state, new_config
 
 
-def convert_diffusers_vq_diffusion_to_ppdiffusers(pretrained_model_name_or_path,
-                                                  output_path=None):
+def convert_diffusers_vq_diffusion_to_ppdiffusers(pretrained_model_name_or_path, output_path=None):
 
     # 0. load diffusers pipe and convert to ppdiffusers weights format
-    diffusers_pipe = DiffusersVQDiffusionPipeline.from_pretrained(
-        pretrained_model_name_or_path, use_auth_token=True)
+    diffusers_pipe = DiffusersVQDiffusionPipeline.from_pretrained(pretrained_model_name_or_path, use_auth_token=True)
 
     # 1. vqvae
     vqvae_state_dict = convert_to_ppdiffusers(diffusers_pipe.vqvae)
@@ -123,34 +118,33 @@ def convert_diffusers_vq_diffusion_to_ppdiffusers(pretrained_model_name_or_path,
     transformer_state_dict = convert_to_ppdiffusers(diffusers_pipe.transformer)
     # 3. learned_classifier_free_sampling_embeddings
     learned_classifier_free_sampling_embeddings_state_dict = convert_to_ppdiffusers(
-        diffusers_pipe.learned_classifier_free_sampling_embeddings)
+        diffusers_pipe.learned_classifier_free_sampling_embeddings
+    )
     # 4.text_encoder
     text_encoder_state_dict, text_encoder_config = convert_hf_clip_to_ppnlp_clip(
-        diffusers_pipe.text_encoder, is_text_encoder=True)
+        diffusers_pipe.text_encoder, is_text_encoder=True
+    )
 
     # 1. vqvae
     pp_vqvae = VQModel.from_config(diffusers_pipe.vqvae.config)
     pp_vqvae.set_dict(vqvae_state_dict)
 
     # 2. transformer
-    pp_transformer = Transformer2DModel.from_config(
-        diffusers_pipe.transformer.config)
+    pp_transformer = Transformer2DModel.from_config(diffusers_pipe.transformer.config)
     pp_transformer.set_dict(transformer_state_dict)
 
     # 3. pp_learned_classifier_free_sampling_embeddings
     pp_learned_classifier_free_sampling_embeddings = LearnedClassifierFreeSamplingEmbeddings.from_config(
-        diffusers_pipe.learned_classifier_free_sampling_embeddings.config)
-    pp_learned_classifier_free_sampling_embeddings.set_dict(
-        learned_classifier_free_sampling_embeddings_state_dict)
+        diffusers_pipe.learned_classifier_free_sampling_embeddings.config
+    )
+    pp_learned_classifier_free_sampling_embeddings.set_dict(learned_classifier_free_sampling_embeddings_state_dict)
 
     # 4. text_encoder
-    pp_text_encoder = CLIPTextModel(
-        CLIPTextConfig.from_dict(text_encoder_config))
+    pp_text_encoder = CLIPTextModel(CLIPTextConfig.from_dict(text_encoder_config))
     pp_text_encoder.set_dict(text_encoder_state_dict)
 
     # 5. scheduler
-    pp_scheduler = VQDiffusionScheduler.from_config(
-        diffusers_pipe.scheduler.config)
+    pp_scheduler = VQDiffusionScheduler.from_config(diffusers_pipe.scheduler.config)
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         # 6. tokenizer
@@ -164,7 +158,8 @@ def convert_diffusers_vq_diffusion_to_ppdiffusers(pretrained_model_name_or_path,
             tokenizer=pp_tokenizer,
             transformer=pp_transformer,
             learned_classifier_free_sampling_embeddings=pp_learned_classifier_free_sampling_embeddings,
-            scheduler=pp_scheduler, )
+            scheduler=pp_scheduler,
+        )
 
         # 8. save_pretrained
         paddle_pipe.save_pretrained(output_path)
@@ -172,8 +167,7 @@ def convert_diffusers_vq_diffusion_to_ppdiffusers(pretrained_model_name_or_path,
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Pytorch model weights to Paddle model weights.")
+    parser = argparse.ArgumentParser(description="Pytorch model weights to Paddle model weights.")
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -184,7 +178,9 @@ if __name__ == "__main__":
         "--output_path",
         type=str,
         default="microsoft/vq-diffusion-ithq-ppdiffusers",
-        help="The model output path.", )
+        help="The model output path.",
+    )
     args = parser.parse_args()
     ppdiffusers_pipe = convert_diffusers_vq_diffusion_to_ppdiffusers(
-        args.pretrained_model_name_or_path, args.output_path)
+        args.pretrained_model_name_or_path, args.output_path
+    )

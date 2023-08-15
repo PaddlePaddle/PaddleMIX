@@ -18,8 +18,7 @@ import PIL.ImageOps
 from packaging import version
 from PIL import Image
 
-if version.parse(version.parse(PIL.__version__).base_version) >= version.parse(
-        "9.1.0"):
+if version.parse(version.parse(PIL.__version__).base_version) >= version.parse("9.1.0"):
     PIL_INTERPOLATION = {
         "linear": PIL.Image.Resampling.BILINEAR,
         "bilinear": PIL.Image.Resampling.BILINEAR,
@@ -60,10 +59,7 @@ def numpy_to_pil(images):
     images = (images * 255).round().astype("uint8")
     if images.shape[-1] == 1:
         # special case for grayscale (single channel) images
-        pil_images = [
-            Image.fromarray(
-                image.squeeze(), mode="L") for image in images
-        ]
+        pil_images = [Image.fromarray(image.squeeze(), mode="L") for image in images]
     else:
         pil_images = [Image.fromarray(image) for image in images]
 

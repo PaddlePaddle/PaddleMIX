@@ -23,7 +23,8 @@ from clip_interrogator import (
     BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
     CLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
     Config,
-    Interrogator, )
+    Interrogator,
+)
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -31,19 +32,18 @@ parser.add_argument(
     "--clip",
     default="openai/clip-vit-large-patch14",
     choices=CLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
-    help="name of CLIP model to use", )
+    help="name of CLIP model to use",
+)
 parser.add_argument(
     "-b",
     "--blip",
     default="Salesforce/blip-image-captioning-large",
     choices=BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
-    help="name of BLIP model to use", )
-parser.add_argument(
-    "-d", "--device", default="auto", help="device to use (auto, gpu or cpu)")
-parser.add_argument(
-    "-s", "--share", action="store_true", help="Create a public link")
-parser.add_argument(
-    "--server_name", default="0.0.0.0", type=str, help="server_name")
+    help="name of BLIP model to use",
+)
+parser.add_argument("-d", "--device", default="auto", help="device to use (auto, gpu or cpu)")
+parser.add_argument("-s", "--share", action="store_true", help="Create a public link")
+parser.add_argument("--server_name", default="0.0.0.0", type=str, help="server_name")
 parser.add_argument("--server_port", default=8586, type=int, help="server_port")
 
 args = parser.parse_args()
@@ -71,21 +71,23 @@ paddle.set_device(device)
 config = Config(
     cache_path="cache",
     clip_pretrained_model_name_or_path=args.clip,
-    blip_pretrained_model_name_or_path=args.blip)
+    blip_pretrained_model_name_or_path=args.blip,
+)
 ci = Interrogator(config)
 
 
 def inference(
-        image,
-        mode,
-        clip_pretrained_model_name_or_path,
-        blip_pretrained_model_name_or_path,
-        blip_min_length,
-        blip_max_length,
-        blip_sample,
-        blip_top_p,
-        blip_repetition_penalty,
-        blip_num_beams, ):
+    image,
+    mode,
+    clip_pretrained_model_name_or_path,
+    blip_pretrained_model_name_or_path,
+    blip_min_length,
+    blip_max_length,
+    blip_sample,
+    blip_top_p,
+    blip_repetition_penalty,
+    blip_num_beams,
+):
     if clip_pretrained_model_name_or_path != ci.config.clip_pretrained_model_name_or_path:
         ci.config.clip_pretrained_model_name_or_path = clip_pretrained_model_name_or_path
         ci.load_clip_model()
@@ -112,36 +114,25 @@ def inference(
 
 inputs = [
     gr.inputs.Image(type="pil"),
-    gr.Radio(
-        ["best", "classic", "fast"], label="Mode", value="fast"),
-    gr.Dropdown(
-        CLIP_PRETRAINED_MODEL_ARCHIVE_LIST, value=args.clip,
-        label="CLIP Model"),
-    gr.Dropdown(
-        BLIP_PRETRAINED_MODEL_ARCHIVE_LIST, value=args.blip,
-        label="BLIP Model"),
-    gr.Number(
-        value=8, label="Caption min Length"),
-    gr.Number(
-        value=32, label="Caption Max Length"),
-    gr.Radio(
-        ["True", "False"], value="False", label="Sample or not?"),
-    gr.Number(
-        value=0.9, label="TopP value, when Sample is true"),
-    gr.Number(
-        value=1.1, label="Repetition penalty value, when Sample is false"),
-    gr.Number(
-        value=64, label="Caption Num Beams, when Sample is false"),
+    gr.Radio(["best", "classic", "fast"], label="Mode", value="fast"),
+    gr.Dropdown(CLIP_PRETRAINED_MODEL_ARCHIVE_LIST, value=args.clip, label="CLIP Model"),
+    gr.Dropdown(BLIP_PRETRAINED_MODEL_ARCHIVE_LIST, value=args.blip, label="BLIP Model"),
+    gr.Number(value=8, label="Caption min Length"),
+    gr.Number(value=32, label="Caption Max Length"),
+    gr.Radio(["True", "False"], value="False", label="Sample or not?"),
+    gr.Number(value=0.9, label="TopP value, when Sample is true"),
+    gr.Number(value=1.1, label="Repetition penalty value, when Sample is false"),
+    gr.Number(value=64, label="Caption Num Beams, when Sample is false"),
 ]
-outputs = [gr.outputs.Textbox(label="Image Caption Output"), ]
+outputs = [
+    gr.outputs.Textbox(label="Image Caption Output"),
+]
 
 io = gr.Interface(
     inference,
     inputs,
     outputs,
     title="🕵️‍♂️ Paddle CLIP Interrogator 🕵️‍♂️",
-    allow_flagging=False, )
-io.launch(
-    share=args.share,
-    server_name=args.server_name,
-    server_port=args.server_port)
+    allow_flagging=False,
+)
+io.launch(share=args.share, server_name=args.server_name, server_port=args.server_port)

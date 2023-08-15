@@ -45,8 +45,7 @@ def parse_line(line, filename):
         elif data_source == "laion_aes":
             text_json = json.loads(vec[2])
             img_b64 = vec[5]
-            caption = text_json.get("caption_en",
-                                    text_json.get("blip_caption_en", ""))
+            caption = text_json.get("caption_en", text_json.get("blip_caption_en", ""))
         else:
             _, captions, _, _, _, img_b64 = vec[:6]
             caption = random.sample(captions.split("|"), 1)[0].replace("\1", "")
@@ -63,24 +62,27 @@ def parse_line(line, filename):
 
 class TextImagePair(IterableDataset):
     def __init__(
-            self,
-            file_list,
-            size,
-            num_records,
-            image_processing=None,
-            buffer_size=1000,
-            shuffle_every_n_samples=5,
-            interpolation="lanczos",
-            tokenizer=None, ):
+        self,
+        file_list,
+        size,
+        num_records,
+        image_processing=None,
+        buffer_size=1000,
+        shuffle_every_n_samples=5,
+        interpolation="lanczos",
+        tokenizer=None,
+    ):
         self.size = size
         assert interpolation == "lanczos"
         if image_processing is None:
-            self.image_processing = transforms.Compose([
-                transforms.Resize(int(size / 0.9), InterpolationMode.LANCZOS),
-                transforms.RandomCrop(size),
-                transforms.ToTensor(),
-                transforms.Normalize(0.5, 0.5),
-            ])
+            self.image_processing = transforms.Compose(
+                [
+                    transforms.Resize(int(size / 0.9), InterpolationMode.LANCZOS),
+                    transforms.RandomCrop(size),
+                    transforms.ToTensor(),
+                    transforms.Normalize(0.5, 0.5),
+                ]
+            )
         else:
             self.image_processing = image_processing
         self.text_processing = lambda caption: tokenizer(
@@ -88,7 +90,8 @@ class TextImagePair(IterableDataset):
             padding="max_length",
             truncation=True,
             max_length=tokenizer.model_max_length,
-            return_tensors="pt", ).input_ids[0]
+            return_tensors="pt",
+        ).input_ids[0]
         self.file_list = []
         file_weights = []
         with open(file_list, "r") as f:
@@ -109,19 +112,14 @@ class TextImagePair(IterableDataset):
             file_weights = file_weights / file_weight_sum
             print(f"sample weights of files: {file_weights}")
             self.file_weights_cumsum = np.cumsum(file_weights)
-            self.file_weights_cumsum = np.concatenate(
-                [[0.0], self.file_weights_cumsum])
+            self.file_weights_cumsum = np.concatenate([[0.0], self.file_weights_cumsum])
         else:
             print("sample each file list with same probabiliy")
             self.file_weights_cumsum = None
 
         self.num_records = num_records
-        self.file_ids = [
-            np.arange(len(filelist)) for filelist in self.file_list
-        ]
-        print(
-            f"original lengths of self.file_ids: {[len(f) for f in self.file_ids]}"
-        )
+        self.file_ids = [np.arange(len(filelist)) for filelist in self.file_list]
+        print(f"original lengths of self.file_ids: {[len(f) for f in self.file_ids]}")
         self.buffer_size = buffer_size
         self.shuffle_every_n_samples = shuffle_every_n_samples
 
@@ -130,9 +128,7 @@ class TextImagePair(IterableDataset):
             random.shuffle(file_ids)
             for i in file_ids:
                 filename = filenames[i].strip("\n")
-                with gzip.open(filename,
-                               "rb") if filename.endswith(".gz") else open(
-                                   filename, "rb") as f:
+                with gzip.open(filename, "rb") if filename.endswith(".gz") else open(filename, "rb") as f:
                     # retry = 0
                     while True:
                         line = f.readline()
@@ -158,19 +154,14 @@ class TextImagePair(IterableDataset):
                             if w < self.size or h < self.size:
                                 continue
                             yield {
-                                "pixel_values":
-                                self.image_processing(data["image"]),
-                                "input_ids":
-                                self.text_processing(data["caption"]),
+                                "pixel_values": self.image_processing(data["image"]),
+                                "input_ids": self.text_processing(data["caption"]),
                             }
 
     def random_load_from_multi_dataset(self):
-        print(
-            f"lengths of self.file_ids in random_load: {[len(f) for f in self.file_ids]}"
-        )
+        print(f"lengths of self.file_ids in random_load: {[len(f) for f in self.file_ids]}")
         sample_loader_per_dataset = [
-            iter(self.sample_loader(self.file_ids[i], self.file_list[i]))
-            for i in range(len(self.file_ids))
+            iter(self.sample_loader(self.file_ids[i], self.file_list[i])) for i in range(len(self.file_ids))
         ]
 
         while True:
@@ -179,8 +170,7 @@ class TextImagePair(IterableDataset):
             else:
                 rand_num = random.random()
                 for i in range(len(self.file_list)):
-                    if self.file_weights_cumsum[
-                            i] <= rand_num < self.file_weights_cumsum[i + 1]:
+                    if self.file_weights_cumsum[i] <= rand_num < self.file_weights_cumsum[i + 1]:
                         break
                 sample_loader = sample_loader_per_dataset[i]
                 # debug

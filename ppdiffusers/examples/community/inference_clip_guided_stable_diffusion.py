@@ -16,9 +16,9 @@
 import paddle
 from clip_guided_stable_diffusion import CLIPGuidedStableDiffusion
 from IPython.display import display
+from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
 from PIL import Image
 
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPModel
 from ppdiffusers import LMSDiscreteScheduler, StableDiffusionPipeline
 
 
@@ -32,15 +32,15 @@ def image_grid(imgs, rows, cols):
     return grid
 
 
-def create_clip_guided_pipeline(model_id="CompVis/stable-diffusion-v1-4",
-                                clip_model_id="openai/clip-vit-large-patch14",
-                                scheduler="plms"):
-    pipeline = StableDiffusionPipeline.from_pretrained(
-        model_id, paddle_dtype=paddle.float16)
+def create_clip_guided_pipeline(
+    model_id="CompVis/stable-diffusion-v1-4",
+    clip_model_id="openai/clip-vit-large-patch14",
+    scheduler="plms",
+):
+    pipeline = StableDiffusionPipeline.from_pretrained(model_id, paddle_dtype=paddle.float16)
 
     if scheduler == "lms":
-        scheduler = LMSDiscreteScheduler(
-            beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear")
+        scheduler = LMSDiscreteScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear")
     else:
         scheduler = pipeline.scheduler
 
@@ -54,26 +54,28 @@ def create_clip_guided_pipeline(model_id="CompVis/stable-diffusion-v1-4",
         text_encoder=pipeline.text_encoder,
         scheduler=scheduler,
         clip_model=clip_model,
-        feature_extractor=feature_extractor, )
+        feature_extractor=feature_extractor,
+    )
 
     return guided_pipeline
 
 
 def infer(
-        prompt,
-        clip_prompt,
-        num_return_images=1,
-        num_images_per_prompt=1,
-        num_inference_steps=50,
-        clip_guidance_scale=100,
-        guidance_scale=7.5,
-        guided_pipeline=None,
-        negative_prompt="",
-        use_cutouts=True,
-        num_cutouts=4,
-        seed=None,
-        unfreeze_unet=True,
-        unfreeze_vae=True, ):
+    prompt,
+    clip_prompt,
+    num_return_images=1,
+    num_images_per_prompt=1,
+    num_inference_steps=50,
+    clip_guidance_scale=100,
+    guidance_scale=7.5,
+    guided_pipeline=None,
+    negative_prompt="",
+    use_cutouts=True,
+    num_cutouts=4,
+    seed=None,
+    unfreeze_unet=True,
+    unfreeze_vae=True,
+):
     clip_prompt = clip_prompt if clip_prompt.strip() != "" else None
     if unfreeze_unet:
         guided_pipeline.unfreeze_unet()
@@ -97,7 +99,8 @@ def infer(
             num_cutouts=num_cutouts,
             use_cutouts=use_cutouts,
             seed=seed,
-            num_images_per_prompt=num_images_per_prompt, ).images
+            num_images_per_prompt=num_images_per_prompt,
+        ).images
         images.extend(image)
 
     return image_grid(images, 1, len(images))
@@ -140,6 +143,7 @@ if __name__ == "__main__":
             num_cutouts=num_cutouts,
             seed=seed,
             unfreeze_unet=unfreeze_unet,
-            unfreeze_vae=unfreeze_vae, )
+            unfreeze_vae=unfreeze_vae,
+        )
 
     display(grid_image)

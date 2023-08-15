@@ -18,11 +18,11 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import paddle
 import paddle.nn.functional as F
-
 from paddlenlp.transformers import (
     ClapTextModelWithProjection,
     RobertaTokenizer,
-    SpeechT5HifiGan, )
+    SpeechT5HifiGan,
+)
 
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
@@ -68,13 +68,14 @@ class AudioLDMPipeline(DiffusionPipeline):
     """
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: ClapTextModelWithProjection,
-            tokenizer: RobertaTokenizer,
-            unet: UNet2DConditionModel,
-            scheduler: KarrasDiffusionSchedulers,
-            vocoder: SpeechT5HifiGan, ):
+        self,
+        vae: AutoencoderKL,
+        text_encoder: ClapTextModelWithProjection,
+        tokenizer: RobertaTokenizer,
+        unet: UNet2DConditionModel,
+        scheduler: KarrasDiffusionSchedulers,
+        vocoder: SpeechT5HifiGan,
+    ):
         super().__init__()
         self.register_modules(
             vae=vae,
@@ -82,17 +83,19 @@ class AudioLDMPipeline(DiffusionPipeline):
             tokenizer=tokenizer,
             unet=unet,
             scheduler=scheduler,
-            vocoder=vocoder)
-        self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+            vocoder=vocoder,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
 
     def _encode_prompt(
-            self,
-            prompt,
-            num_waveforms_per_prompt,
-            do_classifier_free_guidance,
-            negative_prompt=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None, ):
+        self,
+        prompt,
+        num_waveforms_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt=None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+    ):
         """
         Encodes the prompt into text encoder hidden states.
 
@@ -116,13 +119,13 @@ class AudioLDMPipeline(DiffusionPipeline):
                 argument.
         """
         if self.text_encoder.text_model.embeddings.token_type_ids.dtype not in [
-                paddle.int16,
-                paddle.int32,
-                paddle.int64,
+            paddle.int16,
+            paddle.int32,
+            paddle.int64,
         ]:
             self.text_encoder.text_model.embeddings.token_type_ids = (
-                self.text_encoder.text_model.embeddings.token_type_ids.cast(
-                    "int32"))
+                self.text_encoder.text_model.embeddings.token_type_ids.cast("int32")
+            )
 
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
@@ -137,34 +140,35 @@ class AudioLDMPipeline(DiffusionPipeline):
                 max_length=self.tokenizer.model_max_length,
                 return_attention_mask=True,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_input_ids = text_inputs.input_ids
             attention_mask = text_inputs.attention_mask
             untruncated_ids = self.tokenizer(
                 prompt,
                 padding="longest",
                 return_tensors="pd",
-                return_attention_mask=True).input_ids
-            if (untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and
-                    not paddle.equal_all(
-                        x=text_input_ids, y=untruncated_ids).item()):
+                return_attention_mask=True,
+            ).input_ids
+            if (
+                untruncated_ids.shape[-1] >= text_input_ids.shape[-1]
+                and not paddle.equal_all(x=text_input_ids, y=untruncated_ids).item()
+            ):
                 removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
+                    untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1]
+                )
                 logger.warning(
                     f"The following part of your input was truncated because CLAP can only handle sequences up to {self.tokenizer.model_max_length} tokens: {removed_text}"
                 )
-            prompt_embeds = self.text_encoder(
-                text_input_ids.cast("int32"), attention_mask=attention_mask)
+            prompt_embeds = self.text_encoder(text_input_ids.cast("int32"), attention_mask=attention_mask)
             prompt_embeds = prompt_embeds.text_embeds
             # additional L_2 normalization over each hidden-state
             prompt_embeds = F.normalize(x=prompt_embeds, axis=-1)
         prompt_embeds = prompt_embeds.cast(self.text_encoder.dtype)
         bs_embed, seq_len = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
-        prompt_embeds = prompt_embeds.tile(
-            repeat_times=[1, num_waveforms_per_prompt])
-        prompt_embeds = prompt_embeds.reshape(
-            [bs_embed * num_waveforms_per_prompt, seq_len])
+        prompt_embeds = prompt_embeds.tile(repeat_times=[1, num_waveforms_per_prompt])
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_waveforms_per_prompt, seq_len])
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
@@ -190,33 +194,28 @@ class AudioLDMPipeline(DiffusionPipeline):
                 max_length=max_length,
                 truncation=True,
                 return_tensors="pd",
-                return_attention_mask=True, )
+                return_attention_mask=True,
+            )
             uncond_input_ids = uncond_input.input_ids
             attention_mask = uncond_input.attention_mask
-            negative_prompt_embeds = self.text_encoder(
-                uncond_input_ids.cast("int32"), attention_mask=attention_mask)
+            negative_prompt_embeds = self.text_encoder(uncond_input_ids.cast("int32"), attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds.text_embeds
             # additional L_2 normalization over each hidden-state
-            negative_prompt_embeds = F.normalize(
-                x=negative_prompt_embeds, axis=-1)
+            negative_prompt_embeds = F.normalize(x=negative_prompt_embeds, axis=-1)
 
         if do_classifier_free_guidance:
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds.cast(
-                self.text_encoder.dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(self.text_encoder.dtype)
 
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                repeat_times=[1, num_waveforms_per_prompt])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                [batch_size * num_waveforms_per_prompt, seq_len])
+            negative_prompt_embeds = negative_prompt_embeds.tile(repeat_times=[1, num_waveforms_per_prompt])
+            negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_waveforms_per_prompt, seq_len])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            prompt_embeds = paddle.concat(
-                x=[negative_prompt_embeds, prompt_embeds])
+            prompt_embeds = paddle.concat(x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
     def decode_latents(self, latents):
@@ -238,28 +237,27 @@ class AudioLDMPipeline(DiffusionPipeline):
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     def check_inputs(
-            self,
-            prompt,
-            audio_length_in_s,
-            vocoder_upsample_factor,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        audio_length_in_s,
+        vocoder_upsample_factor,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         min_audio_length_in_s = vocoder_upsample_factor * self.vae_scale_factor
         if audio_length_in_s < min_audio_length_in_s:
             raise ValueError(
@@ -269,8 +267,11 @@ class AudioLDMPipeline(DiffusionPipeline):
             raise ValueError(
                 f"The number of frequency bins in the vocoder's log-mel spectrogram has to be divisible by the VAE scale factor, but got {self.vocoder.config.model_in_dim} bins and a scale factor of {self.vae_scale_factor}."
             )
-        if (callback_steps is None or callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+        if (
+            callback_steps is None
+            or callback_steps is not None
+            and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type {type(callback_steps)}."
             )
@@ -282,11 +283,8 @@ class AudioLDMPipeline(DiffusionPipeline):
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `negative_prompt`: {negative_prompt} and `negative_prompt_embeds`: {negative_prompt_embeds}. Please make sure to only forward one of the two."
@@ -297,18 +295,13 @@ class AudioLDMPipeline(DiffusionPipeline):
                     f"`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}."
                 )
 
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(self, batch_size, num_channels_latents, height, dtype, generator, latents=None):
         shape = (
             batch_size,
             num_channels_latents,
             height // self.vae_scale_factor,
-            self.vocoder.config.model_in_dim // self.vae_scale_factor, )
+            self.vocoder.config.model_in_dim // self.vae_scale_factor,
+        )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators."
@@ -325,24 +318,24 @@ class AudioLDMPipeline(DiffusionPipeline):
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
-            self,
-            prompt: Union[str, List[str]]=None,
-            audio_length_in_s: Optional[float]=None,
-            num_inference_steps: int=10,
-            guidance_scale: float=2.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_waveforms_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None,
-            output_type: Optional[str]="np", ):
+        self,
+        prompt: Union[str, List[str]] = None,
+        audio_length_in_s: Optional[float] = None,
+        num_inference_steps: int = 10,
+        guidance_scale: float = 2.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_waveforms_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        output_type: Optional[str] = "np",
+    ):
         """
         Function invoked when calling the pipeline for generation.
 
@@ -409,16 +402,13 @@ class AudioLDMPipeline(DiffusionPipeline):
             When returning a tuple, the first element is a list with the generated audios.
         """
         # 0. Convert audio input length from seconds to spectrogram height
-        vocoder_upsample_factor = np.prod(self.vocoder.config.upsample_rates
-                                          ) / self.vocoder.config.sampling_rate
+        vocoder_upsample_factor = np.prod(self.vocoder.config.upsample_rates) / self.vocoder.config.sampling_rate
         if audio_length_in_s is None:
             audio_length_in_s = self.unet.config.sample_size * self.vae_scale_factor * vocoder_upsample_factor
         height = int(audio_length_in_s / vocoder_upsample_factor)
-        original_waveform_length = int(audio_length_in_s *
-                                       self.vocoder.config.sampling_rate)
+        original_waveform_length = int(audio_length_in_s * self.vocoder.config.sampling_rate)
         if height % self.vae_scale_factor != 0:
-            height = int(np.ceil(height /
-                                 self.vae_scale_factor)) * self.vae_scale_factor
+            height = int(np.ceil(height / self.vae_scale_factor)) * self.vae_scale_factor
             logger.info(
                 f"Audio length in seconds {audio_length_in_s} is increased to {height * vocoder_upsample_factor} so that it can be handled by the model. It will be cut to {audio_length_in_s} after the denoising process."
             )
@@ -431,7 +421,8 @@ class AudioLDMPipeline(DiffusionPipeline):
             callback_steps,
             negative_prompt,
             prompt_embeds,
-            negative_prompt_embeds, )
+            negative_prompt_embeds,
+        )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -453,7 +444,8 @@ class AudioLDMPipeline(DiffusionPipeline):
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds, )
+            negative_prompt_embeds=negative_prompt_embeds,
+        )
 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
@@ -467,21 +459,19 @@ class AudioLDMPipeline(DiffusionPipeline):
             height,
             prompt_embeds.dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # 6. Prepare extra step kwargs
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 7. Denoising loop
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    x=[latents] * 2) if do_classifier_free_guidance else latents
-                latent_model_input = self.scheduler.scale_model_input(
-                    latent_model_input, t)
+                latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
                 noise_pred = self.unet(
@@ -489,22 +479,19 @@ class AudioLDMPipeline(DiffusionPipeline):
                     t,
                     encoder_hidden_states=None,
                     class_labels=prompt_embeds,
-                    cross_attention_kwargs=cross_attention_kwargs, ).sample
+                    cross_attention_kwargs=cross_attention_kwargs,
+                ).sample
 
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(
-                        chunks=2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
+                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
+                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
-                        i + 1) % self.scheduler.order == 0:
+                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -520,6 +507,6 @@ class AudioLDMPipeline(DiffusionPipeline):
             audio = audio.numpy()
 
         if not return_dict:
-            return (audio, )
+            return (audio,)
 
         return AudioPipelineOutput(audios=audio)

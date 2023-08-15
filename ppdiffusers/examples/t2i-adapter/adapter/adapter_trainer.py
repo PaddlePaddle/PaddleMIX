@@ -19,13 +19,14 @@ import sys
 import paddle
 import paddle.amp.auto_cast as autocast
 from paddle.io import DataLoader
-
 from paddlenlp.trainer import Trainer
 from paddlenlp.trainer.integrations import (
     INTEGRATION_TO_CALLBACK,
     VisualDLCallback,
-    rewrite_logs, )
+    rewrite_logs,
+)
 from paddlenlp.utils.log import logger
+
 from ppdiffusers.training_utils import unwrap_model
 
 from .text_image_pair_dataset import TextImagePair, worker_init_fn
@@ -42,10 +43,10 @@ class VisualDLWithImageCallback(VisualDLCallback):
                     "c_softmax_with_cross_entropy",
                 ],
                 level=args.fp16_opt_level,
-                dtype=amp_dtype, )
+                dtype=amp_dtype,
+            )
         else:
-            ctx_manager = contextlib.nullcontext() if sys.version_info >= (
-                3, 7) else contextlib.suppress()
+            ctx_manager = contextlib.nullcontext() if sys.version_info >= (3, 7) else contextlib.suppress()
 
         return ctx_manager
 
@@ -63,20 +64,22 @@ class VisualDLWithImageCallback(VisualDLCallback):
         inputs = kwargs.get("inputs", None)
         model = kwargs.get("model", None)
         image_logs = {}
-        if (inputs is not None and model is not None and
-                args.image_logging_steps > 0 and
-                state.global_step % args.image_logging_steps == 0):
+        if (
+            inputs is not None
+            and model is not None
+            and args.image_logging_steps > 0
+            and state.global_step % args.image_logging_steps == 0
+        ):
             with self.autocast_smart_context_manager(args):
-                image_logs["reconstruction"] = model.decode_image(
-                    pixel_values=inputs["pixel_values"])
-                image_logs["control"] = model.decode_control_image(
-                    adapter_cond=inputs["adapter_cond"])
+                image_logs["reconstruction"] = model.decode_image(pixel_values=inputs["pixel_values"])
+                image_logs["control"] = model.decode_control_image(adapter_cond=inputs["adapter_cond"])
                 image_logs["ddim-samples-9.0"] = model.log_image(
                     input_ids=inputs["input_ids"],
                     adapter_cond=inputs["adapter_cond"],
                     guidance_scale=9.0,
                     height=args.resolution,
-                    width=args.resolution, )
+                    width=args.resolution,
+                )
 
         if self.vdl_writer is None:
             self._init_summary_writer(args)
@@ -91,11 +94,11 @@ class VisualDLWithImageCallback(VisualDLCallback):
                         "Trainer is attempting to log a value of "
                         f'"{v}" of type {type(v)} for key "{k}" as a scalar. '
                         "This invocation of VisualDL's writer.add_scalar() "
-                        "is incorrect so we dropped this attribute.")
+                        "is incorrect so we dropped this attribute."
+                    )
             # log images
             for k, v in image_logs.items():
-                self.vdl_writer.add_image(
-                    k, v, state.global_step, dataformats="NHWC")
+                self.vdl_writer.add_image(k, v, state.global_step, dataformats="NHWC")
             self.vdl_writer.flush()
 
 
@@ -104,17 +107,14 @@ INTEGRATION_TO_CALLBACK.update({"custom_visualdl": VisualDLWithImageCallback})
 
 
 def collate_fn(examples):
-    pixel_values = paddle.stack(
-        [paddle.to_tensor(example["pixel_values"]) for example in examples])
-    input_ids = paddle.stack(
-        [paddle.to_tensor(example["input_ids"]) for example in examples])
-    adapter_cond = paddle.stack(
-        [paddle.to_tensor(example["adapter_cond"]) for example in examples])
+    pixel_values = paddle.stack([paddle.to_tensor(example["pixel_values"]) for example in examples])
+    input_ids = paddle.stack([paddle.to_tensor(example["input_ids"]) for example in examples])
+    adapter_cond = paddle.stack([paddle.to_tensor(example["adapter_cond"]) for example in examples])
 
     batch = {
         "input_ids": input_ids,
         "pixel_values": pixel_values,
-        "adapter_cond": adapter_cond
+        "adapter_cond": adapter_cond,
     }
     return batch
 
@@ -133,18 +133,16 @@ class AdapterLDMTrainer(Trainer):
                 batch_size=self.args.train_batch_size,
                 num_workers=self.args.dataloader_num_workers,
                 worker_init_fn=worker_init_fn,
-                collate_fn=collate_fn, )
+                collate_fn=collate_fn,
+            )
         else:
             return super().get_train_dataloader()
 
-    def _save(self,
-              output_dir=None,
-              state_dict=None,
-              merge_tensor_parallel=False):
+    def _save(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
         super()._save(
             output_dir=output_dir,
             state_dict=state_dict,
-            merge_tensor_parallel=merge_tensor_parallel)
+            merge_tensor_parallel=merge_tensor_parallel,
+        )
         output_dir = output_dir if output_dir is not None else self.args.output_dir
-        unwrap_model(self.model).adapter.save_pretrained(
-            os.path.join(output_dir, "adapter"))
+        unwrap_model(self.model).adapter.save_pretrained(os.path.join(output_dir, "adapter"))

@@ -43,25 +43,28 @@ class RandomCrop(transforms.RandomCrop):
 
 class TextImagePair(IterableDataset):
     def __init__(
-            self,
-            file_list,
-            size,
-            num_records,
-            image_processing=None,
-            buffer_size=1000,
-            shuffle_every_n_samples=5,
-            interpolation="lanczos",
-            tokenizer=None,
-            control_image_processor=None,
-            data_format="default",
-            do_image_processing=True, ):
+        self,
+        file_list,
+        size,
+        num_records,
+        image_processing=None,
+        buffer_size=1000,
+        shuffle_every_n_samples=5,
+        interpolation="lanczos",
+        tokenizer=None,
+        control_image_processor=None,
+        data_format="default",
+        do_image_processing=True,
+    ):
         self.size = size
         self.resize_transform = transforms.Resize(int(size), interpolation)
         if image_processing is None:
-            self.image_processing = transforms.Compose([
-                transforms.ToTensor(),  # (0 ~ 1)
-                transforms.Normalize(0.5, 0.5),  # (-1 ~ 1)
-            ])
+            self.image_processing = transforms.Compose(
+                [
+                    transforms.ToTensor(),  # (0 ~ 1)
+                    transforms.Normalize(0.5, 0.5),  # (-1 ~ 1)
+                ]
+            )
         else:
             self.image_processing = image_processing
         if tokenizer is not None:
@@ -70,7 +73,8 @@ class TextImagePair(IterableDataset):
                 padding="max_length",
                 truncation=True,
                 max_length=tokenizer.model_max_length,
-                return_tensors="np", ).input_ids[0]
+                return_tensors="np",
+            ).input_ids[0]
         else:
             self.text_processing = None
 
@@ -99,19 +103,14 @@ class TextImagePair(IterableDataset):
             file_weights = file_weights / file_weight_sum
             print(f"sample weights of files: {file_weights}")
             self.file_weights_cumsum = np.cumsum(file_weights)
-            self.file_weights_cumsum = np.concatenate(
-                [[0.0], self.file_weights_cumsum])
+            self.file_weights_cumsum = np.concatenate([[0.0], self.file_weights_cumsum])
         else:
             print("sample each file list with same probabiliy")
             self.file_weights_cumsum = None
 
         self.num_records = num_records
-        self.file_ids = [
-            np.arange(len(filelist)) for filelist in self.file_list
-        ]
-        print(
-            f"original lengths of self.file_ids: {[len(f) for f in self.file_ids]}"
-        )
+        self.file_ids = [np.arange(len(filelist)) for filelist in self.file_list]
+        print(f"original lengths of self.file_ids: {[len(f) for f in self.file_ids]}")
         self.buffer_size = buffer_size
         self.shuffle_every_n_samples = shuffle_every_n_samples
         self.data_format = data_format
@@ -122,9 +121,7 @@ class TextImagePair(IterableDataset):
             random.shuffle(file_ids)
             for i in file_ids:
                 filename = filenames[i].strip("\n")
-                with gzip.open(filename,
-                               "rb") if filename.endswith(".gz") else open(
-                                   filename, "rb") as f:
+                with gzip.open(filename, "rb") if filename.endswith(".gz") else open(filename, "rb") as f:
                     # retry = 0
                     while True:
                         line = f.readline()
@@ -150,31 +147,26 @@ class TextImagePair(IterableDataset):
 
                             control_image = data["control_image"]
                             if control_image is not None:
-                                control_image = self.resize_transform(
-                                    control_image)
+                                control_image = self.resize_transform(control_image)
                             else:
                                 control_image = image
                             out = {
-                                "pixel_values":
-                                self.image_processing(image).numpy()
-                                if self.do_image_processing else image,
-                                "input_ids":
-                                self.text_processing(data["caption"])
-                                if self.text_processing else data["caption"],
-                                "adapter_cond":
-                                self.control_image_processor.process_data_load(
-                                    control_image).numpy() if
-                                self.control_image_processor else control_image,
+                                "pixel_values": self.image_processing(image).numpy()
+                                if self.do_image_processing
+                                else image,
+                                "input_ids": self.text_processing(data["caption"])
+                                if self.text_processing
+                                else data["caption"],
+                                "adapter_cond": self.control_image_processor.process_data_load(control_image).numpy()
+                                if self.control_image_processor
+                                else control_image,
                             }
                             yield out
 
     def random_load_from_multi_dataset(self):
-        print(
-            f"lengths of self.file_ids in random_load: {[len(f) for f in self.file_ids]}"
-        )
+        print(f"lengths of self.file_ids in random_load: {[len(f) for f in self.file_ids]}")
         sample_loader_per_dataset = [
-            iter(self.sample_loader(self.file_ids[i], self.file_list[i]))
-            for i in range(len(self.file_ids))
+            iter(self.sample_loader(self.file_ids[i], self.file_list[i])) for i in range(len(self.file_ids))
         ]
 
         while True:
@@ -183,8 +175,7 @@ class TextImagePair(IterableDataset):
             else:
                 rand_num = random.random()
                 for i in range(len(self.file_list)):
-                    if self.file_weights_cumsum[
-                            i] <= rand_num < self.file_weights_cumsum[i + 1]:
+                    if self.file_weights_cumsum[i] <= rand_num < self.file_weights_cumsum[i + 1]:
                         break
                 sample_loader = sample_loader_per_dataset[i]
             yield next(sample_loader)

@@ -46,8 +46,7 @@ def pad_right_down_corner(img, stride, padValue):
 def transfer(model, model_weights):
     transfered_model_weights = {}
     for weights_name in model.state_dict().keys():
-        transfered_model_weights[weights_name] = model_weights[".".join(
-            weights_name.split(".")[1:])]
+        transfered_model_weights[weights_name] = model_weights[".".join(weights_name.split(".")[1:])]
     return transfered_model_weights
 
 
@@ -113,11 +112,9 @@ def draw_bodypose(canvas, candidate, subset):
             X = candidate[index.astype(int), 1]
             mX = np.mean(X)
             mY = np.mean(Y)
-            length = ((X[0] - X[1])**2 + (Y[0] - Y[1])**2)**0.5
+            length = ((X[0] - X[1]) ** 2 + (Y[0] - Y[1]) ** 2) ** 0.5
             angle = math.degrees(math.atan2(X[0] - X[1], Y[0] - Y[1]))
-            polygon = cv2.ellipse2Poly((int(mY), int(mX)),
-                                       (int(length / 2), stickwidth),
-                                       int(angle), 0, 360, 1)
+            polygon = cv2.ellipse2Poly((int(mY), int(mX)), (int(length / 2), stickwidth), int(angle), 0, 360, 1)
             cv2.fillConvexPoly(cur_canvas, polygon, colors[i])
             canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
     return canvas
@@ -156,9 +153,9 @@ def draw_handpose(canvas, all_hand_peaks, show_number=False):
                     canvas,
                     (x1, y1),
                     (x2, y2),
-                    matplotlib.colors.hsv_to_rgb(
-                        [ie / float(len(edges)), 1.0, 1.0]) * 255,
-                    thickness=2, )
+                    matplotlib.colors.hsv_to_rgb([ie / float(len(edges)), 1.0, 1.0]) * 255,
+                    thickness=2,
+                )
 
         for i, keyponit in enumerate(peaks):
             x, y = keyponit
@@ -166,10 +163,13 @@ def draw_handpose(canvas, all_hand_peaks, show_number=False):
             if show_number:
                 cv2.putText(
                     canvas,
-                    str(i), (x, y),
+                    str(i),
+                    (x, y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.3, (0, 0, 0),
-                    lineType=cv2.LINE_AA)
+                    0.3,
+                    (0, 0, 0),
+                    lineType=cv2.LINE_AA,
+                )
     return canvas
 
 
@@ -190,16 +190,14 @@ def hand_detect(candidate, subset, oriImg):
         hands = []
         # left hand
         if has_left:
-            left_shoulder_index, left_elbow_index, left_wrist_index = person[
-                [5, 6, 7]]
+            left_shoulder_index, left_elbow_index, left_wrist_index = person[[5, 6, 7]]
             x1, y1 = candidate[left_shoulder_index][:2]
             x2, y2 = candidate[left_elbow_index][:2]
             x3, y3 = candidate[left_wrist_index][:2]
             hands.append([x1, y1, x2, y2, x3, y3, True])
         # right hand
         if has_right:
-            right_shoulder_index, right_elbow_index, right_wrist_index = person[
-                [2, 3, 4]]
+            right_shoulder_index, right_elbow_index, right_wrist_index = person[[2, 3, 4]]
             x1, y1 = candidate[right_shoulder_index][:2]
             x2, y2 = candidate[right_elbow_index][:2]
             x3, y3 = candidate[right_wrist_index][:2]
@@ -214,8 +212,8 @@ def hand_detect(candidate, subset, oriImg):
             # handRectangle.width = 1.5f * fastMax(distanceWristElbow, 0.9f * distanceElbowShoulder);
             x = x3 + ratioWristElbow * (x3 - x2)
             y = y3 + ratioWristElbow * (y3 - y2)
-            distanceWristElbow = math.sqrt((x3 - x2)**2 + (y3 - y2)**2)
-            distanceElbowShoulder = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+            distanceWristElbow = math.sqrt((x3 - x2) ** 2 + (y3 - y2) ** 2)
+            distanceElbowShoulder = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
             width = 1.0 * max(distanceWristElbow, 0.9 * distanceElbowShoulder)
             # x-y refers to the center --> offset to topLeft point
             # handRectangle.x -= handRectangle.width / 2.f;

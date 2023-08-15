@@ -34,14 +34,11 @@ class LitEma(nn.Layer):
             raise ValueError("Decay must be between 0 and 1")
 
         self.m_name2s_name = {}
-        self.register_buffer(
-            "decay", paddle.to_tensor(
-                decay, dtype=paddle.float32))
+        self.register_buffer("decay", paddle.to_tensor(decay, dtype=paddle.float32))
         self.register_buffer(
             "num_updates",
-            paddle.to_tensor(
-                0, dtype=paddle.int64) if use_num_upates else paddle.to_tensor(
-                    -1, dtype=paddle.int64), )
+            paddle.to_tensor(0, dtype=paddle.int64) if use_num_upates else paddle.to_tensor(-1, dtype=paddle.int64),
+        )
 
         for name, p in model.named_parameters():
             if not p.stop_gradient:
@@ -57,8 +54,7 @@ class LitEma(nn.Layer):
 
         if self.num_updates >= 0:
             self.num_updates += 1
-            decay = min(self.decay,
-                        (1 + self.num_updates) / (10 + self.num_updates))
+            decay = min(self.decay, (1 + self.num_updates) / (10 + self.num_updates))
 
         one_minus_decay = 1.0 - decay
 
@@ -79,8 +75,7 @@ class LitEma(nn.Layer):
         shadow_params = dict(self.named_buffers())
         for key in m_param:
             if not m_param[key].stop_gradient:
-                m_param[key].copy_(shadow_params[self.m_name2s_name[key]],
-                                   False)
+                m_param[key].copy_(shadow_params[self.m_name2s_name[key]], False)
             else:
                 assert key not in self.m_name2s_name
 
@@ -91,9 +86,7 @@ class LitEma(nn.Layer):
           parameters: Iterable of `EagerParamBase`; the parameters to be
             temporarily stored.
         """
-        self.collected_params = [
-            param.detach().cpu().clone() for param in parameters
-        ]
+        self.collected_params = [param.detach().cpu().clone() for param in parameters]
 
     def restore(self, parameters):
         """

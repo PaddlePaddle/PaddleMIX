@@ -16,7 +16,8 @@
 from ..utils import (
     OptionalDependencyNotAvailable,
     is_paddle_available,
-    is_scipy_available, )
+    is_scipy_available,
+)
 
 try:
     if not is_paddle_available():
@@ -25,7 +26,8 @@ except OptionalDependencyNotAvailable:
     from ..utils.dummy_paddle_objects import *  # noqa F403
 else:
     from .preconfig.preconfig_scheduling_euler_ancestral_discrete import (
-        PreconfigEulerAncestralDiscreteScheduler, )
+        PreconfigEulerAncestralDiscreteScheduler,
+    )
     from .scheduling_ddim import DDIMScheduler
     from .scheduling_ddim_inverse import DDIMInverseScheduler
     from .scheduling_ddpm import DDPMScheduler
@@ -56,5 +58,6 @@ except OptionalDependencyNotAvailable:
     from ..utils.dummy_paddle_and_scipy_objects import *  # noqa F403
 else:
     from .preconfig.preconfig_scheduling_lms_discrete import (
-        PreconfigLMSDiscreteScheduler, )
+        PreconfigLMSDiscreteScheduler,
+    )
     from .scheduling_lms_discrete import LMSDiscreteScheduler

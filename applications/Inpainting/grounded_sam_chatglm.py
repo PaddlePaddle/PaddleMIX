@@ -15,34 +15,28 @@
 import os
 from dataclasses import dataclass, field
 
-import paddle
+import matplotlib.pyplot as plt
 import numpy as np
+import paddle
+import paddle.nn.functional as F
 import requests
+from paddlenlp import Taskflow
 from paddlenlp.trainer import PdArgumentParser
 from PIL import Image
 
-import paddle
-import paddle.nn.functional as F
-from PIL import Image, ImageDraw, ImageFont
-
-
-from paddlevlp.processors.groundingdino_processing import GroudingDinoProcessor
-from paddlevlp.models.groundingdino.modeling import GroundingDinoModel
-from paddlevlp.models.sam.modeling import SamModel
-from paddlevlp.processors.sam_processing import SamProcessor
+from paddlemix.models.groundingdino.modeling import GroundingDinoModel
+from paddlemix.models.sam.modeling import SamModel
+from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
+from paddlemix.processors.sam_processing import SamProcessor
+from paddlemix.utils.log import logger
 from ppdiffusers import StableDiffusionInpaintPipeline
-
-from paddlenlp import Taskflow
-
-from paddlevlp.utils.log import logger
-import matplotlib.pyplot as plt
 
 
 def show_mask(mask, ax, random_color=False):
     if random_color:
         color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
     else:
-        color = np.array([30/255, 144/255, 255/255, 0.6])
+        color = np.array([30 / 255, 144 / 255, 255 / 255, 0.6])
     h, w = mask.shape[-2:]
     mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
     ax.imshow(mask_image)
@@ -51,7 +45,7 @@ def show_mask(mask, ax, random_color=False):
 def show_box(box, ax, label):
     x0, y0 = box[0], box[1]
     w, h = box[2] - box[0], box[3] - box[1]
-    ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0,0,0,0), lw=2)) 
+    ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2))
     ax.text(x0, y0, label)
 
 
@@ -66,10 +60,11 @@ class DataArguments:
 
     input_image: str = field(
         metadata={"help": "The name of input image."},
-    )  
-    
+    )
+
     prompt: str = field(
-        default=None, metadata={"help": "The prompt of the image to be inpaint."},
+        default=None,
+        metadata={"help": "The prompt of the image to be inpaint."},
     )
 
 
@@ -78,6 +73,7 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
     """
+
     stable_diffusion_pipeline_name_or_path: str = field(
         default="stabilityai/stable-diffusion-2-inpainting",
         metadata={"help": "Path to pretrained model or model identifier"},
@@ -96,111 +92,105 @@ class ModelArguments:
     )
     box_threshold: float = field(
         default=0.3,
-        metadata={
-            "help": "box threshold."
-        },
+        metadata={"help": "box threshold."},
     )
     text_threshold: float = field(
         default=0.25,
-        metadata={
-            "help": "text threshold."
-        },
+        metadata={"help": "text threshold."},
     )
     output_dir: str = field(
         default="inpainting_output",
-        metadata={
-            "help": "output directory."
-        },
+        metadata={"help": "output directory."},
     )
     visual: bool = field(
         default=True,
-        metadata={
-            "help": "save visual image."
-        },
+        metadata={"help": "save visual image."},
     )
 
-def filter_prompts_with_chatglm(caption,model_name_or_path="THUDM/chatglm-6b"):
-     prompt = "Given caption,extract the main object to be replaced and marked it as 'main_object', " + \
-              f"Extract the remaining part as 'other prompt', " + \
-              f"Return main_object, other prompt in English" + \
-              f"Given caption: {caption}."
 
-     
-    
-     logger.info("chatglm: {}".format(model_name_or_path))
-     textGen = Taskflow("text2text_generation",model=model_name_or_path)
-    
-     reply = textGen(prompt)['result'][0]
-     
-     det_prompt,inpaint_prompt = reply.split('\n')[0].split(':')[-1].strip(), reply.split('\n')[-1].split(':')[-1].strip()
-     
-     return det_prompt,inpaint_prompt
-    
-     
+def filter_prompts_with_chatglm(caption, model_name_or_path="THUDM/chatglm-6b"):
+    prompt = (
+        "Given caption,extract the main object to be replaced and marked it as 'main_object', "
+        + "Extract the remaining part as 'other prompt', "
+        + "Return main_object, other prompt in English"
+        + "Given caption: {}.".format(caption)
+    )
+
+    logger.info("chatglm: {}".format(model_name_or_path))
+    textGen = Taskflow("text2text_generation", model=model_name_or_path)
+
+    reply = textGen(prompt)["result"][0]
+
+    det_prompt, inpaint_prompt = (
+        reply.split("\n")[0].split(":")[-1].strip(),
+        reply.split("\n")[-1].split(":")[-1].strip(),
+    )
+
+    return det_prompt, inpaint_prompt
+
 
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
-    url = (data_args.input_image)
-    
-    
+    url = data_args.input_image
+
     logger.info("dino_model: {}".format(model_args.dino_model_name_or_path))
-    #bulid dino processor
-    dino_processor = GroudingDinoProcessor.from_pretrained(
-       model_args.dino_model_name_or_path
-    ) 
-    #bulid dino model
+    # bulid dino processor
+    dino_processor = GroudingDinoProcessor.from_pretrained(model_args.dino_model_name_or_path)
+    # bulid dino model
     dino_model = GroundingDinoModel.from_pretrained(model_args.dino_model_name_or_path)
     dino_model.eval()
     logger.info("dino_model build finish!")
 
-    #buidl sam processor
-    sam_processor = SamProcessor.from_pretrained(
-        model_args.sam_model_name_or_path
-    ) 
-    #bulid model
+    # buidl sam processor
+    sam_processor = SamProcessor.from_pretrained(model_args.sam_model_name_or_path)
+    # bulid model
     logger.info("SamModel: {}".format(model_args.sam_model_name_or_path))
-    sam_model = SamModel.from_pretrained(model_args.sam_model_name_or_path,input_type="boxs")
+    sam_model = SamModel.from_pretrained(model_args.sam_model_name_or_path, input_type="boxs")
     logger.info("SamModel build finish!")
-    
-    #read image
+
+    # read image
     if os.path.isfile(url):
-        #read image
+        # read image
         image_pil = Image.open(url)
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw)
 
-    det_prompt,inpaint_prompt = filter_prompts_with_chatglm(data_args.prompt,model_args.chatglm_model_name_or_path)
+    det_prompt, inpaint_prompt = filter_prompts_with_chatglm(data_args.prompt, model_args.chatglm_model_name_or_path)
     logger.info("det prompt: {}".format(det_prompt))
     logger.info("inpaint prompt: {}".format(inpaint_prompt))
 
     image_pil = image_pil.convert("RGB")
 
-    #preprocess image text_prompt
-    image_tensor,mask,tokenized_out = dino_processor(images=image_pil,text=det_prompt)
+    # preprocess image text_prompt
+    image_tensor, mask, tokenized_out = dino_processor(images=image_pil, text=det_prompt)
 
     with paddle.no_grad():
-        outputs = dino_model(image_tensor,mask, input_ids=tokenized_out['input_ids'],
-                        attention_mask=tokenized_out['attention_mask'],text_self_attention_masks=tokenized_out['text_self_attention_masks'],
-                        position_ids=tokenized_out['position_ids'])
+        outputs = dino_model(
+            image_tensor,
+            mask,
+            input_ids=tokenized_out["input_ids"],
+            attention_mask=tokenized_out["attention_mask"],
+            text_self_attention_masks=tokenized_out["text_self_attention_masks"],
+            position_ids=tokenized_out["position_ids"],
+        )
 
     logits = F.sigmoid(outputs["pred_logits"])[0]  # (nq, 256)
     boxes = outputs["pred_boxes"][0]  # (nq, 4)
 
-     # filter output
+    # filter output
     logits_filt = logits.clone()
     boxes_filt = boxes.clone()
     filt_mask = logits_filt.max(axis=1) > model_args.box_threshold
     logits_filt = logits_filt[filt_mask]  # num_filt, 256
     boxes_filt = boxes_filt[filt_mask]  # num_filt, 4
 
-     # build pred
+    # build pred
     pred_phrases = []
     for logit, box in zip(logits_filt, boxes_filt):
         pred_phrase = dino_processor.decode(logit > model_args.text_threshold)
         pred_phrases.append(pred_phrase + f"({str(logit.max().item())[:4]})")
 
-    
     size = image_pil.size
     pred_dict = {
         "boxes": boxes_filt,
@@ -208,8 +198,8 @@ def main():
         "labels": pred_phrases,
     }
     logger.info("dino output{}".format(pred_dict))
-    
-    H,W = size[1], size[0]
+
+    H, W = size[1], size[0]
     boxes = []
     for box in zip(boxes_filt):
         box = box[0] * paddle.to_tensor([W, H, W, H])
@@ -219,12 +209,12 @@ def main():
         x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
         boxes.append([x0, y0, x1, y1])
     boxes = np.array(boxes)
-    image_seg,prompt = sam_processor(image_pil,input_type="boxs",box=boxes,point_coords=None) 
-    seg_masks = sam_model(img=image_seg,prompt=prompt)
+    image_seg, prompt = sam_processor(image_pil, input_type="boxs", box=boxes, point_coords=None)
+    seg_masks = sam_model(img=image_seg, prompt=prompt)
     seg_masks = sam_processor.postprocess_masks(seg_masks)
 
     logger.info("Sam finish!")
-    
+
     if model_args.visual:
         # make dir
         os.makedirs(model_args.output_dir, exist_ok=True)
@@ -235,32 +225,32 @@ def main():
             show_mask(mask.cpu().numpy(), plt.gca(), random_color=True)
         for box, label in zip(boxes, pred_phrases):
             show_box(box, plt.gca(), label)
-        
-        plt.axis('off')
+
+        plt.axis("off")
         plt.savefig(
-            os.path.join(model_args.output_dir, 'mask_pred.jpg'), 
-            bbox_inches="tight", dpi=300, pad_inches=0.0
+            os.path.join(model_args.output_dir, "mask_pred.jpg"),
+            bbox_inches="tight",
+            dpi=300,
+            pad_inches=0.0,
         )
 
-    
     logger.info("stable diffusion pipeline: {}".format(model_args.stable_diffusion_pipeline_name_or_path))
     pipe = StableDiffusionInpaintPipeline.from_pretrained(model_args.stable_diffusion_pipeline_name_or_path)
     logger.info("stable diffusion pipeline build finish!")
-    
-    merge_mask = paddle.sum(seg_masks,axis=0).unsqueeze(0)
-    merge_mask = merge_mask>0
+
+    merge_mask = paddle.sum(seg_masks, axis=0).unsqueeze(0)
+    merge_mask = merge_mask > 0
     mask_pil = Image.fromarray(merge_mask[0][0].cpu().numpy())
-    
+
     image_pil = image_pil.resize((512, 512))
     mask_pil = mask_pil.resize((512, 512))
-    
+
     image = pipe(prompt=inpaint_prompt, image=image_pil, mask_image=mask_pil).images[0]
     image = image.resize(size)
     image.save(os.path.join(model_args.output_dir, "grounded_sam_chatglm_output.jpg"))
 
-
     logger.info("finish!")
-    
+
 
 if __name__ == "__main__":
     main()

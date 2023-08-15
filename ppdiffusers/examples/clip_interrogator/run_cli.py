@@ -25,7 +25,8 @@ from clip_interrogator import (
     BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
     CLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
     Config,
-    Interrogator, )
+    Interrogator,
+)
 from PIL import Image
 
 
@@ -46,18 +47,16 @@ def main():
         "--clip",
         default="openai/clip-vit-large-patch14",
         choices=CLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
-        help="name of CLIP model to use", )
+        help="name of CLIP model to use",
+    )
     parser.add_argument(
         "-b",
         "--blip",
         default="Salesforce/blip-image-captioning-large",
         choices=BLIP_PRETRAINED_MODEL_ARCHIVE_LIST,
-        help="name of BLIP model to use", )
-    parser.add_argument(
-        "-d",
-        "--device",
-        default="auto",
-        help="device to use (auto, gpu or cpu)")
+        help="name of BLIP model to use",
+    )
+    parser.add_argument("-d", "--device", default="auto", help="device to use (auto, gpu or cpu)")
     parser.add_argument("-f", "--folder", help="path to folder of images")
     parser.add_argument("-i", "--image", help="image file or url")
     parser.add_argument(
@@ -65,7 +64,8 @@ def main():
         "--mode",
         default="best",
         choices=["best", "classic", "fast"],
-        help="best, classic, or fast")
+        help="best, classic, or fast",
+    )
 
     args = parser.parse_args()
     if not args.folder and not args.image:
@@ -73,8 +73,7 @@ def main():
         exit(1)
 
     if args.folder is not None and args.image is not None:
-        print(
-            "Specify a folder or batch processing or a single image, not both")
+        print("Specify a folder or batch processing or a single image, not both")
         exit(1)
 
     # validate clip model name
@@ -100,16 +99,15 @@ def main():
     # generate a nice prompt
     config = Config(
         clip_pretrained_model_name_or_path=args.clip,
-        blip_pretrained_model_name_or_path=args.blip)
+        blip_pretrained_model_name_or_path=args.blip,
+    )
     ci = Interrogator(config)
 
     # process single image
     if args.image is not None:
         image_path = args.image
-        if str(image_path).startswith("http://") or str(image_path).startswith(
-                "https://"):
-            image = Image.open(requests.get(image_path, stream=True)
-                               .raw).convert("RGB")
+        if str(image_path).startswith("http://") or str(image_path).startswith("https://"):
+            image = Image.open(requests.get(image_path, stream=True).raw).convert("RGB")
         else:
             image = Image.open(image_path).convert("RGB")
         if not image:
@@ -123,10 +121,7 @@ def main():
             print(f"The folder {args.folder} does not exist!")
             exit(1)
 
-        files = [
-            f for f in os.listdir(args.folder)
-            if f.endswith(".jpg") or f.endswith(".png")
-        ]
+        files = [f for f in os.listdir(args.folder) if f.endswith(".jpg") or f.endswith(".png")]
         prompts = []
         for file in files:
             image = Image.open(os.path.join(args.folder, file)).convert("RGB")
@@ -142,9 +137,7 @@ def main():
                 for file, prompt in zip(files, prompts):
                     w.writerow([file, prompt])
 
-            print(
-                f"\n\n\n\nGenerated {len(prompts)} and saved to {csv_path}, enjoy!"
-            )
+            print(f"\n\n\n\nGenerated {len(prompts)} and saved to {csv_path}, enjoy!")
 
 
 if __name__ == "__main__":

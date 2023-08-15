@@ -20,7 +20,7 @@ from .test_schedulers import SchedulerCommonTest
 
 
 class DDIMSchedulerTest(SchedulerCommonTest):
-    scheduler_classes = (DDIMScheduler, )
+    scheduler_classes = (DDIMScheduler,)
     forward_default_kwargs = (("eta", 0.0), ("num_inference_steps", 50))
 
     def get_scheduler_config(self, **kwargs):
@@ -65,12 +65,10 @@ class DDIMSchedulerTest(SchedulerCommonTest):
         scheduler_config = self.get_scheduler_config(steps_offset=1)
         scheduler = scheduler_class(**scheduler_config)
         scheduler.set_timesteps(5)
-        assert paddle.equal_all(scheduler.timesteps,
-                                paddle.to_tensor([801, 601, 401, 201, 1]))
+        assert paddle.equal_all(scheduler.timesteps, paddle.to_tensor([801, 601, 401, 201, 1]))
 
     def test_betas(self):
-        for beta_start, beta_end in zip([0.0001, 0.001, 0.01, 0.1],
-                                        [0.002, 0.02, 0.2, 2]):
+        for beta_start, beta_end in zip([0.0001, 0.001, 0.01, 0.1], [0.002, 0.02, 0.2, 2]):
             self.check_over_configs(beta_start=beta_start, beta_end=beta_end)
 
     def test_schedules(self):
@@ -92,7 +90,8 @@ class DDIMSchedulerTest(SchedulerCommonTest):
                 self.check_over_configs(
                     thresholding=True,
                     prediction_type=prediction_type,
-                    sample_max_value=threshold, )
+                    sample_max_value=threshold,
+                )
 
     def test_time_indices(self):
         for t in [1, 10, 49]:
@@ -100,8 +99,7 @@ class DDIMSchedulerTest(SchedulerCommonTest):
 
     def test_inference_steps(self):
         for t, num_inference_steps in zip([1, 10, 50], [10, 50, 500]):
-            self.check_over_forward(
-                time_step=t, num_inference_steps=num_inference_steps)
+            self.check_over_forward(time_step=t, num_inference_steps=num_inference_steps)
 
     def test_eta(self):
         for t, eta in zip([1, 10, 49], [0.0, 0.5, 1.0]):
@@ -112,18 +110,12 @@ class DDIMSchedulerTest(SchedulerCommonTest):
         scheduler_config = self.get_scheduler_config()
         scheduler = scheduler_class(**scheduler_config)
 
-        assert paddle.sum(paddle.abs(scheduler._get_variance(0, 0) -
-                                     0.0)) < 1e-5
-        assert paddle.sum(
-            paddle.abs(scheduler._get_variance(420, 400) - 0.14771)) < 1e-5
-        assert paddle.sum(
-            paddle.abs(scheduler._get_variance(980, 960) - 0.32460)) < 1e-5
-        assert paddle.sum(paddle.abs(scheduler._get_variance(0, 0) -
-                                     0.0)) < 1e-5
-        assert paddle.sum(
-            paddle.abs(scheduler._get_variance(487, 486) - 0.00979)) < 1e-5
-        assert paddle.sum(
-            paddle.abs(scheduler._get_variance(999, 998) - 0.02)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(0, 0) - 0.0)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(420, 400) - 0.14771)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(980, 960) - 0.32460)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(0, 0) - 0.0)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(487, 486) - 0.00979)) < 1e-5
+        assert paddle.sum(paddle.abs(scheduler._get_variance(999, 998) - 0.02)) < 1e-5
 
     def test_full_loop_no_noise(self):
         sample = self.full_loop()

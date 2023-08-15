@@ -18,13 +18,13 @@ import time
 
 import paddle.amp.auto_cast as autocast
 from paddle.io import DataLoader
-
 from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
 from paddlenlp.trainer.integrations import (
     INTEGRATION_TO_CALLBACK,
     TrainerCallback,
     VisualDLCallback,
-    rewrite_logs, )
+    rewrite_logs,
+)
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
 
@@ -42,10 +42,10 @@ class VisualDLWithImageCallback(VisualDLCallback):
                     "c_softmax_with_cross_entropy",
                 ],
                 level=args.fp16_opt_level,
-                dtype=amp_dtype, )
+                dtype=amp_dtype,
+            )
         else:
-            ctx_manager = contextlib.nullcontext() if sys.version_info >= (
-                3, 7) else contextlib.suppress()
+            ctx_manager = contextlib.nullcontext() if sys.version_info >= (3, 7) else contextlib.suppress()
 
         return ctx_manager
 
@@ -60,22 +60,26 @@ class VisualDLWithImageCallback(VisualDLCallback):
         inputs = kwargs.get("inputs", None)
         model = kwargs.get("model", None)
         image_logs = {}
-        if (inputs is not None and model is not None and
-                args.image_logging_steps > 0 and
-                state.global_step % args.image_logging_steps == 0):
+        if (
+            inputs is not None
+            and model is not None
+            and args.image_logging_steps > 0
+            and state.global_step % args.image_logging_steps == 0
+        ):
             with self.autocast_smart_context_manager(args):
-                image_logs["reconstruction"] = model.decode_image(
-                    pixel_values=inputs["pixel_values"])
+                image_logs["reconstruction"] = model.decode_image(pixel_values=inputs["pixel_values"])
                 image_logs["ddim-samples-1.0"] = model.log_image(
                     input_ids=inputs["input_ids"],
                     guidance_scale=1.0,
                     height=args.resolution,
-                    width=args.resolution)
+                    width=args.resolution,
+                )
                 image_logs["ddim-samples-7.5"] = model.log_image(
                     input_ids=inputs["input_ids"],
                     guidance_scale=7.5,
                     height=args.resolution,
-                    width=args.resolution)
+                    width=args.resolution,
+                )
 
         if not state.is_world_process_zero:
             return
@@ -93,11 +97,11 @@ class VisualDLWithImageCallback(VisualDLCallback):
                         "Trainer is attempting to log a value of "
                         f'"{v}" of type {type(v)} for key "{k}" as a scalar. '
                         "This invocation of VisualDL's writer.add_scalar() "
-                        "is incorrect so we dropped this attribute.")
+                        "is incorrect so we dropped this attribute."
+                    )
             # log images
             for k, v in image_logs.items():
-                self.vdl_writer.add_image(
-                    k, v, state.global_step, dataformats="NHWC")
+                self.vdl_writer.add_image(k, v, state.global_step, dataformats="NHWC")
             self.vdl_writer.flush()
 
 
@@ -163,8 +167,7 @@ class BenchmarkCallback(TrainerCallback):
     def on_log(self, args, state, control, logs=None, **kwargs):
         if self.benchmark:
             if logs is not None and "interval_steps_per_second" in logs:
-                self.batch_start = self.batch_start + (
-                    time.time() - self.maybe_log_save_evaluate_start)
+                self.batch_start = self.batch_start + (time.time() - self.maybe_log_save_evaluate_start)
                 ips = logs["interval_steps_per_second"] * args.train_batch_size
                 avg_batch_cost = 1 / logs["interval_steps_per_second"]
                 logger.info(
@@ -176,14 +179,15 @@ class BenchmarkCallback(TrainerCallback):
                         self.reader_cost_avg.get_average(),
                         avg_batch_cost,
                         args.train_batch_size,
-                        ips, ))
+                        ips,
+                    )
+                )
                 self.reader_cost_avg.reset()
 
     def on_epoch_end(self, args, state, control, **kwargs):
         if self.benchmark:
             train_epoch_cost = time.time() - self.epoch_start
-            logger.info("train epoch: %d, epoch_cost: %.5f s" %
-                        (state.epoch, train_epoch_cost))
+            logger.info("train epoch: %d, epoch_cost: %.5f s" % (state.epoch, train_epoch_cost))
 
 
 # register visualdl_with_image
@@ -197,7 +201,9 @@ class LatentDiffusionTrainer(Trainer):
             self.add_callback(
                 BenchmarkCallback(
                     benchmark=self.args.benchmark,
-                    profiler_options=self.args.profiler_options))
+                    profiler_options=self.args.profiler_options,
+                )
+            )
             if self.args.benchmark:
                 if self.args.disable_tqdm:
                     self.pop_callback(PrinterCallback)
@@ -216,6 +222,7 @@ class LatentDiffusionTrainer(Trainer):
                 self.train_dataset,
                 batch_size=self.args.train_batch_size,
                 num_workers=self.args.dataloader_num_workers,
-                worker_init_fn=worker_init_fn, )
+                worker_init_fn=worker_init_fn,
+            )
         else:
             return super().get_train_dataloader()

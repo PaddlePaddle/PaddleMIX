@@ -21,7 +21,7 @@ from .test_schedulers import SchedulerCommonTest
 
 
 class VQDiffusionSchedulerTest(SchedulerCommonTest):
-    scheduler_classes = (VQDiffusionScheduler, )
+    scheduler_classes = (VQDiffusionScheduler,)
 
     def get_scheduler_config(self, **kwargs):
         config = {
@@ -37,8 +37,7 @@ class VQDiffusionSchedulerTest(SchedulerCommonTest):
         height = 8
         width = 8
 
-        sample = paddle.randint(0, num_vec_classes,
-                                (batch_size, height * width))
+        sample = paddle.randint(0, num_vec_classes, (batch_size, height * width))
 
         return sample
 
@@ -49,10 +48,8 @@ class VQDiffusionSchedulerTest(SchedulerCommonTest):
     def dummy_model(self, num_vec_classes):
         def model(sample, t, *args):
             batch_size, num_latent_pixels = sample.shape
-            logits = paddle.rand(
-                (batch_size, num_vec_classes - 1, num_latent_pixels))
-            return_value = F.log_softmax(
-                logits.cast("float64"), axis=1).cast("float32")
+            logits = paddle.rand((batch_size, num_vec_classes - 1, num_latent_pixels))
+            return_value = F.log_softmax(logits.cast("float64"), axis=1).cast("float32")
             return return_value
 
         return model

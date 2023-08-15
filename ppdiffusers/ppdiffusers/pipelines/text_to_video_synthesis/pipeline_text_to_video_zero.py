@@ -20,31 +20,26 @@ import numpy as np
 import paddle
 import paddle.nn.functional as F
 import PIL
-
 from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
+
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipelines.stable_diffusion import (
     StableDiffusionPipeline,
-    StableDiffusionSafetyChecker, )
+    StableDiffusionSafetyChecker,
+)
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
 from ppdiffusers.utils import BaseOutput
 
 
 def rearrange_0(tensor, f):
     F, C, H, W = tensor.shape
-    tensor = paddle.transpose(
-        x=paddle.reshape(
-            x=tensor, shape=(F // f, f, C, H, W)),
-        perm=(0, 2, 1, 3, 4))
+    tensor = paddle.transpose(x=paddle.reshape(x=tensor, shape=(F // f, f, C, H, W)), perm=(0, 2, 1, 3, 4))
     return tensor
 
 
 def rearrange_1(tensor):
     B, C, F, H, W = tensor.shape
-    return paddle.reshape(
-        x=paddle.transpose(
-            x=tensor, perm=(0, 2, 1, 3, 4)),
-        shape=(B * F, C, H, W))
+    return paddle.reshape(x=paddle.transpose(x=tensor, perm=(0, 2, 1, 3, 4)), shape=(B * F, C, H, W))
 
 
 def rearrange_3(tensor, f):
@@ -70,21 +65,15 @@ class CrossFrameAttnProcessor:
     def __init__(self, batch_size=2):
         self.batch_size = batch_size
 
-    def __call__(self,
-                 attn,
-                 hidden_states,
-                 encoder_hidden_states=None,
-                 attention_mask=None):
+    def __call__(self, attn, hidden_states, encoder_hidden_states=None, attention_mask=None):
         batch_size, sequence_length, _ = hidden_states.shape
-        attention_mask = attn.prepare_attention_mask(
-            attention_mask, sequence_length, batch_size)
+        attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
         query = attn.to_q(hidden_states)
         is_cross_attention = encoder_hidden_states is not None
         if encoder_hidden_states is None:
             encoder_hidden_states = hidden_states
         elif attn.norm_cross:
-            encoder_hidden_states = attn.norm_encoder_hidden_states(
-                encoder_hidden_states)
+            encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
         key = attn.to_k(encoder_hidden_states)
         value = attn.to_v(encoder_hidden_states)
 
@@ -143,8 +132,12 @@ def warp_single_latent(latent, reference_flow):
     _, _, h, w = latent.shape
     if isinstance(latent.dtype, paddle.dtype):
         dtype = latent.dtype
-    elif isinstance(latent.dtype,
-                    str) and latent.dtype not in ["cpu", "cuda", "ipu", "xpu"]:
+    elif isinstance(latent.dtype, str) and latent.dtype not in [
+        "cpu",
+        "cuda",
+        "ipu",
+        "xpu",
+    ]:
         dtype = latent.dtype
     elif isinstance(latent.dtype, paddle.Tensor):
         dtype = latent.dtype.dtype
@@ -157,13 +150,11 @@ def warp_single_latent(latent, reference_flow):
     coords_t0 = coords_t0 * 2.0 - 1.0
     coords_t0 = F.interpolate(x=coords_t0, size=(h, w), mode="bilinear")
     coords_t0 = paddle.transpose(x=coords_t0, perm=(0, 2, 3, 1))
-    warped = F.grid_sample(
-        x=latent, grid=coords_t0, mode="nearest", padding_mode="reflection")
+    warped = F.grid_sample(x=latent, grid=coords_t0, mode="nearest", padding_mode="reflection")
     return warped
 
 
-def create_motion_field(motion_field_strength_x, motion_field_strength_y,
-                        frame_ids, dtype):
+def create_motion_field(motion_field_strength_x, motion_field_strength_y, frame_ids, dtype):
     """
     Create translation motion field
 
@@ -180,15 +171,12 @@ def create_motion_field(motion_field_strength_x, motion_field_strength_y,
     seq_length = len(frame_ids)
     reference_flow = paddle.zeros(shape=(seq_length, 2, 512, 512), dtype=dtype)
     for fr_idx in range(seq_length):
-        reference_flow[(fr_idx), (
-            0), :, :] = motion_field_strength_x * frame_ids[fr_idx]
-        reference_flow[(fr_idx), (
-            1), :, :] = motion_field_strength_y * frame_ids[fr_idx]
+        reference_flow[(fr_idx), (0), :, :] = motion_field_strength_x * frame_ids[fr_idx]
+        reference_flow[(fr_idx), (1), :, :] = motion_field_strength_y * frame_ids[fr_idx]
     return reference_flow
 
 
-def create_motion_field_and_warp_latents(
-        motion_field_strength_x, motion_field_strength_y, frame_ids, latents):
+def create_motion_field_and_warp_latents(motion_field_strength_x, motion_field_strength_y, frame_ids, latents):
     """
     Creates translation motion and warps the latents accordingly
 
@@ -206,11 +194,11 @@ def create_motion_field_and_warp_latents(
         motion_field_strength_x=motion_field_strength_x,
         motion_field_strength_y=motion_field_strength_y,
         frame_ids=frame_ids,
-        dtype=latents.dtype, )
+        dtype=latents.dtype,
+    )
     warped_latents = latents.clone().detach()
     for i in range(len(warped_latents)):
-        warped_latents[i] = warp_single_latent(latents[i][None],
-                                               motion_field[i][None])
+        warped_latents[i] = warp_single_latent(latents[i][None], motion_field[i][None])
     return warped_latents
 
 
@@ -240,18 +228,26 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
     """
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            scheduler: KarrasDiffusionSchedulers,
-            safety_checker: StableDiffusionSafetyChecker,
-            feature_extractor: CLIPImageProcessor,
-            requires_safety_checker: bool=True, ):
-        super().__init__(vae, text_encoder, tokenizer, unet, scheduler,
-                         safety_checker, feature_extractor,
-                         requires_safety_checker)
+        self,
+        vae: AutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: UNet2DConditionModel,
+        scheduler: KarrasDiffusionSchedulers,
+        safety_checker: StableDiffusionSafetyChecker,
+        feature_extractor: CLIPImageProcessor,
+        requires_safety_checker: bool = True,
+    ):
+        super().__init__(
+            vae,
+            text_encoder,
+            tokenizer,
+            unet,
+            scheduler,
+            safety_checker,
+            feature_extractor,
+            requires_safety_checker,
+        )
         self.unet.set_attn_processor(CrossFrameAttnProcessor(batch_size=2))
 
     def forward_loop(self, x_t0, t0, t1, generator):
@@ -267,24 +263,23 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         Returns:
             x_t1: forward process applied to x_t0 from time t0 to t1.
         """
-        eps = paddle.randn(
-            shape=x_t0.shape, generator=generator, dtype=x_t0.dtype)
+        eps = paddle.randn(shape=x_t0.shape, generator=generator, dtype=x_t0.dtype)
         alpha_vec = paddle.prod(x=self.scheduler.alphas[t0:t1])
-        x_t1 = paddle.sqrt(x=alpha_vec) * x_t0 + paddle.sqrt(x=1 -
-                                                             alpha_vec) * eps
+        x_t1 = paddle.sqrt(x=alpha_vec) * x_t0 + paddle.sqrt(x=1 - alpha_vec) * eps
         return x_t1
 
     def backward_loop(
-            self,
-            latents,
-            timesteps,
-            prompt_embeds,
-            guidance_scale,
-            callback,
-            callback_steps,
-            num_warmup_steps,
-            extra_step_kwargs,
-            cross_attention_kwargs=None, ):
+        self,
+        latents,
+        timesteps,
+        prompt_embeds,
+        guidance_scale,
+        callback,
+        callback_steps,
+        num_warmup_steps,
+        extra_step_kwargs,
+        cross_attention_kwargs=None,
+    ):
         """
         Perform backward process given list of time steps
 
@@ -316,32 +311,27 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         with self.progress_bar(total=num_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    x=[latents] * 2) if do_classifier_free_guidance else latents
-                latent_model_input = self.scheduler.scale_model_input(
-                    latent_model_input, t)
+                latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
-                    cross_attention_kwargs=cross_attention_kwargs, ).sample
+                    cross_attention_kwargs=cross_attention_kwargs,
+                ).sample
 
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(
-                        chunks=2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
+                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
+                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
-                        i + 1) % self.scheduler.order == 0:
+                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -349,27 +339,27 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            prompt: Union[str, List[str]],
-            video_length: Optional[int]=8,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_videos_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            motion_field_strength_x: float=12,
-            motion_field_strength_y: float=12,
-            output_type: Optional[str]="tensor",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            t0: int=44,
-            t1: int=47, ):
+        self,
+        prompt: Union[str, List[str]],
+        video_length: Optional[int] = 8,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_videos_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        motion_field_strength_x: float = 12,
+        motion_field_strength_y: float = 12,
+        output_type: Optional[str] = "tensor",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        t0: int = 44,
+        t1: int = 47,
+    ):
         """
         Function invoked when calling the pipeline for generation.
 
@@ -461,12 +451,14 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         do_classifier_free_guidance = guidance_scale > 1.0
 
         # Encode input prompt
-        prompt_embeds = self._encode_prompt(prompt, num_videos_per_prompt,
-                                            do_classifier_free_guidance,
-                                            negative_prompt)
+        prompt_embeds = self._encode_prompt(
+            prompt, num_videos_per_prompt, do_classifier_free_guidance, negative_prompt
+        )
 
         # Prepare timesteps
-        self.scheduler.set_timesteps(num_inference_steps, )
+        self.scheduler.set_timesteps(
+            num_inference_steps,
+        )
         timesteps = self.scheduler.timesteps
 
         # Prepare latent variables
@@ -478,35 +470,37 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             width,
             prompt_embeds.dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
 
         # Perform the first backward process up to time T_1
         x_1_t1 = self.backward_loop(
-            timesteps=timesteps[:-t1 - 1],
+            timesteps=timesteps[: -t1 - 1],
             prompt_embeds=prompt_embeds,
             latents=latents,
             guidance_scale=guidance_scale,
             callback=callback,
             callback_steps=callback_steps,
             extra_step_kwargs=extra_step_kwargs,
-            num_warmup_steps=num_warmup_steps, )
+            num_warmup_steps=num_warmup_steps,
+        )
         scheduler_copy = copy.deepcopy(self.scheduler)
 
         # Perform the second backward process up to time T_0
         x_1_t0 = self.backward_loop(
-            timesteps=timesteps[-t1 - 1:-t0 - 1],
+            timesteps=timesteps[-t1 - 1 : -t0 - 1],
             prompt_embeds=prompt_embeds,
             latents=x_1_t1,
             guidance_scale=guidance_scale,
             callback=callback,
             callback_steps=callback_steps,
             extra_step_kwargs=extra_step_kwargs,
-            num_warmup_steps=0, )
+            num_warmup_steps=0,
+        )
 
         # Propagate first frame latents at time T_0 to remaining frames
         x_2k_t0 = x_1_t0.tile(repeat_times=[video_length - 1, 1, 1, 1])
@@ -516,31 +510,34 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             motion_field_strength_x=motion_field_strength_x,
             motion_field_strength_y=motion_field_strength_y,
             latents=x_2k_t0,
-            frame_ids=frame_ids[1:], )
+            frame_ids=frame_ids[1:],
+        )
 
         # Perform forward process up to time T_1
         x_2k_t1 = self.forward_loop(
             x_t0=x_2k_t0,
             t0=timesteps[-t0 - 1].item(),
             t1=timesteps[-t1 - 1].item(),
-            generator=generator)
+            generator=generator,
+        )
 
         # Perform backward process from time T_1 to 0
         x_1k_t1 = paddle.concat(x=[x_1_t1, x_2k_t1])
         b, l, d = prompt_embeds.shape
-        prompt_embeds = (prompt_embeds[:, (None)].tile(
-            repeat_times=[1, video_length, 1, 1]).reshape(
-                [b * video_length, l, d]))
+        prompt_embeds = (
+            prompt_embeds[:, (None)].tile(repeat_times=[1, video_length, 1, 1]).reshape([b * video_length, l, d])
+        )
         self.scheduler = scheduler_copy
         x_1k_0 = self.backward_loop(
-            timesteps=timesteps[-t1 - 1:],
+            timesteps=timesteps[-t1 - 1 :],
             prompt_embeds=prompt_embeds,
             latents=x_1k_t1,
             guidance_scale=guidance_scale,
             callback=callback,
             callback_steps=callback_steps,
             extra_step_kwargs=extra_step_kwargs,
-            num_warmup_steps=0, )
+            num_warmup_steps=0,
+        )
         latents = x_1k_0
         paddle.device.cuda.empty_cache()
         if output_type == "latent":
@@ -548,9 +545,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             has_nsfw_concept = None
         else:
             image = self.decode_latents(latents)
-            image, has_nsfw_concept = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
         if not return_dict:
             return image, has_nsfw_concept
-        return TextToVideoPipelineOutput(
-            images=image, nsfw_content_detected=has_nsfw_concept)
+        return TextToVideoPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

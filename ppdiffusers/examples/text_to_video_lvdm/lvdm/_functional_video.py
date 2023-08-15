@@ -1,11 +1,25 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
 
 
 def _is_tensor_video_clip(clip):
     if not paddle.is_tensor(x=clip):
-        raise TypeError('clip should be Tensor. Got %s' % type(clip))
+        raise TypeError("clip should be Tensor. Got %s" % type(clip))
     if not clip.ndimension() == 4:
-        raise ValueError('clip should be 4D. Got %dD' % clip.dim())
+        raise ValueError("clip should be 4D. Got %dD" % clip.dim())
     return True
 
 
@@ -15,20 +29,17 @@ def crop(clip, i, j, h, w):
         clip (torch.tensor): Video clip to be cropped. Size is (C, T, H, W)
     """
     if len(clip.shape) != 4:
-        raise ValueError('clip should be a 4D tensor')
-    return clip[(...), i:i + h, j:j + w]
+        raise ValueError("clip should be a 4D tensor")
+    return clip[(...), i : i + h, j : j + w]
 
 
 def resize(clip, target_size, interpolation_mode):
     if len(target_size) != 2:
-        raise ValueError(
-            f'target size should be tuple (height, width), instead got {target_size}'
-        )
-    return paddle.nn.functional.interpolate(
-        x=clip, size=target_size, mode=interpolation_mode, align_corners=False)
+        raise ValueError(f"target size should be tuple (height, width), instead got {target_size}")
+    return paddle.nn.functional.interpolate(x=clip, size=target_size, mode=interpolation_mode, align_corners=False)
 
 
-def resized_crop(clip, i, j, h, w, size, interpolation_mode='bilinear'):
+def resized_crop(clip, i, j, h, w, size, interpolation_mode="bilinear"):
     """
     Do spatial cropping and resizing to the video clip
     Args:
@@ -42,7 +53,7 @@ def resized_crop(clip, i, j, h, w, size, interpolation_mode='bilinear'):
         clip (torch.tensor): Resized and cropped clip. Size is (C, T, H, W)
     """
     if not _is_tensor_video_clip(clip):
-        raise ValueError('clip should be a 4D torch.tensor')
+        raise ValueError("clip should be a 4D torch.tensor")
     clip = crop(clip, i, j, h, w)
     clip = resize(clip, size, interpolation_mode)
     return clip
@@ -50,11 +61,11 @@ def resized_crop(clip, i, j, h, w, size, interpolation_mode='bilinear'):
 
 def center_crop(clip, crop_size):
     if not _is_tensor_video_clip(clip):
-        raise ValueError('clip should be a 4D torch.tensor')
+        raise ValueError("clip should be a 4D torch.tensor")
     h, w = clip.shape[-2], clip.shape[-1]
     th, tw = crop_size
     if h < th or w < tw:
-        raise ValueError('height and width must be no smaller than crop_size')
+        raise ValueError("height and width must be no smaller than crop_size")
     i = int(round((h - th) / 2.0))
     j = int(round((w - tw) / 2.0))
     return crop(clip, i, j, th, tw)
@@ -70,10 +81,9 @@ def to_tensor(clip):
         clip (torch.tensor, dtype=torch.float): Size is (C, T, H, W)
     """
     _is_tensor_video_clip(clip)
-    if not clip.dtype == 'uint8':
-        raise TypeError('clip tensor should have data type uint8. Got %s' %
-                        str(clip.dtype))
-    return clip.astype(dtype='float32').transpose(perm=[3, 0, 1, 2]) / 255.0
+    if not clip.dtype == "uint8":
+        raise TypeError("clip tensor should have data type uint8. Got %s" % str(clip.dtype))
+    return clip.astype(dtype="float32").transpose(perm=[3, 0, 1, 2]) / 255.0
 
 
 def normalize(clip, mean, std, inplace=False):
@@ -86,13 +96,12 @@ def normalize(clip, mean, std, inplace=False):
         normalized clip (torch.tensor): Size is (C, T, H, W)
     """
     if not _is_tensor_video_clip(clip):
-        raise ValueError('clip should be a 4D torch.tensor')
+        raise ValueError("clip should be a 4D torch.tensor")
     if not inplace:
         clip = clip.clone()
     mean = paddle.to_tensor(data=mean, place=clip.place).astype(clip.dtype)
     std = paddle.to_tensor(data=std, place=clip.place).astype(clip.dtype)
-    clip = clip.substract(mean[:, (None), (None), (None)]).divide(std[:, (
-        None), (None), (None)])
+    clip = clip.substract(mean[:, (None), (None), (None)]).divide(std[:, (None), (None), (None)])
     return clip
 
 
@@ -104,5 +113,5 @@ def hflip(clip):
         flipped clip (torch.tensor): Size is (C, T, H, W)
     """
     if not _is_tensor_video_clip(clip):
-        raise ValueError('clip should be a 4D torch.tensor')
+        raise ValueError("clip should be a 4D torch.tensor")
     return clip.flip(axis=-1)

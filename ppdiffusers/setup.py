@@ -57,10 +57,7 @@ setup(
     keywords=["ppdiffusers", "paddle", "paddlemix"],
     install_requires=REQUIRED_PACKAGES,
     python_requires=">=3.6",
-    entry_points={
-        "console_scripts":
-        ["ppdiffusers-cli=ppdiffusers.commands.ppdiffusers_cli:main"]
-    },
+    entry_points={"console_scripts": ["ppdiffusers-cli=ppdiffusers.commands.ppdiffusers_cli:main"]},
     classifiers=[
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
@@ -70,4 +67,5 @@ setup(
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
-    license="Apache 2.0", )
+    license="Apache 2.0",
+)

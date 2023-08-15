@@ -26,7 +26,8 @@ from ...utils import (
     is_k_diffusion_available,
     is_k_diffusion_version,
     is_paddle_available,
-    is_paddlenlp_available, )
+    is_paddlenlp_available,
+)
 
 
 @dataclass
@@ -59,32 +60,40 @@ else:
         HFCLIPTextModel,
         HFCLIPTextModelWithProjection,
         HFCLIPVisionModel,
-        HFCLIPVisionModelWithProjection, )
+        HFCLIPVisionModelWithProjection,
+    )
     from .pipeline_cycle_diffusion import CycleDiffusionPipeline
     from .pipeline_stable_diffusion import StableDiffusionPipeline
     from .pipeline_stable_diffusion_adapter import StableDiffusionAdapterPipeline
     from .pipeline_stable_diffusion_all_in_one import StableDiffusionPipelineAllinOne
     from .pipeline_stable_diffusion_attend_and_excite import (
-        StableDiffusionAttendAndExcitePipeline, )
+        StableDiffusionAttendAndExcitePipeline,
+    )
     from .pipeline_stable_diffusion_controlnet import StableDiffusionControlNetPipeline
     from .pipeline_stable_diffusion_depth2img import StableDiffusionDepth2ImgPipeline
     from .pipeline_stable_diffusion_image_variation import (
-        StableDiffusionImageVariationPipeline, )
+        StableDiffusionImageVariationPipeline,
+    )
     from .pipeline_stable_diffusion_img2img import StableDiffusionImg2ImgPipeline
     from .pipeline_stable_diffusion_inpaint import StableDiffusionInpaintPipeline
     from .pipeline_stable_diffusion_inpaint_legacy import (
-        StableDiffusionInpaintPipelineLegacy, )
+        StableDiffusionInpaintPipelineLegacy,
+    )
     from .pipeline_stable_diffusion_instruct_pix2pix import (
-        StableDiffusionInstructPix2PixPipeline, )
+        StableDiffusionInstructPix2PixPipeline,
+    )
     from .pipeline_stable_diffusion_k_diffusion import StableDiffusionKDiffusionPipeline
     from .pipeline_stable_diffusion_latent_upscale import (
-        StableDiffusionLatentUpscalePipeline, )
+        StableDiffusionLatentUpscalePipeline,
+    )
     from .pipeline_stable_diffusion_mega import StableDiffusionMegaPipeline
     from .pipeline_stable_diffusion_model_editing import (
-        StableDiffusionModelEditingPipeline, )
+        StableDiffusionModelEditingPipeline,
+    )
     from .pipeline_stable_diffusion_panorama import StableDiffusionPanoramaPipeline
     from .pipeline_stable_diffusion_pix2pix_zero import (
-        StableDiffusionPix2PixZeroPipeline, )
+        StableDiffusionPix2PixZeroPipeline,
+    )
     from .pipeline_stable_diffusion_sag import StableDiffusionSAGPipeline
     from .pipeline_stable_diffusion_upscale import StableDiffusionUpscalePipeline
     from .pipeline_stable_unclip import StableUnCLIPPipeline
@@ -101,16 +110,23 @@ else:
     from .pipeline_fastdeploy_cycle_diffusion import FastDeployCycleDiffusionPipeline
     from .pipeline_fastdeploy_stable_diffusion import FastDeployStableDiffusionPipeline
     from .pipeline_fastdeploy_stable_diffusion_controlnet import (
-        FastDeployStableDiffusionControlNetPipeline, )
+        FastDeployStableDiffusionControlNetPipeline,
+    )
     from .pipeline_fastdeploy_stable_diffusion_image_variation import (
-        FastDeployStableDiffusionImageVariationPipeline, )
+        FastDeployStableDiffusionImageVariationPipeline,
+    )
     from .pipeline_fastdeploy_stable_diffusion_img2img import (
-        FastDeployStableDiffusionImg2ImgPipeline, )
+        FastDeployStableDiffusionImg2ImgPipeline,
+    )
     from .pipeline_fastdeploy_stable_diffusion_inpaint import (
-        FastDeployStableDiffusionInpaintPipeline, )
+        FastDeployStableDiffusionInpaintPipeline,
+    )
     from .pipeline_fastdeploy_stable_diffusion_inpaint_legacy import (
-        FastDeployStableDiffusionInpaintPipelineLegacy, )
+        FastDeployStableDiffusionInpaintPipelineLegacy,
+    )
     from .pipeline_fastdeploy_stable_diffusion_mega import (
-        FastDeployStableDiffusionMegaPipeline, )
+        FastDeployStableDiffusionMegaPipeline,
+    )
     from .pipeline_fastdeploy_stable_diffusion_upscale import (
-        FastDeployStableDiffusionUpscalePipeline, )
+        FastDeployStableDiffusionUpscalePipeline,
+    )

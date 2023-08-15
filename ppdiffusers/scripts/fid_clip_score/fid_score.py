@@ -67,42 +67,37 @@ except ImportError:
 from inception import InceptionV3
 
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
-parser.add_argument(
-    "--batch-size", type=int, default=50, help="Batch size to use")
-parser.add_argument(
-    "--resolution", type=int, default=None, help="The resolution to resize.")
+parser.add_argument("--batch-size", type=int, default=50, help="Batch size to use")
+parser.add_argument("--resolution", type=int, default=None, help="The resolution to resize.")
 parser.add_argument(
     "--num-workers",
     type=int,
-    help=("Number of processes to use for data loading. "
-          "Defaults to `min(8, num_cpus)`"))
-parser.add_argument(
-    "--device",
-    type=str,
-    default=None,
-    help="Device to use. Like cuda, cuda:0 or cpu")
+    help=("Number of processes to use for data loading. " "Defaults to `min(8, num_cpus)`"),
+)
+parser.add_argument("--device", type=str, default=None, help="Device to use. Like cuda, cuda:0 or cpu")
 parser.add_argument(
     "--dims",
     type=int,
     default=2048,
     choices=list(InceptionV3.BLOCK_INDEX_BY_DIM),
-    help=("Dimensionality of Inception features to use. "
-          "By default, uses pool3 features"), )
+    help=("Dimensionality of Inception features to use. " "By default, uses pool3 features"),
+)
 parser.add_argument(
     "--save-stats",
     action="store_true",
-    help=("Generate an npz archive from a directory of samples. "
-          "The first path is used as input and the second as output."), )
+    help=(
+        "Generate an npz archive from a directory of samples. "
+        "The first path is used as input and the second as output."
+    ),
+)
 parser.add_argument(
     "path",
     type=str,
     nargs=2,
-    help=("Paths to the generated images or "
-          "to .npz statistic files"))
+    help=("Paths to the generated images or " "to .npz statistic files"),
+)
 
-IMAGE_EXTENSIONS = {
-    "bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"
-}
+IMAGE_EXTENSIONS = {"bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"}
 
 
 class ImagePathDataset(paddle.io.Dataset):
@@ -125,12 +120,7 @@ class ImagePathDataset(paddle.io.Dataset):
         return {"img": img}
 
 
-def get_activations(files,
-                    model,
-                    batch_size=50,
-                    dims=2048,
-                    num_workers=1,
-                    resolution=None):
+def get_activations(files, model, batch_size=50, dims=2048, num_workers=1, resolution=None):
     """Calculates the activations of the pool_3 layer for all images.
 
     Params:
@@ -152,18 +142,17 @@ def get_activations(files,
     model.eval()
 
     if batch_size > len(files):
-        print(("Warning: batch size is bigger than the data size. "
-               "Setting batch size to data size"))
+        print(("Warning: batch size is bigger than the data size. " "Setting batch size to data size"))
         batch_size = len(files)
 
-    dataset = ImagePathDataset(
-        files, transforms=TF.ToTensor(), resolution=resolution)
+    dataset = ImagePathDataset(files, transforms=TF.ToTensor(), resolution=resolution)
     dataloader = paddle.io.DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=False,
         drop_last=False,
-        num_workers=num_workers, )
+        num_workers=num_workers,
+    )
 
     pred_arr = np.empty((len(files), dims))
 
@@ -181,7 +170,7 @@ def get_activations(files,
 
         pred = pred.squeeze(3).squeeze(2).cpu().numpy()
 
-        pred_arr[start_idx:start_idx + pred.shape[0]] = pred
+        pred_arr[start_idx : start_idx + pred.shape[0]] = pred
 
         start_idx = start_idx + pred.shape[0]
 
@@ -224,8 +213,7 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     # Product might be almost singular
     covmean, _ = linalg.sqrtm(sigma1.dot(sigma2), disp=False)
     if not np.isfinite(covmean).all():
-        msg = ("fid calculation produces singular product; "
-               "adding %s to diagonal of cov estimates") % eps
+        msg = ("fid calculation produces singular product; " "adding %s to diagonal of cov estimates") % eps
         print(msg)
         offset = np.eye(sigma1.shape[0]) * eps
         covmean = linalg.sqrtm((sigma1 + offset).dot(sigma2 + offset))
@@ -242,12 +230,7 @@ def calculate_frechet_distance(mu1, sigma1, mu2, sigma2, eps=1e-6):
     return diff.dot(diff) + np.trace(sigma1) + np.trace(sigma2) - 2 * tr_covmean
 
 
-def calculate_activation_statistics(files,
-                                    model,
-                                    batch_size=50,
-                                    dims=2048,
-                                    num_workers=1,
-                                    resolution=None):
+def calculate_activation_statistics(files, model, batch_size=50, dims=2048, num_workers=1, resolution=None):
     """Calculation of the statistics used by the FID.
     Params:
     -- files       : List of image files paths
@@ -264,43 +247,28 @@ def calculate_activation_statistics(files,
     -- sigma : The covariance matrix of the activations of the pool_3 layer of
                the inception model.
     """
-    act = get_activations(
-        files, model, batch_size, dims, num_workers, resolution=resolution)
+    act = get_activations(files, model, batch_size, dims, num_workers, resolution=resolution)
     mu = np.mean(act, axis=0)
     sigma = np.cov(act, rowvar=False)
     return mu, sigma
 
 
-def compute_statistics_of_path(path,
-                               model,
-                               batch_size,
-                               dims,
-                               num_workers=1,
-                               resolution=None):
+def compute_statistics_of_path(path, model, batch_size, dims, num_workers=1, resolution=None):
     if path.endswith(".npz"):
         with np.load(path) as f:
             m, s = f["mu"][:], f["sigma"][:]
     else:
         path = pathlib.Path(path)
-        files = sorted([
-            file
-            for ext in IMAGE_EXTENSIONS
-            for file in path.glob("*.{}".format(ext))
-        ])
+        files = sorted([file for ext in IMAGE_EXTENSIONS for file in path.glob("*.{}".format(ext))])
         FLAG_IMAGE_NUM = os.getenv("FLAG_IMAGE_NUM", None)
         if FLAG_IMAGE_NUM is not None:
-            files = files[:int(FLAG_IMAGE_NUM)]
-        m, s = calculate_activation_statistics(
-            files, model, batch_size, dims, num_workers, resolution=resolution)
+            files = files[: int(FLAG_IMAGE_NUM)]
+        m, s = calculate_activation_statistics(files, model, batch_size, dims, num_workers, resolution=resolution)
 
     return m, s
 
 
-def calculate_fid_given_paths(paths,
-                              batch_size,
-                              dims,
-                              num_workers=1,
-                              resolution=None):
+def calculate_fid_given_paths(paths, batch_size, dims, num_workers=1, resolution=None):
     """Calculates the FID of two paths"""
     for p in paths:
         if not os.path.exists(p):
@@ -310,11 +278,9 @@ def calculate_fid_given_paths(paths,
 
     model = InceptionV3([block_idx])
 
-    m1, s1 = compute_statistics_of_path(
-        paths[0], model, batch_size, dims, num_workers, resolution=resolution)
+    m1, s1 = compute_statistics_of_path(paths[0], model, batch_size, dims, num_workers, resolution=resolution)
 
-    m2, s2 = compute_statistics_of_path(
-        paths[1], model, batch_size, dims, num_workers, resolution=resolution)
+    m2, s2 = compute_statistics_of_path(paths[1], model, batch_size, dims, num_workers, resolution=resolution)
 
     fid_value = calculate_frechet_distance(m1, s1, m2, s2)
 
@@ -335,8 +301,7 @@ def save_fid_stats(paths, batch_size, dims, num_workers=1, resolution=None):
 
     print(f"Saving statistics for {paths[0]}")
 
-    m1, s1 = compute_statistics_of_path(
-        paths[0], model, batch_size, dims, num_workers, resolution=resolution)
+    m1, s1 = compute_statistics_of_path(paths[0], model, batch_size, dims, num_workers, resolution=resolution)
 
     np.savez_compressed(paths[1], mu=m1, sigma=s1)
 
@@ -365,15 +330,13 @@ def main():
             args.batch_size,
             args.dims,
             num_workers,
-            resolution=args.resolution)
+            resolution=args.resolution,
+        )
         return
 
     fid_value = calculate_fid_given_paths(
-        args.path,
-        args.batch_size,
-        args.dims,
-        num_workers,
-        resolution=args.resolution)
+        args.path, args.batch_size, args.dims, num_workers, resolution=args.resolution
+    )
     print("FID: ", fid_value)
 
 

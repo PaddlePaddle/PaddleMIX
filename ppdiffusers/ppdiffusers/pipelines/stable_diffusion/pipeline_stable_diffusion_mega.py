@@ -22,7 +22,8 @@ from ...utils import logging
 from .pipeline_stable_diffusion import StableDiffusionPipeline
 from .pipeline_stable_diffusion_img2img import StableDiffusionImg2ImgPipeline
 from .pipeline_stable_diffusion_inpaint_legacy import (
-    StableDiffusionInpaintPipelineLegacy, )
+    StableDiffusionInpaintPipelineLegacy,
+)
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -61,36 +62,31 @@ class StableDiffusionMegaPipeline(StableDiffusionPipeline):
         return self.text2img(*args, **kwargs)
 
     def text2img(
-            self,
-            prompt: Union[str, List[str]]=None,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None, ):
+        self,
+        prompt: Union[str, List[str]] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+    ):
 
-        expected_components = inspect.signature(
-            StableDiffusionPipeline.__init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+        expected_components = inspect.signature(StableDiffusionPipeline.__init__).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         temp_pipeline = StableDiffusionPipeline(
-            **components,
-            requires_safety_checker=self.config.requires_safety_checker)
+            **components, requires_safety_checker=self.config.requires_safety_checker
+        )
         output = temp_pipeline(
             prompt=prompt,
             height=height,
@@ -108,38 +104,34 @@ class StableDiffusionMegaPipeline(StableDiffusionPipeline):
             return_dict=return_dict,
             callback=callback,
             callback_steps=callback_steps,
-            cross_attention_kwargs=cross_attention_kwargs, )
+            cross_attention_kwargs=cross_attention_kwargs,
+        )
         return output
 
     def img2img(
-            self,
-            prompt: Union[str, List[str]]=None,
-            image: Union[paddle.Tensor, PIL.Image.Image]=None,
-            strength: float=0.8,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[float]=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            **kwargs, ):
-        expected_components = inspect.signature(
-            StableDiffusionImg2ImgPipeline.__init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+        self,
+        prompt: Union[str, List[str]] = None,
+        image: Union[paddle.Tensor, PIL.Image.Image] = None,
+        strength: float = 0.8,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[float] = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        **kwargs,
+    ):
+        expected_components = inspect.signature(StableDiffusionImg2ImgPipeline.__init__).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         temp_pipeline = StableDiffusionImg2ImgPipeline(
-            **components,
-            requires_safety_checker=self.config.requires_safety_checker)
+            **components, requires_safety_checker=self.config.requires_safety_checker
+        )
         output = temp_pipeline(
             prompt=prompt,
             image=image,
@@ -156,41 +148,37 @@ class StableDiffusionMegaPipeline(StableDiffusionPipeline):
             return_dict=return_dict,
             callback=callback,
             callback_steps=callback_steps,
-            **kwargs, )
+            **kwargs,
+        )
 
         return output
 
     def inpaint_legacy(
-            self,
-            prompt: Union[str, List[str]],
-            image: Union[paddle.Tensor, PIL.Image.Image]=None,
-            mask_image: Union[paddle.Tensor, PIL.Image.Image]=None,
-            strength: float=0.8,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            add_predicted_noise: Optional[bool]=False,
-            eta: Optional[float]=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            **kwargs, ):
-        expected_components = inspect.signature(
-            StableDiffusionInpaintPipelineLegacy.__init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+        self,
+        prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, PIL.Image.Image] = None,
+        mask_image: Union[paddle.Tensor, PIL.Image.Image] = None,
+        strength: float = 0.8,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        add_predicted_noise: Optional[bool] = False,
+        eta: Optional[float] = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        **kwargs,
+    ):
+        expected_components = inspect.signature(StableDiffusionInpaintPipelineLegacy.__init__).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         temp_pipeline = StableDiffusionInpaintPipelineLegacy(
-            **components,
-            requires_safety_checker=self.config.requires_safety_checker)
+            **components, requires_safety_checker=self.config.requires_safety_checker
+        )
         output = temp_pipeline(
             prompt=prompt,
             image=image,
@@ -209,6 +197,7 @@ class StableDiffusionMegaPipeline(StableDiffusionPipeline):
             return_dict=return_dict,
             callback=callback,
             callback_steps=callback_steps,
-            **kwargs, )
+            **kwargs,
+        )
 
         return output

@@ -23,7 +23,8 @@ from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
 
 from ..pipeline_params import (
     UNCONDITIONAL_IMAGE_GENERATION_BATCH_PARAMS,
-    UNCONDITIONAL_IMAGE_GENERATION_PARAMS, )
+    UNCONDITIONAL_IMAGE_GENERATION_PARAMS,
+)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -48,7 +49,8 @@ class DDIMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             in_channels=3,
             out_channels=3,
             down_block_types=("DownBlock2D", "AttnDownBlock2D"),
-            up_block_types=("AttnUpBlock2D", "UpBlock2D"), )
+            up_block_types=("AttnUpBlock2D", "UpBlock2D"),
+        )
         scheduler = DDIMScheduler()
         components = {"unet": unet, "scheduler": scheduler}
         return components
@@ -60,7 +62,7 @@ class DDIMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             "batch_size": 1,
             "generator": generator,
             "num_inference_steps": 2,
-            "output_type": "numpy"
+            "output_type": "numpy",
         }
         return inputs
 
@@ -72,10 +74,19 @@ class DDIMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1]
         self.assertEqual(image.shape, (1, 32, 32, 3))
-        expected_slice = np.array([
-            0.0, 0.00152004, 0.0, 0.0, 0.00860906, 0.00182715, 0.00189051, 1.0,
-            0.668702
-        ])
+        expected_slice = np.array(
+            [
+                0.0,
+                0.00152004,
+                0.0,
+                0.0,
+                0.00860906,
+                0.00182715,
+                0.00189051,
+                1.0,
+                0.668702,
+            ]
+        )
         max_diff = np.abs(image_slice.flatten() - expected_slice).max()
         self.assertLessEqual(max_diff, 0.001)
 
@@ -93,10 +104,7 @@ class DDIMPipelineIntegrationTests(unittest.TestCase):
         image = ddim(generator=generator, eta=0.0, output_type="numpy").images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        expected_slice = np.array([
-            0.2060, 0.2042, 0.2022, 0.2193, 0.2146, 0.2110, 0.2471, 0.2446,
-            0.2388
-        ])
+        expected_slice = np.array([0.2060, 0.2042, 0.2022, 0.2193, 0.2146, 0.2110, 0.2471, 0.2446, 0.2388])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_inference_ema_bedroom(self):
@@ -109,8 +117,17 @@ class DDIMPipelineIntegrationTests(unittest.TestCase):
         image = ddim(generator=generator, output_type="numpy").images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 256, 256, 3)
-        expected_slice = np.array([
-            0.19830778, 0.18826014, 0.18584034, 0.1927332, 0.18754855,
-            0.17855307, 0.18288234, 0.16375086, 0.1497818
-        ])
+        expected_slice = np.array(
+            [
+                0.19830778,
+                0.18826014,
+                0.18584034,
+                0.1927332,
+                0.18754855,
+                0.17855307,
+                0.18288234,
+                0.16375086,
+                0.1497818,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01

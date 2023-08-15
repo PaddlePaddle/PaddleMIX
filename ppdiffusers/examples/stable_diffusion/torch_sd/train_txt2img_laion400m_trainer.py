@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-import torch
+
 import transformers
 from sd import (
     SDDataArguments,
@@ -20,13 +20,13 @@ from sd import (
     SDTrainingArguments,
     StableDiffusionModel,
     StableDiffusionTrainer,
-    TextImagePair, )
+    TextImagePair,
+)
 from transformers.trainer import get_last_checkpoint, set_seed
 
 
 def main():
-    parser = transformers.HfArgumentParser(
-        (SDModelArguments, SDDataArguments, SDTrainingArguments))
+    parser = transformers.HfArgumentParser((SDModelArguments, SDDataArguments, SDTrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
     log_level = training_args.get_process_log_level()
@@ -41,15 +41,13 @@ def main():
 
     # Detecting last checkpoint.
     last_checkpoint = None
-    if os.path.isdir(
-            training_args.output_dir
-    ) and training_args.do_train and not training_args.overwrite_output_dir:
+    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
-        if last_checkpoint is None and len(
-                os.listdir(training_args.output_dir)) > 0:
+        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
             raise ValueError(
                 f"Output directory ({training_args.output_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome.")
+                "Use --overwrite_output_dir to overcome."
+            )
         elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
             print(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
@@ -69,13 +67,15 @@ def main():
         buffer_size=data_args.buffer_size,
         shuffle_every_n_samples=data_args.shuffle_every_n_samples,
         interpolation=data_args.interpolation,
-        tokenizer=model.tokenizer, )
+        tokenizer=model.tokenizer,
+    )
 
     trainer = StableDiffusionTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
-        tokenizer=model.tokenizer, )
+        tokenizer=model.tokenizer,
+    )
 
     checkpoint = None
     if training_args.resume_from_checkpoint is not None:

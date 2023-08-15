@@ -48,18 +48,12 @@ def get_affine_mat_kernel(h, w, s, inv=False):
     center = np.array([np.round(w / 2.0), np.round(h / 2.0)])
 
     size_resized = (w_, h_)
-    trans = get_affine_transform(
-        center, np.array([scale_w, scale_h]), 0, size_resized, inv=inv)
+    trans = get_affine_transform(center, np.array([scale_w, scale_h]), 0, size_resized, inv=inv)
 
     return trans, size_resized
 
 
-def get_affine_transform(center,
-                         input_size,
-                         rot,
-                         output_size,
-                         shift=(0.0, 0.0),
-                         inv=False):
+def get_affine_transform(center, input_size, rot, output_size, shift=(0.0, 0.0), inv=False):
     """Get the affine transform matrix, given the center/scale/rot/output_size.
 
     Args:
@@ -134,13 +128,13 @@ def get_warp_matrix(theta, size_input, size_dst, size_target):
     matrix[0, 0] = np.cos(theta) * scale_x
     matrix[0, 1] = -np.sin(theta) * scale_x
     matrix[0, 2] = scale_x * (
-        -0.5 * size_input[0] * np.cos(theta) + 0.5 * size_input[1] *
-        np.sin(theta) + 0.5 * size_target[0])
+        -0.5 * size_input[0] * np.cos(theta) + 0.5 * size_input[1] * np.sin(theta) + 0.5 * size_target[0]
+    )
     matrix[1, 0] = np.sin(theta) * scale_y
     matrix[1, 1] = np.cos(theta) * scale_y
     matrix[1, 2] = scale_y * (
-        -0.5 * size_input[0] * np.sin(theta) - 0.5 * size_input[1] *
-        np.cos(theta) + 0.5 * size_target[1])
+        -0.5 * size_input[0] * np.sin(theta) - 0.5 * size_input[1] * np.cos(theta) + 0.5 * size_target[1]
+    )
     return matrix
 
 
@@ -209,18 +203,25 @@ class TopDownEvalAffine(object):
         scale = im_info["scale"] if "scale" in im_info else imshape
         if self.use_udp:
             trans = get_warp_matrix(
-                rot, center * 2.0,
-                [self.trainsize[0] - 1.0, self.trainsize[1] - 1.0], scale)
+                rot,
+                center * 2.0,
+                [self.trainsize[0] - 1.0, self.trainsize[1] - 1.0],
+                scale,
+            )
             image = cv2.warpAffine(
                 image,
-                trans, (int(self.trainsize[0]), int(self.trainsize[1])),
-                flags=cv2.INTER_LINEAR)
+                trans,
+                (int(self.trainsize[0]), int(self.trainsize[1])),
+                flags=cv2.INTER_LINEAR,
+            )
         else:
             trans = get_affine_transform(center, scale, rot, self.trainsize)
             image = cv2.warpAffine(
                 image,
-                trans, (int(self.trainsize[0]), int(self.trainsize[1])),
-                flags=cv2.INTER_LINEAR)
+                trans,
+                (int(self.trainsize[0]), int(self.trainsize[1])),
+                flags=cv2.INTER_LINEAR,
+            )
 
         return image, im_info
 

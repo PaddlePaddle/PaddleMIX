@@ -17,11 +17,11 @@ import inspect
 from typing import Callable, List, Optional, Union
 
 import paddle
-
 from paddlenlp.transformers import (
     CLIPImageProcessor,
     CLIPTextModelWithProjection,
-    CLIPTokenizer, )
+    CLIPTokenizer,
+)
 
 from ...models import AutoencoderKL, Transformer2DModel, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
@@ -70,13 +70,14 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
     _optional_components = ["text_unet"]
 
     def __init__(
-            self,
-            tokenizer: CLIPTokenizer,
-            text_encoder: CLIPTextModelWithProjection,
-            image_unet: UNet2DConditionModel,
-            text_unet: UNetFlatConditionModel,
-            vae: AutoencoderKL,
-            scheduler: KarrasDiffusionSchedulers, ):
+        self,
+        tokenizer: CLIPTokenizer,
+        text_encoder: CLIPTextModelWithProjection,
+        image_unet: UNet2DConditionModel,
+        text_unet: UNetFlatConditionModel,
+        vae: AutoencoderKL,
+        scheduler: KarrasDiffusionSchedulers,
+    ):
         super().__init__()
         self.register_modules(
             tokenizer=tokenizer,
@@ -84,8 +85,9 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
             image_unet=image_unet,
             text_unet=text_unet,
             vae=vae,
-            scheduler=scheduler, )
-        self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+            scheduler=scheduler,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
 
         if self.text_unet is not None:
             self._swap_unet_attention_blocks()
@@ -98,16 +100,24 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
             if isinstance(module, Transformer2DModel):
                 parent_name, index = name.rsplit(".", 1)
                 index = int(index)
-                self.image_unet.get_sublayer(parent_name)[
-                    index], self.text_unet.get_sublayer(parent_name)[index] = (
-                        self.text_unet.get_sublayer(parent_name)[index],
-                        self.image_unet.get_sublayer(parent_name)[index], )
+                (
+                    self.image_unet.get_sublayer(parent_name)[index],
+                    self.text_unet.get_sublayer(parent_name)[index],
+                ) = (
+                    self.text_unet.get_sublayer(parent_name)[index],
+                    self.image_unet.get_sublayer(parent_name)[index],
+                )
 
     def remove_unused_weights(self):
         self.register_modules(text_unet=None)
 
-    def _encode_prompt(self, prompt, num_images_per_prompt,
-                       do_classifier_free_guidance, negative_prompt):
+    def _encode_prompt(
+        self,
+        prompt,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt,
+    ):
         r"""
         Encodes the prompt into text encoder hidden states.
 
@@ -124,11 +134,9 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
         """
 
         def normalize_embeddings(encoder_output):
-            embeds = paddle.matmul(encoder_output.last_hidden_state,
-                                   self.text_encoder.text_projection)
+            embeds = paddle.matmul(encoder_output.last_hidden_state, self.text_encoder.text_projection)
             embeds_pooled = encoder_output.text_embeds
-            embeds = embeds / paddle.norm(
-                embeds_pooled.unsqueeze(1), axis=-1, keepdim=True)
+            embeds = embeds / paddle.norm(embeds_pooled.unsqueeze(1), axis=-1, keepdim=True)
             return embeds
 
         batch_size = len(prompt) if isinstance(prompt, list) else 1
@@ -138,35 +146,35 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
             padding="max_length",
             max_length=self.tokenizer.model_max_length,
             truncation=True,
-            return_tensors="pd", )
+            return_tensors="pd",
+        )
         text_input_ids = text_inputs.input_ids
-        untruncated_ids = self.tokenizer(
-            prompt, padding="longest", return_tensors="pd").input_ids
+        untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                -1] and not paddle.equal_all(text_input_ids, untruncated_ids):
-            removed_text = self.tokenizer.batch_decode(
-                untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
+            removed_text = self.tokenizer.batch_decode(untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
-                f" {self.tokenizer.model_max_length} tokens: {removed_text}")
+                f" {self.tokenizer.model_max_length} tokens: {removed_text}"
+            )
 
-        if hasattr(self.text_encoder.config, "use_attention_mask"
-                   ) and self.text_encoder.config.use_attention_mask:
+        if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
             attention_mask = text_inputs.attention_mask
         else:
             attention_mask = None
 
         prompt_embeds = self.text_encoder(
             text_input_ids,
-            attention_mask=attention_mask, )
+            attention_mask=attention_mask,
+        )
         prompt_embeds = normalize_embeddings(prompt_embeds)
 
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape(
-            [bs_embed * num_images_per_prompt, seq_len, -1])
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance:
@@ -176,14 +184,16 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
             elif type(prompt) is not type(negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}.")
+                    f" {type(prompt)}."
+                )
             elif isinstance(negative_prompt, str):
                 uncond_tokens = [negative_prompt]
             elif batch_size != len(negative_prompt):
                 raise ValueError(
                     f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                     f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`.")
+                    " the batch size of `prompt`."
+                )
             else:
                 uncond_tokens = negative_prompt
 
@@ -193,32 +203,29 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
 
             negative_prompt_embeds = self.text_encoder(
                 uncond_input.input_ids,
-                attention_mask=attention_mask, )
-            negative_prompt_embeds = normalize_embeddings(
-                negative_prompt_embeds)
+                attention_mask=attention_mask,
+            )
+            negative_prompt_embeds = normalize_embeddings(negative_prompt_embeds)
 
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                [1, num_images_per_prompt, 1])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
+            negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            prompt_embeds = paddle.concat(
-                [negative_prompt_embeds, prompt_embeds])
+            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
 
         return prompt_embeds
 
@@ -238,54 +245,50 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.check_inputs
     def check_inputs(
-            self,
-            prompt,
-            height,
-            width,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        height,
+        width,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two.")
+                " only forward one of the two."
+            )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -298,20 +301,25 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
                 raise ValueError(
                     "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}.")
+                    f" {negative_prompt_embeds.shape}."
+                )
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -328,23 +336,23 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            prompt: Union[str, List[str]],
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            **kwargs, ):
+        self,
+        prompt: Union[str, List[str]],
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        **kwargs,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -429,9 +437,9 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
         do_classifier_free_guidance = guidance_scale > 1.0
 
         # 3. Encode input prompt
-        prompt_embeds = self._encode_prompt(prompt, num_images_per_prompt,
-                                            do_classifier_free_guidance,
-                                            negative_prompt)
+        prompt_embeds = self._encode_prompt(
+            prompt, num_images_per_prompt, do_classifier_free_guidance, negative_prompt
+        )
 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
@@ -446,7 +454,8 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
             width,
             prompt_embeds.dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # 6. Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -454,25 +463,19 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
         # 7. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = paddle.concat(
-                [latents] * 2) if do_classifier_free_guidance else latents
-            latent_model_input = self.scheduler.scale_model_input(
-                latent_model_input, t)
+            latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
             # predict the noise residual
-            noise_pred = self.image_unet(
-                latent_model_input, t,
-                encoder_hidden_states=prompt_embeds).sample
+            noise_pred = self.image_unet(latent_model_input, t, encoder_hidden_states=prompt_embeds).sample
 
             # perform guidance
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                noise_pred = noise_pred_uncond + guidance_scale * (
-                    noise_pred_text - noise_pred_uncond)
+                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
             # compute the previous noisy sample x_t -> x_t-1
-            latents = self.scheduler.step(noise_pred, t, latents,
-                                          **extra_step_kwargs).prev_sample
+            latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
             # call the callback, if provided
             if callback is not None and i % callback_steps == 0:
@@ -486,6 +489,6 @@ class VersatileDiffusionTextToImagePipeline(DiffusionPipeline):
             image = self.numpy_to_pil(image)
 
         if not return_dict:
-            return (image, )
+            return (image,)
 
         return ImagePipelineOutput(images=image)

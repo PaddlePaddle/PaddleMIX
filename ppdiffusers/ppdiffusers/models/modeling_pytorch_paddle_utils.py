@@ -20,9 +20,7 @@ import paddle.nn as nn
 #####################
 
 
-def convert_pytorch_state_dict_to_paddle(pt_state_dict,
-                                         paddle_model: nn.Layer,
-                                         sub_layer=None):
+def convert_pytorch_state_dict_to_paddle(pt_state_dict, paddle_model: nn.Layer, sub_layer=None):
     # Step 1: Find Linear layer which need transpose weight
     linear_need_transpose = []
     for k, v in paddle_model.named_sublayers(include_self=True):
@@ -51,7 +49,7 @@ def convert_pytorch_state_dict_to_paddle(pt_state_dict,
             pt_tensor = pt_tensor.T
         # (2) 0d tensor -> 1d tensor
         if pt_tensor.ndim == 0:
-            pt_tensor = pt_tensor.reshape((1, ))
+            pt_tensor = pt_tensor.reshape((1,))
         # (3) name mapping
         for old_key, new_key in ptname2pdname.items():
             pt_key = pt_key.replace(old_key, new_key)
@@ -61,10 +59,7 @@ def convert_pytorch_state_dict_to_paddle(pt_state_dict,
 
 
 @classmethod
-def convert_pytorch_state_dict_to_paddle_class_method(cls,
-                                                      pt_state_dict,
-                                                      paddle_model: nn.Layer,
-                                                      sub_layer=None):
+def convert_pytorch_state_dict_to_paddle_class_method(cls, pt_state_dict, paddle_model: nn.Layer, sub_layer=None):
     # Step 1: Find Linear layer which need transpose weight
     linear_need_transpose = []
     for k, v in paddle_model.named_sublayers(include_self=True):
@@ -96,7 +91,7 @@ def convert_pytorch_state_dict_to_paddle_class_method(cls,
             pt_tensor = pt_tensor.T
         # (2) 0d tensor -> 1d tensor
         if pt_tensor.ndim == 0:
-            pt_tensor = pt_tensor.reshape((1, ))
+            pt_tensor = pt_tensor.reshape((1,))
         # (3) name mapping
         for old_key, new_key in ptname2pdname.items():
             pt_key = pt_key.replace(old_key, new_key)
@@ -137,8 +132,7 @@ def convert_paddle_state_dict_to_pytorch(pd_state_dict, paddle_model: nn.Layer):
             pd_key = pd_key.replace(new_key, old_key)
         if hasattr(paddle_model, "paddle_torch_name_mapping"):
             pd_key = paddle_model.paddle_torch_name_mapping.get(pd_key, pd_key)
-        pytorch_state_dict[pd_key] = pd_tensor.contiguous() if hasattr(
-            pd_tensor, "contiguous") else pd_tensor
+        pytorch_state_dict[pd_key] = pd_tensor.contiguous() if hasattr(pd_tensor, "contiguous") else pd_tensor
     return pytorch_state_dict
 
 
