@@ -39,7 +39,7 @@ from paddlenlp.utils.import_utils import is_datasets_available
 from paddlenlp.utils.log import logger
 
 import paddlemix
-from paddlemix.examples.blip2.utils import coco_caption_eval
+from paddlemix.examples.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
 from paddlemix.optimization import FilterParamsName
 
 DEFAULT_CALLBACKS = [DefaultFlowCallback]
@@ -186,9 +186,7 @@ class BLIP2Trainer(Trainer):
             # model, self.optimizer
             if hasattr(model, "language_model"):
                 decorated = paddle.amp.decorate(
-                    models=[model.visual_encoder, model.language_model],
-                    optimizers=self.optimizer,
-                    level="O2",
+                    models=[model.visual_encoder, model.language_model], optimizers=self.optimizer, level="O2"
                 )
                 model.visual_encoder, model.language_model = decorated[0]
             else:
@@ -202,6 +200,7 @@ class BLIP2Trainer(Trainer):
             assert self.args.tensor_parallel_degree < 2, "tensor_parallel_degree = {}, pelease init optimizer.".format(
                 self.args.tensor_parallel_degree
             )
+
         in_pipeline_parallel_mode = self.args.pipeline_parallel_degree > 1
         in_sharding_parallel_mode = self.sharding is not None
         in_tensor_parallel_model = self.args.tensor_parallel_degree > 1
@@ -267,6 +266,7 @@ class BLIP2Trainer(Trainer):
                 self.optimizer = fleet.distributed_optimizer(self.optimizer)
             else:
                 # sync params (broadcast) buffers in dp group
+
                 if not is_dp_group_support_in_group_sharded_parallel() and self.args.data_parallel_degree > 1:
                     try:
                         from paddle.fluid.dygraph.parallel import sync_params_buffers
@@ -337,6 +337,7 @@ class BLIP2Trainer(Trainer):
         eval_dataset: Optional[Dataset] = None,
         ignore_keys: Optional[List[str]] = None,
         metric_key_prefix: str = "eval",
+        task_name="coco_caption",
     ) -> Dict[str, float]:
         """
         Run evaluation and returns metrics.
@@ -364,6 +365,7 @@ class BLIP2Trainer(Trainer):
         """
         # memory metrics - must set up as early as possible
         self._memory_tracker.start()
+        self.task_name = task_name
         if isinstance(eval_dataset, dict):
             eval_dataset = eval_dataset["test"]
         eval_dataloader = self.get_eval_dataloader(eval_dataset)
@@ -482,80 +484,64 @@ class BLIP2Trainer(Trainer):
         """
         inputs = self._prepare_inputs(inputs)
         results = []
-        with paddle.no_grad():
-            # with paddle.amp.auto_cast(level='O2'):
-            model_inputs = self.eval_processor(
-                text=[""] * inputs["pixel_values"].shape[0],
-                return_tensors="pd",
-                return_attention_mask=True,
-                mode="test",
-            )
-            model_inputs.update(inputs)
-            generated_ids, scores = model.generate(**model_inputs)
-            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
-            generated_text = [text.strip() for text in generated_text]
-            for caption, img_id in zip(generated_text, inputs["image_id"]):
-                results.append({"caption": caption, "image_id": int(img_id)})
+        if "caption" in self.task_name:
+            with paddle.no_grad():
+                # with paddle.amp.auto_cast(level='O2'):
+                model_inputs = self.eval_processor(
+                    text=[""] * inputs["pixel_values"].shape[0],
+                    return_tensors="pd",
+                    return_attention_mask=True,
+                    mode="test",
+                )
+                model_inputs.update(inputs)
+                generated_ids, scores = model.generate(**model_inputs)
+                generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
+                generated_text = [text.strip() for text in generated_text]
+                for caption, img_id in zip(generated_text, inputs["image_id"]):
+                    results.append({"caption": caption, "image_id": int(img_id)})
+        elif "vqa" in self.task_name:
+            with paddle.no_grad():
+                # with paddle.amp.auto_cast(level='O2'):
+                model_inputs = inputs
+                generated_ids, scores = model.predict_answers(**model_inputs)
+                answers = self.processor.batch_decode(generated_ids, skip_special_tokens=True)
+                answers = [text.strip() for text in answers]
+                question_id = inputs["question_id"]
+                for answer, ques_id in zip(answers, question_id):
+                    ques_id = int(ques_id)
+                    results.append({"question_id": ques_id, "answer": answer})
+        else:
+            raise NotImplementedError
         return results
 
     def after_evaluation(self, val_result):
-        eval_result_file = self.save_result(
-            result=val_result,
-            result_dir=self.args.output_dir + "/result",
-            filename="{}_epoch{}".format("eval", "eval"),
-            remove_duplicate="image_id",
-            world_size=self.args.world_size,
-        )
+        if "caption" in self.task_name:
+            eval_result_file = save_result(
+                result=val_result,
+                result_dir=self.args.output_dir + self.task_name + "/result",
+                filename="{}_epoch{}".format("eval", "eval"),
+                remove_duplicate="image_id",
+                world_size=self.args.world_size,
+            )
 
-        metrics = self._report_metrics(eval_result_file=eval_result_file)
+            metrics = self._report_metrics_caption(eval_result_file=eval_result_file)
+        elif "vqa" in self.task_name:
+            eval_result_file = save_result(
+                val_result,
+                result_dir=self.args.output_dir + self.task_name + "/result",
+                filename="{}_epoch{}".format("eval", "eval"),
+                remove_duplicate="question_id",
+            )
 
+            metrics = self._report_metrics_vqa(eval_result_file=eval_result_file)
+        else:
+            raise NotImplementedError
         return metrics
 
-    @staticmethod
-    def save_result(result, result_dir, filename, remove_duplicate="", world_size=1):
-        import logging
-
-        rank_id_curr_node = int(os.environ.get("PADDLE_RANK_IN_NODE", 0))
-        result_file = os.path.join(result_dir, "%s_rank%d.json" % (filename, rank_id_curr_node))
-        if not os.path.exists(result_dir):
-            os.mkdir(result_dir)
-        json.dump(result, open(result_file, "w"))
-
-        final_result_file = os.path.join(result_dir, "%s.json" % filename)
-        if world_size > 1:
-            paddle.distributed.barrier()
-        if rank_id_curr_node == 0:
-            logging.warning("rank %d starts merging results." % rank_id_curr_node)
-            result = []
-            # for rank in range(get_world_size()):
-            for rank in range(int(os.environ.get("PADDLE_TRAINERS_NUM", 1))):
-                result_file = os.path.join(result_dir, "%s_rank%d.json" % (filename, rank))
-                res = json.load(open(result_file, "r"))
-                result += res
-
-            if remove_duplicate:
-                result_new = []
-                id_list = []
-                for res in result:
-                    if res[remove_duplicate] not in id_list:
-                        id_list.append(res[remove_duplicate])
-                        result_new.append(res)
-                result = result_new
-
-            json.dump(result, open(final_result_file, "w"))
-            print("result file saved to %s" % final_result_file)
-        else:
-            while not os.path.exists(final_result_file):
-                time.sleep(0.5)
-                logging.warning("rank %d waits rank0 to merge results." % rank_id_curr_node)
-
-        # combine results from all processes
-        return final_result_file
-
-    def _report_metrics(self, eval_result_file, split_name="test"):
+    def _report_metrics_caption(self, eval_result_file, split_name="test"):
 
         # TODO better way to define this
-        coco_gt_root = os.path.join("/export/home/.cache/lavis", "coco_gt")
+        coco_gt_root = os.path.join("/root/.paddlemix/datasets/", "coco_gt")
         coco_val = coco_caption_eval(coco_gt_root, eval_result_file, split_name)
 
         agg_metrics = coco_val.eval["CIDEr"] + coco_val.eval["Bleu_4"]
@@ -568,3 +554,31 @@ class BLIP2Trainer(Trainer):
         coco_res["agg_metrics"] = agg_metrics
 
         return coco_res
+
+    def _report_metrics_vqa(self, eval_result_file):
+
+        metrics = {}
+        self.anno_files = "/root/.paddlemix/datasets/coco/annotations/v2_mscoco_val2014_annotations.json"
+        self.ques_files = "/root/.paddlemix/datasets/coco/annotations/v2_OpenEnded_mscoco_val2014_questions.json"
+
+        vqa = VQA(self.anno_files, self.ques_files)
+        vqa_result = vqa.loadRes(resFile=eval_result_file, quesFile=self.ques_files)
+        vqa_scorer = VQAEval(vqa, vqa_result, n=2)
+        logger.info("Start VQA evaluation.")
+        vqa_scorer.evaluate()
+
+        # print accuracies
+        overall_acc = vqa_scorer.accuracy["overall"]
+        metrics["agg_metrics"] = overall_acc
+
+        logger.info("Overall Accuracy is: %.02f\n" % overall_acc)
+        logger.info("Per Answer Type Accuracy is the following:")
+
+        for ans_type in vqa_scorer.accuracy["perAnswerType"]:
+            logger.info("%s : %.02f" % (ans_type, vqa_scorer.accuracy["perAnswerType"][ans_type]))
+            metrics[ans_type] = vqa_scorer.accuracy["perAnswerType"][ans_type]
+
+        with open(os.path.join(self.args.output_dir, "evaluate.txt"), "a") as f:
+            f.write(json.dumps(metrics) + "\n")
+
+        return metrics

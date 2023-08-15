@@ -48,8 +48,7 @@ def tile(x, dim, n_tile):
     repeat_idx[dim] = n_tile
     x = x.repeat(*(repeat_idx))
     order_index = paddle.to_tensor(
-        np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)]),
-        dtype="int64",
+        np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)]), dtype="int64"
     )
     return paddle.index_select(x, dim, order_index)
 

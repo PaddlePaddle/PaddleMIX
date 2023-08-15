@@ -49,12 +49,10 @@ class DataArguments:
     """
 
     input_image: str = field(
-        default="http://images.cocodataset.org/val2017/000000039769.jpg",
-        metadata={"help": "The name of input image."},
+        default="http://images.cocodataset.org/val2017/000000039769.jpg", metadata={"help": "The name of input image."}
     )  # "http://images.cocodataset.org/val2017/000000039769.jpg"
     prompt: str = field(
-        default="describe the image",
-        metadata={"help": "The prompt of the image to be generated."},
+        default="describe the image", metadata={"help": "The prompt of the image to be generated."}
     )  # "Question: how many cats are there? Answer:"
 
 
@@ -90,12 +88,10 @@ class PreTrainingArguments(TrainingArguments):
     warmup_steps: int = field(default=2000, metadata={"help": "Number of warmup steps."})
     lr_scheduler_name: str = field(default="CosineDecayWithWarmup", metadata={"help": "The scheduler name to use."})
     per_device_train_batch_size: int = field(
-        default=128,
-        metadata={"help": "Batch size per GPU core/CPU for training. (default: 8)"},
+        default=128, metadata={"help": "Batch size per GPU core/CPU for training. (default: 8)"}
     )
     per_device_eval_batch_size: int = field(
-        default=128,
-        metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"},
+        default=128, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
     )
     warmup_start_lr: float = field(default=1e-6, metadata={"help": " The initial learning rate of blip2."})
     output_dir: str = field(default=".", metadata={"help": "The output path"})
@@ -112,8 +108,7 @@ class PreTrainingArguments(TrainingArguments):
     )
     tensor_parallel_degree: int = field(default=1, metadata={"help": "Set the number of tensor model parallel"})
     sharding_parallel_degree: int = field(
-        default=1,
-        metadata={"help": "Set the number of sharding, enable sharding parallel"},
+        default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"}
     )
     pipeline_parallel_degree: int = field(default=1, metadata={"help": "Enable pipeline parallel"})
     model_path: str = field(
@@ -162,11 +157,7 @@ def main():
     if training_args.model_path is not None:
         checkpoint = training_args.model_path
         load_model(training_args, model, ckpt_dir=checkpoint, load_language_model=False)
-        load_model(
-            training_args,
-            model.language_model,
-            ckpt_dir=LLM_LIST[model_args.text_model_name_or_path],
-        )
+        load_model(training_args, model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
     generated_ids, scores = model.generate(**inputs)
     generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
     logger.info("Generate text: {}".format(generated_text))

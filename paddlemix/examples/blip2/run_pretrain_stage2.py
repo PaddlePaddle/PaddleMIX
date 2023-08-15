@@ -54,8 +54,7 @@ class DataArguments:
         metadata={"help": "The name of the task to use (via the datasets library)."},
     )
     prompt: str = field(
-        default="a photo of ",
-        metadata={"help": "The prompt of the image to be generated."},
+        default="a photo of ", metadata={"help": "The prompt of the image to be generated."}
     )  # "Question: how many cats are there? Answer:"
 
 
@@ -75,10 +74,7 @@ class ModelArguments:
         metadata={"help": "The type of text model to use (OPT, T5)."},
     )
     image_size: int = field(default=224, metadata={"help": " Image size for training. (default:224)"})
-    llm_name: str = field(
-        default="opt-2.7b",
-        metadata={"help": "llm name which you ned to load in LLM_LIST"},
-    )
+    llm_name: str = field(default="opt-2.7b", metadata={"help": "llm name which you ned to load in LLM_LIST"})
 
 
 @dataclass
@@ -95,12 +91,10 @@ class PreTrainingArguments(TrainingArguments):
     warmup_steps: int = field(default=2000, metadata={"help": "Number of warmup steps."})
     lr_scheduler_name: str = field(default="CosineDecayWithWarmup", metadata={"help": "The scheduler name to use."})
     per_device_train_batch_size: int = field(
-        default=128,
-        metadata={"help": "Batch size per GPU core/CPU for training. (default: 8)"},
+        default=32, metadata={"help": "Batch size per GPU core/CPU for training. (default: 8)"}
     )
     per_device_eval_batch_size: int = field(
-        default=128,
-        metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"},
+        default=128, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
     )
     warmup_start_lr: float = field(default=1e-6, metadata={"help": " The initial learning rate of blip2."})
     output_dir: str = field(default=".", metadata={"help": "The output path"})
@@ -117,19 +111,7 @@ class PreTrainingArguments(TrainingArguments):
     )
     tensor_parallel_degree: int = field(default=1, metadata={"help": "Set the number of tensor model parallel"})
     sharding_parallel_degree: int = field(
-        default=1,
-        metadata={"help": "Set the number of sharding, enable sharding parallel"},
-    )
-    pipeline_parallel_degree: int = field(default=1, metadata={"help": "Enable pipeline parallel"})
-    fp16_opt_level: str = field(default="O1", metadata={"help": "Mixed Precision Type"})
-    fp16: bool = field(default=True, metadata={"help": "Whether to use mixed Precision"})
-    gradient_checkpointing: bool = field(
-        default=False, metadata={"help": "Forward recompute for saving graphics memory"}
-    )
-    tensor_parallel_degree: int = field(default=1, metadata={"help": "Set the number of tensor model parallel"})
-    sharding_parallel_degree: int = field(
-        default=1,
-        metadata={"help": "Set the number of sharding, enable sharding parallel"},
+        default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"}
     )
     pipeline_parallel_degree: int = field(default=1, metadata={"help": "Enable pipeline parallel"})
     resume_from_checkpoint: str = field(
@@ -223,25 +205,12 @@ def main():
     checkpoint = None
     if training_args.model_path is not None:
         checkpoint = training_args.model_path
-        load_model(
-            training_args,
-            model,
-            ckpt_dir=model_args.model_path,
-            load_language_model=False,
-        )
-        load_model(
-            training_args,
-            model.language_model,
-            ckpt_dir=LLM_LIST[model_args.text_model_name_or_path],
-        )
+        load_model(training_args, model, ckpt_dir=model_args.model_path, load_language_model=False)
+        load_model(training_args, model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
     if training_args.resume_from_checkpoint is not None:
         checkpoint = os.path.join(training_args.resume_from_checkpoint, "model_state.pdparams")
         load_model(training_args, model, ckpt_dir=checkpoint, load_language_model=False)
-        load_model(
-            training_args,
-            model.language_model,
-            ckpt_dir=LLM_LIST[model_args.text_model_name_or_path],
-        )
+        load_model(training_args, model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
     if training_args.do_eval:
         eval_metrics = trainer.evaluate(eval_dataset)
         trainer.log_metrics("eval", eval_metrics)

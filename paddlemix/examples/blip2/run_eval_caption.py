@@ -53,8 +53,7 @@ class DataArguments:
         metadata={"help": "The name of the task to use (via the datasets library)."},
     )
     prompt: str = field(
-        default="a photo of ",
-        metadata={"help": "The prompt of the image to be generated."},
+        default="a photo of ", metadata={"help": "The prompt of the image to be generated."}
     )  # "Question: how many cats are there? Answer:"
 
 
@@ -89,12 +88,10 @@ class PreTrainingArguments(TrainingArguments):
     warmup_steps: int = field(default=2000, metadata={"help": "Number of warmup steps."})
     lr_scheduler_name: str = field(default="CosineDecayWithWarmup", metadata={"help": "The scheduler name to use."})
     per_device_train_batch_size: int = field(
-        default=128,
-        metadata={"help": "Batch size per GPU core/CPU for training. (default: 8)"},
+        default=128, metadata={"help": "Batch size per GPU core/CPU for training. (default: 8)"}
     )
     per_device_eval_batch_size: int = field(
-        default=1,
-        metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"},
+        default=1, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
     )
     warmup_start_lr: float = field(default=1e-6, metadata={"help": " The initial learning rate of blip2."})
     output_dir: str = field(default=".", metadata={"help": "The output path"})
@@ -111,8 +108,7 @@ class PreTrainingArguments(TrainingArguments):
     )
     tensor_parallel_degree: int = field(default=1, metadata={"help": "Set the number of tensor model parallel"})
     sharding_parallel_degree: int = field(
-        default=1,
-        metadata={"help": "Set the number of sharding, enable sharding parallel"},
+        default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"}
     )
     pipeline_parallel_degree: int = field(default=1, metadata={"help": "Enable pipeline parallel"})
     fp16_opt_level: str = field(default="O1", metadata={"help": "Mixed Precision Type"})
@@ -122,8 +118,7 @@ class PreTrainingArguments(TrainingArguments):
     )
     tensor_parallel_degree: int = field(default=1, metadata={"help": "Set the number of tensor model parallel"})
     sharding_parallel_degree: int = field(
-        default=1,
-        metadata={"help": "Set the number of sharding, enable sharding parallel"},
+        default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"}
     )
     pipeline_parallel_degree: int = field(default=1, metadata={"help": "Enable pipeline parallel"})
     model_path: str = field(

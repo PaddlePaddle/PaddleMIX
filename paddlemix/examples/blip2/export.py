@@ -36,8 +36,7 @@ class DataArguments:
     """
 
     input_image: str = field(
-        default="http://images.cocodataset.org/val2017/000000039769.jpg",
-        metadata={"help": "The name of input image."},
+        default="http://images.cocodataset.org/val2017/000000039769.jpg", metadata={"help": "The name of input image."}
     )  # "http://images.cocodataset.org/val2017/000000039769.jpg"
     prompt: str = field(
         default=None, metadata={"help": "The prompt of the image to be generated."}
@@ -77,9 +76,7 @@ def main():
     dtype = "float32"
     if model_args.fp16:
         decorated = paddle.amp.decorate(
-            models=[model.visual_encoder, model.language_model],
-            optimizers=None,
-            level="O2",
+            models=[model.visual_encoder, model.language_model], optimizers=None, level="O2"
         )
         model.visual_encoder, model.language_model = decorated
         dtype = "float16"
