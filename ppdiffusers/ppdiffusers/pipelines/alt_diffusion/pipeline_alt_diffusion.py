@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import inspect
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
@@ -22,7 +23,8 @@ from packaging import version
 from paddlenlp.transformers import CLIPImageProcessor, XLMRobertaTokenizer
 
 from ...configuration_utils import FrozenDict
-from ...loaders import TextualInversionLoaderMixin
+from ...image_processor import VaeImageProcessor
+from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import deprecate, logging, randn_tensor, replace_example_docstring
@@ -47,40 +49,56 @@ EXAMPLE_DOC_STRING = """
 """
 
 
+# Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.rescale_noise_cfg
+def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
+    """
+    Rescale `noise_cfg` according to `guidance_rescale`. Based on findings of [Common Diffusion Noise Schedules and
+    Sample Steps are Flawed](https://arxiv.org/pdf/2305.08891.pdf). See Section 3.4
+    """
+    std_text = noise_pred_text.std(dim=list(range(1, noise_pred_text.ndim)),
+                                   keepdim=True)
+    std_cfg = noise_cfg.std(dim=list(range(1, noise_cfg.ndim)), keepdim=True)
+    # rescale the results from guidance (fixes overexposure)
+    noise_pred_rescaled = noise_cfg * (std_text / std_cfg)
+    # mix with the original results from guidance by factor guidance_rescale to avoid "plain looking" images
+    noise_cfg = guidance_rescale * noise_pred_rescaled + (1 - guidance_rescale
+                                                          ) * noise_cfg
+    return noise_cfg
+
+
 # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline with Stable->Alt, CLIPTextModel->RobertaSeriesModelWithTransformation, CLIPTokenizer->XLMRobertaTokenizer, AltDiffusionSafetyChecker->StableDiffusionSafetyChecker
-class AltDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
+class AltDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
+                           LoraLoaderMixin):
     r"""
     Pipeline for text-to-image generation using Alt Diffusion.
 
-    This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
-    library implements for all the pipelines (such as downloading or saving, running on a particular device, etc.)
+    This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
+    implemented for all pipelines (downloading, saving, running on a particular device, etc.).
 
-    In addition the pipeline inherits the following loading methods:
-        - *Textual-Inversion*: [`loaders.TextualInversionLoaderMixin.load_textual_inversion`]
-        - *LoRA*: [`loaders.LoraLoaderMixin.load_lora_weights`]
-        - *Ckpt*: [`loaders.FromSingleFileMixin.from_ckpt`]
-    as well as the following saving methods:
-        - *LoRA*: [`loaders.LoraLoaderMixin.save_lora_weights`]
+    The pipeline also inherits the following loading methods:
+        - [`~loaders.TextualInversionLoaderMixin.load_textual_inversion`] for loading textual inversion embeddings
+        - [`~loaders.LoraLoaderMixin.load_lora_weights`] for loading LoRA weights
+        - [`~loaders.LoraLoaderMixin.save_lora_weights`] for saving LoRA weights
+        - [`~loaders.FromSingleFileMixin.from_single_file`] for loading `.ckpt` files
 
     Args:
         vae ([`AutoencoderKL`]):
-            Variational Auto-Encoder (VAE) Model to encode and decode images to and from latent representations.
-        text_encoder ([`RobertaSeriesModelWithTransformation`]):
-            Frozen text-encoder. Alt Diffusion uses the text portion of
-            [CLIP](https://huggingface.co/docs/transformers/model_doc/clip#transformers.RobertaSeriesModelWithTransformation),
-            specifically the [clip-vit-large-patch14](https://huggingface.co/openai/clip-vit-large-patch14) variant.
-        tokenizer (`XLMRobertaTokenizer`):
-            Tokenizer of class
-            [XLMRobertaTokenizer](https://huggingface.co/docs/transformers/v4.21.0/en/model_doc/clip#transformers.XLMRobertaTokenizer).
-        unet ([`UNet2DConditionModel`]): Conditional U-Net architecture to denoise the encoded image latents.
+            Variational Auto-Encoder (VAE) model to encode and decode images to and from latent representations.
+        text_encoder ([`~transformers.RobertaSeriesModelWithTransformation`]):
+            Frozen text-encoder ([clip-vit-large-patch14](https://huggingface.co/openai/clip-vit-large-patch14)).
+        tokenizer ([`~transformers.XLMRobertaTokenizer`]):
+            A `XLMRobertaTokenizer` to tokenize text.
+        unet ([`UNet2DConditionModel`]):
+            A `UNet2DConditionModel` to denoise the encoded image latents.
         scheduler ([`SchedulerMixin`]):
             A scheduler to be used in combination with `unet` to denoise the encoded image latents. Can be one of
             [`DDIMScheduler`], [`LMSDiscreteScheduler`], or [`PNDMScheduler`].
         safety_checker ([`StableDiffusionSafetyChecker`]):
             Classification module that estimates whether generated images could be considered offensive or harmful.
-            Please, refer to the [model card](https://huggingface.co/runwayml/stable-diffusion-v1-5) for details.
-        feature_extractor ([`CLIPImageProcessor`]):
-            Model that extracts features from generated images to be used as inputs for the `safety_checker`.
+            Please refer to the [model card](https://huggingface.co/runwayml/stable-diffusion-v1-5) for more details
+            about a model's potential harms.
+        feature_extractor ([`~transformers.CLIPImageProcessor`]):
+            A `CLIPImageProcessor` to extract features from generated images; used as inputs to the `safety_checker`.
     """
     _optional_components = ["safety_checker", "feature_extractor"]
 
@@ -183,6 +201,8 @@ class AltDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             safety_checker=safety_checker,
             feature_extractor=feature_extractor, )
         self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+        self.image_processor = VaeImageProcessor(
+            vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     def _encode_prompt(
@@ -214,7 +234,14 @@ class AltDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
+            lora_scale (`float`, *optional*):
+                A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
+        if lora_scale is not None and isinstance(self, LoraLoaderMixin):
+            self._lora_scale = lora_scale
+
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
@@ -243,7 +270,7 @@ class AltDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
                 removed_text = self.tokenizer.batch_decode(
                     untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
                 logger.warning(
-                    "The following part of your input was truncated because XLM-Roberta can only handle sequences up to"
+                    "The following part of your input was truncated because CLIP can only handle sequences up to"
                     f" {self.tokenizer.model_max_length} tokens: {removed_text}")
 
             if hasattr(self.text_encoder.config, "use_attention_mask"
@@ -270,7 +297,8 @@ class AltDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
             uncond_tokens: List[str]
             if negative_prompt is None:
                 uncond_tokens = [""] * batch_size
-            elif type(prompt) is not type(negative_prompt):
+            elif prompt is not None and type(prompt) is not type(
+                    negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
                     f" {type(prompt)}.")
@@ -329,19 +357,29 @@ class AltDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin):
         return prompt_embeds
 
     def run_safety_checker(self, image, dtype):
-        if self.safety_checker is not None:
+        if self.safety_checker is None:
+            has_nsfw_concept = None
+        else:
+            if paddle.is_tensor(x=image):
+                feature_extractor_input = self.image_processor.postprocess(
+                    image, output_type='pil')
+            else:
+                feature_extractor_input = self.image_processor.numpy_to_pil(
+                    image)
             safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors="pd")
+                feature_extractor_input, return_tensors='pd')
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
                 clip_input=safety_checker_input.pixel_values.cast(dtype))
-        else:
-            has_nsfw_concept = None
         return image, has_nsfw_concept
 
     def decode_latents(self, latents):
+        warnings.warn(
+            ("The decode_latents method is deprecated and will be removed in a future version. Please"
+             " use VaeImageProcessor instead"),
+            FutureWarning, )
         latents = 1 / self.vae.config.scaling_factor * latents
-        image = self.vae.decode(latents).sample
+        image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(0, 1)
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.transpose([0, 2, 3, 1]).cast("float32").numpy()

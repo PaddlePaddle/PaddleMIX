@@ -822,16 +822,21 @@ class StableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FromSingleFileMixin,
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
                 if do_classifier_free_guidance and guidance_rescale > 0.0:
+                    # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
                     noise_pred = rescale_noise_cfg(
                         noise_pred,
                         noise_pred_text,
                         guidance_rescale=guidance_rescale)
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(
                     noise_pred,
                     t,
                     latents,
                     **extra_step_kwargs,
                     return_dict=False)[0]
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
