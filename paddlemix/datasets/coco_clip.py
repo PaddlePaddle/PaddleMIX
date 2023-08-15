@@ -14,6 +14,8 @@
 import collections
 import json
 import os
+from paddle.dataset.common import md5file
+from paddle.utils.download import get_path_from_url
 
 from paddlemix.utils.env import DATA_HOME
 from paddlemix.utils.log import logger
@@ -25,9 +27,10 @@ from .dataset import DatasetBuilder
 
 class CaptionCLIP(DatasetBuilder):
 
-    URL = "https://bj.bcebos.com/paddlemix/datasets/coco.tar.gz"
-    META_INFO = collections.namedtuple("META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
-    MD5 = ""
+    URL = "https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco.tar"
+    META_INFO = collections.namedtuple(
+        "META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
+    MD5 = "e670ce82b14b3f45d08c9370808ee1e7"
     SPLITS = {
         "train": META_INFO(
             os.path.join("coco", "images"),
@@ -54,12 +57,8 @@ class CaptionCLIP(DatasetBuilder):
         images, annotations, image_hash, anno_hash = self.SPLITS[mode]
         image_fullname = os.path.join(DATA_HOME, images)
         anno_fullname = os.path.join(DATA_HOME, annotations)
-        # if (
-        #     (not os.path.exists(src_fullname) or (src_data_hash and not md5file(src_fullname) == src_data_hash))
-        #     or (not os.path.exists(tgt_fullname) or (tgt_data_hash and not md5file(tgt_fullname) == tgt_data_hash))
-        #     or (not os.path.exists(vocab_fullname) or (vocab_hash and not md5file(vocab_fullname) == vocab_hash))
-        # ):
-        #     get_path_from_url(self.URL, default_root, self.MD5)
+        if (not os.path.exists(image_fullname) or not os.path.exists(anno_fullname) or not md5file(anno_fullname) == anno_hash):
+            get_path_from_url(self.URL, DATA_HOME, self.MD5)
 
         return image_fullname, anno_fullname, mode
 
