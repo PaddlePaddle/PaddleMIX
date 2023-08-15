@@ -24,11 +24,7 @@ from .vae import DecoderOutput
 
 def conv3d(in_channels, out_channels, kernel_size, conv3d_type="SamePadConv3d"):
     if conv3d_type == "SamePadConv3d":
-        return SamePadConv3d(
-            in_channels,
-            out_channels,
-            kernel_size=kernel_size,
-            padding_type="replicate")
+        return SamePadConv3d(in_channels, out_channels, kernel_size=kernel_size, padding_type="replicate")
     else:
         raise NotImplementedError
 
@@ -50,23 +46,24 @@ class AutoencoderKLOutput(BaseOutput):
 class LVDMAutoencoderKL(ModelMixin, ConfigMixin):
     @register_to_config
     def __init__(
-            self,
-            n_hiddens=32,
-            downsample=[4, 8, 8],
-            z_channels=4,
-            double_z=True,
-            image_channel=3,
-            norm_type="group",
-            padding_type="replicate",
-            upsample=[4, 8, 8],
-            embed_dim=4,
-            # ckpt_path=None,
-            # ignore_keys=[],
-            image_key="image",
-            monitor=None,
-            std=1.0,
-            mean=0.0,
-            prob=0.2, ):
+        self,
+        n_hiddens=32,
+        downsample=[4, 8, 8],
+        z_channels=4,
+        double_z=True,
+        image_channel=3,
+        norm_type="group",
+        padding_type="replicate",
+        upsample=[4, 8, 8],
+        embed_dim=4,
+        # ckpt_path=None,
+        # ignore_keys=[],
+        image_key="image",
+        monitor=None,
+        std=1.0,
+        mean=0.0,
+        prob=0.2,
+    ):
         super().__init__()
         self.image_key = image_key
         # pass init params to Encoder
@@ -77,7 +74,8 @@ class LVDMAutoencoderKL(ModelMixin, ConfigMixin):
             double_z=double_z,
             image_channel=image_channel,
             norm_type=norm_type,
-            padding_type=padding_type, )
+            padding_type=padding_type,
+        )
 
         # pass init params to Decoder
         self.decoder = Decoder(
@@ -85,7 +83,8 @@ class LVDMAutoencoderKL(ModelMixin, ConfigMixin):
             upsample=upsample,
             z_channels=z_channels,
             image_channel=image_channel,
-            norm_type="group", )
+            norm_type="group",
+        )
 
         self.quant_conv = conv3d(2 * z_channels, 2 * embed_dim, 1)
         self.post_quant_conv = conv3d(embed_dim, z_channels, 1)

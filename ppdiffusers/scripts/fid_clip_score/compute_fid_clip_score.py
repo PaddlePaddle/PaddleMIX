@@ -53,9 +53,9 @@ def compute_clip_score(model, processor, texts, images_path, batch_size=64):
     all_text_embeds = []
     all_image_embeds = []
     for text, image_path in tqdm(
-            zip(
-                batchify(texts, batch_size), batchify(images_path, batch_size)),
-            total=math.ceil(len(texts) / batch_size), ):
+        zip(batchify(texts, batch_size), batchify(images_path, batch_size)),
+        total=math.ceil(len(texts) / batch_size),
+    ):
         assert len(text) == len(image_path)
         batch_inputs = processor(
             text=text,
@@ -63,56 +63,52 @@ def compute_clip_score(model, processor, texts, images_path, batch_size=64):
             return_tensors="pd",
             max_length=processor.tokenizer.model_max_length,
             padding="max_length",
-            truncation=True, )
-        text_embeds = model.get_text_features(
-            input_ids=batch_inputs["input_ids"])
-        image_embeds = model.get_image_features(
-            pixel_values=batch_inputs["pixel_values"])
+            truncation=True,
+        )
+        text_embeds = model.get_text_features(input_ids=batch_inputs["input_ids"])
+        image_embeds = model.get_image_features(pixel_values=batch_inputs["pixel_values"])
         all_text_embeds.append(text_embeds)
         all_image_embeds.append(image_embeds)
 
     all_text_embeds = paddle.concat(all_text_embeds)
     all_image_embeds = paddle.concat(all_image_embeds)
-    all_text_embeds = all_text_embeds / all_text_embeds.norm(
-        axis=-1, keepdim=True)
-    all_image_embeds = all_image_embeds / all_image_embeds.norm(
-        axis=-1, keepdim=True)
-    clip_score = (all_image_embeds *
-                  all_text_embeds).sum(-1) * model.logit_scale.exp()
+    all_text_embeds = all_text_embeds / all_text_embeds.norm(axis=-1, keepdim=True)
+    all_image_embeds = all_image_embeds / all_image_embeds.norm(axis=-1, keepdim=True)
+    clip_score = (all_image_embeds * all_text_embeds).sum(-1) * model.logit_scale.exp()
     return clip_score
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--image_path", default=None, nargs="+", type=str, help="image_path")
+    parser.add_argument("--image_path", default=None, nargs="+", type=str, help="image_path")
     parser.add_argument(
         "--output_file",
         default="statistic_results.json",
         type=str,
-        help="output file name", )
+        help="output file name",
+    )
     parser.add_argument(
         "--text_file_name",
         default="coco30k",
         choices=["coco1k", "coco10k", "coco30k"],
         type=str,
-        help="text file.", )
+        help="text file.",
+    )
     parser.add_argument(
         "--clip_model_name_or_path",
         default="openai/clip-vit-base-patch32",
         type=str,
-        help="clip_model_name_or_path", )
-    parser.add_argument(
-        "--fid_batch_size", default=32, type=int, help="fid_batch_size")
-    parser.add_argument(
-        "--clip_batch_size", default=64, type=int, help="clip_batch_size")
-    parser.add_argument(
-        "--resolution", default=256, type=int, help="resolution of images")
+        help="clip_model_name_or_path",
+    )
+    parser.add_argument("--fid_batch_size", default=32, type=int, help="fid_batch_size")
+    parser.add_argument("--clip_batch_size", default=64, type=int, help="clip_batch_size")
+    parser.add_argument("--resolution", default=256, type=int, help="resolution of images")
     parser.add_argument("--device", default="gpu", type=str, help="device")
     parser.add_argument(
         "--only_fid",
         action="store_true",
-        help=("Only eval fid. "), )
+        help=("Only eval fid. "),
+    )
     args = parser.parse_args()
 
     paddle.set_device(args.device)
@@ -127,11 +123,9 @@ if __name__ == "__main__":
     else:
         os.environ["FLAG_IMAGE_NUM"] = "1000"
     dataset_name = f"coco_{args.resolution}_{image_num}.npz"
-    fid_target_file = get_path_from_url(base_url + dataset_name,
-                                        cache_path) + ".npz"
+    fid_target_file = get_path_from_url(base_url + dataset_name, cache_path) + ".npz"
 
-    text_file = get_path_from_url(base_url + text_file_name + ".tsv",
-                                  cache_path)
+    text_file = get_path_from_url(base_url + text_file_name + ".tsv", cache_path)
     df = pd.read_csv(text_file, sep="\t")
     texts = df["caption_en"].tolist()
     if not args.only_fid:
@@ -149,18 +143,16 @@ if __name__ == "__main__":
             [fid_target_file, path],
             batch_size=args.fid_batch_size,
             dims=2048,
-            num_workers=4, )
+            num_workers=4,
+        )
         results["fid"].append(fid_value)
 
         if not args.only_fid:
             # clip score
-            images_path = sorted([
-                image_path
-                for ext in IMAGE_EXTENSIONS
-                for image_path in pathlib.Path(path).glob("*.{}".format(ext))
-            ])
-            clip_score = compute_clip_score(model, processor, texts,
-                                            images_path, args.clip_batch_size)
+            images_path = sorted(
+                [image_path for ext in IMAGE_EXTENSIONS for image_path in pathlib.Path(path).glob("*.{}".format(ext))]
+            )
+            clip_score = compute_clip_score(model, processor, texts, images_path, args.clip_batch_size)
             if "clip_score" not in results:
                 results["clip_score"] = []
             _clip_score = clip_score.mean().item()

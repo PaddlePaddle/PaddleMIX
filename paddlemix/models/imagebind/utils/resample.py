@@ -13,29 +13,28 @@
 # limitations under the License.
 
 import math
-import sys
-from typing import List, Optional, Tuple, Union
+from typing import Optional
 
 import paddle
 
 
 def _get_sinc_resample_kernel(
-        orig_freq: int,
-        new_freq: int,
-        gcd: int,
-        lowpass_filter_width: int=6,
-        rolloff: float=0.99,
-        resampling_method: str="sinc_interpolation",
-        beta: Optional[float]=None,
-        device: str=str("cpu").replace("cuda", "gpu"),
-        dtype: Optional[paddle.dtype]=None, ):
+    orig_freq: int,
+    new_freq: int,
+    gcd: int,
+    lowpass_filter_width: int = 6,
+    rolloff: float = 0.99,
+    resampling_method: str = "sinc_interpolation",
+    beta: Optional[float] = None,
+    device: str = str("cpu").replace("cuda", "gpu"),
+    dtype: Optional[paddle.dtype] = None,
+):
     if not (int(orig_freq) == orig_freq and int(new_freq) == new_freq):
         raise Exception(
             "Frequencies must be of integer type to ensure quality resampling computation. To work around this, manually convert both frequencies to integer values that maintain their resampling rate ratio before passing them into the function. Example: To downsample a 44100 hz waveform by a factor of 8, use `orig_freq=8` and `new_freq=1` instead of `orig_freq=44100` and `new_freq=5512.5`."
         )
     if resampling_method not in ["sinc_interpolation", "kaiser_window"]:
-        raise ValueError("Invalid resampling method: {}".format(
-            resampling_method))
+        raise ValueError("Invalid resampling method: {}".format(resampling_method))
     orig_freq = int(orig_freq) // gcd
     new_freq = int(new_freq) // gcd
     assert lowpass_filter_width > 0
@@ -49,54 +48,41 @@ def _get_sinc_resample_kernel(
         t = (-i / new_freq + idx / orig_freq) * base_freq
         t = t.clip_(min=-lowpass_filter_width, max=lowpass_filter_width)
         if resampling_method == "sinc_interpolation":
-            window = paddle.cos(x=t * math.pi / lowpass_filter_width / 2)**2
+            window = paddle.cos(x=t * math.pi / lowpass_filter_width / 2) ** 2
         else:
             if beta is None:
                 beta = 14.769656459379492
             beta_tensor = paddle.to_tensor(data=float(beta))
-            window = paddle.i0(beta_tensor * paddle.sqrt(
-                x=1 - (t / lowpass_filter_width)**2)) / paddle.i0(beta_tensor)
+            window = paddle.i0(beta_tensor * paddle.sqrt(x=1 - (t / lowpass_filter_width) ** 2)) / paddle.i0(
+                beta_tensor
+            )
         t *= math.pi
         # breakpoint()
-        kernel = paddle.where(
-            condition=t == 0,
-            x=paddle.to_tensor(data=1.0),
-            y=paddle.sin(x=t) / t)
+        kernel = paddle.where(condition=t == 0, x=paddle.to_tensor(data=1.0), y=paddle.sin(x=t) / t)
         paddle.assign(paddle.multiply(kernel, window), kernel)
         #  kernel.scale_(scale=window)
         kernels.append(kernel)
     scale = base_freq / orig_freq
 
-    kernels = paddle.stack(x=kernels).reshape(
-        (new_freq, 1, -1)).scale_(scale=scale)
+    kernels = paddle.stack(x=kernels).reshape((new_freq, 1, -1)).scale_(scale=scale)
     if dtype is None:
         kernels = kernels.to(dtype="float32")
     return kernels, width
 
 
-def _apply_sinc_resample_kernel(waveform,
-                                orig_freq: int,
-                                new_freq: int,
-                                gcd: int,
-                                kernel,
-                                width: int):
+def _apply_sinc_resample_kernel(waveform, orig_freq: int, new_freq: int, gcd: int, kernel, width: int):
     if not waveform.is_floating_point():
-        raise TypeError(
-            f"Expected floating point type for waveform tensor, but received {waveform.dtype}."
-        )
+        raise TypeError(f"Expected floating point type for waveform tensor, but received {waveform.dtype}.")
     orig_freq = int(orig_freq) // gcd
     new_freq = int(new_freq) // gcd
     shape = waveform.shape
 
     waveform = waveform.reshape((-1, shape[-1]))
     num_wavs, length = waveform.shape
-    waveform = paddle.nn.functional.pad(waveform.unsqueeze(1),
-                                        (width, width + orig_freq),
-                                        data_format="NCL").squeeze()
+    waveform = paddle.nn.functional.pad(waveform.unsqueeze(1), (width, width + orig_freq), data_format="NCL").squeeze()
     if waveform.dim() == 1:
         waveform = waveform.unsqueeze(0)
-    resampled = paddle.nn.functional.conv1d(
-        x=waveform[:, (None)], weight=kernel, stride=orig_freq)
+    resampled = paddle.nn.functional.conv1d(x=waveform[:, (None)], weight=kernel, stride=orig_freq)
     x = resampled
     perm_0 = list(range(x.ndim))
     perm_0[1] = 2
@@ -110,13 +96,14 @@ def _apply_sinc_resample_kernel(waveform,
 
 
 def resample(
-        waveform,
-        orig_freq: int,
-        new_freq: int,
-        lowpass_filter_width: int=6,
-        rolloff: float=0.99,
-        resampling_method: str="sinc_interpolation",
-        beta: Optional[float]=None, ):
+    waveform,
+    orig_freq: int,
+    new_freq: int,
+    lowpass_filter_width: int = 6,
+    rolloff: float = 0.99,
+    resampling_method: str = "sinc_interpolation",
+    beta: Optional[float] = None,
+):
     """Resamples the waveform at the new frequency using bandlimited interpolation. [:footcite:`RESAMPLE`].
 
     .. devices:: CPU CUDA
@@ -155,8 +142,8 @@ def resample(
         resampling_method,
         beta,
         waveform.place,
-        waveform.dtype, )
+        waveform.dtype,
+    )
 
-    resampled = _apply_sinc_resample_kernel(waveform, orig_freq, new_freq, gcd,
-                                            kernel, width)
+    resampled = _apply_sinc_resample_kernel(waveform, orig_freq, new_freq, gcd, kernel, width)
     return resampled

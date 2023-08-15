@@ -18,8 +18,11 @@ import sys
 
 import paddle.amp.auto_cast as autocast
 from paddlenlp.trainer import Trainer
-from paddlenlp.trainer.integrations import (INTEGRATION_TO_CALLBACK,
-                                            VisualDLCallback, rewrite_logs)
+from paddlenlp.trainer.integrations import (
+    INTEGRATION_TO_CALLBACK,
+    VisualDLCallback,
+    rewrite_logs,
+)
 from paddlenlp.utils.log import logger
 
 from ppdiffusers.training_utils import unwrap_model
@@ -36,19 +39,17 @@ class VisualDLWithImageCallback(VisualDLCallback):
                     "c_softmax_with_cross_entropy",
                 ],
                 level=args.fp16_opt_level,
-                dtype=amp_dtype, )
+                dtype=amp_dtype,
+            )
         else:
-            ctx_manager = (contextlib.nullcontext()
-                           if sys.version_info >= (3, 7) else
-                           contextlib.suppress())
+            ctx_manager = contextlib.nullcontext() if sys.version_info >= (3, 7) else contextlib.suppress()
 
         return ctx_manager
 
     def on_step_end(self, args, state, control, model=None, **kwargs):
         if hasattr(model, "on_train_batch_end"):
             model.on_train_batch_end()
-        if (args.image_logging_steps > 0 and
-                state.global_step % args.image_logging_steps == 0):
+        if args.image_logging_steps > 0 and state.global_step % args.image_logging_steps == 0:
             control.should_log = True
 
     def on_log(self, args, state, control, logs=None, **kwargs):
@@ -58,20 +59,22 @@ class VisualDLWithImageCallback(VisualDLCallback):
         inputs = kwargs.get("inputs", None)
         model = kwargs.get("model", None)
         image_logs = {}
-        if (inputs is not None and model is not None and
-                args.image_logging_steps > 0 and
-                state.global_step % args.image_logging_steps == 0):
+        if (
+            inputs is not None
+            and model is not None
+            and args.image_logging_steps > 0
+            and state.global_step % args.image_logging_steps == 0
+        ):
             with self.autocast_smart_context_manager(args):
-                image_logs["reconstruction"] = model.decode_image(
-                    pixel_values=inputs["pixel_values"])
-                image_logs["control"] = model.decode_control_image(
-                    controlnet_cond=inputs["controlnet_cond"])
+                image_logs["reconstruction"] = model.decode_image(pixel_values=inputs["pixel_values"])
+                image_logs["control"] = model.decode_control_image(controlnet_cond=inputs["controlnet_cond"])
                 image_logs["ddim-samples-9.0"] = model.log_image(
                     input_ids=inputs["input_ids"],
                     controlnet_cond=inputs["controlnet_cond"],
                     guidance_scale=9.0,
                     height=args.resolution,
-                    width=args.resolution, )
+                    width=args.resolution,
+                )
 
         if self.vdl_writer is None:
             self._init_summary_writer(args)
@@ -86,11 +89,11 @@ class VisualDLWithImageCallback(VisualDLCallback):
                         "Trainer is attempting to log a value of "
                         f'"{v}" of type {type(v)} for key "{k}" as a scalar. '
                         "This invocation of VisualDL's writer.add_scalar() "
-                        "is incorrect so we dropped this attribute.")
+                        "is incorrect so we dropped this attribute."
+                    )
             # log images
             for k, v in image_logs.items():
-                self.vdl_writer.add_image(
-                    k, v, state.global_step, dataformats="NHWC")
+                self.vdl_writer.add_image(k, v, state.global_step, dataformats="NHWC")
             self.vdl_writer.flush()
 
 
@@ -103,14 +106,11 @@ class ControlNetTrainer(Trainer):
         loss = model(**inputs)
         return loss
 
-    def _save(self,
-              output_dir=None,
-              state_dict=None,
-              merge_tensor_parallel=False):
+    def _save(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
         super()._save(
             output_dir=output_dir,
             state_dict=state_dict,
-            merge_tensor_parallel=merge_tensor_parallel, )
+            merge_tensor_parallel=merge_tensor_parallel,
+        )
         output_dir = output_dir if output_dir is not None else self.args.output_dir
-        unwrap_model(self.model).controlnet.save_pretrained(
-            os.path.join(output_dir, "controlnet"))
+        unwrap_model(self.model).controlnet.save_pretrained(os.path.join(output_dir, "controlnet"))

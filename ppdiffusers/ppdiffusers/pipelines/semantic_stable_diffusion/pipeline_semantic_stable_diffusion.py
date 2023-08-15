@@ -18,13 +18,11 @@ from itertools import repeat
 from typing import Callable, List, Optional, Union
 
 import paddle
-from paddlenlp.transformers import (CLIPImageProcessor, CLIPTextModel,
-                                    CLIPTokenizer)
+from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...pipeline_utils import DiffusionPipeline
-from ...pipelines.stable_diffusion.safety_checker import \
-    StableDiffusionSafetyChecker
+from ...pipelines.stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging, randn_tensor
 from . import SemanticStableDiffusionPipelineOutput
@@ -107,15 +105,16 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
     _optional_components = ["safety_checker", "feature_extractor"]
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            scheduler: KarrasDiffusionSchedulers,
-            safety_checker: StableDiffusionSafetyChecker,
-            feature_extractor: CLIPImageProcessor,
-            requires_safety_checker: bool=True, ):
+        self,
+        vae: AutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: UNet2DConditionModel,
+        scheduler: KarrasDiffusionSchedulers,
+        safety_checker: StableDiffusionSafetyChecker,
+        feature_extractor: CLIPImageProcessor,
+        requires_safety_checker: bool = True,
+    ):
         super().__init__()
 
         if safety_checker is None and requires_safety_checker:
@@ -141,8 +140,9 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
             unet=unet,
             scheduler=scheduler,
             safety_checker=safety_checker,
-            feature_extractor=feature_extractor, )
-        self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+            feature_extractor=feature_extractor,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
@@ -161,54 +161,50 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.check_inputs
     def check_inputs(
-            self,
-            prompt,
-            height,
-            width,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        height,
+        width,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two.")
+                " only forward one of the two."
+            )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -221,23 +217,26 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                 raise ValueError(
                     "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}.")
+                    f" {negative_prompt_embeds.shape}."
+                )
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(
-            self,
-            batch_size,
-            num_channels_latents,
-            height,
-            width,
-            dtype,
-            generator,
-            latents=None, ):
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
         shape = (
             batch_size,
             num_channels_latents,
             height // self.vae_scale_factor,
-            width // self.vae_scale_factor, )
+            width // self.vae_scale_factor,
+        )
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -253,33 +252,33 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            prompt: Union[str, List[str]],
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: int=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            editing_prompt: Optional[Union[str, List[str]]]=None,
-            editing_prompt_embeddings: Optional[paddle.Tensor]=None,
-            reverse_editing_direction: Optional[Union[bool, List[bool]]]=False,
-            edit_guidance_scale: Optional[Union[float, List[float]]]=5,
-            edit_warmup_steps: Optional[Union[int, List[int]]]=10,
-            edit_cooldown_steps: Optional[Union[int, List[int]]]=None,
-            edit_threshold: Optional[Union[float, List[float]]]=0.9,
-            edit_momentum_scale: Optional[float]=0.1,
-            edit_mom_beta: Optional[float]=0.4,
-            edit_weights: Optional[List[float]]=None,
-            sem_guidance: Optional[List[paddle.Tensor]]=None, ):
+        self,
+        prompt: Union[str, List[str]],
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: int = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        editing_prompt: Optional[Union[str, List[str]]] = None,
+        editing_prompt_embeddings: Optional[paddle.Tensor] = None,
+        reverse_editing_direction: Optional[Union[bool, List[bool]]] = False,
+        edit_guidance_scale: Optional[Union[float, List[float]]] = 5,
+        edit_warmup_steps: Optional[Union[int, List[int]]] = 10,
+        edit_cooldown_steps: Optional[Union[int, List[int]]] = None,
+        edit_threshold: Optional[Union[float, List[float]]] = 0.9,
+        edit_momentum_scale: Optional[float] = 0.1,
+        edit_mom_beta: Optional[float] = 0.4,
+        edit_weights: Optional[List[float]] = None,
+        sem_guidance: Optional[List[paddle.Tensor]] = None,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -399,61 +398,53 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
             prompt,
             padding="max_length",
             max_length=self.tokenizer.model_max_length,
-            return_tensors="pd", )
+            return_tensors="pd",
+        )
         text_input_ids = text_inputs.input_ids
 
         if text_input_ids.shape[-1] > self.tokenizer.model_max_length:
-            removed_text = self.tokenizer.batch_decode(
-                text_input_ids[:, self.tokenizer.model_max_length:])
+            removed_text = self.tokenizer.batch_decode(text_input_ids[:, self.tokenizer.model_max_length :])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
-                f" {self.tokenizer.model_max_length} tokens: {removed_text}")
-            text_input_ids = text_input_ids[:, :self.tokenizer.model_max_length]
+                f" {self.tokenizer.model_max_length} tokens: {removed_text}"
+            )
+            text_input_ids = text_input_ids[:, : self.tokenizer.model_max_length]
         text_embeddings = self.text_encoder(text_input_ids)[0]
 
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         bs_embed, seq_len, _ = text_embeddings.shape
         text_embeddings = text_embeddings.tile([1, num_images_per_prompt, 1])
-        text_embeddings = text_embeddings.reshape(
-            [bs_embed * num_images_per_prompt, seq_len, -1])
+        text_embeddings = text_embeddings.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
 
         if enable_edit_guidance:
             # get safety text embeddings
             if editing_prompt_embeddings is None:
                 edit_concepts_input = self.tokenizer(
-                    [
-                        x
-                        for item in editing_prompt
-                        for x in repeat(item, batch_size)
-                    ],
+                    [x for item in editing_prompt for x in repeat(item, batch_size)],
                     padding="max_length",
                     max_length=self.tokenizer.model_max_length,
-                    return_tensors="pd", )
+                    return_tensors="pd",
+                )
 
                 edit_concepts_input_ids = edit_concepts_input.input_ids
 
-                if edit_concepts_input_ids.shape[
-                        -1] > self.tokenizer.model_max_length:
+                if edit_concepts_input_ids.shape[-1] > self.tokenizer.model_max_length:
                     removed_text = self.tokenizer.batch_decode(
-                        edit_concepts_input_ids[:, self.tokenizer.
-                                                model_max_length:])
+                        edit_concepts_input_ids[:, self.tokenizer.model_max_length :]
+                    )
                     logger.warning(
                         "The following part of your input was truncated because CLIP can only handle sequences up to"
                         f" {self.tokenizer.model_max_length} tokens: {removed_text}"
                     )
-                    edit_concepts_input_ids = edit_concepts_input_ids[:, :self.
-                                                                      tokenizer.
-                                                                      model_max_length]
+                    edit_concepts_input_ids = edit_concepts_input_ids[:, : self.tokenizer.model_max_length]
                 edit_concepts = self.text_encoder(edit_concepts_input_ids)[0]
             else:
-                edit_concepts = editing_prompt_embeddings.tile(
-                    [batch_size, 1, 1])
+                edit_concepts = editing_prompt_embeddings.tile([batch_size, 1, 1])
 
             # duplicate text embeddings for each generation per prompt, using mps friendly method
             bs_embed_edit, seq_len_edit, _ = edit_concepts.shape
             edit_concepts = edit_concepts.tile([1, num_images_per_prompt, 1])
-            edit_concepts = edit_concepts.reshape(
-                [bs_embed_edit * num_images_per_prompt, seq_len_edit, -1])
+            edit_concepts = edit_concepts.reshape([bs_embed_edit * num_images_per_prompt, seq_len_edit, -1])
 
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
@@ -468,14 +459,16 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
             elif type(prompt) is not type(negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}.")
+                    f" {type(prompt)}."
+                )
             elif isinstance(negative_prompt, str):
                 uncond_tokens = [negative_prompt]
             elif batch_size != len(negative_prompt):
                 raise ValueError(
                     f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                     f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`.")
+                    " the batch size of `prompt`."
+                )
             else:
                 uncond_tokens = negative_prompt
 
@@ -485,25 +478,22 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0]
 
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = uncond_embeddings.shape[1]
-            uncond_embeddings = uncond_embeddings.tile(
-                [batch_size, num_images_per_prompt, 1])
-            uncond_embeddings = uncond_embeddings.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
+            uncond_embeddings = uncond_embeddings.tile([batch_size, num_images_per_prompt, 1])
+            uncond_embeddings = uncond_embeddings.reshape([batch_size * num_images_per_prompt, seq_len, -1])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
             if enable_edit_guidance:
-                text_embeddings = paddle.concat(
-                    [uncond_embeddings, text_embeddings, edit_concepts])
+                text_embeddings = paddle.concat([uncond_embeddings, text_embeddings, edit_concepts])
             else:
-                text_embeddings = paddle.concat(
-                    [uncond_embeddings, text_embeddings])
+                text_embeddings = paddle.concat([uncond_embeddings, text_embeddings])
         # get the initial random noise unless the user supplied it
 
         # 4. Prepare timesteps
@@ -519,7 +509,8 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
             width,
             text_embeddings.dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # 6. Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -534,41 +525,39 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
 
         for i, t in enumerate(self.progress_bar(timesteps)):
             # expand the latents if we are doing classifier free guidance
-            latent_model_input = (paddle.concat([latents] *
-                                                (2 + enabled_editing_prompts))
-                                  if do_classifier_free_guidance else latents)
-            latent_model_input = self.scheduler.scale_model_input(
-                latent_model_input, t)
+            latent_model_input = (
+                paddle.concat([latents] * (2 + enabled_editing_prompts)) if do_classifier_free_guidance else latents
+            )
+            latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
             # predict the noise residual
-            noise_pred = self.unet(
-                latent_model_input, t,
-                encoder_hidden_states=text_embeddings).sample
+            noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=text_embeddings).sample
 
             # perform guidance
             if do_classifier_free_guidance:
-                noise_pred_out = noise_pred.chunk(
-                    2 + enabled_editing_prompts)  # [b,4, 64, 64]
+                noise_pred_out = noise_pred.chunk(2 + enabled_editing_prompts)  # [b,4, 64, 64]
                 noise_pred_uncond, noise_pred_text = (
                     noise_pred_out[0],
-                    noise_pred_out[1], )
+                    noise_pred_out[1],
+                )
                 noise_pred_edit_concepts = noise_pred_out[2:]
 
                 # default text guidance
-                noise_guidance = guidance_scale * (
-                    noise_pred_text - noise_pred_uncond)
+                noise_guidance = guidance_scale * (noise_pred_text - noise_pred_uncond)
                 # noise_guidance = (noise_pred_text - noise_pred_edit_concepts[0])
 
                 if self.uncond_estimates is None:
                     self.uncond_estimates = paddle.zeros(
                         (num_inference_steps + 1, *noise_pred_uncond.shape),
-                        dtype=noise_pred.dtype, )
+                        dtype=noise_pred.dtype,
+                    )
                 self.uncond_estimates[i] = noise_pred_uncond.detach()
 
                 if self.text_estimates is None:
                     self.text_estimates = paddle.zeros(
                         (num_inference_steps + 1, *noise_pred_text.shape),
-                        dtype=noise_pred.dtype, )
+                        dtype=noise_pred.dtype,
+                    )
                 self.text_estimates[i] = noise_pred_text.detach()
 
                 if self.edit_estimates is None and enable_edit_guidance:
@@ -576,29 +565,32 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                         (
                             num_inference_steps + 1,
                             len(noise_pred_edit_concepts),
-                            *noise_pred_edit_concepts[0].shape, ),
-                        dtype=noise_pred.dtype, )
+                            *noise_pred_edit_concepts[0].shape,
+                        ),
+                        dtype=noise_pred.dtype,
+                    )
 
                 if self.sem_guidance is None:
                     self.sem_guidance = paddle.zeros(
                         (num_inference_steps + 1, *noise_pred_text.shape),
-                        dtype=noise_pred.dtype, )
+                        dtype=noise_pred.dtype,
+                    )
 
                 if edit_momentum is None:
                     edit_momentum = paddle.zeros_like(noise_guidance)
 
                 if enable_edit_guidance:
                     concept_weights = paddle.zeros(
-                        (len(noise_pred_edit_concepts),
-                         noise_guidance.shape[0]),
-                        dtype=noise_guidance.dtype, )
+                        (len(noise_pred_edit_concepts), noise_guidance.shape[0]),
+                        dtype=noise_guidance.dtype,
+                    )
                     noise_guidance_edit = paddle.zeros(
                         (len(noise_pred_edit_concepts), *noise_guidance.shape),
-                        dtype=noise_guidance.dtype, )
+                        dtype=noise_guidance.dtype,
+                    )
                     # noise_guidance_edit = torch.zeros_like(noise_guidance)
                     warmup_inds = []
-                    for c, noise_pred_edit_concept in enumerate(
-                            noise_pred_edit_concepts):
+                    for c, noise_pred_edit_concept in enumerate(noise_pred_edit_concepts):
                         self.edit_estimates[i, c] = noise_pred_edit_concept
                         if isinstance(edit_guidance_scale, list):
                             edit_guidance_scale_c = edit_guidance_scale[c]
@@ -610,8 +602,7 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                         else:
                             edit_threshold_c = edit_threshold
                         if isinstance(reverse_editing_direction, list):
-                            reverse_editing_direction_c = reverse_editing_direction[
-                                c]
+                            reverse_editing_direction_c = reverse_editing_direction[c]
                         else:
                             reverse_editing_direction_c = reverse_editing_direction
                         if edit_weights:
@@ -632,27 +623,19 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                         if i >= edit_warmup_steps_c:
                             warmup_inds.append(c)
                         if i >= edit_cooldown_steps_c:
-                            noise_guidance_edit[
-                                c, :, :, :, :] = paddle.zeros_like(
-                                    noise_pred_edit_concept)
+                            noise_guidance_edit[c, :, :, :, :] = paddle.zeros_like(noise_pred_edit_concept)
                             continue
 
-                        noise_guidance_edit_tmp = (
-                            noise_pred_edit_concept - noise_pred_uncond)
+                        noise_guidance_edit_tmp = noise_pred_edit_concept - noise_pred_uncond
                         # tmp_weights = (noise_pred_text - noise_pred_edit_concept).sum(dim=(1, 2, 3))
-                        tmp_weights = (
-                            noise_guidance - noise_pred_edit_concept).sum(
-                                (1, 2, 3))
+                        tmp_weights = (noise_guidance - noise_pred_edit_concept).sum((1, 2, 3))
 
-                        tmp_weights = paddle.full_like(
-                            tmp_weights,
-                            edit_weight_c)  # * (1 / enabled_editing_prompts)
+                        tmp_weights = paddle.full_like(tmp_weights, edit_weight_c)  # * (1 / enabled_editing_prompts)
                         if reverse_editing_direction_c:
                             noise_guidance_edit_tmp = noise_guidance_edit_tmp * -1
                         concept_weights[c, :] = tmp_weights
 
-                        noise_guidance_edit_tmp = (noise_guidance_edit_tmp *
-                                                   edit_guidance_scale_c)
+                        noise_guidance_edit_tmp = noise_guidance_edit_tmp * edit_guidance_scale_c
 
                         # quantile function expects float32
                         if noise_guidance_edit_tmp.dtype == paddle.float32:
@@ -660,23 +643,22 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                                 paddle.abs(noise_guidance_edit_tmp).flatten(2),
                                 edit_threshold_c,
                                 axis=2,
-                                keepdim=False, )
+                                keepdim=False,
+                            )
                         else:
                             tmp = quantile(
-                                paddle.abs(noise_guidance_edit_tmp).flatten(2)
-                                .cast(paddle.float32),
+                                paddle.abs(noise_guidance_edit_tmp).flatten(2).cast(paddle.float32),
                                 edit_threshold_c,
                                 axis=2,
                                 keepdim=False,
                             ).cast(noise_guidance_edit_tmp.dtype)
 
                         noise_guidance_edit_tmp = paddle.where(
-                            paddle.abs(noise_guidance_edit_tmp) >=
-                            tmp[:, :, None, None],
+                            paddle.abs(noise_guidance_edit_tmp) >= tmp[:, :, None, None],
                             noise_guidance_edit_tmp,
-                            paddle.zeros_like(noise_guidance_edit_tmp), )
-                        noise_guidance_edit[
-                            c, :, :, :, :] = noise_guidance_edit_tmp
+                            paddle.zeros_like(noise_guidance_edit_tmp),
+                        )
+                        noise_guidance_edit[c, :, :, :, :] = noise_guidance_edit_tmp
 
                         # noise_guidance_edit = noise_guidance_edit + noise_guidance_edit_tmp
 
@@ -685,22 +667,21 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                         # concept_weights = concept_weights.to("cpu")  # Offload to cpu
                         # noise_guidance_edit = noise_guidance_edit.to("cpu")
 
-                        concept_weights_tmp = paddle.index_select(
-                            concept_weights, warmup_inds, 0)
+                        concept_weights_tmp = paddle.index_select(concept_weights, warmup_inds, 0)
                         concept_weights_tmp = paddle.where(
                             concept_weights_tmp < 0,
                             paddle.zeros_like(concept_weights_tmp),
-                            concept_weights_tmp, )
-                        concept_weights_tmp = (concept_weights_tmp /
-                                               concept_weights_tmp.sum(0))
+                            concept_weights_tmp,
+                        )
+                        concept_weights_tmp = concept_weights_tmp / concept_weights_tmp.sum(0)
                         # concept_weights_tmp = torch.nan_to_num(concept_weights_tmp)
 
-                        noise_guidance_edit_tmp = paddle.index_select(
-                            noise_guidance_edit, warmup_inds, 0)
+                        noise_guidance_edit_tmp = paddle.index_select(noise_guidance_edit, warmup_inds, 0)
                         noise_guidance_edit_tmp = paddle.einsum(
                             "cb,cbijk->bijk",
                             concept_weights_tmp,
-                            noise_guidance_edit_tmp, )
+                            noise_guidance_edit_tmp,
+                        )
                         noise_guidance_edit_tmp = noise_guidance_edit_tmp
                         noise_guidance = noise_guidance + noise_guidance_edit_tmp
 
@@ -714,17 +695,15 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                     concept_weights = paddle.where(
                         concept_weights < 0,
                         paddle.zeros_like(concept_weights),
-                        concept_weights, )
+                        concept_weights,
+                    )
                     # concept_weights = paddle.nan_to_num(concept_weights)
 
-                    noise_guidance_edit = paddle.einsum(
-                        "cb,cbijk->bijk", concept_weights, noise_guidance_edit)
+                    noise_guidance_edit = paddle.einsum("cb,cbijk->bijk", concept_weights, noise_guidance_edit)
 
-                    noise_guidance_edit = (noise_guidance_edit +
-                                           edit_momentum_scale * edit_momentum)
+                    noise_guidance_edit = noise_guidance_edit + edit_momentum_scale * edit_momentum
 
-                    edit_momentum = (edit_mom_beta * edit_momentum +
-                                     (1 - edit_mom_beta) * noise_guidance_edit)
+                    edit_momentum = edit_mom_beta * edit_momentum + (1 - edit_mom_beta) * noise_guidance_edit
 
                     if warmup_inds.shape[0] == len(noise_pred_edit_concepts):
                         noise_guidance = noise_guidance + noise_guidance_edit
@@ -737,8 +716,7 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                 noise_pred = noise_pred_uncond + noise_guidance
 
                 # compute the previous noisy sample x_t -> x_t-1
-            latents = self.scheduler.step(noise_pred, t, latents,
-                                          **extra_step_kwargs).prev_sample
+            latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
             # call the callback, if provided
             if callback is not None and i % callback_steps == 0:
@@ -748,12 +726,11 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
         image = self.decode_latents(latents)
 
         if self.safety_checker is not None:
-            safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors="pd")
+            safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.cast(
-                    text_embeddings.dtype), )
+                clip_input=safety_checker_input.pixel_values.cast(text_embeddings.dtype),
+            )
         else:
             has_nsfw_concept = None
 
@@ -763,5 +740,4 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
         if not return_dict:
             return (image, has_nsfw_concept)
 
-        return SemanticStableDiffusionPipelineOutput(
-            images=image, nsfw_content_detected=has_nsfw_concept)
+        return SemanticStableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

@@ -19,13 +19,20 @@ import unittest
 import numpy as np
 import paddle
 
-from ppdiffusers import (AutoencoderKL, DDIMScheduler, DiTPipeline,
-                         DPMSolverMultistepScheduler, Transformer2DModel)
+from ppdiffusers import (
+    AutoencoderKL,
+    DDIMScheduler,
+    DiTPipeline,
+    DPMSolverMultistepScheduler,
+    Transformer2DModel,
+)
 from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..pipeline_params import (CLASS_CONDITIONED_IMAGE_GENERATION_BATCH_PARAMS,
-                               CLASS_CONDITIONED_IMAGE_GENERATION_PARAMS)
+from ..pipeline_params import (
+    CLASS_CONDITIONED_IMAGE_GENERATION_BATCH_PARAMS,
+    CLASS_CONDITIONED_IMAGE_GENERATION_PARAMS,
+)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
@@ -55,7 +62,8 @@ class DiTPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             activation_fn="gelu-approximate",
             num_embeds_ada_norm=1000,
             norm_type="ada_norm_zero",
-            norm_elementwise_affine=False, )
+            norm_elementwise_affine=False,
+        )
         vae = AutoencoderKL()
         scheduler = DDIMScheduler()
         components = {
@@ -85,20 +93,15 @@ class DiTPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1]
         self.assertEqual(image.shape, (1, 16, 16, 3))
         print(image_slice.flatten())
-        expected_slice = np.array([
-            0.28088313, 0.0, 0.8108508, 1.0, 1.0, 0.47994, 0.9075564, 0.0,
-            0.14398015
-        ])
+        expected_slice = np.array([0.28088313, 0.0, 0.8108508, 1.0, 1.0, 0.47994, 0.9075564, 0.0, 0.14398015])
         max_diff = np.abs(image_slice.flatten() - expected_slice).max()
         self.assertLessEqual(max_diff, 0.001)
 
     def test_inference_batch_single_identical(self):
-        self._test_inference_batch_single_identical(
-            relax_max_difference=True, expected_max_diff=1e-3)
+        self._test_inference_batch_single_identical(relax_max_difference=True, expected_max_diff=1e-3)
 
     def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(
-            expected_max_diff=1e-3)
+        self._test_xformers_attention_forwardGenerator_pass(expected_max_diff=1e-3)
 
 
 @require_paddle_gpu
@@ -116,35 +119,35 @@ class DiTPipelineIntegrationTests(unittest.TestCase):
 
         words = ["vase", "umbrella", "white shark", "white wolf"]
         ids = pipe.get_label_ids(words)
-        images = pipe(
-            ids, generator=generator, num_inference_steps=40,
-            output_type="np").images
-        expected_slices = np.array([
-            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, 0.0016301274299621582, 0.0, 0.0, 0.0, 0.0],
+        images = pipe(ids, generator=generator, num_inference_steps=40, output_type="np").images
+        expected_slices = np.array(
             [
-                0.434637188911438,
-                0.4323567748069763,
-                0.4406988322734833,
-                0.442973256111145,
-                0.4462621212005615,
-                0.45129328966140747,
-                0.41893237829208374,
-                0.42390328645706177,
-                0.3906112015247345,
-            ],
-            [
-                0.9986965656280518,
-                0.9948190450668335,
-                0.9841029644012451,
-                0.9911775588989258,
-                0.9871039390563965,
-                0.9874314069747925,
-                0.9822297096252441,
-                0.9997426271438599,
-                1.0,
-            ],
-        ])
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0016301274299621582, 0.0, 0.0, 0.0, 0.0],
+                [
+                    0.434637188911438,
+                    0.4323567748069763,
+                    0.4406988322734833,
+                    0.442973256111145,
+                    0.4462621212005615,
+                    0.45129328966140747,
+                    0.41893237829208374,
+                    0.42390328645706177,
+                    0.3906112015247345,
+                ],
+                [
+                    0.9986965656280518,
+                    0.9948190450668335,
+                    0.9841029644012451,
+                    0.9911775588989258,
+                    0.9871039390563965,
+                    0.9874314069747925,
+                    0.9822297096252441,
+                    0.9997426271438599,
+                    1.0,
+                ],
+            ]
+        )
 
         for word, image, expected_slice in zip(words, images, expected_slices):
             # expected_image = load_numpy(
@@ -152,37 +155,34 @@ class DiTPipelineIntegrationTests(unittest.TestCase):
             # )
             assert image.shape == (256, 256, 3)
             image_slice = image[-3:, -3:, -1]
-            assert np.abs((image_slice.flatten() - expected_slice).max(
-            )) < 0.001
+            assert np.abs((image_slice.flatten() - expected_slice).max()) < 0.001
 
     def test_dit_512_fp16(self):
-        pipe = DiTPipeline.from_pretrained(
-            "facebook/DiT-XL-2-512", paddle_dtype=paddle.float16)
-        pipe.scheduler = DPMSolverMultistepScheduler.from_config(
-            pipe.scheduler.config)
+        pipe = DiTPipeline.from_pretrained("facebook/DiT-XL-2-512", paddle_dtype=paddle.float16)
+        pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
         pipe.to("gpu")
 
         words = ["vase", "umbrella"]
         ids = pipe.get_label_ids(words)
         generator = paddle.Generator().manual_seed(0)
-        images = pipe(
-            ids, generator=generator, num_inference_steps=25,
-            output_type="np").images
+        images = pipe(ids, generator=generator, num_inference_steps=25, output_type="np").images
 
-        expected_slices = np.array([
-            [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.994140625],
+        expected_slices = np.array(
             [
-                0.0,
-                0.0,
-                0.01708984375,
-                0.024658203125,
-                0.0830078125,
-                0.134521484375,
-                0.175537109375,
-                0.33740234375,
-                0.207763671875,
-            ],
-        ])
+                [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.994140625],
+                [
+                    0.0,
+                    0.0,
+                    0.01708984375,
+                    0.024658203125,
+                    0.0830078125,
+                    0.134521484375,
+                    0.175537109375,
+                    0.33740234375,
+                    0.207763671875,
+                ],
+            ]
+        )
 
         for word, image, expected_slice in zip(words, images, expected_slices):
             # expected_image = load_numpy(

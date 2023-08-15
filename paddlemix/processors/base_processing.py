@@ -43,24 +43,22 @@ class ProcessorMixin(object):
                 raise TypeError(f"Unexepcted keyword argument {key}.")
         for arg, attribute_name in zip(args, self.attributes):
             if attribute_name in kwargs:
-                raise TypeError(
-                    f"Got multiple values for argument {attribute_name}.")
+                raise TypeError(f"Got multiple values for argument {attribute_name}.")
             else:
                 kwargs[attribute_name] = arg
 
         if len(kwargs) != len(self.attributes):
             raise ValueError(
                 f"This processor requires {len(self.attributes)} arguments: {', '.join(self.attributes)}. Got "
-                f"{len(args)} arguments instead.")
+                f"{len(args)} arguments instead."
+            )
 
         # Check each arg is of the proper class (this will also catch a user initializing in the wrong order)
         for attribute_name, arg in kwargs.items():
             setattr(self, attribute_name, arg)
 
     def __repr__(self):
-        attributes_repr = [
-            f"- {name}: {repr(getattr(self, name))}" for name in self.attributes
-        ]
+        attributes_repr = [f"- {name}: {repr(getattr(self, name))}" for name in self.attributes]
         attributes_repr = "\n".join(attributes_repr)
         return f"{self.__class__.__name__}:\n{attributes_repr}"
 
@@ -122,13 +120,11 @@ class ProcessorMixin(object):
                 [`~feature_extraction_utils.FeatureExtractionMixin.from_pretrained`] and
                 [`~tokenization_utils_base.PreTrainedTokenizer.from_pretrained`].
         """
-        args = cls._get_arguments_from_pretrained(pretrained_model_name_or_path,
-                                                  **kwargs)
+        args = cls._get_arguments_from_pretrained(pretrained_model_name_or_path, **kwargs)
         return cls(*args)
 
     @classmethod
-    def _get_arguments_from_pretrained(cls, pretrained_model_name_or_path,
-                                       **kwargs):
+    def _get_arguments_from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
         args = []
         for attribute_name in cls.attributes:
             class_name = getattr(cls, f"{attribute_name}_class")
@@ -136,9 +132,7 @@ class ProcessorMixin(object):
             attribute_class = getattr(paddlemix.processors, class_name, None)
             if attribute_class is None:
                 attribute_class = getattr(paddlenlp.transformers, class_name)
-            args.append(
-                attribute_class.from_pretrained(pretrained_model_name_or_path,
-                                                **kwargs))
+            args.append(attribute_class.from_pretrained(pretrained_model_name_or_path, **kwargs))
         return args
 
     @property

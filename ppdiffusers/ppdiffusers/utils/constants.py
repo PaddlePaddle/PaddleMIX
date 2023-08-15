@@ -31,9 +31,8 @@ def str2bool(v):
 
 
 ppnlp_cache_home = os.path.expanduser(
-    os.getenv("PPNLP_HOME",
-              os.path.join(
-                  os.getenv("XDG_CACHE_HOME", "~/.cache"), "paddlenlp")))
+    os.getenv("PPNLP_HOME", os.path.join(os.getenv("XDG_CACHE_HOME", "~/.cache"), "paddlenlp"))
+)
 
 ppdiffusers_default_cache_path = os.path.join(ppnlp_cache_home, "ppdiffusers")
 # diffusers_default_cache_path = os.path.join(HUGGINGFACE_HUB_CACHE, "diffusers")
@@ -51,25 +50,20 @@ PPDIFFUSERS_CACHE = ppdiffusers_default_cache_path
 DIFFUSERS_CACHE = diffusers_default_cache_path
 DIFFUSERS_DYNAMIC_MODULE_NAME = "diffusers_modules"
 PPDIFFUSERS_DYNAMIC_MODULE_NAME = "ppdiffusers_modules"
-HF_MODULES_CACHE = os.getenv("HF_MODULES_CACHE",
-                             os.path.join(hf_cache_home, "modules"))
-PPDIFFUSERS_MODULES_CACHE = os.getenv("PPDIFFUSERS_MODULES_CACHE",
-                                      os.path.join(ppnlp_cache_home, "modules"))
+HF_MODULES_CACHE = os.getenv("HF_MODULES_CACHE", os.path.join(hf_cache_home, "modules"))
+PPDIFFUSERS_MODULES_CACHE = os.getenv("PPDIFFUSERS_MODULES_CACHE", os.path.join(ppnlp_cache_home, "modules"))
 
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
 FASTDEPLOY_WEIGHTS_NAME = "inference.pdiparams"
 FASTDEPLOY_MODEL_NAME = "inference.pdmodel"
 WEIGHTS_NAME = PADDLE_WEIGHTS_NAME
 
-TEST_DOWNLOAD_SERVER = (
-    "https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/tests")
+TEST_DOWNLOAD_SERVER = "https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/tests"
 DOWNLOAD_SERVER = "https://bj.bcebos.com/paddlenlp/models/community"
-PPNLP_BOS_RESOLVE_ENDPOINT = os.getenv("PPNLP_ENDPOINT",
-                                       "https://bj.bcebos.com/paddlenlp")
+PPNLP_BOS_RESOLVE_ENDPOINT = os.getenv("PPNLP_ENDPOINT", "https://bj.bcebos.com/paddlenlp")
 DEPRECATED_REVISION_ARGS = ["fp16", "non-ema"]
 TEXT_ENCODER_ATTN_MODULE = ".self_attn"
-LOW_CPU_MEM_USAGE_DEFAULT = str2bool(
-    os.getenv("LOW_CPU_MEM_USAGE_DEFAULT", False))
+LOW_CPU_MEM_USAGE_DEFAULT = str2bool(os.getenv("LOW_CPU_MEM_USAGE_DEFAULT", False))
 
 NEG_INF = -1e4
 
@@ -87,5 +81,4 @@ if bool(os.getenv("PATCH_ALLCLOSE", False)):
     def allclose(x, y, rtol=1e-05, atol=1e-08, equal_nan=False, name=None):
         print(x.tolist())
         print(y.tolist())
-        return raw_all_close(
-            x, y, rtol=rtol, atol=atol, equal_nan=equal_nan, name=name)
+        return raw_all_close(x, y, rtol=rtol, atol=atol, equal_nan=equal_nan, name=name)

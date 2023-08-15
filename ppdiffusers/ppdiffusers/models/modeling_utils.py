@@ -21,16 +21,33 @@ from typing import Any, Callable, Optional, Union
 import paddle
 import paddle.nn as nn
 
-from ..utils import (CONFIG_NAME, DIFFUSERS_CACHE, FROM_DIFFUSERS, FROM_HF_HUB,
-                     HF_HUB_OFFLINE, LOW_CPU_MEM_USAGE_DEFAULT,
-                     PADDLE_WEIGHTS_NAME, PPDIFFUSERS_CACHE, TO_DIFFUSERS,
-                     TORCH_SAFETENSORS_WEIGHTS_NAME, TORCH_WEIGHTS_NAME,
-                     _add_variant, _get_model_file, deprecate,
-                     is_paddlenlp_available, is_safetensors_available,
-                     is_torch_available, is_torch_file, logging, smart_load)
+from ..utils import (
+    CONFIG_NAME,
+    DIFFUSERS_CACHE,
+    FROM_DIFFUSERS,
+    FROM_HF_HUB,
+    HF_HUB_OFFLINE,
+    LOW_CPU_MEM_USAGE_DEFAULT,
+    PADDLE_WEIGHTS_NAME,
+    PPDIFFUSERS_CACHE,
+    TO_DIFFUSERS,
+    TORCH_SAFETENSORS_WEIGHTS_NAME,
+    TORCH_WEIGHTS_NAME,
+    _add_variant,
+    _get_model_file,
+    deprecate,
+    is_paddlenlp_available,
+    is_safetensors_available,
+    is_torch_available,
+    is_torch_file,
+    logging,
+    smart_load,
+)
 from ..version import VERSION as __version__
 from .modeling_pytorch_paddle_utils import (
-    convert_paddle_state_dict_to_pytorch, convert_pytorch_state_dict_to_paddle)
+    convert_paddle_state_dict_to_pytorch,
+    convert_pytorch_state_dict_to_paddle,
+)
 
 logger = logging.get_logger(__name__)
 
@@ -87,11 +104,7 @@ def convert_state_dict(state_dict, framework="torch"):
         state_dict = {k: v.cpu().numpy() for k, v in state_dict.items()}
         return state_dict
     elif framework in ["paddle", "pd"]:
-        state_dict = {
-            k: paddle.to_tensor(
-                v, place="cpu")
-            for k, v in state_dict.items()
-        }
+        state_dict = {k: paddle.to_tensor(v, place="cpu") for k, v in state_dict.items()}
         return state_dict
     else:
         raise NotImplementedError(f"Not Implemented {framework} framework!")
@@ -129,9 +142,7 @@ class ModelMixin(nn.Layer):
           [`~models.ModelMixin.save_pretrained`].
     """
     config_name = CONFIG_NAME
-    _automatically_saved_args = [
-        "_ppdiffusers_version", "_class_name", "_name_or_path"
-    ]
+    _automatically_saved_args = ["_ppdiffusers_version", "_class_name", "_name_or_path"]
     _supports_gradient_checkpointing = False
 
     def __init__(self):
@@ -144,8 +155,7 @@ class ModelMixin(nn.Layer):
         https://pytorch.org/docs/stable/_modules/torch/nn/modules/module.html#Module
         """
 
-        is_in_config = "_internal_dict" in self.__dict__ and hasattr(
-            self.__dict__["_internal_dict"], name)
+        is_in_config = "_internal_dict" in self.__dict__ and hasattr(self.__dict__["_internal_dict"], name)
         is_attribute = name in self.__dict__
 
         if is_in_config and not is_attribute:
@@ -155,7 +165,8 @@ class ModelMixin(nn.Layer):
                 "1.0.0",
                 deprecation_message,
                 standard_warn=False,
-                stacklevel=3, )
+                stacklevel=3,
+            )
             return self._internal_dict[name]
 
         # call PyTorch's https://pytorch.org/docs/stable/_modules/torch/nn/modules/module.html#Module
@@ -171,7 +182,8 @@ class ModelMixin(nn.Layer):
         """
         return any(
             hasattr(m, "gradient_checkpointing") and m.gradient_checkpointing
-            for m in self.sublayers(include_self=True))
+            for m in self.sublayers(include_self=True)
+        )
 
     def enable_gradient_checkpointing(self):
         """
@@ -181,9 +193,7 @@ class ModelMixin(nn.Layer):
         activations".
         """
         if not self._supports_gradient_checkpointing:
-            raise ValueError(
-                f"{self.__class__.__name__} does not support gradient checkpointing."
-            )
+            raise ValueError(f"{self.__class__.__name__} does not support gradient checkpointing.")
         self.apply(partial(self._set_gradient_checkpointing, value=True))
 
     def disable_gradient_checkpointing(self):
@@ -196,15 +206,13 @@ class ModelMixin(nn.Layer):
         if self._supports_gradient_checkpointing:
             self.apply(partial(self._set_gradient_checkpointing, value=False))
 
-    def set_use_memory_efficient_attention_xformers(
-            self, valid: bool, attention_op: Optional[str]=None) -> None:
+    def set_use_memory_efficient_attention_xformers(self, valid: bool, attention_op: Optional[str] = None) -> None:
         # Recursively walk through all the children.
         # Any children which exposes the set_use_memory_efficient_attention_xformers method
         # gets the message
         def fn_recursive_set_mem_eff(module: nn.Layer):
             if hasattr(module, "set_use_memory_efficient_attention_xformers"):
-                module.set_use_memory_efficient_attention_xformers(valid,
-                                                                   attention_op)
+                module.set_use_memory_efficient_attention_xformers(valid, attention_op)
 
             for child in module.children():
                 fn_recursive_set_mem_eff(child)
@@ -213,8 +221,7 @@ class ModelMixin(nn.Layer):
             if isinstance(module, nn.Layer):
                 fn_recursive_set_mem_eff(module)
 
-    def enable_xformers_memory_efficient_attention(
-            self, attention_op: Optional[str]=None):
+    def enable_xformers_memory_efficient_attention(self, attention_op: Optional[str] = None):
         r"""
         Enable memory efficient attention as implemented in xformers.
 
@@ -249,13 +256,14 @@ class ModelMixin(nn.Layer):
         self.set_use_memory_efficient_attention_xformers(False)
 
     def save_pretrained(
-            self,
-            save_directory: Union[str, os.PathLike],
-            is_main_process: bool=True,
-            save_function: Callable=None,
-            safe_serialization: bool=False,
-            variant: Optional[str]=None,
-            to_diffusers: Optional[bool]=None, ):
+        self,
+        save_directory: Union[str, os.PathLike],
+        is_main_process: bool = True,
+        save_function: Callable = None,
+        safe_serialization: bool = False,
+        variant: Optional[str] = None,
+        to_diffusers: Optional[bool] = None,
+    ):
         """
         Save a model and its configuration file to a directory, so that it can be re-loaded using the
         `[`~models.ModelMixin.from_pretrained`]` class method.
@@ -280,16 +288,11 @@ class ModelMixin(nn.Layer):
         """
         if to_diffusers is None:
             to_diffusers = TO_DIFFUSERS
-        if to_diffusers and safe_serialization and not is_safetensors_available(
-        ):
-            raise ImportError(
-                "`safe_serialization` requires the `safetensors library: `pip install safetensors`."
-            )
+        if to_diffusers and safe_serialization and not is_safetensors_available():
+            raise ImportError("`safe_serialization` requires the `safetensors library: `pip install safetensors`.")
 
         if os.path.isfile(save_directory):
-            logger.error(
-                f"Provided path ({save_directory}) should be a directory, not a file"
-            )
+            logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
             return
 
         os.makedirs(save_directory, exist_ok=True)
@@ -314,14 +317,11 @@ class ModelMixin(nn.Layer):
                 if safe_serialization:
                     if is_torch_available():
                         save_function = safetensors_torch_save_file
-                        state_dict = convert_state_dict(
-                            state_dict, framework="torch")
+                        state_dict = convert_state_dict(state_dict, framework="torch")
                     else:
                         save_function = safetensors_numpy_save_file
-                        state_dict = convert_state_dict(
-                            state_dict, framework="numpy")
-                    weights_name = _add_variant(TORCH_SAFETENSORS_WEIGHTS_NAME,
-                                                variant)
+                        state_dict = convert_state_dict(state_dict, framework="numpy")
+                    weights_name = _add_variant(TORCH_SAFETENSORS_WEIGHTS_NAME, variant)
                 else:
                     if not is_torch_available():
                         raise ImportError(
@@ -329,11 +329,9 @@ class ModelMixin(nn.Layer):
                         )
                     save_function = torch.save
                     weights_name = _add_variant(TORCH_WEIGHTS_NAME, variant)
-                    state_dict = convert_state_dict(
-                        state_dict, framework="torch")
+                    state_dict = convert_state_dict(state_dict, framework="torch")
 
-                state_dict = convert_paddle_state_dict_to_pytorch(state_dict,
-                                                                  model_to_save)
+                state_dict = convert_paddle_state_dict_to_pytorch(state_dict, model_to_save)
             else:
                 save_function = paddle.save
                 weights_name = _add_variant(PADDLE_WEIGHTS_NAME, variant)
@@ -341,15 +339,10 @@ class ModelMixin(nn.Layer):
         # Save the model
         save_function(state_dict, os.path.join(save_directory, weights_name))
 
-        logger.info(
-            f"Model weights saved in {os.path.join(save_directory, weights_name)}"
-        )
+        logger.info(f"Model weights saved in {os.path.join(save_directory, weights_name)}")
 
     @classmethod
-    def from_pretrained(
-            cls,
-            pretrained_model_name_or_path: Optional[Union[str, os.PathLike]],
-            **kwargs):
+    def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
         r"""
         Instantiate a pretrained pytorch model from a pre-trained model configuration.
 
@@ -425,8 +418,9 @@ class ModelMixin(nn.Layer):
 
         """
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
-        cache_dir = (kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub
-                     else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE))
+        cache_dir = (
+            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
+        )
         ignore_mismatched_sizes = kwargs.pop("ignore_mismatched_sizes", False)
         force_download = kwargs.pop("force_download", False)
         from_diffusers = kwargs.pop("from_diffusers", FROM_DIFFUSERS)
@@ -439,13 +433,11 @@ class ModelMixin(nn.Layer):
         paddle_dtype = kwargs.pop("paddle_dtype", None)
         subfolder = kwargs.pop("subfolder", None)
         ignore_keys = kwargs.pop("ignore_keys", None)
-        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage",
-                                       LOW_CPU_MEM_USAGE_DEFAULT)
+        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", LOW_CPU_MEM_USAGE_DEFAULT)
         variant = kwargs.pop("variant", None)
         use_safetensors = kwargs.pop("use_safetensors", None)
 
-        if from_diffusers and use_safetensors and not is_safetensors_available(
-        ):
+        if from_diffusers and use_safetensors and not is_safetensors_available():
             raise ValueError(
                 "`use_safetensors`=True but safetensors is not installed. Please install safetensors with `pip install safetenstors"
             )
@@ -476,7 +468,8 @@ class ModelMixin(nn.Layer):
             subfolder=subfolder,
             user_agent=user_agent,
             from_hf_hub=from_hf_hub,  # whether or not from_hf_hub
-            **kwargs, )
+            **kwargs,
+        )
 
         # This variable will flag if we're loading a sharded checkpoint. In this case the archive file is just the
         # Load model
@@ -486,8 +479,7 @@ class ModelMixin(nn.Layer):
                 try:
                     model_file = _get_model_file(
                         pretrained_model_name_or_path,
-                        weights_name=_add_variant(
-                            TORCH_SAFETENSORS_WEIGHTS_NAME, variant),
+                        weights_name=_add_variant(TORCH_SAFETENSORS_WEIGHTS_NAME, variant),
                         cache_dir=cache_dir,
                         force_download=force_download,
                         resume_download=resume_download,
@@ -498,7 +490,8 @@ class ModelMixin(nn.Layer):
                         subfolder=subfolder,
                         user_agent=user_agent,
                         commit_hash=commit_hash,
-                        from_hf_hub=from_hf_hub, )
+                        from_hf_hub=from_hf_hub,
+                    )
                     # try load model_file with paddle / torch / safetensor
                     state_dict = smart_load(model_file)
                 except Exception:
@@ -518,7 +511,8 @@ class ModelMixin(nn.Layer):
                     subfolder=subfolder,
                     user_agent=user_agent,
                     commit_hash=commit_hash,
-                    from_hf_hub=from_hf_hub, )
+                    from_hf_hub=from_hf_hub,
+                )
                 # try load model_file with paddle / torch / safetensor
                 state_dict = smart_load(model_file)
         else:
@@ -535,18 +529,19 @@ class ModelMixin(nn.Layer):
                 subfolder=subfolder,
                 user_agent=user_agent,
                 commit_hash=commit_hash,
-                from_hf_hub=from_hf_hub, )
+                from_hf_hub=from_hf_hub,
+            )
             # try load model_file with paddle / torch / safetensor
             state_dict = smart_load(model_file)
 
         init_contexts = []
 
-        dtype = set(v.dtype for v in state_dict.values()
-                    if paddle.is_tensor(v) and paddle.is_floating_point(v))
+        dtype = set(v.dtype for v in state_dict.values() if paddle.is_tensor(v) and paddle.is_floating_point(v))
         if len(dtype) > 1 and paddle.float32 not in dtype:
             raise ValueError(
                 f"The weights of the model file {model_file} have a mixture of incompatible dtypes {dtype}. Please"
-                f" make sure that {model_file} weights have only one dtype.")
+                f" make sure that {model_file} weights have only one dtype."
+            )
         elif len(dtype) > 1 and paddle.float32 in dtype:
             dtype = paddle.float32
         elif len(dtype) == 0:
@@ -580,21 +575,16 @@ class ModelMixin(nn.Layer):
             for k in keys:
                 for ik in ignore_keys:
                     if k.startswith(ik):
-                        logger.warning(
-                            "Deleting key {} from state_dict.".format(k))
+                        logger.warning("Deleting key {} from state_dict.".format(k))
                         del state_dict[k]
 
-        (
+        (model, missing_keys, unexpected_keys, mismatched_keys, error_msgs,) = cls._load_pretrained_model(
             model,
-            missing_keys,
-            unexpected_keys,
-            mismatched_keys,
-            error_msgs, ) = cls._load_pretrained_model(
-                model,
-                state_dict,
-                model_file,
-                pretrained_model_name_or_path,
-                ignore_mismatched_sizes=ignore_mismatched_sizes, )
+            state_dict,
+            model_file,
+            pretrained_model_name_or_path,
+            ignore_mismatched_sizes=ignore_mismatched_sizes,
+        )
 
         loading_info = {
             "missing_keys": missing_keys,
@@ -621,12 +611,13 @@ class ModelMixin(nn.Layer):
 
     @classmethod
     def _load_pretrained_model(
-            cls,
-            model,
-            state_dict,
-            resolved_archive_file,
-            pretrained_model_name_or_path,
-            ignore_mismatched_sizes=False, ):
+        cls,
+        model,
+        state_dict,
+        resolved_archive_file,
+        pretrained_model_name_or_path,
+        ignore_mismatched_sizes=False,
+    ):
         # Retrieve missing & unexpected_keys
         model_state_dict = model.state_dict()
         loaded_keys = list(state_dict.keys())
@@ -642,21 +633,25 @@ class ModelMixin(nn.Layer):
         model_to_load = model
 
         def _find_mismatched_keys(
-                state_dict,
-                model_state_dict,
-                loaded_keys,
-                ignore_mismatched_sizes, ):
+            state_dict,
+            model_state_dict,
+            loaded_keys,
+            ignore_mismatched_sizes,
+        ):
             mismatched_keys = []
             for checkpoint_key in loaded_keys:
                 model_key = checkpoint_key
 
-                if model_key in model_state_dict and list(state_dict[
-                        checkpoint_key].shape) != list(model_state_dict[
-                            model_key].shape):
-                    mismatched_keys.append((
-                        checkpoint_key,
-                        state_dict[checkpoint_key].shape,
-                        model_state_dict[model_key].shape, ))
+                if model_key in model_state_dict and list(state_dict[checkpoint_key].shape) != list(
+                    model_state_dict[model_key].shape
+                ):
+                    mismatched_keys.append(
+                        (
+                            checkpoint_key,
+                            state_dict[checkpoint_key].shape,
+                            model_state_dict[model_key].shape,
+                        )
+                    )
                     del state_dict[checkpoint_key]
             if ignore_mismatched_sizes:
                 mismatched_keys = []
@@ -668,7 +663,8 @@ class ModelMixin(nn.Layer):
                 state_dict,
                 model_state_dict,
                 original_loaded_keys,
-                ignore_mismatched_sizes, )
+                ignore_mismatched_sizes,
+            )
             error_msgs = []
             for key_name, loaded_shape, model_shape in mismatched_keys:
                 error_msgs.append(
@@ -679,10 +675,10 @@ class ModelMixin(nn.Layer):
         if len(error_msgs) > 0:
             error_msg = "\n\t".join(error_msgs)
             if "size mismatch" in error_msg:
-                error_msg += "\n\tYou may consider adding `ignore_mismatched_sizes=True` in the model `from_pretrained` method."
-            raise RuntimeError(
-                f"Error(s) in loading state_dict for {model.__class__.__name__}:\n\t{error_msg}"
-            )
+                error_msg += (
+                    "\n\tYou may consider adding `ignore_mismatched_sizes=True` in the model `from_pretrained` method."
+                )
+            raise RuntimeError(f"Error(s) in loading state_dict for {model.__class__.__name__}:\n\t{error_msg}")
 
         if len(unexpected_keys) > 0:
             logger.warning(
@@ -693,11 +689,10 @@ class ModelMixin(nn.Layer):
                 " BertForPreTraining model).\n- This IS NOT expected if you are initializing"
                 f" {model.__class__.__name__} from the checkpoint of a model that you expect to be exactly"
                 " identical (initializing a BertForSequenceClassification model from a"
-                " BertForSequenceClassification model).")
-        else:
-            logger.info(
-                f"All model checkpoint weights were used when initializing {model.__class__.__name__}.\n"
+                " BertForSequenceClassification model)."
             )
+        else:
+            logger.info(f"All model checkpoint weights were used when initializing {model.__class__.__name__}.\n")
         if len(missing_keys) > 0:
             logger.warning(
                 f"Some weights of {model.__class__.__name__} were not initialized from the model checkpoint at"
@@ -709,17 +704,21 @@ class ModelMixin(nn.Layer):
                 f"All the weights of {model.__class__.__name__} were initialized from the model checkpoint at"
                 f" {pretrained_model_name_or_path}.\nIf your task is similar to the task the model of the"
                 f" checkpoint was trained on, you can already use {model.__class__.__name__} for predictions"
-                " without further training.")
+                " without further training."
+            )
         if len(mismatched_keys) > 0:
-            mismatched_warning = "\n".join([
-                f"- {key}: found shape {shape1} in the checkpoint and {shape2} in the model instantiated"
-                for key, shape1, shape2 in mismatched_keys
-            ])
+            mismatched_warning = "\n".join(
+                [
+                    f"- {key}: found shape {shape1} in the checkpoint and {shape2} in the model instantiated"
+                    for key, shape1, shape2 in mismatched_keys
+                ]
+            )
             logger.warning(
                 f"Some weights of {model.__class__.__name__} were not initialized from the model checkpoint at"
                 f" {pretrained_model_name_or_path} and are newly initialized because the shapes did not"
                 f" match:\n{mismatched_warning}\nYou should probably TRAIN this model on a down-stream task to be"
-                " able to use it for predictions and inference.")
+                " able to use it for predictions and inference."
+            )
 
         return model, missing_keys, unexpected_keys, mismatched_keys, error_msgs
 
@@ -738,9 +737,7 @@ class ModelMixin(nn.Layer):
         """
         return get_parameter_dtype(self)
 
-    def num_parameters(self,
-                       only_trainable: bool=False,
-                       exclude_embeddings: bool=False) -> int:
+    def num_parameters(self, only_trainable: bool = False, exclude_embeddings: bool = False) -> int:
         """
         Get number of (optionally, trainable or non-embeddings) parameters in the module.
 
@@ -762,14 +759,11 @@ class ModelMixin(nn.Layer):
                 if isinstance(module_type, nn.Embedding)
             ]
             non_embedding_parameters = [
-                parameter for name, parameter in self.named_parameters()
-                if name not in embedding_param_names
+                parameter for name, parameter in self.named_parameters() if name not in embedding_param_names
             ]
-            return sum(p.numel() for p in non_embedding_parameters
-                       if not p.stop_gradient or not only_trainable)
+            return sum(p.numel() for p in non_embedding_parameters if not p.stop_gradient or not only_trainable)
         else:
-            return sum(p.numel() for p in self.parameters()
-                       if not p.stop_gradient or not only_trainable)
+            return sum(p.numel() for p in self.parameters() if not p.stop_gradient or not only_trainable)
 
 
 def unfreeze_params(params):

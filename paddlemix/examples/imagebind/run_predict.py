@@ -12,12 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
 import os
-import sys
 from dataclasses import dataclass, field
 
-import numpy as np
 import paddle
 import requests
 from paddlenlp.trainer import PdArgumentParser
@@ -26,16 +23,13 @@ from PIL import Image
 from paddlemix import ImageBindModel, ImageBindProcessor
 from paddlemix.datasets import *
 from paddlemix.models import ModalityType
-from paddlemix.models.imagebind.modeling import ImageBindModel
 from paddlemix.utils.log import logger
 
 
 class Predictor:
     def __init__(self, model_args):
-        self.processor = ImageBindProcessor.from_pretrained(
-            model_args.model_name_or_path)
-        self.predictor = ImageBindModel.from_pretrained(
-            model_args.model_name_or_path)
+        self.processor = ImageBindProcessor.from_pretrained(model_args.model_name_or_path)
+        self.predictor = ImageBindModel.from_pretrained(model_args.model_name_or_path)
         self.predictor.eval()
 
     def run(self, inputs):
@@ -55,8 +49,7 @@ def main(model_args, data_args):
         # read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     elif url:
-        image_pil = Image.open(requests.get(url, stream=True).raw).convert(
-            "RGB")
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
     else:
         image_pil = None
 
@@ -66,7 +59,8 @@ def main(model_args, data_args):
         images=image_pil,
         text=data_args.input_text,
         audios=data_args.input_audio,
-        return_tensors="pd", )
+        return_tensors="pd",
+    )
     inputs = {}
     if data_args.input_text:
         tokenized_processor = encoding["input_ids"]
@@ -84,8 +78,7 @@ def main(model_args, data_args):
     if data_args.input_text:
         logger.info("Generate text: {}".format(embeddings[ModalityType.TEXT]))
     if image_pil:
-        logger.info("Generate vision: {}".format(embeddings[
-            ModalityType.VISION]))
+        logger.info("Generate vision: {}".format(embeddings[ModalityType.VISION]))
     if data_args.input_audio:
         logger.info("Generate audio: {}".format(embeddings[ModalityType.AUDIO]))
 
@@ -99,17 +92,17 @@ class DataArguments:
     the command line.
     """
 
-    input_text: str = field(
-        default="A dog.",
-        metadata={"help": "The name of imagebind text input."})
+    input_text: str = field(default="A dog.", metadata={"help": "The name of imagebind text input."})
     input_image: str = field(
         default="",
         # wget https://github.com/facebookresearch/ImageBind/blob/main/.assets/bird_image.jpg
-        metadata={"help": "The name of imagebind image input."}, )
+        metadata={"help": "The name of imagebind image input."},
+    )
     input_audio: str = field(
         default=None,
         # wget https://github.com/facebookresearch/ImageBind/blob/main/.assets/bird_audio.wav
-        metadata={"help": "The name of imagebind audio input."}, )
+        metadata={"help": "The name of imagebind audio input."},
+    )
 
 
 @dataclass
@@ -120,14 +113,13 @@ class ModelArguments:
 
     model_name_or_path: str = field(
         default="imagebind-1.2b/",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
 
     device: str = field(
         default="GPU",
-        metadata={
-            "help":
-            "Choose the device you want to run, it can be: CPU/GPU/XPU, default is CPU."
-        }, )
+        metadata={"help": "Choose the device you want to run, it can be: CPU/GPU/XPU, default is CPU."},
+    )
 
 
 if __name__ == "__main__":

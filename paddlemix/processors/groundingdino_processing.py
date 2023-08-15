@@ -15,20 +15,14 @@
 Processor class for GroundingDino.
 """
 
-import re
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union
 
-import numpy as np
 import paddle
 import paddle.vision.transforms as T
-import PIL
 from paddlenlp.taskflow.utils import pad_batch_data
-from paddlenlp.transformers.tokenizer_utils_base import (BatchEncoding,
-                                                         TensorType, TextInput)
 
 from .base_processing import ProcessorMixin
-from .image_utils import (IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD,
-                          valid_images)
+from .image_utils import IMAGENET_STANDARD_MEAN, IMAGENET_STANDARD_STD, valid_images
 from .processing_utils import BaseImageProcessor, BaseTextProcessor
 from .utils import _max_by_axis
 
@@ -50,18 +44,18 @@ class GroudingDinoProcessor(ProcessorMixin):
         super().__init__(image_processor, text_processor, tokenizer)
 
     def __call__(
-            self,
-            images=None,
-            text: str=None,
-            **kwargs, ):
+        self,
+        images=None,
+        text: str = None,
+        **kwargs,
+    ):
 
         if images is None or text is None:
             raise ValueError("You have to specify either images and text.")
 
         self.prompt = self.text_processor.pre_caption(text)
         input_ids = self.tokenizer([self.prompt]).input_ids
-        specical_tokens = self.tokenizer.convert_tokens_to_ids(
-            ["[CLS]", "[SEP]", ".", "?"])
+        specical_tokens = self.tokenizer.convert_tokens_to_ids(["[CLS]", "[SEP]", ".", "?"])
         tokenized_out = self.text_processor(input_ids, specical_tokens)
 
         image_tensor, mask = self.image_processor(images)
@@ -86,8 +80,7 @@ class GroudingDinoProcessor(ProcessorMixin):
     def model_input_names(self):
         tokenizer_input_names = self.tokenizer.model_input_names
         image_processor_input_names = self.image_processor.model_input_names
-        return list(
-            dict.fromkeys(tokenizer_input_names + image_processor_input_names))
+        return list(dict.fromkeys(tokenizer_input_names + image_processor_input_names))
 
 
 class GroudingDinoTextProcessor(BaseTextProcessor):
@@ -96,19 +89,21 @@ class GroudingDinoTextProcessor(BaseTextProcessor):
     """
 
     def __init__(
-            self,
-            max_words: int=256,
-            **kwargs, ):
+        self,
+        max_words: int = 256,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
 
         self.max_words = max_words
         self.caption = None
 
     def __call__(
-            self,
-            input_ids,
-            special_tokens_list,
-            **kwargs, ):
+        self,
+        input_ids,
+        special_tokens_list,
+        **kwargs,
+    ):
         """
         Preprocess the text with tokenization.
         """
@@ -116,25 +111,19 @@ class GroudingDinoTextProcessor(BaseTextProcessor):
         input_ids = pad_batch_data(input_ids)
         input_ids = paddle.to_tensor(input_ids, dtype=paddle.int64).squeeze(-1)
         tokenized_out["input_ids"] = input_ids
-        tokenized_out["attention_mask"] = paddle.cast(input_ids != 0,
-                                                      paddle.int64)
+        tokenized_out["attention_mask"] = paddle.cast(input_ids != 0, paddle.int64)
 
         (
             text_self_attention_masks,
             position_ids,
             cate_to_token_mask_list,
-        ) = self.generate_masks_with_special_tokens_and_transfer_map(
-            tokenized_out, special_tokens_list)
+        ) = self.generate_masks_with_special_tokens_and_transfer_map(tokenized_out, special_tokens_list)
 
         if text_self_attention_masks.shape[1] > self.max_words:
-            text_self_attention_masks = text_self_attention_masks[:, :self.
-                                                                  max_words, :
-                                                                  self.max_words]
-            position_ids = position_ids[:, :self.max_words]
-            tokenized_out["input_ids"] = tokenized_out[
-                "input_ids"][:, :self.max_words]
-            tokenized_out["attention_mask"] = tokenized_out[
-                "attention_mask"][:, :self.max_words]
+            text_self_attention_masks = text_self_attention_masks[:, : self.max_words, : self.max_words]
+            position_ids = position_ids[:, : self.max_words]
+            tokenized_out["input_ids"] = tokenized_out["input_ids"][:, : self.max_words]
+            tokenized_out["attention_mask"] = tokenized_out["attention_mask"][:, : self.max_words]
         tokenized_out["position_ids"] = position_ids
         tokenized_out["text_self_attention_masks"] = text_self_attention_masks
 
@@ -150,8 +139,7 @@ class GroudingDinoTextProcessor(BaseTextProcessor):
         self.caption = caption
         return caption
 
-    def generate_masks_with_special_tokens_and_transfer_map(
-            self, tokenized, special_tokens_list):
+    def generate_masks_with_special_tokens_and_transfer_map(self, tokenized, special_tokens_list):
         """Generate attention mask between each pair of special tokens
         Args:
             input_ids (torch.Tensor): input ids. Shape: [bs, num_token]
@@ -170,8 +158,7 @@ class GroudingDinoTextProcessor(BaseTextProcessor):
         idxs = paddle.nonzero(special_tokens_mask)
 
         # generate attention mask and positional ids
-        attention_mask = (paddle.eye(num_token, dtype=paddle.int32)
-                          .cast(paddle.bool).unsqueeze(0).tile([bs, 1, 1]))
+        attention_mask = paddle.eye(num_token, dtype=paddle.int32).cast(paddle.bool).unsqueeze(0).tile([bs, 1, 1])
         position_ids = paddle.zeros((bs, num_token), dtype=paddle.int64)
         cate_to_token_mask_list = [[] for _ in range(bs)]
         previous_col = 0
@@ -182,17 +169,18 @@ class GroudingDinoTextProcessor(BaseTextProcessor):
                 attention_mask[row, col, col] = True
                 position_ids[row, col] = 0
             else:
-                attention_mask[row, previous_col + 1:col + 1, previous_col + 1:
-                               col + 1] = True
-                position_ids[row, previous_col + 1:col + 1] = paddle.arange(
-                    0, col - previous_col)
-                c2t_maski = paddle.zeros([num_token, ]).cast(paddle.bool)
-                c2t_maski[previous_col + 1:col] = True
+                attention_mask[row, previous_col + 1 : col + 1, previous_col + 1 : col + 1] = True
+                position_ids[row, previous_col + 1 : col + 1] = paddle.arange(0, col - previous_col)
+                c2t_maski = paddle.zeros(
+                    [
+                        num_token,
+                    ]
+                ).cast(paddle.bool)
+                c2t_maski[previous_col + 1 : col] = True
                 cate_to_token_mask_list[row].append(c2t_maski)
             previous_col = col
 
-        return attention_mask, position_ids.cast(
-            paddle.int64), cate_to_token_mask_list
+        return attention_mask, position_ids.cast(paddle.int64), cate_to_token_mask_list
 
 
 class GroudingDinoImageProcessor(BaseImageProcessor):
@@ -203,22 +191,22 @@ class GroudingDinoImageProcessor(BaseImageProcessor):
     model_input_names = ["pixel_values"]
 
     def __init__(
-            self,
-            do_resize: bool=True,
-            size: List[int]=None,
-            do_normalize: bool=True,
-            image_mean: Optional[Union[float, List[float]]]=None,
-            image_std: Optional[Union[float, List[float]]]=None,
-            do_nested: bool=True,
-            **kwargs, ) -> None:
+        self,
+        do_resize: bool = True,
+        size: List[int] = None,
+        do_normalize: bool = True,
+        image_mean: Optional[Union[float, List[float]]] = None,
+        image_std: Optional[Union[float, List[float]]] = None,
+        do_nested: bool = True,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         size = size if size is not None else 800
 
         self.do_resize = do_resize
         self.size = size
         self.do_normalize = do_normalize
-        self.image_mean = (image_mean if image_mean is not None else
-                           IMAGENET_STANDARD_MEAN)
+        self.image_mean = image_mean if image_mean is not None else IMAGENET_STANDARD_MEAN
         self.image_std = image_std if image_std is not None else IMAGENET_STANDARD_STD
         self.do_nested = do_nested
 
@@ -229,8 +217,7 @@ class GroudingDinoImageProcessor(BaseImageProcessor):
                 min_original_size = float(min((w, h)))
                 max_original_size = float(max((w, h)))
                 if max_original_size / min_original_size * size > max_size:
-                    size = int(
-                        round(max_size * min_original_size / max_original_size))
+                    size = int(round(max_size * min_original_size / max_original_size))
 
             if (w <= h and w == size) or (h <= w and h == size):
                 return (h, w)
@@ -256,16 +243,13 @@ class GroudingDinoImageProcessor(BaseImageProcessor):
         if target is None:
             return rescaled_image
 
-        ratios = tuple(
-            float(s) / float(s_orig)
-            for s, s_orig in zip(rescaled_image.size, image.size))
+        ratios = tuple(float(s) / float(s_orig) for s, s_orig in zip(rescaled_image.size, image.size))
         ratio_width, ratio_height = ratios
 
         target = target.copy()
         if "boxes" in target:
             boxes = target["boxes"]
-            scaled_boxes = boxes * paddle.to_tensor(
-                [ratio_width, ratio_height, ratio_width, ratio_height])
+            scaled_boxes = boxes * paddle.to_tensor([ratio_width, ratio_height, ratio_width, ratio_height])
             target["boxes"] = scaled_boxes
 
         if "area" in target:
@@ -276,11 +260,10 @@ class GroudingDinoImageProcessor(BaseImageProcessor):
         h, w = size
         target["size"] = paddle.to_tensor([h, w])
 
-        if "masks" in target:
-            target["masks"] = (interpolate(
-                target["masks"][:, None].cast(paddle.float32),
-                size,
-                mode="nearest")[:, 0] > 0.5)
+        # if "masks" in target:
+        #     target["masks"] = (
+        #         interpolate(target["masks"][:, None].cast(paddle.float32), size, mode="nearest")[:, 0] > 0.5
+        #     )
 
         return rescaled_image, target
 
@@ -298,22 +281,23 @@ class GroudingDinoImageProcessor(BaseImageProcessor):
             mask = paddle.ones((b, h, w), dtype=paddle.bool)
             for i in range(b):
                 img = tensor_list[i]
-                tensor[i, :img.shape[0], :img.shape[1], :img.shape[2]] = img
-                mask[i, :img.shape[1], :img.shape[2]] = False
+                tensor[i, : img.shape[0], : img.shape[1], : img.shape[2]] = img
+                mask[i, : img.shape[1], : img.shape[2]] = False
         else:
             raise ValueError("not supported")
         return tensor, mask
 
     def preprocess(
-            self,
-            images,
-            do_resize: Optional[bool]=None,
-            size: Optional[Dict[str, int]]=None,
-            do_normalize: Optional[bool]=None,
-            image_mean: Optional[Union[float, List[float]]]=None,
-            image_std: Optional[Union[float, List[float]]]=None,
-            do_nested: bool=None,
-            **kwargs, ):
+        self,
+        images,
+        do_resize: Optional[bool] = None,
+        size: Optional[Dict[str, int]] = None,
+        do_normalize: Optional[bool] = None,
+        image_mean: Optional[Union[float, List[float]]] = None,
+        image_std: Optional[Union[float, List[float]]] = None,
+        do_nested: bool = None,
+        **kwargs,
+    ):
         """
         Preprocess an image or batch of images.
 
@@ -329,23 +313,17 @@ class GroudingDinoImageProcessor(BaseImageProcessor):
         if not isinstance(images, (list, tuple)):
             images = [images]
 
-        if isinstance(images[0], str):
-            images = [load_image(image) for image in images]
+        # if isinstance(images[0], str):
+        #     images = [load_image(image) for image in images]
 
         if not valid_images(images):
-            raise ValueError(
-                "Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, "
-                "paddle.Tensor.")
+            raise ValueError("Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
 
         if do_normalize and (image_mean is None or image_std is None):
-            raise ValueError(
-                "Image mean and std must be specified if do_normalize is True.")
+            raise ValueError("Image mean and std must be specified if do_normalize is True.")
 
         if do_resize:
-            images = [
-                T.to_tensor(self.resize(
-                    image=image, size=size)) for image in images
-            ]
+            images = [T.to_tensor(self.resize(image=image, size=size)) for image in images]
 
         if do_normalize:
             images = T.normalize(images, mean=image_mean, std=image_std)

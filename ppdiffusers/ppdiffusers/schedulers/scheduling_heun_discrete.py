@@ -20,13 +20,11 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from .scheduling_utils import (KarrasDiffusionSchedulers, SchedulerMixin,
-                               SchedulerOutput)
+from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
-def betas_for_alpha_bar(num_diffusion_timesteps,
-                        max_beta=0.999) -> paddle.Tensor:
+def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999) -> paddle.Tensor:
     """
     Create a beta schedule that discretizes the given alpha_t_bar function, which defines the cumulative product of
     (1-beta) over time from t = [0,1].
@@ -45,7 +43,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps,
     """
 
     def alpha_bar(time_step):
-        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2)**2
+        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2) ** 2
 
     betas = []
     for i in range(num_diffusion_timesteps):
@@ -90,32 +88,35 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            num_train_timesteps: int=1000,
-            beta_start: float=0.00085,  # sensible defaults
-            beta_end: float=0.012,
-            beta_schedule: str="linear",
-            trained_betas: Optional[Union[np.ndarray, List[float]]]=None,
-            prediction_type: str="epsilon",
-            use_karras_sigmas: Optional[bool]=False, ):
+        self,
+        num_train_timesteps: int = 1000,
+        beta_start: float = 0.00085,  # sensible defaults
+        beta_end: float = 0.012,
+        beta_schedule: str = "linear",
+        trained_betas: Optional[Union[np.ndarray, List[float]]] = None,
+        prediction_type: str = "epsilon",
+        use_karras_sigmas: Optional[bool] = False,
+    ):
         if trained_betas is not None:
             self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
         elif beta_schedule == "linear":
-            self.betas = paddle.linspace(
-                beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
+            self.betas = paddle.linspace(beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
-            self.betas = (paddle.linspace(
-                beta_start**0.5,
-                beta_end**0.5,
-                num_train_timesteps,
-                dtype=paddle.float32, )**2)
+            self.betas = (
+                paddle.linspace(
+                    beta_start**0.5,
+                    beta_end**0.5,
+                    num_train_timesteps,
+                    dtype=paddle.float32,
+                )
+                ** 2
+            )
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
         else:
-            raise NotImplementedError(
-                f"{beta_schedule} does is not implemented for {self.__class__}")
+            raise NotImplementedError(f"{beta_schedule} does is not implemented for {self.__class__}")
 
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = paddle.cumprod(self.alphas, 0)
@@ -137,9 +138,10 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
         return indices[pos].item()
 
     def scale_model_input(
-            self,
-            sample: paddle.Tensor,
-            timestep: Union[float, paddle.Tensor], ) -> paddle.Tensor:
+        self,
+        sample: paddle.Tensor,
+        timestep: Union[float, paddle.Tensor],
+    ) -> paddle.Tensor:
         """
         Args:
         Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
@@ -151,13 +153,14 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
         step_index = self.index_for_timestep(timestep)
 
         sigma = self.sigmas[step_index]
-        sample = sample / ((sigma**2 + 1)**0.5)
+        sample = sample / ((sigma**2 + 1) ** 0.5)
         return sample
 
     def set_timesteps(
-            self,
-            num_inference_steps: int,
-            num_train_timesteps: Optional[int]=None, ):
+        self,
+        num_inference_steps: int,
+        num_train_timesteps: Optional[int] = None,
+    ):
         """
         Sets the timesteps used for the diffusion chain. Supporting function to be run before inference.
 
@@ -169,32 +172,25 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         num_train_timesteps = num_train_timesteps or self.config.num_train_timesteps
 
-        timesteps = np.linspace(
-            0, num_train_timesteps - 1, num_inference_steps,
-            dtype=float)[::-1].copy()
+        timesteps = np.linspace(0, num_train_timesteps - 1, num_inference_steps, dtype=float)[::-1].copy()
 
-        sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod)**
-                          0.5)
+        sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod) ** 0.5)
         log_sigmas = np.log(sigmas)
         sigmas = np.interp(timesteps, np.arange(0, len(sigmas)), sigmas)
 
         if self.use_karras_sigmas:
-            sigmas = self._convert_to_karras(
-                in_sigmas=sigmas, num_inference_steps=self.num_inference_steps)
-            timesteps = np.array(
-                [self._sigma_to_t(sigma, log_sigmas) for sigma in sigmas])
+            sigmas = self._convert_to_karras(in_sigmas=sigmas, num_inference_steps=self.num_inference_steps)
+            timesteps = np.array([self._sigma_to_t(sigma, log_sigmas) for sigma in sigmas])
 
         sigmas = np.concatenate([sigmas, [0.0]]).astype(np.float32)
         sigmas = paddle.to_tensor(sigmas)
-        self.sigmas = paddle.concat(
-            [sigmas[:1], sigmas[1:-1].repeat_interleave(2), sigmas[-1:]])
+        self.sigmas = paddle.concat([sigmas[:1], sigmas[1:-1].repeat_interleave(2), sigmas[-1:]])
 
         # standard deviation of the initial noise distribution
         self.init_noise_sigma = self.sigmas.max()
 
         timesteps = paddle.to_tensor(timesteps)
-        timesteps = paddle.concat(
-            [timesteps[:1], timesteps[1:].repeat_interleave(2)])
+        timesteps = paddle.concat([timesteps[:1], timesteps[1:].repeat_interleave(2)])
 
         self.timesteps = timesteps.cast(paddle.float32)
 
@@ -210,9 +206,7 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
         dists = log_sigma - log_sigmas[:, np.newaxis]
 
         # get sigmas range
-        low_idx = (np.cumsum(
-            (dists >= 0), axis=0).argmax(axis=0)
-                   .clip(max=log_sigmas.shape[0] - 2))
+        low_idx = np.cumsum((dists >= 0), axis=0).argmax(axis=0).clip(max=log_sigmas.shape[0] - 2)
         high_idx = low_idx + 1
 
         low = log_sigmas[low_idx]
@@ -227,8 +221,7 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
         t = t.reshape(sigma.shape)
         return t
 
-    def _convert_to_karras(self, in_sigmas: paddle.Tensor,
-                           num_inference_steps) -> paddle.Tensor:
+    def _convert_to_karras(self, in_sigmas: paddle.Tensor, num_inference_steps) -> paddle.Tensor:
         """Constructs the noise schedule of Karras et al. (2022)."""
 
         sigma_min = in_sigmas[-1].item()
@@ -236,9 +229,9 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         rho = 7.0  # 7.0 is the value used in the paper
         ramp = np.linspace(0, 1, num_inference_steps)
-        min_inv_rho = sigma_min**(1 / rho)
-        max_inv_rho = sigma_max**(1 / rho)
-        sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho))**rho
+        min_inv_rho = sigma_min ** (1 / rho)
+        max_inv_rho = sigma_max ** (1 / rho)
+        sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho)) ** rho
         return sigmas
 
     @property
@@ -246,11 +239,12 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
         return self.dt is None
 
     def step(
-            self,
-            model_output: Union[paddle.Tensor, np.ndarray],
-            timestep: Union[float, paddle.Tensor],
-            sample: Union[paddle.Tensor, np.ndarray],
-            return_dict: bool=True, ) -> Union[SchedulerOutput, Tuple]:
+        self,
+        model_output: Union[paddle.Tensor, np.ndarray],
+        timestep: Union[float, paddle.Tensor],
+        sample: Union[paddle.Tensor, np.ndarray],
+        return_dict: bool = True,
+    ) -> Union[SchedulerOutput, Tuple]:
         """
         Args:
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
@@ -286,11 +280,11 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
             pred_original_sample = sample - sigma_input * model_output
         elif self.config.prediction_type == "v_prediction":
             sigma_input = sigma_hat if self.state_in_first_order else sigma_next
-            pred_original_sample = model_output * (-sigma_input / (
-                sigma_input**2 + 1)**0.5) + (sample / (sigma_input**2 + 1))
+            pred_original_sample = model_output * (-sigma_input / (sigma_input**2 + 1) ** 0.5) + (
+                sample / (sigma_input**2 + 1)
+            )
         elif self.config.prediction_type == "sample":
-            raise NotImplementedError(
-                "prediction_type not implemented yet: sample")
+            raise NotImplementedError("prediction_type not implemented yet: sample")
         else:
             raise ValueError(
                 f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, or `v_prediction`"
@@ -324,22 +318,21 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
         prev_sample = sample + derivative * dt
 
         if not return_dict:
-            return (prev_sample, )
+            return (prev_sample,)
 
         return SchedulerOutput(prev_sample=prev_sample)
 
     def add_noise(
-            self,
-            original_samples: paddle.Tensor,
-            noise: paddle.Tensor,
-            timesteps: paddle.Tensor, ) -> paddle.Tensor:
+        self,
+        original_samples: paddle.Tensor,
+        noise: paddle.Tensor,
+        timesteps: paddle.Tensor,
+    ) -> paddle.Tensor:
         # Make sure sigmas and timesteps have the same dtype as original_samples
         sigmas = self.sigmas.cast(original_samples.dtype)
 
         schedule_timesteps = self.timesteps
-        step_indices = [
-            self.index_for_timestep(t, schedule_timesteps) for t in timesteps
-        ]
+        step_indices = [self.index_for_timestep(t, schedule_timesteps) for t in timesteps]
 
         sigma = sigmas[step_indices].flatten()
         while len(sigma.shape) < len(original_samples.shape):

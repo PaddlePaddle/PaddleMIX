@@ -42,28 +42,22 @@ class AppTask(object):
         self._priority_path = priority_path
         self.is_static_model = kwargs.get("is_static_model", False)
 
-        self._home_path = (self.kwargs["home_path"]
-                           if "home_path" in self.kwargs else PPMIX_HOME)
+        self._home_path = self.kwargs["home_path"] if "home_path" in self.kwargs else PPMIX_HOME
 
         if "task_path" in self.kwargs:
             self._task_path = self.kwargs["task_path"]
             self._model_dir = self._task_path
         elif self._priority_path:
-            self._task_path = os.path.join(self._home_path, "models",
-                                           self._priority_path)
+            self._task_path = os.path.join(self._home_path, "models", self._priority_path)
             self._model_dir = os.path.join(self._home_path, "models")
         else:
-            self._task_path = os.path.join(self._home_path, "models",
-                                           self.model)
+            self._task_path = os.path.join(self._home_path, "models", self.model)
             self._model_dir = os.path.join(self._home_path, "models")
 
-        self._infer_precision = (self.kwargs["precision"]
-                                 if "precision" in self.kwargs else "fp32")
+        self._infer_precision = self.kwargs["precision"] if "precision" in self.kwargs else "fp32"
         # Default to use Paddle Inference
         self._predictor_type = "paddle-inference"
-        self._num_threads = (self.kwargs["num_threads"]
-                             if "num_threads" in self.kwargs else
-                             math.ceil(cpu_count() / 2))
+        self._num_threads = self.kwargs["num_threads"] if "num_threads" in self.kwargs else math.ceil(cpu_count() / 2)
 
     def _construct_tokenizer(self, model):
         """
@@ -83,8 +77,7 @@ class AppTask(object):
         if len(names) == 0:
             raise IOError(f"{self._task_path} should include '.pdparams' file.")
         if len(names) > 1:
-            logger.warning(
-                f"{self._task_path} includes more than one '.pdparams' file.")
+            logger.warning(f"{self._task_path} includes more than one '.pdparams' file.")
         return names[0]
 
     def _convert_dygraph_to_static(self):
@@ -98,12 +91,10 @@ class AppTask(object):
             self._input_spec is not None
         ), "The input spec must be created before converting the dygraph model to static model."
         logger.info("Converting to the inference model cost a little time.")
-        static_model = paddle.jit.to_static(
-            self._model, input_spec=self._input_spec)
+        static_model = paddle.jit.to_static(self._model, input_spec=self._input_spec)
 
         paddle.jit.save(static_model, self.inference_model_path)
-        logger.info("The inference model save in the path:{}".format(
-            self.inference_model_path))
+        logger.info("The inference model save in the path:{}".format(self.inference_model_path))
 
     def _prepare_static_mode(self):
         """
@@ -139,50 +130,46 @@ class AppTask(object):
                     min_subgraph_size=30,
                     precision_mode=precision_map[self._infer_precision],
                     use_static=True,
-                    use_calib_mode=False, )
+                    use_calib_mode=False,
+                )
 
                 if not os.path.exists(self._tuned_trt_shape_file):
-                    self._config.collect_shape_range_info(
-                        self._tuned_trt_shape_file)
+                    self._config.collect_shape_range_info(self._tuned_trt_shape_file)
                 else:
-                    logger.info(f"Use dynamic shape file: "
-                                f"{self._tuned_trt_shape_file} for TRT...")
-                self._config.enable_tuned_tensorrt_dynamic_shape(
-                    self._tuned_trt_shape_file, True)
+                    logger.info(f"Use dynamic shape file: " f"{self._tuned_trt_shape_file} for TRT...")
+                self._config.enable_tuned_tensorrt_dynamic_shape(self._tuned_trt_shape_file, True)
 
             if self.task == "openset_det_sam":
                 self._config.delete_pass("add_support_int8_pass")
 
                 if self.model == "GroundingDino/groundingdino-swint-ogc":
-                    self._config.exp_disable_tensorrt_ops([
-                        "pad3d",
-                        "set_value",
-                        "reduce_all",
-                        "cumsum_8.tmp_0",
-                        "linear_296.tmp_1",
-                    ])
+                    self._config.exp_disable_tensorrt_ops(
+                        [
+                            "pad3d",
+                            "set_value",
+                            "reduce_all",
+                            "cumsum_8.tmp_0",
+                            "linear_296.tmp_1",
+                        ]
+                    )
 
                 if self.model == "Sam/SamVitH-1024" or self.model == "Sam/SamVitH-512":
                     self._config.delete_pass("shuffle_channel_detect_pass")
                     self._config.delete_pass("trt_skip_layernorm_fuse_pass")
                     self._config.delete_pass("preln_residual_bias_fuse_pass")
-                    self._config.exp_disable_tensorrt_ops([
-                        "concat_1.tmp_0",
-                        "set_value",
-                        "empty_0.tmp_0",
-                        "concat_55.tmp_0",
-                    ])
+                    self._config.exp_disable_tensorrt_ops(
+                        [
+                            "concat_1.tmp_0",
+                            "set_value",
+                            "empty_0.tmp_0",
+                            "concat_55.tmp_0",
+                        ]
+                    )
 
         self.predictor = paddle.inference.create_predictor(self._config)
         self.input_names = [name for name in self.predictor.get_input_names()]
-        self.input_handles = [
-            self.predictor.get_input_handle(name)
-            for name in self.predictor.get_input_names()
-        ]
-        self.output_handle = [
-            self.predictor.get_output_handle(name)
-            for name in self.predictor.get_output_names()
-        ]
+        self.input_handles = [self.predictor.get_input_handle(name) for name in self.predictor.get_input_names()]
+        self.output_handle = [self.predictor.get_output_handle(name) for name in self.predictor.get_output_names()]
 
     def _get_inference_model(self):
         """
@@ -191,11 +178,10 @@ class AppTask(object):
 
         # When the user-provided model path is already a static model, skip to_static conversion
         if self.is_static_model:
-            self.inference_model_path = os.path.join(self._task_path,
-                                                     self._static_model_name)
-            if not os.path.exists(self.inference_model_path +
-                                  ".pdmodel") or not os.path.exists(
-                                      self.inference_model_path + ".pdiparams"):
+            self.inference_model_path = os.path.join(self._task_path, self._static_model_name)
+            if not os.path.exists(self.inference_model_path + ".pdmodel") or not os.path.exists(
+                self.inference_model_path + ".pdiparams"
+            ):
                 raise IOError(
                     f"{self._task_path} should include {self._static_model_name + '.pdmodel'} and {self._static_model_name + '.pdiparams'} while is_static_model is True"
                 )
@@ -205,8 +191,7 @@ class AppTask(object):
 
         else:
             # Since 'self._task_path' is used to load the HF Hub path when 'from_hf_hub=True', we construct the static model path in a different way
-            self.inference_model_path = os.path.join(self._task_path,
-                                                     self._static_model_name)
+            self.inference_model_path = os.path.join(self._task_path, self._static_model_name)
             self._tuned_trt_shape_file = self.inference_model_path + "_shape.txt"
             if not os.path.exists(self.inference_model_path + ".pdiparams"):
                 with dygraph_mode_guard():
@@ -217,17 +202,12 @@ class AppTask(object):
         self._static_model_file = self.inference_model_path + ".pdmodel"
         self._static_params_file = self.inference_model_path + ".pdiparams"
 
-        if (paddle.get_device().split(":", 1)[0] == "npu" and
-                self._infer_precision == "fp16"):
+        if paddle.get_device().split(":", 1)[0] == "npu" and self._infer_precision == "fp16":
             # transform fp32 model tp fp16 model
             self._static_fp16_model_file = self.inference_model_path + "-fp16.pdmodel"
-            self._static_fp16_params_file = (
-                self.inference_model_path + "-fp16.pdiparams")
-            if not os.path.exists(
-                    self._static_fp16_model_file) and not os.path.exists(
-                        self._static_fp16_params_file):
-                logger.info(
-                    "Converting to the inference model from fp32 to fp16.")
+            self._static_fp16_params_file = self.inference_model_path + "-fp16.pdiparams"
+            if not os.path.exists(self._static_fp16_model_file) and not os.path.exists(self._static_fp16_params_file):
+                logger.info("Converting to the inference model from fp32 to fp16.")
                 paddle.inference.convert_to_mixed_precision(
                     os.path.join(self._static_model_file),
                     os.path.join(self._static_params_file),
@@ -237,16 +217,16 @@ class AppTask(object):
                     mixed_precision=paddle.inference.PrecisionType.Half,
                     # Here, npu sigmoid will lead to OOM and cpu sigmoid don't support fp16.
                     # So, we add sigmoid to black list temporarily.
-                    black_list={"sigmoid"}, )
+                    black_list={"sigmoid"},
+                )
                 logger.info(
-                    "The inference model in fp16 precison save in the path:{}".
-                    format(self._static_fp16_model_file))
+                    "The inference model in fp16 precison save in the path:{}".format(self._static_fp16_model_file)
+                )
             self._static_model_file = self._static_fp16_model_file
             self._static_params_file = self._static_fp16_params_file
 
         if self._predictor_type == "paddle-inference":
-            self._config = paddle.inference.Config(self._static_model_file,
-                                                   self._static_params_file)
+            self._config = paddle.inference.Config(self._static_model_file, self._static_params_file)
             self._prepare_static_mode()
         else:
             self._prepare_onnx_mode()

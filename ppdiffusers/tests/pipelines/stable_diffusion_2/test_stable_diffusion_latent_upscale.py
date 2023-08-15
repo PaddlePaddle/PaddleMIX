@@ -21,19 +21,24 @@ import numpy as np
 import paddle
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
-from ppdiffusers import (AutoencoderKL, EulerDiscreteScheduler,
-                         StableDiffusionLatentUpscalePipeline,
-                         StableDiffusionPipeline, UNet2DConditionModel)
+from ppdiffusers import (
+    AutoencoderKL,
+    EulerDiscreteScheduler,
+    StableDiffusionLatentUpscalePipeline,
+    StableDiffusionPipeline,
+    UNet2DConditionModel,
+)
 from ppdiffusers.utils import floats_tensor, load_image, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..pipeline_params import (TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
-                               TEXT_GUIDED_IMAGE_VARIATION_PARAMS)
+from ..pipeline_params import (
+    TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
+    TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
+)
 from ..test_pipelines_common import PipelineTesterMixin
 
 
-class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin,
-                                                    unittest.TestCase):
+class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionLatentUpscalePipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS - {
         "height",
@@ -42,9 +47,7 @@ class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin,
         "negative_prompt_embeds",
         "prompt_embeds",
     }
-    required_optional_params = PipelineTesterMixin.required_optional_params - {
-        "num_images_per_prompt"
-    }
+    required_optional_params = PipelineTesterMixin.required_optional_params - {"num_images_per_prompt"}
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS
     test_cpu_offload = False
 
@@ -53,8 +56,7 @@ class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin,
         batch_size = 1
         num_channels = 4
         sizes = 16, 16
-        image = floats_tensor(
-            (batch_size, num_channels) + sizes, rng=random.Random(0))
+        image = floats_tensor((batch_size, num_channels) + sizes, rng=random.Random(0))
         return image
 
     def get_dummy_components(self):
@@ -72,7 +74,8 @@ class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin,
                 "KDownBlock2D",
                 "KCrossAttnDownBlock2D",
                 "KCrossAttnDownBlock2D",
-                "KCrossAttnDownBlock2D", ),
+                "KCrossAttnDownBlock2D",
+            ),
             in_channels=8,
             mid_block_type=None,
             only_cross_attention=False,
@@ -84,7 +87,9 @@ class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin,
                 "KCrossAttnUpBlock2D",
                 "KCrossAttnUpBlock2D",
                 "KCrossAttnUpBlock2D",
-                "KUpBlock2D", ), )
+                "KUpBlock2D",
+            ),
+        )
         vae = AutoencoderKL(
             block_out_channels=[32, 32, 64, 64],
             in_channels=3,
@@ -101,7 +106,8 @@ class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin,
                 "UpDecoderBlock2D",
                 "UpDecoderBlock2D",
             ],
-            latent_channels=4, )
+            latent_channels=4,
+        )
         scheduler = EulerDiscreteScheduler(prediction_type="sample")
         text_config = CLIPTextConfig(
             bos_token_id=0,
@@ -114,10 +120,10 @@ class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin,
             pad_token_id=1,
             vocab_size=1000,
             hidden_act="quick_gelu",
-            projection_dim=512, )
+            projection_dim=512,
+        )
         text_encoder = CLIPTextModel(text_config).eval()
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         components = {
             "unet": model.eval(),
             "vae": vae.eval(),
@@ -147,17 +153,19 @@ class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin,
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1]
         self.assertEqual(image.shape, (1, 256, 256, 3))
-        expected_slice = np.array([
-            0.5665861368179321,
-            0.7449524402618408,
-            0.0,
-            0.1325536072254181,
-            0.4274534583091736,
-            0.0,
-            0.0,
-            0.14426982402801514,
-            0.0,
-        ])
+        expected_slice = np.array(
+            [
+                0.5665861368179321,
+                0.7449524402618408,
+                0.0,
+                0.1325536072254181,
+                0.4274534583091736,
+                0.0,
+                0.0,
+                0.14426982402801514,
+                0.0,
+            ]
+        )
         max_diff = np.abs(image_slice.flatten() - expected_slice).max()
         self.assertLessEqual(max_diff, 0.001)
 
@@ -175,25 +183,23 @@ class StableDiffusionLatentUpscalePipelineIntegrationTests(unittest.TestCase):
 
     def test_latent_upscaler_fp16(self):
         generator = paddle.Generator().manual_seed(seed=33)
-        pipe = StableDiffusionPipeline.from_pretrained(
-            "CompVis/stable-diffusion-v1-4", paddle_dtype=paddle.float16)
+        pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", paddle_dtype=paddle.float16)
         pipe.to("gpu")
         upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(
-            "stabilityai/sd-x2-latent-upscaler", paddle_dtype=paddle.float16)
+            "stabilityai/sd-x2-latent-upscaler", paddle_dtype=paddle.float16
+        )
         upscaler.to("gpu")
 
-        prompt = (
-            "a photo of an astronaut high resolution, unreal engine, ultra realistic"
-        )
-        low_res_latents = pipe(
-            prompt, generator=generator, output_type="latent").images
+        prompt = "a photo of an astronaut high resolution, unreal engine, ultra realistic"
+        low_res_latents = pipe(prompt, generator=generator, output_type="latent").images
         image = upscaler(
             prompt=prompt,
             image=low_res_latents,
             num_inference_steps=20,
             guidance_scale=0,
             generator=generator,
-            output_type="np", ).images[0]
+            output_type="np",
+        ).images[0]
         # invalid expected_image
         # expected_image = load_numpy(
         #     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/latent-upscaler/astronaut_1024.npy"
@@ -209,7 +215,8 @@ class StableDiffusionLatentUpscalePipelineIntegrationTests(unittest.TestCase):
     def test_latent_upscaler_fp16_image(self):
         generator = paddle.Generator().manual_seed(seed=33)
         upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(
-            "stabilityai/sd-x2-latent-upscaler", paddle_dtype=paddle.float16)
+            "stabilityai/sd-x2-latent-upscaler", paddle_dtype=paddle.float16
+        )
         upscaler.to("gpu")
 
         prompt = "the temple of fire by Ross Tran and Gerardo Dottori, oil on canvas"
@@ -222,7 +229,8 @@ class StableDiffusionLatentUpscalePipelineIntegrationTests(unittest.TestCase):
             num_inference_steps=20,
             guidance_scale=0,
             generator=generator,
-            output_type="np", ).images[0]
+            output_type="np",
+        ).images[0]
         # invalid expected_image
         # expected_image = load_numpy(
         #     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/latent-upscaler/fire_temple_1024.npy"

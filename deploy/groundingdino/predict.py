@@ -25,25 +25,26 @@ from paddlenlp.trainer import PdArgumentParser
 from PIL import Image, ImageDraw, ImageFont
 
 from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
-from paddlemix.utils.log import logger
 
 ms_deformable_attn = load(
     name="deformable_detr_ops",
     sources=[
         "./paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cc",
         "./paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cu",
-    ], )
+    ],
+)
 
 
 def load_predictor(
-        model_dir,
-        run_mode="paddle",
-        batch_size=1,
-        device="GPU",
-        cpu_threads=1,
-        enable_mkldnn=False,
-        enable_mkldnn_bfloat16=False,
-        delete_shuffle_pass=False, ):
+    model_dir,
+    run_mode="paddle",
+    batch_size=1,
+    device="GPU",
+    cpu_threads=1,
+    enable_mkldnn=False,
+    enable_mkldnn_bfloat16=False,
+    delete_shuffle_pass=False,
+):
     """set AnalysisConfig, generate AnalysisPredictor
     Args:
         model_dir (str): root path of __model__ and __params__
@@ -64,8 +65,8 @@ def load_predictor(
     """
     if device != "GPU" and run_mode != "paddle":
         raise ValueError(
-            "Predict by TensorRT mode: {}, expect device=='GPU', but device == {}".
-            format(run_mode, device))
+            "Predict by TensorRT mode: {}, expect device=='GPU', but device == {}".format(run_mode, device)
+        )
     infer_model = os.path.join(model_dir, "groundingdino_model.pdmodel")
     infer_params = os.path.join(model_dir, "groundingdino_model.pdiparams")
 
@@ -93,10 +94,8 @@ def load_predictor(
                 config.enable_mkldnn()
                 if enable_mkldnn_bfloat16:
                     config.enable_mkldnn_bfloat16()
-            except Exception as e:
-                print(
-                    "The current environment does not support `mkldnn`, so disable mkldnn."
-                )
+            except Exception:
+                print("The current environment does not support `mkldnn`, so disable mkldnn.")
                 pass
 
     # disable print log when predict
@@ -154,8 +153,7 @@ def plot_boxes_to_image(image_pil, tgt):
 
 class Predictor(object):
     def __init__(self, model_args, data_args):
-        self.processor = GroudingDinoProcessor.from_pretrained(
-            model_args.text_encoder_type)
+        self.processor = GroudingDinoProcessor.from_pretrained(model_args.text_encoder_type)
         self.box_threshold = model_args.box_threshold
         self.text_threshold = model_args.text_threshold
         self.predictor, self.config = load_predictor(model_args.model_path)
@@ -171,8 +169,7 @@ class Predictor(object):
         self.input_map["m"] = np.array(self.mask.numpy(), dtype="int64")
 
         for key in self.tokenized_input.keys():
-            self.input_map[key] = np.array(
-                self.tokenized_input[key].numpy(), dtype="int64")
+            self.input_map[key] = np.array(self.tokenized_input[key].numpy(), dtype="int64")
 
         input_names = self.predictor.get_input_names()
         for i in range(len(input_names)):
@@ -181,8 +178,7 @@ class Predictor(object):
 
     def preprocess(self, image, text):
 
-        self.image, self.mask, self.tokenized_input = self.processor(
-            images=image, text=text)
+        self.image, self.mask, self.tokenized_input = self.processor(images=image, text=text)
 
     def run(self, image, prompt):
         self.preprocess(image, data_args.prompt)
@@ -190,10 +186,8 @@ class Predictor(object):
         self.create_inputs()
         self.predictor.run()
         output_names = self.predictor.get_output_names()
-        pred_boxes = self.predictor.get_output_handle(output_names[
-            0]).copy_to_cpu()
-        pred_logits = self.predictor.get_output_handle(output_names[
-            1]).copy_to_cpu()
+        pred_boxes = self.predictor.get_output_handle(output_names[0]).copy_to_cpu()
+        pred_logits = self.predictor.get_output_handle(output_names[1]).copy_to_cpu()
 
         pred_dict = {
             "pred_logits": paddle.to_tensor(pred_logits),
@@ -219,8 +213,7 @@ class Predictor(object):
         for logit, box in zip(logits_filt, boxes_filt):
             pred_phrase = self.processor.decode(logit > self.text_threshold)
             if with_logits:
-                pred_phrases.append(pred_phrase +
-                                    f"({str(logit.max().item())[:4]})")
+                pred_phrases.append(pred_phrase + f"({str(logit.max().item())[:4]})")
             else:
                 pred_phrases.append(pred_phrase)
 
@@ -235,8 +228,7 @@ def main(model_args, data_args):
         # read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     else:
-        image_pil = Image.open(requests.get(url, stream=True).raw).convert(
-            "RGB")
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
 
     boxes_filt, pred_phrases = predictor.run(image_pil, data_args.prompt)
 
@@ -265,9 +257,7 @@ class DataArguments:
     """
 
     input_image: str = field(metadata={"help": "The name of input image."})
-    prompt: str = field(
-        default=None,
-        metadata={"help": "The prompt of the image to be generated."})
+    prompt: str = field(default=None, metadata={"help": "The prompt of the image to be generated."})
 
 
 @dataclass
@@ -278,30 +268,32 @@ class ModelArguments:
 
     model_path: str = field(
         default="output_groundingdino/",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     text_encoder_type: str = field(
         default="GroundingDino/groundingdino-swint-ogc",
-        metadata={"help": "type for text encoder ."}, )
+        metadata={"help": "type for text encoder ."},
+    )
     box_threshold: float = field(
         default=0.3,
-        metadata={"help": "box threshold."}, )
+        metadata={"help": "box threshold."},
+    )
     text_threshold: float = field(
         default=0.25,
-        metadata={"help": "text threshold."}, )
+        metadata={"help": "text threshold."},
+    )
     output_dir: str = field(
         default="output",
-        metadata={"help": "output directory."}, )
+        metadata={"help": "output directory."},
+    )
     run_mode: str = field(
         default="paddle",
-        metadata={
-            "help": "mode of running(paddle/trt_fp32/trt_fp16/trt_int8)."
-        }, )
+        metadata={"help": "mode of running(paddle/trt_fp32/trt_fp16/trt_int8)."},
+    )
     device: str = field(
         default="GPU",
-        metadata={
-            "help":
-            "Choose the device you want to run, it can be: CPU/GPU/XPU, default is CPU."
-        }, )
+        metadata={"help": "Choose the device you want to run, it can be: CPU/GPU/XPU, default is CPU."},
+    )
 
 
 if __name__ == "__main__":

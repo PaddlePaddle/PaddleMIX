@@ -23,11 +23,12 @@ from PIL import Image
 
 class Fill50kDataset(Dataset):
     def __init__(
-            self,
-            tokenizer,
-            file_path="./fill50k",
-            do_image_processing=True,
-            do_text_processing=True, ):
+        self,
+        tokenizer,
+        file_path="./fill50k",
+        do_image_processing=True,
+        do_text_processing=True,
+    ):
         self.tokenizer = tokenizer
         self.image_list = []
         self.label_list = []
@@ -47,7 +48,8 @@ class Fill50kDataset(Dataset):
                 padding="max_length",
                 truncation=True,
                 max_length=tokenizer.model_max_length,
-                return_tensors="np", ).input_ids[0]
+                return_tensors="np",
+            ).input_ids[0]
         self.do_image_processing = do_image_processing
         self.do_text_processing = do_text_processing
 
@@ -67,13 +69,11 @@ class Fill50kDataset(Dataset):
         if self.do_image_processing:
             # Normalize source images to [0, 1].
             source = source.astype(np.float32) / 255.0
-            source = paddle.to_tensor(
-                source.transpose([2, 0, 1]), dtype=paddle.float32)
+            source = paddle.to_tensor(source.transpose([2, 0, 1]), dtype=paddle.float32)
 
             # Normalize target images to [-1, 1].
             target = (target.astype(np.float32) / 127.5) - 1.0
-            target = paddle.to_tensor(
-                target.transpose([2, 0, 1]), dtype=paddle.float32)
+            target = paddle.to_tensor(target.transpose([2, 0, 1]), dtype=paddle.float32)
 
         if self.text_processing and self.do_text_processing:
             input_ids = self.text_processing(prompt)
@@ -84,4 +84,5 @@ class Fill50kDataset(Dataset):
         return dict(
             input_ids=input_ids,
             pixel_values=target,
-            adapter_cond=source, )
+            adapter_cond=source,
+        )

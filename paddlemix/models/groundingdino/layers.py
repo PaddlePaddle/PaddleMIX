@@ -94,13 +94,14 @@ class MultiHeadAttention(nn.Layer):
     """
 
     def __init__(
-            self,
-            embed_dim,
-            num_heads,
-            dropout=0.0,
-            kdim=None,
-            vdim=None,
-            need_weights=False, ):
+        self,
+        embed_dim,
+        num_heads,
+        dropout=0.0,
+        kdim=None,
+        vdim=None,
+        need_weights=False,
+    ):
         super(MultiHeadAttention, self).__init__()
         self.embed_dim = embed_dim
         self.kdim = kdim if kdim is not None else embed_dim
@@ -112,20 +113,18 @@ class MultiHeadAttention(nn.Layer):
         self.need_weights = need_weights
 
         self.head_dim = embed_dim // num_heads
-        assert (self.head_dim * num_heads == self.embed_dim
-                ), "embed_dim must be divisible by num_heads"
+        assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
 
         if self._qkv_same_embed_dim:
             self.in_proj_weight = self.create_parameter(
                 shape=[embed_dim, 3 * embed_dim],
                 attr=None,
                 dtype=self._dtype,
-                is_bias=False, )
+                is_bias=False,
+            )
             self.in_proj_bias = self.create_parameter(
-                shape=[3 * embed_dim],
-                attr=None,
-                dtype=self._dtype,
-                is_bias=True)
+                shape=[3 * embed_dim], attr=None, dtype=self._dtype, is_bias=True
+            )
         else:
             self.q_proj = nn.Linear(embed_dim, embed_dim)
             self.k_proj = nn.Linear(self.kdim, embed_dim)
@@ -147,15 +146,14 @@ class MultiHeadAttention(nn.Layer):
         if self._qkv_same_embed_dim:
             tensor = F.linear(
                 x=tensor,
-                weight=self.in_proj_weight[:, index * self.embed_dim:(index + 1)
-                                           * self.embed_dim],
-                bias=self.in_proj_bias[index * self.embed_dim:(index + 1) *
-                                       self.embed_dim]
-                if self.in_proj_bias is not None else None, )
+                weight=self.in_proj_weight[:, index * self.embed_dim : (index + 1) * self.embed_dim],
+                bias=self.in_proj_bias[index * self.embed_dim : (index + 1) * self.embed_dim]
+                if self.in_proj_bias is not None
+                else None,
+            )
         else:
             tensor = getattr(self, self._type_list[index])(tensor)
-        tensor = tensor.reshape(
-            [0, 0, self.num_heads, self.head_dim]).transpose([0, 2, 1, 3])
+        tensor = tensor.reshape([0, 0, self.num_heads, self.head_dim]).transpose([0, 2, 1, 3])
         return tensor
 
     def forward(self, query, key=None, value=None, attn_mask=None):
@@ -201,12 +199,11 @@ class MultiHeadAttention(nn.Layer):
         key = query if key is None else key
         value = query if value is None else value
         # compute q ,k ,v
-        q, k, v = (self.compute_qkv(t, i)
-                   for i, t in enumerate([query, key, value]))
+        q, k, v = (self.compute_qkv(t, i) for i, t in enumerate([query, key, value]))
 
         # scale dot product attention
         product = paddle.matmul(x=q, y=k, transpose_y=True)
-        scaling = float(self.head_dim)**-0.5
+        scaling = float(self.head_dim) ** -0.5
         product = product * scaling
 
         if attn_mask is not None:
@@ -215,11 +212,7 @@ class MultiHeadAttention(nn.Layer):
             product = product + attn_mask
         weights = F.softmax(product)
         if self.dropout:
-            weights = F.dropout(
-                weights,
-                self.dropout,
-                training=self.training,
-                mode="upscale_in_train")
+            weights = F.dropout(weights, self.dropout, training=self.training, mode="upscale_in_train")
 
         out = paddle.matmul(weights, v)
 
@@ -236,10 +229,7 @@ class MultiHeadAttention(nn.Layer):
         return out if len(outs) == 1 else tuple(outs)
 
 
-def drop_path(x,
-              drop_prob: float=0.0,
-              training: bool=False,
-              scale_by_keep: bool=True):
+def drop_path(x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: bool = True):
     """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
 
     This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
@@ -252,21 +242,17 @@ def drop_path(x,
     if drop_prob == 0.0 or not training:
         return x
     keep_prob = 1 - drop_prob
-    shape = (x.shape[0], ) + (1, ) * (
-        x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
-    random_tensor = paddle.bernoulli(
-        paddle.full(
-            shape, keep_prob, dtype=x.dtype))
+    shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
+    random_tensor = paddle.bernoulli(paddle.full(shape, keep_prob, dtype=x.dtype))
     if keep_prob > 0.0 and scale_by_keep:
-        random_tensor = paddle.divide(random_tensor,
-                                      paddle.to_tensor(keep_prob))
+        random_tensor = paddle.divide(random_tensor, paddle.to_tensor(keep_prob))
     return x * random_tensor
 
 
 class DropPath(nn.Layer):
     """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks)."""
 
-    def __init__(self, drop_prob: float=0.0, scale_by_keep: bool=True):
+    def __init__(self, drop_prob: float = 0.0, scale_by_keep: bool = True):
         super(DropPath, self).__init__()
         self.drop_prob = drop_prob
         self.scale_by_keep = scale_by_keep

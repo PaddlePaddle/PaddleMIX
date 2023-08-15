@@ -18,4 +18,4 @@
 # It only exists so that temporarely `from diffusers.pipelines import DiffusionPipeline` works
 
 from .pipelines import ImagePipelineOutput  # noqa: F401
-from .pipelines import DiffusionPipeline, TextPipelineOutput
+from .pipelines import DiffusionPipeline, TextPipelineOutput  # noqa: F401

@@ -20,8 +20,7 @@ import numpy as np
 import paddle
 
 from ppdiffusers.models import UNet3DConditionModel
-from ppdiffusers.models.attention_processor import (AttnProcessor,
-                                                    LoRAAttnProcessor)
+from ppdiffusers.models.attention_processor import AttnProcessor, LoRAAttnProcessor
 from ppdiffusers.utils import floats_tensor, logging
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 
@@ -30,20 +29,18 @@ from .test_modeling_common import ModelTesterMixin
 logger = logging.get_logger(__name__)
 
 
-def create_lora_layers(model, mock_weights: bool=True):
+def create_lora_layers(model, mock_weights: bool = True):
     lora_attn_procs = {}
     for name in model.attn_processors.keys():
         has_cross_attention = name.endswith("attn2.processor") and not (
-            name.startswith("transformer_in") or
-            "temp_attentions" in name.split("."))
-        cross_attention_dim = (model.config.cross_attention_dim
-                               if has_cross_attention else None)
+            name.startswith("transformer_in") or "temp_attentions" in name.split(".")
+        )
+        cross_attention_dim = model.config.cross_attention_dim if has_cross_attention else None
         if name.startswith("mid_block"):
             hidden_size = model.config.block_out_channels[-1]
         elif name.startswith("up_blocks"):
             block_id = int(name[len("up_blocks.")])
-            hidden_size = list(reversed(model.config.block_out_channels))[
-                block_id]
+            hidden_size = list(reversed(model.config.block_out_channels))[block_id]
         elif name.startswith("down_blocks"):
             block_id = int(name[len("down_blocks.")])
             hidden_size = model.config.block_out_channels[block_id]
@@ -51,20 +48,15 @@ def create_lora_layers(model, mock_weights: bool=True):
             # Note that the `8 * ...` comes from: https://github.com/huggingface/diffusers/blob/7139f0e874f10b2463caa8cbd585762a309d12d6/src/diffusers/models/unet_3d_condition.py#L148
             hidden_size = 8 * model.config.attention_head_dim
 
-        lora_attn_procs[name] = LoRAAttnProcessor(
-            hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
+        lora_attn_procs[name] = LoRAAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
 
         if mock_weights:
             # add 1 to weights to mock trained weights
             with paddle.no_grad():
-                lora_attn_procs[name].to_q_lora.up.weight.set_value(
-                    lora_attn_procs[name].to_q_lora.up.weight + 1)
-                lora_attn_procs[name].to_k_lora.up.weight.set_value(
-                    lora_attn_procs[name].to_k_lora.up.weight + 1)
-                lora_attn_procs[name].to_v_lora.up.weight.set_value(
-                    lora_attn_procs[name].to_v_lora.up.weight + 1)
-                lora_attn_procs[name].to_out_lora.up.weight.set_value(
-                    lora_attn_procs[name].to_out_lora.up.weight + 1)
+                lora_attn_procs[name].to_q_lora.up.weight.set_value(lora_attn_procs[name].to_q_lora.up.weight + 1)
+                lora_attn_procs[name].to_k_lora.up.weight.set_value(lora_attn_procs[name].to_k_lora.up.weight + 1)
+                lora_attn_procs[name].to_v_lora.up.weight.set_value(lora_attn_procs[name].to_v_lora.up.weight + 1)
+                lora_attn_procs[name].to_out_lora.up.weight.set_value(lora_attn_procs[name].to_out_lora.up.weight + 1)
     return lora_attn_procs
 
 
@@ -99,7 +91,8 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
             "block_out_channels": (32, 64),
             "down_block_types": (
                 "CrossAttnDownBlock3D",
-                "DownBlock3D", ),
+                "DownBlock3D",
+            ),
             "up_block_types": ("UpBlock3D", "CrossAttnUpBlock3D"),
             "cross_attention_dim": 32,
             "attention_head_dim": 8,
@@ -121,9 +114,10 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
 
         model.enable_xformers_memory_efficient_attention()
 
-        assert (model.mid_block.attentions[0].transformer_blocks[0]
-                .attn1.processor.__class__.__name__ == "XFormersAttnProcessor"
-                ), "xformers is not enabled"
+        assert (
+            model.mid_block.attentions[0].transformer_blocks[0].attn1.processor.__class__.__name__
+            == "XFormersAttnProcessor"
+        ), "xformers is not enabled"
 
     # Overriding to set `norm_num_groups` needs to be different for this model.
     def test_forward_with_norm_groups(self):
@@ -140,8 +134,7 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
                 output = output.sample
         self.assertIsNotNone(output)
         expected_shape = inputs_dict["sample"].shape
-        self.assertEqual(output.shape, expected_shape,
-                         "Input and output shapes do not match")
+        self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
 
     # Overriding since the UNet3D outputs a different structure.
     def test_determinism(self):
@@ -199,12 +192,9 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
         model.set_attn_processor(model.attn_processors)
 
         with paddle.no_grad():
-            sample2 = model(
-                **inputs_dict, cross_attention_kwargs={"scale": 0.0}).sample
-            sample3 = model(
-                **inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
-            sample4 = model(
-                **inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
+            sample2 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.0}).sample
+            sample3 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
+            sample4 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
 
         assert (sample1 - sample2).abs().max() < 1e-4
         assert (sample3 - sample4).abs().max() < 1e-4
@@ -227,23 +217,20 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
         model.set_attn_processor(lora_attn_procs)
 
         with paddle.no_grad():
-            sample = model(
-                **inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
+            sample = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             model.save_attn_procs(
                 tmpdirname,
-                to_diffusers=False, )
-            self.assertTrue(
-                os.path.isfile(
-                    os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+                to_diffusers=False,
+            )
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
             paddle.seed(0)
             new_model = self.model_class(**init_dict)
             new_model.load_attn_procs(tmpdirname, from_diffusers=False)
 
         with paddle.no_grad():
-            new_sample = new_model(
-                **inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
+            new_sample = new_model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
 
         assert (sample - new_sample).abs().max() < 1e-4
 
@@ -265,24 +252,17 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
         model.set_attn_processor(lora_attn_procs)
 
         with paddle.no_grad():
-            sample = model(
-                **inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
+            sample = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
 
         with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_attn_procs(
-                tmpdirname, safe_serialization=True, to_diffusers=True)
-            self.assertTrue(
-                os.path.isfile(
-                    os.path.join(tmpdirname,
-                                 "pytorch_lora_weights.safetensors")))
+            model.save_attn_procs(tmpdirname, safe_serialization=True, to_diffusers=True)
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.safetensors")))
             paddle.seed(0)
             new_model = self.model_class(**init_dict)
-            new_model.load_attn_procs(
-                tmpdirname, use_safetensors=True, from_diffusers=True)
+            new_model.load_attn_procs(tmpdirname, use_safetensors=True, from_diffusers=True)
 
         with paddle.no_grad():
-            new_sample = new_model(
-                **inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
+            new_sample = new_model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
 
         assert (sample - new_sample).abs().max() < 1e-4
 
@@ -303,16 +283,15 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
         # Saving as paddle, properly reloads with directly filename
         with tempfile.TemporaryDirectory() as tmpdirname:
             model.save_attn_procs(tmpdirname, to_diffusers=True)
-            self.assertTrue(
-                os.path.isfile(
-                    os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
             paddle.seed(0)
             new_model = self.model_class(**init_dict)
             new_model.load_attn_procs(
                 tmpdirname,
                 weight_name="pytorch_lora_weights.bin",
                 use_safetensors=False,
-                from_diffusers=True, )
+                from_diffusers=True,
+            )
 
     def test_lora_save_paddle_force_load_safetensors_error(self):
         pass
@@ -332,8 +311,7 @@ class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
         model.set_attn_processor(lora_attn_procs)
 
         with paddle.no_grad():
-            sample = model(
-                **inputs_dict, cross_attention_kwargs={"scale": 0.0}).sample
+            sample = model(**inputs_dict, cross_attention_kwargs={"scale": 0.0}).sample
 
         model.set_attn_processor(AttnProcessor())
 

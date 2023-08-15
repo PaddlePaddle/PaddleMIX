@@ -14,8 +14,7 @@
 
 import paddle
 
-from ppdiffusers import (IFInpaintingPipeline,
-                         IFInpaintingSuperResolutionPipeline)
+from ppdiffusers import IFInpaintingPipeline, IFInpaintingSuperResolutionPipeline
 from ppdiffusers.utils import load_image, pd_to_pil
 
 url = "https://huggingface.co/datasets/diffusers/docs-images/resolve/main/if/person.png"
@@ -24,8 +23,7 @@ original_image = load_image(url)
 url = "https://huggingface.co/datasets/diffusers/docs-images/resolve/main/if/glasses_mask.png"
 mask_image = load_image(url)
 
-pipe = IFInpaintingPipeline.from_pretrained(
-    "DeepFloyd/IF-I-XL-v1.0", variant="fp16", paddle_dtype=paddle.float16)
+pipe = IFInpaintingPipeline.from_pretrained("DeepFloyd/IF-I-XL-v1.0", variant="fp16", paddle_dtype=paddle.float16)
 pipe.enable_xformers_memory_efficient_attention()
 prompt = "blue sunglasses"
 prompt_embeds, negative_embeds = pipe.encode_prompt(prompt)
@@ -35,7 +33,8 @@ image = pipe(
     mask_image=mask_image,
     prompt_embeds=prompt_embeds,
     negative_prompt_embeds=negative_embeds,
-    output_type="pd", ).images
+    output_type="pd",
+).images
 pipe.to(paddle_device="cpu")
 # save intermediate image
 pil_image = pd_to_pil(image)
@@ -45,7 +44,8 @@ super_res_1_pipe = IFInpaintingSuperResolutionPipeline.from_pretrained(
     "DeepFloyd/IF-II-L-v1.0",
     text_encoder=None,
     variant="fp16",
-    paddle_dtype=paddle.float16, )
+    paddle_dtype=paddle.float16,
+)
 super_res_1_pipe.enable_xformers_memory_efficient_attention()
 
 image = super_res_1_pipe(
@@ -53,5 +53,6 @@ image = super_res_1_pipe(
     mask_image=mask_image,
     original_image=original_image,
     prompt_embeds=prompt_embeds,
-    negative_prompt_embeds=negative_embeds, ).images
+    negative_prompt_embeds=negative_embeds,
+).images
 image[0].save("./text_guided_image_inpainting-deepfloyd_if-if_stage_II.png")

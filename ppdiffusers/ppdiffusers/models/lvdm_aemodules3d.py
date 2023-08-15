@@ -39,8 +39,9 @@ def hinge_d_loss(logits_real, logits_fake):
 
 def vanilla_d_loss(logits_real, logits_fake):
     d_loss = 0.5 * (
-        paddle.mean(x=paddle.nn.functional.softplus(x=-logits_real)) +
-        paddle.mean(x=paddle.nn.functional.softplus(x=logits_fake)))
+        paddle.mean(x=paddle.nn.functional.softplus(x=-logits_real))
+        + paddle.mean(x=paddle.nn.functional.softplus(x=logits_fake))
+    )
     return d_loss
 
 
@@ -52,41 +53,34 @@ def Normalize(in_channels, norm_type="group"):
             num_channels=in_channels,
             epsilon=1e-06,
             weight_attr=None,
-            bias_attr=None, )
+            bias_attr=None,
+        )
     elif norm_type == "batch":
         return paddle.nn.SyncBatchNorm(in_channels)
 
 
 class ResBlock(paddle.nn.Layer):
     def __init__(
-            self,
-            in_channels,
-            out_channels=None,
-            conv_shortcut=False,
-            dropout=0.0,
-            norm_type="group",
-            padding_type="replicate", ):
+        self,
+        in_channels,
+        out_channels=None,
+        conv_shortcut=False,
+        dropout=0.0,
+        norm_type="group",
+        padding_type="replicate",
+    ):
         super().__init__()
         self.in_channels = in_channels
         out_channels = in_channels if out_channels is None else out_channels
         self.out_channels = out_channels
         self.use_conv_shortcut = conv_shortcut
         self.norm1 = Normalize(in_channels, norm_type)
-        self.conv1 = SamePadConv3d(
-            in_channels, out_channels, kernel_size=3, padding_type=padding_type)
+        self.conv1 = SamePadConv3d(in_channels, out_channels, kernel_size=3, padding_type=padding_type)
         self.dropout = paddle.nn.Dropout(p=dropout)
         self.norm2 = Normalize(in_channels, norm_type)
-        self.conv2 = SamePadConv3d(
-            out_channels,
-            out_channels,
-            kernel_size=3,
-            padding_type=padding_type)
+        self.conv2 = SamePadConv3d(out_channels, out_channels, kernel_size=3, padding_type=padding_type)
         if self.in_channels != self.out_channels:
-            self.conv_shortcut = SamePadConv3d(
-                in_channels,
-                out_channels,
-                kernel_size=3,
-                padding_type=padding_type)
+            self.conv_shortcut = SamePadConv3d(in_channels, out_channels, kernel_size=3, padding_type=padding_type)
 
     def forward(self, x):
         h = x
@@ -103,18 +97,19 @@ class ResBlock(paddle.nn.Layer):
 
 class SamePadConv3d(paddle.nn.Layer):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride=1,
-            bias=True,
-            padding_type="replicate", ):
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        bias=True,
+        padding_type="replicate",
+    ):
         super().__init__()
         if isinstance(kernel_size, int):
-            kernel_size = (kernel_size, ) * 3
+            kernel_size = (kernel_size,) * 3
         if isinstance(stride, int):
-            stride = (stride, ) * 3
+            stride = (stride,) * 3
         total_pad = tuple([(k - s) for k, s in zip(kernel_size, stride)])
         pad_input = []
         for p in total_pad[::-1]:
@@ -128,31 +123,31 @@ class SamePadConv3d(paddle.nn.Layer):
             kernel_size=kernel_size,
             stride=stride,
             padding=0,
-            bias_attr=bias, )
+            bias_attr=bias,
+        )
         self.weight = self.conv.weight
 
     def forward(self, x):
         return self.conv(
-            paddle.nn.functional.pad(x=x,
-                                     pad=self.pad_input,
-                                     mode=self.padding_type,
-                                     data_format="NCDHW"))
+            paddle.nn.functional.pad(x=x, pad=self.pad_input, mode=self.padding_type, data_format="NCDHW")
+        )
 
 
 class SamePadConvTranspose3d(paddle.nn.Layer):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel_size,
-            stride=1,
-            bias=True,
-            padding_type="replicate", ):
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride=1,
+        bias=True,
+        padding_type="replicate",
+    ):
         super().__init__()
         if isinstance(kernel_size, int):
-            kernel_size = (kernel_size, ) * 3
+            kernel_size = (kernel_size,) * 3
         if isinstance(stride, int):
-            stride = (stride, ) * 3
+            stride = (stride,) * 3
         total_pad = tuple([(k - s) for k, s in zip(kernel_size, stride)])
         pad_input = []
         for p in total_pad[::-1]:
@@ -166,45 +161,38 @@ class SamePadConvTranspose3d(paddle.nn.Layer):
             kernel_size=kernel_size,
             stride=stride,
             padding=tuple([(k - 1) for k in kernel_size]),
-            bias_attr=bias, )
+            bias_attr=bias,
+        )
 
     def forward(self, x):
         return self.convt(
-            paddle.nn.functional.pad(x=x,
-                                     pad=self.pad_input,
-                                     mode=self.padding_type,
-                                     data_format="NCDHW"))
+            paddle.nn.functional.pad(x=x, pad=self.pad_input, mode=self.padding_type, data_format="NCDHW")
+        )
 
 
 class Encoder(paddle.nn.Layer):
     def __init__(
-            self,
-            n_hiddens,
-            downsample,
-            z_channels,
-            double_z,
-            image_channel=3,
-            norm_type="group",
-            padding_type="replicate", ):
+        self,
+        n_hiddens,
+        downsample,
+        z_channels,
+        double_z,
+        image_channel=3,
+        norm_type="group",
+        padding_type="replicate",
+    ):
         super().__init__()
         n_times_downsample = np.array([int(math.log2(d)) for d in downsample])
         self.conv_blocks = paddle.nn.LayerList()
         max_ds = n_times_downsample.max()
-        self.conv_first = SamePadConv3d(
-            image_channel, n_hiddens, kernel_size=3, padding_type=padding_type)
+        self.conv_first = SamePadConv3d(image_channel, n_hiddens, kernel_size=3, padding_type=padding_type)
         for i in range(max_ds):
             block = paddle.nn.Layer()
             in_channels = n_hiddens * 2**i
-            out_channels = n_hiddens * 2**(i + 1)
+            out_channels = n_hiddens * 2 ** (i + 1)
             stride = tuple([(2 if d > 0 else 1) for d in n_times_downsample])
-            block.down = SamePadConv3d(
-                in_channels,
-                out_channels,
-                4,
-                stride=stride,
-                padding_type=padding_type)
-            block.res = ResBlock(
-                out_channels, out_channels, norm_type=norm_type)
+            block.down = SamePadConv3d(in_channels, out_channels, 4, stride=stride, padding_type=padding_type)
+            block.res = ResBlock(out_channels, out_channels, norm_type=norm_type)
             self.conv_blocks.append(block)
             n_times_downsample -= 1
         self.final_block = paddle.nn.Sequential(
@@ -215,7 +203,9 @@ class Encoder(paddle.nn.Layer):
                 2 * z_channels if double_z else z_channels,
                 kernel_size=3,
                 stride=1,
-                padding_type=padding_type, ), )
+                padding_type=padding_type,
+            ),
+        )
         self.out_channels = out_channels
 
     def forward(self, x):
@@ -228,12 +218,7 @@ class Encoder(paddle.nn.Layer):
 
 
 class Decoder(paddle.nn.Layer):
-    def __init__(self,
-                 n_hiddens,
-                 upsample,
-                 z_channels,
-                 image_channel,
-                 norm_type="group"):
+    def __init__(self, n_hiddens, upsample, z_channels, image_channel, norm_type="group"):
         super().__init__()
         n_times_upsample = np.array([int(math.log2(d)) for d in upsample])
         max_us = n_times_upsample.max()
@@ -241,20 +226,15 @@ class Decoder(paddle.nn.Layer):
         self.conv_blocks = paddle.nn.LayerList()
         for i in range(max_us):
             block = paddle.nn.Layer()
-            in_channels = in_channels if i == 0 else n_hiddens * 2**(
-                max_us - i + 1)
-            out_channels = n_hiddens * 2**(max_us - i)
+            in_channels = in_channels if i == 0 else n_hiddens * 2 ** (max_us - i + 1)
+            out_channels = n_hiddens * 2 ** (max_us - i)
             us = tuple([(2 if d > 0 else 1) for d in n_times_upsample])
-            block.up = SamePadConvTranspose3d(
-                in_channels, out_channels, 4, stride=us)
-            block.res1 = ResBlock(
-                out_channels, out_channels, norm_type=norm_type)
-            block.res2 = ResBlock(
-                out_channels, out_channels, norm_type=norm_type)
+            block.up = SamePadConvTranspose3d(in_channels, out_channels, 4, stride=us)
+            block.res1 = ResBlock(out_channels, out_channels, norm_type=norm_type)
+            block.res2 = ResBlock(out_channels, out_channels, norm_type=norm_type)
             self.conv_blocks.append(block)
             n_times_upsample -= 1
-        self.conv_out = SamePadConv3d(
-            out_channels, image_channel, kernel_size=3)
+        self.conv_out = SamePadConv3d(out_channels, image_channel, kernel_size=3)
 
     def forward(self, x):
         h = x

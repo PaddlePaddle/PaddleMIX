@@ -18,8 +18,7 @@ from IPython.display import Audio, display
 
 from ppdiffusers import AudioLDMPipeline
 
-pipe = AudioLDMPipeline.from_pretrained(
-    "cvssp/audioldm", paddle_dtype=paddle.float16)
+pipe = AudioLDMPipeline.from_pretrained("cvssp/audioldm", paddle_dtype=paddle.float16)
 
 prompt = "Techno music with a strong, upbeat tempo and high melodic riffs"
 audio = pipe(prompt, num_inference_steps=10, audio_length_in_s=5.0).audios[0]

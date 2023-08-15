@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
-
-from ppdiffusers import (StableDiffusionImg2ImgPipeline,
-                         StableDiffusionUpscalePipeline)
+from ppdiffusers import StableDiffusionImg2ImgPipeline, StableDiffusionUpscalePipeline
 
 from .apptask import AppTask
 
@@ -37,19 +34,18 @@ class StableDiffusionImg2ImgTask(AppTask):
         """
 
         # bulid model
-        model_instance = StableDiffusionImg2ImgPipeline.from_pretrained(
-            model, safety_checker=None)
+        model_instance = StableDiffusionImg2ImgPipeline.from_pretrained(model, safety_checker=None)
 
         self._model = model_instance
 
     def _preprocess(self, inputs):
         """ """
         image = inputs.get("image", None)
-        assert image is not None, f"The image is None"
+        assert image is not None, "The image is None"
         prompt = inputs.get("prompt", None)
-        assert prompt is not None, f"The prompt is None"
+        assert prompt is not None, "The prompt is None"
         negative_prompt = inputs.get("negative_prompt", None)
-        assert negative_prompt is not None, f"The negative_prompt is None"
+        assert negative_prompt is not None, "The negative_prompt is None"
 
         return inputs
 
@@ -63,7 +59,8 @@ class StableDiffusionImg2ImgTask(AppTask):
             negative_prompt=inputs["negative_prompt"],
             image=inputs["image"],
             guidance_scale=self._guidance_scale,
-            strength=self._strength, ).images[0]
+            strength=self._strength,
+        ).images[0]
 
         inputs.pop("prompt", None)
         inputs.pop("negative_prompt", None)
@@ -101,9 +98,9 @@ class StableDiffusionUpscaleTask(AppTask):
     def _preprocess(self, inputs):
         """ """
         image = inputs.get("image", None)
-        assert image is not None, f"The image is None"
+        assert image is not None, "The image is None"
         prompt = inputs.get("prompt", None)
-        assert prompt is not None, f"The prompt is None"
+        assert prompt is not None, "The prompt is None"
 
         return inputs
 
@@ -114,7 +111,8 @@ class StableDiffusionUpscaleTask(AppTask):
 
         result = self._model(
             prompt=inputs["prompt"],
-            image=inputs["image"], ).images[0]
+            image=inputs["image"],
+        ).images[0]
 
         inputs.pop("prompt", None)
         inputs.pop("image", None)

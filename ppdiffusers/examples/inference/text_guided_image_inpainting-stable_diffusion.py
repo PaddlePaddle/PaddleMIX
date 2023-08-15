@@ -23,13 +23,10 @@ mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diff
 init_image = load_image(img_url).resize((512, 512))
 mask_image = load_image(mask_url).resize((512, 512))
 
-pipe = StableDiffusionInpaintPipelineLegacy.from_pretrained(
-    "runwayml/stable-diffusion-v1-5")
+pipe = StableDiffusionInpaintPipelineLegacy.from_pretrained("runwayml/stable-diffusion-v1-5")
 
 prompt = "a cat sitting on a bench"
 with paddle.amp.auto_cast(True):
-    image = pipe(
-        prompt=prompt, image=init_image, mask_image=mask_image,
-        strength=0.75).images[0]
+    image = pipe(prompt=prompt, image=init_image, mask_image=mask_image, strength=0.75).images[0]
 
 image.save("text_guided_image_inpainting-stable_diffusion-result.png")

@@ -19,25 +19,30 @@ scheduler = LMSDiscreteScheduler(
     beta_start=0.00085,
     beta_end=0.012,
     beta_schedule="scaled_linear",
-    num_train_timesteps=1000, )
+    num_train_timesteps=1000,
+)
 pipeline = DiffusionPipeline.from_pretrained(
     "CompVis/stable-diffusion-v1-4",
     scheduler=scheduler,
-    custom_pipeline="mixture_tiling.py", )
+    custom_pipeline="mixture_tiling.py",
+)
 pipeline
 
 # Mixture of Diffusers generation
 image = pipeline(
-    prompt=[[
-        "A charming house in the countryside, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-        "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-        "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-    ]],
+    prompt=[
+        [
+            "A charming house in the countryside, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+            "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+            "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+        ]
+    ],
     tile_height=640,
     tile_width=640,
     tile_row_overlap=0,
     tile_col_overlap=256,
     guidance_scale=8,
     seed=7178915308,
-    num_inference_steps=50, )["images"][0]
+    num_inference_steps=50,
+)["images"][0]
 image.save("mixture_tiling" + ".png")

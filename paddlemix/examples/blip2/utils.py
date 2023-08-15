@@ -11,47 +11,35 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import copy
+import datetime
+import json
 import os
+import re
+import sys
+import time
+
+import paddle
 from pycocoevalcap.eval import COCOEvalCap
 from pycocotools.coco import COCO
-from paddlemix.utils.downloader import get_weights_path_from_url
-from paddlemix.utils.downloader import is_url
+
 from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
-import paddle
+from paddlemix.utils.downloader import get_weights_path_from_url, is_url
 from paddlemix.utils.log import logger
-import time
-import json
-import sys
-import re
-import json
-import datetime
-import copy
 
 LLM_LIST = {
-    "facebook/opt-2.7b":
-    "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-2.7b/model_state.pdparams",
-    "t5-small":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-small/model_state.pdparams",
-    "t5-base":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-base/model_state.pdparams",
-    "t5-large":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-large/model_state.pdparams",
-    "t5-3b":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-3b/model_state.pdparams",
-    "t5-11b":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-11b/model_state.pdparams",
-    "t5-v1_1-base":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-v1_1-base/model_state.pdparams",
-    "t5-v1_1-large":
-    "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-v1_1-large/model_state.pdparams",
-    "facebook/llama-7b":
-    "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-7b/model_state.pdparams",
-    "facebook/llama-13b":
-    "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-13b/model_state.pdparams",
-    "facebook/llama-30b":
-    "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-30b/model_state.pdparams",
-    "facebook/llama-65b":
-    "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-65b/model_state.pdparams",
+    "facebook/opt-2.7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-2.7b/model_state.pdparams",
+    "t5-small": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-small/model_state.pdparams",
+    "t5-base": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-base/model_state.pdparams",
+    "t5-large": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-large/model_state.pdparams",
+    "t5-3b": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-3b/model_state.pdparams",
+    "t5-11b": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-11b/model_state.pdparams",
+    "t5-v1_1-base": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-v1_1-base/model_state.pdparams",
+    "t5-v1_1-large": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-v1_1-large/model_state.pdparams",
+    "facebook/llama-7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-7b/model_state.pdparams",
+    "facebook/llama-13b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-13b/model_state.pdparams",
+    "facebook/llama-30b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-30b/model_state.pdparams",
+    "facebook/llama-65b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-65b/model_state.pdparams",
 }
 
 
@@ -81,25 +69,24 @@ class BlipCollator:
             max_length=32,
             return_tensors="pd",
             return_attention_mask=True,
-            mode=self.mode, )
-        batch.update({'image_id': image_id})
+            mode=self.mode,
+        )
+        batch.update({"image_id": image_id})
         return batch
 
 
 def coco_caption_eval(coco_gt_root, results_file, split):
-    urls = {
-        "val":
-        "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json",
-        "test":
-        "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json",
-    }
+    # urls = {
+    #     "val": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json",
+    #     "test": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json",
+    # }
     filenames = {
         "val": "coco_karpathy_val_gt.json",
         "test": "coco_karpathy_test_gt.json",
     }
 
-    #download_url(urls[split], coco_gt_root)
-    annotation_file = os.path.join(coco_gt_root, filenames['test'])
+    # download_url(urls[split], coco_gt_root)
+    annotation_file = os.path.join(coco_gt_root, filenames["test"])
 
     # create coco object and coco_result object
     coco = COCO(annotation_file)
@@ -115,11 +102,7 @@ def coco_caption_eval(coco_gt_root, results_file, split):
     return coco_eval
 
 
-def load_model(args,
-               model,
-               optimizer=None,
-               ckpt_dir="",
-               load_language_model=True):
+def load_model(args, model, optimizer=None, ckpt_dir="", load_language_model=True):
     """
     load the saved checkpoint file and update the state dicts of model and optimizer.
     """
@@ -140,18 +123,27 @@ def load_model(args,
     if ckpt_dir and os.path.isfile(ckpt_dir):
         # breakpoint()
         print("Try to load a whole checkpoint from %s " % ckpt_dir)
-        embedding_list = ['word_embeddings']
+        embedding_list = ["word_embeddings"]
         collinear_list = [
-            "fc1", "fc2", "qkv", "proj", "query", "key", "value", "qkv_proj",
-            "q_proj", "k_proj", "v_proj", "linear1", "linear2", "project_in",
-            "project_out"
+            "fc1",
+            "fc2",
+            "qkv",
+            "proj",
+            "query",
+            "key",
+            "value",
+            "qkv_proj",
+            "q_proj",
+            "k_proj",
+            "v_proj",
+            "linear1",
+            "linear2",
+            "project_in",
+            "project_out",
         ]
         rowlinear_list = ["out_proj"]
         all_list = collinear_list + rowlinear_list + embedding_list
-        skip_list = [
-            'visual_encoder.patch_embed.proj.weight',
-            'visual_encoder.patch_embed.proj.bias'
-        ]
+        skip_list = ["visual_encoder.patch_embed.proj.weight", "visual_encoder.patch_embed.proj.bias"]
 
         col_list = []
         row_list = []
@@ -161,10 +153,10 @@ def load_model(args,
         mp_size = args.tensor_parallel_degree
 
         def renamebias(model_dict, whole_key):
-            if 'q_bias' in whole_key:
-                key = whole_key.replace('q_bias', 'q_proj.bias')
-            elif 'v_bias' in whole_key:
-                key = whole_key.replace('v_bias', 'v_proj.bias')
+            if "q_bias" in whole_key:
+                key = whole_key.replace("q_bias", "q_proj.bias")
+            elif "v_bias" in whole_key:
+                key = whole_key.replace("v_bias", "v_proj.bias")
             model_dict[key] = model_dict[whole_key]
             del model_dict[whole_key]
             return model_dict
@@ -172,47 +164,44 @@ def load_model(args,
         def col_split_modeldict(model_dict):
             if len(model_dict.shape) == 2:
                 subbatch = model_dict.shape[1] // mp_size
-                return model_dict[:, mp_rank * subbatch:(mp_rank + 1) *
-                                  subbatch]
+                return model_dict[:, mp_rank * subbatch : (mp_rank + 1) * subbatch]
             elif len(model_dict.shape) == 1:
                 subbatch = model_dict.shape[0] // mp_size
-                return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
+                return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
 
         def row_split_modeldict(model_dict):
             if len(model_dict.shape) == 2:
                 subbatch = model_dict.shape[0] // mp_size
-                return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
+                return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
             else:
                 return model_dict
 
         def emb_split_modeldict(model_dict):
             subbatch = model_dict.shape[0] // mp_size
-            return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
+            return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
 
         model_dict = paddle.load(ckpt_dir)
         for whole_key in model_dict.keys():
-            if not '.' in whole_key:
+            if "." not in whole_key:
                 continue
 
-            key = whole_key.split('.')[-2]
+            key = whole_key.split(".")[-2]
             if whole_key in skip_list:
                 continue
             if key in all_list:
                 if key in collinear_list:
                     col_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = col_split_modeldict(model_dict[
-                        whole_key])
+                    model_dict[whole_key] = col_split_modeldict(model_dict[whole_key])
                 elif key in rowlinear_list:
                     row_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = row_split_modeldict(model_dict[
-                        whole_key])
+                    model_dict[whole_key] = row_split_modeldict(model_dict[whole_key])
                 else:
                     emb_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = emb_split_modeldict(model_dict[
-                        whole_key])
+                    model_dict[whole_key] = emb_split_modeldict(model_dict[whole_key])
 
         param_state_dict = model_dict
         import numpy as np
+
         model_dict = model.state_dict()
         model_weight = {}
         incorrect_keys = 0
@@ -220,21 +209,19 @@ def load_model(args,
             if key in param_state_dict.keys():
 
                 if isinstance(param_state_dict[key], np.ndarray):
-                    param_state_dict[key] = paddle.to_tensor(param_state_dict[
-                        key])
+                    param_state_dict[key] = paddle.to_tensor(param_state_dict[key])
                 if value.dtype == param_state_dict[key].dtype:
                     model_weight[key] = param_state_dict[key]
                 else:
-                    model_weight[key] = param_state_dict[key].astype(
-                        value.dtype)
+                    model_weight[key] = param_state_dict[key].astype(value.dtype)
                 if value.shape != param_state_dict[key].shape:
-                    logger.info('Unmatched key: {}'.format(key))
+                    logger.info("Unmatched key: {}".format(key))
                     print(value.shape, param_state_dict[key].shape, key)
 
             else:
-                if load_language_model == False and "language_model" in key:
+                if load_language_model is False and "language_model" in key:
                     continue
-                logger.info('Unmatched key: {}'.format(key))
+                logger.info("Unmatched key: {}".format(key))
                 incorrect_keys += 1
         interpolate_pos_embed(model, model_weight)
         model.set_state_dict(model_weight)
@@ -245,13 +232,13 @@ def load_model(args,
         raise TypeError("`load` requires a valid value of `ckpt_dir`.")
 
 
-def save_result(result, result_dir, filename, remove_duplicate="",
-                world_size=1):
+def save_result(result, result_dir, filename, remove_duplicate="", world_size=1):
     import logging
+
     rank_id_curr_node = int(os.environ.get("PADDLE_RANK_IN_NODE", 0))
-    result_file = os.path.join(result_dir,
-                               "%s_rank%d.json" % (filename, rank_id_curr_node))
-    if not os.path.exists(result_dir): os.mkdir(result_dir)
+    result_file = os.path.join(result_dir, "%s_rank%d.json" % (filename, rank_id_curr_node))
+    if not os.path.exists(result_dir):
+        os.mkdir(result_dir)
     json.dump(result, open(result_file, "w"))
 
     final_result_file = os.path.join(result_dir, "%s.json" % filename)
@@ -262,8 +249,7 @@ def save_result(result, result_dir, filename, remove_duplicate="",
         result = []
         # for rank in range(get_world_size()):
         for rank in range(int(os.environ.get("PADDLE_TRAINERS_NUM", 1))):
-            result_file = os.path.join(result_dir,
-                                       "%s_rank%d.json" % (filename, rank))
+            result_file = os.path.join(result_dir, "%s_rank%d.json" % (filename, rank))
             res = json.load(open(result_file, "r"))
             result += res
 
@@ -281,8 +267,7 @@ def save_result(result, result_dir, filename, remove_duplicate="",
     else:
         while not os.path.exists(final_result_file):
             time.sleep(0.5)
-            logging.warning("rank %d waits rank0 to merge results." %
-                            rank_id_curr_node)
+            logging.warning("rank %d waits rank0 to merge results." % rank_id_curr_node)
 
     # combine results from all processes
     return final_result_file
@@ -464,7 +449,7 @@ class VQAEval:
         ]
 
     def evaluate(self, quesIds=None):
-        if quesIds == None:
+        if quesIds is None:
             quesIds = [quesId for quesId in self.params["question_id"]]
         gts = {}
         res = {}
@@ -493,13 +478,8 @@ class VQAEval:
                 for ansDic in gts[quesId]["answers"]:
                     ansDic["answer"] = self.processPunctuation(ansDic["answer"])
             for gtAnsDatum in gts[quesId]["answers"]:
-                otherGTAns = [
-                    item for item in gts[quesId]["answers"]
-                    if item != gtAnsDatum
-                ]
-                matchingAns = [
-                    item for item in otherGTAns if item["answer"] == resAns
-                ]
+                otherGTAns = [item for item in gts[quesId]["answers"] if item != gtAnsDatum]
+                matchingAns = [item for item in otherGTAns if item["answer"] == resAns]
                 acc = min(1, float(len(matchingAns)) / 3)
                 gtAcc.append(acc)
             quesType = gts[quesId]["question_type"]
@@ -525,8 +505,7 @@ class VQAEval:
     def processPunctuation(self, inText):
         outText = inText
         for p in self.punct:
-            if (p + " " in inText or " " + p in inText) or (
-                    re.search(self.commaStrip, inText) != None):
+            if (p + " " in inText or " " + p in inText) or (re.search(self.commaStrip, inText) is not None):
                 outText = outText.replace(p, "")
             else:
                 outText = outText.replace(p, " ")
@@ -549,18 +528,16 @@ class VQAEval:
         return outText
 
     def setAccuracy(self, accQA, accQuesType, accAnsType):
-        self.accuracy["overall"] = round(100 * float(sum(accQA)) / len(accQA),
-                                         self.n)
+        self.accuracy["overall"] = round(100 * float(sum(accQA)) / len(accQA), self.n)
         self.accuracy["perQuestionType"] = {
             quesType: round(
-                100 * float(sum(accQuesType[quesType])) /
-                len(accQuesType[quesType]),
-                self.n, )
+                100 * float(sum(accQuesType[quesType])) / len(accQuesType[quesType]),
+                self.n,
+            )
             for quesType in accQuesType
         }
         self.accuracy["perAnswerType"] = {
-            ansType: round(100 * float(sum(accAnsType[ansType])) /
-                           len(accAnsType[ansType]), self.n)
+            ansType: round(100 * float(sum(accAnsType[ansType])) / len(accAnsType[ansType]), self.n)
             for ansType in accAnsType
         }
 
@@ -593,8 +570,8 @@ class VQAEval:
             status = "Done...\r\n"
         block = int(round(barLength * progress))
         text = "\rFinshed Percent: [{0}] {1}% {2}".format(
-            "#" * block + "-" * (barLength - block),
-            int(progress * 100), status)
+            "#" * block + "-" * (barLength - block), int(progress * 100), status
+        )
         sys.stdout.write(text)
         sys.stdout.flush()
 
@@ -612,9 +589,9 @@ class VQA:
         self.qa = {}
         self.qqa = {}
         self.imgToQA = {}
-        if not annotation_file == None and not question_file == None:
+        if annotation_file is not None and question_file is not None:
             print("loading VQA annotations and questions into memory...")
-            time_t = datetime.datetime.utcnow()
+            # time_t = datetime.datetime.utcnow()
             dataset = json.load(open(annotation_file, "r"))
             questions = json.load(open(question_file, "r"))
             self.dataset = dataset
@@ -664,17 +641,13 @@ class VQA:
         else:
             if not len(imgIds) == 0:
                 anns = sum(
-                    [
-                        self.imgToQA[imgId] for imgId in imgIds
-                        if imgId in self.imgToQA
-                    ],
-                    [], )
+                    [self.imgToQA[imgId] for imgId in imgIds if imgId in self.imgToQA],
+                    [],
+                )
             else:
                 anns = self.dataset["annotations"]
-            anns = (anns if len(quesTypes) == 0 else
-                    [ann for ann in anns if ann["question_type"] in quesTypes])
-            anns = (anns if len(ansTypes) == 0 else
-                    [ann for ann in anns if ann["answer_type"] in ansTypes])
+            anns = anns if len(quesTypes) == 0 else [ann for ann in anns if ann["question_type"] in quesTypes]
+            anns = anns if len(ansTypes) == 0 else [ann for ann in anns if ann["answer_type"] in ansTypes]
         ids = [ann["question_id"] for ann in anns]
         return ids
 
@@ -694,15 +667,11 @@ class VQA:
             anns = self.dataset["annotations"]
         else:
             if not len(quesIds) == 0:
-                anns = sum([
-                    self.qa[quesId] for quesId in quesIds if quesId in self.qa
-                ], [])
+                anns = sum([self.qa[quesId] for quesId in quesIds if quesId in self.qa], [])
             else:
                 anns = self.dataset["annotations"]
-            anns = (anns if len(quesTypes) == 0 else
-                    [ann for ann in anns if ann["question_type"] in quesTypes])
-            anns = (anns if len(ansTypes) == 0 else
-                    [ann for ann in anns if ann["answer_type"] in ansTypes])
+            anns = anns if len(quesTypes) == 0 else [ann for ann in anns if ann["question_type"] in quesTypes]
+            anns = anns if len(ansTypes) == 0 else [ann for ann in anns if ann["answer_type"] in ansTypes]
         ids = [ann["image_id"] for ann in anns]
         return ids
 
@@ -742,8 +711,7 @@ class VQA:
         res.dataset["info"] = copy.deepcopy(self.questions["info"])
         res.dataset["task_type"] = copy.deepcopy(self.questions["task_type"])
         res.dataset["data_type"] = copy.deepcopy(self.questions["data_type"])
-        res.dataset["data_subtype"] = copy.deepcopy(self.questions[
-            "data_subtype"])
+        res.dataset["data_subtype"] = copy.deepcopy(self.questions["data_subtype"])
         res.dataset["license"] = copy.deepcopy(self.questions["license"])
 
         print("Loading and preparing results...     ")
@@ -751,19 +719,20 @@ class VQA:
         anns = json.load(open(resFile))
         assert type(anns) == list, "results is not an array of objects"
         annsQuesIds = [ann["question_id"] for ann in anns]
-        assert set(annsQuesIds) == set(self.getQuesIds(
-        )), "Results do not correspond to current VQA set. Either the results do not have predictions for all question ids in annotation file or there is atleast one question id that does not belong to the question ids in the annotation file."
+        assert set(annsQuesIds) == set(
+            self.getQuesIds()
+        ), "Results do not correspond to current VQA set. Either the results do not have predictions for all question ids in annotation file or there is atleast one question id that does not belong to the question ids in the annotation file."
         for ann in anns:
             quesId = ann["question_id"]
             if res.dataset["task_type"] == "Multiple Choice":
-                assert (ann["answer"] in self.qqa[quesId]["multiple_choices"]
-                        ), "predicted answer is not one of the multiple choices"
+                assert (
+                    ann["answer"] in self.qqa[quesId]["multiple_choices"]
+                ), "predicted answer is not one of the multiple choices"
             qaAnn = self.qa[quesId]
             ann["image_id"] = qaAnn["image_id"]
             ann["question_type"] = qaAnn["question_type"]
             ann["answer_type"] = qaAnn["answer_type"]
-        print("DONE (t=%0.2fs)" % (
-            (datetime.datetime.utcnow() - time_t).total_seconds()))
+        print("DONE (t=%0.2fs)" % ((datetime.datetime.utcnow() - time_t).total_seconds()))
 
         res.dataset["annotations"] = anns
         res.createIndex()

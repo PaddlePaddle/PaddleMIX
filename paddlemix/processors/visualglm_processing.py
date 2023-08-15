@@ -21,15 +21,20 @@ from typing import List, Optional, Union
 
 import numpy as np
 import paddle
-from paddlenlp.transformers.tokenizer_utils_base import (BatchEncoding,
-                                                         TensorType, TextInput)
+from paddlenlp.transformers.tokenizer_utils_base import (
+    BatchEncoding,
+    TensorType,
+    TextInput,
+)
 from PIL import Image
 
 from .base_processing import ProcessorMixin
 from .image_processing_utils import BatchFeature
 from .image_utils import ImageInput
 
-__all__ = ["VisualGLMProcessor", ]
+__all__ = [
+    "VisualGLMProcessor",
+]
 
 
 class VisualGLMProcessor(ProcessorMixin):
@@ -78,10 +83,11 @@ class VisualGLMProcessor(ProcessorMixin):
         self.num_query_tokens = 32
 
     def process_images(
-            self,
-            images: ImageInput,
-            return_tensors: Optional[Union[str, TensorType]]=TensorType.PADDLE,
-            **kwargs, ) -> BatchFeature:
+        self,
+        images: ImageInput,
+        return_tensors: Optional[Union[str, TensorType]] = TensorType.PADDLE,
+        **kwargs,
+    ) -> BatchFeature:
         """
         This method uses [`VisualGLMImageProcessor.__call__`] method to prepare image(s) for the model.
         Please refer to the docstring of the method for more information.
@@ -92,31 +98,31 @@ class VisualGLMProcessor(ProcessorMixin):
         if isinstance(images, (Image.Image, np.ndarray, paddle.Tensor)):
             images = [images]
 
-        processed_images = self.image_processor(
-            images, return_tensors=return_tensors)
+        processed_images = self.image_processor(images, return_tensors=return_tensors)
 
         return processed_images
 
     def process_texts(
-            self,
-            texts: Union[TextInput, List[TextInput]],
-            return_tensors: Optional[Union[str, TensorType]]=TensorType.PADDLE,
-            **kwargs, ) -> BatchEncoding:
+        self,
+        texts: Union[TextInput, List[TextInput]],
+        return_tensors: Optional[Union[str, TensorType]] = TensorType.PADDLE,
+        **kwargs,
+    ) -> BatchEncoding:
         if not texts:
             raise ValueError("You have to input correct texts.")
 
         if isinstance(texts, TextInput):
             texts = [texts]
 
-        processed_texts = self.tokenizer(
-            text=texts, return_tensors=return_tensors, **kwargs)
+        processed_texts = self.tokenizer(text=texts, return_tensors=return_tensors, **kwargs)
         return BatchEncoding(processed_texts)
 
     def build_inputs_with_image(
-            self,
-            image: Union[Image.Image, np.ndarray, paddle.Tensor],
-            query: str,
-            history: Optional[str]=None, ):
+        self,
+        image: Union[Image.Image, np.ndarray, paddle.Tensor],
+        query: str,
+        history: Optional[str] = None,
+    ):
         # construct prompt with inputs
         if image is not None:
             prompt = self.default_prompt
@@ -129,22 +135,17 @@ class VisualGLMProcessor(ProcessorMixin):
         if image is not None:
             image_start_position = prompt.rfind(self.image_tag)
             image_end_position = image_start_position + len(self.image_tag)
-            first_text_input = self.tokenizer.encode(
-                prompt[:image_start_position], add_special_tokens=False)
+            first_text_input = self.tokenizer.encode(prompt[:image_start_position], add_special_tokens=False)
             image_input = [self.tokenizer.unk_token_id] * self.num_query_tokens
-            second_text_input = self.tokenizer.encode(
-                prompt[image_end_position:], add_special_tokens=False)
-            all_input_ids = (first_text_input["input_ids"] + image_input +
-                             second_text_input["input_ids"])
-            all_input_ids = self.tokenizer.build_inputs_with_special_tokens(
-                all_input_ids)
+            second_text_input = self.tokenizer.encode(prompt[image_end_position:], add_special_tokens=False)
+            all_input_ids = first_text_input["input_ids"] + image_input + second_text_input["input_ids"]
+            all_input_ids = self.tokenizer.build_inputs_with_special_tokens(all_input_ids)
 
             # processing image
             processed_image = self.process_images(image)
 
             inputs = {
-                "input_ids": paddle.to_tensor(
-                    all_input_ids, dtype="int64").unsqueeze(0),
+                "input_ids": paddle.to_tensor(all_input_ids, dtype="int64").unsqueeze(0),
                 "pre_image_length": len(first_text_input["input_ids"]),
                 "pixel_values": processed_image["pixel_values"],
             }
@@ -155,23 +156,24 @@ class VisualGLMProcessor(ProcessorMixin):
         return inputs
 
     def __call__(
-            self,
-            image: Union[Image.Image, np.ndarray, paddle.Tensor],
-            query: str,
-            history: Optional[str]=[],
-            **kwargs, ):
+        self,
+        image: Union[Image.Image, np.ndarray, paddle.Tensor],
+        query: str,
+        history: Optional[str] = [],
+        **kwargs,
+    ):
         if image is None:
             raise ValueError("Image should not be None.")
         if query is None:
             raise ValueError("Query should not be None.")
         if not isinstance(query, str):
-            raise TypeError(
-                "A string type of query is expected, but acceived {}.".format(
-                    type(query)))
+            raise TypeError("A string type of query is expected, but acceived {}.".format(type(query)))
         if not isinstance(history, list):
             raise TypeError(
-                "A list type of history is expected with each item [query, response] in it, but acceived {}.".
-                format(type(history)))
+                "A list type of history is expected with each item [query, response] in it, but acceived {}.".format(
+                    type(history)
+                )
+            )
 
         inputs = self.build_inputs_with_image(image, query, history=history)
 
@@ -203,10 +205,8 @@ class VisualGLMProcessor(ProcessorMixin):
             ["\?", "？"],
         ]
         for item in punkts:
-            response = re.sub(r"([\u4e00-\u9fff])%s" % item[0],
-                              r"\1%s" % item[1], response)
-            response = re.sub(r"%s([\u4e00-\u9fff])" % item[0],
-                              r"%s\1" % item[1], response)
+            response = re.sub(r"([\u4e00-\u9fff])%s" % item[0], r"\1%s" % item[1], response)
+            response = re.sub(r"%s([\u4e00-\u9fff])" % item[0], r"%s\1" % item[1], response)
         return response
 
     def get_responses(self, *args, **kwargs):
@@ -223,5 +223,4 @@ class VisualGLMProcessor(ProcessorMixin):
     def model_input_names(self):
         tokenizer_input_names = self.tokenizer.model_input_names
         image_processor_input_names = self.image_processor.model_input_names
-        return list(
-            dict.fromkeys(tokenizer_input_names + image_processor_input_names))
+        return list(dict.fromkeys(tokenizer_input_names + image_processor_input_names))

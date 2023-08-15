@@ -45,12 +45,14 @@ class ModelUtilsTest(unittest.TestCase):
         response_mock.raise_for_status.side_effect = HTTPError
         response_mock.json.return_value = {}
         orig_model = UNet2DConditionModel.from_pretrained(
-            "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="unet")
+            "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="unet"
+        )
         with mock.patch("requests.request", return_value=response_mock):
             model = UNet2DConditionModel.from_pretrained(
                 "hf-internal-testing/tiny-stable-diffusion-torch",
                 subfolder="unet",
-                local_files_only=True, )
+                local_files_only=True,
+            )
         for p1, p2 in zip(orig_model.parameters(), model.parameters()):
             if (p1 != p2).cast("int64").sum() > 0:
                 assert False, "Parameters not the same!"
@@ -67,13 +69,12 @@ class ModelUtilsTest(unittest.TestCase):
                     subfolder="unet",
                     cache_dir=tmpdirname,
                     from_hf_hub=True,
-                    from_diffusers=True, )
+                    from_diffusers=True,
+                )
 
             download_requests = [r.method for r in m.request_history]
-            assert (download_requests.count("HEAD") == 2
-                    ), "2 HEAD requests one for config, one for model"
-            assert (download_requests.count("GET") == 2
-                    ), "2 GET requests one for config, one for model"
+            assert download_requests.count("HEAD") == 2, "2 HEAD requests one for config, one for model"
+            assert download_requests.count("GET") == 2, "2 GET requests one for config, one for model"
 
             with requests_mock.mock(real_http=True) as m:
                 UNet2DConditionModel.from_pretrained(
@@ -81,7 +82,8 @@ class ModelUtilsTest(unittest.TestCase):
                     subfolder="unet",
                     cache_dir=tmpdirname,
                     from_hf_hub=True,
-                    from_diffusers=True, )
+                    from_diffusers=True,
+                )
 
             cache_requests = [r.method for r in m.request_history]
             # TODO check this
@@ -92,15 +94,15 @@ class ModelUtilsTest(unittest.TestCase):
         ppdiffusers.utils.import_utils._safetensors_available = True
 
     def test_weight_overwrite(self):
-        with tempfile.TemporaryDirectory() as tmpdirname, self.assertRaises(
-                RuntimeError) as error_context:
+        with tempfile.TemporaryDirectory() as tmpdirname, self.assertRaises(RuntimeError) as error_context:
             UNet2DConditionModel.from_pretrained(
                 "hf-internal-testing/tiny-stable-diffusion-torch",
                 subfolder="unet",
                 cache_dir=tmpdirname,
                 in_channels=9,
                 from_hf_hub=True,
-                from_diffusers=True, )
+                from_diffusers=True,
+            )
 
         # make sure that error message states what keys are missing
         assert "size mismatch" in str(error_context.exception)
@@ -114,7 +116,8 @@ class ModelUtilsTest(unittest.TestCase):
                 low_cpu_mem_usage=False,
                 ignore_mismatched_sizes=True,
                 from_hf_hub=True,
-                from_diffusers=True, )
+                from_diffusers=True,
+            )
 
         assert model.config.in_channels == 9
 
@@ -139,8 +142,7 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.sample
         max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 5e-05,
-                             "Models give different forward passes")
+        self.assertLessEqual(max_diff, 5e-05, "Models give different forward passes")
 
     def test_getattr_is_correct(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -183,10 +185,7 @@ class ModelTesterMixin:
         with self.assertRaises(AttributeError) as error:
             model.does_not_exist
 
-        assert (
-            str(error.exception) ==
-            f"'{type(model).__name__}' object has no attribute 'does_not_exist'"
-        )
+        assert str(error.exception) == f"'{type(model).__name__}' object has no attribute 'does_not_exist'"
 
     def test_from_save_pretrained_variant(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -196,8 +195,7 @@ class ModelTesterMixin:
         model.eval()
         with tempfile.TemporaryDirectory() as tmpdirname:
             model.save_pretrained(tmpdirname, variant="fp16")
-            new_model = self.model_class.from_pretrained(
-                tmpdirname, variant="fp16")
+            new_model = self.model_class.from_pretrained(tmpdirname, variant="fp16")
             if hasattr(new_model, "set_default_attn_processor"):
                 new_model.set_default_attn_processor()
             # non-variant cannot be loaded
@@ -208,8 +206,7 @@ class ModelTesterMixin:
             # support diffusion_pytorch_model.bin and model_state.pdparams
             assert "Error no file named model_state.pdparams found in directory" in str(
                 error_context.exception
-            ) or "Error no file named diffusion_pytorch_model.bin found in directory" in str(
-                error_context.exception)
+            ) or "Error no file named diffusion_pytorch_model.bin found in directory" in str(error_context.exception)
         with paddle.no_grad():
 
             image = model(**inputs_dict)
@@ -219,8 +216,7 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.sample
         max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 5e-05,
-                             "Models give different forward passes")
+        self.assertLessEqual(max_diff, 5e-05, "Models give different forward passes")
 
     def test_from_save_pretrained_dtype(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -231,11 +227,9 @@ class ModelTesterMixin:
             with tempfile.TemporaryDirectory() as tmpdirname:
                 model.to(dtype=dtype)
                 model.save_pretrained(tmpdirname)
-                new_model = self.model_class.from_pretrained(
-                    tmpdirname, paddle_dtype=dtype)
+                new_model = self.model_class.from_pretrained(tmpdirname, paddle_dtype=dtype)
                 assert new_model.dtype == dtype
-                new_model = self.model_class.from_pretrained(
-                    tmpdirname, paddle_dtype=dtype)
+                new_model = self.model_class.from_pretrained(tmpdirname, paddle_dtype=dtype)
                 assert new_model.dtype == dtype
 
     def test_determinism(self):
@@ -266,8 +260,7 @@ class ModelTesterMixin:
                 output = output.sample
         self.assertIsNotNone(output)
         expected_shape = inputs_dict["sample"].shape
-        self.assertEqual(output.shape, expected_shape,
-                         "Input and output shapes do not match")
+        self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
 
     def test_forward_with_norm_groups(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -281,8 +274,7 @@ class ModelTesterMixin:
                 output = output.sample
         self.assertIsNotNone(output)
         expected_shape = inputs_dict["sample"].shape
-        self.assertEqual(output.shape, expected_shape,
-                         "Input and output shapes do not match")
+        self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
 
     def test_forward_signature(self):
         init_dict, _ = self.prepare_init_args_and_inputs_for_common()
@@ -320,8 +312,7 @@ class ModelTesterMixin:
         output = model(**inputs_dict)
         if isinstance(output, dict):
             output = output.sample
-        noise = paddle.randn(
-            shape=list((inputs_dict["sample"].shape[0], ) + self.output_shape))
+        noise = paddle.randn(shape=list((inputs_dict["sample"].shape[0],) + self.output_shape))
         loss = paddle.nn.functional.mse_loss(input=output, label=noise)
         loss.backward()
 
@@ -333,8 +324,7 @@ class ModelTesterMixin:
         output = model(**inputs_dict)
         if isinstance(output, dict):
             output = output.sample
-        noise = paddle.randn(
-            shape=list((inputs_dict["sample"].shape[0], ) + self.output_shape))
+        noise = paddle.randn(shape=list((inputs_dict["sample"].shape[0],) + self.output_shape))
         loss = paddle.nn.functional.mse_loss(input=output, label=noise)
         loss.backward()
         ema_model.step(model.parameters())
@@ -346,12 +336,10 @@ class ModelTesterMixin:
 
         def recursive_check(tuple_object, dict_object):
             if isinstance(tuple_object, (List, Tuple)):
-                for tuple_iterable_value, dict_iterable_value in zip(
-                        tuple_object, dict_object.values()):
+                for tuple_iterable_value, dict_iterable_value in zip(tuple_object, dict_object.values()):
                     recursive_check(tuple_iterable_value, dict_iterable_value)
             elif isinstance(tuple_object, Dict):
-                for tuple_iterable_value, dict_iterable_value in zip(
-                        tuple_object.values(), dict_object.values()):
+                for tuple_iterable_value, dict_iterable_value in zip(tuple_object.values(), dict_object.values()):
                     recursive_check(tuple_iterable_value, dict_iterable_value)
             elif tuple_object is None:
                 return
@@ -360,7 +348,8 @@ class ModelTesterMixin:
                     paddle.allclose(
                         set_nan_tensor_to_zero(tuple_object),
                         set_nan_tensor_to_zero(dict_object),
-                        atol=1e-05, ),
+                        atol=1e-05,
+                    ),
                     msg=f"Tuple and dict output are not equal. Difference: {paddle.max(x=paddle.abs(x=tuple_object - dict_object))}. Tuple has `nan`: {paddle.isnan(x=tuple_object).any()} and `inf`: {paddle.isinf(x=tuple_object)}. Dict has `nan`: {paddle.isnan(x=dict_object).any()} and `inf`: {paddle.isinf(x=dict_object)}.",
                 )
 
@@ -384,8 +373,7 @@ class ModelTesterMixin:
         self.assertFalse(model.is_gradient_checkpointing)
 
     def test_deprecated_kwargs(self):
-        has_kwarg_in_model_class = (
-            "kwargs" in inspect.signature(self.model_class.__init__).parameters)
+        has_kwarg_in_model_class = "kwargs" in inspect.signature(self.model_class.__init__).parameters
         has_deprecated_kwarg = len(self.model_class._deprecated_kwargs) > 0
         if has_kwarg_in_model_class and not has_deprecated_kwarg:
             raise ValueError(

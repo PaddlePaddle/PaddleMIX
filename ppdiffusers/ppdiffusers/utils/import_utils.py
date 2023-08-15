@@ -64,8 +64,9 @@ if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
 
         if _paddle_available:
             try:
-                from paddle.incubate.nn.memory_efficient_attention import \
-                    memory_efficient_attention  # noqa
+                from paddle.incubate.nn.memory_efficient_attention import (  # noqa
+                    memory_efficient_attention,
+                )
 
                 _ppxformers_available = True
             except ImportError:
@@ -90,8 +91,7 @@ if USE_SAFETENSORS in ENV_VARS_TRUE_AND_AUTO_VALUES:
     if _safetensors_available:
         try:
             _safetensors_version = importlib_metadata.version("safetensors")
-            logger.info(
-                f"Safetensors version {_safetensors_version} available.")
+            logger.info(f"Safetensors version {_safetensors_version} available.")
         except importlib_metadata.PackageNotFoundError:
             _safetensors_available = False
 else:
@@ -101,8 +101,7 @@ else:
 _transformers_available = importlib.util.find_spec("transformers") is not None
 try:
     _transformers_version = importlib_metadata.version("transformers")
-    logger.debug(
-        f"Successfully imported transformers version {_transformers_version}")
+    logger.debug(f"Successfully imported transformers version {_transformers_version}")
 except importlib_metadata.PackageNotFoundError:
     _transformers_available = False
 
@@ -116,8 +115,7 @@ except importlib_metadata.PackageNotFoundError:
 _unidecode_available = importlib.util.find_spec("unidecode") is not None
 try:
     _unidecode_version = importlib_metadata.version("unidecode")
-    logger.debug(
-        f"Successfully imported unidecode version {_unidecode_version}")
+    logger.debug(f"Successfully imported unidecode version {_unidecode_version}")
 except importlib_metadata.PackageNotFoundError:
     _unidecode_available = False
 
@@ -134,14 +132,12 @@ if _fastdeploy_available:
             pass
     _fastdeploy_available = _fastdeploy_version != "N/A"
     if _fastdeploy_available:
-        logger.debug(
-            f"Successfully imported fastdeploy version {_fastdeploy_version}")
+        logger.debug(f"Successfully imported fastdeploy version {_fastdeploy_version}")
 
 _paddlenlp_available = importlib.util.find_spec("paddlenlp") is not None
 try:
     _paddlenlp_version = importlib_metadata.version("paddlenlp")
-    logger.debug(
-        f"Successfully imported paddlenlp version {_paddlenlp_version}")
+    logger.debug(f"Successfully imported paddlenlp version {_paddlenlp_version}")
 except importlib_metadata.PackageNotFoundError:
     _paddlenlp_available = False
 
@@ -152,7 +148,8 @@ try:
         "opencv-python",
         "opencv-contrib-python",
         "opencv-python-headless",
-        "opencv-contrib-python-headless", )
+        "opencv-contrib-python-headless",
+    )
     _opencv_version = None
     for pkg in candidates:
         try:
@@ -183,8 +180,7 @@ except importlib_metadata.PackageNotFoundError:
 _k_diffusion_available = importlib.util.find_spec("k_diffusion") is not None
 try:
     _k_diffusion_version = importlib_metadata.version("k_diffusion")
-    logger.debug(
-        f"Successfully imported k-diffusion version {_k_diffusion_version}")
+    logger.debug(f"Successfully imported k-diffusion version {_k_diffusion_version}")
 except importlib_metadata.PackageNotFoundError:
     _k_diffusion_available = False
 
@@ -205,16 +201,14 @@ except importlib_metadata.PackageNotFoundError:
 _omegaconf_available = importlib.util.find_spec("omegaconf") is not None
 try:
     _omegaconf_version = importlib_metadata.version("omegaconf")
-    logger.debug(
-        f"Successfully imported omegaconf version {_omegaconf_version}")
+    logger.debug(f"Successfully imported omegaconf version {_omegaconf_version}")
 except importlib_metadata.PackageNotFoundError:
     _omegaconf_available = False
 
 _tensorboard_available = importlib.util.find_spec("tensorboard")
 try:
     _tensorboard_version = importlib_metadata.version("tensorboard")
-    logger.debug(
-        f"Successfully imported tensorboard version {_tensorboard_version}")
+    logger.debug(f"Successfully imported tensorboard version {_tensorboard_version}")
 except importlib_metadata.PackageNotFoundError:
     _tensorboard_available = False
 
@@ -232,8 +226,7 @@ try:
         import einops.layers.paddle
 
         einops.layers.paddle
-        logger.debug(
-            f"Successfully imported einops version {einops.__version__}")
+        logger.debug(f"Successfully imported einops version {einops.__version__}")
     except ImportError:
         _einops_available = False
 except importlib_metadata.PackageNotFoundError:
@@ -482,27 +475,29 @@ installation section: https://github.com/rspeer/python-ftfy/tree/master#installi
 that match your environment. Please note that you may need to restart your runtime after installation.
 """
 
-BACKENDS_MAPPING = OrderedDict([
-    ("bs4", (is_bs4_available, BS4_IMPORT_ERROR)),
-    ("fastdeploy", (is_fastdeploy_available, FASTDEPLOY_IMPORT_ERROR)),
-    ("paddle", (is_paddle_available, PADDLE_IMPORT_ERROR)),
-    ("paddlenlp", (is_paddlenlp_available, PADDLENLP_IMPORT_ERROR)),
-    ("visualdl", (is_visualdl_available, VISUALDL_IMPORT_ERROR)),
-    ("inflect", (is_inflect_available, INFLECT_IMPORT_ERROR)),
-    ("opencv", (is_opencv_available, OPENCV_IMPORT_ERROR)),
-    ("scipy", (is_scipy_available, SCIPY_IMPORT_ERROR)),
-    ("torch", (is_torch_available, PYTORCH_IMPORT_ERROR)),
-    ("unidecode", (is_unidecode_available, UNIDECODE_IMPORT_ERROR)),
-    ("librosa", (is_librosa_available, LIBROSA_IMPORT_ERROR)),
-    ("k_diffusion", (is_k_diffusion_available, K_DIFFUSION_IMPORT_ERROR)),
-    ("wandb", (is_wandb_available, WANDB_IMPORT_ERROR)),
-    ("omegaconf", (is_omegaconf_available, OMEGACONF_IMPORT_ERROR)),
-    ("tensorboard", (is_tensorboard_available, TENSORBOARD_IMPORT_ERROR)),
-    ("einops", (is_einops_available, EINOPS_IMPORT_ERROR)),
-    ("note_seq", (is_note_seq_available, NOTE_SEQ_IMPORT_ERROR)),
-    ("compel", (is_compel_available, COMPEL_IMPORT_ERROR)),
-    ("ftfy", (is_ftfy_available, FTFY_IMPORT_ERROR)),
-])
+BACKENDS_MAPPING = OrderedDict(
+    [
+        ("bs4", (is_bs4_available, BS4_IMPORT_ERROR)),
+        ("fastdeploy", (is_fastdeploy_available, FASTDEPLOY_IMPORT_ERROR)),
+        ("paddle", (is_paddle_available, PADDLE_IMPORT_ERROR)),
+        ("paddlenlp", (is_paddlenlp_available, PADDLENLP_IMPORT_ERROR)),
+        ("visualdl", (is_visualdl_available, VISUALDL_IMPORT_ERROR)),
+        ("inflect", (is_inflect_available, INFLECT_IMPORT_ERROR)),
+        ("opencv", (is_opencv_available, OPENCV_IMPORT_ERROR)),
+        ("scipy", (is_scipy_available, SCIPY_IMPORT_ERROR)),
+        ("torch", (is_torch_available, PYTORCH_IMPORT_ERROR)),
+        ("unidecode", (is_unidecode_available, UNIDECODE_IMPORT_ERROR)),
+        ("librosa", (is_librosa_available, LIBROSA_IMPORT_ERROR)),
+        ("k_diffusion", (is_k_diffusion_available, K_DIFFUSION_IMPORT_ERROR)),
+        ("wandb", (is_wandb_available, WANDB_IMPORT_ERROR)),
+        ("omegaconf", (is_omegaconf_available, OMEGACONF_IMPORT_ERROR)),
+        ("tensorboard", (is_tensorboard_available, TENSORBOARD_IMPORT_ERROR)),
+        ("einops", (is_einops_available, EINOPS_IMPORT_ERROR)),
+        ("note_seq", (is_note_seq_available, NOTE_SEQ_IMPORT_ERROR)),
+        ("compel", (is_compel_available, COMPEL_IMPORT_ERROR)),
+        ("ftfy", (is_ftfy_available, FTFY_IMPORT_ERROR)),
+    ]
+)
 
 
 def requires_backends(obj, backends):
@@ -516,26 +511,24 @@ def requires_backends(obj, backends):
         raise ImportError("".join(failed))
 
     if name in [
-            "VersatileDiffusionTextToImagePipeline",
-            "VersatileDiffusionPipeline",
-            "VersatileDiffusionDualGuidedPipeline",
-            "StableDiffusionImageVariationPipeline",
-            "UnCLIPPipeline",
+        "VersatileDiffusionTextToImagePipeline",
+        "VersatileDiffusionPipeline",
+        "VersatileDiffusionDualGuidedPipeline",
+        "StableDiffusionImageVariationPipeline",
+        "UnCLIPPipeline",
     ] and is_paddlenlp_version("<", "2.5.0"):
         raise ImportError(
             f"You need to install `paddlenlp>=2.5.0` in order to use {name}: \n```\n pip install"
-            " --upgrade paddlenlp \n```")
+            " --upgrade paddlenlp \n```"
+        )
 
-    if name in [
-            "StableDiffusionDepth2ImgPipeline",
-            "StableDiffusionPix2PixZeroPipeline",
-    ] and is_paddlenlp_version(
-            "<",
-            "2.5.1"  # TODO version
+    if name in ["StableDiffusionDepth2ImgPipeline", "StableDiffusionPix2PixZeroPipeline"] and is_paddlenlp_version(
+        "<", "2.5.1"  # TODO version
     ):
         raise ImportError(
             f"You need to install `paddlenlp>=2.5.1` in order to use {name}: \n```\n pip install"
-            " --upgrade paddlenlp \n```")
+            " --upgrade paddlenlp \n```"
+        )
 
 
 class DummyObject(type):
@@ -551,9 +544,7 @@ class DummyObject(type):
 
 
 # This function was copied from: https://github.com/huggingface/accelerate/blob/874c4967d94badd24f893064cc3bef45f57cadf7/src/accelerate/utils/versions.py#L319
-def compare_versions(library_or_version: Union[str, Version],
-                     operation: str,
-                     requirement_version: str):
+def compare_versions(library_or_version: Union[str, Version], operation: str, requirement_version: str):
     """
     Args:
     Compares a library version to some requirement using a given operation.
@@ -565,13 +556,10 @@ def compare_versions(library_or_version: Union[str, Version],
             The version to compare the library version against
     """
     if operation not in STR_OPERATION_TO_FUNC.keys():
-        raise ValueError(
-            f"`operation` must be one of {list(STR_OPERATION_TO_FUNC.keys())}, received {operation}"
-        )
+        raise ValueError(f"`operation` must be one of {list(STR_OPERATION_TO_FUNC.keys())}, received {operation}")
     operation = STR_OPERATION_TO_FUNC[operation]
     if isinstance(library_or_version, str):
-        library_or_version = parse(
-            importlib_metadata.version(library_or_version))
+        library_or_version = parse(importlib_metadata.version(library_or_version))
     return operation(library_or_version, parse(requirement_version))
 
 

@@ -60,52 +60,56 @@ class TransformerTemporalModel(ModelMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            num_attention_heads: int=16,
-            attention_head_dim: int=88,
-            in_channels: Optional[int]=None,
-            out_channels: Optional[int]=None,
-            num_layers: int=1,
-            dropout: float=0.0,
-            norm_num_groups: int=32,
-            cross_attention_dim: Optional[int]=None,
-            attention_bias: bool=False,
-            sample_size: Optional[int]=None,
-            activation_fn: str="geglu",
-            norm_elementwise_affine: bool=True,
-            double_self_attention: bool=True, ):
+        self,
+        num_attention_heads: int = 16,
+        attention_head_dim: int = 88,
+        in_channels: Optional[int] = None,
+        out_channels: Optional[int] = None,
+        num_layers: int = 1,
+        dropout: float = 0.0,
+        norm_num_groups: int = 32,
+        cross_attention_dim: Optional[int] = None,
+        attention_bias: bool = False,
+        sample_size: Optional[int] = None,
+        activation_fn: str = "geglu",
+        norm_elementwise_affine: bool = True,
+        double_self_attention: bool = True,
+    ):
         super().__init__()
         self.num_attention_heads = num_attention_heads
         self.attention_head_dim = attention_head_dim
         inner_dim = num_attention_heads * attention_head_dim
         self.in_channels = in_channels
-        self.norm = nn.GroupNorm(
-            num_groups=norm_num_groups, num_channels=in_channels, epsilon=1e-06)
+        self.norm = nn.GroupNorm(num_groups=norm_num_groups, num_channels=in_channels, epsilon=1e-06)
         self.proj_in = nn.Linear(in_channels, inner_dim)
-        self.transformer_blocks = nn.LayerList([
-            BasicTransformerBlock(
-                inner_dim,
-                num_attention_heads,
-                attention_head_dim,
-                dropout=dropout,
-                cross_attention_dim=cross_attention_dim,
-                activation_fn=activation_fn,
-                attention_bias=attention_bias,
-                double_self_attention=double_self_attention,
-                norm_elementwise_affine=norm_elementwise_affine, )
-            for d in range(num_layers)
-        ])
+        self.transformer_blocks = nn.LayerList(
+            [
+                BasicTransformerBlock(
+                    inner_dim,
+                    num_attention_heads,
+                    attention_head_dim,
+                    dropout=dropout,
+                    cross_attention_dim=cross_attention_dim,
+                    activation_fn=activation_fn,
+                    attention_bias=attention_bias,
+                    double_self_attention=double_self_attention,
+                    norm_elementwise_affine=norm_elementwise_affine,
+                )
+                for d in range(num_layers)
+            ]
+        )
         self.proj_out = nn.Linear(inner_dim, in_channels)
 
     def forward(
-            self,
-            hidden_states,
-            encoder_hidden_states=None,
-            timestep=None,
-            class_labels=None,
-            num_frames=1,
-            cross_attention_kwargs=None,
-            return_dict: bool=True, ):
+        self,
+        hidden_states,
+        encoder_hidden_states=None,
+        timestep=None,
+        class_labels=None,
+        num_frames=1,
+        cross_attention_kwargs=None,
+        return_dict: bool = True,
+    ):
         """
         Args:
             hidden_states ( When discrete, `paddle.Tensor` of shape `(batch size, num latent pixels)`.
@@ -131,12 +135,12 @@ class TransformerTemporalModel(ModelMixin, ConfigMixin):
         batch_frames, channel, height, width = hidden_states.shape
         batch_size = batch_frames // num_frames
         residual = hidden_states
-        hidden_states = hidden_states[None, :].reshape(
-            (batch_size, num_frames, channel, height, width))
+        hidden_states = hidden_states[None, :].reshape((batch_size, num_frames, channel, height, width))
         hidden_states = hidden_states.transpose([0, 2, 1, 3, 4])
         hidden_states = self.norm(hidden_states)
         hidden_states = hidden_states.transpose([0, 3, 4, 2, 1]).reshape(
-            (batch_size * height * width, num_frames, channel))
+            (batch_size * height * width, num_frames, channel)
+        )
         hidden_states = self.proj_in(hidden_states)
         # 2. Blocks
         for block in self.transformer_blocks:
@@ -145,15 +149,17 @@ class TransformerTemporalModel(ModelMixin, ConfigMixin):
                 encoder_hidden_states=encoder_hidden_states,
                 timestep=timestep,
                 cross_attention_kwargs=cross_attention_kwargs,
-                class_labels=class_labels, )
+                class_labels=class_labels,
+            )
         # 3. Output
         hidden_states = self.proj_out(hidden_states)
-        hidden_states = (hidden_states[None, None, :].reshape(
-            (batch_size, height, width, channel, num_frames))
-                         .transpose([0, 3, 4, 1, 2]))
-        hidden_states = hidden_states.reshape(
-            (batch_frames, channel, height, width))
+        hidden_states = (
+            hidden_states[None, None, :]
+            .reshape((batch_size, height, width, channel, num_frames))
+            .transpose([0, 3, 4, 1, 2])
+        )
+        hidden_states = hidden_states.reshape((batch_frames, channel, height, width))
         output = hidden_states + residual
         if not return_dict:
-            return (output, )
+            return (output,)
         return TransformerTemporalModelOutput(sample=output)

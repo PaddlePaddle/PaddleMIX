@@ -26,9 +26,15 @@ from paddle import nn
 from paddle.distributed.fleet.utils import recompute
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.clip.configuration import (
-    CLIPConfig, CLIPTextConfig, CLIPVisionConfig)
+    CLIPConfig,
+    CLIPTextConfig,
+    CLIPVisionConfig,
+)
 from paddlenlp.transformers.model_outputs import (
-    BaseModelOutput, BaseModelOutputWithPooling, ModelOutput)
+    BaseModelOutput,
+    BaseModelOutputWithPooling,
+    ModelOutput,
+)
 from paddlenlp.transformers.model_utils import PretrainedModel
 
 from ppdiffusers.initializer import normal_, ones_
@@ -39,7 +45,7 @@ CLIP_PRETRAINED_MODEL_ARCHIVE_LIST = [
 ]
 
 
-def finfo(dtype: paddle.dtype=None):
+def finfo(dtype: paddle.dtype = None):
     if dtype is None:
         dtype = paddle.get_default_dtype()
 
@@ -58,10 +64,7 @@ def finfo(dtype: paddle.dtype=None):
 
 
 def Parameter(data: paddle.Tensor, requires_grad=True):
-    tensor = paddle.create_parameter(
-        data.shape,
-        dtype=data.dtype,
-        default_initializer=nn.initializer.Assign(data))
+    tensor = paddle.create_parameter(data.shape, dtype=data.dtype, default_initializer=nn.initializer.Assign(data))
     if not requires_grad:
         tensor.stop_gradient = True
     return tensor
@@ -74,13 +77,14 @@ class TorchLinear(nn.Layer):
     """
 
     def __init__(
-            self,
-            in_features,
-            out_features,
-            weight_attr=None,
-            bias_attr=None,
-            name=None,
-            bias=None, ):
+        self,
+        in_features,
+        out_features,
+        weight_attr=None,
+        bias_attr=None,
+        name=None,
+        bias=None,
+    ):
         super().__init__()
         self._dtype = self._helper.get_default_dtype()
         self._weight_attr = weight_attr
@@ -96,23 +100,25 @@ class TorchLinear(nn.Layer):
             ],  # regular linear has shape [in_features, out_features]
             attr=self._weight_attr,
             dtype=self._dtype,
-            is_bias=False, )
+            is_bias=False,
+        )
         self.bias = self.create_parameter(
             shape=[out_features],
             attr=self._bias_attr,
             dtype=self._dtype,
-            is_bias=True, )
+            is_bias=True,
+        )
         self.name = name
 
     def forward(self, input):
-        out = F.linear(
-            x=input, weight=self.weight.T, bias=self.bias, name=self.name)
+        out = F.linear(x=input, weight=self.weight.T, bias=self.bias, name=self.name)
         return out
 
     def extra_repr(self):
         name_str = ", name={}".format(self.name) if self.name else ""
         return "in_features={}, out_features={}, dtype={}{}".format(
-            self.weight.shape[1], self.weight.shape[0], self._dtype, name_str)
+            self.weight.shape[1], self.weight.shape[0], self._dtype, name_str
+        )
 
 
 def str2bool(v):
@@ -139,20 +145,18 @@ def masked_fill(x, mask, value):
     return paddle.where(mask, y, x)
 
 
-def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int]=None):
+def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
     """
     Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
     """
     bsz, src_len = mask.shape
     tgt_len = tgt_len if tgt_len is not None else src_len
 
-    expanded_mask = (
-        mask[:, None, None, :].expand([bsz, 1, tgt_len, src_len]).cast(dtype))
+    expanded_mask = mask[:, None, None, :].expand([bsz, 1, tgt_len, src_len]).cast(dtype)
 
     inverted_mask = 1.0 - expanded_mask
 
-    return masked_fill(inverted_mask,
-                       inverted_mask.cast(paddle.bool), finfo(dtype).min)
+    return masked_fill(inverted_mask, inverted_mask.cast(paddle.bool), finfo(dtype).min)
 
 
 # contrastive loss function, adapted from
@@ -256,9 +260,10 @@ class HFCLIPOutput(ModelOutput):
     vision_model_output: BaseModelOutputWithPooling = None
 
     def to_tuple(self) -> Tuple[Any]:
-        return tuple(self[k]
-                     if k not in ["text_model_output", "vision_model_output"]
-                     else getattr(self, k).to_tuple() for k in self.keys())
+        return tuple(
+            self[k] if k not in ["text_model_output", "vision_model_output"] else getattr(self, k).to_tuple()
+            for k in self.keys()
+        )
 
 
 class HFCLIPVisionEmbeddings(nn.Layer):
@@ -269,30 +274,29 @@ class HFCLIPVisionEmbeddings(nn.Layer):
         self.image_size = config.image_size
         self.patch_size = config.patch_size
 
-        self.class_embedding = Parameter(paddle.randn((self.embed_dim, )))
+        self.class_embedding = Parameter(paddle.randn((self.embed_dim,)))
 
         self.patch_embedding = nn.Conv2D(
             in_channels=config.num_channels,
             out_channels=self.embed_dim,
             kernel_size=self.patch_size,
             stride=self.patch_size,
-            bias_attr=False, )
+            bias_attr=False,
+        )
 
-        self.num_patches = (self.image_size // self.patch_size)**2
+        self.num_patches = (self.image_size // self.patch_size) ** 2
         self.num_positions = self.num_patches + 1
-        self.position_embedding = nn.Embedding(self.num_positions,
-                                               self.embed_dim)
+        self.position_embedding = nn.Embedding(self.num_positions, self.embed_dim)
         self.register_buffer(
             "position_ids",
-            paddle.arange(self.num_positions).expand(
-                (1, -1), dtype="int64"),
-            persistable=False, )
+            paddle.arange(self.num_positions).expand((1, -1), dtype="int64"),
+            persistable=False,
+        )
 
     def forward(self, pixel_values: paddle.Tensor) -> paddle.Tensor:
         batch_size = pixel_values.shape[0]
         target_dtype = self.patch_embedding.weight.dtype
-        patch_embeds = self.patch_embedding(
-            pixel_values.cast(target_dtype))  # shape = [*, width, grid, grid]
+        patch_embeds = self.patch_embedding(pixel_values.cast(target_dtype))  # shape = [*, width, grid, grid]
         patch_embeds = patch_embeds.flatten(2).transpose([0, 2, 1])
 
         class_embeds = self.class_embedding.expand([batch_size, 1, -1])
@@ -307,23 +311,22 @@ class HFCLIPTextEmbeddings(nn.Layer):
         embed_dim = config.hidden_size
 
         self.token_embedding = nn.Embedding(config.vocab_size, embed_dim)
-        self.position_embedding = nn.Embedding(config.max_position_embeddings,
-                                               embed_dim)
+        self.position_embedding = nn.Embedding(config.max_position_embeddings, embed_dim)
 
         # position_ids (1, len position emb) is contiguous in memory and exported when serialized
         self.register_buffer(
             "position_ids",
-            paddle.arange(
-                config.max_position_embeddings, dtype="int64").expand((1, -1)),
-            persistable=False, )
+            paddle.arange(config.max_position_embeddings, dtype="int64").expand((1, -1)),
+            persistable=False,
+        )
 
     def forward(
-            self,
-            input_ids: Optional[paddle.Tensor]=None,
-            position_ids: Optional[paddle.Tensor]=None,
-            inputs_embeds: Optional[paddle.Tensor]=None, ) -> paddle.Tensor:
-        seq_length = (input_ids.shape[-1]
-                      if input_ids is not None else inputs_embeds.shape[-2])
+        self,
+        input_ids: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        inputs_embeds: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
+        seq_length = input_ids.shape[-1] if input_ids is not None else inputs_embeds.shape[-2]
 
         if position_ids is None:
             position_ids = self.position_ids[:, :seq_length]
@@ -349,7 +352,8 @@ class HFCLIPAttention(nn.Layer):
         if self.head_dim * self.num_heads != self.embed_dim:
             raise ValueError(
                 f"embed_dim must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`:"
-                f" {self.num_heads}).")
+                f" {self.num_heads})."
+            )
         self.scale = self.head_dim**-0.5
         self.dropout = config.attention_dropout
 
@@ -359,18 +363,15 @@ class HFCLIPAttention(nn.Layer):
         self.out_proj = LinearClass(self.embed_dim, self.embed_dim)
 
     def _shape(self, tensor: paddle.Tensor, seq_len: int, bsz: int):
-        return tensor.reshape(
-            [bsz, seq_len, self.num_heads, self.head_dim]).transpose(
-                [0, 2, 1, 3])
+        return tensor.reshape([bsz, seq_len, self.num_heads, self.head_dim]).transpose([0, 2, 1, 3])
 
     def forward(
-            self,
-            hidden_states: paddle.Tensor,
-            attention_mask: Optional[paddle.Tensor]=None,
-            causal_attention_mask: Optional[paddle.Tensor]=None,
-            output_attentions: Optional[bool]=False, ) -> Tuple[
-                paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[
-                    paddle.Tensor]]]:
+        self,
+        hidden_states: paddle.Tensor,
+        attention_mask: Optional[paddle.Tensor] = None,
+        causal_attention_mask: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = False,
+    ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
         """Input shape: Batch x Time x Channel"""
 
         bsz, tgt_len, embed_dim = hidden_states.shape
@@ -381,8 +382,7 @@ class HFCLIPAttention(nn.Layer):
         value_states = self._shape(self.v_proj(hidden_states), -1, bsz)
 
         proj_shape = (bsz * self.num_heads, -1, self.head_dim)
-        query_states = self._shape(query_states, tgt_len,
-                                   bsz).reshape(proj_shape)
+        query_states = self._shape(query_states, tgt_len, bsz).reshape(proj_shape)
         key_states = key_states.reshape(proj_shape)
         value_states = value_states.reshape(proj_shape)
 
@@ -392,29 +392,26 @@ class HFCLIPAttention(nn.Layer):
         if attn_weights.shape != [bsz * self.num_heads, tgt_len, src_len]:
             raise ValueError(
                 f"Attention weights should be of size {[bsz * self.num_heads, tgt_len, src_len]}, but is"
-                f" {attn_weights.shape}")
+                f" {attn_weights.shape}"
+            )
 
         # apply the causal_attention_mask first
         if causal_attention_mask is not None:
             if causal_attention_mask.shape != [bsz, 1, tgt_len, src_len]:
                 raise ValueError(
                     f"Attention mask should be of size {[bsz, 1, tgt_len, src_len]}, but is"
-                    f" {causal_attention_mask.shape}")
-            attn_weights = (
-                attn_weights.reshape([bsz, self.num_heads, tgt_len, src_len]) +
-                causal_attention_mask)
-            attn_weights = attn_weights.reshape(
-                [bsz * self.num_heads, tgt_len, src_len])
+                    f" {causal_attention_mask.shape}"
+                )
+            attn_weights = attn_weights.reshape([bsz, self.num_heads, tgt_len, src_len]) + causal_attention_mask
+            attn_weights = attn_weights.reshape([bsz * self.num_heads, tgt_len, src_len])
 
         if attention_mask is not None:
             if attention_mask.shape != [bsz, 1, tgt_len, src_len]:
                 raise ValueError(
                     f"Attention mask should be of size {[bsz, 1, tgt_len, src_len]}, but is {attention_mask.shape}"
                 )
-            attn_weights = (attn_weights.reshape(
-                [bsz, self.num_heads, tgt_len, src_len]) + attention_mask)
-            attn_weights = attn_weights.reshape(
-                [bsz * self.num_heads, tgt_len, src_len])
+            attn_weights = attn_weights.reshape([bsz, self.num_heads, tgt_len, src_len]) + attention_mask
+            attn_weights = attn_weights.reshape([bsz * self.num_heads, tgt_len, src_len])
 
         attn_weights = F.softmax(attn_weights, axis=-1)
 
@@ -423,25 +420,22 @@ class HFCLIPAttention(nn.Layer):
             # make sure that attn_weights keeps its gradient.
             # In order to do so, attn_weights have to reshaped
             # twice and have to be reused in the following
-            attn_weights_reshaped = attn_weights.reshape(
-                [bsz, self.num_heads, tgt_len, src_len])
-            attn_weights = attn_weights_reshaped.reshape(
-                [bsz * self.num_heads, tgt_len, src_len])
+            attn_weights_reshaped = attn_weights.reshape([bsz, self.num_heads, tgt_len, src_len])
+            attn_weights = attn_weights_reshaped.reshape([bsz * self.num_heads, tgt_len, src_len])
         else:
             attn_weights_reshaped = None
 
-        attn_probs = F.dropout(
-            attn_weights, p=self.dropout, training=self.training)
+        attn_probs = F.dropout(attn_weights, p=self.dropout, training=self.training)
 
         attn_output = paddle.matmul(attn_probs, value_states)
 
         if attn_output.shape != [bsz * self.num_heads, tgt_len, self.head_dim]:
             raise ValueError(
                 f"`attn_output` should be of size {[bsz, self.num_heads, tgt_len, self.head_dim]}, but is"
-                f" {attn_output.shape}")
+                f" {attn_output.shape}"
+            )
 
-        attn_output = attn_output.reshape(
-            [bsz, self.num_heads, tgt_len, self.head_dim])
+        attn_output = attn_output.reshape([bsz, self.num_heads, tgt_len, self.head_dim])
         attn_output = attn_output.transpose([0, 2, 1, 3])
         attn_output = attn_output.reshape([bsz, tgt_len, embed_dim])
 
@@ -470,18 +464,17 @@ class HFCLIPEncoderLayer(nn.Layer):
         super().__init__()
         self.embed_dim = config.hidden_size
         self.self_attn = HFCLIPAttention(config)
-        self.layer_norm1 = nn.LayerNorm(
-            self.embed_dim, epsilon=config.layer_norm_eps)
+        self.layer_norm1 = nn.LayerNorm(self.embed_dim, epsilon=config.layer_norm_eps)
         self.mlp = HFCLIPMLP(config)
-        self.layer_norm2 = nn.LayerNorm(
-            self.embed_dim, epsilon=config.layer_norm_eps)
+        self.layer_norm2 = nn.LayerNorm(self.embed_dim, epsilon=config.layer_norm_eps)
 
     def forward(
-            self,
-            hidden_states: paddle.Tensor,
-            attention_mask: paddle.Tensor,
-            causal_attention_mask: paddle.Tensor,
-            output_attentions: Optional[bool]=False, ) -> Tuple[paddle.Tensor]:
+        self,
+        hidden_states: paddle.Tensor,
+        attention_mask: paddle.Tensor,
+        causal_attention_mask: paddle.Tensor,
+        output_attentions: Optional[bool] = False,
+    ) -> Tuple[paddle.Tensor]:
         """
         Args:
             hidden_states (`paddle.Tensor`): input to the layer of shape `(batch, seq_len, embed_dim)`
@@ -499,7 +492,8 @@ class HFCLIPEncoderLayer(nn.Layer):
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             causal_attention_mask=causal_attention_mask,
-            output_attentions=output_attentions, )
+            output_attentions=output_attentions,
+        )
         hidden_states = residual + hidden_states
 
         residual = hidden_states
@@ -507,10 +501,10 @@ class HFCLIPEncoderLayer(nn.Layer):
         hidden_states = self.mlp(hidden_states)
         hidden_states = residual + hidden_states
 
-        outputs = (hidden_states, )
+        outputs = (hidden_states,)
 
         if output_attentions:
-            outputs += (attn_weights, )
+            outputs += (attn_weights,)
 
         return outputs
 
@@ -531,24 +525,21 @@ class HFCLIPPretrainedModel(PretrainedModel):
         factor = self.config.initializer_factor
         if isinstance(module, HFCLIPTextEmbeddings):
             normal_(module.token_embedding.weight, mean=0.0, std=factor * 0.02)
-            normal_(
-                module.position_embedding.weight, mean=0.0, std=factor * 0.02)
+            normal_(module.position_embedding.weight, mean=0.0, std=factor * 0.02)
         elif isinstance(module, HFCLIPVisionEmbeddings):
             factor = self.config.initializer_factor
-            normal_(
-                module.class_embedding,
-                mean=0.0,
-                std=module.embed_dim**-0.5 * factor)
+            normal_(module.class_embedding, mean=0.0, std=module.embed_dim**-0.5 * factor)
             normal_(
                 module.patch_embedding.weight,
-                std=module.config.initializer_range * factor, )
+                std=module.config.initializer_range * factor,
+            )
             normal_(
                 module.position_embedding.weight,
-                std=module.config.initializer_range * factor, )
+                std=module.config.initializer_range * factor,
+            )
         elif isinstance(module, HFCLIPAttention):
             factor = self.config.initializer_factor
-            in_proj_std = ((module.embed_dim**-0.5) * (
-                (2 * module.config.num_hidden_layers)**-0.5) * factor)
+            in_proj_std = (module.embed_dim**-0.5) * ((2 * module.config.num_hidden_layers) ** -0.5) * factor
             out_proj_std = (module.embed_dim**-0.5) * factor
             normal_(module.q_proj.weight, std=in_proj_std)
             normal_(module.k_proj.weight, std=in_proj_std)
@@ -556,30 +547,31 @@ class HFCLIPPretrainedModel(PretrainedModel):
             normal_(module.out_proj.weight, std=out_proj_std)
         elif isinstance(module, HFCLIPMLP):
             factor = self.config.initializer_factor
-            in_proj_std = ((module.config.hidden_size**-0.5) * (
-                (2 * module.config.num_hidden_layers)**-0.5) * factor)
-            fc_std = (2 * module.config.hidden_size)**-0.5 * factor
+            in_proj_std = (
+                (module.config.hidden_size**-0.5) * ((2 * module.config.num_hidden_layers) ** -0.5) * factor
+            )
+            fc_std = (2 * module.config.hidden_size) ** -0.5 * factor
             normal_(module.fc1.weight, std=fc_std)
             normal_(module.fc2.weight, std=in_proj_std)
         elif isinstance(module, HFCLIPModel):
             normal_(
                 module.text_projection.weight,
-                std=module.text_embed_dim
-                **-0.5 * self.config.initializer_factor, )
+                std=module.text_embed_dim**-0.5 * self.config.initializer_factor,
+            )
             normal_(
                 module.visual_projection.weight,
-                std=module.vision_embed_dim
-                **-0.5 * self.config.initializer_factor, )
+                std=module.vision_embed_dim**-0.5 * self.config.initializer_factor,
+            )
         elif isinstance(module, HFCLIPVisionModelWithProjection):
             normal_(
                 module.visual_projection.weight,
-                std=self.config.hidden_size
-                **-0.5 * self.config.initializer_factor, )
+                std=self.config.hidden_size**-0.5 * self.config.initializer_factor,
+            )
         elif isinstance(module, HFCLIPTextModelWithProjection):
             normal_(
                 module.text_projection.weight,
-                std=self.config.hidden_size
-                **-0.5 * self.config.initializer_factor, )
+                std=self.config.hidden_size**-0.5 * self.config.initializer_factor,
+            )
 
         if isinstance(module, nn.LayerNorm):
             module.bias.zero_()
@@ -599,9 +591,7 @@ class HFCLIPPretrainedModel(PretrainedModel):
         activations".
         """
         if not self.supports_gradient_checkpointing:
-            raise ValueError(
-                f"{self.__class__.__name__} does not support gradient checkpointing."
-            )
+            raise ValueError(f"{self.__class__.__name__} does not support gradient checkpointing.")
         self.apply(partial(self._set_gradient_checkpointing, value=True))
 
     def gradient_checkpointing_disable(self):
@@ -627,8 +617,7 @@ class HFCLIPPretrainedModel(PretrainedModel):
             def map_from(module, state_dict, *args, **kwargs):
                 if state_dict.pop("is_torch_weight", False):
                     need_transposed = []
-                    for name, layer in module.named_sublayers(
-                            include_self=True):
+                    for name, layer in module.named_sublayers(include_self=True):
                         if isinstance(layer, nn.Linear):
                             need_transposed.append(name + ".weight")
                     module.need_transposed = need_transposed
@@ -637,8 +626,7 @@ class HFCLIPPretrainedModel(PretrainedModel):
 
         else:
             map_from = function
-        self.load_torch_hook = self.register_load_state_dict_pre_hook(
-            map_from, with_module=True)
+        self.load_torch_hook = self.register_load_state_dict_pre_hook(map_from, with_module=True)
         return self.load_torch_hook
 
     def remove_load_torch_hook(self):
@@ -651,7 +639,8 @@ class HFCLIPPretrainedModel(PretrainedModel):
             dtype=dtype,
             blocking=blocking,
             include_sublayers=True,
-            floating_only=True, )
+            floating_only=True,
+        )
 
 
 class HFCLIPEncoder(nn.Layer):
@@ -666,20 +655,18 @@ class HFCLIPEncoder(nn.Layer):
     def __init__(self, config: CLIPConfig):
         super().__init__()
         self.config = config
-        self.layers = nn.LayerList([
-            HFCLIPEncoderLayer(config) for _ in range(config.num_hidden_layers)
-        ])
+        self.layers = nn.LayerList([HFCLIPEncoderLayer(config) for _ in range(config.num_hidden_layers)])
         self.gradient_checkpointing = False
 
     def forward(
-            self,
-            inputs_embeds,
-            attention_mask: Optional[paddle.Tensor]=None,
-            causal_attention_mask: Optional[paddle.Tensor]=None,
-            output_attentions: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ) -> Union[Tuple,
-                                                         BaseModelOutput]:
+        self,
+        inputs_embeds,
+        attention_mask: Optional[paddle.Tensor] = None,
+        causal_attention_mask: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, BaseModelOutput]:
         r"""
         Args:
             inputs_embeds (`paddle.Tensor` of shape `(batch_size, sequence_length, hidden_size)`):
@@ -709,13 +696,11 @@ class HFCLIPEncoder(nn.Layer):
             return_dict (`bool`, *optional*):
                 Whether or not to return a [`~utils.ModelOutput`] instead of a plain tuple.
         """
-        output_attentions = (output_attentions if output_attentions is not None
-                             else self.config.output_attentions)
-        output_hidden_states = (output_hidden_states
-                                if output_hidden_states is not None else
-                                self.config.output_hidden_states)
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         encoder_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
@@ -723,7 +708,7 @@ class HFCLIPEncoder(nn.Layer):
         hidden_states = inputs_embeds
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
-                encoder_states = encoder_states + (hidden_states, )
+                encoder_states = encoder_states + (hidden_states,)
             if self.gradient_checkpointing and self.training:
 
                 def create_custom_forward(module):
@@ -736,30 +721,31 @@ class HFCLIPEncoder(nn.Layer):
                     create_custom_forward(encoder_layer),
                     hidden_states,
                     attention_mask,
-                    causal_attention_mask, )
+                    causal_attention_mask,
+                )
             else:
                 layer_outputs = encoder_layer(
                     hidden_states,
                     attention_mask,
                     causal_attention_mask,
-                    output_attentions=output_attentions, )
+                    output_attentions=output_attentions,
+                )
 
             hidden_states = layer_outputs[0]
 
             if output_attentions:
-                all_attentions = all_attentions + (layer_outputs[1], )
+                all_attentions = all_attentions + (layer_outputs[1],)
 
         if output_hidden_states:
-            encoder_states = encoder_states + (hidden_states, )
+            encoder_states = encoder_states + (hidden_states,)
 
         if not return_dict:
-            return tuple(
-                v for v in [hidden_states, encoder_states, all_attentions]
-                if v is not None)
+            return tuple(v for v in [hidden_states, encoder_states, all_attentions] if v is not None)
         return BaseModelOutput(
             last_hidden_state=hidden_states,
             hidden_states=encoder_states,
-            attentions=all_attentions, )
+            attentions=all_attentions,
+        )
 
 
 # def _make_causal_mask(
@@ -786,31 +772,28 @@ class HFCLIPTextTransformer(nn.Layer):
         embed_dim = config.hidden_size
         self.embeddings = HFCLIPTextEmbeddings(config)
         self.encoder = HFCLIPEncoder(config)
-        self.final_layer_norm = nn.LayerNorm(
-            embed_dim, epsilon=config.layer_norm_eps)
+        self.final_layer_norm = nn.LayerNorm(embed_dim, epsilon=config.layer_norm_eps)
         # For `pooled_output` computation
         self.eos_token_id = config.eos_token_id
 
     def forward(
-            self,
-            input_ids: Optional[paddle.Tensor]=None,
-            attention_mask: Optional[paddle.Tensor]=None,
-            position_ids: Optional[paddle.Tensor]=None,
-            output_attentions: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ) -> Union[
-                Tuple, BaseModelOutputWithPooling]:
+        self,
+        input_ids: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, BaseModelOutputWithPooling]:
         r"""
         Returns:
 
         """
-        output_attentions = (output_attentions if output_attentions is not None
-                             else self.config.output_attentions)
-        output_hidden_states = (output_hidden_states
-                                if output_hidden_states is not None else
-                                self.config.output_hidden_states)
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if input_ids is None:
             raise ValueError("You have to specify either input_ids")
@@ -818,8 +801,7 @@ class HFCLIPTextTransformer(nn.Layer):
         input_shape = input_ids.shape
         input_ids = input_ids.reshape([-1, input_shape[-1]])
 
-        hidden_states = self.embeddings(
-            input_ids=input_ids, position_ids=position_ids)
+        hidden_states = self.embeddings(input_ids=input_ids, position_ids=position_ids)
 
         bsz, seq_len = input_shape
         # CLIP's text model uses causal mask, prepare it here.
@@ -828,7 +810,8 @@ class HFCLIPTextTransformer(nn.Layer):
         causal_attention_mask = self._build_causal_attention_mask(
             bsz,
             seq_len,
-            hidden_states.dtype, )
+            hidden_states.dtype,
+        )
         # expand attention_mask
         if attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
@@ -840,7 +823,8 @@ class HFCLIPTextTransformer(nn.Layer):
             causal_attention_mask=causal_attention_mask,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
         last_hidden_state = encoder_outputs[0]
         last_hidden_state = self.final_layer_norm(last_hidden_state)
@@ -855,24 +839,24 @@ class HFCLIPTextTransformer(nn.Layer):
             pooled_output = last_hidden_state.gather_nd(
                 paddle.stack(
                     [
-                        paddle.arange(
-                            last_hidden_state.shape[0], dtype="int32"),
-                        input_ids.argmax(
-                            -1, dtype="int32"),
+                        paddle.arange(last_hidden_state.shape[0], dtype="int32"),
+                        input_ids.argmax(-1, dtype="int32"),
                     ],
-                    axis=-1, ))
+                    axis=-1,
+                )
+            )
         else:
             # The config gets updated `eos_token_id` from PR #24773 (so the use of exta new tokens is possible)
             # We need to get the first position of `eos_token_id` value (`pad_token_ids` might equal to `eos_token_id`)
             pooled_output = last_hidden_state.gather_nd(
                 paddle.stack(
                     [
-                        paddle.arange(
-                            last_hidden_state.shape[0], dtype="int32"),
-                        (input_ids == self.eos_token_id).cast("int32").argmax(
-                            axis=-1, dtype="int32"),
+                        paddle.arange(last_hidden_state.shape[0], dtype="int32"),
+                        (input_ids == self.eos_token_id).cast("int32").argmax(axis=-1, dtype="int32"),
                     ],
-                    axis=-1, ))
+                    axis=-1,
+                )
+            )
 
         if not return_dict:
             return (last_hidden_state, pooled_output) + encoder_outputs[1:]
@@ -881,12 +865,14 @@ class HFCLIPTextTransformer(nn.Layer):
             last_hidden_state=last_hidden_state,
             pooler_output=pooled_output,
             hidden_states=encoder_outputs.hidden_states,
-            attentions=encoder_outputs.attentions, )
+            attentions=encoder_outputs.attentions,
+        )
 
     def _build_causal_attention_mask(self, bsz, seq_len, dtype):
         mask = paddle.triu(
             paddle.full((bsz, 1, seq_len, seq_len), finfo(dtype).min),
-            diagonal=1, )
+            diagonal=1,
+        )
         return mask
 
 
@@ -908,14 +894,14 @@ class HFCLIPTextModel(HFCLIPPretrainedModel):
         self.text_model.embeddings.token_embedding = value
 
     def forward(
-            self,
-            input_ids: Optional[paddle.Tensor]=None,
-            attention_mask: Optional[paddle.Tensor]=None,
-            position_ids: Optional[paddle.Tensor]=None,
-            output_attentions: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ) -> Union[
-                Tuple, BaseModelOutputWithPooling]:
+        self,
+        input_ids: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, BaseModelOutputWithPooling]:
         r"""
         Returns:
 
@@ -933,8 +919,7 @@ class HFCLIPTextModel(HFCLIPPretrainedModel):
         >>> last_hidden_state = outputs.last_hidden_state
         >>> pooled_output = outputs.pooler_output  # pooled (EOS token) states
         ```"""
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         return self.text_model(
             input_ids=input_ids,
@@ -942,7 +927,8 @@ class HFCLIPTextModel(HFCLIPPretrainedModel):
             position_ids=position_ids,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
 
 class HFCLIPVisionTransformer(nn.Layer):
@@ -952,30 +938,26 @@ class HFCLIPVisionTransformer(nn.Layer):
         embed_dim = config.hidden_size
 
         self.embeddings = HFCLIPVisionEmbeddings(config)
-        self.pre_layrnorm = nn.LayerNorm(
-            embed_dim, epsilon=config.layer_norm_eps)
+        self.pre_layrnorm = nn.LayerNorm(embed_dim, epsilon=config.layer_norm_eps)
         self.encoder = HFCLIPEncoder(config)
-        self.post_layernorm = nn.LayerNorm(
-            embed_dim, epsilon=config.layer_norm_eps)
+        self.post_layernorm = nn.LayerNorm(embed_dim, epsilon=config.layer_norm_eps)
 
     def forward(
-            self,
-            pixel_values: Optional[paddle.Tensor]=None,
-            output_attentions: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ) -> Union[
-                Tuple, BaseModelOutputWithPooling]:
+        self,
+        pixel_values: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, BaseModelOutputWithPooling]:
         r"""
         Returns:
 
         """
-        output_attentions = (output_attentions if output_attentions is not None
-                             else self.config.output_attentions)
-        output_hidden_states = (output_hidden_states
-                                if output_hidden_states is not None else
-                                self.config.output_hidden_states)
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if pixel_values is None:
             raise ValueError("You have to specify pixel_values")
@@ -987,7 +969,8 @@ class HFCLIPVisionTransformer(nn.Layer):
             inputs_embeds=hidden_states,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
         last_hidden_state = encoder_outputs[0]
         pooled_output = last_hidden_state[:, 0, :]
@@ -1000,7 +983,8 @@ class HFCLIPVisionTransformer(nn.Layer):
             last_hidden_state=last_hidden_state,
             pooler_output=pooled_output,
             hidden_states=encoder_outputs.hidden_states,
-            attentions=encoder_outputs.attentions, )
+            attentions=encoder_outputs.attentions,
+        )
 
 
 class HFCLIPVisionModel(HFCLIPPretrainedModel):
@@ -1017,12 +1001,12 @@ class HFCLIPVisionModel(HFCLIPPretrainedModel):
         return self.vision_model.embeddings.patch_embedding
 
     def forward(
-            self,
-            pixel_values: Optional[paddle.Tensor]=None,
-            output_attentions: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ) -> Union[
-                Tuple, BaseModelOutputWithPooling]:
+        self,
+        pixel_values: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, BaseModelOutputWithPooling]:
         r"""
         Returns:
 
@@ -1045,14 +1029,14 @@ class HFCLIPVisionModel(HFCLIPPretrainedModel):
         >>> last_hidden_state = outputs.last_hidden_state
         >>> pooled_output = outputs.pooler_output  # pooled CLS states
         ```"""
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         return self.vision_model(
             pixel_values=pixel_values,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
 
 class HFCLIPModel(HFCLIPPretrainedModel):
@@ -1064,12 +1048,14 @@ class HFCLIPModel(HFCLIPPretrainedModel):
         if not isinstance(config.text_config, CLIPTextConfig):
             raise ValueError(
                 "config.text_config is expected to be of type CLIPTextConfig but is of type"
-                f" {type(config.text_config)}.")
+                f" {type(config.text_config)}."
+            )
 
         if not isinstance(config.vision_config, CLIPVisionConfig):
             raise ValueError(
                 "config.vision_config is expected to be of type CLIPVisionConfig but is of type"
-                f" {type(config.vision_config)}.")
+                f" {type(config.vision_config)}."
+            )
 
         text_config = config.text_config
         vision_config = config.vision_config
@@ -1081,24 +1067,22 @@ class HFCLIPModel(HFCLIPPretrainedModel):
         self.text_model = HFCLIPTextTransformer(text_config)
         self.vision_model = HFCLIPVisionTransformer(vision_config)
 
-        self.visual_projection = LinearClass(
-            self.vision_embed_dim, self.projection_dim, bias_attr=False)
-        self.text_projection = LinearClass(
-            self.text_embed_dim, self.projection_dim, bias_attr=False)
-        self.logit_scale = Parameter(
-            paddle.to_tensor(self.config.logit_scale_init_value))
+        self.visual_projection = LinearClass(self.vision_embed_dim, self.projection_dim, bias_attr=False)
+        self.text_projection = LinearClass(self.text_embed_dim, self.projection_dim, bias_attr=False)
+        self.logit_scale = Parameter(paddle.to_tensor(self.config.logit_scale_init_value))
 
         # Initialize weights and apply final processing
         self.post_init()
 
     def get_text_features(
-            self,
-            input_ids: Optional[paddle.Tensor]=None,
-            attention_mask: Optional[paddle.Tensor]=None,
-            position_ids: Optional[paddle.Tensor]=None,
-            output_attentions: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ) -> paddle.Tensor:
+        self,
+        input_ids: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> paddle.Tensor:
         r"""
         Returns:
             text_features (`paddle.Tensor` of shape `(batch_size, output_dim`): The text embeddings obtained by
@@ -1116,13 +1100,11 @@ class HFCLIPModel(HFCLIPPretrainedModel):
         >>> text_features = model.get_text_features(**inputs)
         ```"""
         # Use CLIP model's config for some fields (if specified) instead of those of vision & text components.
-        output_attentions = (output_attentions if output_attentions is not None
-                             else self.config.output_attentions)
-        output_hidden_states = (output_hidden_states
-                                if output_hidden_states is not None else
-                                self.config.output_hidden_states)
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         text_outputs = self.text_model(
             input_ids=input_ids,
@@ -1130,7 +1112,8 @@ class HFCLIPModel(HFCLIPPretrainedModel):
             position_ids=position_ids,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
         pooled_output = text_outputs[1]
         text_features = self.text_projection(pooled_output)
@@ -1138,11 +1121,12 @@ class HFCLIPModel(HFCLIPPretrainedModel):
         return text_features
 
     def get_image_features(
-            self,
-            pixel_values: Optional[paddle.Tensor]=None,
-            output_attentions: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ) -> paddle.Tensor:
+        self,
+        pixel_values: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> paddle.Tensor:
         r"""
         Returns:
             image_features (`paddle.Tensor` of shape `(batch_size, output_dim`): The image embeddings obtained by
@@ -1166,19 +1150,18 @@ class HFCLIPModel(HFCLIPPretrainedModel):
         >>> image_features = model.get_image_features(**inputs)
         ```"""
         # Use CLIP model's config for some fields (if specified) instead of those of vision & text components.
-        output_attentions = (output_attentions if output_attentions is not None
-                             else self.config.output_attentions)
-        output_hidden_states = (output_hidden_states
-                                if output_hidden_states is not None else
-                                self.config.output_hidden_states)
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         vision_outputs = self.vision_model(
             pixel_values=pixel_values,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
         pooled_output = vision_outputs[1]  # pooled_output
         image_features = self.visual_projection(pooled_output)
@@ -1186,15 +1169,16 @@ class HFCLIPModel(HFCLIPPretrainedModel):
         return image_features
 
     def forward(
-            self,
-            input_ids: Optional[paddle.Tensor]=None,
-            pixel_values: Optional[paddle.Tensor]=None,
-            attention_mask: Optional[paddle.Tensor]=None,
-            position_ids: Optional[paddle.Tensor]=None,
-            return_loss: Optional[bool]=None,
-            output_attentions: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ) -> Union[Tuple, HFCLIPOutput]:
+        self,
+        input_ids: Optional[paddle.Tensor] = None,
+        pixel_values: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        return_loss: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, HFCLIPOutput]:
         r"""
         Returns:
 
@@ -1221,19 +1205,18 @@ class HFCLIPModel(HFCLIPPretrainedModel):
         >>> probs = F.softmax(logits_per_image.softmax, axis=1)  # we can take the softmax to get the label probabilities
         ```"""
         # Use CLIP model's config for some fields (if specified) instead of those of vision & text components.
-        output_attentions = (output_attentions if output_attentions is not None
-                             else self.config.output_attentions)
-        output_hidden_states = (output_hidden_states
-                                if output_hidden_states is not None else
-                                self.config.output_hidden_states)
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         vision_outputs = self.vision_model(
             pixel_values=pixel_values,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
         text_outputs = self.text_model(
             input_ids=input_ids,
@@ -1241,7 +1224,8 @@ class HFCLIPModel(HFCLIPPretrainedModel):
             position_ids=position_ids,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
         image_embeds = vision_outputs[1]
         image_embeds = self.visual_projection(image_embeds)
@@ -1250,14 +1234,12 @@ class HFCLIPModel(HFCLIPPretrainedModel):
         text_embeds = self.text_projection(text_embeds)
 
         # normalized features
-        image_embeds = image_embeds / image_embeds.norm(
-            p=2, axis=-1, keepdim=True)
+        image_embeds = image_embeds / image_embeds.norm(p=2, axis=-1, keepdim=True)
         text_embeds = text_embeds / text_embeds.norm(p=2, axis=-1, keepdim=True)
 
         # cosine similarity as logits
         logit_scale = self.logit_scale.exp()
-        logits_per_text = paddle.matmul(text_embeds,
-                                        image_embeds.t()) * logit_scale
+        logits_per_text = paddle.matmul(text_embeds, image_embeds.t()) * logit_scale
         logits_per_image = logits_per_text.t()
 
         loss = None
@@ -1271,8 +1253,9 @@ class HFCLIPModel(HFCLIPPretrainedModel):
                 text_embeds,
                 image_embeds,
                 text_outputs,
-                vision_outputs, )
-            return ((loss, ) + output) if loss is not None else output
+                vision_outputs,
+            )
+            return ((loss,) + output) if loss is not None else output
 
         return HFCLIPOutput(
             loss=loss,
@@ -1281,7 +1264,8 @@ class HFCLIPModel(HFCLIPPretrainedModel):
             text_embeds=text_embeds,
             image_embeds=image_embeds,
             text_model_output=text_outputs,
-            vision_model_output=vision_outputs, )
+            vision_model_output=vision_outputs,
+        )
 
 
 class HFCLIPTextModelWithProjection(HFCLIPPretrainedModel):
@@ -1294,8 +1278,7 @@ class HFCLIPTextModelWithProjection(HFCLIPPretrainedModel):
 
         self.text_model = HFCLIPTextTransformer(config)
 
-        self.text_projection = LinearClass(
-            config.hidden_size, config.projection_dim, bias_attr=False)
+        self.text_projection = LinearClass(config.hidden_size, config.projection_dim, bias_attr=False)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1307,14 +1290,14 @@ class HFCLIPTextModelWithProjection(HFCLIPPretrainedModel):
         self.text_model.embeddings.token_embedding = value
 
     def forward(
-            self,
-            input_ids: Optional[paddle.Tensor]=None,
-            attention_mask: Optional[paddle.Tensor]=None,
-            position_ids: Optional[paddle.Tensor]=None,
-            output_attentions: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ) -> Union[Tuple,
-                                                         HFCLIPTextModelOutput]:
+        self,
+        input_ids: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, HFCLIPTextModelOutput]:
         r"""
         Returns:
 
@@ -1331,8 +1314,7 @@ class HFCLIPTextModelWithProjection(HFCLIPPretrainedModel):
         >>> outputs = model(**inputs)
         >>> text_embeds = outputs.text_embeds
         ```"""
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         text_outputs = self.text_model(
             input_ids=input_ids,
@@ -1340,7 +1322,8 @@ class HFCLIPTextModelWithProjection(HFCLIPPretrainedModel):
             position_ids=position_ids,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
         pooled_output = text_outputs[1]
 
@@ -1354,7 +1337,8 @@ class HFCLIPTextModelWithProjection(HFCLIPPretrainedModel):
             text_embeds=text_embeds,
             last_hidden_state=text_outputs.last_hidden_state,
             hidden_states=text_outputs.hidden_states,
-            attentions=text_outputs.attentions, )
+            attentions=text_outputs.attentions,
+        )
 
 
 class HFCLIPVisionModelWithProjection(HFCLIPPretrainedModel):
@@ -1366,8 +1350,7 @@ class HFCLIPVisionModelWithProjection(HFCLIPPretrainedModel):
 
         self.vision_model = HFCLIPVisionTransformer(config)
 
-        self.visual_projection = LinearClass(
-            config.hidden_size, config.projection_dim, bias_attr=False)
+        self.visual_projection = LinearClass(config.hidden_size, config.projection_dim, bias_attr=False)
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1376,12 +1359,12 @@ class HFCLIPVisionModelWithProjection(HFCLIPPretrainedModel):
         return self.vision_model.embeddings.patch_embedding
 
     def forward(
-            self,
-            pixel_values: Optional[paddle.Tensor]=None,
-            output_attentions: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ) -> Union[
-                Tuple, HFCLIPVisionModelOutput]:
+        self,
+        pixel_values: Optional[paddle.Tensor] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, HFCLIPVisionModelOutput]:
         r"""
         Returns:
 
@@ -1403,14 +1386,14 @@ class HFCLIPVisionModelWithProjection(HFCLIPPretrainedModel):
         >>> outputs = model(**inputs)
         >>> image_embeds = outputs.image_embeds
         ```"""
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         vision_outputs = self.vision_model(
             pixel_values=pixel_values,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
         pooled_output = vision_outputs[1]  # pooled_output
 
@@ -1424,4 +1407,5 @@ class HFCLIPVisionModelWithProjection(HFCLIPPretrainedModel):
             image_embeds=image_embeds,
             last_hidden_state=vision_outputs.last_hidden_state,
             hidden_states=vision_outputs.hidden_states,
-            attentions=vision_outputs.attentions, )
+            attentions=vision_outputs.attentions,
+        )

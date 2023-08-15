@@ -18,21 +18,27 @@ from typing import Callable, List, Optional, Union
 
 import paddle
 import PIL.Image
-from paddlenlp.transformers import (CLIPImageProcessor,
-                                    CLIPTextModelWithProjection, CLIPTokenizer,
-                                    CLIPVisionModelWithProjection)
+from paddlenlp.transformers import (
+    CLIPImageProcessor,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+    CLIPVisionModelWithProjection,
+)
 
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging
 from ..pipeline_utils import DiffusionPipeline
 from .modeling_text_unet import UNetFlatConditionModel
-from .pipeline_versatile_diffusion_dual_guided import \
-    VersatileDiffusionDualGuidedPipeline
-from .pipeline_versatile_diffusion_image_variation import \
-    VersatileDiffusionImageVariationPipeline
-from .pipeline_versatile_diffusion_text_to_image import \
-    VersatileDiffusionTextToImagePipeline
+from .pipeline_versatile_diffusion_dual_guided import (
+    VersatileDiffusionDualGuidedPipeline,
+)
+from .pipeline_versatile_diffusion_image_variation import (
+    VersatileDiffusionImageVariationPipeline,
+)
+from .pipeline_versatile_diffusion_text_to_image import (
+    VersatileDiffusionTextToImagePipeline,
+)
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -77,15 +83,16 @@ class VersatileDiffusionPipeline(DiffusionPipeline):
     scheduler: KarrasDiffusionSchedulers
 
     def __init__(
-            self,
-            tokenizer: CLIPTokenizer,
-            image_feature_extractor: CLIPImageProcessor,
-            text_encoder: CLIPTextModelWithProjection,
-            image_encoder: CLIPVisionModelWithProjection,
-            image_unet: UNet2DConditionModel,
-            text_unet: UNet2DConditionModel,
-            vae: AutoencoderKL,
-            scheduler: KarrasDiffusionSchedulers, ):
+        self,
+        tokenizer: CLIPTokenizer,
+        image_feature_extractor: CLIPImageProcessor,
+        text_encoder: CLIPTextModelWithProjection,
+        image_encoder: CLIPVisionModelWithProjection,
+        image_unet: UNet2DConditionModel,
+        text_unet: UNet2DConditionModel,
+        vae: AutoencoderKL,
+        scheduler: KarrasDiffusionSchedulers,
+    ):
         super().__init__()
 
         self.register_modules(
@@ -96,27 +103,28 @@ class VersatileDiffusionPipeline(DiffusionPipeline):
             image_unet=image_unet,
             text_unet=text_unet,
             vae=vae,
-            scheduler=scheduler, )
-        self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+            scheduler=scheduler,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
 
     @paddle.no_grad()
     def image_variation(
-            self,
-            image: Union[paddle.Tensor, PIL.Image.Image],
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1, ):
+        self,
+        image: Union[paddle.Tensor, PIL.Image.Image],
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -194,13 +202,8 @@ class VersatileDiffusionPipeline(DiffusionPipeline):
             list of `bool`s denoting whether the corresponding generated image likely represents "not-safe-for-work"
             (nsfw) content, according to the `safety_checker`.
         """
-        expected_components = inspect.signature(
-            VersatileDiffusionImageVariationPipeline.__init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+        expected_components = inspect.signature(VersatileDiffusionImageVariationPipeline.__init__).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         return VersatileDiffusionImageVariationPipeline(**components)(
             image=image,
             height=height,
@@ -215,26 +218,27 @@ class VersatileDiffusionPipeline(DiffusionPipeline):
             output_type=output_type,
             return_dict=return_dict,
             callback=callback,
-            callback_steps=callback_steps, )
+            callback_steps=callback_steps,
+        )
 
     @paddle.no_grad()
     def text_to_image(
-            self,
-            prompt: Union[str, List[str]],
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1, ):
+        self,
+        prompt: Union[str, List[str]],
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -303,13 +307,8 @@ class VersatileDiffusionPipeline(DiffusionPipeline):
             list of `bool`s denoting whether the corresponding generated image likely represents "not-safe-for-work"
             (nsfw) content, according to the `safety_checker`.
         """
-        expected_components = inspect.signature(
-            VersatileDiffusionTextToImagePipeline.__init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+        expected_components = inspect.signature(VersatileDiffusionTextToImagePipeline.__init__).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         temp_pipeline = VersatileDiffusionTextToImagePipeline(**components)
         output = temp_pipeline(
             prompt=prompt,
@@ -325,7 +324,8 @@ class VersatileDiffusionPipeline(DiffusionPipeline):
             output_type=output_type,
             return_dict=return_dict,
             callback=callback,
-            callback_steps=callback_steps, )
+            callback_steps=callback_steps,
+        )
         # swap the attention blocks back to the original state
         temp_pipeline._swap_unet_attention_blocks()
 
@@ -333,23 +333,23 @@ class VersatileDiffusionPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def dual_guided(
-            self,
-            prompt: Union[PIL.Image.Image, List[PIL.Image.Image]],
-            image: Union[str, List[str]],
-            text_to_image_strength: float=0.5,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1, ):
+        self,
+        prompt: Union[PIL.Image.Image, List[PIL.Image.Image]],
+        image: Union[str, List[str]],
+        text_to_image_strength: float = 0.5,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -431,13 +431,8 @@ class VersatileDiffusionPipeline(DiffusionPipeline):
             returning a tuple, the first element is a list with the generated images.
         """
 
-        expected_components = inspect.signature(
-            VersatileDiffusionDualGuidedPipeline.__init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+        expected_components = inspect.signature(VersatileDiffusionDualGuidedPipeline.__init__).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         temp_pipeline = VersatileDiffusionDualGuidedPipeline(**components)
         output = temp_pipeline(
             prompt=prompt,
@@ -454,7 +449,8 @@ class VersatileDiffusionPipeline(DiffusionPipeline):
             output_type=output_type,
             return_dict=return_dict,
             callback=callback,
-            callback_steps=callback_steps, )
+            callback_steps=callback_steps,
+        )
         temp_pipeline._revert_dual_attention()
 
         return output

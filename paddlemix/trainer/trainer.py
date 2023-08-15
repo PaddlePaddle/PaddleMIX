@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import numpy as np
+
 import paddle
 from paddle.io import DataLoader
 from paddlenlp.trainer.trainer import Trainer
@@ -80,10 +80,8 @@ class CLIPTrainer(Trainer):
         if self.rank == 0 and self.args.tensorboard:
             self.logstep += 1
             self.writer.add_scalar("train/loss", loss.item(), self.logstep)
-            self.writer.add_scalar("train/grad_norm",
-                                   grad_norms.item(), self.logstep)
-            self.writer.add_scalar("train/logit_scale",
-                                   logit_scale.item(), self.logstep)
+            self.writer.add_scalar("train/grad_norm", grad_norms.item(), self.logstep)
+            self.writer.add_scalar("train/logit_scale", logit_scale.item(), self.logstep)
 
         return loss.detach()
 
@@ -103,4 +101,5 @@ class CLIPTrainer(Trainer):
             collate_fn=self.data_collator,
             num_workers=self.args.dataloader_num_workers,
             prefetch_factor=1,
-            shuffle=False, )
+            shuffle=False,
+        )

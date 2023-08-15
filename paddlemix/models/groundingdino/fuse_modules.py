@@ -58,11 +58,7 @@ def l2norm(X, dim, eps=1e-8):
     return X
 
 
-def func_attention(query,
-                   context,
-                   smooth=1,
-                   raw_feature_norm="softmax",
-                   eps=1e-8):
+def func_attention(query, context, smooth=1, raw_feature_norm="softmax", eps=1e-8):
     """
     query: (n_context, queryL, d)
     context: (n_context, sourceL, d)
@@ -112,13 +108,7 @@ def func_attention(query,
 
 
 class BiMultiHeadAttention(nn.Layer):
-    def __init__(self,
-                 v_dim,
-                 l_dim,
-                 embed_dim,
-                 num_heads,
-                 dropout=0.1,
-                 cfg=None):
+    def __init__(self, v_dim, l_dim, embed_dim, num_heads, dropout=0.1, cfg=None):
         super(BiMultiHeadAttention, self).__init__()
 
         self.embed_dim = embed_dim
@@ -130,7 +120,7 @@ class BiMultiHeadAttention(nn.Layer):
         assert (
             self.head_dim * self.num_heads == self.embed_dim
         ), f"embed_dim must be divisible by num_heads (got `embed_dim`: {self.embed_dim} and `num_heads`: {self.num_heads})."
-        self.scale = self.head_dim**(-0.5)
+        self.scale = self.head_dim ** (-0.5)
         self.dropout = dropout
 
         self.v_proj = nn.Linear(self.v_dim, self.embed_dim)
@@ -148,9 +138,7 @@ class BiMultiHeadAttention(nn.Layer):
         self._reset_parameters()
 
     def _shape(self, tensor, seq_len, bsz):
-        return tensor.reshape(
-            [bsz, seq_len, self.num_heads, self.head_dim]).transpose(
-                [0, 2, 1, 3])
+        return tensor.reshape([bsz, seq_len, self.num_heads, self.head_dim]).transpose([0, 2, 1, 3])
 
     def _reset_parameters(self):
         xavier_uniform_(self.v_proj.weight)
@@ -187,16 +175,13 @@ class BiMultiHeadAttention(nn.Layer):
         value_l_states = self._shape(self.values_l_proj(l), -1, bsz)
 
         proj_shape = (bsz * self.num_heads, -1, self.head_dim)
-        query_states = self._shape(query_states, tgt_len,
-                                   bsz).reshape(proj_shape)
+        query_states = self._shape(query_states, tgt_len, bsz).reshape(proj_shape)
         key_states = key_states.reshape(proj_shape)
         value_v_states = value_v_states.reshape(proj_shape)
         value_l_states = value_l_states.reshape(proj_shape)
 
         src_len = key_states.shape[1]
-        attn_weights = paddle.bmm(
-            query_states,
-            key_states.transpose([0, 2, 1]))  # bs*nhead, nimg, ntxt
+        attn_weights = paddle.bmm(query_states, key_states.transpose([0, 2, 1]))  # bs*nhead, nimg, ntxt
 
         if attn_weights.shape != [bsz * self.num_heads, tgt_len, src_len]:
             raise ValueError(
@@ -216,8 +201,7 @@ class BiMultiHeadAttention(nn.Layer):
             )  # Do not increase 50000, data type half has quite limited range
 
         attn_weights_T = attn_weights.transpose([0, 2, 1])
-        attn_weights_l = attn_weights_T - paddle.max(
-            attn_weights_T, axis=-1, keepdim=True)
+        attn_weights_l = attn_weights_T - paddle.max(attn_weights_T, axis=-1, keepdim=True)
         if self.clamp_min_for_underflow:
             attn_weights_l = paddle.clip(
                 attn_weights_l, min=-50000
@@ -230,53 +214,43 @@ class BiMultiHeadAttention(nn.Layer):
         # mask vison for language
         if attention_mask_v is not None:
 
-            attention_mask_v = (attention_mask_v[:, None, None, :]
-                                .cast(paddle.float32)
-                                .tile([1, self.num_heads, 1, 1]).flatten(0, 1))
-            attn_weights_l = masked_fill(attn_weights_l,
-                                         attention_mask_v == 1.0, float("-inf"))
+            attention_mask_v = (
+                attention_mask_v[:, None, None, :].cast(paddle.float32).tile([1, self.num_heads, 1, 1]).flatten(0, 1)
+            )
+            attn_weights_l = masked_fill(attn_weights_l, attention_mask_v == 1.0, float("-inf"))
 
         attn_weights_l = F.softmax(attn_weights_l, axis=-1)
 
         # mask language for vision
         if attention_mask_l is not None:
-            attention_mask_l = (attention_mask_l[:, None, None, :]
-                                .cast(paddle.float32)
-                                .tile([1, self.num_heads, 1, 1]).flatten(0, 1))
-            attn_weights = masked_fill(attn_weights, attention_mask_l == 1.0,
-                                       float("-inf"))
+            attention_mask_l = (
+                attention_mask_l[:, None, None, :].cast(paddle.float32).tile([1, self.num_heads, 1, 1]).flatten(0, 1)
+            )
+            attn_weights = masked_fill(attn_weights, attention_mask_l == 1.0, float("-inf"))
 
         attn_weights_v = F.softmax(attn_weights, axis=-1)
 
-        attn_probs_v = F.dropout(
-            attn_weights_v, p=self.dropout, training=self.training)
-        attn_probs_l = F.dropout(
-            attn_weights_l, p=self.dropout, training=self.training)
+        attn_probs_v = F.dropout(attn_weights_v, p=self.dropout, training=self.training)
+        attn_probs_l = F.dropout(attn_weights_l, p=self.dropout, training=self.training)
 
         attn_output_v = paddle.bmm(attn_probs_v, value_l_states)
         attn_output_l = paddle.bmm(attn_probs_l, value_v_states)
 
-        if attn_output_v.shape != [
-                bsz * self.num_heads, tgt_len, self.head_dim
-        ]:
+        if attn_output_v.shape != [bsz * self.num_heads, tgt_len, self.head_dim]:
             raise ValueError(
                 f"`attn_output_v` should be of size {(bsz, self.num_heads, tgt_len, self.head_dim)}, but is {attn_output_v.shape}"
             )
 
-        if attn_output_l.shape != [
-                bsz * self.num_heads, src_len, self.head_dim
-        ]:
+        if attn_output_l.shape != [bsz * self.num_heads, src_len, self.head_dim]:
             raise ValueError(
                 f"`attn_output_l` should be of size {(bsz, self.num_heads, src_len, self.head_dim)}, but is {attn_output_l.shape}"
             )
 
-        attn_output_v = attn_output_v.reshape(
-            [bsz, self.num_heads, tgt_len, self.head_dim])
+        attn_output_v = attn_output_v.reshape([bsz, self.num_heads, tgt_len, self.head_dim])
         attn_output_v = attn_output_v.transpose([0, 2, 1, 3])
         attn_output_v = attn_output_v.reshape([bsz, tgt_len, self.embed_dim])
 
-        attn_output_l = attn_output_l.reshape(
-            [bsz, self.num_heads, src_len, self.head_dim])
+        attn_output_l = attn_output_l.reshape([bsz, self.num_heads, src_len, self.head_dim])
         attn_output_l = attn_output_l.transpose([0, 2, 1, 3])
         attn_output_l = attn_output_l.reshape([bsz, src_len, self.embed_dim])
 
@@ -289,15 +263,16 @@ class BiMultiHeadAttention(nn.Layer):
 # Bi-Direction MHA (text->image, image->text)
 class BiAttentionBlock(nn.Layer):
     def __init__(
-            self,
-            v_dim,
-            l_dim,
-            embed_dim,
-            num_heads,
-            dropout=0.1,
-            drop_path=0.0,
-            init_values=1e-4,
-            cfg=None, ):
+        self,
+        v_dim,
+        l_dim,
+        embed_dim,
+        num_heads,
+        dropout=0.1,
+        drop_path=0.0,
+        init_values=1e-4,
+        cfg=None,
+    ):
         """
         Inputs:
             embed_dim - Dimensionality of input and attention feature vectors
@@ -316,26 +291,24 @@ class BiAttentionBlock(nn.Layer):
             l_dim=l_dim,
             embed_dim=embed_dim,
             num_heads=num_heads,
-            dropout=dropout, )
+            dropout=dropout,
+        )
 
         # add layer scale for training stability
-        self.drop_path = DropPath(
-            drop_path) if drop_path > 0.0 else nn.Identity()
+        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
         self.gamma_v = self.create_parameter(
             shape=[v_dim],
-            attr=paddle.ParamAttr(initializer=Constant(init_values)), )
+            attr=paddle.ParamAttr(initializer=Constant(init_values)),
+        )
         self.gamma_l = self.create_parameter(
             shape=[l_dim],
-            attr=paddle.ParamAttr(initializer=Constant(init_values)), )
+            attr=paddle.ParamAttr(initializer=Constant(init_values)),
+        )
 
     def forward(self, v, l, attention_mask_v=None, attention_mask_l=None):
         v = self.layer_norm_v(v)
         l = self.layer_norm_l(l)
-        delta_v, delta_l = self.attn(
-            v,
-            l,
-            attention_mask_v=attention_mask_v,
-            attention_mask_l=attention_mask_l)
+        delta_v, delta_l = self.attn(v, l, attention_mask_v=attention_mask_v, attention_mask_l=attention_mask_l)
         # v, l = v + delta_v, l + delta_l
         v = v + self.drop_path(self.gamma_v * delta_v)
         l = l + self.drop_path(self.gamma_l * delta_l)

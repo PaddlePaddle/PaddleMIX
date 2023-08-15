@@ -22,7 +22,11 @@ import paddle.amp.auto_cast as autocast
 from paddle.io import DataLoader
 from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
 from paddlenlp.trainer.integrations import (
-    INTEGRATION_TO_CALLBACK, TrainerCallback, VisualDLCallback, rewrite_logs)
+    INTEGRATION_TO_CALLBACK,
+    TrainerCallback,
+    VisualDLCallback,
+    rewrite_logs,
+)
 from paddlenlp.transformers.model_utils import _add_variant
 from paddlenlp.utils import profiler
 from paddlenlp.utils.log import logger
@@ -58,19 +62,17 @@ class VisualDLWithImageCallback(VisualDLCallback):
                 custom_black_list=set(custom_black_list),
                 custom_white_list=set(custom_white_list),
                 level=args.fp16_opt_level,
-                dtype=amp_dtype, )
+                dtype=amp_dtype,
+            )
         else:
-            ctx_manager = (contextlib.nullcontext()
-                           if sys.version_info >= (3, 7) else
-                           contextlib.suppress())
+            ctx_manager = contextlib.nullcontext() if sys.version_info >= (3, 7) else contextlib.suppress()
 
         return ctx_manager
 
     def on_step_end(self, args, state, control, model=None, **kwargs):
         if hasattr(model, "on_train_batch_end"):
             model.on_train_batch_end()
-        if (args.image_logging_steps > 0 and
-                state.global_step % args.image_logging_steps == 0):
+        if args.image_logging_steps > 0 and state.global_step % args.image_logging_steps == 0:
             control.should_log = True
 
     def on_log(self, args, state, control, logs=None, **kwargs):
@@ -78,26 +80,32 @@ class VisualDLWithImageCallback(VisualDLCallback):
         inputs = kwargs.get("inputs", None)
         model = kwargs.get("model", None)
         image_logs = {}
-        if (inputs is not None and model is not None and
-                args.image_logging_steps > 0 and
-                state.global_step % args.image_logging_steps == 0):
+        if (
+            inputs is not None
+            and model is not None
+            and args.image_logging_steps > 0
+            and state.global_step % args.image_logging_steps == 0
+        ):
 
             with self.autocast_smart_context_manager(args):
                 max_batch = 4 if args.resolution > 256 else 8
                 image_logs["reconstruction"] = model.decode_image(
-                    pixel_values=inputs["pixel_values"], max_batch=max_batch)
+                    pixel_values=inputs["pixel_values"], max_batch=max_batch
+                )
                 image_logs["ddim-samples-1.0"] = model.log_image(
                     input_ids=inputs["input_ids"],
                     guidance_scale=1.0,
                     height=args.resolution,
                     width=args.resolution,
-                    max_batch=max_batch, )
+                    max_batch=max_batch,
+                )
                 image_logs["ddim-samples-7.5"] = model.log_image(
                     input_ids=inputs["input_ids"],
                     guidance_scale=7.5,
                     height=args.resolution,
                     width=args.resolution,
-                    max_batch=max_batch, )
+                    max_batch=max_batch,
+                )
 
         if not state.is_world_process_zero:
             return
@@ -110,10 +118,8 @@ class VisualDLWithImageCallback(VisualDLCallback):
             logs["unet_lr"] = base_learning_rate
             if model.train_text_encoder:
                 if args.text_encoder_learning_rate != args.unet_learning_rate:
-                    logs[
-                        "unet_lr"] = base_learning_rate * args.unet_learning_rate
-                    logs["text_encoder_lr"] = (base_learning_rate *
-                                               args.text_encoder_learning_rate)
+                    logs["unet_lr"] = base_learning_rate * args.unet_learning_rate
+                    logs["text_encoder_lr"] = base_learning_rate * args.text_encoder_learning_rate
                 else:
                     logs["text_encoder_lr"] = base_learning_rate
 
@@ -127,11 +133,11 @@ class VisualDLWithImageCallback(VisualDLCallback):
                         "Trainer is attempting to log a value of "
                         f'"{v}" of type {type(v)} for key "{k}" as a scalar. '
                         "This invocation of VisualDL's writer.add_scalar() "
-                        "is incorrect so we dropped this attribute.")
+                        "is incorrect so we dropped this attribute."
+                    )
             # log images
             for k, v in image_logs.items():
-                self.vdl_writer.add_image(
-                    k, v, state.global_step, dataformats="NHWC")
+                self.vdl_writer.add_image(k, v, state.global_step, dataformats="NHWC")
             self.vdl_writer.flush()
 
 
@@ -172,8 +178,7 @@ class BenchmarkCallback(TrainerCallback):
         self.profiler_options = profiler_options
 
     def on_train_begin(self, args, state, control, **kwargs):
-        assert (args.gradient_accumulation_steps == 1 and not args.do_eval and
-                not args.do_predict)
+        assert args.gradient_accumulation_steps == 1 and not args.do_eval and not args.do_predict
         if self.benchmark:
             self.reader_cost_avg = AverageStatistical()
 
@@ -198,8 +203,7 @@ class BenchmarkCallback(TrainerCallback):
     def on_log(self, args, state, control, logs=None, **kwargs):
         if self.benchmark:
             if logs is not None and "interval_steps_per_second" in logs:
-                self.batch_start = self.batch_start + (
-                    time.time() - self.maybe_log_save_evaluate_start)
+                self.batch_start = self.batch_start + (time.time() - self.maybe_log_save_evaluate_start)
                 ips = logs["interval_steps_per_second"] * args.train_batch_size
                 avg_batch_cost = 1 / logs["interval_steps_per_second"]
                 logger.info(
@@ -211,14 +215,15 @@ class BenchmarkCallback(TrainerCallback):
                         self.reader_cost_avg.get_average(),
                         avg_batch_cost,
                         args.train_batch_size,
-                        ips, ))
+                        ips,
+                    )
+                )
                 self.reader_cost_avg.reset()
 
     def on_epoch_end(self, args, state, control, **kwargs):
         if self.benchmark:
             train_epoch_cost = time.time() - self.epoch_start
-            logger.info("train epoch: %d, epoch_cost: %.5f s" %
-                        (state.epoch, train_epoch_cost))
+            logger.info("train epoch: %d, epoch_cost: %.5f s" % (state.epoch, train_epoch_cost))
 
 
 # register visualdl_with_image
@@ -232,7 +237,9 @@ class StableDiffusionTrainer(Trainer):
             self.add_callback(
                 BenchmarkCallback(
                     benchmark=self.args.benchmark,
-                    profiler_options=self.args.profiler_options, ))
+                    profiler_options=self.args.profiler_options,
+                )
+            )
             if self.args.benchmark:
                 if self.args.disable_tqdm:
                     self.pop_callback(PrinterCallback)
@@ -251,34 +258,27 @@ class StableDiffusionTrainer(Trainer):
                 self.train_dataset,
                 batch_size=self.args.train_batch_size,
                 num_workers=self.args.dataloader_num_workers,
-                worker_init_fn=worker_init_fn, )
+                worker_init_fn=worker_init_fn,
+            )
         else:
             return super().get_train_dataloader()
 
-    def _save(self,
-              output_dir=None,
-              state_dict=None,
-              merge_tensor_parallel=False):
+    def _save(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
         output_dir = output_dir if output_dir is not None else self.args.output_dir
         os.makedirs(output_dir, exist_ok=True)
         if self.args.only_save_updated_model:
             unwraped_model = unwrap_model(self.model)
             logger.info(f"Saving unet checkpoint to {output_dir}/unet")
-            unwraped_model.unet.save_pretrained(
-                os.path.join(output_dir, "unet"))
+            unwraped_model.unet.save_pretrained(os.path.join(output_dir, "unet"))
 
             if unwraped_model.use_ema:
                 logger.info(f"Saving ema unet checkpoint to {output_dir}/unet")
                 with unwraped_model.ema_scope():
-                    unwraped_model.unet.save_pretrained(
-                        os.path.join(output_dir, "unet"), variant="ema")
+                    unwraped_model.unet.save_pretrained(os.path.join(output_dir, "unet"), variant="ema")
 
             if unwraped_model.train_text_encoder:
-                logger.info(
-                    f"Saving text encoder checkpoint to {output_dir}/text_encoder"
-                )
-                unwraped_model.text_encoder.save_pretrained(
-                    os.path.join(output_dir, "text_encoder"))
+                logger.info(f"Saving text encoder checkpoint to {output_dir}/text_encoder")
+                unwraped_model.text_encoder.save_pretrained(os.path.join(output_dir, "text_encoder"))
         else:
             logger.info(f"Saving model checkpoint to {output_dir}")
             if state_dict is None:
@@ -287,10 +287,10 @@ class StableDiffusionTrainer(Trainer):
                 state_dict,
                 os.path.join(
                     output_dir,
-                    _add_variant(PADDLE_WEIGHTS_NAME,
-                                 self.args.weight_name_suffix), ), )
+                    _add_variant(PADDLE_WEIGHTS_NAME, self.args.weight_name_suffix),
+                ),
+            )
             if self.args.should_save:
                 if self.tokenizer is not None:
                     self.tokenizer.save_pretrained(output_dir)
-                paddle.save(self.args,
-                            os.path.join(output_dir, TRAINING_ARGS_NAME))
+                paddle.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))

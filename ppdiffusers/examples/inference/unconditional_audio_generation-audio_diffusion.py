@@ -18,8 +18,7 @@ from scipy.io.wavfile import write
 from ppdiffusers import AudioDiffusionPipeline
 
 # 加载模型和scheduler
-pipe = AudioDiffusionPipeline.from_pretrained(
-    "teticio/audio-diffusion-ddim-256")
+pipe = AudioDiffusionPipeline.from_pretrained("teticio/audio-diffusion-ddim-256")
 pipe.set_progress_bar_config(disable=None)
 generator = paddle.Generator().manual_seed(42)
 
@@ -29,8 +28,7 @@ image = output.images[0]
 
 # 保存音频到本地
 for i, audio in enumerate(audio):
-    write(f"audio_diffusion_test{i}.wav", pipe.mel.sample_rate,
-          audio.transpose())
+    write(f"audio_diffusion_test{i}.wav", pipe.mel.sample_rate, audio.transpose())
 
 # 保存图片
 image.save("unconditional_audio_generation-audio_diffusion-result.png")

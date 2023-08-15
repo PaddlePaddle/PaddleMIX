@@ -22,15 +22,7 @@ from .resnet import Downsample2D
 
 
 class BottleneckResnetBlock(paddle.nn.Layer):
-    def __init__(self,
-                 in_c,
-                 mid_c,
-                 out_c,
-                 down,
-                 ksize=3,
-                 sk=False,
-                 use_conv=True,
-                 proj_ksize=1):
+    def __init__(self, in_c, mid_c, out_c, down, ksize=3, sk=False, use_conv=True, proj_ksize=1):
         super().__init__()
         ps = ksize // 2
         proj_pad = proj_ksize // 2
@@ -40,7 +32,8 @@ class BottleneckResnetBlock(paddle.nn.Layer):
                 out_channels=mid_c,
                 kernel_size=proj_ksize,
                 stride=1,
-                padding=proj_pad, )
+                padding=proj_pad,
+            )
         else:
             self.conv1 = None
         if out_c != mid_c:
@@ -49,29 +42,27 @@ class BottleneckResnetBlock(paddle.nn.Layer):
                 out_channels=out_c,
                 kernel_size=proj_ksize,
                 stride=1,
-                padding=proj_pad, )
+                padding=proj_pad,
+            )
         else:
             self.conv2 = None
-        self.block1 = paddle.nn.Conv2D(
-            in_channels=mid_c,
-            out_channels=mid_c,
-            kernel_size=3,
-            stride=1,
-            padding=1)
+        self.block1 = paddle.nn.Conv2D(in_channels=mid_c, out_channels=mid_c, kernel_size=3, stride=1, padding=1)
         self.act = paddle.nn.ReLU()
         self.block2 = paddle.nn.Conv2D(
             in_channels=mid_c,
             out_channels=mid_c,
             kernel_size=ksize,
             stride=1,
-            padding=ps, )
+            padding=ps,
+        )
         if sk is False:
             self.conv_shortcut = paddle.nn.Conv2D(
                 in_channels=in_c,
                 out_channels=mid_c,
                 kernel_size=ksize,
                 stride=1,
-                padding=ps, )
+                padding=ps,
+            )
         else:
             self.conv_shortcut = None
         self.down = down
@@ -136,20 +127,20 @@ class T2IAdapter(ModelMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            block_out_channels: List[int]=[320, 640, 1280, 1280],
-            block_mid_channels: Optional[List[int]]=None,
-            num_res_blocks: int=3,
-            channels_in: int=3,
-            kernel_size: int=3,
-            proj_kernel_size: int=1,
-            res_block_skip: bool=True,
-            use_conv: bool=False,
-            input_scale_factor: int=8, ):
+        self,
+        block_out_channels: List[int] = [320, 640, 1280, 1280],
+        block_mid_channels: Optional[List[int]] = None,
+        num_res_blocks: int = 3,
+        channels_in: int = 3,
+        kernel_size: int = 3,
+        proj_kernel_size: int = 1,
+        res_block_skip: bool = True,
+        use_conv: bool = False,
+        input_scale_factor: int = 8,
+    ):
         super(T2IAdapter, self).__init__()
         self.num_downsample_blocks = len(block_out_channels)
-        self.unshuffle = paddle.nn.PixelUnshuffle(
-            downscale_factor=input_scale_factor)
+        self.unshuffle = paddle.nn.PixelUnshuffle(downscale_factor=input_scale_factor)
         self.num_res_blocks = num_res_blocks
         self.body = []
         if block_mid_channels is None:
@@ -166,7 +157,9 @@ class T2IAdapter(ModelMixin, ConfigMixin):
                             ksize=kernel_size,
                             proj_ksize=proj_kernel_size,
                             sk=res_block_skip,
-                            use_conv=use_conv, ))
+                            use_conv=use_conv,
+                        )
+                    )
                 elif j == num_res_blocks - 1:
                     self.body.append(
                         BottleneckResnetBlock(
@@ -177,7 +170,9 @@ class T2IAdapter(ModelMixin, ConfigMixin):
                             ksize=kernel_size,
                             proj_ksize=proj_kernel_size,
                             sk=res_block_skip,
-                            use_conv=use_conv, ))
+                            use_conv=use_conv,
+                        )
+                    )
                 else:
                     self.body.append(
                         BottleneckResnetBlock(
@@ -188,7 +183,9 @@ class T2IAdapter(ModelMixin, ConfigMixin):
                             ksize=kernel_size,
                             proj_ksize=proj_kernel_size,
                             sk=res_block_skip,
-                            use_conv=use_conv, ))
+                            use_conv=use_conv,
+                        )
+                    )
         self.body = paddle.nn.LayerList(sublayers=self.body)
         if block_mid_channels[0] == block_out_channels[0]:
             self.conv_in = paddle.nn.Conv2D(
@@ -196,14 +193,16 @@ class T2IAdapter(ModelMixin, ConfigMixin):
                 out_channels=block_mid_channels[0],
                 kernel_size=3,
                 stride=1,
-                padding=1, )
+                padding=1,
+            )
         else:
             self.conv_in = paddle.nn.Conv2D(
                 in_channels=channels_in * input_scale_factor**2,
                 out_channels=block_mid_channels[0],
                 kernel_size=proj_kernel_size,
                 stride=1,
-                padding=proj_kernel_size // 2, )
+                padding=proj_kernel_size // 2,
+            )
 
     def forward(self, x: paddle.Tensor) -> List[paddle.Tensor]:
         """
@@ -241,9 +240,7 @@ class MultiAdapter(ModelMixin):
         self.num_adapter = len(adapters)
         self.adapters = paddle.nn.LayerList(sublayers=adapters)
 
-    def forward(
-            self, xs: paddle.Tensor,
-            adapter_weights: Optional[List[float]]=None) -> List[paddle.Tensor]:
+    def forward(self, xs: paddle.Tensor, adapter_weights: Optional[List[float]] = None) -> List[paddle.Tensor]:
         """
         Args:
             xs (`torch.Tensor`):
@@ -254,8 +251,7 @@ class MultiAdapter(ModelMixin):
                 them together.
         """
         if adapter_weights is None:
-            adapter_weights = paddle.to_tensor([1 / self.num_adapter] *
-                                               self.num_adapter)
+            adapter_weights = paddle.to_tensor([1 / self.num_adapter] * self.num_adapter)
         else:
             adapter_weights = paddle.to_tensor(adapter_weights)
         if xs.shape[1] % self.num_adapter != 0:

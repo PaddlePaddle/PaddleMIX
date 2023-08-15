@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
 
 from ppdiffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
 
@@ -34,14 +33,13 @@ class TextToVideoSDTask(AppTask):
 
         # bulid model
         model_instance = TextToVideoSDPipeline.from_pretrained(model)
-        model_instance.scheduler = DPMSolverMultistepScheduler.from_config(
-            model_instance.scheduler.config)
+        model_instance.scheduler = DPMSolverMultistepScheduler.from_config(model_instance.scheduler.config)
         self._model = model_instance
 
     def _preprocess(self, inputs):
         """ """
         prompt = inputs.get("prompt", None)
-        assert prompt is not None, f"The prompt is None"
+        assert prompt is not None, "The prompt is None"
         num_inference_steps = inputs.get("num_inference_steps", 25)
         inputs["num_inference_steps"] = num_inference_steps
 
@@ -54,7 +52,8 @@ class TextToVideoSDTask(AppTask):
 
         result = self._model(
             prompt=inputs["prompt"],
-            num_inference_steps=inputs["num_inference_steps"], ).frames
+            num_inference_steps=inputs["num_inference_steps"],
+        ).frames
 
         inputs.pop("prompt", None)
 

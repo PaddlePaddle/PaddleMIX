@@ -23,8 +23,7 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from .scheduling_utils import (KarrasDiffusionSchedulers, SchedulerMixin,
-                               SchedulerOutput)
+from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
@@ -47,7 +46,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
     """
 
     def alpha_bar(time_step):
-        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2)**2
+        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2) ** 2
 
     betas = []
     for i in range(num_diffusion_timesteps):
@@ -113,38 +112,41 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            num_train_timesteps: int=1000,
-            beta_start: float=0.0001,
-            beta_end: float=0.02,
-            beta_schedule: str="linear",
-            trained_betas: Optional[np.ndarray]=None,
-            solver_order: int=2,
-            prediction_type: str="epsilon",
-            thresholding: bool=False,
-            dynamic_thresholding_ratio: float=0.995,
-            sample_max_value: float=1.0,
-            algorithm_type: str="deis",
-            solver_type: str="logrho",
-            lower_order_final: bool=True, ):
+        self,
+        num_train_timesteps: int = 1000,
+        beta_start: float = 0.0001,
+        beta_end: float = 0.02,
+        beta_schedule: str = "linear",
+        trained_betas: Optional[np.ndarray] = None,
+        solver_order: int = 2,
+        prediction_type: str = "epsilon",
+        thresholding: bool = False,
+        dynamic_thresholding_ratio: float = 0.995,
+        sample_max_value: float = 1.0,
+        algorithm_type: str = "deis",
+        solver_type: str = "logrho",
+        lower_order_final: bool = True,
+    ):
         if trained_betas is not None:
             self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
         elif beta_schedule == "linear":
-            self.betas = paddle.linspace(
-                beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
+            self.betas = paddle.linspace(beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
-            self.betas = (paddle.linspace(
-                beta_start**0.5,
-                beta_end**0.5,
-                num_train_timesteps,
-                dtype=paddle.float32, )**2)
+            self.betas = (
+                paddle.linspace(
+                    beta_start**0.5,
+                    beta_end**0.5,
+                    num_train_timesteps,
+                    dtype=paddle.float32,
+                )
+                ** 2
+            )
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
         else:
-            raise NotImplementedError(
-                f"{beta_schedule} does is not implemented for {self.__class__}")
+            raise NotImplementedError(f"{beta_schedule} does is not implemented for {self.__class__}")
 
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = paddle.cumprod(self.alphas, 0)
@@ -161,23 +163,17 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
             if algorithm_type in ["dpmsolver", "dpmsolver++"]:
                 self.register_to_config(algorithm_type="deis")
             else:
-                raise NotImplementedError(
-                    f"{algorithm_type} does is not implemented for {self.__class__}"
-                )
+                raise NotImplementedError(f"{algorithm_type} does is not implemented for {self.__class__}")
 
         if solver_type not in ["logrho"]:
             if solver_type in ["midpoint", "heun", "bh1", "bh2"]:
                 self.register_to_config(solver_type="logrho")
             else:
-                raise NotImplementedError(
-                    f"solver type {solver_type} does is not implemented for {self.__class__}"
-                )
+                raise NotImplementedError(f"solver type {solver_type} does is not implemented for {self.__class__}")
 
         # setable values
         self.num_inference_steps = None
-        timesteps = np.linspace(
-            0, num_train_timesteps - 1, num_train_timesteps,
-            dtype=np.float32)[::-1].copy()
+        timesteps = np.linspace(0, num_train_timesteps - 1, num_train_timesteps, dtype=np.float32)[::-1].copy()
         self.timesteps = paddle.to_tensor(timesteps)
         self.model_outputs = [None] * solver_order
         self.lower_order_nums = 0
@@ -190,9 +186,12 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
             num_inference_steps (`int`):
                 the number of diffusion steps used when generating samples with a pre-trained model.
         """
-        timesteps = (np.linspace(0, self.config.num_train_timesteps - 1,
-                                 num_inference_steps + 1).round()[::-1][:-1]
-                     .copy().astype(np.int64))
+        timesteps = (
+            np.linspace(0, self.config.num_train_timesteps - 1, num_inference_steps + 1)
+            .round()[::-1][:-1]
+            .copy()
+            .astype(np.int64)
+        )
 
         # when num_inference_steps == num_train_timesteps, we can end up with
         # duplicates in timesteps.
@@ -203,7 +202,9 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
 
         self.num_inference_steps = len(timesteps)
 
-        self.model_outputs = [None, ] * self.config.solver_order
+        self.model_outputs = [
+            None,
+        ] * self.config.solver_order
         self.lower_order_nums = 0
 
     def _threshold_sample(self, sample: paddle.Tensor) -> paddle.Tensor:
@@ -228,8 +229,7 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
 
         abs_sample = sample.abs()  # "a certain percentile absolute pixel value"
 
-        s = paddle.quantile(
-            abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
+        s = paddle.quantile(abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
         # paddle.clip donot support min > max
         if self.config.sample_max_value < 1:
             s = paddle.ones_like(s) * self.config.sample_max_value
@@ -237,21 +237,15 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
             s = paddle.clip(
                 s, min=1, max=self.config.sample_max_value
             )  # When clip to min=1, equivalent to standard clipping to [-1, 1]
-        s = s.unsqueeze(
-            1)  # (batch_size, 1) because clip will broadcast along axis=0
-        sample = (
-            paddle.clip(sample, -s, s) /
-            s)  # "we threshold xt0 to the range [-s, s] and then divide by s"
+        s = s.unsqueeze(1)  # (batch_size, 1) because clip will broadcast along axis=0
+        sample = paddle.clip(sample, -s, s) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
 
         sample = paddle.reshape(sample, [batch_size, channels, height, width])
         sample = paddle.cast(sample, dtype)
 
         return sample
 
-    def convert_model_output(self,
-                             model_output: paddle.Tensor,
-                             timestep: int,
-                             sample: paddle.Tensor) -> paddle.Tensor:
+    def convert_model_output(self, model_output: paddle.Tensor, timestep: int, sample: paddle.Tensor) -> paddle.Tensor:
         """
         Convert the model output to the corresponding type that the algorithm DEIS needs.
 
@@ -275,7 +269,8 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
         else:
             raise ValueError(
                 f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, `sample`, or"
-                " `v_prediction` for the DEISMultistepScheduler.")
+                " `v_prediction` for the DEISMultistepScheduler."
+            )
 
         if self.config.thresholding:
             x0_pred = self._threshold_sample(x0_pred)
@@ -287,11 +282,12 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
             raise NotImplementedError("only support log-rho multistep deis now")
 
     def deis_first_order_update(
-            self,
-            model_output: paddle.Tensor,
-            timestep: int,
-            prev_timestep: int,
-            sample: paddle.Tensor, ) -> paddle.Tensor:
+        self,
+        model_output: paddle.Tensor,
+        timestep: int,
+        prev_timestep: int,
+        sample: paddle.Tensor,
+    ) -> paddle.Tensor:
         """
         One step for the first-order DEIS (equivalent to DDIM).
 
@@ -305,24 +301,23 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
         Returns:
             `paddle.Tensor`: the sample tensor at the previous timestep.
         """
-        lambda_t, lambda_s = self.lambda_t[prev_timestep], self.lambda_t[
-            timestep]
+        lambda_t, lambda_s = self.lambda_t[prev_timestep], self.lambda_t[timestep]
         alpha_t, alpha_s = self.alpha_t[prev_timestep], self.alpha_t[timestep]
         sigma_t, _ = self.sigma_t[prev_timestep], self.sigma_t[timestep]
         h = lambda_t - lambda_s
         if self.config.algorithm_type == "deis":
-            x_t = (alpha_t / alpha_s) * sample - (sigma_t * (paddle.exp(h) - 1.0
-                                                             )) * model_output
+            x_t = (alpha_t / alpha_s) * sample - (sigma_t * (paddle.exp(h) - 1.0)) * model_output
         else:
             raise NotImplementedError("only support log-rho multistep deis now")
         return x_t
 
     def multistep_deis_second_order_update(
-            self,
-            model_output_list: List[paddle.Tensor],
-            timestep_list: List[int],
-            prev_timestep: int,
-            sample: paddle.Tensor, ) -> paddle.Tensor:
+        self,
+        model_output_list: List[paddle.Tensor],
+        timestep_list: List[int],
+        prev_timestep: int,
+        sample: paddle.Tensor,
+    ) -> paddle.Tensor:
         """
         One step for the second-order multistep DEIS.
 
@@ -342,28 +337,28 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
         alpha_t, alpha_s0, alpha_s1 = (
             self.alpha_t[t],
             self.alpha_t[s0],
-            self.alpha_t[s1], )
+            self.alpha_t[s1],
+        )
         sigma_t, sigma_s0, sigma_s1 = (
             self.sigma_t[t],
             self.sigma_t[s0],
-            self.sigma_t[s1], )
+            self.sigma_t[s1],
+        )
 
         rho_t, rho_s0, rho_s1 = (
             sigma_t / alpha_t,
             sigma_s0 / alpha_s0,
-            sigma_s1 / alpha_s1, )
+            sigma_s1 / alpha_s1,
+        )
 
         if self.config.algorithm_type == "deis":
 
             def ind_fn(t, b, c):
                 # Integrate[(log(t) - log(c)) / (log(b) - log(c)), {t}]
-                return (t * (-paddle.log(c) + paddle.log(t) - 1) /
-                        (paddle.log(b) - paddle.log(c)))
+                return t * (-paddle.log(c) + paddle.log(t) - 1) / (paddle.log(b) - paddle.log(c))
 
-            coef1 = ind_fn(rho_t, rho_s0, rho_s1) - ind_fn(rho_s0, rho_s0,
-                                                           rho_s1)
-            coef2 = ind_fn(rho_t, rho_s1, rho_s0) - ind_fn(rho_s0, rho_s1,
-                                                           rho_s0)
+            coef1 = ind_fn(rho_t, rho_s0, rho_s1) - ind_fn(rho_s0, rho_s0, rho_s1)
+            coef2 = ind_fn(rho_t, rho_s1, rho_s0) - ind_fn(rho_s0, rho_s1, rho_s0)
 
             x_t = alpha_t * (sample / alpha_s0 + coef1 * m0 + coef2 * m1)
             return x_t
@@ -371,11 +366,12 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
             raise NotImplementedError("only support log-rho multistep deis now")
 
     def multistep_deis_third_order_update(
-            self,
-            model_output_list: List[paddle.Tensor],
-            timestep_list: List[int],
-            prev_timestep: int,
-            sample: paddle.Tensor, ) -> paddle.Tensor:
+        self,
+        model_output_list: List[paddle.Tensor],
+        timestep_list: List[int],
+        prev_timestep: int,
+        sample: paddle.Tensor,
+    ) -> paddle.Tensor:
         """
         One step for the third-order multistep DEIS.
 
@@ -394,57 +390,60 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
             prev_timestep,
             timestep_list[-1],
             timestep_list[-2],
-            timestep_list[-3], )
-        m0, m1, m2 = model_output_list[-1], model_output_list[
-            -2], model_output_list[-3]
+            timestep_list[-3],
+        )
+        m0, m1, m2 = model_output_list[-1], model_output_list[-2], model_output_list[-3]
         alpha_t, alpha_s0, alpha_s1, alpha_s2 = (
             self.alpha_t[t],
             self.alpha_t[s0],
             self.alpha_t[s1],
-            self.alpha_t[s2], )
+            self.alpha_t[s2],
+        )
         sigma_t, sigma_s0, sigma_s1, simga_s2 = (
             self.sigma_t[t],
             self.sigma_t[s0],
             self.sigma_t[s1],
-            self.sigma_t[s2], )
+            self.sigma_t[s2],
+        )
         rho_t, rho_s0, rho_s1, rho_s2 = (
             sigma_t / alpha_t,
             sigma_s0 / alpha_s0,
             sigma_s1 / alpha_s1,
-            simga_s2 / alpha_s2, )
+            simga_s2 / alpha_s2,
+        )
 
         if self.config.algorithm_type == "deis":
 
             def ind_fn(t, b, c, d):
                 # Integrate[(log(t) - log(c))(log(t) - log(d)) / (log(b) - log(c))(log(b) - log(d)), {t}]
                 numerator = t * (
-                    paddle.log(c) * (paddle.log(d) - paddle.log(t) + 1
-                                     ) - paddle.log(d) * paddle.log(t) +
-                    paddle.log(d) + paddle.log(t)**2 - 2 * paddle.log(t) + 2)
-                denominator = (paddle.log(b) - paddle.log(c)) * (
-                    paddle.log(b) - paddle.log(d))
+                    paddle.log(c) * (paddle.log(d) - paddle.log(t) + 1)
+                    - paddle.log(d) * paddle.log(t)
+                    + paddle.log(d)
+                    + paddle.log(t) ** 2
+                    - 2 * paddle.log(t)
+                    + 2
+                )
+                denominator = (paddle.log(b) - paddle.log(c)) * (paddle.log(b) - paddle.log(d))
                 return numerator / denominator
 
-            coef1 = ind_fn(rho_t, rho_s0, rho_s1, rho_s2) - ind_fn(
-                rho_s0, rho_s0, rho_s1, rho_s2)
-            coef2 = ind_fn(rho_t, rho_s1, rho_s2, rho_s0) - ind_fn(
-                rho_s0, rho_s1, rho_s2, rho_s0)
-            coef3 = ind_fn(rho_t, rho_s2, rho_s0, rho_s1) - ind_fn(
-                rho_s0, rho_s2, rho_s0, rho_s1)
+            coef1 = ind_fn(rho_t, rho_s0, rho_s1, rho_s2) - ind_fn(rho_s0, rho_s0, rho_s1, rho_s2)
+            coef2 = ind_fn(rho_t, rho_s1, rho_s2, rho_s0) - ind_fn(rho_s0, rho_s1, rho_s2, rho_s0)
+            coef3 = ind_fn(rho_t, rho_s2, rho_s0, rho_s1) - ind_fn(rho_s0, rho_s2, rho_s0, rho_s1)
 
-            x_t = alpha_t * (
-                sample / alpha_s0 + coef1 * m0 + coef2 * m1 + coef3 * m2)
+            x_t = alpha_t * (sample / alpha_s0 + coef1 * m0 + coef2 * m1 + coef3 * m2)
 
             return x_t
         else:
             raise NotImplementedError("only support log-rho multistep deis now")
 
     def step(
-            self,
-            model_output: paddle.Tensor,
-            timestep: int,
-            sample: paddle.Tensor,
-            return_dict: bool=True, ) -> Union[SchedulerOutput, Tuple]:
+        self,
+        model_output: paddle.Tensor,
+        timestep: int,
+        sample: paddle.Tensor,
+        return_dict: bool = True,
+    ) -> Union[SchedulerOutput, Tuple]:
         """
         Step function propagating the sample with the multistep DEIS.
 
@@ -470,29 +469,26 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
             step_index = len(self.timesteps) - 1
         else:
             step_index = step_index.item()
-        prev_timestep = (0 if step_index == len(self.timesteps) - 1 else
-                         self.timesteps[step_index + 1])
-        lower_order_final = ((step_index == len(self.timesteps) - 1) and
-                             self.config.lower_order_final and
-                             len(self.timesteps) < 15)
-        lower_order_second = ((step_index == len(self.timesteps) - 2) and
-                              self.config.lower_order_final and
-                              len(self.timesteps) < 15)
+        prev_timestep = 0 if step_index == len(self.timesteps) - 1 else self.timesteps[step_index + 1]
+        lower_order_final = (
+            (step_index == len(self.timesteps) - 1) and self.config.lower_order_final and len(self.timesteps) < 15
+        )
+        lower_order_second = (
+            (step_index == len(self.timesteps) - 2) and self.config.lower_order_final and len(self.timesteps) < 15
+        )
 
         model_output = self.convert_model_output(model_output, timestep, sample)
         for i in range(self.config.solver_order - 1):
             self.model_outputs[i] = self.model_outputs[i + 1]
         self.model_outputs[-1] = model_output
 
-        if (self.config.solver_order == 1 or self.lower_order_nums < 1 or
-                lower_order_final):
-            prev_sample = self.deis_first_order_update(model_output, timestep,
-                                                       prev_timestep, sample)
-        elif (self.config.solver_order == 2 or self.lower_order_nums < 2 or
-              lower_order_second):
+        if self.config.solver_order == 1 or self.lower_order_nums < 1 or lower_order_final:
+            prev_sample = self.deis_first_order_update(model_output, timestep, prev_timestep, sample)
+        elif self.config.solver_order == 2 or self.lower_order_nums < 2 or lower_order_second:
             timestep_list = [self.timesteps[step_index - 1], timestep]
             prev_sample = self.multistep_deis_second_order_update(
-                self.model_outputs, timestep_list, prev_timestep, sample)
+                self.model_outputs, timestep_list, prev_timestep, sample
+            )
         else:
             timestep_list = [
                 self.timesteps[step_index - 2],
@@ -500,18 +496,18 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
                 timestep,
             ]
             prev_sample = self.multistep_deis_third_order_update(
-                self.model_outputs, timestep_list, prev_timestep, sample)
+                self.model_outputs, timestep_list, prev_timestep, sample
+            )
 
         if self.lower_order_nums < self.config.solver_order:
             self.lower_order_nums += 1
 
         if not return_dict:
-            return (prev_sample, )
+            return (prev_sample,)
 
         return SchedulerOutput(prev_sample=prev_sample)
 
-    def scale_model_input(self, sample: paddle.Tensor, *args,
-                          **kwargs) -> paddle.Tensor:
+    def scale_model_input(self, sample: paddle.Tensor, *args, **kwargs) -> paddle.Tensor:
         """
         Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
         current timestep.
@@ -525,26 +521,25 @@ class DEISMultistepScheduler(SchedulerMixin, ConfigMixin):
         return sample
 
     def add_noise(
-            self,
-            original_samples: paddle.Tensor,
-            noise: paddle.Tensor,
-            timesteps: paddle.Tensor, ) -> paddle.Tensor:
+        self,
+        original_samples: paddle.Tensor,
+        noise: paddle.Tensor,
+        timesteps: paddle.Tensor,
+    ) -> paddle.Tensor:
         # Make sure alphas_cumprod and timestep have same dtype as original_samples
         alphas_cumprod = self.alphas_cumprod.cast(original_samples.dtype)
 
-        sqrt_alpha_prod = alphas_cumprod[timesteps]**0.5
+        sqrt_alpha_prod = alphas_cumprod[timesteps] ** 0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()
         while len(sqrt_alpha_prod.shape) < len(original_samples.shape):
             sqrt_alpha_prod = sqrt_alpha_prod.unsqueeze(-1)
 
-        sqrt_one_minus_alpha_prod = (1 - alphas_cumprod[timesteps])**0.5
+        sqrt_one_minus_alpha_prod = (1 - alphas_cumprod[timesteps]) ** 0.5
         sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.flatten()
-        while len(sqrt_one_minus_alpha_prod.shape) < len(
-                original_samples.shape):
+        while len(sqrt_one_minus_alpha_prod.shape) < len(original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
-        noisy_samples = (sqrt_alpha_prod * original_samples +
-                         sqrt_one_minus_alpha_prod * noise)
+        noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
         return noisy_samples
 
     def __len__(self):

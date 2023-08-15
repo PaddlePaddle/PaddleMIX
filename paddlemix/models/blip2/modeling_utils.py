@@ -13,12 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
+
 import numpy as np
-import paddle.nn.functional as F
+import paddle
 import paddle.nn as nn
-from paddlemix.utils.log import logger
-import time
+import paddle.nn.functional as F
+
+
 def disabled_train(self, mode=True):
     """Overwrite model.train with this function to make sure train/eval mode
     does not change anymore."""
@@ -35,7 +36,7 @@ def concat_all_gather(tensor):
         return tensor
 
     tensors_gather = []
-    paddle.distributed.all_gather(tensors_gather, tensor,sync_op=False)
+    paddle.distributed.all_gather(tensors_gather, tensor, sync_op=False)
 
     output = paddle.concat(tensors_gather, axis=0)
     return output
@@ -47,8 +48,7 @@ def tile(x, dim, n_tile):
     repeat_idx[dim] = n_tile
     x = x.repeat(*(repeat_idx))
     order_index = paddle.to_tensor(
-        np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)]),
-        dtype='int64'
+        np.concatenate([init_dim * np.arange(n_tile) + i for i in range(init_dim)]), dtype="int64"
     )
     return paddle.index_select(x, dim, order_index)
 
@@ -67,12 +67,13 @@ def all_gather_with_grad(tensors):
     tensor_all = GatherLayer.apply(tensors)
     return paddle.concat(tensor_all, axis=0)
 
+
 class CrossEntropyLoss(nn.Layer):
     """
     Softmax Cross entropy loss
     """
 
-    def __init__(self, reduction='mean', label_smoothing=None):
+    def __init__(self, reduction="mean", label_smoothing=None):
         super().__init__()
         if label_smoothing is not None:
             assert label_smoothing >= 0 and label_smoothing <= 1, "label_smoothing must be in [0, 1]"
@@ -102,15 +103,16 @@ class CrossEntropyLoss(nn.Layer):
                 loss = paddle.sum(-label * F.log_softmax(x, axis=-1), axis=-1)
             else:
                 if label.dtype == paddle.int32:
-                    label = paddle.cast(label, 'int64')
+                    label = paddle.cast(label, "int64")
                 loss = F.cross_entropy(x, label=label, soft_label=False)
 
-        if self.reduction == 'sum':
+        if self.reduction == "sum":
             return loss.sum()
-        elif self.reduction == 'mean':
+        elif self.reduction == "mean":
             return loss.mean()
         else:
             return loss
+
 
 class GatherLayer(paddle.autograd.PyLayer):
     """
@@ -126,10 +128,10 @@ class GatherLayer(paddle.autograd.PyLayer):
 
     @staticmethod
     def backward(ctx, *grads):
-        # print(grads)
         all_gradients = paddle.stack(grads)
         paddle.distributed.all_reduce(all_gradients)
         return all_gradients[paddle.distributed.get_rank()]
+
 
 def masked_fill(x, mask, value):
     y = paddle.full(x.shape, value, x.dtype)

@@ -15,12 +15,10 @@
 Backbone modules.
 """
 
-from collections import OrderedDict
-from typing import Dict, List, Optional
+from typing import List
 
 import paddle
 import paddle.nn as nn
-import paddle.nn.functional as F
 
 from .position_encoding import build_position_encoding
 from .swin_transformer import SwinTransformerModel
@@ -59,11 +57,11 @@ def build_backbone(args):
     use_checkpoint = getattr(args, "use_checkpoint", False)
 
     if args.backbone in [
-            "swin_T_224_1k",
-            "swin_B_224_22k",
-            "swin_B_384_22k",
-            "swin_L_224_22k",
-            "swin_L_384_22k",
+        "swin_T_224_1k",
+        "swin_B_224_22k",
+        "swin_B_384_22k",
+        "swin_L_224_22k",
+        "swin_L_384_22k",
     ]:
         pretrain_img_size = int(args.backbone.split("_")[-2])
         backbone = SwinTransformerModel.from_pretrained(
@@ -71,9 +69,10 @@ def build_backbone(args):
             pretrain_img_size=pretrain_img_size,
             out_indices=tuple(return_interm_indices),
             dilation=False,
-            use_checkpoint=use_checkpoint, )
+            use_checkpoint=use_checkpoint,
+        )
 
-        bb_num_channels = backbone.num_features[4 - len(return_interm_indices):]
+        bb_num_channels = backbone.num_features[4 - len(return_interm_indices) :]
     else:
         raise NotImplementedError("Unknown backbone {}".format(args.backbone))
 
@@ -83,9 +82,8 @@ def build_backbone(args):
 
     model = Joiner(backbone, position_embedding)
     model.num_channels = bb_num_channels
-    assert isinstance(
-        bb_num_channels,
-        List), "bb_num_channels is expected to be a List but {}".format(
-            type(bb_num_channels))
+    assert isinstance(bb_num_channels, List), "bb_num_channels is expected to be a List but {}".format(
+        type(bb_num_channels)
+    )
 
     return model

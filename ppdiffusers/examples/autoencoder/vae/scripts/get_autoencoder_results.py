@@ -25,15 +25,16 @@ from tqdm import tqdm
 
 from ppdiffusers import AutoencoderKL, StableDiffusionImg2ImgPipeline
 
-image_processing = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(0.5, 0.5),
-])
+image_processing = transforms.Compose(
+    [
+        transforms.ToTensor(),
+        transforms.Normalize(0.5, 0.5),
+    ]
+)
 
 
 def decode_image(image):
-    image = (image / 2 + 0.5).clip(0, 1).transpose(
-        [0, 2, 3, 1]).cast("float32").numpy()
+    image = (image / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1]).cast("float32").numpy()
     image = StableDiffusionImg2ImgPipeline.numpy_to_pil(image)
     return image
 
@@ -62,8 +63,7 @@ def main(vae_path, src_size, tgt_size, imgs, outdir):
             z = model.encode(img).latent_dist.sample()
             recon = model.decode(z).sample
 
-            decode_image(recon)[0].save(
-                osp.join(outdir, osp.basename(img_path)))
+            decode_image(recon)[0].save(osp.join(outdir, osp.basename(img_path)))
 
 
 if __name__ == "__main__":

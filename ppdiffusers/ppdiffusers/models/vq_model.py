@@ -69,20 +69,21 @@ class VQModel(ModelMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            in_channels: int=3,
-            out_channels: int=3,
-            down_block_types: Tuple[str]=("DownEncoderBlock2D", ),
-            up_block_types: Tuple[str]=("UpDecoderBlock2D", ),
-            block_out_channels: Tuple[int]=(64, ),
-            layers_per_block: int=1,
-            act_fn: str="silu",
-            latent_channels: int=3,
-            sample_size: int=32,
-            num_vq_embeddings: int=256,
-            norm_num_groups: int=32,
-            vq_embed_dim: Optional[int]=None,
-            scaling_factor: float=0.18215, ):
+        self,
+        in_channels: int = 3,
+        out_channels: int = 3,
+        down_block_types: Tuple[str] = ("DownEncoderBlock2D",),
+        up_block_types: Tuple[str] = ("UpDecoderBlock2D",),
+        block_out_channels: Tuple[int] = (64,),
+        layers_per_block: int = 1,
+        act_fn: str = "silu",
+        latent_channels: int = 3,
+        sample_size: int = 32,
+        num_vq_embeddings: int = 256,
+        norm_num_groups: int = 32,
+        vq_embed_dim: Optional[int] = None,
+        scaling_factor: float = 0.18215,
+    ):
         super().__init__()
 
         # pass init params to Encoder
@@ -94,7 +95,8 @@ class VQModel(ModelMixin, ConfigMixin):
             layers_per_block=layers_per_block,
             act_fn=act_fn,
             norm_num_groups=norm_num_groups,
-            double_z=False, )
+            double_z=False,
+        )
 
         vq_embed_dim = vq_embed_dim if vq_embed_dim is not None else latent_channels
 
@@ -104,7 +106,8 @@ class VQModel(ModelMixin, ConfigMixin):
             vq_embed_dim,
             beta=0.25,
             remap=None,
-            sane_index_shape=False, )
+            sane_index_shape=False,
+        )
         self.post_quant_conv = nn.Conv2D(vq_embed_dim, latent_channels, 1)
 
         # pass init params to Decoder
@@ -115,22 +118,24 @@ class VQModel(ModelMixin, ConfigMixin):
             block_out_channels=block_out_channels,
             layers_per_block=layers_per_block,
             act_fn=act_fn,
-            norm_num_groups=norm_num_groups, )
+            norm_num_groups=norm_num_groups,
+        )
 
-    def encode(self, x: paddle.Tensor, return_dict: bool=True):
+    def encode(self, x: paddle.Tensor, return_dict: bool = True):
         h = self.encoder(x)
         h = self.quant_conv(h)
 
         if not return_dict:
-            return (h, )
+            return (h,)
 
         return VQEncoderOutput(latents=h)
 
     def decode(
-            self,
-            h: paddle.Tensor,
-            force_not_quantize: bool=False,
-            return_dict: bool=True, ):
+        self,
+        h: paddle.Tensor,
+        force_not_quantize: bool = False,
+        return_dict: bool = True,
+    ):
         # cast h to float16 / float32
         h = h.cast(self.dtype)
         # also go through quantization layer
@@ -142,11 +147,11 @@ class VQModel(ModelMixin, ConfigMixin):
         dec = self.decoder(quant)
 
         if not return_dict:
-            return (dec, )
+            return (dec,)
 
         return DecoderOutput(sample=dec)
 
-    def forward(self, sample: paddle.Tensor, return_dict: bool=True):
+    def forward(self, sample: paddle.Tensor, return_dict: bool = True):
         r"""
         Args:
             sample (`paddle.Tensor`): Input sample.
@@ -158,6 +163,6 @@ class VQModel(ModelMixin, ConfigMixin):
         dec = self.decode(h).sample
 
         if not return_dict:
-            return (dec, )
+            return (dec,)
 
         return DecoderOutput(sample=dec)

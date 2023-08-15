@@ -13,43 +13,46 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Paddle BLIP2 model."""
-from paddlemix.utils.log import logger
-import math
 from dataclasses import dataclass
 from typing import Any, Optional, Tuple, Union
 
 import paddle
-import paddle.nn as nn
-import paddle.nn.functional as F
-from paddle.distributed.fleet.utils import recompute
 import paddle.distributed as dist
-
+import paddle.nn as nn
+from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.transformers.model_outputs import ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
-
-from paddlemix.models.blip2.modeling_opt import OPTForCausalLM
-from paddlenlp.transformers.t5.configuration import T5Config
 from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 from paddlenlp.utils.initializer import normal_, ones_, zeros_
-from paddlenlp.utils.log import logger
-from .configuration import Blip2Config
+
+from paddlemix.models.blip2.modeling_opt import OPTForCausalLM
+from paddlemix.models.blip2.modeling_utils import (
+    all_gather_with_grad,
+    concat_all_gather,
+    disabled_train,
+    masked_fill,
+)
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
-from paddlenlp.transformers import AutoTokenizer
-from paddlemix.models.blip2.modeling_utils import disabled_train, all_gather_with_grad, concat_all_gather, masked_fill
+from paddlemix.utils.log import logger
+
+from .configuration import Blip2Config
 
 BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "Salesforce/blip2-flan-t5-xl",
     "Salesforce/blip2-opt-2.7b",
 ]
 
-__all__ = ["Blip2ForConditionalGeneration", ]
+__all__ = [
+    "Blip2ForConditionalGeneration",
+]
 
 
 def Parameter(tensor):
     return paddle.create_parameter(
         tensor.shape,
         dtype=tensor.dtype,
-        default_initializer=nn.initializer.Assign(tensor), )
+        default_initializer=nn.initializer.Assign(tensor),
+    )
 
 
 @dataclass
@@ -77,9 +80,11 @@ class Blip2ForConditionalGenerationModelOutput(ModelOutput):
 
     def to_tuple(self) -> Tuple[Any]:
         return tuple(
-            self[k] if k not in
-            ["vision_outputs", "qformer_outputs", "language_model_outputs"] else
-            getattr(self, k).to_tuple() for k in self.keys())
+            self[k]
+            if k not in ["vision_outputs", "qformer_outputs", "language_model_outputs"]
+            else getattr(self, k).to_tuple()
+            for k in self.keys()
+        )
 
 
 @dataclass
@@ -87,6 +92,7 @@ class Blip2ForStage1ModelOutput(Blip2ForConditionalGenerationModelOutput):
     """
     Class defining the outputs of [`Blip2ForStage1ModelOutput`].
     """
+
     loss: Optional[Tuple[paddle.Tensor]] = None
     loss_itc: Optional[Tuple[paddle.Tensor]] = None
     loss_itm: Optional[paddle.Tensor] = None
@@ -113,8 +119,7 @@ class Blip2PretrainedModel(PretrainedModel):
     def _init_weights(self, module):
         """Initialize the weights"""
         factor = self.config.initializer_range
-        if (isinstance(module, nn.Conv2D) or isinstance(module, nn.Embedding) or
-                isinstance(module, nn.Linear)):
+        if isinstance(module, nn.Conv2D) or isinstance(module, nn.Embedding) or isinstance(module, nn.Linear):
             normal_(module.weight, mean=0.0, std=factor)
             if hasattr(module, "bias") and module.bias is not None:
                 zeros_(module.bias)
@@ -132,12 +137,9 @@ class Blip2PretrainedModel(PretrainedModel):
         return tokenizer
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path,
-                        from_hf_hub: bool=False,
-                        subfolder: str=None,
-                        *args,
-                        **kwargs):
+    def from_pretrained(
+        cls, pretrained_model_name_or_path, from_hf_hub: bool = False, subfolder: str = None, *args, **kwargs
+    ):
         """
         Creates an instance of `PretrainedModel`. Model weights are loaded
         by specifying name of a built-in pretrained model, a pretrained model from HF Hub, a community contributed model,
@@ -192,18 +194,22 @@ class Blip2PretrainedModel(PretrainedModel):
                 model = BertForSequenceClassification.from_pretrained('./my_bert/'
         """
         import os
+
+        from paddlenlp.transformers.configuration_utils import PretrainedConfig
+        from paddlenlp.transformers.model_utils import load_state_dict, no_init_weights
         from paddlenlp.transformers.utils import (
             ContextManagers,
+            device_guard,
             is_paddle_support_lazy_init,
             is_safetensors_available,
             resolve_cache_dir,
-            device_guard, )
-        from paddlenlp.transformers.configuration_utils import PretrainedConfig
+        )
         from paddlenlp.utils.env import (
             CONFIG_NAME,
             PADDLE_WEIGHTS_NAME,
-            PYTORCH_WEIGHTS_NAME, )
-        from paddlenlp.transformers.model_utils import no_init_weights, load_state_dict
+            PYTORCH_WEIGHTS_NAME,
+        )
+
         config = kwargs.pop("config", None)
         state_dict = kwargs.pop("state_dict", None)
         cache_dir = kwargs.pop("cache_dir", None)
@@ -212,16 +218,14 @@ class Blip2PretrainedModel(PretrainedModel):
         dtype = kwargs.pop("dtype", None)
         subfolder = kwargs.pop("subfolder", "")
         variant = kwargs.pop("variant", None)
-        use_safetensors = kwargs.pop("use_safetensors", None
-                                     if is_safetensors_available() else False)
+        use_safetensors = kwargs.pop("use_safetensors", None if is_safetensors_available() else False)
 
         low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", False)
         convert_from_torch = kwargs.pop("convert_from_torch", None)
         load_state_as_np = kwargs.pop("load_state_as_np", None)
         mp_degree = kwargs.pop("mp_degree", 1)
         if load_state_as_np is not None:
-            logger.warning(
-                "`load_state_as_np` is deprecated,  please delete it!")
+            logger.warning("`load_state_as_np` is deprecated,  please delete it!")
 
         model_kwargs = kwargs
 
@@ -236,8 +240,7 @@ class Blip2PretrainedModel(PretrainedModel):
         if convert_from_torch is None:
             convert_from_torch = False
 
-        cache_dir = resolve_cache_dir(pretrained_model_name_or_path,
-                                      from_hf_hub, cache_dir)
+        cache_dir = resolve_cache_dir(pretrained_model_name_or_path, from_hf_hub, cache_dir)
         # 1. get the PretrainedConfig to init model
         if not isinstance(config, PretrainedConfig):
             config_path = config if config is not None else pretrained_model_name_or_path
@@ -248,14 +251,14 @@ class Blip2PretrainedModel(PretrainedModel):
                 force_download=force_download,
                 from_hf_hub=from_hf_hub,
                 subfolder=subfolder,
-                **kwargs, )
+                **kwargs,
+            )
         if not os.path.exists(os.path.join(cache_dir, CONFIG_NAME)):
             config.save_pretrained(cache_dir)
 
         # refine options for config
         config.mp_degree = mp_degree
-        convert_from_torch = cls.support_conversion(
-            config) and convert_from_torch
+        convert_from_torch = cls.support_conversion(config) and convert_from_torch
 
         if dtype is None:
             dtype = config.dtype
@@ -285,7 +288,8 @@ class Blip2PretrainedModel(PretrainedModel):
             config=config,
             convert_from_torch=convert_from_torch,
             use_safetensors=use_safetensors,
-            variant=variant, )
+            variant=variant,
+        )
 
         # load pt weights early so that we know which dtype to init the model under
         if not is_sharded and state_dict is None:
@@ -297,8 +301,7 @@ class Blip2PretrainedModel(PretrainedModel):
                         f"Starting to convert pytorch weight file<{resolved_archive_file}> to "
                         f"paddle weight file<{os.path.join(cache_dir, PADDLE_WEIGHTS_NAME)}> ..."
                     )
-                    state_dict = cls.convert(resolved_archive_file, config,
-                                             cache_dir)
+                    state_dict = cls.convert(resolved_archive_file, config, cache_dir)
                 else:
                     raise ValueError(
                         f"download the {PYTORCH_WEIGHTS_NAME} weight file, but model<{cls}> "
@@ -306,19 +309,15 @@ class Blip2PretrainedModel(PretrainedModel):
                     )
             else:
                 # 4. loading non-sharded ckpt from the state dict
-                if config.tensor_parallel_degree > 1 and resolved_archive_file.endswith(
-                        "model_state.pdparams"):
-                    state_dict = cls.convert_tensor_parallel(
-                        resolved_archive_file, config)
+                if config.tensor_parallel_degree > 1 and resolved_archive_file.endswith("model_state.pdparams"):
+                    state_dict = cls.convert_tensor_parallel(resolved_archive_file, config)
                 else:
                     state_dict = load_state_dict(resolved_archive_file)
 
-                logger.info(
-                    "Loaded weights file from disk, setting weights to model.")
+                logger.info("Loaded weights file from disk, setting weights to model.")
 
         # Check if `_keep_in_fp32_modules` is not None
-        use_keep_in_fp32_modules = (
-            cls._keep_in_fp32_modules is not None) and dtype == "float16"
+        use_keep_in_fp32_modules = (cls._keep_in_fp32_modules is not None) and dtype == "float16"
 
         if is_sharded:
             loaded_state_dict_keys = sharded_metadata["all_checkpoint_keys"]
@@ -333,14 +332,14 @@ class Blip2PretrainedModel(PretrainedModel):
             for k in list(state_dict.keys()):
                 if not isinstance(state_dict[k], paddle.Tensor):
                     with device_guard():
-                        state_dict[k] = paddle.Tensor(
-                            state_dict.pop(k), zero_copy=True)
+                        state_dict[k] = paddle.Tensor(state_dict.pop(k), zero_copy=True)
 
         # 3. init the model
         init_args = config["init_args"] or ()
         with ContextManagers(init_contexts):
             model = cls(config, *init_args, **model_kwargs)
         from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
+
         interpolate_pos_embed(model, state_dict)
         if use_keep_in_fp32_modules:
             # low_cpu_mem_usage = True
@@ -358,7 +357,8 @@ class Blip2PretrainedModel(PretrainedModel):
             ignore_mismatched_sizes=ignore_mismatched_sizes,
             low_cpu_mem_usage=low_cpu_mem_usage,
             dtype=dtype,
-            keep_in_fp32_modules=keep_in_fp32_modules, )
+            keep_in_fp32_modules=keep_in_fp32_modules,
+        )
 
         if paddle.in_dynamic_mode():
             return model
@@ -376,13 +376,15 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
     ]
 
     def __init__(
-            self,
-            config: Blip2Config, ):
+        self,
+        config: Blip2Config,
+    ):
         super().__init__(config)
         from paddlemix.models.blip2.eva_vit import VisionTransformer
+
         self.visual_encoder = VisionTransformer.from_pretrained(
-            pretrained_model_name_or_path=config.vision_config,
-            mp_degree=config.mp_degree)
+            pretrained_model_name_or_path=config.vision_config, mp_degree=config.mp_degree
+        )
         self.freeze_vit = config.freeze_vit
         self.train_stage1 = False
         if self.freeze_vit:
@@ -400,33 +402,32 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=True,
                 tokenizer_length=len(self.tokenizer),
-                mp_degree=config.mp_degree)
+                mp_degree=config.mp_degree,
+            )
 
             state_dict = self.Qformer.state_dict()
             for name, param in self.Qformer.named_parameters():
-                if '_query' in name:
-                    key_orig = name.replace('_query', '')
-                    param.copy_(state_dict[key_orig], False)  ### problem
+                if "_query" in name:
+                    key_orig = name.replace("_query", "")
+                    param.copy_(state_dict[key_orig], False)
 
             self.temp = self.create_parameter(
-                shape=(1, ),
-                default_initializer=paddle.nn.initializer.Constant(value=0.07))
+                shape=(1,), default_initializer=paddle.nn.initializer.Constant(value=0.07)
+            )
             self.max_txt_len = config.get("max_txt_len")
         else:
             if config.use_decoder_only_language_model:
                 if "opt" in config.text_config:
                     language_model = OPTForCausalLM.from_pretrained(
-                        config.text_config,
-                        load_state_as_np=True,
-                        mp_degree=config.mp_degree)
+                        config.text_config, load_state_as_np=True, mp_degree=config.mp_degree
+                    )
                 else:
                     raise NotImplementedError
             else:
                 if "t5" in config.text_config:
                     language_model = T5ForConditionalGeneration(
-                        config.text_config,
-                        load_state_as_np=True,
-                        mp_degree=config.mp_degree)
+                        config.text_config, load_state_as_np=True, mp_degree=config.mp_degree
+                    )
                 else:
                     raise NotImplementedError
 
@@ -441,7 +442,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 train_in_satge1=False,
                 text_hidden_size=self.language_model.hidden_size,
                 ignore_mismatched_sizes=True,
-                mp_degree=config.mp_degree)
+                mp_degree=config.mp_degree,
+            )
             self.Qformer.cls = None
             self.Qformer.bert.embeddings.word_embeddings = None
             self.Qformer.bert.embeddings.position_embeddings = None
@@ -452,13 +454,15 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
     def get_input_embeddings(self) -> nn.Layer:
         return self.vision_model.embeddings.patch_embedding
 
-    def forward(self,
-                pixel_values: paddle.Tensor,
-                input_ids: paddle.Tensor=None,
-                attention_mask: Optional[paddle.Tensor]=None,
-                return_dict: Optional[bool]=None,
-                text_input_stage1: Optional[paddle.Tensor]=None,
-                **kwargs):
+    def forward(
+        self,
+        pixel_values: paddle.Tensor,
+        input_ids: paddle.Tensor = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        return_dict: Optional[bool] = None,
+        text_input_stage1: Optional[paddle.Tensor] = None,
+        **kwargs
+    ):
 
         if self.train_stage1:
             return self.forward_stage1(pixel_values, text_input_stage1)
@@ -467,15 +471,17 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 pixel_values,
                 input_ids,
                 attention_mask,
-                return_dict, )
+                return_dict,
+            )
 
     def forward_stage2(
-            self,
-            pixel_values: paddle.Tensor,
-            input_ids: paddle.Tensor,
-            attention_mask: Optional[paddle.Tensor]=None,
-            return_dict: Optional[bool]=None,
-            **kwargs) -> Union[Tuple, Blip2ForConditionalGenerationModelOutput]:
+        self,
+        pixel_values: paddle.Tensor,
+        input_ids: paddle.Tensor,
+        attention_mask: Optional[paddle.Tensor] = None,
+        return_dict: Optional[bool] = None,
+        **kwargs
+    ) -> Union[Tuple, Blip2ForConditionalGenerationModelOutput]:
         r"""
         Returns:
         Examples:
@@ -516,54 +522,50 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         >>> print(generated_text)
         two
         ```"""
-        return_dict = (return_dict if return_dict is not None else
-                       self.config.use_return_dict)
-        with paddle.amp.auto_cast(level='O2'):
-            image_embeds = self.Qformer.ln_vision(
-                self.visual_encoder(pixel_values))
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        with paddle.amp.auto_cast(level="O2"):
+            image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
         image_embeds = image_embeds.astype("float32")
 
         # step 2: forward the query tokens through the QFormer, using the image embeddings for cross-attention
-        image_attention_mask = paddle.ones(
-            image_embeds.shape[:-1], dtype="int64")
-        query_tokens = self.Qformer.query_tokens.expand(
-            [image_embeds.shape[0], -1, -1])
+        image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
+        query_tokens = self.Qformer.query_tokens.expand([image_embeds.shape[0], -1, -1])
         query_outputs = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
             encoder_attention_mask=image_attention_mask,
-            return_dict=True, )
+            return_dict=True,
+        )
         query_output = query_outputs[0]
 
         # step 3: use the language model, conditioned on the query outputs and the prompt
         language_model_inputs = self.Qformer.language_projection(query_output)
-        language_model_attention_mask = paddle.ones(
-            language_model_inputs.shape[:-1], dtype="int64")
+        language_model_attention_mask = paddle.ones(language_model_inputs.shape[:-1], dtype="int64")
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
-        inputs_embeds = paddle.concat(
-            [language_model_inputs, inputs_embeds], axis=1)
+        inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
         if attention_mask is None:
             attention_mask = paddle.ones_like(input_ids)
 
-        attention_mask = paddle.concat(
-            [language_model_attention_mask, attention_mask], axis=1)
+        attention_mask = paddle.concat([language_model_attention_mask, attention_mask], axis=1)
 
-        targets = input_ids * (1 - (
-            input_ids == self.pad_token_id).astype(input_ids.dtype)) + (
-                input_ids == self.pad_token_id).astype(input_ids.dtype) * (-100)
+        targets = input_ids * (1 - (input_ids == self.pad_token_id).astype(input_ids.dtype)) + (
+            input_ids == self.pad_token_id
+        ).astype(input_ids.dtype) * (-100)
 
-        empty_targets = paddle.ones(
-            language_model_attention_mask.shape, dtype="int64").fill_(-100)
+        empty_targets = paddle.ones(language_model_attention_mask.shape, dtype="int64").fill_(-100)
         labels = paddle.concat([empty_targets, targets], axis=1)
         labels.stop_gradient = True
-        with paddle.amp.auto_cast(level='O2'):
+        with paddle.amp.auto_cast(level="O2"):
             outputs = self.language_model(
                 inputs_embeds=inputs_embeds,
                 attention_mask=attention_mask,
                 return_dict=True,
-                labels=labels, )
+                labels=labels,
+            )
             loss = outputs.loss
-        return Blip2ForConditionalGenerationModelOutput(loss=loss, )
+        return Blip2ForConditionalGenerationModelOutput(
+            loss=loss,
+        )
 
     def forward_stage1(self, pixel_values, text_input):
         text = text_input
@@ -572,80 +574,67 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         image_embeds = self.Qformer.ln_vision(self.visual_encoder(image))
 
         image_atts = paddle.ones(image_embeds.shape[:-1], dtype="int64")
-        query_tokens = self.Qformer.query_tokens.expand(
-            shape=[image_embeds.shape[0], -1, -1])
+        query_tokens = self.Qformer.query_tokens.expand(shape=[image_embeds.shape[0], -1, -1])
         query_output = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
             encoder_attention_mask=image_atts,
             use_cache=True,
-            return_dict=True)
+            return_dict=True,
+        )
         image_feats = paddle.nn.functional.normalize(
-            x=self.Qformer.vision_proj(query_output.last_hidden_state), axis=-1)
+            x=self.Qformer.vision_proj(query_output.last_hidden_state), axis=-1
+        )
 
         text_tokens = self.tokenizer(
             text,
-            padding='max_length',
+            padding="max_length",
             truncation=True,
             max_length=self.max_txt_len,
             return_attention_mask=True,
-            return_tensors="pd")
+            return_tensors="pd",
+        )
         text_output = self.Qformer.bert(
-            text_tokens.input_ids,
-            attention_mask=text_tokens.attention_mask,
-            return_dict=True)
+            text_tokens.input_ids, attention_mask=text_tokens.attention_mask, return_dict=True
+        )
         text_feat = paddle.nn.functional.normalize(
-            self.Qformer.text_proj(text_output.last_hidden_state[:, 0, :]),
-            axis=-1)
+            self.Qformer.text_proj(text_output.last_hidden_state[:, 0, :]), axis=-1
+        )
 
-        ###============== Image-text Contrastive ===================###
+        # Image-text Contrastive
         # image_feats_all = image_feats
         # text_feat_all = text_feat
         image_feats_all = concat_all_gather(image_feats)
         text_feat_all = concat_all_gather(text_feat)
-        sim_q2t = paddle.matmul(
-            image_feats.unsqueeze(axis=1),
-            text_feat_all.unsqueeze(axis=-1)).squeeze()
+        sim_q2t = paddle.matmul(image_feats.unsqueeze(axis=1), text_feat_all.unsqueeze(axis=-1)).squeeze()
         sim_i2t = sim_q2t.max(axis=-1)
         sim_i2t = sim_i2t / self.temp
         sim_t2q = paddle.matmul(
-            x=text_feat.unsqueeze(axis=1).unsqueeze(axis=1),
-            y=image_feats_all.transpose(perm=[0, 2, 1])).squeeze()
+            x=text_feat.unsqueeze(axis=1).unsqueeze(axis=1), y=image_feats_all.transpose(perm=[0, 2, 1])
+        ).squeeze()
         sim_t2i = sim_t2q.max(axis=-1)
         sim_t2i = sim_t2i / self.temp
 
         rank = dist.get_rank()
         bs = image.shape[0]
 
-        targets = paddle.linspace(
-            start=rank * bs, stop=rank * bs + bs - 1, num=bs).astype(int)
-        one_hot_label = paddle.nn.functional.one_hot(
-            targets, num_classes=sim_i2t.shape[1])
-        smooth_label = paddle.nn.functional.label_smooth(
-            label=one_hot_label, epsilon=0.1)
-        loss_itc = (paddle.nn.functional.cross_entropy(
-            input=sim_i2t, label=smooth_label, soft_label=True) +
-                    paddle.nn.functional.cross_entropy(
-                        input=sim_t2i, label=smooth_label, soft_label=True)) / 2
+        targets = paddle.linspace(start=rank * bs, stop=rank * bs + bs - 1, num=bs).astype(int)
+        one_hot_label = paddle.nn.functional.one_hot(targets, num_classes=sim_i2t.shape[1])
+        smooth_label = paddle.nn.functional.label_smooth(label=one_hot_label, epsilon=0.1)
+        loss_itc = (
+            paddle.nn.functional.cross_entropy(input=sim_i2t, label=smooth_label, soft_label=True)
+            + paddle.nn.functional.cross_entropy(input=sim_t2i, label=smooth_label, soft_label=True)
+        ) / 2
         text_input_ids_world = concat_all_gather(text_tokens.input_ids)
-        text_attention_mask_world = concat_all_gather(
-            text_tokens.attention_mask)
+        text_attention_mask_world = concat_all_gather(text_tokens.attention_mask)
         image_embeds_world = all_gather_with_grad(image_embeds)
         with paddle.no_grad():
-            weights_t2i = paddle.nn.functional.softmax(
-                x=sim_t2i, axis=1) + 0.0001
-            weights_t2i_list = paddle.chunk(
-                weights_t2i,
-                chunks=paddle.distributed.get_world_size(),
-                axis=-1)
+            weights_t2i = paddle.nn.functional.softmax(x=sim_t2i, axis=1) + 0.0001
+            weights_t2i_list = paddle.chunk(weights_t2i, chunks=paddle.distributed.get_world_size(), axis=-1)
             weights_t2i_list[rank].fill_diagonal_(value=0)
             weights_t2i = paddle.concat(weights_t2i_list, axis=-1)
-            weights_i2t = paddle.nn.functional.softmax(
-                x=sim_i2t, axis=1) + 0.0001
-            weights_i2t_list = paddle.chunk(
-                weights_i2t,
-                chunks=paddle.distributed.get_world_size(),
-                axis=-1)
+            weights_i2t = paddle.nn.functional.softmax(x=sim_i2t, axis=1) + 0.0001
+            weights_i2t_list = paddle.chunk(weights_i2t, chunks=paddle.distributed.get_world_size(), axis=-1)
             weights_i2t_list[rank].fill_diagonal_(value=0)
             weights_i2t = paddle.concat(weights_i2t_list, axis=-1)
         image_embeds_neg = []
@@ -661,79 +650,59 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             text_atts_neg.append(text_attention_mask_world[neg_idx])
         text_ids_neg = paddle.stack(x=text_ids_neg, axis=0)
         text_atts_neg = paddle.stack(x=text_atts_neg, axis=0)
-        text_ids_all = paddle.concat(
-            x=[text_tokens.input_ids, text_tokens.input_ids, text_ids_neg],
-            axis=0)
+        text_ids_all = paddle.concat(x=[text_tokens.input_ids, text_tokens.input_ids, text_ids_neg], axis=0)
         text_atts_all = paddle.concat(
-            x=[
-                text_tokens.attention_mask, text_tokens.attention_mask,
-                text_atts_neg
-            ],
-            axis=0)
-        query_tokens_itm = self.Qformer.query_tokens.expand(
-            shape=[text_ids_all.shape[0], -1, -1])
-        query_atts_itm = paddle.ones(
-            shape=query_tokens_itm.shape[:-1], dtype='int64')
-        attention_mask_all = paddle.concat(
-            x=[query_atts_itm, text_atts_all], axis=1)
-        image_embeds_all = paddle.concat(
-            x=[image_embeds, image_embeds_neg, image_embeds], axis=0)
-        image_atts_all = paddle.ones(
-            shape=image_embeds_all.shape[:-1], dtype='int64')
+            x=[text_tokens.attention_mask, text_tokens.attention_mask, text_atts_neg], axis=0
+        )
+        query_tokens_itm = self.Qformer.query_tokens.expand(shape=[text_ids_all.shape[0], -1, -1])
+        query_atts_itm = paddle.ones(shape=query_tokens_itm.shape[:-1], dtype="int64")
+        attention_mask_all = paddle.concat(x=[query_atts_itm, text_atts_all], axis=1)
+        image_embeds_all = paddle.concat(x=[image_embeds, image_embeds_neg, image_embeds], axis=0)
+        image_atts_all = paddle.ones(shape=image_embeds_all.shape[:-1], dtype="int64")
         output_itm = self.Qformer.bert(
             text_ids_all,
             query_embeds=query_tokens_itm,
             attention_mask=attention_mask_all,
             encoder_hidden_states=image_embeds_all,
             encoder_attention_mask=image_atts_all,
-            return_dict=True)
-        vl_embeddings = output_itm.last_hidden_state[:, :query_tokens_itm.shape[
-            1], :]
+            return_dict=True,
+        )
+        vl_embeddings = output_itm.last_hidden_state[:, : query_tokens_itm.shape[1], :]
         vl_output = self.Qformer.itm_head(vl_embeddings)
         logits = vl_output.mean(axis=1)
 
-        itm_labels = paddle.concat(
-            [
-                paddle.ones(
-                    [bs], dtype='int64'), paddle.zeros(
-                        [2 * bs], dtype='int64')
-            ],
-            axis=0)
-        loss_itm = paddle.nn.functional.cross_entropy(
-            input=logits, label=itm_labels)
-        ##================= Image Captioning ========================##
+        itm_labels = paddle.concat([paddle.ones([bs], dtype="int64"), paddle.zeros([2 * bs], dtype="int64")], axis=0)
+        loss_itm = paddle.nn.functional.cross_entropy(input=logits, label=itm_labels)
+        # Image Captioning
 
         decoder_input_ids = text_tokens.input_ids.clone()
         decoder_input_ids[:, (0)] = self.tokenizer.bos_token_id
-        labels = masked_fill(decoder_input_ids,
-                             decoder_input_ids == self.tokenizer.pad_token_id,
-                             -100)
-        query_atts = paddle.ones(shape=query_tokens.shape[:-1], dtype='int64')
-        attention_mask = paddle.concat(
-            x=[query_atts, text_tokens.attention_mask], axis=1)
-        #import pdb;pdb.set_trace()
+        labels = masked_fill(decoder_input_ids, decoder_input_ids == self.tokenizer.pad_token_id, -100)
+        query_atts = paddle.ones(shape=query_tokens.shape[:-1], dtype="int64")
+        attention_mask = paddle.concat(x=[query_atts, text_tokens.attention_mask], axis=1)
         lm_output = self.Qformer(
             decoder_input_ids,
             attention_mask=attention_mask,
             past_key_values=query_output.past_key_values,
             return_dict=True,
-            labels=labels)
+            labels=labels,
+        )
         loss_lm = lm_output.loss
         return Blip2ForStage1ModelOutput(
-            loss=loss_itc + loss_itm + loss_lm,
-            loss_itc=loss_itc,
-            loss_itm=loss_itm,
-            loss_lm=loss_lm)
+            loss=loss_itc + loss_itm + loss_lm, loss_itc=loss_itc, loss_itm=loss_itm, loss_lm=loss_lm
+        )
 
     @paddle.no_grad()
-    def generate_stage1(self,
-                        samples,
-                        use_nucleus_sampling=False,
-                        num_beams=3,
-                        max_length=30,
-                        min_length=10,
-                        top_p=0.9,
-                        repetition_penalty=1.0):
+    def generate_stage1(
+        self,
+        samples,
+        use_nucleus_sampling=False,
+        num_beams=3,
+        max_length=30,
+        min_length=10,
+        top_p=0.9,
+        repetition_penalty=1.0,
+    ):
         """
         Args:
             samples (dict): A dictionary containing the following keys:
@@ -748,22 +717,16 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         Returns:
             captions (list): A list of strings of length batch_size * num_captions.
         """
-        image = samples['image']
+        image = samples["image"]
         image_embeds = self.ln_vision(self.visual_encoder(image))
         if not use_nucleus_sampling:
             image_embeds = image_embeds.repeat_interleave(num_beams, axis=0)
         else:
             num_beams = 1
-        image_atts = paddle.ones(shape=image_embeds.shape[:-1], dtype='int64')
-        model_kwargs = {
-            'encoder_hidden_states': image_embeds,
-            'encoder_attention_mask': image_atts
-        }
-        input_ids = paddle.empty(
-            shape=[image.shape[0], 1],
-            dtype='int64').fill_(value=self.tokenizer.bos_token_id)
-        query_tokens = self.query_tokens.expand(
-            shape=[image_embeds.shape[0], -1, -1])
+        image_atts = paddle.ones(shape=image_embeds.shape[:-1], dtype="int64")
+        model_kwargs = {"encoder_hidden_states": image_embeds, "encoder_attention_mask": image_atts}
+        input_ids = paddle.empty(shape=[image.shape[0], 1], dtype="int64").fill_(value=self.tokenizer.bos_token_id)
+        query_tokens = self.query_tokens.expand(shape=[image_embeds.shape[0], -1, -1])
         outputs = self.Qformer.generate(
             input_ids=input_ids,
             query_embeds=query_tokens,
@@ -774,18 +737,19 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             top_p=top_p,
             eos_token_id=self.tokenizer.sep_token_id,
             pad_token_id=self.tokenizer.pad_token_id,
-            **model_kwargs)
-        captions = self.tokenizer.batch_decode(
-            outputs, skip_special_tokens=True)
+            **model_kwargs,
+        )
+        captions = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
         return captions
 
     @paddle.no_grad()
     def generate(
-            self,
-            pixel_values: paddle.Tensor,
-            input_ids: Optional[paddle.Tensor]=None,
-            attention_mask: Optional[paddle.Tensor]=None,
-            **generate_kwargs, ) -> paddle.Tensor:
+        self,
+        pixel_values: paddle.Tensor,
+        input_ids: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        **generate_kwargs,
+    ) -> paddle.Tensor:
         """
         Overrides `generate` function to be able to use the model as a conditional generator.
         Args:
@@ -800,32 +764,27 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         """
         batch_size = pixel_values.shape[0]
         image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
-        image_attention_mask = paddle.ones(
-            image_embeds.shape[:-1], dtype="int64")
+        image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
 
-        query_tokens = self.Qformer.query_tokens.expand(
-            [image_embeds.shape[0], -1, -1])
+        query_tokens = self.Qformer.query_tokens.expand([image_embeds.shape[0], -1, -1])
         query_outputs = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
             encoder_attention_mask=image_attention_mask,
-            return_dict=True, )
+            return_dict=True,
+        )
         query_output = query_outputs.last_hidden_state
 
         language_model_inputs = self.Qformer.language_projection(query_output)
-        language_attention_mask = paddle.ones(
-            language_model_inputs.shape[:-1], dtype="int64")
+        language_attention_mask = paddle.ones(language_model_inputs.shape[:-1], dtype="int64")
         if input_ids is None:
-            input_ids = paddle.to_tensor(
-                [[self.config.text_config.bos_token_id]]).tile([batch_size, 1])
+            input_ids = paddle.to_tensor([[self.config.text_config.bos_token_id]]).tile([batch_size, 1])
         if attention_mask is None:
             attention_mask = paddle.ones_like(input_ids)
-        attention_mask = paddle.concat(
-            [language_attention_mask, attention_mask], axis=1)
+        attention_mask = paddle.concat([language_attention_mask, attention_mask], axis=1)
         # concatenate query embeddings with prompt embeddings
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
-        inputs_embeds = paddle.concat(
-            [language_model_inputs, inputs_embeds], axis=1)
+        inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
 
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
@@ -840,63 +799,62 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             eos_token_id=50118,
             repetition_penalty=1,
             length_penalty=1,
-            num_return_sequences=1, )
+            num_return_sequences=1,
+        )
 
         return outputs
 
     @paddle.no_grad()
     def encode_image(
-            self,
-            pixel_values: paddle.Tensor,
-            **kwargs, ):
-        image_embeds = self.ln_vision(
-            self.visual_encoder(pixel_values.astype("float16")))
+        self,
+        pixel_values: paddle.Tensor,
+        **kwargs,
+    ):
+        image_embeds = self.ln_vision(self.visual_encoder(pixel_values.astype("float16")))
         image_embeds = image_embeds.astype("float32")
 
-        image_attention_mask = paddle.ones(
-            image_embeds.shape[:-1], dtype="int64")
+        image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
 
         query_tokens = self.query_tokens.expand([image_embeds.shape[0], -1, -1])
         query_outputs = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
             encoder_attention_mask=image_attention_mask,
-            return_dict=True, )
+            return_dict=True,
+        )
         query_output = query_outputs[0]
         return query_output
 
     @paddle.no_grad()
-    def predict_answers(self,
-                        pixel_values: paddle.Tensor,
-                        input_ids: Optional[paddle.Tensor]=None,
-                        attention_mask: Optional[paddle.Tensor]=None,
-                        max_len=10,
-                        min_len=1,
-                        **kwargs):
-        batch_size = pixel_values.shape[0]
+    def predict_answers(
+        self,
+        pixel_values: paddle.Tensor,
+        input_ids: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        max_len=10,
+        min_len=1,
+        **kwargs
+    ):
+        # batch_size = pixel_values.shape[0]
         image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
-        image_attention_mask = paddle.ones(
-            image_embeds.shape[:-1], dtype="int64")
+        image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
 
-        query_tokens = self.Qformer.query_tokens.expand(
-            [image_embeds.shape[0], -1, -1])
+        query_tokens = self.Qformer.query_tokens.expand([image_embeds.shape[0], -1, -1])
         query_outputs = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,
             encoder_attention_mask=image_attention_mask,
-            return_dict=True, )
+            return_dict=True,
+        )
         query_output = query_outputs.last_hidden_state
 
         language_model_inputs = self.Qformer.language_projection(query_output)
-        language_attention_mask = paddle.ones(
-            language_model_inputs.shape[:-1], dtype="int64")
+        language_attention_mask = paddle.ones(language_model_inputs.shape[:-1], dtype="int64")
 
-        attention_mask = paddle.concat(
-            [language_attention_mask, attention_mask], axis=1)
+        attention_mask = paddle.concat([language_attention_mask, attention_mask], axis=1)
         # concatenate query embeddings with prompt embeddings
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
-        inputs_embeds = paddle.concat(
-            [language_model_inputs, inputs_embeds], axis=1)
+        inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
 
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
@@ -909,7 +867,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             min_length=min_len,
             eos_token_id=50118,
             repetition_penalty=1,
-            length_penalty=0, )
+            length_penalty=0,
+        )
 
         return outputs
 

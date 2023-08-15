@@ -28,17 +28,16 @@ def download_image(url):
 
 
 # Loading additional models
-feature_extractor = CLIPFeatureExtractor.from_pretrained(
-    "laion/CLIP-ViT-B-32-laion2B-s34B-b79K")
-clip_model = CLIPModel.from_pretrained(
-    "laion/CLIP-ViT-B-32-laion2B-s34B-b79K", paddle_dtype=paddle.float16)
+feature_extractor = CLIPFeatureExtractor.from_pretrained("laion/CLIP-ViT-B-32-laion2B-s34B-b79K")
+clip_model = CLIPModel.from_pretrained("laion/CLIP-ViT-B-32-laion2B-s34B-b79K", paddle_dtype=paddle.float16)
 
 mixing_pipeline = DiffusionPipeline.from_pretrained(
     "CompVis/stable-diffusion-v1-4",
     custom_pipeline="clip_guided_images_mixing_stable_diffusion",
     clip_model=clip_model,
     feature_extractor=feature_extractor,
-    paddle_dtype=paddle.float16, )
+    paddle_dtype=paddle.float16,
+)
 mixing_pipeline.enable_attention_slicing()
 
 # Pipline running
@@ -64,6 +63,7 @@ pipe_images = mixing_pipeline(
     guidance_scale=9.0,
     batch_size=1,
     clip_guidance_scale=100,
-    generator=generator, ).images
+    generator=generator,
+).images
 
 pipe_images[0].save("clip_guided_images_mixing_stable_diffusion.png")

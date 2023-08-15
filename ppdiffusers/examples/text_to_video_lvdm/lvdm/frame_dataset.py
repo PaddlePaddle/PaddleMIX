@@ -21,6 +21,7 @@ from einops import rearrange
 from PIL import Image, ImageFile
 
 from ._transforms_video import CenterCropVideo, RandomCropVideo
+
 """ VideoFrameDataset """
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 IMG_EXTENSIONS = [
@@ -72,9 +73,7 @@ def is_image_file(filename):
 
 def find_classes(dir):
     assert os.path.exists(dir), f"{dir} does not exist"
-    classes = [
-        d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))
-    ]
+    classes = [d for d in os.listdir(dir) if os.path.isdir(os.path.join(dir, d))]
     classes.sort()
     class_to_idx = {classes[i]: i for i in range(len(classes))}
     return classes, class_to_idx
@@ -87,10 +86,7 @@ def class_name_to_idx(annotation_dir):
     fpath = os.path.join(annotation_dir, "classInd.txt")
     with open(fpath, "r") as f:
         data = f.readlines()
-        class_to_idx = {
-            x.strip().split(" ")[1].lower(): int(x.strip().split(" ")[0]) - 1
-            for x in data
-        }
+        class_to_idx = {x.strip().split(" ")[1].lower(): int(x.strip().split(" ")[0]) - 1 for x in data}
     return class_to_idx
 
 
@@ -151,8 +147,7 @@ def split_by_captical(s):
     return string.rstrip(" ").lower()
 
 
-def make_dataset_ucf(dir, nframes, class_to_idx, frame_stride=1,
-                     clip_step=None):
+def make_dataset_ucf(dir, nframes, class_to_idx, frame_stride=1, clip_step=None):
     """
     Load consecutive clips and consecutive frames from `dir`.
 
@@ -181,11 +176,9 @@ def make_dataset_ucf(dir, nframes, class_to_idx, frame_stride=1,
             assert os.path.isdir(video_path)
             frames = []
             for i, fname in enumerate(sorted(os.listdir(video_path))):
-                assert is_image_file(
-                    fname), f"fname={fname},video_path={video_path},dir={dir}"
+                assert is_image_file(fname), f"fname={fname},video_path={video_path},dir={dir}"
                 img_path = os.path.join(video_path, fname)
-                class_name = video_name.split("_")[
-                    1].lower()  # v_BoxingSpeedBag_g12_c05 -> boxingspeedbag
+                class_name = video_name.split("_")[1].lower()  # v_BoxingSpeedBag_g12_c05 -> boxingspeedbag
                 class_caption = split_by_captical(
                     video_name.split("_")[1]
                 )  # v_BoxingSpeedBag_g12_c05 -> BoxingSpeedBag -> boxing speed bag
@@ -201,7 +194,7 @@ def make_dataset_ucf(dir, nframes, class_to_idx, frame_stride=1,
             frames = frames[::frame_stride]
             start_indices = list(range(len(frames)))[::clip_step]
             for i in start_indices:
-                clip = frames[i:i + nframes]
+                clip = frames[i : i + nframes]
                 if len(clip) == nframes:
                     clips.append(clip)
     return clips, videos
@@ -234,18 +227,19 @@ def load_and_transform_frames(frame_list, loader, img_transform=None):
 
 class VideoFrameDataset(paddle.io.Dataset):
     def __init__(
-            self,
-            data_root,
-            resolution,
-            video_length,
-            dataset_name="",
-            subset_split="",
-            annotation_dir=None,
-            spatial_transform="",
-            temporal_transform="",
-            frame_stride=1,
-            clip_step=None,
-            tokenizer=None, ):
+        self,
+        data_root,
+        resolution,
+        video_length,
+        dataset_name="",
+        subset_split="",
+        annotation_dir=None,
+        spatial_transform="",
+        temporal_transform="",
+        frame_stride=1,
+        clip_step=None,
+        tokenizer=None,
+    ):
         self.loader = default_loader
         self.video_length = video_length
         self.subset_split = subset_split
@@ -264,8 +258,7 @@ class VideoFrameDataset(paddle.io.Dataset):
             if annotation_dir is None:
                 annotation_dir = os.path.join(data_root, "ucfTrainTestlist")
             class_to_idx = class_name_to_idx(annotation_dir)
-            assert (len(class_to_idx) == 101
-                    ), f"num of classes = {len(class_to_idx)}, not 101"
+            assert len(class_to_idx) == 101, f"num of classes = {len(class_to_idx)}, not 101"
         elif dataset_name == "sky":
             classes, class_to_idx = find_classes(video_dir)
         else:
@@ -279,9 +272,9 @@ class VideoFrameDataset(paddle.io.Dataset):
             video_length,
             class_to_idx,
             frame_stride=frame_stride,
-            clip_step=clip_step, )
-        assert (len(self.clips[0]) == video_length
-                ), f"Invalid clip length = {len(self.clips[0])}"
+            clip_step=clip_step,
+        )
+        assert len(self.clips[0]) == video_length, f"Invalid clip length = {len(self.clips[0])}"
         if self.temporal_transform == "rand_clips":
             self.clips = self.videos
         if subset_split == "all":
@@ -296,31 +289,33 @@ class VideoFrameDataset(paddle.io.Dataset):
         print("[VideoFrameDataset] video_length", self.video_length)
         if len(self.clips) == 0:
             raise RuntimeError(
-                f"Found 0 clips in {video_dir}. \nSupported image extensions are: "
-                + ",".join(IMG_EXTENSIONS))
-        self.img_transform = paddle.vision.transforms.Compose([
-            paddle.vision.transforms.ToTensor(),
-            paddle.vision.transforms.Normalize((0.5, 0.5, 0.5),
-                                               (0.5, 0.5, 0.5)),
-        ])
+                f"Found 0 clips in {video_dir}. \nSupported image extensions are: " + ",".join(IMG_EXTENSIONS)
+            )
+        self.img_transform = paddle.vision.transforms.Compose(
+            [
+                paddle.vision.transforms.ToTensor(),
+                paddle.vision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
+        )
         if self.spatial_transform == "center_crop_resize":
             print("Spatial transform: center crop and then resize")
-            self.video_transform = paddle.vision.transforms.Compose([
-                paddle.vision.transforms.Resize(resolution),
-                CenterCropVideo(resolution),
-            ])
-            self.video_transform_step1 = paddle.vision.transforms.Compose([
-                paddle.vision.transforms.Resize(resolution),
-            ])
-            self.video_transform_step2 = paddle.vision.transforms.Compose(
-                [CenterCropVideo(resolution)])
+            self.video_transform = paddle.vision.transforms.Compose(
+                [
+                    paddle.vision.transforms.Resize(resolution),
+                    CenterCropVideo(resolution),
+                ]
+            )
+            self.video_transform_step1 = paddle.vision.transforms.Compose(
+                [
+                    paddle.vision.transforms.Resize(resolution),
+                ]
+            )
+            self.video_transform_step2 = paddle.vision.transforms.Compose([CenterCropVideo(resolution)])
         elif self.spatial_transform == "resize":
             print("Spatial transform: resize with no crop")
-            self.video_transform = paddle.vision.transforms.Resize(
-                (resolution, resolution))
+            self.video_transform = paddle.vision.transforms.Resize((resolution, resolution))
         elif self.spatial_transform == "random_crop":
-            self.video_transform = paddle.vision.transforms.Compose(
-                [RandomCropVideo(resolution)])
+            self.video_transform = paddle.vision.transforms.Compose([RandomCropVideo(resolution)])
         elif self.spatial_transform == "":
             self.video_transform = None
         else:
@@ -332,7 +327,8 @@ class VideoFrameDataset(paddle.io.Dataset):
                 padding="max_length",
                 truncation=True,
                 max_length=tokenizer.model_max_length,
-                return_tensors="np", ).input_ids[0]
+                return_tensors="np",
+            ).input_ids[0]
         else:
             self.text_processing = None
 
@@ -340,14 +336,13 @@ class VideoFrameDataset(paddle.io.Dataset):
         if self.temporal_transform == "rand_clips":
             raw_video = self.clips[index]
             rand_idx = random.randint(0, len(raw_video) - self.video_length)
-            clip = raw_video[rand_idx:rand_idx + self.video_length]
+            clip = raw_video[rand_idx : rand_idx + self.video_length]
         else:
             clip = self.clips[index]
         assert (
             len(clip) == self.video_length
         ), f"current clip_length={len(clip)}, target clip_length={self.video_length}, {clip}"
-        frames, labels = load_and_transform_frames(clip, self.loader,
-                                                   self.img_transform)
+        frames, labels = load_and_transform_frames(clip, self.loader, self.img_transform)
 
         assert (
             len(frames) == self.video_length
@@ -357,8 +352,7 @@ class VideoFrameDataset(paddle.io.Dataset):
             if self.spatial_transform == "center_crop_resize":
                 temp_frames = rearrange(frames, "c t h w -> (c t) h w")
                 temp_frames = self.video_transform_step1(temp_frames)
-                frames = rearrange(
-                    temp_frames, "(c t) h w -> c t h w", c=frames.shape[0])
+                frames = rearrange(temp_frames, "(c t) h w -> c t h w", c=frames.shape[0])
                 frames = self.video_transform_step2(frames)
             else:
                 frames = self.video_transform(frames)
@@ -377,7 +371,9 @@ class VideoFrameDataset(paddle.io.Dataset):
                 "input_ids": self.text_processing(example["caption"]),
             }
         else:
-            tensor_out = {"pixel_values": example["image"], }
+            tensor_out = {
+                "pixel_values": example["image"],
+            }
         return tensor_out
 
     def __len__(self):

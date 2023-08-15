@@ -25,11 +25,25 @@ from types import FunctionType, MethodType
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..utils import (
-    DIFFUSERS_CACHE, FROM_DIFFUSERS, FROM_HF_HUB, HF_HUB_OFFLINE,
-    LOW_CPU_MEM_USAGE_DEFAULT, PPDIFFUSERS_CACHE, TO_DIFFUSERS, _add_variant,
-    _get_model_file, get_logger, is_paddle_available, is_paddlenlp_available,
-    is_ppxformers_available, is_safetensors_available, is_torch_available,
-    is_torch_file, smart_load, str2bool)
+    DIFFUSERS_CACHE,
+    FROM_DIFFUSERS,
+    FROM_HF_HUB,
+    HF_HUB_OFFLINE,
+    LOW_CPU_MEM_USAGE_DEFAULT,
+    PPDIFFUSERS_CACHE,
+    TO_DIFFUSERS,
+    _add_variant,
+    _get_model_file,
+    get_logger,
+    is_paddle_available,
+    is_paddlenlp_available,
+    is_ppxformers_available,
+    is_safetensors_available,
+    is_torch_available,
+    is_torch_file,
+    smart_load,
+    str2bool,
+)
 
 logger = get_logger(__name__)
 
@@ -60,8 +74,7 @@ def copy_func(f):
     "Copy a non-builtin function (NB `copy.copy` does not work for this)"
     if not isinstance(f, FunctionType):
         return copy.copy(f)
-    fn = FunctionType(f.__code__, f.__globals__, f.__name__, f.__defaults__,
-                      f.__closure__)
+    fn = FunctionType(f.__code__, f.__globals__, f.__name__, f.__defaults__, f.__closure__)
     fn.__kwdefaults__ = f.__kwdefaults__
     fn.__dict__.update(f.__dict__)
     fn.__annotations__.update(f.__annotations__)
@@ -81,7 +94,7 @@ class _clsmethod:
 def patch_to(cls, as_prop=False, cls_method=False):
     "Decorator: add `f` to `cls`"
     if not isinstance(cls, (tuple, list)):
-        cls = (cls, )
+        cls = (cls,)
 
     def _inner(f):
         for c_ in cls:
@@ -108,11 +121,11 @@ if is_paddle_available():
 
     def is_floating_point(x):
         if not isinstance(x, (paddle.Tensor, paddle.static.Variable)):
-            raise TypeError(
-                "Expected Tensor, but received type of x: {}".format(type(x)))
+            raise TypeError("Expected Tensor, but received type of x: {}".format(type(x)))
         dtype = x.dtype
-        is_fp_dtype = (dtype == paddle.float32 or dtype == paddle.float64 or
-                       dtype == paddle.float16 or dtype == paddle.bfloat16)
+        is_fp_dtype = (
+            dtype == paddle.float32 or dtype == paddle.float64 or dtype == paddle.float16 or dtype == paddle.bfloat16
+        )
         return is_fp_dtype
 
     if not hasattr(paddle, "is_floating_point"):
@@ -219,7 +232,8 @@ if is_paddle_available():
         tensor = paddle.create_parameter(
             data.shape,
             dtype=data.dtype,
-            default_initializer=nn.initializer.Assign(data), )
+            default_initializer=nn.initializer.Assign(data),
+        )
         if not requires_grad:
             tensor.stop_gradient = True
         return tensor
@@ -247,8 +261,7 @@ if is_paddle_available():
 
         for item in atoms:
             if not hasattr(mod, item):
-                raise AttributeError(mod.__class__.__name__ + " has no "
-                                     "attribute `" + item + "`")
+                raise AttributeError(mod.__class__.__name__ + " has no " "attribute `" + item + "`")
 
             mod = getattr(mod, item)
 
@@ -259,23 +272,21 @@ if is_paddle_available():
     nn.Layer.get_sublayer = get_sublayer
 
     class _WrappedHook:
-        def __init__(self, hook: Callable, module: Optional["nn.Layer"]=None):
+        def __init__(self, hook: Callable, module: Optional["nn.Layer"] = None):
             self.hook: Callable = hook
             functools.update_wrapper(self, hook)
 
             self.with_module: bool = False
 
             if module is not None:
-                self.module: weakref.ReferenceType["nn.Layer"] = weakref.ref(
-                    module)
+                self.module: weakref.ReferenceType["nn.Layer"] = weakref.ref(module)
                 self.with_module = True
 
         def __call__(self, *args: Any, **kwargs: Any) -> Any:
             if self.with_module:
                 module = self.module()
                 if module is None:
-                    raise RuntimeError(
-                        "You are trying to call the hook of a dead Module!")
+                    raise RuntimeError("You are trying to call the hook of a dead Module!")
                 return self.hook(module, *args, **kwargs)
             return self.hook(*args, **kwargs)
 
@@ -292,8 +303,7 @@ if is_paddle_available():
 
             if self.with_module:
                 if state["module"] is None:
-                    raise RuntimeError(
-                        "You are trying to revive the hook of a dead Module!")
+                    raise RuntimeError("You are trying to revive the hook of a dead Module!")
                 self.module = weakref.ref(state["module"])
 
     try:
@@ -305,22 +315,20 @@ if is_paddle_available():
         if not hasattr(self, "load_state_dict_pre_hooks"):
             self.load_state_dict_pre_hooks = OrderedDict()
         handle = HookRemoveHelper(self.load_state_dict_pre_hooks)
-        self.load_state_dict_pre_hooks[handle._hook_id] = _WrappedHook(
-            hook, self if with_module else None)
+        self.load_state_dict_pre_hooks[handle._hook_id] = _WrappedHook(hook, self if with_module else None)
         return handle
 
     nn.Layer.register_load_state_dict_pre_hook = register_load_state_dict_pre_hook
 
     raw_set_state_dict = nn.Layer.set_state_dict
 
-    def set_state_dict(self, state_dict, use_structured_name: bool=True):
+    def set_state_dict(self, state_dict, use_structured_name: bool = True):
         if hasattr(self, "load_state_dict_pre_hooks"):
             for hook in self.load_state_dict_pre_hooks.values():
                 hook(state_dict)
         # POP is_torch_weight
         state_dict.pop("is_torch_weight", None)
-        return raw_set_state_dict(
-            self, state_dict, use_structured_name=use_structured_name)
+        return raw_set_state_dict(self, state_dict, use_structured_name=use_structured_name)
 
     nn.Layer.set_state_dict = set_state_dict
     nn.Layer.load_dict = nn.Layer.set_state_dict
@@ -338,12 +346,12 @@ if is_paddle_available() and is_paddlenlp_available():
         from ..utils.paddle_utils import no_init_weights
 
     if is_ppxformers_available():
-        from paddle.incubate.nn.memory_efficient_attention import \
-            memory_efficient_attention
+        from paddle.incubate.nn.memory_efficient_attention import (
+            memory_efficient_attention,
+        )
         from paddle.nn.functional.flash_attention import flash_attention
 
-        sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 +
-                                                                           64)
+        sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 + 64)
         if sdp_kernel == "mem_efficient":
             flash_attn_version = 1
         else:
@@ -353,33 +361,32 @@ if is_paddle_available() and is_paddlenlp_available():
         flash_attn_error = None
         try:
             _ = flash_attention(
-                paddle.ones(
-                    (1, 1, 2, 40), dtype=paddle.float16),
-                paddle.ones(
-                    (1, 1, 2, 40), dtype=paddle.float16),
-                paddle.ones(
-                    (1, 1, 2, 40), dtype=paddle.float16), )
+                paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+            )
         except Exception as error:
             flash_attn_error = error
             is_support_flash_attention = False
 
         def scaled_dot_product_attention_(
-                query,
-                key,
-                value,
-                attn_mask=None,
-                dropout_p=0.0,
-                is_causal=False,
-                scale=None,
-                training=True,
-                attention_op=None, ):
+            query,
+            key,
+            value,
+            attn_mask=None,
+            dropout_p=0.0,
+            is_causal=False,
+            scale=None,
+            training=True,
+            attention_op=None,
+        ):
 
             if attention_op in [None, "auto"]:
                 head_dim = query.shape[-1]
                 attention_op = "cutlass"
                 if is_support_flash_attention and query.dtype in [
-                        paddle.float16,
-                        paddle.bfloat16,
+                    paddle.float16,
+                    paddle.bfloat16,
                 ]:
                     if flash_attn_version == 1:
                         if head_dim <= 128:
@@ -403,17 +410,12 @@ if is_paddle_available() and is_paddlenlp_available():
                 else:
                     if attn_mask is not None:
                         attn_mask = paddle.transpose(attn_mask, [0, 2, 1, 3])
-                        if (attn_mask.cast("float32").min() == 0 and
-                                attn_mask.cast("float32").max() == 1):
+                        if attn_mask.cast("float32").min() == 0 and attn_mask.cast("float32").max() == 1:
                             attn_mask = (attn_mask.cast(s.dtype) - 1) * 10000.0
                         s = s + attn_mask
                     p = paddle.nn.functional.softmax(s, axis=-1)
                 if dropout_p > 0.0:
-                    p = paddle.nn.functional.dropout(
-                        p,
-                        dropout_p,
-                        training=training,
-                        mode="upscale_in_train")
+                    p = paddle.nn.functional.dropout(p, dropout_p, training=training, mode="upscale_in_train")
                 o = paddle.matmul(p, vt)
                 return paddle.transpose(o, [0, 2, 1, 3])
             elif attention_op == "cutlass":
@@ -427,7 +429,8 @@ if is_paddle_available() and is_paddlenlp_available():
                     None,
                     p=dropout_p if training else 0.0,
                     scale=scale,
-                    training=True, )  # make sure we use training=True
+                    training=True,
+                )  # make sure we use training=True
             elif attention_op == "flash":
                 output = flash_attention(
                     query,
@@ -435,15 +438,13 @@ if is_paddle_available() and is_paddlenlp_available():
                     value,
                     dropout=dropout_p,
                     causal=is_causal,
-                    return_softmax=False, )[0]
+                    return_softmax=False,
+                )[0]
             else:
-                raise ValueError(
-                    "ppxformers's attention_op shoulde be in ['cutlass', 'flash', 'math']"
-                )
+                raise ValueError("ppxformers's attention_op shoulde be in ['cutlass', 'flash', 'math']")
             return output
 
-        paddle.nn.functional.scaled_dot_product_attention_ = (
-            scaled_dot_product_attention_)
+        paddle.nn.functional.scaled_dot_product_attention_ = scaled_dot_product_attention_
 
     @patch_to(nn.Layer, as_prop=True)
     def dtype(parameter: nn.Layer) -> paddle.dtype:
@@ -474,8 +475,10 @@ if is_paddle_available() and is_paddlenlp_available():
         from shutil import copyfile
 
         import sentencepiece as spm
-        from paddlenlp.transformers.tokenizer_utils import (AddedToken,
-                                                            PretrainedTokenizer)
+        from paddlenlp.transformers.tokenizer_utils import (
+            AddedToken,
+            PretrainedTokenizer,
+        )
 
         SPIECE_UNDERLINE = "▁"
 
@@ -495,24 +498,24 @@ if is_paddle_available() and is_paddlenlp_available():
             model_input_names = ["input_ids", "attention_mask"]
 
             def __init__(
-                    self,
-                    vocab_file,
-                    bos_token="<s>",
-                    eos_token="</s>",
-                    sep_token="</s>",
-                    cls_token="<s>",
-                    unk_token="<unk>",
-                    pad_token="<pad>",
-                    mask_token="<mask>",
-                    sp_model_kwargs: Optional[Dict[str, Any]]=None,
-                    **kwargs, ) -> None:
+                self,
+                vocab_file,
+                bos_token="<s>",
+                eos_token="</s>",
+                sep_token="</s>",
+                cls_token="<s>",
+                unk_token="<unk>",
+                pad_token="<pad>",
+                mask_token="<mask>",
+                sp_model_kwargs: Optional[Dict[str, Any]] = None,
+                **kwargs,
+            ) -> None:
                 # Mask token behave like a normal word, i.e. include the space before it
-                mask_token = (AddedToken(
-                    mask_token, lstrip=True, rstrip=False)
-                              if isinstance(mask_token, str) else mask_token)
+                mask_token = (
+                    AddedToken(mask_token, lstrip=True, rstrip=False) if isinstance(mask_token, str) else mask_token
+                )
 
-                self.sp_model_kwargs = ({} if sp_model_kwargs is None else
-                                        sp_model_kwargs)
+                self.sp_model_kwargs = {} if sp_model_kwargs is None else sp_model_kwargs
 
                 super().__init__(
                     bos_token=bos_token,
@@ -523,10 +526,10 @@ if is_paddle_available() and is_paddlenlp_available():
                     pad_token=pad_token,
                     mask_token=mask_token,
                     sp_model_kwargs=self.sp_model_kwargs,
-                    **kwargs, )
+                    **kwargs,
+                )
 
-                self.sp_model = spm.SentencePieceProcessor(
-                    **self.sp_model_kwargs)
+                self.sp_model = spm.SentencePieceProcessor(**self.sp_model_kwargs)
                 self.sp_model.Load(str(vocab_file))
                 self.vocab_file = vocab_file
 
@@ -547,12 +550,8 @@ if is_paddle_available() and is_paddlenlp_available():
                 # The first "real" token "," has position 4 in the original fairseq vocab and position 3 in the spm vocab
                 self.fairseq_offset = 1
 
-                self.fairseq_tokens_to_ids["<mask>"] = (
-                    len(self.sp_model) + self.fairseq_offset)
-                self.fairseq_ids_to_tokens = {
-                    v: k
-                    for k, v in self.fairseq_tokens_to_ids.items()
-                }
+                self.fairseq_tokens_to_ids["<mask>"] = len(self.sp_model) + self.fairseq_offset
+                self.fairseq_ids_to_tokens = {v: k for k, v in self.fairseq_tokens_to_ids.items()}
 
             def __getstate__(self):
                 state = self.__dict__.copy()
@@ -567,14 +566,12 @@ if is_paddle_available() and is_paddlenlp_available():
                 if not hasattr(self, "sp_model_kwargs"):
                     self.sp_model_kwargs = {}
 
-                self.sp_model = spm.SentencePieceProcessor(
-                    **self.sp_model_kwargs)
+                self.sp_model = spm.SentencePieceProcessor(**self.sp_model_kwargs)
                 self.sp_model.LoadFromSerializedProto(self.sp_model_proto)
 
             def build_inputs_with_special_tokens(
-                    self,
-                    token_ids_0: List[int],
-                    token_ids_1: Optional[List[int]]=None) -> List[int]:
+                self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None
+            ) -> List[int]:
                 """
                 Build model inputs from a sequence or a pair of sequence for sequence classification tasks by concatenating and
                 adding special tokens. An XLM-RoBERTa sequence has the following format:
@@ -590,17 +587,17 @@ if is_paddle_available() and is_paddlenlp_available():
                 """
 
                 if token_ids_1 is None:
-                    return [self.cls_token_id
-                            ] + token_ids_0 + [self.sep_token_id]
+                    return [self.cls_token_id] + token_ids_0 + [self.sep_token_id]
                 cls = [self.cls_token_id]
                 sep = [self.sep_token_id]
                 return cls + token_ids_0 + sep + sep + token_ids_1 + sep
 
             def get_special_tokens_mask(
-                    self,
-                    token_ids_0: List[int],
-                    token_ids_1: Optional[List[int]]=None,
-                    already_has_special_tokens: bool=False, ) -> List[int]:
+                self,
+                token_ids_0: List[int],
+                token_ids_1: Optional[List[int]] = None,
+                already_has_special_tokens: bool = False,
+            ) -> List[int]:
                 """
                 Retrieve sequence ids from a token list that has no special tokens added. This method is called when adding
                 special tokens using the tokenizer `prepare_for_model` method.
@@ -619,17 +616,16 @@ if is_paddle_available() and is_paddlenlp_available():
                     return super().get_special_tokens_mask(
                         token_ids_0=token_ids_0,
                         token_ids_1=token_ids_1,
-                        already_has_special_tokens=True, )
+                        already_has_special_tokens=True,
+                    )
 
                 if token_ids_1 is None:
                     return [1] + ([0] * len(token_ids_0)) + [1]
-                return ([1] + ([0] * len(token_ids_0)) + [1, 1] +
-                        ([0] * len(token_ids_1)) + [1])
+                return [1] + ([0] * len(token_ids_0)) + [1, 1] + ([0] * len(token_ids_1)) + [1]
 
             def create_token_type_ids_from_sequences(
-                    self,
-                    token_ids_0: List[int],
-                    token_ids_1: Optional[List[int]]=None) -> List[int]:
+                self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None
+            ) -> List[int]:
                 """
                 Create a mask from the two sequences passed to be used in a sequence-pair classification task. XLM-RoBERTa does
                 not make use of token type ids, therefore a list of zeros is returned.
@@ -647,19 +643,14 @@ if is_paddle_available() and is_paddlenlp_available():
 
                 if token_ids_1 is None:
                     return len(cls + token_ids_0 + sep) * [0]
-                return len(cls + token_ids_0 + sep + sep + token_ids_1 +
-                           sep) * [0]
+                return len(cls + token_ids_0 + sep + sep + token_ids_1 + sep) * [0]
 
             @property
             def vocab_size(self):
-                return (len(self.sp_model) + self.fairseq_offset + 1
-                        )  # Add the <mask> token
+                return len(self.sp_model) + self.fairseq_offset + 1  # Add the <mask> token
 
             def get_vocab(self):
-                vocab = {
-                    self.convert_ids_to_tokens(i): i
-                    for i in range(self.vocab_size)
-                }
+                vocab = {self.convert_ids_to_tokens(i): i for i in range(self.vocab_size)}
                 vocab.update(self.added_tokens_encoder)
                 return vocab
 
@@ -683,33 +674,28 @@ if is_paddle_available() and is_paddlenlp_available():
 
             def convert_tokens_to_string(self, tokens):
                 """Converts a sequence of tokens (strings for sub-words) in a single string."""
-                out_string = "".join(tokens).replace(SPIECE_UNDERLINE,
-                                                     " ").strip()
+                out_string = "".join(tokens).replace(SPIECE_UNDERLINE, " ").strip()
                 return out_string
 
-            def save_vocabulary(
-                    self, save_directory: str,
-                    filename_prefix: Optional[str]=None) -> Tuple[str]:
+            def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
                 if not os.path.isdir(save_directory):
-                    logger.error(
-                        f"Vocabulary path ({save_directory}) should be a directory"
-                    )
+                    logger.error(f"Vocabulary path ({save_directory}) should be a directory")
                     return
                 out_vocab_file = os.path.join(
                     save_directory,
-                    (filename_prefix + "-" if filename_prefix else "") +
-                    self.resource_files_names["vocab_file"], )
+                    (filename_prefix + "-" if filename_prefix else "") + self.resource_files_names["vocab_file"],
+                )
 
-                if os.path.abspath(self.vocab_file) != os.path.abspath(
-                        out_vocab_file) and os.path.isfile(self.vocab_file):
+                if os.path.abspath(self.vocab_file) != os.path.abspath(out_vocab_file) and os.path.isfile(
+                    self.vocab_file
+                ):
                     copyfile(self.vocab_file, out_vocab_file)
                 elif not os.path.isfile(self.vocab_file):
                     with open(out_vocab_file, "wb") as fi:
-                        content_spiece_model = self.sp_model.serialized_model_proto(
-                        )
+                        content_spiece_model = self.sp_model.serialized_model_proto()
                         fi.write(content_spiece_model)
 
-                return (out_vocab_file, )
+                return (out_vocab_file,)
 
         paddlenlp.transformers.XLMRobertaTokenizer = XLMRobertaTokenizer
 
@@ -719,16 +705,17 @@ if is_paddle_available() and is_paddlenlp_available():
     BertModel.raw_forward = BertModel.forward
 
     def forward_new(
-            self,
-            input_ids: paddle.Tensor,
-            token_type_ids: Optional[paddle.Tensor]=None,
-            position_ids: Optional[paddle.Tensor]=None,
-            attention_mask: Optional[paddle.Tensor]=None,
-            past_key_values: Optional[Tuple[Tuple[paddle.Tensor]]]=None,
-            use_cache: Optional[bool]=None,
-            output_hidden_states: Optional[bool]=None,
-            output_attentions: Optional[bool]=None,
-            return_dict: Optional[bool]=None, ):
+        self,
+        input_ids: paddle.Tensor,
+        token_type_ids: Optional[paddle.Tensor] = None,
+        position_ids: Optional[paddle.Tensor] = None,
+        attention_mask: Optional[paddle.Tensor] = None,
+        past_key_values: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
+        use_cache: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ):
         if attention_mask is None:
             attention_mask = paddle.ones_like(input_ids)
         return self.raw_forward(
@@ -740,7 +727,8 @@ if is_paddle_available() and is_paddlenlp_available():
             use_cache=use_cache,
             output_hidden_states=output_hidden_states,
             output_attentions=output_attentions,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
     BertModel.forward = forward_new
 
@@ -748,13 +736,10 @@ if is_paddle_available() and is_paddlenlp_available():
     TRANSFORMERS_WEIGHTS_NAME = "pytorch_model.bin"
 
     # patch from_pretrained and save_pretrained
-    def from_pretrained_v3(cls,
-                           pretrained_model_name_or_path,
-                           *args,
-                           from_hf_hub: bool=False,
-                           **kwargs):
-        cache_dir = (kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub
-                     else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE))
+    def from_pretrained_v3(cls, pretrained_model_name_or_path, *args, from_hf_hub: bool = False, **kwargs):
+        cache_dir = (
+            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
+        )
         ignore_mismatched_sizes = kwargs.pop("ignore_mismatched_sizes", False)
         force_download = kwargs.pop("force_download", False)
         from_diffusers = kwargs.pop("from_diffusers", None)
@@ -773,8 +758,7 @@ if is_paddle_available() and is_paddlenlp_available():
             paddle_dtype = _dtype
         subfolder = kwargs.pop("subfolder", None)
         variant = kwargs.pop("variant", None)
-        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage",
-                                       LOW_CPU_MEM_USAGE_DEFAULT)
+        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", LOW_CPU_MEM_USAGE_DEFAULT)
 
         user_agent = {
             "ppdiffusers": __version__,
@@ -787,8 +771,7 @@ if is_paddle_available() and is_paddlenlp_available():
         model_kwargs = kwargs
         # 1. get the PretrainedConfig to init model
         if not isinstance(config, PretrainedConfig):
-            config_path = (config if config is not None else
-                           pretrained_model_name_or_path)
+            config_path = config if config is not None else pretrained_model_name_or_path
 
             # TODO fix config  from_pretrained
             # must from hf hub
@@ -797,9 +780,11 @@ if is_paddle_available() and is_paddlenlp_available():
                     kwargs["subfolder"] = subfolder
             else:
                 if subfolder is not None:
-                    config_path = (os.path.join(config_path, subfolder)
-                                   if os.path.isdir(config_path) else
-                                   "/".join([config_path, subfolder]))
+                    config_path = (
+                        os.path.join(config_path, subfolder)
+                        if os.path.isdir(config_path)
+                        else "/".join([config_path, subfolder])
+                    )
 
             config, model_kwargs = cls.config_class.from_pretrained(
                 config_path,
@@ -807,12 +792,12 @@ if is_paddle_available() and is_paddlenlp_available():
                 return_unused_kwargs=True,
                 force_download=force_download,
                 from_hf_hub=from_hf_hub,
-                **kwargs, )
+                **kwargs,
+            )
         assert config is not None
 
         # we will remove in the future.
-        if not from_hf_hub and not os.path.exists(
-                os.path.join(cache_dir, config_path, "config.json")):
+        if not from_hf_hub and not os.path.exists(os.path.join(cache_dir, config_path, "config.json")):
             config.save_pretrained(os.path.join(cache_dir, config_path))
 
         if paddle_dtype is None:
@@ -825,8 +810,7 @@ if is_paddle_available() and is_paddlenlp_available():
                 try:
                     model_file = _get_model_file(
                         pretrained_model_name_or_path,
-                        weights_name=_add_variant(
-                            TRANSFORMERS_SAFE_WEIGHTS_NAME, variant),
+                        weights_name=_add_variant(TRANSFORMERS_SAFE_WEIGHTS_NAME, variant),
                         cache_dir=cache_dir,
                         force_download=force_download,
                         resume_download=resume_download,
@@ -836,15 +820,15 @@ if is_paddle_available() and is_paddlenlp_available():
                         revision=revision,
                         subfolder=subfolder,
                         user_agent=user_agent,
-                        from_hf_hub=from_hf_hub, )
+                        from_hf_hub=from_hf_hub,
+                    )
                 except Exception:  # noqa: E722
                     model_file = None
                     pass
             if model_file is None:
                 model_file = _get_model_file(
                     pretrained_model_name_or_path,
-                    weights_name=_add_variant(TRANSFORMERS_WEIGHTS_NAME,
-                                              variant),
+                    weights_name=_add_variant(TRANSFORMERS_WEIGHTS_NAME, variant),
                     cache_dir=cache_dir,
                     force_download=force_download,
                     resume_download=resume_download,
@@ -854,7 +838,8 @@ if is_paddle_available() and is_paddlenlp_available():
                     revision=revision,
                     subfolder=subfolder,
                     user_agent=user_agent,
-                    from_hf_hub=from_hf_hub, )
+                    from_hf_hub=from_hf_hub,
+                )
         else:
             model_file = _get_model_file(
                 pretrained_model_name_or_path,
@@ -868,19 +853,20 @@ if is_paddle_available() and is_paddlenlp_available():
                 revision=revision,
                 subfolder=subfolder,
                 user_agent=user_agent,
-                from_hf_hub=from_hf_hub, )
+                from_hf_hub=from_hf_hub,
+            )
         assert model_file is not None
 
         # try load model_file with paddle / torch / safetensor
         state_dict = smart_load(model_file)
         init_contexts = []
 
-        dtype = set(v.dtype for v in state_dict.values()
-                    if paddle.is_tensor(v) and paddle.is_floating_point(v))
+        dtype = set(v.dtype for v in state_dict.values() if paddle.is_tensor(v) and paddle.is_floating_point(v))
         if len(dtype) > 1 and paddle.float32 not in dtype:
             raise ValueError(
                 f"The weights of the model file {model_file} have a mixture of incompatible dtypes {dtype}. Please"
-                f" make sure that {model_file} weights have only one dtype.")
+                f" make sure that {model_file} weights have only one dtype."
+            )
         elif len(dtype) > 1 and paddle.float32 in dtype:
             dtype = paddle.float32
         elif len(dtype) == 0:
@@ -900,22 +886,18 @@ if is_paddle_available() and is_paddlenlp_available():
             model = cls(config, **model_kwargs)
 
         # convert weights
-        if (from_diffusers or is_torch_file(model_file)) and hasattr(
-                cls, "smart_convert"):
+        if (from_diffusers or is_torch_file(model_file)) and hasattr(cls, "smart_convert"):
             state_dict = cls.smart_convert(state_dict, model)
 
         loaded_state_dict_keys = list(state_dict.keys())
 
-        (
-            model,
-            missing_keys,
-            unexpected_keys,
-            mismatched_keys, ) = cls._load_pretrained_model_old(
-                model=model,
-                state_dict=state_dict,
-                loaded_keys=loaded_state_dict_keys,
-                ignore_mismatched_sizes=ignore_mismatched_sizes,
-                dtype=None, )
+        (model, missing_keys, unexpected_keys, mismatched_keys,) = cls._load_pretrained_model_old(
+            model=model,
+            state_dict=state_dict,
+            loaded_keys=loaded_state_dict_keys,
+            ignore_mismatched_sizes=ignore_mismatched_sizes,
+            dtype=None,
+        )
         loading_info = {
             "missing_keys": missing_keys,
             "unexpected_keys": unexpected_keys,
@@ -941,9 +923,7 @@ if is_paddle_available() and is_paddlenlp_available():
                 " (initializing a BertForSequenceClassification model from a BertForSequenceClassification model)."
             )
         else:
-            logger.info(
-                f"All model checkpoint weights were used when initializing {model.__class__.__name__}.\n"
-            )
+            logger.info(f"All model checkpoint weights were used when initializing {model.__class__.__name__}.\n")
 
         if len(missing_keys) > 0:
             logger.warning(
@@ -956,17 +936,21 @@ if is_paddle_available() and is_paddlenlp_available():
                 f"All the weights of {model.__class__.__name__} were initialized from the model checkpoint at"
                 f" {pretrained_model_name_or_path}.\nIf your task is similar to the task the model of the checkpoint"
                 f" was trained on, you can already use {model.__class__.__name__} for predictions without further"
-                " training.")
+                " training."
+            )
         if len(mismatched_keys) > 0:
-            mismatched_warning = "\n".join([
-                f"- {key}: found shape {shape1} in the checkpoint and {shape2} in the model instantiated"
-                for key, shape1, shape2 in mismatched_keys
-            ])
+            mismatched_warning = "\n".join(
+                [
+                    f"- {key}: found shape {shape1} in the checkpoint and {shape2} in the model instantiated"
+                    for key, shape1, shape2 in mismatched_keys
+                ]
+            )
             logger.warning(
                 f"Some weights of {model.__class__.__name__} were not initialized from the model checkpoint at"
                 f" {pretrained_model_name_or_path} and are newly initialized because the shapes did not"
                 f" match:\n{mismatched_warning}\nYou should probably TRAIN this model on a down-stream task to be able"
-                " to use it for predictions and inference.")
+                " to use it for predictions and inference."
+            )
 
         if output_loading_info:
             return model, loading_info
@@ -979,12 +963,13 @@ if is_paddle_available() and is_paddlenlp_available():
 
     @classmethod
     def _load_pretrained_model_old(
-            cls,
-            model: PretrainedModel,
-            state_dict: Dict[str, paddle.Tensor],
-            loaded_keys: List[str],
-            ignore_mismatched_sizes=False,
-            dtype=None, ) -> Tuple[List[str]]:
+        cls,
+        model: PretrainedModel,
+        state_dict: Dict[str, paddle.Tensor],
+        loaded_keys: List[str],
+        ignore_mismatched_sizes=False,
+        dtype=None,
+    ) -> Tuple[List[str]]:
         model_state_dict = model.state_dict()
 
         expected_keys = list(model_state_dict.keys())
@@ -992,8 +977,7 @@ if is_paddle_available() and is_paddlenlp_available():
 
         if len(prefix) > 0:
             has_prefix_module = any(s.startswith(prefix) for s in loaded_keys)
-            expects_prefix_module = any(
-                s.startswith(prefix) for s in expected_keys)
+            expects_prefix_module = any(s.startswith(prefix) for s in expected_keys)
         else:
             has_prefix_module = False
             expects_prefix_module = False
@@ -1004,10 +988,7 @@ if is_paddle_available() and is_paddlenlp_available():
         add_prefix_to_model = has_prefix_module and not expects_prefix_module
 
         if remove_prefix_from_model:
-            expected_keys = [
-                ".".join(s.split(".")[1:]) if s.startswith(prefix) else s
-                for s in expected_keys
-            ]
+            expected_keys = [".".join(s.split(".")[1:]) if s.startswith(prefix) else s for s in expected_keys]
         elif add_prefix_to_model:
             expected_keys = [".".join([prefix, s]) for s in expected_keys]
 
@@ -1018,31 +999,26 @@ if is_paddle_available() and is_paddlenlp_available():
         # the user.
         if cls._keys_to_ignore_on_load_missing is not None:
             for pat in cls._keys_to_ignore_on_load_missing:
-                missing_keys = [
-                    k for k in missing_keys if re.search(pat, k) is None
-                ]
+                missing_keys = [k for k in missing_keys if re.search(pat, k) is None]
 
         if cls._keys_to_ignore_on_load_unexpected is not None:
             for pat in cls._keys_to_ignore_on_load_unexpected:
-                unexpected_keys = [
-                    k for k in unexpected_keys if re.search(pat, k) is None
-                ]
+                unexpected_keys = [k for k in unexpected_keys if re.search(pat, k) is None]
 
         # Make sure we are able to load base models as well as derived models (with heads)
         start_prefix = ""
         model_to_load = model
-        if (len(cls.base_model_prefix) > 0 and
-                not hasattr(model, cls.base_model_prefix) and
-                has_prefix_module):
+        if len(cls.base_model_prefix) > 0 and not hasattr(model, cls.base_model_prefix) and has_prefix_module:
             start_prefix = cls.base_model_prefix + "."
 
         def _find_mismatched_keys(
-                state_dict,
-                model_state_dict,
-                loaded_keys,
-                add_prefix_to_model,
-                remove_prefix_from_model,
-                ignore_mismatched_sizes, ):
+            state_dict,
+            model_state_dict,
+            loaded_keys,
+            add_prefix_to_model,
+            remove_prefix_from_model,
+            ignore_mismatched_sizes,
+        ):
             mismatched_keys = []
             if ignore_mismatched_sizes:
                 for checkpoint_key in loaded_keys:
@@ -1054,13 +1030,17 @@ if is_paddle_available() and is_paddlenlp_available():
                         # The model key doesn't start with `prefix` but `checkpoint_key` does so we remove it.
                         model_key = ".".join(checkpoint_key.split(".")[1:])
 
-                    if (model_key in model_state_dict and
-                            state_dict[checkpoint_key].shape !=
-                            model_state_dict[model_key].shape):
-                        mismatched_keys.append((
-                            checkpoint_key,
-                            state_dict[checkpoint_key].shape,
-                            model_state_dict[model_key].shape, ))
+                    if (
+                        model_key in model_state_dict
+                        and state_dict[checkpoint_key].shape != model_state_dict[model_key].shape
+                    ):
+                        mismatched_keys.append(
+                            (
+                                checkpoint_key,
+                                state_dict[checkpoint_key].shape,
+                                model_state_dict[model_key].shape,
+                            )
+                        )
                         del state_dict[checkpoint_key]
             return mismatched_keys
 
@@ -1071,7 +1051,8 @@ if is_paddle_available() and is_paddlenlp_available():
             loaded_keys,
             add_prefix_to_model,
             remove_prefix_from_model,
-            ignore_mismatched_sizes, )
+            ignore_mismatched_sizes,
+        )
 
         start_prefix = prefix + "."
 
@@ -1090,8 +1071,7 @@ if is_paddle_available() and is_paddlenlp_available():
         if add_prefix_to_model:
             for key in list(state_dict.keys()):
                 if key.startswith(start_prefix):
-                    state_dict[key.replace(start_prefix, "")] = state_dict.pop(
-                        key)
+                    state_dict[key.replace(start_prefix, "")] = state_dict.pop(key)
 
         if remove_prefix_from_model:
             for key in list(state_dict.keys()):
@@ -1126,12 +1106,9 @@ if is_paddle_available() and is_paddlenlp_available():
                     # this is the temp hard code for fused-mt transformer
                     if model.keep_in_fp32_modules(key, model.config, dtype):
                         target_dtype = "float32"
-                    state_dict[key] = paddle.cast(
-                        state_dict[key], dtype=target_dtype)
+                    state_dict[key] = paddle.cast(state_dict[key], dtype=target_dtype)
                 else:
-                    raise ValueError(
-                        f"the dtype<{state_dict[key].dtype}> of current state-dict[{key}] is not valid"
-                    )
+                    raise ValueError(f"the dtype<{state_dict[key].dtype}> of current state-dict[{key}] is not valid")
         else:
             dtype_prefix_len = len("paddle.")
             for k, v in model_to_load.state_dict().items():
@@ -1155,8 +1132,7 @@ if is_paddle_available() and is_paddlenlp_available():
         # To avoid recursive import temporarily.
         import paddlenlp.ops.fast_transformer.transformer.decoding as ft_decoding
 
-        state_to_load = ft_decoding.get_ft_para_conf().fit_partial_model(
-            model_to_load, state_dict)
+        state_to_load = ft_decoding.get_ft_para_conf().fit_partial_model(model_to_load, state_dict)
         if paddle.in_dynamic_mode():
             model_to_load.set_state_dict(state_to_load)
 
@@ -1170,19 +1146,20 @@ if is_paddle_available() and is_paddlenlp_available():
 
     @classmethod
     def from_pretrained(
-            cls,
-            pretrained_model_name_or_path,
-            *args,
-            from_hf_hub=False,
-            subfolder=None,
-            paddle_dtype=None,
-            from_diffusers=None,
-            variant=None,
-            **kwargs, ):
+        cls,
+        pretrained_model_name_or_path,
+        *args,
+        from_hf_hub=False,
+        subfolder=None,
+        paddle_dtype=None,
+        from_diffusers=None,
+        variant=None,
+        **kwargs,
+    ):
         try:
             if cls.constructed_from_pretrained_config() and (
-                    hasattr(cls, "smart_convert") or
-                    hasattr(cls, "register_load_torch_hook")):
+                hasattr(cls, "smart_convert") or hasattr(cls, "register_load_torch_hook")
+            ):
                 return from_pretrained_v3(
                     cls,
                     pretrained_model_name_or_path,
@@ -1192,7 +1169,8 @@ if is_paddle_available() and is_paddlenlp_available():
                     paddle_dtype=paddle_dtype,
                     from_diffusers=from_diffusers,
                     variant=variant,
-                    **kwargs, )
+                    **kwargs,
+                )
         except Exception:
             pass
 
@@ -1206,7 +1184,8 @@ if is_paddle_available() and is_paddlenlp_available():
             from_hf_hub=from_hf_hub,
             subfolder=subfolder,
             dtype=dtype,
-            **kwargs, )
+            **kwargs,
+        )
 
     PretrainedModel.from_pretrained = from_pretrained
 
@@ -1214,51 +1193,43 @@ if is_paddle_available() and is_paddlenlp_available():
         from safetensors.numpy import save_file as safetensors_numpy_save_file
 
         if is_torch_available():
-            from safetensors.torch import \
-                save_file as safetensors_torch_save_file
+            from safetensors.torch import save_file as safetensors_torch_save_file
 
     if is_torch_available():
         import torch
 
     def save_pretrained_v3(
-            self: PretrainedModel,
-            save_directory: str,
-            is_main_process: bool=True,
-            save_function: Callable=None,
-            safe_serialization: bool=False,
-            variant: Optional[str]=None,
-            to_diffusers: Optional[bool]=None, ):
-        from ..models.modeling_pytorch_paddle_utils import \
-            convert_paddle_state_dict_to_pytorch
+        self: PretrainedModel,
+        save_directory: str,
+        is_main_process: bool = True,
+        save_function: Callable = None,
+        safe_serialization: bool = False,
+        variant: Optional[str] = None,
+        to_diffusers: Optional[bool] = None,
+    ):
+        from ..models.modeling_pytorch_paddle_utils import (
+            convert_paddle_state_dict_to_pytorch,
+        )
         from ..models.modeling_utils import convert_state_dict
 
         if to_diffusers is None:
             to_diffusers = TO_DIFFUSERS
 
-        if to_diffusers and safe_serialization and not is_safetensors_available(
-        ):
-            raise ImportError(
-                "`safe_serialization` requires the `safetensors library: `pip install safetensors`."
-            )
+        if to_diffusers and safe_serialization and not is_safetensors_available():
+            raise ImportError("`safe_serialization` requires the `safetensors library: `pip install safetensors`.")
 
         if os.path.isfile(save_directory):
-            logger.error(
-                f"Provided path ({save_directory}) should be a directory, not a file"
-            )
+            logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
             return
 
-        model_to_save = self._layers if isinstance(
-            self, paddle.DataParallel) else self
+        model_to_save = self._layers if isinstance(self, paddle.DataParallel) else self
         if is_main_process:
             try:
-                model_to_save.config.dtype = str(model_to_save._dtype).split(
-                    ".")[-1]
+                model_to_save.config.dtype = str(model_to_save._dtype).split(".")[-1]
             except:
                 model_to_save.config.dtype = "float32"
             # Attach architecture to the config
-            model_to_save.config.architectures = [
-                model_to_save.__class__.__name__
-            ]
+            model_to_save.config.architectures = [model_to_save.__class__.__name__]
 
             model_to_save.config.save_pretrained(save_directory)
 
@@ -1273,12 +1244,10 @@ if is_paddle_available() and is_paddlenlp_available():
                 if safe_serialization:
                     if is_torch_available():
                         save_function = safetensors_torch_save_file
-                        state_dict = convert_state_dict(
-                            state_dict, framework="torch")
+                        state_dict = convert_state_dict(state_dict, framework="torch")
                     else:
                         save_function = safetensors_numpy_save_file
-                        state_dict = convert_state_dict(
-                            state_dict, framework="numpy")
+                        state_dict = convert_state_dict(state_dict, framework="numpy")
                     weights_name = _add_variant("model.safetensors", variant)
                 else:
                     if not is_torch_available():
@@ -1287,11 +1256,9 @@ if is_paddle_available() and is_paddlenlp_available():
                         )
                     save_function = torch.save
                     weights_name = _add_variant("pytorch_model.bin", variant)
-                    state_dict = convert_state_dict(
-                        state_dict, framework="torch")
+                    state_dict = convert_state_dict(state_dict, framework="torch")
 
-                state_dict = convert_paddle_state_dict_to_pytorch(state_dict,
-                                                                  model_to_save)
+                state_dict = convert_paddle_state_dict_to_pytorch(state_dict, model_to_save)
             else:
                 save_function = paddle.save
                 weights_name = _add_variant("model_state.pdparams", variant)
@@ -1299,24 +1266,22 @@ if is_paddle_available() and is_paddlenlp_available():
         # Save the model
         save_function(state_dict, os.path.join(save_directory, weights_name))
 
-        logger.info(
-            f"Model weights saved in {os.path.join(save_directory, weights_name)}"
-        )
+        logger.info(f"Model weights saved in {os.path.join(save_directory, weights_name)}")
 
     def save_pretrained(
-            self,
-            save_dir: str,
-            is_main_process: bool=True,
-            state_dict=None,
-            save_function: Callable=None,
-            max_shard_size="10GB",
-            safe_serialization: bool=False,
-            variant: Optional[str]=None,
-            to_diffusers: Optional[bool]=None,
-            *args,
-            **kwargs, ):
-        if self.constructed_from_pretrained_config() and hasattr(
-                self, "smart_convert"):
+        self,
+        save_dir: str,
+        is_main_process: bool = True,
+        state_dict=None,
+        save_function: Callable = None,
+        max_shard_size="10GB",
+        safe_serialization: bool = False,
+        variant: Optional[str] = None,
+        to_diffusers: Optional[bool] = None,
+        *args,
+        **kwargs,
+    ):
+        if self.constructed_from_pretrained_config() and hasattr(self, "smart_convert"):
             return save_pretrained_v3(
                 self,
                 save_dir,
@@ -1324,7 +1289,8 @@ if is_paddle_available() and is_paddlenlp_available():
                 save_function=save_function,
                 safe_serialization=safe_serialization,
                 variant=variant,
-                to_diffusers=to_diffusers, )
+                to_diffusers=to_diffusers,
+            )
         return raw_save_pretrained(
             self,
             save_dir=save_dir,
@@ -1335,32 +1301,40 @@ if is_paddle_available() and is_paddlenlp_available():
             safe_serialization=safe_serialization,
             variant=variant,
             *args,
-            **kwargs, )
+            **kwargs,
+        )
 
     PretrainedModel.save_pretrained = save_pretrained
 
     from paddlenlp.transformers import (
-        BertModel, BitBackbone, ClapTextModelWithProjection, CLIPTextModel,
-        CLIPTextModelWithProjection, CLIPVisionModel,
-        CLIPVisionModelWithProjection, DPTForDepthEstimation, SpeechT5HifiGan,
-        T5EncoderModel)
+        BertModel,
+        BitBackbone,
+        ClapTextModelWithProjection,
+        CLIPTextModel,
+        CLIPTextModelWithProjection,
+        CLIPVisionModel,
+        CLIPVisionModelWithProjection,
+        DPTForDepthEstimation,
+        SpeechT5HifiGan,
+        T5EncoderModel,
+    )
 
     if not hasattr(T5EncoderModel, "_keep_in_fp32_modules"):
         T5EncoderModel._keep_in_fp32_modules = ["wo"]
 
-    from ..models.modeling_pytorch_paddle_utils import \
-        convert_pytorch_state_dict_to_paddle_class_method
-    from ..pipelines.alt_diffusion.modeling_roberta_series import \
-        RobertaSeriesModelWithTransformation
+    from ..models.modeling_pytorch_paddle_utils import (
+        convert_pytorch_state_dict_to_paddle_class_method,
+    )
+    from ..pipelines.alt_diffusion.modeling_roberta_series import (
+        RobertaSeriesModelWithTransformation,
+    )
     from ..pipelines.deepfloyd_if.safety_checker import IFSafetyChecker
-    from ..pipelines.latent_diffusion.pipeline_latent_diffusion import \
-        LDMBertModel
-    from ..pipelines.paint_by_example.image_encoder import \
-        PaintByExampleImageEncoder
-    from ..pipelines.stable_diffusion.safety_checker import \
-        StableDiffusionSafetyChecker
-    from ..pipelines.stable_diffusion_safe.safety_checker import \
-        SafeStableDiffusionSafetyChecker
+    from ..pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertModel
+    from ..pipelines.paint_by_example.image_encoder import PaintByExampleImageEncoder
+    from ..pipelines.stable_diffusion.safety_checker import StableDiffusionSafetyChecker
+    from ..pipelines.stable_diffusion_safe.safety_checker import (
+        SafeStableDiffusionSafetyChecker,
+    )
 
     @classmethod
     def clip_smart_convert(cls, state_dict, pd_model):
@@ -1380,7 +1354,9 @@ if is_paddle_available() and is_paddlenlp_available():
             ".pre_layrnorm.": ".ln_pre.",
             ".post_layernorm.": ".ln_post.",
         }
-        ignore_value = ["position_ids", ]
+        ignore_value = [
+            "position_ids",
+        ]
         if cls in [PaintByExampleImageEncoder]:
             # ignore mapper. prefix, we will use convert_pytorch_state_dict_to_paddle to convert mapper.xxxx state_dict
             ignore_value.append("mapper.")
@@ -1410,11 +1386,11 @@ if is_paddle_available() and is_paddlenlp_available():
                 name = name.replace(hf_name, ppnlp_name)
             # step4: 0d tensor -> 1d tensor
             if name == "logit_scale" and value.ndim == 1:
-                value = value.reshape((1, ))
+                value = value.reshape((1,))
             # step5: safety_checker need prefix "clip."
             if "vision_model" in name and cls in [
-                    StableDiffusionSafetyChecker,
-                    SafeStableDiffusionSafetyChecker,
+                StableDiffusionSafetyChecker,
+                SafeStableDiffusionSafetyChecker,
             ]:
                 name = "clip." + name
             new_model_state[name] = value
@@ -1423,8 +1399,7 @@ if is_paddle_available() and is_paddlenlp_available():
 
         if cls in [PaintByExampleImageEncoder]:
             # convert mapper
-            mappersd = cls.smart_convert(
-                state_dict, pd_model, sub_layer="mapper.")
+            mappersd = cls.smart_convert(state_dict, pd_model, sub_layer="mapper.")
             new_model_state.update(mappersd)
 
         return new_model_state
@@ -1451,10 +1426,8 @@ if is_paddle_available() and is_paddlenlp_available():
             # about cls predictions ignore
             "cls.predictions.transform.dense": "cls.predictions.transform",
             "cls.predictions.decoder.weight": "cls.predictions.decoder_weight",
-            "cls.predictions.transform.LayerNorm.weight":
-            "cls.predictions.layer_norm.weight",
-            "cls.predictions.transform.LayerNorm.bias":
-            "cls.predictions.layer_norm.bias",
+            "cls.predictions.transform.LayerNorm.weight": "cls.predictions.layer_norm.weight",
+            "cls.predictions.transform.LayerNorm.bias": "cls.predictions.layer_norm.bias",
             "cls.predictions.bias": "cls.predictions.decoder_bias",
         }
         ignore_value = ["position_ids"]
@@ -1481,8 +1454,7 @@ if is_paddle_available() and is_paddlenlp_available():
     def ldmbert_smart_convert(cls, state_dict, pd_model):
         transformers2ppnlp = {
             "model.embed_tokens.weight": "embeddings.word_embeddings.weight",
-            "model.embed_positions.weight":
-            "embeddings.position_embeddings.weight",
+            "model.embed_positions.weight": "embeddings.position_embeddings.weight",
             "model.layer_norm.": "final_layer_norm.",
             "model.layers": "encoder.layers",
             ".self_attn_layer_norm.": ".norm1.",
@@ -1513,14 +1485,14 @@ if is_paddle_available() and is_paddlenlp_available():
 
     LDMBertModel.smart_convert = ldmbert_smart_convert
     for cls_ in [
-            CLIPTextModel,
-            CLIPTextModelWithProjection,
-            CLIPVisionModel,
-            CLIPVisionModelWithProjection,
-            StableDiffusionSafetyChecker,
-            SafeStableDiffusionSafetyChecker,
-            PaintByExampleImageEncoder,
-            IFSafetyChecker,
+        CLIPTextModel,
+        CLIPTextModelWithProjection,
+        CLIPVisionModel,
+        CLIPVisionModelWithProjection,
+        StableDiffusionSafetyChecker,
+        SafeStableDiffusionSafetyChecker,
+        PaintByExampleImageEncoder,
+        IFSafetyChecker,
     ]:
         setattr(cls_, "smart_convert", clip_smart_convert)
 
@@ -1532,8 +1504,12 @@ if is_paddle_available() and is_paddlenlp_available():
     else:
         # NEW TRANSFORMERS CLIP MODEL
         from ..pipelines.stable_diffusion.hf_clip_model import (
-            HFCLIPModel, HFCLIPTextModel, HFCLIPTextModelWithProjection,
-            HFCLIPVisionModel, HFCLIPVisionModelWithProjection)
+            HFCLIPModel,
+            HFCLIPTextModel,
+            HFCLIPTextModelWithProjection,
+            HFCLIPVisionModel,
+            HFCLIPVisionModelWithProjection,
+        )
 
         TRANSFORMERS_CLIP_MODEL = [
             HFCLIPModel,
@@ -1543,29 +1519,27 @@ if is_paddle_available() and is_paddlenlp_available():
             HFCLIPVisionModelWithProjection,
         ]
     for cls_ in [
-            DPTForDepthEstimation,
-            BitBackbone,
-            SpeechT5HifiGan,
-            ClapTextModelWithProjection,
-            T5EncoderModel,
+        DPTForDepthEstimation,
+        BitBackbone,
+        SpeechT5HifiGan,
+        ClapTextModelWithProjection,
+        T5EncoderModel,
     ] + TRANSFORMERS_CLIP_MODEL:
-        setattr(cls_, "smart_convert",
-                convert_pytorch_state_dict_to_paddle_class_method)
+        setattr(cls_, "smart_convert", convert_pytorch_state_dict_to_paddle_class_method)
 
     # TODO remove this when we updage ImageProcessingMixin
     # patch get_image_processor_dict support subfolder.
 
     IMAGE_PROCESSOR_NAME = "preprocessor_config.json"
-    from paddlenlp.transformers.feature_extraction_utils import \
-        FeatureExtractionMixin
-    from paddlenlp.transformers.image_processing_utils import \
-        ImageProcessingMixin
+    from paddlenlp.transformers.feature_extraction_utils import FeatureExtractionMixin
+    from paddlenlp.transformers.image_processing_utils import ImageProcessingMixin
 
     @classmethod
     def get_image_processor_dict(cls, pretrained_model_name_or_path, **kwargs):
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
-        cache_dir = (kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub
-                     else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE))
+        cache_dir = (
+            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
+        )
         force_download = kwargs.pop("force_download", False)
         resume_download = kwargs.pop("resume_download", False)
         proxies = kwargs.pop("proxies", None)
@@ -1589,12 +1563,11 @@ if is_paddle_available() and is_paddlenlp_available():
             revision=revision,
             subfolder=subfolder,
             user_agent=user_agent,
-            from_hf_hub=from_hf_hub, )
+            from_hf_hub=from_hf_hub,
+        )
         try:
             # Load image_processor dict
-            with open(
-                    resolved_image_processor_file, "r",
-                    encoding="utf-8") as reader:
+            with open(resolved_image_processor_file, "r", encoding="utf-8") as reader:
                 text = reader.read()
             image_processor_dict = json.loads(text)
 

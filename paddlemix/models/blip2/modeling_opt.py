@@ -25,28 +25,25 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 import paddle.tensor as tensor
 from paddle.distributed import fleet
+from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.fluid import layers
 from paddle.nn import Layer
+from paddle.nn.functional.flash_attention import flash_attention
 from paddle.nn.layer.transformer import _convert_param_attr_to_list
-from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-from paddle.nn.functional.flash_attention import (flash_attention, )
-
 from paddlenlp.transformers.conversion_utils import StateDictNameMapping
-from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
-from paddlenlp.utils.log import logger
-
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPastAndCrossAttentions,
-    CausalLMOutputWithCrossAttentions, )
+    CausalLMOutputWithCrossAttentions,
+)
+from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
 from paddlenlp.transformers.opt.configuration import (
     OPT_PRETRAINED_INIT_CONFIGURATION,
     OPT_PRETRAINED_RESOURCE_FILES_MAP,
-    OPTConfig, )
+    OPTConfig,
+)
+from paddlenlp.utils.log import logger
 
-__all__ = [
-    "OPTModel", "OPTPretrainedModel", "OPTForCausalLM",
-    "OPTForConditionalGeneration"
-]
+__all__ = ["OPTModel", "OPTPretrainedModel", "OPTForCausalLM", "OPTForConditionalGeneration"]
 
 
 def finfo(dtype):
@@ -64,24 +61,16 @@ def _make_causal_mask(input_ids_shape, past_key_values_length, dtype):
     """
     batch_size, target_length = input_ids_shape
 
-    mask = paddle.full((target_length, target_length),
-                       float(finfo(paddle.get_default_dtype()).min))
+    mask = paddle.full((target_length, target_length), float(finfo(paddle.get_default_dtype()).min))
 
     mask_cond = paddle.arange(mask.shape[-1])
     mask_cond = mask_cond < (mask_cond + 1).reshape([mask.shape[-1], 1])
     mask = paddle.where(mask_cond, paddle.full(mask_cond.shape, 0), mask)
 
     if past_key_values_length > 0:
-        mask = paddle.concat(
-            [
-                paddle.zeros(
-                    [target_length, past_key_values_length], dtype=mask.dtype),
-                mask
-            ],
-            axis=-1)
+        mask = paddle.concat([paddle.zeros([target_length, past_key_values_length], dtype=mask.dtype), mask], axis=-1)
 
-    expanded_mask = mask.unsqueeze(0).expand(
-        [batch_size, 1, target_length, target_length + past_key_values_length])
+    expanded_mask = mask.unsqueeze(0).expand([batch_size, 1, target_length, target_length + past_key_values_length])
     return expanded_mask
 
 
@@ -95,9 +84,8 @@ def _expand_mask(mask, tgt_length):
     expanded_mask = ~(paddle.cast(mask[:, None, None, :], "bool"))
     expanded_mask = paddle.cast(expanded_mask, dtype=paddle.float32)
 
-    expanded_mask = expanded_mask.expand(
-        [batch_size, 1, tgt_length, src_length])
-    expanded_mask = expanded_mask * float(finfo('float16').min)
+    expanded_mask = expanded_mask.expand([batch_size, 1, tgt_length, src_length])
+    expanded_mask = expanded_mask * float(finfo("float16").min)
     return expanded_mask
 
 
@@ -113,9 +101,10 @@ class MultiHeadAttention(nn.Layer):
     StaticCache = collections.namedtuple("StaticCache", ["k", "v"])
 
     def __init__(
-            self,
-            config: OPTConfig,
-            need_weights=False, ):
+        self,
+        config: OPTConfig,
+        need_weights=False,
+    ):
         super(MultiHeadAttention, self).__init__()
         self.use_flash_attn = config.get("use_flash_attn", False)
         self.num_heads = config.num_attention_heads
@@ -131,8 +120,8 @@ class MultiHeadAttention(nn.Layer):
         self.mp_degree = config.mp_degree
 
         assert (
-            self.head_dim * self.num_heads * config.mp_degree ==
-            config.hidden_size), "hidden_size must be divisible by num_heads"
+            self.head_dim * self.num_heads * config.mp_degree == config.hidden_size
+        ), "hidden_size must be divisible by num_heads"
 
         if config.mp_degree > 1:
             if self.fuse_attention_qkv:
@@ -140,33 +129,34 @@ class MultiHeadAttention(nn.Layer):
                     config.hidden_size,
                     config.hidden_size * 3,
                     has_bias=True,
-                    input_is_parallel=True, )
+                    input_is_parallel=True,
+                )
             else:
                 self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
                     config.hidden_size,
                     config.hidden_size,
                     has_bias=True,
-                    gather_output=False, )
+                    gather_output=False,
+                )
                 self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
                     config.hidden_size,
                     config.hidden_size,
                     has_bias=True,
-                    gather_output=False, )
+                    gather_output=False,
+                )
                 self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
                     config.hidden_size,
                     config.hidden_size,
                     has_bias=True,
-                    gather_output=False, )
+                    gather_output=False,
+                )
 
             self.out_proj = fleet.meta_parallel.RowParallelLinear(
-                config.hidden_size,
-                config.hidden_size,
-                input_is_parallel=True,
-                has_bias=True)
+                config.hidden_size, config.hidden_size, input_is_parallel=True, has_bias=True
+            )
         else:
             if self.fuse_attention_qkv:
-                self.qkv_proj = nn.Linear(config.hidden_size,
-                                          3 * config.hidden_size)
+                self.qkv_proj = nn.Linear(config.hidden_size, 3 * config.hidden_size)
             else:
                 self.q_proj = nn.Linear(config.hidden_size, config.hidden_size)
                 self.k_proj = nn.Linear(config.hidden_size, config.hidden_size)
@@ -176,15 +166,13 @@ class MultiHeadAttention(nn.Layer):
 
     def _fuse_prepare_qkv(self, query, use_cache=False, cache=None):
         mix_layer = self.qkv_proj(query)
-        mix_layer = paddle.reshape_(mix_layer,
-                                    [0, 0, self.num_heads, 3 * self.head_dim])
+        mix_layer = paddle.reshape_(mix_layer, [0, 0, self.num_heads, 3 * self.head_dim])
         if not self.use_flash_attn:
             mix_layer = paddle.transpose(mix_layer, [0, 2, 1, 3])
+
         q, k, v = paddle.split(mix_layer, num_or_sections=3, axis=-1)
 
-        assert not isinstance(
-            cache, self.StaticCache
-        ), "cache currently does not support the StaticCache type"
+        assert not isinstance(cache, self.StaticCache), "cache currently does not support the StaticCache type"
 
         if isinstance(cache, self.Cache):
             # for decoder self-attention in inference
@@ -262,29 +250,19 @@ class MultiHeadAttention(nn.Layer):
             return self.StaticCache(k, v)
         elif value is None:  # incremental_state
             k = layers.fill_constant_batch_size_like(
-                input=key,
-                shape=[-1, self.num_heads, 0, self.head_dim],
-                dtype=key.dtype,
-                value=0)
+                input=key, shape=[-1, self.num_heads, 0, self.head_dim], dtype=key.dtype, value=0
+            )
             v = layers.fill_constant_batch_size_like(
-                input=key,
-                shape=[-1, self.num_heads, 0, self.head_dim],
-                dtype=key.dtype,
-                value=0)
+                input=key, shape=[-1, self.num_heads, 0, self.head_dim], dtype=key.dtype, value=0
+            )
             return self.Cache(k, v)
         else:
             # incremental_state with initial value, mainly for usage like UniLM
             return self.Cache(key, value)
 
-    def forward(self,
-                query,
-                key,
-                value,
-                attn_mask=None,
-                use_cache=False,
-                cache=None,
-                output_attention=None,
-                is_causal=True):
+    def forward(
+        self, query, key, value, attn_mask=None, use_cache=False, cache=None, output_attention=None, is_causal=True
+    ):
         r"""
         Applies multi-head attention to map queries and a set of key-value pairs
         to outputs.
@@ -295,8 +273,7 @@ class MultiHeadAttention(nn.Layer):
         if self.fuse_attention_qkv:
             q, k, v, cache = self._fuse_prepare_qkv(query, use_cache, cache)
         else:
-            q, k, v, cache = self._prepare_qkv(query, key, value, use_cache,
-                                               cache)
+            q, k, v, cache = self._prepare_qkv(query, key, value, use_cache, cache)
         if self.use_flash_attn:
             bsz, q_len, num_heads, head_dim = q.shape
             out, weights = flash_attention(
@@ -305,12 +282,12 @@ class MultiHeadAttention(nn.Layer):
                 v,
                 causal=is_causal and q.shape[1] != 1,
                 return_softmax=self.need_weights and output_attention,
-                dropout=self.dropout)
+                dropout=self.dropout,
+            )
             out = out.reshape([bsz, q_len, head_dim * num_heads])
         # scale dot product attention
         else:
-            product = paddle.matmul(
-                x=q * (self.head_dim**-0.5), y=k, transpose_y=True)
+            product = paddle.matmul(x=q * (self.head_dim**-0.5), y=k, transpose_y=True)
 
             if attn_mask is not None:
                 product = product + attn_mask
@@ -319,24 +296,15 @@ class MultiHeadAttention(nn.Layer):
             if self.dropout:
                 if self.mp_degree > 1:
                     with get_rng_state_tracker().rng_state("local_seed"):
-                        weights = F.dropout(
-                            weights,
-                            self.dropout,
-                            training=self.training,
-                            mode="upscale_in_train")
+                        weights = F.dropout(weights, self.dropout, training=self.training, mode="upscale_in_train")
                 else:
-                    weights = F.dropout(
-                        weights,
-                        self.dropout,
-                        training=self.training,
-                        mode="upscale_in_train")
+                    weights = F.dropout(weights, self.dropout, training=self.training, mode="upscale_in_train")
 
             out = tensor.matmul(weights, v)
 
             # combine heads
             out = tensor.transpose(out, perm=[0, 2, 1, 3])
-            out = tensor.reshape(
-                x=out, shape=[0, 0, out.shape[2] * out.shape[3]])
+            out = tensor.reshape(x=out, shape=[0, 0, out.shape[2] * out.shape[3]])
 
         # project to output
         out = self.out_proj(out)
@@ -364,8 +332,7 @@ class TransformerDecoderLayer(nn.Layer):
         act_dropout = config.hidden_dropout_prob
         normalize_before = getattr(config, "normalize_before", True)
 
-        weight_attr = paddle.ParamAttr(initializer=nn.initializer.Normal(
-            mean=0.0, std=config.initializer_range))
+        weight_attr = paddle.ParamAttr(initializer=nn.initializer.Normal(mean=0.0, std=config.initializer_range))
         bias_attr = None
 
         self._config = locals()
@@ -383,18 +350,16 @@ class TransformerDecoderLayer(nn.Layer):
         self.self_attn = MultiHeadAttention(config, need_weights=True)
         if config.mp_degree > 1:
             self.linear1 = fleet.meta_parallel.ColumnParallelLinear(
-                d_model, dim_feedforward, has_bias=True, gather_output=True)
+                d_model, dim_feedforward, has_bias=True, gather_output=True
+            )
 
         else:
-            self.linear1 = nn.Linear(
-                d_model,
-                dim_feedforward,
-                weight_attrs[2],
-                bias_attr=bias_attrs[2])
+            self.linear1 = nn.Linear(d_model, dim_feedforward, weight_attrs[2], bias_attr=bias_attrs[2])
 
         if config.mp_degree > 1:
             self.linear2 = fleet.meta_parallel.ColumnParallelLinear(
-                dim_feedforward, d_model, has_bias=True, gather_output=True)
+                dim_feedforward, d_model, has_bias=True, gather_output=True
+            )
             """
             self.linear2 = fleet.meta_parallel.RowParallelLinear(
                     dim_feedforward,
@@ -404,11 +369,7 @@ class TransformerDecoderLayer(nn.Layer):
                 )
             """
         else:
-            self.linear2 = nn.Linear(
-                dim_feedforward,
-                d_model,
-                weight_attrs[2],
-                bias_attr=bias_attrs[2])
+            self.linear2 = nn.Linear(dim_feedforward, d_model, weight_attrs[2], bias_attr=bias_attrs[2])
 
         self.norm1 = nn.LayerNorm(d_model, epsilon=1e-5)
         self.norm2 = nn.LayerNorm(d_model, epsilon=1e-5)
@@ -421,13 +382,7 @@ class TransformerDecoderLayer(nn.Layer):
             self.activation = getattr(F, activation)
         self.mp_degree = config.mp_degree
 
-    def forward(self,
-                tgt,
-                memory,
-                tgt_mask=None,
-                use_cache=False,
-                cache=None,
-                output_attentions=False):
+    def forward(self, tgt, memory, tgt_mask=None, use_cache=False, cache=None, output_attentions=False):
         residual = tgt
 
         if self.normalize_before:
@@ -435,17 +390,9 @@ class TransformerDecoderLayer(nn.Layer):
 
         # self.self_attn(...) --> hidden_states, weights, (cache)
         if use_cache is False:
-            tgt, attn_weights = self.self_attn(
-                tgt,
-                tgt,
-                tgt,
-                tgt_mask,
-                use_cache,
-                cache,
-                output_attention=None)
+            tgt, attn_weights = self.self_attn(tgt, tgt, tgt, tgt_mask, use_cache, cache, output_attention=None)
         else:
-            tgt, attn_weights, incremental_cache = self.self_attn(
-                tgt, tgt, tgt, tgt_mask, use_cache, cache)
+            tgt, attn_weights, incremental_cache = self.self_attn(tgt, tgt, tgt, tgt_mask, use_cache, cache)
         if self.mp_degree > 1:
             with get_rng_state_tracker().rng_state("global_seed"):
                 tgt = residual + self.dropout1(tgt)
@@ -459,11 +406,9 @@ class TransformerDecoderLayer(nn.Layer):
             tgt = self.norm2(tgt)
         if self.mp_degree > 1:
             with get_rng_state_tracker().rng_state("global_seed"):
-                tgt = self.dropout2(
-                    self.linear2(self.activation(self.linear1(tgt))))
+                tgt = self.dropout2(self.linear2(self.activation(self.linear1(tgt))))
         else:
-            tgt = self.dropout2(
-                self.linear2(self.activation(self.linear1(tgt))))
+            tgt = self.dropout2(self.linear2(self.activation(self.linear1(tgt))))
         tgt = residual + tgt
 
         if not self.normalize_before:
@@ -472,15 +417,12 @@ class TransformerDecoderLayer(nn.Layer):
         if not (output_attentions or use_cache):
             return tgt
 
-        temp_list = [
-            tgt, attn_weights, incremental_cache if use_cache else None
-        ]
+        temp_list = [tgt, attn_weights, incremental_cache if use_cache else None]
 
         return tuple(v for v in temp_list if v is not None)
 
     def gen_cache(self, memory):
-        incremental_cache = self.self_attn.gen_cache(
-            memory, type=self.self_attn.Cache)
+        incremental_cache = self.self_attn.gen_cache(memory, type=self.self_attn.Cache)
         return incremental_cache
 
 
@@ -498,18 +440,15 @@ class TransformerDecoder(Layer):
                     config.hidden_size,
                     config.word_embed_proj_dim,
                     gather_output=True,
-                    has_bias=False, )
+                    has_bias=False,
+                )
             else:
                 if config.use_fusedlinear:
                     self.project_out = paddle.incubate.nn.FusedLinear(
-                        config.hidden_size,
-                        config.word_embed_proj_dim,
-                        bias_attr=False)
+                        config.hidden_size, config.word_embed_proj_dim, bias_attr=False
+                    )
                 else:
-                    self.project_out = nn.Linear(
-                        config.hidden_size,
-                        config.word_embed_proj_dim,
-                        bias_attr=False)
+                    self.project_out = nn.Linear(config.hidden_size, config.word_embed_proj_dim, bias_attr=False)
         else:
             self.project_out = None
 
@@ -524,16 +463,17 @@ class TransformerDecoder(Layer):
         self.checkpoints = []
 
     def forward(
-            self,
-            tgt,
-            memory,
-            tgt_mask=None,
-            memory_mask=None,
-            use_cache: bool=False,
-            cache=None,
-            output_attentions=False,
-            output_hidden_states=False,
-            return_dict=False, ):
+        self,
+        tgt,
+        memory,
+        tgt_mask=None,
+        memory_mask=None,
+        use_cache: bool = False,
+        cache=None,
+        output_attentions=False,
+        output_hidden_states=False,
+        return_dict=False,
+    ):
         r"""
         Applies a stack of N Transformer decoder layers on inputs. If `norm` is
         provided, also applies layer normalization on the output of last decoder
@@ -552,18 +492,19 @@ class TransformerDecoder(Layer):
                 tgt_mask=tgt_mask,
                 use_cache=use_cache,
                 cache=cache[i] if cache is not None else cache,
-                output_attentions=output_attentions, )
+                output_attentions=output_attentions,
+            )
 
             # outputs = hidden_states if both use_cache and output_attentions are False
             # Otherwise, outputs = (hidden_states, attention if output_attentions, cache if use_cache)
             output = outputs[0] if (use_cache or output_attentions) else outputs
 
             if output_attentions:
-                all_self_attentions = all_self_attentions + (outputs[1], )
+                all_self_attentions = all_self_attentions + (outputs[1],)
             if use_cache:
                 new_caches.append(outputs[-1])
             if output_hidden_states:
-                all_hidden_states = all_hidden_states + (output, )
+                all_hidden_states = all_hidden_states + (output,)
             self.checkpoints.append(output.name)
 
         if self.final_layer_norm:
@@ -573,9 +514,7 @@ class TransformerDecoder(Layer):
             output = self.project_out(output)
 
         if not return_dict:
-            temp_list = [
-                output, new_caches, all_hidden_states, all_self_attentions
-            ]
+            temp_list = [output, new_caches, all_hidden_states, all_self_attentions]
 
             if not (use_cache or output_attentions or output_hidden_states):
                 return output
@@ -587,7 +526,8 @@ class TransformerDecoder(Layer):
             past_key_values=new_caches,
             hidden_states=all_hidden_states,
             attentions=all_self_attentions,
-            cross_attentions=None, )
+            cross_attentions=None,
+        )
 
     def gen_cache(self, memory, do_zip=False):
         r"""
@@ -606,10 +546,7 @@ class TransformerDecoder(Layer):
 class OPTLearnedPositionEmbedding(nn.Embedding):
     """this module learns postional embeddings up to a fixed maximum size"""
 
-    def __init__(self,
-                 num_embeddings: int,
-                 embedding_dim: int,
-                 initializer_range: float):
+    def __init__(self, num_embeddings: int, embedding_dim: int, initializer_range: float):
         """OPT is set up so that if padding_idx is specified then offset the embedding ids by 2
         and adjust num_embeddings appropriately. Other models don't have this hack.
 
@@ -620,7 +557,7 @@ class OPTLearnedPositionEmbedding(nn.Embedding):
         self.offset = 2
         super().__init__(num_embeddings + self.offset, embedding_dim)
 
-    def forward(self, attention_mask, past_key_values_length: int=0):
+    def forward(self, attention_mask, past_key_values_length: int = 0):
         """get the position embedding with attention mask
 
         Args:
@@ -634,8 +571,7 @@ class OPTLearnedPositionEmbedding(nn.Embedding):
         if attention_mask.dtype not in [paddle.bool, paddle.int64]:
             attention_mask = attention_mask == 1.0
 
-        position_ids = paddle.cumsum(
-            paddle.cast(attention_mask, "int64"), axis=-1) * attention_mask - 1
+        position_ids = paddle.cumsum(paddle.cast(attention_mask, "int64"), axis=-1) * attention_mask - 1
 
         # cut positions if `past_key_values_length` is > 0
         position_ids = position_ids[:, past_key_values_length:]
@@ -653,15 +589,19 @@ class OPTEmbeddings(Layer):
             self.word_embeddings = fleet.meta_parallel.VocabParallelEmbedding(
                 config.vocab_size,
                 config.word_embed_proj_dim,
-                weight_attr=paddle.ParamAttr(initializer=nn.initializer.Normal(
-                    mean=0.0, std=config.initializer_range)), )
+                weight_attr=paddle.ParamAttr(
+                    initializer=nn.initializer.Normal(mean=0.0, std=config.initializer_range)
+                ),
+            )
         else:
             self.word_embeddings = nn.Embedding(
                 config.vocab_size,
                 config.word_embed_proj_dim,
                 # padding_idx=config.pad_token_id,
-                weight_attr=paddle.ParamAttr(initializer=nn.initializer.Normal(
-                    mean=0.0, std=config.initializer_range)), )
+                weight_attr=paddle.ParamAttr(
+                    initializer=nn.initializer.Normal(mean=0.0, std=config.initializer_range)
+                ),
+            )
 
         if config.word_embed_proj_dim != config.hidden_size:
             if config.mp_degree > 1:
@@ -669,41 +609,34 @@ class OPTEmbeddings(Layer):
                     config.word_embed_proj_dim,
                     config.hidden_size,
                     gather_output=True,
-                    has_bias=False, )
+                    has_bias=False,
+                )
             else:
                 if config.use_fusedlinear:
                     self.project_in = paddle.incubate.nn.FusedLinear(
-                        config.word_embed_proj_dim,
-                        config.hidden_size,
-                        bias_attr=False)
+                        config.word_embed_proj_dim, config.hidden_size, bias_attr=False
+                    )
                 else:
-                    self.project_in = nn.Linear(
-                        config.word_embed_proj_dim,
-                        config.hidden_size,
-                        bias_attr=False)
+                    self.project_in = nn.Linear(config.word_embed_proj_dim, config.hidden_size, bias_attr=False)
         else:
             self.project_in = None
 
         self.position_embeddings = OPTLearnedPositionEmbedding(
             num_embeddings=config.max_position_embeddings,
             embedding_dim=config.hidden_size,
-            initializer_range=config.initializer_range, )
+            initializer_range=config.initializer_range,
+        )
         self.mp_degree = config.mp_degree
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self,
-                input_ids=None,
-                attention_mask=None,
-                input_embeddings=None,
-                past_key_values_length=None):
+    def forward(self, input_ids=None, attention_mask=None, input_embeddings=None, past_key_values_length=None):
         if input_ids is not None:
             input_embeddings = self.word_embeddings(input_ids)
 
         if self.project_in:
             input_embeddings = self.project_in(input_embeddings)
 
-        position_embeddings = self.position_embeddings(attention_mask,
-                                                       past_key_values_length)
+        position_embeddings = self.position_embeddings(attention_mask, past_key_values_length)
 
         embeddings = input_embeddings + position_embeddings
         if self.mp_degree > 1:
@@ -738,37 +671,32 @@ class OPTPretrainedModel(PretrainedModel):
             is_split=is_split,
             tensor_parallel_degree=config.tensor_parallel_degree,
             tensor_parallel_rank=config.tensor_parallel_rank,
-            num_attention_heads=config.num_attention_heads, )
-        actions = {"word_embeddings.weight": partial(fn, is_column=False), }
+            num_attention_heads=config.num_attention_heads,
+        )
+        actions = {
+            "word_embeddings.weight": partial(fn, is_column=False),
+        }
         for layer_index in range(config.num_hidden_layers):
-            actions.update({
-                # Column Linear
-                f"decoder.layers.{layer_index}.self_attn.q_proj.weight":
-                partial(
-                    fn, is_column=True),
-                f"decoder.layers.{layer_index}.self_attn.k_proj.weight":
-                partial(
-                    fn, is_column=True),
-                f"decoder.layers.{layer_index}.self_attn.v_proj.weight":
-                partial(
-                    fn, is_column=True),
-                f"decoder.layers.{layer_index}.linear1.weight": partial(
-                    fn, is_column=True),
-                # Row Linear
-                f"decoder.layers.{layer_index}.linear2.weight": partial(
-                    fn, is_column=False),
-                f"decoder.layers.{layer_index}.self_attn.out_proj.weight":
-                partial(
-                    fn, is_column=False),
-            })
+            actions.update(
+                {
+                    # Column Linear
+                    f"decoder.layers.{layer_index}.self_attn.q_proj.weight": partial(fn, is_column=True),
+                    f"decoder.layers.{layer_index}.self_attn.k_proj.weight": partial(fn, is_column=True),
+                    f"decoder.layers.{layer_index}.self_attn.v_proj.weight": partial(fn, is_column=True),
+                    f"decoder.layers.{layer_index}.linear1.weight": partial(fn, is_column=True),
+                    # Row Linear
+                    f"decoder.layers.{layer_index}.linear2.weight": partial(fn, is_column=False),
+                    f"decoder.layers.{layer_index}.self_attn.out_proj.weight": partial(fn, is_column=False),
+                }
+            )
 
         if config.word_embed_proj_dim != config.hidden_size:
-            actions.update({
-                "decoder.project_out.weight": partial(
-                    fn, is_column=True),
-                "decoder.project_in.weight": partial(
-                    fn, is_column=True),
-            })
+            actions.update(
+                {
+                    "decoder.project_out.weight": partial(fn, is_column=True),
+                    "decoder.project_in.weight": partial(fn, is_column=True),
+                }
+            )
 
         if cls.__name__ != "OPTModel":
             for key in list(actions.keys()):
@@ -777,22 +705,12 @@ class OPTPretrainedModel(PretrainedModel):
         return actions
 
     @classmethod
-    def _get_name_mappings(cls,
-                           config: OPTConfig) -> list[StateDictNameMapping]:
+    def _get_name_mappings(cls, config: OPTConfig) -> list[StateDictNameMapping]:
         mappings: list[StateDictNameMapping] = []
         model_mappings = [
-            [
-                "decoder.embed_tokens.weight",
-                "embeddings.word_embeddings.weight"
-            ],
-            [
-                "decoder.embed_positions.weight",
-                "embeddings.position_embeddings.weight"
-            ],
-            [
-                "decoder.final_layer_norm.weight",
-                "decoder.final_layer_norm.weight"
-            ],
+            ["decoder.embed_tokens.weight", "embeddings.word_embeddings.weight"],
+            ["decoder.embed_positions.weight", "embeddings.position_embeddings.weight"],
+            ["decoder.final_layer_norm.weight", "decoder.final_layer_norm.weight"],
             ["decoder.final_layer_norm.bias", "decoder.final_layer_norm.bias"],
         ]
         for layer_index in range(config.num_hidden_layers):
@@ -846,27 +764,18 @@ class OPTPretrainedModel(PretrainedModel):
                     f"decoder.layers.{layer_index}.linear1.weight",
                     "transpose",
                 ],
-                [
-                    f"decoder.layers.{layer_index}.fc1.bias",
-                    f"decoder.layers.{layer_index}.linear1.bias"
-                ],
+                [f"decoder.layers.{layer_index}.fc1.bias", f"decoder.layers.{layer_index}.linear1.bias"],
                 [
                     f"decoder.layers.{layer_index}.fc2.weight",
                     f"decoder.layers.{layer_index}.linear2.weight",
                     "transpose",
                 ],
-                [
-                    f"decoder.layers.{layer_index}.fc2.bias",
-                    f"decoder.layers.{layer_index}.linear2.bias"
-                ],
+                [f"decoder.layers.{layer_index}.fc2.bias", f"decoder.layers.{layer_index}.linear2.bias"],
                 [
                     f"decoder.layers.{layer_index}.final_layer_norm.weight",
                     f"decoder.layers.{layer_index}.norm2.weight",
                 ],
-                [
-                    f"decoder.layers.{layer_index}.final_layer_norm.bias",
-                    f"decoder.layers.{layer_index}.norm2.bias"
-                ],
+                [f"decoder.layers.{layer_index}.final_layer_norm.bias", f"decoder.layers.{layer_index}.norm2.bias"],
             ]
             model_mappings.extend(layer_mappings)
 
@@ -877,17 +786,12 @@ class OPTPretrainedModel(PretrainedModel):
                 mapping[1] = "opt." + mapping[1]
 
         # downstream mappings
-        mappings = [
-            StateDictNameMapping(
-                *mapping, index=index)
-            for index, mapping in enumerate(model_mappings)
-        ]
+        mappings = [StateDictNameMapping(*mapping, index=index) for index, mapping in enumerate(model_mappings)]
         return mappings
 
     def _init_weights(self, layer):
         """Initialization hook"""
-        if isinstance(layer, (paddle.incubate.nn.FusedLinear, nn.Linear,
-                              nn.Embedding)):
+        if isinstance(layer, (paddle.incubate.nn.FusedLinear, nn.Linear, nn.Embedding)):
             # In the dygraph mode, use the `set_value` to reset the parameter directly,
             # and reset the `state_dict` to update parameter in static mode.
             if isinstance(layer.weight, paddle.Tensor):
@@ -895,9 +799,11 @@ class OPTPretrainedModel(PretrainedModel):
                     paddle.tensor.normal(
                         mean=0.0,
                         std=self.initializer_range
-                        if hasattr(self, "initializer_range") else
-                        self.opt.config["initializer_range"],
-                        shape=layer.weight.shape, ))
+                        if hasattr(self, "initializer_range")
+                        else self.opt.config["initializer_range"],
+                        shape=layer.weight.shape,
+                    )
+                )
 
 
 @register_base_model
@@ -932,38 +838,36 @@ class OPTModel(OPTPretrainedModel):
         self.decoder = TransformerDecoder(config, decoder_layers)
         self.checkpoints = []
 
-    def _prepare_decoder_attention_mask(self, attention_mask, input_shape,
-                                        past_key_values_length):
+    def _prepare_decoder_attention_mask(self, attention_mask, input_shape, past_key_values_length):
         # create causal mask
         # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
         combined_attention_mask = None
         if input_shape[-1] > 1:
             combined_attention_mask = _make_causal_mask(
-                input_shape,
-                past_key_values_length=past_key_values_length,
-                dtype=attention_mask.dtype)
+                input_shape, past_key_values_length=past_key_values_length, dtype=attention_mask.dtype
+            )
 
         if attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
-            expanded_attn_mask = _expand_mask(
-                attention_mask, tgt_length=input_shape[-1])
+            expanded_attn_mask = _expand_mask(attention_mask, tgt_length=input_shape[-1])
             combined_attention_mask = (
-                expanded_attn_mask if combined_attention_mask is None else
-                expanded_attn_mask + combined_attention_mask)
+                expanded_attn_mask if combined_attention_mask is None else expanded_attn_mask + combined_attention_mask
+            )
 
         return combined_attention_mask
 
     def forward(
-            self,
-            input_ids=None,
-            position_ids=None,
-            attention_mask=None,
-            inputs_embeds=None,
-            use_cache=False,
-            cache=None,
-            output_attentions=None,
-            output_hidden_states=None,
-            return_dict=None, ):
+        self,
+        input_ids=None,
+        position_ids=None,
+        attention_mask=None,
+        inputs_embeds=None,
+        use_cache=False,
+        cache=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+    ):
         r"""
         The OPTModel forward method, overrides the `__call__()` special method.
 
@@ -1031,42 +935,37 @@ class OPTModel(OPTPretrainedModel):
             logger.warning("position_ids has not required for OPTModel.")
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (output_hidden_states
-                                if output_hidden_states is not None else
-                                self.config.output_hidden_states)
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if input_ids is not None and inputs_embeds is not None:
-            raise ValueError(
-                "You cannot specify both input_ids and inputs_embeds at the same time"
-            )
+            raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
             input_shape = paddle.shape(input_ids)
             input_ids = input_ids.reshape((-1, input_shape[-1]))
         elif inputs_embeds is not None:
             input_shape = paddle.shape(inputs_embeds)[:-1]
         else:
-            raise ValueError(
-                "You have to specify either input_ids or inputs_embeds")
+            raise ValueError("You have to specify either input_ids or inputs_embeds")
 
         self.checkpoints = []
-        past_key_values_length = paddle.shape(cache[0].k)[
-            2] if cache is not None else 0
+        past_key_values_length = paddle.shape(cache[0].k)[2] if cache is not None else 0
 
         seq_length_with_past = input_shape[-1] + past_key_values_length
 
         if attention_mask is None:
-            attention_mask = paddle.ones(
-                (input_shape[0], seq_length_with_past), dtype=paddle.bool)
+            attention_mask = paddle.ones((input_shape[0], seq_length_with_past), dtype=paddle.bool)
 
         embedding_output = self.embeddings(
             input_ids=input_ids,
             attention_mask=attention_mask,
             input_embeddings=inputs_embeds,
-            past_key_values_length=past_key_values_length, )
+            past_key_values_length=past_key_values_length,
+        )
 
-        attention_mask = self._prepare_decoder_attention_mask(
-            attention_mask, input_shape, past_key_values_length)
+        attention_mask = self._prepare_decoder_attention_mask(attention_mask, input_shape, past_key_values_length)
         attention_mask.stop_gradient = True
 
         outputs = self.decoder.forward(
@@ -1077,17 +976,17 @@ class OPTModel(OPTPretrainedModel):
             cache=cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
         if output_hidden_states:
             if return_dict:
-                outputs.hidden_states = (embedding_output,
-                                         ) + outputs.hidden_states
+                outputs.hidden_states = (embedding_output,) + outputs.hidden_states
             else:
                 # [last_hidden_state, caches, all_hidden_states, all_self_attentions]
                 idx = 2 if use_cache else 1
-                all_hidden_states = ((embedding_output, ) + outputs[idx], )
-                outputs = outputs[:idx] + all_hidden_states + outputs[idx + 1:]
+                all_hidden_states = ((embedding_output,) + outputs[idx],)
+                outputs = outputs[:idx] + all_hidden_states + outputs[idx + 1 :]
 
         self.checkpoints.extend(self.decoder.checkpoints)
         return outputs
@@ -1108,22 +1007,19 @@ class OPTModel(OPTPretrainedModel):
 
 
 class OPTLMHead(Layer):
-    def __init__(self,
-                 hidden_size: int,
-                 vocab_size: int,
-                 embedding_weights=None):
+    def __init__(self, hidden_size: int, vocab_size: int, embedding_weights=None):
         super(OPTLMHead, self).__init__()
-        self.decoder_weight = (self.create_parameter(
-            shape=[vocab_size, hidden_size],
-            dtype=paddle.get_default_dtype(),
-            is_bias=True) if embedding_weights is None else embedding_weights)
+        self.decoder_weight = (
+            self.create_parameter(shape=[vocab_size, hidden_size], dtype=paddle.get_default_dtype(), is_bias=True)
+            if embedding_weights is None
+            else embedding_weights
+        )
 
     def forward(self, hidden_states):
         if isinstance(hidden_states, BaseModelOutputWithPastAndCrossAttentions):
             hidden_states = hidden_states["last_hidden_state"]
 
-        logits = paddle.tensor.matmul(
-            hidden_states, self.decoder_weight, transpose_y=True)
+        logits = paddle.tensor.matmul(hidden_states, self.decoder_weight, transpose_y=True)
         return logits
 
 
@@ -1139,9 +1035,10 @@ class OPTForCausalLM(OPTPretrainedModel):
 
     def __init__(self, config: OPTConfig, **kwargs):
         super(OPTForCausalLM, self).__init__(config)
-        from paddle.distributed import fleet
+
         config.use_fusedlinear = config.get("use_fusedlinear", False)
         config.mp_degree = config.mp_degree
+
         self.opt = OPTModel(config)
         self.lm_head = OPTLMHead(
             hidden_size=self.opt.config.hidden_size,
@@ -1150,17 +1047,18 @@ class OPTForCausalLM(OPTPretrainedModel):
         )
 
     def forward(
-            self,
-            input_ids=None,
-            attention_mask=None,
-            inputs_embeds=None,
-            labels=None,
-            use_cache=False,
-            cache=None,
-            output_attentions=None,
-            output_hidden_states=None,
-            return_dict=None,
-            **kwargs, ):
+        self,
+        input_ids=None,
+        attention_mask=None,
+        inputs_embeds=None,
+        labels=None,
+        use_cache=False,
+        cache=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,
+        **kwargs,
+    ):
         r"""
 
         Args:
@@ -1207,9 +1105,10 @@ class OPTForCausalLM(OPTPretrainedModel):
                 print(tokenizer.batch_decode(output_ids[0]))
         """
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
-        output_hidden_states = (output_hidden_states
-                                if output_hidden_states is not None else
-                                self.config.output_hidden_states)
+        output_hidden_states = (
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+        )
+
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         outputs = self.opt(
@@ -1220,7 +1119,8 @@ class OPTForCausalLM(OPTPretrainedModel):
             cache=cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
 
         if use_cache:
             encoder_outputs, cached_kvs = outputs[:2]
@@ -1231,12 +1131,13 @@ class OPTForCausalLM(OPTPretrainedModel):
 
         loss = None
         if labels is not None:
-            logits = logits[:, -labels.shape[1]:, :]
+            logits = logits[:, -labels.shape[1] :, :]
             shift_logits = logits[:, :-1, :]
             shift_labels = labels[:, 1:]
 
-            loss_fct = CrossEntropyLoss(reduction='mean', label_smoothing=None)
-            labels = shift_labels.reshape((-1, ))
+            loss_fct = CrossEntropyLoss(reduction="mean", label_smoothing=None)
+            labels = shift_labels.reshape((-1,))
+
             valid_index = paddle.where(labels != -100)[0].flatten()
             logits = shift_logits.reshape((-1, shift_logits.shape[-1]))
             logits = paddle.gather(logits, valid_index, axis=0)
@@ -1249,8 +1150,8 @@ class OPTForCausalLM(OPTPretrainedModel):
             if not use_cache:
                 return (loss, logits) if loss is not None else logits
 
-            outputs = (logits, ) + outputs[1:]
-            return ((loss, ) + outputs) if loss is not None else outputs
+            outputs = (logits,) + outputs[1:]
+            return ((loss,) + outputs) if loss is not None else outputs
 
         return CausalLMOutputWithCrossAttentions(
             loss=loss,
@@ -1258,7 +1159,8 @@ class OPTForCausalLM(OPTPretrainedModel):
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
             attentions=outputs.attentions,
-            cross_attentions=outputs.cross_attentions, )
+            cross_attentions=outputs.cross_attentions,
+        )
 
     def prepare_fast_entry(self, kwargs: Dict[str, Any]):
         # import FasterOPT at here to avoid cycling import
@@ -1270,37 +1172,27 @@ class OPTForCausalLM(OPTPretrainedModel):
         decoding_lib = kwargs.get("decoding_lib", None)
 
         if decode_strategy == "beam_search":
-            raise AttributeError(
-                "'beam_search' is not supported yet in the fast version of OPT")
+            raise AttributeError("'beam_search' is not supported yet in the fast version of OPT")
         # Currently, FasterTransformer only support restricted size_per_head.
-        size_per_head = self.opt.config["hidden_size"] // self.opt.config[
-            "num_attention_heads"]
+
+        size_per_head = self.opt.config["hidden_size"] // self.opt.config["num_attention_heads"]
+
         if size_per_head not in [32, 64, 80, 96, 128]:
             raise AttributeError(
-                "'size_per_head = %d' is not supported yet in the fast version of OPT"
-                % size_per_head)
+                "'size_per_head = %d' is not supported yet in the fast version of OPT" % size_per_head
+            )
         if kwargs["forced_bos_token_id"] is not None:
             # not support for forced_bos_token_id yet in the fast version
-            raise AttributeError(
-                "'forced_bos_token_id != None' is not supported yet in the fast version"
-            )
+            raise AttributeError("'forced_bos_token_id != None' is not supported yet in the fast version")
         if kwargs["min_length"] != 0:
             # not support for min_length yet in the fast version
-            raise AttributeError(
-                "'min_length != 0' is not supported yet in the fast version")
-        self._fast_entry = FasterOPT(
-            self,
-            use_fp16_decoding=use_fp16_decoding,
-            decoding_lib=decoding_lib).forward
+            raise AttributeError("'min_length != 0' is not supported yet in the fast version")
+        self._fast_entry = FasterOPT(self, use_fp16_decoding=use_fp16_decoding, decoding_lib=decoding_lib).forward
         return self._fast_entry
 
-    def prepare_inputs_for_generation(self,
-                                      input_ids,
-                                      use_cache=False,
-                                      cache=None,
-                                      attention_mask=None,
-                                      inputs_embeds=None,
-                                      **kwargs):
+    def prepare_inputs_for_generation(
+        self, input_ids, use_cache=False, cache=None, attention_mask=None, inputs_embeds=None, **kwargs
+    ):
         if cache is not None:
             input_ids = input_ids[:, -1:]
 
@@ -1310,20 +1202,23 @@ class OPTForCausalLM(OPTPretrainedModel):
         else:
             model_inputs = {"input_ids": input_ids}
 
-        model_inputs.update({
-            "cache": cache,
-            "use_cache": True,
-            "attention_mask": attention_mask,
-        })
+        model_inputs.update(
+            {
+                "cache": cache,
+                "use_cache": True,
+                "attention_mask": attention_mask,
+            }
+        )
         return model_inputs
 
     @staticmethod
-    def prepare_attention_mask_for_generation(input_ids, pad_token_id,
-                                              eos_token_id):
+    def prepare_attention_mask_for_generation(input_ids, pad_token_id, eos_token_id):
         is_pad_token_in_inputs_ids = (pad_token_id is not None) and paddle.any(
-            input_ids == pad_token_id).numpy().item()
+            input_ids == pad_token_id
+        ).numpy().item()
         is_pad_token_not_equal_to_eos_token_id = (eos_token_id is None) or (
-            (eos_token_id is not None) and (pad_token_id != eos_token_id))
+            (eos_token_id is not None) and (pad_token_id != eos_token_id)
+        )
         if is_pad_token_in_inputs_ids and is_pad_token_not_equal_to_eos_token_id:
             attention_mask = (input_ids != pad_token_id).astype("int64")
         else:
@@ -1348,7 +1243,7 @@ class CrossEntropyLoss(nn.Layer):
     Softmax Cross entropy loss
     """
 
-    def __init__(self, reduction='mean', label_smoothing=None):
+    def __init__(self, reduction="mean", label_smoothing=None):
         super().__init__()
         if label_smoothing is not None:
             assert label_smoothing >= 0 and label_smoothing <= 1, "label_smoothing must be in [0, 1]"
@@ -1378,12 +1273,12 @@ class CrossEntropyLoss(nn.Layer):
                 loss = paddle.sum(-label * F.log_softmax(x, axis=-1), axis=-1)
             else:
                 if label.dtype == paddle.int32:
-                    label = paddle.cast(label, 'int64')
+                    label = paddle.cast(label, "int64")
                 loss = F.cross_entropy(x, label=label, soft_label=False)
 
-        if self.reduction == 'sum':
+        if self.reduction == "sum":
             return loss.sum()
-        elif self.reduction == 'mean':
+        elif self.reduction == "mean":
             return loss.mean()
         else:
             return loss

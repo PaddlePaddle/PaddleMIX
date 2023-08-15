@@ -17,16 +17,26 @@ from collections import OrderedDict
 
 import paddle
 import torch
-from diffusers import \
-    VersatileDiffusionPipeline as DiffusersVersatileDiffusionPipeline
+from diffusers import VersatileDiffusionPipeline as DiffusersVersatileDiffusionPipeline
 from paddlenlp.transformers import (
-    CLIPFeatureExtractor, CLIPTextConfig, CLIPTextModelWithProjection,
-    CLIPTokenizer, CLIPVisionConfig, CLIPVisionModelWithProjection)
+    CLIPFeatureExtractor,
+    CLIPTextConfig,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+    CLIPVisionConfig,
+    CLIPVisionModelWithProjection,
+)
 
-from ppdiffusers import (AutoencoderKL, DDIMScheduler, LMSDiscreteScheduler,
-                         PNDMScheduler, UNet2DConditionModel)
-from ppdiffusers import \
-    VersatileDiffusionPipeline as PPDiffusersVersatileDiffusionPipeline
+from ppdiffusers import (
+    AutoencoderKL,
+    DDIMScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+    UNet2DConditionModel,
+)
+from ppdiffusers import (
+    VersatileDiffusionPipeline as PPDiffusersVersatileDiffusionPipeline,
+)
 from ppdiffusers.pipelines.versatile_diffusion import UNetFlatConditionModel
 
 paddle.set_device("cpu")
@@ -46,10 +56,7 @@ def convert_to_ppdiffusers(vae_or_unet, dtype="float32"):
     return new_vae_or_unet
 
 
-def convert_hf_clip_to_ppnlp_clip(clip,
-                                  dtype="float32",
-                                  is_text_encoder=True,
-                                  need_prefix=False):
+def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True, need_prefix=False):
     new_model_state = {}
     transformers2ppnlp = {
         ".encoder.": ".transformer.",
@@ -68,9 +75,7 @@ def convert_hf_clip_to_ppnlp_clip(clip,
         ".vision_model.": ".",
     }
     ignore_value = ["position_ids"]
-    donot_transpose = [
-        "embeddings", "norm", "concept_embeds", "special_care_embeds"
-    ]
+    donot_transpose = ["embeddings", "norm", "concept_embeds", "special_care_embeds"]
 
     for name, value in clip.state_dict().items():
         # step1: ignore position_ids
@@ -84,7 +89,7 @@ def convert_hf_clip_to_ppnlp_clip(clip,
             name = name.replace(hf_name, ppnlp_name)
         # step4: 0d tensor -> 1d tensor
         if name == "logit_scale":
-            value = value.reshape((1, ))
+            value = value.reshape((1,))
         # step5: safety_checker need prefix "clip."
         if "vision_model" in name and need_prefix:
             name = "clip." + name
@@ -122,8 +127,7 @@ def convert_hf_clip_to_ppnlp_clip(clip,
                 "vision_heads": clip.config.num_attention_heads,
                 "vision_embed_dim": clip.config.hidden_size,
                 "vision_patch_size": clip.config.patch_size,
-                "vision_mlp_ratio":
-                clip.config.intermediate_size // clip.config.hidden_size,
+                "vision_mlp_ratio": clip.config.intermediate_size // clip.config.hidden_size,
                 "vision_hidden_act": clip.config.hidden_act,
                 "projection_dim": clip.config.projection_dim,
             }
@@ -147,20 +151,22 @@ def check_keys(model, state_dict):
         print(f"{cls_name} Found mismatched_keys {mismatched_keys_str}!")
 
 
-def convert_diffusers_to_ppdiffusers(pretrained_model_name_or_path,
-                                     output_path=None):
+def convert_diffusers_to_ppdiffusers(pretrained_model_name_or_path, output_path=None):
     # 0. load diffusers pipe and convert to ppdiffusers weights format
     diffusers_pipe = DiffusersVersatileDiffusionPipeline.from_pretrained(
-        pretrained_model_name_or_path, use_auth_token=True)
+        pretrained_model_name_or_path, use_auth_token=True
+    )
     vae_state_dict = convert_to_ppdiffusers(diffusers_pipe.vae)
     image_unet_state_dict = convert_to_ppdiffusers(diffusers_pipe.image_unet)
     text_unet_state_dict = convert_to_ppdiffusers(diffusers_pipe.text_unet)
 
     text_encoder_state_dict, text_config = convert_hf_clip_to_ppnlp_clip(
-        diffusers_pipe.text_encoder, is_text_encoder=True, need_prefix=False)
+        diffusers_pipe.text_encoder, is_text_encoder=True, need_prefix=False
+    )
 
     image_encoder_state_dict, vision_config = convert_hf_clip_to_ppnlp_clip(
-        diffusers_pipe.image_encoder, is_text_encoder=False, need_prefix=False)
+        diffusers_pipe.image_encoder, is_text_encoder=False, need_prefix=False
+    )
 
     # 1. vae
     pp_vae = AutoencoderKL.from_config(diffusers_pipe.vae.config)
@@ -179,14 +185,12 @@ def convert_diffusers_to_ppdiffusers(pretrained_model_name_or_path,
     check_keys(pp_text_unet, text_unet_state_dict)
 
     # 4. image_encoder
-    pp_image_encoder = CLIPVisionModelWithProjection(
-        CLIPVisionConfig.from_dict(vision_config))
+    pp_image_encoder = CLIPVisionModelWithProjection(CLIPVisionConfig.from_dict(vision_config))
     pp_image_encoder.set_dict(image_encoder_state_dict)
     check_keys(pp_image_encoder, image_encoder_state_dict)
 
     # 5. text_encoder
-    pp_text_encoder = CLIPTextModelWithProjection(
-        CLIPTextConfig.from_dict(text_config))
+    pp_text_encoder = CLIPTextModelWithProjection(CLIPTextConfig.from_dict(text_config))
     pp_text_encoder.set_dict(text_encoder_state_dict)
     check_keys(pp_text_encoder, text_encoder_state_dict)
 
@@ -203,12 +207,10 @@ def convert_diffusers_to_ppdiffusers(pretrained_model_name_or_path,
             set_alpha_to_one=False,
             steps_offset=1,
             # Make sure the scheduler compatible with PNDM
-            skip_prk_steps=True, )
+            skip_prk_steps=True,
+        )
     elif "lms" in scheduler_type:
-        pp_scheduler = LMSDiscreteScheduler(
-            beta_start=beta_start,
-            beta_end=beta_end,
-            beta_schedule="scaled_linear")
+        pp_scheduler = LMSDiscreteScheduler(beta_start=beta_start, beta_end=beta_end, beta_schedule="scaled_linear")
     elif "ddim" in scheduler_type:
         pp_scheduler = DDIMScheduler(
             beta_start=beta_start,
@@ -217,13 +219,13 @@ def convert_diffusers_to_ppdiffusers(pretrained_model_name_or_path,
             # Make sure the scheduler compatible with DDIM
             clip_sample=False,
             set_alpha_to_one=False,
-            steps_offset=1, )
+            steps_offset=1,
+        )
     else:
         raise ValueError(f"Scheduler of type {scheduler_type} doesn't exist!")
 
     with tempfile.TemporaryDirectory() as tmpdirname:
-        pp_feature_extractor = CLIPFeatureExtractor.from_pretrained(
-            "CompVis/stable-diffusion-v1-4/feature_extractor")
+        pp_feature_extractor = CLIPFeatureExtractor.from_pretrained("CompVis/stable-diffusion-v1-4/feature_extractor")
         # 7. tokenizer
         diffusers_pipe.tokenizer.save_pretrained(tmpdirname)
         pp_tokenizer = CLIPTokenizer.from_pretrained(tmpdirname)
@@ -236,15 +238,15 @@ def convert_diffusers_to_ppdiffusers(pretrained_model_name_or_path,
             image_unet=pp_image_unet,
             text_unet=pp_text_unet,
             vae=pp_vae,
-            scheduler=pp_scheduler, )
+            scheduler=pp_scheduler,
+        )
         # 9. save_pretrained
         paddle_pipe.save_pretrained(output_path)
     return paddle_pipe
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Pytorch model weights to Paddle model weights.")
+    parser = argparse.ArgumentParser(description="Pytorch model weights to Paddle model weights.")
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -255,7 +257,7 @@ if __name__ == "__main__":
         "--output_path",
         type=str,
         default="versatile-diffusion-ppdiffusers",
-        help="The model output path.", )
+        help="The model output path.",
+    )
     args = parser.parse_args()
-    ppdiffusers_pipe = convert_diffusers_to_ppdiffusers(
-        args.pretrained_model_name_or_path, args.output_path)
+    ppdiffusers_pipe = convert_diffusers_to_ppdiffusers(args.pretrained_model_name_or_path, args.output_path)

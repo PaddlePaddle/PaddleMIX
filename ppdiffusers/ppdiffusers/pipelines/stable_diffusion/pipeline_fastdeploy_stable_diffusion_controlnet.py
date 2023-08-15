@@ -13,16 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .pipeline_fastdeploy_stable_diffusion import \
-    FastDeployStableDiffusionPipeline
+from .pipeline_fastdeploy_stable_diffusion import FastDeployStableDiffusionPipeline
 
 
-class FastDeployStableDiffusionControlNetPipeline(
-        FastDeployStableDiffusionPipeline):
+class FastDeployStableDiffusionControlNetPipeline(FastDeployStableDiffusionPipeline):
     def __call__(
-            self,
-            *args,
-            **kwargs, ):
+        self,
+        *args,
+        **kwargs,
+    ):
         controlnet_cond = kwargs.pop("controlnet_cond", None)
         image = kwargs.pop("image", None)
         if controlnet_cond is None:

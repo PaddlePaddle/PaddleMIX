@@ -23,10 +23,9 @@ import pprint
 import socket
 from dataclasses import dataclass, field
 
-from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
-                               get_last_checkpoint)
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
-from paddlemix.checkpoint import load_model, save
+from paddlemix.checkpoint import load_model
 from paddlemix.datasets.laion_clip import get_data
 from paddlemix.metrics.clip_zero_shot import zero_shot_eval
 from paddlemix.models.evaclip.eva_clip_model import EVACLIP
@@ -45,11 +44,13 @@ class DataArguments:
 
     classification_eval: str = field(
         default="",
-        metadata={"help": "Path to IN1K data."}, )
+        metadata={"help": "Path to IN1K data."},
+    )
 
     precomputed_text_emb: str = field(
         default="open_clip_vit_g_14",
-        metadata={"help": "precomputed_text_emb name."}, )
+        metadata={"help": "precomputed_text_emb name."},
+    )
 
 
 @dataclass
@@ -60,13 +61,12 @@ class ModelArguments:
 
     model: str = field(
         default="paddlemix/EVA/EVA02-CLIP-L-14",
-        metadata={
-            "help":
-            "model name to create, for example paddlemix/EVA/EVA02-CLIP-L-14"
-        }, )
+        metadata={"help": "model name to create, for example paddlemix/EVA/EVA02-CLIP-L-14"},
+    )
     model_name_or_path: str = field(
         default="clip",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
 
 
 @dataclass
@@ -77,13 +77,9 @@ class PreTrainingArguments(TrainingArguments):
 
     pretrained_model_path: str = field(
         default=None,
-        metadata={
-            "help":
-            "The path to pre-trained model that we will use for pretraining."
-        }, )
-    pretrained_text_model: str = field(
-        default="openclip",
-        metadata={"help": "the model to pre-extract text feats"})
+        metadata={"help": "The path to pre-trained model that we will use for pretraining."},
+    )
+    pretrained_text_model: str = field(default="openclip", metadata={"help": "the model to pre-extract text feats"})
 
 
 def evaluate(model, dataloader_dict, args):
@@ -94,15 +90,15 @@ def evaluate(model, dataloader_dict, args):
 
 
 def main_worker(training_args, model_args, data_args):
-    model = EVACLIP.from_pretrained(
-        model_args.model, ignore_mismatched_sizes=False)
+    model = EVACLIP.from_pretrained(model_args.model, ignore_mismatched_sizes=False)
 
     training_args.model = model_args.model
-    if (training_args.pretrained_model_path and
-            training_args.pretrained_model_path != "None" and
-            training_args.resume_from_checkpoint is None):
-        load_model(
-            training_args, model, ckpt_dir=training_args.pretrained_model_path)
+    if (
+        training_args.pretrained_model_path
+        and training_args.pretrained_model_path != "None"
+        and training_args.resume_from_checkpoint is None
+    ):
+        load_model(training_args, model, ckpt_dir=training_args.pretrained_model_path)
 
     preprocess_train = image_transform(model.visual.image_size, is_train=True)
     preprocess_val = image_transform(model.visual.image_size, is_train=False)
@@ -112,8 +108,7 @@ def main_worker(training_args, model_args, data_args):
 
 
 if __name__ == "__main__":
-    parser = PdArgumentParser(
-        (ModelArguments, DataArguments, PreTrainingArguments))
+    parser = PdArgumentParser((ModelArguments, DataArguments, PreTrainingArguments))
     model_args, data_args, training_args = parser.parse_args_into_dataclasses()
     training_args.hostname = socket.gethostname()
     pprint.pprint(data_args)

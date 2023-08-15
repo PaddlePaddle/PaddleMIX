@@ -18,16 +18,12 @@ from typing import List
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddle import Tensor
-from paddle.nn import Layer
-from paddlenlp.transformers import AutoTokenizer, BertModel, RobertaModel
-from paddlenlp.transformers.model_utils import (PretrainedModel,
-                                                register_base_model)
+from paddlenlp.transformers import BertModel, RobertaModel
+from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
 from paddlenlp.utils.initializer import constant_, xavier_uniform_
 
 from .backbone import build_backbone
-from .bertwarper import (BertModelWarper, generate_masks_with_special_tokens,
-                         generate_masks_with_special_tokens_and_transfer_map)
+from .bertwarper import BertModelWarper
 from .configuration import GroundingDinoConfig
 from .transformer import build_transformer
 from .utils import MLP, ContrastiveEmbed, inverse_sigmoid
@@ -75,14 +71,12 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
         elif config.text_encoder_type == "roberta-base":
             self.bert = RobertaModel.from_pretrained(config.text_encoder_type)
         else:
-            raise ValueError("Unknown text_encoder_type {}".format(
-                config.text_encoder_type))
+            raise ValueError("Unknown text_encoder_type {}".format(config.text_encoder_type))
         self.bert.pooler.dense.weight.stop_gradient = True
         self.bert.pooler.dense.bias.stop_gradient = True
         self.bert = BertModelWarper(bert_model=self.bert)
 
-        self.feat_map = nn.Linear(
-            self.bert.config.hidden_size, self.hidden_dim, bias_attr=True)
+        self.feat_map = nn.Linear(self.bert.config.hidden_size, self.hidden_dim, bias_attr=True)
         constant_(self.feat_map.bias, 0)
         xavier_uniform_(self.feat_map.weight)
 
@@ -94,32 +88,29 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
                 in_channels = self.backbone.num_channels[_]
                 input_proj_list.append(
                     nn.Sequential(
-                        nn.Conv2D(
-                            in_channels, hidden_dim, kernel_size=1),
-                        nn.GroupNorm(32, hidden_dim), ))
+                        nn.Conv2D(in_channels, hidden_dim, kernel_size=1),
+                        nn.GroupNorm(32, hidden_dim),
+                    )
+                )
             for _ in range(config.num_feature_levels - num_backbone_outs):
                 input_proj_list.append(
                     nn.Sequential(
-                        nn.Conv2D(
-                            in_channels,
-                            hidden_dim,
-                            kernel_size=3,
-                            stride=2,
-                            padding=1),
-                        nn.GroupNorm(32, hidden_dim), ))
+                        nn.Conv2D(in_channels, hidden_dim, kernel_size=3, stride=2, padding=1),
+                        nn.GroupNorm(32, hidden_dim),
+                    )
+                )
                 in_channels = hidden_dim
             self.input_proj = nn.LayerList(input_proj_list)
         else:
-            assert (two_stage_type == "no"
-                    ), "two_stage_type should be no if num_feature_levels=1 !!!"
-            self.input_proj = nn.LayerList([
-                nn.Sequential(
-                    nn.Conv2D(
-                        self.backbone.num_channels[-1],
-                        hidden_dim,
-                        kernel_size=1),
-                    nn.GroupNorm(32, hidden_dim), )
-            ])
+            # assert two_stage_type == "no", "two_stage_type should be no if num_feature_levels=1 !!!"
+            self.input_proj = nn.LayerList(
+                [
+                    nn.Sequential(
+                        nn.Conv2D(self.backbone.num_channels[-1], hidden_dim, kernel_size=1),
+                        nn.GroupNorm(32, hidden_dim),
+                    )
+                ]
+            )
 
         # prepare class & box embed
         _class_embed = ContrastiveEmbed()
@@ -129,17 +120,10 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
         constant_(_bbox_embed.layers[-1].bias, 0)
 
         if config.dec_pred_bbox_embed_share:
-            box_embed_layerlist = [
-                _bbox_embed for i in range(self.transformer.num_decoder_layers)
-            ]
+            box_embed_layerlist = [_bbox_embed for i in range(self.transformer.num_decoder_layers)]
         else:
-            box_embed_layerlist = [
-                copy.deepcopy(_bbox_embed)
-                for i in range(self.transformer.num_decoder_layers)
-            ]
-        class_embed_layerlist = [
-            _class_embed for i in range(self.transformer.num_decoder_layers)
-        ]
+            box_embed_layerlist = [copy.deepcopy(_bbox_embed) for i in range(self.transformer.num_decoder_layers)]
+        class_embed_layerlist = [_class_embed for i in range(self.transformer.num_decoder_layers)]
         self.bbox_embed = nn.LayerList(box_embed_layerlist)
         self.class_embed = nn.LayerList(class_embed_layerlist)
         self.transformer.decoder.bbox_embed = self.bbox_embed
@@ -161,8 +145,7 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
                 assert config.dec_pred_bbox_embed_share
                 self.transformer.enc_out_class_embed = _class_embed
             else:
-                self.transformer.enc_out_class_embed = copy.deepcopy(
-                    _class_embed)
+                self.transformer.enc_out_class_embed = copy.deepcopy(_class_embed)
 
             self.refpoint_embed = None
 
@@ -178,14 +161,15 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
         self.refpoint_embed = nn.Embedding(use_num_queries, self.query_dim)
 
     def forward(
-            self,
-            x: paddle.Tensor,
-            m: paddle.Tensor,
-            input_ids: paddle.Tensor,
-            attention_mask: paddle.Tensor,
-            text_self_attention_masks: paddle.Tensor,
-            position_ids: paddle.Tensor=None,
-            targets: List=None, ):
+        self,
+        x: paddle.Tensor,
+        m: paddle.Tensor,
+        input_ids: paddle.Tensor,
+        attention_mask: paddle.Tensor,
+        text_self_attention_masks: paddle.Tensor,
+        position_ids: paddle.Tensor = None,
+        targets: List = None,
+    ):
 
         tokenized = {
             "input_ids": input_ids,
@@ -194,10 +178,7 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
 
         # extract text embeddings
         if self.sub_sentence_present:
-            tokenized_for_encoder = {
-                k: v
-                for k, v in tokenized.items() if k != "attention_mask"
-            }
+            tokenized_for_encoder = {k: v for k, v in tokenized.items() if k != "attention_mask"}
             tokenized_for_encoder["attention_mask"] = text_self_attention_masks
             tokenized_for_encoder["position_ids"] = position_ids
         else:
@@ -206,28 +187,22 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
 
         bert_output = self.bert(**tokenized_for_encoder)  # bs, 195, 768
 
-        encoded_text = self.feat_map(
-            bert_output["last_hidden_state"])  # bs, 195, d_model
-        text_token_mask = tokenized["attention_mask"].cast(
-            paddle.bool)  # bs, 195
+        encoded_text = self.feat_map(bert_output["last_hidden_state"])  # bs, 195, d_model
+        text_token_mask = tokenized["attention_mask"].cast(paddle.bool)  # bs, 195
         # text_token_mask: True for nomask, False for mask
         # text_self_attention_masks: True for nomask, False for mask
 
         if encoded_text.shape[1] > self.max_text_len:
-            encoded_text = encoded_text[:, :self.max_text_len, :]
-            text_token_mask = text_token_mask[:, :self.max_text_len]
-            position_ids = position_ids[:, :self.max_text_len]
-            text_self_attention_masks = text_self_attention_masks[:, :self.
-                                                                  max_text_len, :
-                                                                  self.
-                                                                  max_text_len]
+            encoded_text = encoded_text[:, : self.max_text_len, :]
+            text_token_mask = text_token_mask[:, : self.max_text_len]
+            position_ids = position_ids[:, : self.max_text_len]
+            text_self_attention_masks = text_self_attention_masks[:, : self.max_text_len, : self.max_text_len]
 
         text_dict = {
             "encoded_text": encoded_text,  # bs, 195, d_model
             "text_token_mask": text_token_mask,  # bs, 195
             "position_ids": position_ids,  # bs, 195
-            "text_self_attention_masks":
-            text_self_attention_masks,  # bs, 195,195
+            "text_self_attention_masks": text_self_attention_masks,  # bs, 195,195
         }
 
         features, feat_masks, poss = self.backbone(x, m)
@@ -249,40 +224,35 @@ class GroundingDinoModel(GroundingDinoPretrainedModel):
                 else:
                     src = self.input_proj[l](srcs[-1])
                 # m = samples.mask
-                mask = F.interpolate(
-                    m[None].cast(paddle.float32),
-                    size=src.shape[-2:]).cast(paddle.bool)[0]
+                mask = F.interpolate(m[None].cast(paddle.float32), size=src.shape[-2:]).cast(paddle.bool)[0]
                 # pos_l = self.backbone[1](NestedTensor(src, mask)).cast(src.dtype)
                 pos_l = self.backbone[1](mask).cast(src.dtype)
                 srcs.append(src)
                 masks.append(mask)
                 poss.append(pos_l)
 
-        input_query_bbox = input_query_label = attn_mask = dn_meta = None
+        # input_query_bbox = input_query_label = attn_mask = dn_meta = None
+        input_query_bbox = input_query_label = attn_mask = None
         hs, reference, hs_enc, ref_enc, init_box_proposal = self.transformer(
-            srcs, masks, input_query_bbox, poss, input_query_label, attn_mask,
-            text_dict)
+            srcs, masks, input_query_bbox, poss, input_query_label, attn_mask, text_dict
+        )
 
         # deformable-detr-like anchor update
         outputs_coord_list = []
-        for dec_lid, (layer_ref_sig, layer_bbox_embed, layer_hs
-                      ) in enumerate(zip(reference[:-1], self.bbox_embed, hs)):
+        for dec_lid, (layer_ref_sig, layer_bbox_embed, layer_hs) in enumerate(
+            zip(reference[:-1], self.bbox_embed, hs)
+        ):
             layer_delta_unsig = layer_bbox_embed(layer_hs)
-            layer_outputs_unsig = layer_delta_unsig + inverse_sigmoid(
-                layer_ref_sig)
+            layer_outputs_unsig = layer_delta_unsig + inverse_sigmoid(layer_ref_sig)
             layer_outputs_unsig = F.sigmoid(layer_outputs_unsig)
             outputs_coord_list.append(layer_outputs_unsig)
         outputs_coord_list = paddle.stack(outputs_coord_list)
 
         # output
-        outputs_class = paddle.stack([
-            layer_cls_embed(layer_hs, text_dict)
-            for layer_cls_embed, layer_hs in zip(self.class_embed, hs)
-        ])
+        outputs_class = paddle.stack(
+            [layer_cls_embed(layer_hs, text_dict) for layer_cls_embed, layer_hs in zip(self.class_embed, hs)]
+        )
 
-        out = {
-            "pred_logits": outputs_class[-1],
-            "pred_boxes": outputs_coord_list[-1]
-        }
+        out = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord_list[-1]}
 
         return out

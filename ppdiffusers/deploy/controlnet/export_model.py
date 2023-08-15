@@ -18,36 +18,42 @@ from types import MethodType
 
 import paddle
 
-from ppdiffusers import (ControlNetModel, FastDeployRuntimeModel,
-                         FastDeployStableDiffusionControlNetPipeline,
-                         StableDiffusionControlNetPipeline,
-                         UNet2DConditionModel)
+from ppdiffusers import (
+    ControlNetModel,
+    FastDeployRuntimeModel,
+    FastDeployStableDiffusionControlNetPipeline,
+    StableDiffusionControlNetPipeline,
+    UNet2DConditionModel,
+)
 
 
 class ControlNetWithUnetModel(paddle.nn.Layer):
     def __init__(
-            self,
-            unet,
-            controlnet, ):
+        self,
+        unet,
+        controlnet,
+    ):
         super().__init__()
         self.unet = unet
         self.controlnet = controlnet
 
     def forward(
-            self,
-            sample,
-            timestep,
-            encoder_hidden_states,
-            controlnet_cond,
-            controlnet_conditioning_scale,
-            return_dict=True, ):
+        self,
+        sample,
+        timestep,
+        encoder_hidden_states,
+        controlnet_cond,
+        controlnet_conditioning_scale,
+        return_dict=True,
+    ):
         down_block_res_samples, mid_block_res_sample = self.controlnet(
             sample,
             timestep,
             encoder_hidden_states=encoder_hidden_states,
             controlnet_cond=controlnet_cond,
             conditioning_scale=controlnet_conditioning_scale,
-            return_dict=False, )
+            return_dict=False,
+        )
 
         noise_pred = self.unet(
             sample,
@@ -55,21 +61,21 @@ class ControlNetWithUnetModel(paddle.nn.Layer):
             encoder_hidden_states=encoder_hidden_states,
             down_block_additional_residuals=down_block_res_samples,
             mid_block_additional_residual=mid_block_res_sample,
-            return_dict=return_dict, )
+            return_dict=return_dict,
+        )
         return noise_pred
 
 
 def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
-        model_path: str,
-        controlnet_model_path: str,
-        output_path: str,
-        sample: bool=False,
-        height: int=None,
-        width: int=None, ):
-    unet_tmp = UNet2DConditionModel.from_pretrained(
-        model_path, resnet_pre_temb_non_linearity=True, subfolder="unet")
-    controlnet_tmp = ControlNetModel.from_pretrained(
-        controlnet_model_path, resnet_pre_temb_non_linearity=True)
+    model_path: str,
+    controlnet_model_path: str,
+    output_path: str,
+    sample: bool = False,
+    height: int = None,
+    width: int = None,
+):
+    unet_tmp = UNet2DConditionModel.from_pretrained(model_path, resnet_pre_temb_non_linearity=True, subfolder="unet")
+    controlnet_tmp = ControlNetModel.from_pretrained(controlnet_model_path, resnet_pre_temb_non_linearity=True)
 
     pipeline = StableDiffusionControlNetPipeline.from_pretrained(
         model_path,
@@ -77,7 +83,8 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         controlnet=controlnet_tmp,
         safety_checker=None,
         feature_extractor=None,
-        requires_safety_checker=False, )
+        requires_safety_checker=False,
+    )
     # make sure we disable xformers
     pipeline.disable_xformers_memory_efficient_attention()
     output_path = Path(output_path)
@@ -85,8 +92,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     latent_height = height // 8 if height is not None else None
     latent_width = width // 8 if width is not None else None
     # get arguments
-    cross_attention_dim = (
-        pipeline.unet.config.cross_attention_dim)  # 768 or 1024 or 1280
+    cross_attention_dim = pipeline.unet.config.cross_attention_dim  # 768 or 1024 or 1280
     unet_channels = pipeline.unet.config.in_channels  # 4
     vae_in_channels = pipeline.vae.config.in_channels  # 3
     vae_latent_channels = pipeline.vae.config.latent_channels  # 4
@@ -94,14 +100,12 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         f"cross_attention_dim: {cross_attention_dim}\n",
         f"unet_in_channels: {unet_channels}\n",
         f"vae_encoder_in_channels: {vae_in_channels}\n",
-        f"vae_decoder_latent_channels: {vae_latent_channels}", )
+        f"vae_decoder_latent_channels: {vae_latent_channels}",
+    )
     # 1. Convert text_encoder
     text_encoder = paddle.jit.to_static(
         pipeline.text_encoder,
-        input_spec=[
-            paddle.static.InputSpec(
-                shape=[None, None], dtype="int64", name="input_ids")
-        ],  # input_ids
+        input_spec=[paddle.static.InputSpec(shape=[None, None], dtype="int64", name="input_ids")],  # input_ids
     )
     save_path = os.path.join(args.output_path, "text_encoder", "inference")
     paddle.jit.save(text_encoder, save_path)
@@ -109,8 +113,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     del pipeline.text_encoder
 
     # wrap unet + controlnet
-    new_unet = ControlNetWithUnetModel(
-        unet=pipeline.unet, controlnet=pipeline.controlnet)
+    new_unet = ControlNetWithUnetModel(unet=pipeline.unet, controlnet=pipeline.controlnet)
 
     # 2. Convert unet
     unet = paddle.jit.to_static(
@@ -119,23 +122,26 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
             paddle.static.InputSpec(
                 shape=[None, unet_channels, latent_height, latent_width],
                 dtype="float32",
-                name="sample", ),  # sample
-            paddle.static.InputSpec(
-                shape=[1], dtype="float32", name="timestep"),  # timestep
+                name="sample",
+            ),  # sample
+            paddle.static.InputSpec(shape=[1], dtype="float32", name="timestep"),  # timestep
             paddle.static.InputSpec(
                 shape=[None, None, cross_attention_dim],
                 dtype="float32",
-                name="encoder_hidden_states", ),  # encoder_hidden_states
+                name="encoder_hidden_states",
+            ),  # encoder_hidden_states
             paddle.static.InputSpec(
                 shape=[None, vae_in_channels, height, width],
                 dtype="float32",
-                name="controlnet_cond", ),  # controlnet_cond
+                name="controlnet_cond",
+            ),  # controlnet_cond
             paddle.static.InputSpec(
                 shape=[len(pipeline.unet.config.block_out_channels) * 3 + 1],
                 dtype="float32",
                 name="controlnet_conditioning_scale",
             ),  # controlnet_conditioning_scale
-        ], )
+        ],
+    )
 
     save_path = os.path.join(args.output_path, "unet", "inference")
     paddle.jit.save(unet, save_path)
@@ -152,8 +158,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     # 3. Convert vae encoder
     vae_encoder = pipeline.vae
     if sample:
-        vae_encoder.forward = MethodType(forward_vae_encoder_sample,
-                                         vae_encoder)
+        vae_encoder.forward = MethodType(forward_vae_encoder_sample, vae_encoder)
     else:
         vae_encoder.forward = MethodType(forward_vae_encoder_mode, vae_encoder)
 
@@ -165,7 +170,8 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
                 dtype="float32",
                 name="sample",  # N, C, H, W
             ),  # latent
-        ], )
+        ],
+    )
     # Save vae_encoder in static graph model.
     save_path = os.path.join(args.output_path, "vae_encoder", "inference")
     paddle.jit.save(vae_encoder, save_path)
@@ -184,8 +190,10 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
             paddle.static.InputSpec(
                 shape=[None, vae_latent_channels, latent_height, latent_width],
                 dtype="float32",
-                name="latent_sample", ),  # latent_sample
-        ], )
+                name="latent_sample",
+            ),  # latent_sample
+        ],
+    )
     # Save vae_decoder in static graph model.
     save_path = os.path.join(args.output_path, "vae_decoder", "inference")
     paddle.jit.save(vae_decoder, save_path)
@@ -193,18 +201,16 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     del pipeline.vae
 
     fastdeploy_pipeline = FastDeployStableDiffusionControlNetPipeline(
-        vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path /
-                                                           "vae_encoder"),
-        vae_decoder=FastDeployRuntimeModel.from_pretrained(output_path /
-                                                           "vae_decoder"),
-        text_encoder=FastDeployRuntimeModel.from_pretrained(output_path /
-                                                            "text_encoder"),
+        vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
+        vae_decoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_decoder"),
+        text_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "text_encoder"),
         unet=FastDeployRuntimeModel.from_pretrained(output_path / "unet"),
         tokenizer=pipeline.tokenizer,
         scheduler=pipeline.scheduler,
         safety_checker=None,
         feature_extractor=None,
-        requires_safety_checker=False, )
+        requires_safety_checker=False,
+    )
     fastdeploy_pipeline.save_pretrained(output_path)
     print("FastDeploy pipeline saved to", output_path)
 
@@ -224,26 +230,25 @@ if __name__ == "__main__":
         default="lllyasviel/sd-controlnet-canny",
         help="Path to the `ppdiffusers` controlnet_pretrained_model_name_or_path  checkpoint to convert (either a local directory or on the bos).",
     )
-    parser.add_argument(
-        "--output_path",
-        type=str,
-        required=True,
-        help="Path to the output model.")
+    parser.add_argument("--output_path", type=str, required=True, help="Path to the output model.")
     parser.add_argument(
         "--sample",
         action="store_true",
         default=False,
-        help="Export the vae encoder in mode or sample", )
+        help="Export the vae encoder in mode or sample",
+    )
     parser.add_argument(
         "--height",
         type=int,
         default=None,
-        help="The height of output images. Default: None", )
+        help="The height of output images. Default: None",
+    )
     parser.add_argument(
         "--width",
         type=int,
         default=None,
-        help="The width of output images. Default: None", )
+        help="The width of output images. Default: None",
+    )
     args = parser.parse_args()
 
     convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
@@ -252,4 +257,5 @@ if __name__ == "__main__":
         args.output_path,
         args.sample,
         args.height,
-        args.width, )
+        args.width,
+    )

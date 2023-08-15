@@ -50,22 +50,15 @@ np.random.seed(1)
 bs, n_heads, c = 2, 8, 8
 query_length, n_levels, n_points = 2, 2, 2
 spatial_shapes = paddle.to_tensor([(6, 4), (3, 2)], dtype=paddle.int64)
-level_start_index = paddle.concat((paddle.to_tensor(
-    [0], dtype=paddle.int64), spatial_shapes.prod(1).cumsum(0)[:-1]))
+level_start_index = paddle.concat((paddle.to_tensor([0], dtype=paddle.int64), spatial_shapes.prod(1).cumsum(0)[:-1]))
 value_length = sum([(H * W).item() for H, W in spatial_shapes])
 
 
 def get_test_tensors(channels):
-    value = (paddle.rand(
-        [bs, value_length, n_heads, channels], dtype=paddle.float32) * 0.01)
-    sampling_locations = paddle.rand(
-        [bs, query_length, n_heads, n_levels, n_points, 2],
-        dtype=paddle.float32)
-    attention_weights = (paddle.rand(
-        [bs, query_length, n_heads, n_levels, n_points], dtype=paddle.float32) +
-                         1e-5)
-    attention_weights /= attention_weights.sum(-1, keepdim=True).sum(
-        -2, keepdim=True)
+    value = paddle.rand([bs, value_length, n_heads, channels], dtype=paddle.float32) * 0.01
+    sampling_locations = paddle.rand([bs, query_length, n_heads, n_levels, n_points, 2], dtype=paddle.float32)
+    attention_weights = paddle.rand([bs, query_length, n_heads, n_levels, n_points], dtype=paddle.float32) + 1e-5
+    attention_weights /= attention_weights.sum(-1, keepdim=True).sum(-2, keepdim=True)
 
     return [value, sampling_locations, attention_weights]
 
@@ -74,23 +67,31 @@ def get_test_tensors(channels):
 def check_forward_equal_with_paddle_float():
     value, sampling_locations, attention_weights = get_test_tensors(c)
 
-    output_paddle = (ms_deform_attn_core_paddle(
-        value,
-        spatial_shapes,
-        level_start_index,
-        sampling_locations,
-        attention_weights, ).detach().cpu())
-    output_cuda = (ms_deformable_attn(
-        value,
-        spatial_shapes,
-        level_start_index,
-        sampling_locations,
-        attention_weights, ).detach().cpu())
-    fwdok = paddle.allclose(
-        output_cuda, output_paddle, rtol=1e-2, atol=1e-3).item()
+    output_paddle = (
+        ms_deform_attn_core_paddle(
+            value,
+            spatial_shapes,
+            level_start_index,
+            sampling_locations,
+            attention_weights,
+        )
+        .detach()
+        .cpu()
+    )
+    output_cuda = (
+        ms_deformable_attn(
+            value,
+            spatial_shapes,
+            level_start_index,
+            sampling_locations,
+            attention_weights,
+        )
+        .detach()
+        .cpu()
+    )
+    fwdok = paddle.allclose(output_cuda, output_paddle, rtol=1e-2, atol=1e-3).item()
     max_abs_err = (output_cuda - output_paddle).abs().max().item()
-    max_rel_err = ((
-        (output_cuda - output_paddle).abs() / output_paddle.abs()).max().item())
+    max_rel_err = ((output_cuda - output_paddle).abs() / output_paddle.abs()).max().item()
 
     print(
         f"*{fwdok} check_forward_equal_with_paddle_float: max_abs_err {max_abs_err:.2e} max_rel_err {max_rel_err:.2e}"
@@ -101,7 +102,8 @@ def check_gradient_numerical(channels=4):
     (
         value_paddle,
         sampling_locations_paddle,
-        attention_weights_paddle, ) = get_test_tensors(channels)
+        attention_weights_paddle,
+    ) = get_test_tensors(channels)
     value_paddle.stop_gradient = False
     sampling_locations_paddle.stop_gradient = False
     attention_weights_paddle.stop_gradient = False
@@ -118,7 +120,8 @@ def check_gradient_numerical(channels=4):
         spatial_shapes,
         level_start_index,
         sampling_locations_paddle,
-        attention_weights_paddle, )
+        attention_weights_paddle,
+    )
     output_paddle.sum().backward()
 
     output_cuda = ms_deformable_attn(
@@ -126,25 +129,22 @@ def check_gradient_numerical(channels=4):
         spatial_shapes,
         level_start_index,
         sampling_locations_cuda,
-        attention_weights_cuda, )
+        attention_weights_cuda,
+    )
     output_cuda.sum().backward()
 
-    res = paddle.allclose(
-        value_paddle.grad, value_cuda.grad, rtol=1e-2, atol=1e-3).item()
+    res = paddle.allclose(value_paddle.grad, value_cuda.grad, rtol=1e-2, atol=1e-3).item()
     print(f"*tensor1 {res} check_gradient_numerical(D={channels})")
 
     res = paddle.allclose(
         sampling_locations_paddle.grad,
         sampling_locations_cuda.grad,
         rtol=1e-2,
-        atol=1e-3, ).item()
+        atol=1e-3,
+    ).item()
     print(f"*tensor2 {res} check_gradient_numerical(D={channels})")
 
-    res = paddle.allclose(
-        attention_weights_paddle.grad,
-        attention_weights_cuda.grad,
-        rtol=1e-2,
-        atol=1e-3).item()
+    res = paddle.allclose(attention_weights_paddle.grad, attention_weights_cuda.grad, rtol=1e-2, atol=1e-3).item()
     print(f"*tensor3 {res} check_gradient_numerical(D={channels})")
 
 

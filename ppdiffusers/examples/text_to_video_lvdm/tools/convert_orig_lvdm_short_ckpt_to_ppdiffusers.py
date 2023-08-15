@@ -27,13 +27,19 @@ except ImportError:
     raise ImportError(
         "OmegaConf is required to convert the SD checkpoints. Please install it with `pip install OmegaConf`."
     )
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers import (
-    AutoencoderKL, DDIMScheduler, DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler, EulerDiscreteScheduler,
-    HeunDiscreteScheduler, LMSDiscreteScheduler, LVDMAutoencoderKL,
-    LVDMUncondPipeline, LVDMUNet3DModel, PNDMScheduler)
+    DDIMScheduler,
+    DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    HeunDiscreteScheduler,
+    LMSDiscreteScheduler,
+    LVDMAutoencoderKL,
+    LVDMUncondPipeline,
+    LVDMUNet3DModel,
+    PNDMScheduler,
+)
 
 paddle.set_device("cpu")
 MZ_ZIP_LOCAL_DIR_HEADER_SIZE = 30
@@ -116,8 +122,7 @@ def get_data_iostream(file: str, file_name="data.pkl"):
     FILENAME = f"archive/{file_name}".encode("latin")
     padding_size_plus_fbxx = 4 + 14
     data_iostream = []
-    offset = MZ_ZIP_LOCAL_DIR_HEADER_SIZE + len(
-        FILENAME) + padding_size_plus_fbxx
+    offset = MZ_ZIP_LOCAL_DIR_HEADER_SIZE + len(FILENAME) + padding_size_plus_fbxx
     with open(file, "rb") as r:
         r.seek(offset)
         for bytes_data in io.BytesIO(r.read()):
@@ -130,8 +135,7 @@ def get_data_iostream(file: str, file_name="data.pkl"):
     return out, offset + len(out)
 
 
-def _rebuild_tensor_stage(storage, storage_offset, size, stride, requires_grad,
-                          backward_hooks):
+def _rebuild_tensor_stage(storage, storage_offset, size, stride, requires_grad, backward_hooks):
     if isinstance(storage, TensorMeta):
         storage.size = size
     return storage
@@ -162,7 +166,8 @@ def create_unet_diffusers_config(original_config):
         padding_t=unet_params.padding_t,
         temporal_length=unet_params.temporal_length,
         use_relative_position=unet_params.use_relative_position,
-        use_scale_shift_norm=unet_params.use_scale_shift_norm, )
+        use_scale_shift_norm=unet_params.use_scale_shift_norm,
+    )
 
     return config
 
@@ -181,7 +186,8 @@ def create_lvdm_vae_diffusers_config(original_config):
         padding_type=vae_params.encoder.params.padding_type,
         double_z=vae_params.encoder.params.double_z,
         z_channels=vae_params.encoder.params.z_channels,
-        upsample=vae_params.decoder.params.upsample, )
+        upsample=vae_params.decoder.params.upsample,
+    )
     return config
 
 
@@ -190,14 +196,12 @@ def create_diffusers_schedular(original_config):
         num_train_timesteps=original_config.model.params.timesteps,
         beta_start=original_config.model.params.linear_start,
         beta_end=original_config.model.params.linear_end,
-        beta_schedule="scaled_linear", )
+        beta_schedule="scaled_linear",
+    )
     return schedular
 
 
-def convert_lvdm_unet_checkpoint(checkpoint,
-                                 config,
-                                 path=None,
-                                 extract_ema=False):
+def convert_lvdm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False):
     """
     Takes a state dict and a config, and returns a converted checkpoint.
     """
@@ -218,8 +222,7 @@ def convert_lvdm_unet_checkpoint(checkpoint,
             for key in keys:
                 if key.startswith("model.diffusion_model"):
                     flat_ema_key = "model_ema." + "".join(key.split(".")[1:])
-                    unet_state_dict[key.replace(unet_key, "")] = checkpoint.pop(
-                        flat_ema_key)
+                    unet_state_dict[key.replace(unet_key, "")] = checkpoint.pop(flat_ema_key)
         else:
             print(
                 "In this conversion only the non-EMA weights are extracted. If you want to instead extract the EMA"
@@ -251,9 +254,7 @@ def convert_lvdm_vae_checkpoint(checkpoint, vae_checkpoint, config):
     return new_checkpoint
 
 
-def convert_diffusers_vae_unet_to_ppdiffusers(vae_or_unet,
-                                              diffusers_vae_unet_checkpoint,
-                                              dtype="float32"):
+def convert_diffusers_vae_unet_to_ppdiffusers(vae_or_unet, diffusers_vae_unet_checkpoint, dtype="float32"):
     need_transpose = []
     for k, v in vae_or_unet.named_sublayers(include_self=True):
         if isinstance(v, paddle.nn.Linear):
@@ -275,8 +276,7 @@ def check_keys(model, state_dict):
         if k not in state_dict.keys():
             missing_keys.append(k)
         if list(v.shape) != list(state_dict[k].shape):
-            mismatched_keys.append(
-                str((k, list(v.shape), list(state_dict[k].shape))))
+            mismatched_keys.append(str((k, list(v.shape), list(state_dict[k].shape))))
     if len(missing_keys):
         missing_keys_str = ", ".join(missing_keys)
         print(f"{cls_name} Found missing_keys {missing_keys_str}!")
@@ -293,13 +293,15 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="Path to the checkpoint to convert.", )
+        help="Path to the checkpoint to convert.",
+    )
     parser.add_argument(
         "--vae_checkpoint_path",
         default=None,
         type=str,
         required=False,
-        help="Path to the checkpoint to convert.", )
+        help="Path to the checkpoint to convert.",
+    )
     parser.add_argument(
         "--original_config_file",
         default=None,
@@ -325,13 +327,15 @@ if __name__ == "__main__":
             "Only relevant for checkpoints that have both EMA and non-EMA weights. Whether to extract the EMA weights"
             " or not. Defaults to `False`. Add `--extract_ema` to extract the EMA weights. EMA weights usually yield"
             " higher quality images for inference. Non-EMA weights are usually better to continue fine-tuning."
-        ), )
+        ),
+    )
     parser.add_argument(
         "--dump_path",
         default=None,
         type=str,
         required=True,
-        help="Path to the output model.", )
+        help="Path to the output model.",
+    )
     args = parser.parse_args()
 
     # image_size = 512
@@ -340,15 +344,13 @@ if __name__ == "__main__":
 
     vae_checkpoint = None
     if args.vae_checkpoint_path:
-        vae_checkpoint = torch.load(
-            args.vae_checkpoint_path, map_location="cpu")
+        vae_checkpoint = torch.load(args.vae_checkpoint_path, map_location="cpu")
         vae_checkpoint = vae_checkpoint.get("state_dict", vae_checkpoint)
 
     original_config = OmegaConf.load(args.original_config_file)
 
     if args.num_in_channels is not None:
-        original_config["model"]["params"]["unet_config"]["params"][
-            "in_channels"] = args.num_in_channels
+        original_config["model"]["params"]["unet_config"]["params"]["in_channels"] = args.num_in_channels
 
     num_train_timesteps = original_config.model.params.timesteps
     beta_start = original_config.model.params.linear_start
@@ -361,7 +363,8 @@ if __name__ == "__main__":
         num_train_timesteps=num_train_timesteps,
         steps_offset=1,
         clip_sample=False,
-        set_alpha_to_one=False, )
+        set_alpha_to_one=False,
+    )
 
     # make sure scheduler works correctly with DDIM
     scheduler.register_to_config(clip_sample=False)
@@ -377,15 +380,13 @@ if __name__ == "__main__":
     elif args.scheduler_type == "euler":
         scheduler = EulerDiscreteScheduler.from_config(scheduler.config)
     elif args.scheduler_type == "euler-ancestral":
-        scheduler = EulerAncestralDiscreteScheduler.from_config(
-            scheduler.config)
+        scheduler = EulerAncestralDiscreteScheduler.from_config(scheduler.config)
     elif args.scheduler_type == "dpm":
         scheduler = DPMSolverMultistepScheduler.from_config(scheduler.config)
     elif args.scheduler_type == "ddim":
         scheduler = scheduler
     else:
-        raise ValueError(
-            f"Scheduler of type {args.scheduler_type} doesn't exist!")
+        raise ValueError(f"Scheduler of type {args.scheduler_type} doesn't exist!")
 
     # 1. Convert the LVDMUNet3DModel model.
     diffusers_unet_config = create_unet_diffusers_config(original_config)
@@ -393,26 +394,25 @@ if __name__ == "__main__":
         checkpoint,
         diffusers_unet_config,
         path=args.checkpoint_path,
-        extract_ema=args.extract_ema, )
+        extract_ema=args.extract_ema,
+    )
     unet = LVDMUNet3DModel.from_config(diffusers_unet_config)
-    ppdiffusers_unet_checkpoint = convert_diffusers_vae_unet_to_ppdiffusers(
-        unet, diffusers_unet_checkpoint)
+    ppdiffusers_unet_checkpoint = convert_diffusers_vae_unet_to_ppdiffusers(unet, diffusers_unet_checkpoint)
     check_keys(unet, ppdiffusers_unet_checkpoint)
     unet.load_dict(ppdiffusers_unet_checkpoint)
 
     # 2. Convert the LVDMAutoencoderKL model.
     vae_config = create_lvdm_vae_diffusers_config(original_config)
-    diffusers_vae_checkpoint = convert_lvdm_vae_checkpoint(
-        checkpoint, vae_checkpoint, vae_config)
+    diffusers_vae_checkpoint = convert_lvdm_vae_checkpoint(checkpoint, vae_checkpoint, vae_config)
     vae = LVDMAutoencoderKL.from_config(vae_config)
-    ppdiffusers_vae_checkpoint = convert_diffusers_vae_unet_to_ppdiffusers(
-        vae, diffusers_vae_checkpoint)
+    ppdiffusers_vae_checkpoint = convert_diffusers_vae_unet_to_ppdiffusers(vae, diffusers_vae_checkpoint)
     check_keys(vae, ppdiffusers_vae_checkpoint)
     vae.load_dict(ppdiffusers_vae_checkpoint)
 
     pipe = LVDMUncondPipeline(
         vae=vae,
         unet=unet,
-        scheduler=scheduler, )
+        scheduler=scheduler,
+    )
 
     pipe.save_pretrained(args.dump_path)

@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .image2image_text_guided_generation import (StableDiffusionImg2ImgTask,
-                                                 StableDiffusionUpscaleTask)
+from .image2image_text_guided_generation import (
+    StableDiffusionImg2ImgTask,
+    StableDiffusionUpscaleTask,
+)
 from .image2text_generation import Blip2CaptionTask
 from .openset_det_sam import OpenSetDetTask, OpenSetSegTask
-from .text2image_generation import (StableDiffusionTask,
-                                    VersatileDiffusionDualGuidedTask)
+from .text2image_generation import StableDiffusionTask, VersatileDiffusionDualGuidedTask
 from .text2image_inpaiting import StableDiffusionInpaintTask
 from .text2text_generation import ChatGlmTask
 from .text2video_generation import TextToVideoSDTask
@@ -92,8 +93,7 @@ APPLICATIONS = {
         "models": {
             "Linaqruf/anything-v3.0": {
                 "task_class": StableDiffusionImg2ImgTask,
-                "task_flag":
-                "image2image_text_guided_generation-Linaqruf/anything-v3.0",
+                "task_flag": "image2image_text_guided_generation-Linaqruf/anything-v3.0",
             }
         },
         "default": {
@@ -104,8 +104,7 @@ APPLICATIONS = {
         "models": {
             "stabilityai/stable-diffusion-x4-upscaler": {
                 "task_class": StableDiffusionUpscaleTask,
-                "task_flag":
-                "image2image_text_guided_upscaling-stabilityai/stable-diffusion-x4-upscaler",
+                "task_flag": "image2image_text_guided_upscaling-stabilityai/stable-diffusion-x4-upscaler",
             }
         },
         "default": {
@@ -116,8 +115,7 @@ APPLICATIONS = {
         "models": {
             "shi-labs/versatile-diffusion": {
                 "task_class": VersatileDiffusionDualGuidedTask,
-                "task_flag":
-                "dual_text_and_image_guided_generation-shi-labs/versatile-diffusion",
+                "task_flag": "dual_text_and_image_guided_generation-shi-labs/versatile-diffusion",
             }
         },
         "default": {
@@ -128,8 +126,7 @@ APPLICATIONS = {
         "models": {
             "damo-vilab/text-to-video-ms-1.7b": {
                 "task_class": TextToVideoSDTask,
-                "task_flag":
-                "text_to_video_generation-damo-vilab/text-to-video-ms-1.7b",
+                "task_flag": "text_to_video_generation-damo-vilab/text-to-video-ms-1.7b",
             }
         },
         "default": {

@@ -15,7 +15,6 @@
 import paddle
 from PIL import Image
 
-from paddlemix.utils.log import logger
 from ppdiffusers import StableDiffusionInpaintPipeline
 
 from .apptask import AppTask
@@ -45,11 +44,11 @@ class StableDiffusionInpaintTask(AppTask):
     def _preprocess(self, inputs):
         """ """
         image = inputs.get("image", None)
-        assert image is not None, f"The image is None"
+        assert image is not None, "The image is None"
         seg_masks = inputs.get("seg_masks", None)
-        assert seg_masks is not None, f"The seg masks is None"
+        assert seg_masks is not None, "The seg masks is None"
         inpaint_prompt = inputs.get("inpaint_prompt", None)
-        assert inpaint_prompt is not None, f"The inpaint_prompt is None"
+        assert inpaint_prompt is not None, "The inpaint_prompt is None"
 
         self._org_size = image.size
         merge_mask = paddle.sum(seg_masks, axis=0).unsqueeze(0)
@@ -72,7 +71,8 @@ class StableDiffusionInpaintTask(AppTask):
         result = self._model(
             inputs["inpaint_prompt"],
             image=inputs["image"],
-            mask_image=inputs["mask_pil"], ).images[0]
+            mask_image=inputs["mask_pil"],
+        ).images[0]
 
         inputs.pop("mask_pil", None)
         inputs.pop("image", None)

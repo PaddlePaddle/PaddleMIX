@@ -59,10 +59,10 @@ def to(self, *args, **kwargs):
             if isinstance(kwargs["x"], paddle.dtype):
                 dtype = kwargs["x"]
             elif isinstance(kwargs["x"], str) and kwargs["x"] not in [
-                    "cpu",
-                    "cuda",
-                    "ipu",
-                    "xpu",
+                "cpu",
+                "cuda",
+                "ipu",
+                "xpu",
             ]:
                 dtype = kwargs["x"]
             elif isinstance(kwargs["x"], paddle.Tensor):
@@ -78,8 +78,7 @@ def to(self, *args, **kwargs):
                 if x not in ["cpu", "cuda", "ipu", "xpu"]:
                     dtype = kwargs["x"]
                 else:
-                    dtype = kwargs["y"] if isinstance(kwargs["y"],
-                                                      str) else self.dtype
+                    dtype = kwargs["y"] if isinstance(kwargs["y"], str) else self.dtype
             else:
                 dtype = kwargs["x"]
             return paddle.cast(self, dtype)
@@ -99,11 +98,9 @@ def split(self, *args, **kwargs):
     elif kwargs:
         if "dim" in kwargs:
             kwargs["axis"] = kwargs.pop("dim")
-            kwargs["num_or_sections"] = self.shape[kwargs[
-                "axis"]] // kwargs.pop("split_size")
+            kwargs["num_or_sections"] = self.shape[kwargs["axis"]] // kwargs.pop("split_size")
         else:
-            kwargs["num_or_sections"] = self.shape[0] // kwargs.pop(
-                "split_size")
+            kwargs["num_or_sections"] = self.shape[0] // kwargs.pop("split_size")
         return paddle.split(self, **kwargs)
 
 
@@ -116,7 +113,7 @@ def i0(self, input):
     K = paddle.arange(0, 20).astype("float32")
     m = 0
     for k in K:
-        m += ((input**2) / 4)**k / math.factorial(k)**2
+        m += ((input**2) / 4) ** k / math.factorial(k) ** 2
     return m
 
 
@@ -128,7 +125,7 @@ setattr(paddle.audio.functional, "resample", resample)
 def stride(self, dim):
     shape = self.shape
     shape.append(1)
-    return paddle.cumprod(paddle.to_tensor(shape)[dim + 1:], dim=0)[-1].item()
+    return paddle.cumprod(paddle.to_tensor(shape)[dim + 1 :], dim=0)[-1].item()
 
 
 setattr(paddle.Tensor, "stride", stride)
@@ -144,14 +141,20 @@ def as_strided(self, size, stride):
     hh = paddle.expand(h, (dx, dy)).flatten(0)
     datas = []
     for i in range(0, size[0] * stride[0], stride[0]):
-        axes = [0, ]
-        starts = [i, ]
-        ends = [stride[1] * size[1] + i, ]
-        strides = [stride[1], ]
-        new_x = paddle.strided_slice(
-            ww, axes=axes, starts=starts, ends=ends, strides=strides)
-        new_y = paddle.strided_slice(
-            hh, axes=axes, starts=starts, ends=ends, strides=strides)
+        axes = [
+            0,
+        ]
+        starts = [
+            i,
+        ]
+        ends = [
+            stride[1] * size[1] + i,
+        ]
+        strides = [
+            stride[1],
+        ]
+        new_x = paddle.strided_slice(ww, axes=axes, starts=starts, ends=ends, strides=strides)
+        new_y = paddle.strided_slice(hh, axes=axes, starts=starts, ends=ends, strides=strides)
         datas.append(self[new_y, new_x])
     return paddle.stack(datas)
 
@@ -163,19 +166,15 @@ def hann_window(window_length, periodic=True, **kwargs):
     N = window_length
     x = paddle.arange(N)
     if periodic:
-        return paddle.sin(math.pi * x / (N))**2
+        return paddle.sin(math.pi * x / (N)) ** 2
     else:
-        return paddle.sin(math.pi * x / (N - 1))**2
+        return paddle.sin(math.pi * x / (N - 1)) ** 2
 
 
 setattr(paddle, "hann_window", hann_window)
 
 
-def hamming_window(window_length,
-                   periodic=True,
-                   alpha=0.54,
-                   beta=0.46,
-                   **kwargs):
+def hamming_window(window_length, periodic=True, alpha=0.54, beta=0.46, **kwargs):
     N = window_length
     x = paddle.arange(N)
     if periodic:
@@ -189,17 +188,14 @@ setattr(paddle, "hamming_window", hamming_window)
 
 def pad(input, pad, mode="constant", value=0.0):
     data_formats = {3: "NCL", 4: "NCHW", 5: "NCDHW"}
-    shape = input.shape
     if input.dim() == 2:
         input = input.unsqueeze(0)
     n = len(input.shape)
     pad = list(pad) + [0] * (n - 3) * 2
-    pad = pad[:(n - 2) * 2]
-    return paddle.nn.functional.pad(input,
-                                    pad=tuple(pad),
-                                    mode=mode,
-                                    value=value,
-                                    data_format=data_formats[n]).squeeze()
+    pad = pad[: (n - 2) * 2]
+    return paddle.nn.functional.pad(
+        input, pad=tuple(pad), mode=mode, value=value, data_format=data_formats[n]
+    ).squeeze()
 
 
 setattr(paddle, "pad_from_torch", pad)

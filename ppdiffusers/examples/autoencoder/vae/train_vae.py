@@ -28,8 +28,7 @@ from paddlenlp.utils.log import logger
 from tqdm.auto import tqdm
 
 from ppdiffusers.models.ema import LitEma
-from ppdiffusers.training_utils import (freeze_params, main_process_first,
-                                        unwrap_model)
+from ppdiffusers.training_utils import freeze_params, main_process_first, unwrap_model
 
 
 def read_json(file):
@@ -56,8 +55,7 @@ def run_evaluate(vae, val_dataloader, writer, global_step):
     log_dict_ae_all = defaultdict(list)
     log_dict_disc_all = defaultdict(list)
     for batch in val_dataloader:
-        log_dict_ae, log_dict_disc = unwrap_model(vae).validation_step(
-            batch["image"], global_step=global_step)
+        log_dict_ae, log_dict_disc = unwrap_model(vae).validation_step(batch["image"], global_step=global_step)
         for k, v in log_dict_ae.items():
             if "loss" not in k:
                 continue
@@ -71,25 +69,21 @@ def run_evaluate(vae, val_dataloader, writer, global_step):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Simple example of a training a autoencoder model script.")
+    parser = argparse.ArgumentParser(description="Simple example of a training a autoencoder model script.")
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
         default=None,
         required=False,
-        help="Path to pretrained model or model identifier from bos.", )
+        help="Path to pretrained model or model identifier from bos.",
+    )
     parser.add_argument(
         "--output_dir",
         type=str,
         default="autoencoder_outputs",
         help="The output directory where the model predictions and checkpoints will be written.",
     )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=23,
-        help="A seed for reproducible training.")
+    parser.add_argument("--seed", type=int, default=23, help="A seed for reproducible training.")
     parser.add_argument(
         "--batch_size",
         type=int,
@@ -112,48 +106,39 @@ def parse_args():
     parser.add_argument(
         "--scale_lr",
         action="store_true",
-        help="Scale base-lr by ngpu * batch_size", )
-    parser.add_argument(
-        "--freeze_encoder",
-        action="store_true",
-        help="Whether to freeze encoder layer.")
+        help="Scale base-lr by ngpu * batch_size",
+    )
+    parser.add_argument("--freeze_encoder", action="store_true", help="Whether to freeze encoder layer.")
     parser.add_argument(
         "--from_scratch",
         action="store_true",
-        help="Whether to train new model from scratch. ", )
-    parser.add_argument(
-        "--vae_config_file",
-        default=None,
-        type=str,
-        help="Path to the vae_config_file.")
+        help="Whether to train new model from scratch. ",
+    )
+    parser.add_argument("--vae_config_file", default=None, type=str, help="Path to the vae_config_file.")
     parser.add_argument(
         "--logging_dir",
         type=str,
         default="logs",
         help=(
             "[TensorBoard](https://www.tensorflow.org/tensorboard) or [VisualDL](https://www.paddlepaddle.org.cn/paddle/visualdl) log directory. Will default to"
-            "*output_dir/logs"), )
+            "*output_dir/logs"
+        ),
+    )
     parser.add_argument(
         "--report_to",
         type=str,
         default="visualdl",
         choices=["tensorboard", "visualdl"],
-        help="Log writer type.", )
-    parser.add_argument(
-        "--logging_steps",
-        default=100,
-        type=int,
-        help="The interval steps to logging.")
+        help="Log writer type.",
+    )
+    parser.add_argument("--logging_steps", default=100, type=int, help="The interval steps to logging.")
     parser.add_argument(
         "--image_logging_steps",
         default=500,
         type=int,
-        help="The interval steps to logging images.", )
-    parser.add_argument(
-        "--save_steps",
-        default=2000,
-        type=int,
-        help="The interval steps to saveing.")
+        help="The interval steps to logging images.",
+    )
+    parser.add_argument("--save_steps", default=2000, type=int, help="The interval steps to saveing.")
     parser.add_argument(
         "--ignore_keys",
         default=[],
@@ -166,136 +151,152 @@ def parse_args():
         default=None,
         type=int,
         nargs="*",
-        help="The height and width of the input at the encoder.", )
+        help="The height and width of the input at the encoder.",
+    )
     # dataset
     parser.add_argument(
         "--dataset_type",
         type=str,
         default="text_image_pair",
         choices=["imagenet", "text_image_pair"],
-        help="The type of dataset.", )
+        help="The type of dataset.",
+    )
     parser.add_argument(
         "--resolution",
         type=int,
         default=512,
         help=(
             "The resolution for input images, all the images in the train/validation dataset will be resized to this"
-            " resolution"), )
+            " resolution"
+        ),
+    )
     parser.add_argument(
         "--degradation",
         type=str,
         default="pil_nearest",
-        help="Degradation_fn, e.g. cv_bicubic, bsrgan_light, or pil_nearest", )
+        help="Degradation_fn, e.g. cv_bicubic, bsrgan_light, or pil_nearest",
+    )
     parser.add_argument(
         "--file_list",
         type=str,
         default="./data/filelist/train.filelist.list",
-        help="Path to the train file_list.", )
+        help="Path to the train file_list.",
+    )
     parser.add_argument(
         "--num_workers",
         type=int,
         default=8,
-        help="The number of subprocess to load data.", )
+        help="The number of subprocess to load data.",
+    )
     parser.add_argument(
         "--num_records",
         type=int,
         default=62500,
-        help="The num_records of the text_image_pair dataset.", )
+        help="The num_records of the text_image_pair dataset.",
+    )
     parser.add_argument(
         "--buffer_size",
         type=int,
         default=100,
-        help="The buffer size of the text_image_pair dataset.", )
+        help="The buffer size of the text_image_pair dataset.",
+    )
     parser.add_argument(
         "--shuffle_every_n_samples",
         type=int,
         default=5,
-        help="The shuffle_every_n_samples of the text_image_pair dataset.", )
+        help="The shuffle_every_n_samples of the text_image_pair dataset.",
+    )
     parser.add_argument(
         "--init_from_ckpt",
         type=str,
         default=None,
-        help="The path of checkpoint to be loaded.", )
+        help="The path of checkpoint to be loaded.",
+    )
 
     # loss fn
     parser.add_argument(
         "--disc_start",
         type=int,
         default=50001,
-        help="The number of steps the discriminator started.", )
+        help="The number of steps the discriminator started.",
+    )
     parser.add_argument(
         "--kl_weight",
         type=float,
         default=1.0e-6,
-        help="The weight ratio of the kl_loss.", )
+        help="The weight ratio of the kl_loss.",
+    )
     parser.add_argument(
         "--disc_weight",
         type=float,
         default=0.5,
-        help="The weight ratio of the disc_loss.", )
+        help="The weight ratio of the disc_loss.",
+    )
     parser.add_argument(
         "--logvar_init",
         type=float,
         default=0.0,
-        help="The init value of the output log variances.", )
+        help="The init value of the output log variances.",
+    )
     parser.add_argument(
         "--pixelloss_weight",
         type=float,
         default=1.0,
-        help="The weight ratio of the pixelloss.", )
+        help="The weight ratio of the pixelloss.",
+    )
     parser.add_argument(
         "--disc_num_layers",
         type=int,
         default=3,
-        help="The num layers of the discriminator.", )
+        help="The num layers of the discriminator.",
+    )
     parser.add_argument(
         "--disc_in_channels",
         type=int,
         default=3,
-        help="The in channels of the discriminator.", )
+        help="The in channels of the discriminator.",
+    )
     parser.add_argument(
         "--disc_factor",
         type=float,
         default=1.0,
-        help="The factor of the discriminator loss.", )
+        help="The factor of the discriminator loss.",
+    )
     parser.add_argument(
         "--perceptual_weight",
         type=float,
         default=1.0,
-        help="The weight ratio of the perceptual loss.", )
+        help="The weight ratio of the perceptual loss.",
+    )
     parser.add_argument(
         "--use_actnorm",
         action="store_true",
-        help="Whether to use actnorm in NLayerDiscriminator layer.", )
+        help="Whether to use actnorm in NLayerDiscriminator layer.",
+    )
     parser.add_argument(
         "--disc_conditional",
         action="store_true",
-        help="Whether to use conditional discriminator.", )
+        help="Whether to use conditional discriminator.",
+    )
     parser.add_argument(
         "--disc_loss",
         type=str,
         choices=["hinge", "vanilla"],
         default="hinge",
-        help="The type of discriminator loss.", )
-    parser.add_argument(
-        "--use_ema", action="store_true", help="Whether to use_ema.")
+        help="The type of discriminator loss.",
+    )
+    parser.add_argument("--use_ema", action="store_true", help="Whether to use_ema.")
     parser.add_argument(
         "--enable_xformers_memory_efficient_attention",
         action="store_true",
-        help="Whether to enable_xformers_memory_efficient_attention.", )
-    parser.add_argument(
-        "--recompute", action="store_true", help="Whether to recompute.")
-    parser.add_argument(
-        "--ema_decay",
-        type=float,
-        default=0.9999,
-        help="The value of ema_decay.")
+        help="Whether to enable_xformers_memory_efficient_attention.",
+    )
+    parser.add_argument("--recompute", action="store_true", help="Whether to recompute.")
+    parser.add_argument("--ema_decay", type=float, default=0.9999, help="The value of ema_decay.")
     args = parser.parse_args()
 
     args.logging_dir = os.path.join(args.output_dir, args.logging_dir)
-    args.image_logging_steps = (
-        math.ceil(args.image_logging_steps / args.logging_steps) *
-        args.logging_steps)
+    args.image_logging_steps = math.ceil(args.image_logging_steps / args.logging_steps) * args.logging_steps
 
     return args
 
@@ -358,7 +359,8 @@ def main():
             disc_loss=args.disc_loss,
             ema_decay=args.ema_decay,
             use_ema=args.use_ema,
-            **model_kwargs, )
+            **model_kwargs,
+        )
     else:
         assert args.vae_config_file is not None, "We must supply vae_config_file!"
         # Load config: train model from scatch
@@ -378,7 +380,8 @@ def main():
             disc_conditional=args.disc_conditional,
             disc_loss=args.disc_loss,
             ema_decay=args.ema_decay,
-            use_ema=args.use_ema, )
+            use_ema=args.use_ema,
+        )
 
     if args.init_from_ckpt and os.path.isfile(args.init_from_ckpt):
         state_dict = paddle.load(args.init_from_ckpt)
@@ -390,8 +393,7 @@ def main():
         args.learning_rate = num_processes * args.batch_size * args.learning_rate
 
     # configure_optimizers
-    parameters = list(vae.decoder.parameters()) + list(
-        vae.post_quant_conv.parameters())
+    parameters = list(vae.decoder.parameters()) + list(vae.post_quant_conv.parameters())
     # we may freeze_encoder
     if not args.freeze_encoder:
         parameters += list(vae.encoder.parameters())
@@ -401,16 +403,13 @@ def main():
         freeze_params(vae.quant_conv.parameters())
         print("Freeze vae.encoder.parameters and vae.quant_conv.parameters!")
 
-    opt_ae = Adam(
-        parameters=parameters,
-        learning_rate=args.learning_rate,
-        beta1=0.5,
-        beta2=0.9)
+    opt_ae = Adam(parameters=parameters, learning_rate=args.learning_rate, beta1=0.5, beta2=0.9)
     opt_disc = Adam(
         parameters=vae.loss.discriminator.parameters(),
         learning_rate=args.learning_rate,
         beta1=0.5,
-        beta2=0.9, )
+        beta2=0.9,
+    )
     if args.use_ema:
         vae.model_ema = LitEma(vae, decay=args.ema_decay)
     if args.recompute:
@@ -427,27 +426,17 @@ def main():
         from ldm import ImageNetSRTrain, ImageNetSRValidation
 
         with main_process_first():
-            train_dataset = ImageNetSRTrain(
-                size=args.resolution, degradation=args.degradation)
-            val_dataset = ImageNetSRValidation(
-                size=args.resolution, degradation=args.degradation)
-        train_sampler = (DistributedBatchSampler(
-            train_dataset, batch_size=args.batch_size, shuffle=True)
-                         if num_processes > 1 else BatchSampler(
-                             train_dataset,
-                             batch_size=args.batch_size,
-                             shuffle=True))
-        train_dataloader = DataLoader(
-            train_dataset,
-            batch_sampler=train_sampler,
-            num_workers=args.num_workers)
+            train_dataset = ImageNetSRTrain(size=args.resolution, degradation=args.degradation)
+            val_dataset = ImageNetSRValidation(size=args.resolution, degradation=args.degradation)
+        train_sampler = (
+            DistributedBatchSampler(train_dataset, batch_size=args.batch_size, shuffle=True)
+            if num_processes > 1
+            else BatchSampler(train_dataset, batch_size=args.batch_size, shuffle=True)
+        )
+        train_dataloader = DataLoader(train_dataset, batch_sampler=train_sampler, num_workers=args.num_workers)
 
-        val_sampler = BatchSampler(
-            val_dataset, batch_size=args.batch_size * 2, shuffle=False)
-        val_dataloader = DataLoader(
-            val_dataset,
-            batch_sampler=val_sampler,
-            num_workers=args.num_workers)
+        val_sampler = BatchSampler(val_dataset, batch_size=args.batch_size * 2, shuffle=False)
+        val_dataloader = DataLoader(val_dataset, batch_sampler=val_sampler, num_workers=args.num_workers)
     else:
         train_dataset = TextImagePair(
             file_list=args.file_list,
@@ -455,19 +444,21 @@ def main():
             num_records=args.num_records,
             buffer_size=args.buffer_size,
             shuffle_every_n_samples=args.shuffle_every_n_samples,
-            interpolation="lanczos", )
+            interpolation="lanczos",
+        )
 
         train_dataloader = DataLoader(
             train_dataset,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
-            worker_init_fn=worker_init_fn, )
+            worker_init_fn=worker_init_fn,
+        )
         val_dataloader = val_dataset = None
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
     num_update_steps_per_epoch = (
-        len(train_dataloader) if args.dataset_type == "imagenet" else
-        math.ceil(len(train_dataset) / args.batch_size))
+        len(train_dataloader) if args.dataset_type == "imagenet" else math.ceil(len(train_dataset) / args.batch_size)
+    )
     if args.max_train_steps is None:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
         overrode_max_train_steps = True
@@ -475,8 +466,7 @@ def main():
     if overrode_max_train_steps:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
     # Afterwards we recalculate our number of training epochs
-    args.num_train_epochs = math.ceil(args.max_train_steps /
-                                      num_update_steps_per_epoch)
+    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
     if rank == 0:
         logger.info("-----------  Configuration Arguments -----------")
@@ -492,9 +482,7 @@ def main():
     logger.info(f"  Num examples = {len(train_dataset)}")
     logger.info(f"  Num Epochs = {args.num_train_epochs}")
     logger.info(f"  Instantaneous batch size per device = {args.batch_size}")
-    logger.info(
-        f"  Total train batch size (w. parallel, distributed) = {total_batch_size}"
-    )
+    logger.info(f"  Total train batch size (w. parallel, distributed) = {total_batch_size}")
     logger.info(f"  Total optimization steps = {args.max_train_steps}")
     logger.info(
         f"  Number of trainable parameters = {sum(p.numel().item() for p in vae.parameters() if not p.stop_gradient) }"
@@ -515,9 +503,7 @@ def main():
                 # pytorch_lightning use this `toggle_optimizer` method
                 # ref: https://github.com/Lightning-AI/lightning/blob/a58639ce7e864dd70484e7d34c37730ae204183c/src/pytorch_lightning/core/module.py#L1419-L1447
                 unwrap_model(vae).toggle_optimizer(optimizers, optimizer_idx)
-                loss, log_dict = vae(batch["image"],
-                                     optimizer_idx=optimizer_idx,
-                                     global_step=global_step)
+                loss, log_dict = vae(batch["image"], optimizer_idx=optimizer_idx, global_step=global_step)
                 optimizers[optimizer_idx].clear_grad()
                 loss.backward()
                 optimizers[optimizer_idx].step()
@@ -541,17 +527,13 @@ def main():
                 if global_step % args.image_logging_steps == 0:
                     images_log = unwrap_model(vae).log_images(batch["image"])
                     for name, val in images_log.items():
-                        writer.add_image(
-                            name, val, global_step, dataformats="NHWC")
+                        writer.add_image(name, val, global_step, dataformats="NHWC")
 
                 # saving
                 if global_step % args.save_steps == 0:
                     if val_dataloader is not None:
-                        run_evaluate(
-                            unwrap_model(vae), val_dataloader, writer,
-                            global_step)
-                    output_dir = os.path.join(
-                        args.output_dir, "checkpoint-{}".format(global_step))
+                        run_evaluate(unwrap_model(vae), val_dataloader, writer, global_step)
+                    output_dir = os.path.join(args.output_dir, "checkpoint-{}".format(global_step))
                     unwrap_model(vae).save_pretrained(output_dir)
 
             del logs

@@ -18,8 +18,6 @@ import math
 
 import paddle
 import paddle.nn as nn
-from matplotlib.pyplot import axis
-from paddlenlp.utils.initializer import uniform_
 
 
 class PositionEmbeddingSineHW(nn.Layer):
@@ -29,12 +27,13 @@ class PositionEmbeddingSineHW(nn.Layer):
     """
 
     def __init__(
-            self,
-            num_pos_feats=64,
-            temperatureH=10000,
-            temperatureW=10000,
-            normalize=False,
-            scale=None, ):
+        self,
+        num_pos_feats=64,
+        temperatureH=10000,
+        temperatureW=10000,
+        normalize=False,
+        scale=None,
+    ):
         super().__init__()
         self.num_pos_feats = num_pos_feats
         self.temperatureH = temperatureH
@@ -61,23 +60,15 @@ class PositionEmbeddingSineHW(nn.Layer):
             x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
         dim_tx = paddle.arange(self.num_pos_feats)
-        dim_tx = self.temperatureW**(
-            2 * (paddle.floor_divide(dim_tx, paddle.to_tensor(2))) /
-            self.num_pos_feats)
+        dim_tx = self.temperatureW ** (2 * (paddle.floor_divide(dim_tx, paddle.to_tensor(2))) / self.num_pos_feats)
         pos_x = x_embed[:, :, :, None] / dim_tx
 
         dim_ty = paddle.arange(self.num_pos_feats)
-        dim_ty = self.temperatureH**(
-            2 * (paddle.floor_divide(dim_ty, paddle.to_tensor(2))) /
-            self.num_pos_feats)
+        dim_ty = self.temperatureH ** (2 * (paddle.floor_divide(dim_ty, paddle.to_tensor(2))) / self.num_pos_feats)
         pos_y = y_embed[:, :, :, None] / dim_ty
 
-        pos_x = paddle.stack(
-            (pos_x[:, :, :, 0::2].sin(), pos_x[:, :, :, 1::2].cos()),
-            axis=4).flatten(3)
-        pos_y = paddle.stack(
-            (pos_y[:, :, :, 0::2].sin(), pos_y[:, :, :, 1::2].cos()),
-            axis=4).flatten(3)
+        pos_x = paddle.stack((pos_x[:, :, :, 0::2].sin(), pos_x[:, :, :, 1::2].cos()), axis=4).flatten(3)
+        pos_y = paddle.stack((pos_y[:, :, :, 0::2].sin(), pos_y[:, :, :, 1::2].cos()), axis=4).flatten(3)
         pos = paddle.concat((pos_y, pos_x), axis=3).transpose([0, 3, 1, 2])
 
         return pos
@@ -91,7 +82,8 @@ def build_position_encoding(args):
             N_steps,
             temperatureH=args.pe_temperatureH,
             temperatureW=args.pe_temperatureW,
-            normalize=True, )
+            normalize=True,
+        )
     elif args.position_embedding in ("v3", "learned"):
         position_embedding = PositionEmbeddingLearned(N_steps)
     else:

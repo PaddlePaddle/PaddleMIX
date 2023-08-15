@@ -35,16 +35,15 @@ class UNetBlockTesterMixin:
             return 4, 32, 32, 32
         elif self.block_type == "up":
             return 4, 32, 64, 64
-        raise ValueError(
-            f"'{self.block_type}' is not a supported block_type. Set it to 'up', 'mid', or 'down'."
-        )
+        raise ValueError(f"'{self.block_type}' is not a supported block_type. Set it to 'up', 'mid', or 'down'.")
 
     def get_dummy_input(
-            self,
-            include_temb=True,
-            include_res_hidden_states_tuple=False,
-            include_encoder_hidden_states=False,
-            include_skip_sample=False, ):
+        self,
+        include_temb=True,
+        include_res_hidden_states_tuple=False,
+        include_encoder_hidden_states=False,
+        include_skip_sample=False,
+    ):
         batch_size = 4
         num_channels = 32
         sizes = 32, 32
@@ -54,28 +53,20 @@ class UNetBlockTesterMixin:
         dummy_input = {"hidden_states": hidden_states}
         if include_temb:
             temb_channels = 128
-            dummy_input["temb"] = randn_tensor(
-                (batch_size, temb_channels), generator=generator)
+            dummy_input["temb"] = randn_tensor((batch_size, temb_channels), generator=generator)
         if include_res_hidden_states_tuple:
             generator_1 = paddle.Generator().manual_seed(1)
-            dummy_input["res_hidden_states_tuple"] = (randn_tensor(
-                shape, generator=generator_1), )
+            dummy_input["res_hidden_states_tuple"] = (randn_tensor(shape, generator=generator_1),)
         if include_encoder_hidden_states:
-            dummy_input["encoder_hidden_states"] = floats_tensor(
-                (batch_size, 32, 32))
+            dummy_input["encoder_hidden_states"] = floats_tensor((batch_size, 32, 32))
         if include_skip_sample:
-            dummy_input["skip_sample"] = randn_tensor(
-                (batch_size, 3) + sizes, generator=generator)
+            dummy_input["skip_sample"] = randn_tensor((batch_size, 3) + sizes, generator=generator)
 
         paddle.seed(0)
         return dummy_input
 
     def prepare_init_args_and_inputs_for_common(self):
-        init_dict = {
-            "in_channels": 32,
-            "out_channels": 32,
-            "temb_channels": 128
-        }
+        init_dict = {"in_channels": 32, "out_channels": 32, "temb_channels": 128}
         if self.block_type == "up":
             init_dict["prev_output_channel"] = 32
         if self.block_type == "mid":
@@ -94,8 +85,7 @@ class UNetBlockTesterMixin:
         self.assertEqual(list(output.shape), list(self.output_shape))
         output_slice = output[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(expected_slice)
-        assert paddle_all_close(
-            output_slice.flatten(), expected_slice, atol=0.005)
+        assert paddle_all_close(output_slice.flatten(), expected_slice, atol=0.005)
 
     def test_training(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()

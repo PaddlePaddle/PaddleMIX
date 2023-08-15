@@ -21,19 +21,21 @@ sd_pipe = StableDiffusionImageVariationPipeline.from_pretrained(
     "lambdalabs/sd-image-variations-diffusers",
     revision="v2.0",
     from_diffusers=True,
-    from_hf_hub=True, )
+    from_hf_hub=True,
+)
 
-im = load_image(
-    "https://bj.bcebos.com/v1/paddlenlp/models/community/thu-ml/data/space.jpg")
+im = load_image("https://bj.bcebos.com/v1/paddlenlp/models/community/thu-ml/data/space.jpg")
 
-tform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Resize(
-        (224, 224),
-        interpolation="bicubic", ),
-    transforms.Normalize([0.48145466, 0.4578275, 0.40821073],
-                         [0.26862954, 0.26130258, 0.27577711]),
-])
+tform = transforms.Compose(
+    [
+        transforms.ToTensor(),
+        transforms.Resize(
+            (224, 224),
+            interpolation="bicubic",
+        ),
+        transforms.Normalize([0.48145466, 0.4578275, 0.40821073], [0.26862954, 0.26130258, 0.27577711]),
+    ]
+)
 inp = tform(im)
 
 out = sd_pipe(im, guidance_scale=3)

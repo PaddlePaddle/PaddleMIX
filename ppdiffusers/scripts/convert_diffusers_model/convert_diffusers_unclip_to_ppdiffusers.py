@@ -18,8 +18,11 @@ from collections import OrderedDict
 import paddle
 import torch
 from diffusers import UnCLIPPipeline as DiffusersUnCLIPPipeline
-from paddlenlp.transformers import (CLIPTextConfig, CLIPTextModelWithProjection,
-                                    CLIPTokenizer)
+from paddlenlp.transformers import (
+    CLIPTextConfig,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+)
 
 from ppdiffusers import PriorTransformer
 from ppdiffusers import UnCLIPPipeline as PPDiffusersUnCLIPPipeline
@@ -43,10 +46,7 @@ def convert_to_ppdiffusers(vae_or_unet, dtype="float32", prefix=""):
     return new_vae_or_unet
 
 
-def convert_hf_clip_to_ppnlp_clip(clip,
-                                  dtype="float32",
-                                  is_text_encoder=True,
-                                  need_prefix=False):
+def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True, need_prefix=False):
     new_model_state = {}
     transformers2ppnlp = {
         ".encoder.": ".transformer.",
@@ -65,9 +65,7 @@ def convert_hf_clip_to_ppnlp_clip(clip,
         ".vision_model.": ".",
     }
     ignore_value = ["position_ids"]
-    donot_transpose = [
-        "embeddings", "norm", "concept_embeds", "special_care_embeds"
-    ]
+    donot_transpose = ["embeddings", "norm", "concept_embeds", "special_care_embeds"]
 
     for name, value in clip.state_dict().items():
         # step1: ignore position_ids
@@ -81,7 +79,7 @@ def convert_hf_clip_to_ppnlp_clip(clip,
             name = name.replace(hf_name, ppnlp_name)
         # step4: 0d tensor -> 1d tensor
         if name == "logit_scale":
-            value = value.reshape((1, ))
+            value = value.reshape((1,))
         # step5: safety_checker need prefix "clip."
         if "vision_model" in name and need_prefix:
             name = "clip." + name
@@ -119,8 +117,7 @@ def convert_hf_clip_to_ppnlp_clip(clip,
                 "vision_heads": clip.config.num_attention_heads,
                 "vision_embed_dim": clip.config.hidden_size,
                 "vision_patch_size": clip.config.patch_size,
-                "vision_mlp_ratio":
-                clip.config.intermediate_size // clip.config.hidden_size,
+                "vision_mlp_ratio": clip.config.intermediate_size // clip.config.hidden_size,
                 "vision_hidden_act": clip.config.hidden_act,
                 "projection_dim": clip.config.projection_dim,
             }
@@ -144,20 +141,17 @@ def check_keys(model, state_dict):
         print(f"{cls_name} Found mismatched_keys {mismatched_keys_str}!")
 
 
-def convert_diffusers_unclip_to_ppdiffusers(pretrained_model_name_or_path,
-                                            output_path=None):
+def convert_diffusers_unclip_to_ppdiffusers(pretrained_model_name_or_path, output_path=None):
     # 0. load diffusers pipe and convert to ppdiffusers weights format
-    diffusers_pipe = DiffusersUnCLIPPipeline.from_pretrained(
-        pretrained_model_name_or_path, use_auth_token=True)
+    diffusers_pipe = DiffusersUnCLIPPipeline.from_pretrained(pretrained_model_name_or_path, use_auth_token=True)
     prior_state_dict = convert_to_ppdiffusers(diffusers_pipe.prior)
     decoder_state_dict = convert_to_ppdiffusers(diffusers_pipe.decoder)
     text_proj_state_dict = convert_to_ppdiffusers(diffusers_pipe.text_proj)
-    super_res_first_state_dict = convert_to_ppdiffusers(
-        diffusers_pipe.super_res_first)
-    super_res_last_state_dict = convert_to_ppdiffusers(
-        diffusers_pipe.super_res_last)
+    super_res_first_state_dict = convert_to_ppdiffusers(diffusers_pipe.super_res_first)
+    super_res_last_state_dict = convert_to_ppdiffusers(diffusers_pipe.super_res_last)
     text_encoder_state_dict, text_config = convert_hf_clip_to_ppnlp_clip(
-        diffusers_pipe.text_encoder, is_text_encoder=True, need_prefix=False)
+        diffusers_pipe.text_encoder, is_text_encoder=True, need_prefix=False
+    )
 
     pp_prior = PriorTransformer.from_config(diffusers_pipe.prior.config)
     pp_prior.set_dict(prior_state_dict)
@@ -167,32 +161,25 @@ def convert_diffusers_unclip_to_ppdiffusers(pretrained_model_name_or_path,
     pp_decoder.set_dict(decoder_state_dict)
     check_keys(pp_decoder, decoder_state_dict)
 
-    pp_text_proj = UnCLIPTextProjModel.from_config(
-        diffusers_pipe.text_proj.config)
+    pp_text_proj = UnCLIPTextProjModel.from_config(diffusers_pipe.text_proj.config)
     pp_text_proj.set_dict(text_proj_state_dict)
     check_keys(pp_text_proj, text_proj_state_dict)
 
-    pp_super_res_first = UNet2DModel.from_config(
-        diffusers_pipe.super_res_first.config)
+    pp_super_res_first = UNet2DModel.from_config(diffusers_pipe.super_res_first.config)
     pp_super_res_first.set_dict(super_res_first_state_dict)
     check_keys(pp_super_res_first, super_res_first_state_dict)
 
-    pp_super_res_last = UNet2DModel.from_config(
-        diffusers_pipe.super_res_last.config)
+    pp_super_res_last = UNet2DModel.from_config(diffusers_pipe.super_res_last.config)
     pp_super_res_last.set_dict(super_res_last_state_dict)
     check_keys(pp_super_res_last, super_res_last_state_dict)
 
-    pp_text_encoder = CLIPTextModelWithProjection(
-        CLIPTextConfig.from_dict(text_config))
+    pp_text_encoder = CLIPTextModelWithProjection(CLIPTextConfig.from_dict(text_config))
     pp_text_encoder.set_dict(text_encoder_state_dict)
     check_keys(pp_text_encoder, text_encoder_state_dict)
 
-    pp_prior_scheduler = UnCLIPScheduler.from_config(
-        diffusers_pipe.prior_scheduler.config)
-    pp_decoder_scheduler = UnCLIPScheduler.from_config(
-        diffusers_pipe.decoder_scheduler.config)
-    pp_super_res_scheduler = UnCLIPScheduler.from_config(
-        diffusers_pipe.super_res_scheduler.config)
+    pp_prior_scheduler = UnCLIPScheduler.from_config(diffusers_pipe.prior_scheduler.config)
+    pp_decoder_scheduler = UnCLIPScheduler.from_config(diffusers_pipe.decoder_scheduler.config)
+    pp_super_res_scheduler = UnCLIPScheduler.from_config(diffusers_pipe.super_res_scheduler.config)
 
     with tempfile.TemporaryDirectory() as tmpdirname:
         # 5. feature_extractor
@@ -209,15 +196,15 @@ def convert_diffusers_unclip_to_ppdiffusers(pretrained_model_name_or_path,
             super_res_last=pp_super_res_last,
             prior_scheduler=pp_prior_scheduler,
             decoder_scheduler=pp_decoder_scheduler,
-            super_res_scheduler=pp_super_res_scheduler, )
+            super_res_scheduler=pp_super_res_scheduler,
+        )
         # 6. save_pretrained
         paddle_pipe.save_pretrained(output_path)
     return paddle_pipe
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Pytorch model weights to Paddle model weights.")
+    parser = argparse.ArgumentParser(description="Pytorch model weights to Paddle model weights.")
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -228,7 +215,7 @@ if __name__ == "__main__":
         "--output_path",
         type=str,
         default="./karlo-v1-alpha",
-        help="The model output path.", )
+        help="The model output path.",
+    )
     args = parser.parse_args()
-    ppdiffusers_pipe = convert_diffusers_unclip_to_ppdiffusers(
-        args.pretrained_model_name_or_path, args.output_path)
+    ppdiffusers_pipe = convert_diffusers_unclip_to_ppdiffusers(args.pretrained_model_name_or_path, args.output_path)

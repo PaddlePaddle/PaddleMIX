@@ -17,8 +17,7 @@ import paddle
 from ppdiffusers import LVDMUncondPipeline
 
 # 加载模型和scheduler
-pipe = LVDMUncondPipeline.from_pretrained(
-    "westfish/lvdm_short_sky_epoch2239_step150079")
+pipe = LVDMUncondPipeline.from_pretrained("westfish/lvdm_short_sky_epoch2239_step150079")
 
 # 执行pipeline进行推理
 seed = 1000
@@ -32,4 +31,5 @@ samples = pipe(
     save_dir=".",
     save_name="ddim_lvdm_short_sky_epoch2239_step150079",
     scale_factor=0.33422927,
-    shift_factor=1.4606637, )
+    shift_factor=1.4606637,
+)

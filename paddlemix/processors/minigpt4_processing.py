@@ -20,15 +20,20 @@ from typing import List, Optional, Union
 
 import numpy as np
 import paddle
-from paddlenlp.transformers.tokenizer_utils_base import (BatchEncoding,
-                                                         TensorType, TextInput)
+from paddlenlp.transformers.tokenizer_utils_base import (
+    BatchEncoding,
+    TensorType,
+    TextInput,
+)
 from PIL import Image
 
 from .base_processing import ProcessorMixin
 from .image_processing_utils import BatchFeature
 from .image_utils import ImageInput
 
-__all__ = ["MiniGPT4Processor", ]
+__all__ = [
+    "MiniGPT4Processor",
+]
 
 
 class MiniGPT4Processor(ProcessorMixin):
@@ -74,16 +79,16 @@ class MiniGPT4Processor(ProcessorMixin):
         tokenizer.pad_token = tokenizer.eos_token
         super().__init__(image_processor, tokenizer)
         self.current_processor = self.image_processor
-        self.default_prompt = (
-            "###Human: <Img><ImageHere></Img> <TextHere>###Assistant: ")
+        self.default_prompt = "###Human: <Img><ImageHere></Img> <TextHere>###Assistant: "
         self.image_tag = "<ImageHere>"
         self.text_tag = "<TextHere>"
 
     def process_images(
-            self,
-            images: ImageInput,
-            return_tensors: Optional[Union[str, TensorType]]=TensorType.PADDLE,
-            **kwargs, ) -> BatchFeature:
+        self,
+        images: ImageInput,
+        return_tensors: Optional[Union[str, TensorType]] = TensorType.PADDLE,
+        **kwargs,
+    ) -> BatchFeature:
         """
         This method uses [`MiniGPT4ImageProcessor.__call__`] method to prepare image(s) for the model.
         Please refer to the docstring of the method for more information.
@@ -95,34 +100,31 @@ class MiniGPT4Processor(ProcessorMixin):
             images = [images]
 
         # processing with image processor
-        processed_images = self.image_processor(
-            images, return_tensors=return_tensors)
+        processed_images = self.image_processor(images, return_tensors=return_tensors)
 
         return processed_images
 
     def process_texts(
-            self,
-            texts: Union[TextInput, List[TextInput]],
-            prompts: Union[TextInput, List[TextInput]]=None,
-            return_tensors: Optional[Union[str, TensorType]]=TensorType.PADDLE,
-            **kwargs, ):
+        self,
+        texts: Union[TextInput, List[TextInput]],
+        prompts: Union[TextInput, List[TextInput]] = None,
+        return_tensors: Optional[Union[str, TensorType]] = TensorType.PADDLE,
+        **kwargs,
+    ):
         prompts = prompts if prompts is not None else [self.default_prompt]
 
         if (not isinstance(texts, TextInput)) and (not isinstance(texts, list)):
+            raise TypeError("Unsupported type for texts: {}, only str and list type supported.".format(type(texts)))
+        if prompts is not None and (not isinstance(prompts, TextInput)) and (not isinstance(prompts, list)):
             raise TypeError(
-                "Unsupported type for texts: {}, only str and list type supported.".
-                format(type(texts)))
-        if (prompts is not None and (not isinstance(prompts, TextInput)) and
-            (not isinstance(prompts, list))):
-            raise TypeError(
-                "Unsupported type for prompts: {}, only str and list type supported.".
-                format(type(prompts)))
+                "Unsupported type for prompts: {}, only str and list type supported.".format(type(prompts))
+            )
 
         if isinstance(prompts, list):
             if isinstance(texts, list) and len(prompts) != len(texts):
                 raise ValueError(
-                    "The length of prompts not is equal to texts' length: {} != {}".
-                    format(len(prompts), len(texts)))
+                    "The length of prompts not is equal to texts' length: {} != {}".format(len(prompts), len(texts))
+                )
             elif isinstance(texts, TextInput):
                 texts = [texts] * len(prompts)
         else:
@@ -137,47 +139,51 @@ class MiniGPT4Processor(ProcessorMixin):
             if self.image_tag not in text:
                 if self.image_tag not in prompt:
                     raise ValueError(
-                        "A prompt should contain a image tag `{}` to insert image embeddings. if you don't want to use prompt function, you have to input a text with the image tag `{}`.".
-                        format(self.image_tag, self.image_tag))
+                        "A prompt should contain a image tag `{}` to insert image embeddings. if you don't want to use prompt function, you have to input a text with the image tag `{}`.".format(
+                            self.image_tag, self.image_tag
+                        )
+                    )
                 if self.text_tag not in prompt:
                     raise ValueError(
-                        "A prompt should contain a text tag `{}` to insert text information.".
-                        format(self.text_tag))
+                        "A prompt should contain a text tag `{}` to insert text information.".format(self.text_tag)
+                    )
                 assemble_texts.append(prompt.replace(self.text_tag, text))
             else:
                 assemble_texts.append(text)
 
         # processing with text tokenizer
-        first_texts, second_texts = zip(* [
-            assemble_text.split(self.image_tag)
-            for assemble_text in assemble_texts
-        ])
+        first_texts, second_texts = zip(*[assemble_text.split(self.image_tag) for assemble_text in assemble_texts])
         first_text_encoding = self.tokenizer(
             text=first_texts,
             return_tensors=return_tensors,
             add_special_tokens=True,
-            **kwargs, )
+            **kwargs,
+        )
         second_text_encoding = self.tokenizer(
             text=second_texts,
             return_tensors=return_tensors,
             add_special_tokens=False,
-            **kwargs, )
+            **kwargs,
+        )
 
-        encoded_texts = BatchEncoding({
-            "first_input_ids": first_text_encoding["input_ids"],
-            "first_attention_mask": first_text_encoding["attention_mask"],
-            "second_input_ids": second_text_encoding["input_ids"],
-            "second_attention_mask": second_text_encoding["attention_mask"],
-        })
+        encoded_texts = BatchEncoding(
+            {
+                "first_input_ids": first_text_encoding["input_ids"],
+                "first_attention_mask": first_text_encoding["attention_mask"],
+                "second_input_ids": second_text_encoding["input_ids"],
+                "second_attention_mask": second_text_encoding["attention_mask"],
+            }
+        )
         return encoded_texts
 
     def __call__(
-            self,
-            images: ImageInput=None,
-            text: str=None,
-            prompt: str=None,
-            return_tensors: Optional[Union[str, TensorType]]=TensorType.PADDLE,
-            **kwargs, ) -> BatchFeature:
+        self,
+        images: ImageInput = None,
+        text: str = None,
+        prompt: str = None,
+        return_tensors: Optional[Union[str, TensorType]] = TensorType.PADDLE,
+        **kwargs,
+    ) -> BatchFeature:
         """
         This method uses [`MiniGPT4ImageProcessor.__call__`] method to prepare image(s) for the model, and
         [`LlamaTokenizer.__call__`] to prepare text for the model.
@@ -186,21 +192,17 @@ class MiniGPT4Processor(ProcessorMixin):
         prompt = prompt if prompt is not None else self.default_prompt
 
         if images is None and text is None:
-            raise ValueError(
-                "Images and text are None, you have to specify either images or texts."
+            raise ValueError("Images and text are None, you have to specify either images or texts.")
+        if images is not None and not isinstance(images, (Image.Image, np.ndarray, paddle.Tensor, list)):
+            raise TypeError(
+                "A type in [Image.Image, np.ndarray, paddle.Tensor, list] for images is expected, but received {}.".format(
+                    type(images)
+                )
             )
-        if images is not None and not isinstance(
-                images, (Image.Image, np.ndarray, paddle.Tensor, list)):
-            raise TypeError(
-                "A type in [Image.Image, np.ndarray, paddle.Tensor, list] for images is expected, but received {}.".
-                format(type(images)))
         if text is not None and not isinstance(text, str):
-            raise TypeError("A str type of text is expected, but received {}.".
-                            format(type(text)))
+            raise TypeError("A str type of text is expected, but received {}.".format(type(text)))
         if prompt is not None and not isinstance(prompt, str):
-            raise TypeError(
-                "A str type of prompt is expected, but received {}.".format(
-                    type(prompt)))
+            raise TypeError("A str type of prompt is expected, but received {}.".format(type(prompt)))
 
         if images is not None and not isinstance(images, list):
             images = [images]
@@ -214,8 +216,7 @@ class MiniGPT4Processor(ProcessorMixin):
         # image-only mode
         if text is None:
             # processing with image processor
-            processed_features = self.process_images(
-                images, return_tensors=return_tensors, **kwargs)
+            processed_features = self.process_images(images, return_tensors=return_tensors, **kwargs)
             return processed_features
 
         # text-only mode
@@ -225,8 +226,7 @@ class MiniGPT4Processor(ProcessorMixin):
             return encoded_texts
 
         # text-image mode
-        processed_features = self.image_processor(
-            images, return_tensors=return_tensors)
+        processed_features = self.image_processor(images, return_tensors=return_tensors)
         encoded_texts = self.process_texts(texts, prompts, **kwargs)
         processed_features.update(encoded_texts)
 
@@ -251,5 +251,4 @@ class MiniGPT4Processor(ProcessorMixin):
     def model_input_names(self):
         tokenizer_input_names = self.tokenizer.model_input_names
         image_processor_input_names = self.image_processor.model_input_names
-        return list(
-            dict.fromkeys(tokenizer_input_names + image_processor_input_names))
+        return list(dict.fromkeys(tokenizer_input_names + image_processor_input_names))

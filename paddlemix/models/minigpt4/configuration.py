@@ -16,8 +16,7 @@ import copy
 import os
 from typing import Union
 
-from paddlenlp.transformers.auto.modeling import \
-    MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
+from paddlenlp.transformers.auto.modeling import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.llama.configuration import LlamaConfig
 
@@ -74,23 +73,24 @@ class MiniGPT4VisionConfig(PretrainedConfig):
     model_type = "mimigpt4_vision_model"
 
     def __init__(
-            self,
-            hidden_size=1408,
-            intermediate_size=6144,
-            projection_dim=512,
-            num_hidden_layers=39,
-            num_attention_heads=16,
-            num_channels=3,
-            image_size=224,
-            patch_size=14,
-            hidden_act="gelu",
-            layer_norm_eps=0.00001,
-            dropout=0.0,
-            attention_dropout=0.0,
-            initializer_range=1e-10,
-            initializer_factor=1.0,
-            qkv_bias=True,
-            **kwargs, ):
+        self,
+        hidden_size=1408,
+        intermediate_size=6144,
+        projection_dim=512,
+        num_hidden_layers=39,
+        num_attention_heads=16,
+        num_channels=3,
+        image_size=224,
+        patch_size=14,
+        hidden_act="gelu",
+        layer_norm_eps=0.00001,
+        dropout=0.0,
+        attention_dropout=0.0,
+        initializer_range=1e-10,
+        initializer_factor=1.0,
+        qkv_bias=True,
+        **kwargs,
+    ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
@@ -111,17 +111,13 @@ class MiniGPT4VisionConfig(PretrainedConfig):
         self.qkv_bias = qkv_bias
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
-                                                  **kwargs)
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
         # get the vision config dict if we are loading from MiniGPT4Config
         if config_dict.get("model_type") == "minigpt4":
             config_dict = config_dict["vision_config"]
 
-        if ("model_type" in config_dict and hasattr(cls, "model_type") and
-                config_dict["model_type"] != cls.model_type):
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -188,24 +184,25 @@ class MiniGPT4QFormerConfig(PretrainedConfig):
     model_type = "minigpt4_qformer"
 
     def __init__(
-            self,
-            vocab_size=30522,
-            hidden_size=768,
-            num_hidden_layers=12,
-            num_attention_heads=12,
-            intermediate_size=3072,
-            hidden_act="gelu",
-            hidden_dropout_prob=0.1,
-            attention_probs_dropout_prob=0.1,
-            max_position_embeddings=512,
-            initializer_range=0.02,
-            layer_norm_eps=1e-12,
-            pad_token_id=0,
-            position_embedding_type="absolute",
-            classifier_dropout=None,
-            cross_attention_frequency=2,
-            encoder_hidden_size=1408,
-            **kwargs, ):
+        self,
+        vocab_size=30522,
+        hidden_size=768,
+        num_hidden_layers=12,
+        num_attention_heads=12,
+        intermediate_size=3072,
+        hidden_act="gelu",
+        hidden_dropout_prob=0.1,
+        attention_probs_dropout_prob=0.1,
+        max_position_embeddings=512,
+        initializer_range=0.02,
+        layer_norm_eps=1e-12,
+        pad_token_id=0,
+        position_embedding_type="absolute",
+        classifier_dropout=None,
+        cross_attention_frequency=2,
+        encoder_hidden_size=1408,
+        **kwargs,
+    ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
 
         self.vocab_size = vocab_size
@@ -225,18 +222,14 @@ class MiniGPT4QFormerConfig(PretrainedConfig):
         self.encoder_hidden_size = encoder_hidden_size
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
-                                                  **kwargs)
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
 
         # get the qformer config dict if we are loading from MiniGPT4Config
         if config_dict.get("model_type") == "minigpt4":
             config_dict = config_dict["qformer_config"]
 
-        if ("model_type" in config_dict and hasattr(cls, "model_type") and
-                config_dict["model_type"] != cls.model_type):
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -290,58 +283,50 @@ class MiniGPT4Config(PretrainedConfig):
     is_composition = True
 
     def __init__(
-            self,
-            vision_config=None,
-            qformer_config=None,
-            text_config=None,
-            num_query_tokens=32,
-            **kwargs, ):
+        self,
+        vision_config=None,
+        qformer_config=None,
+        text_config=None,
+        num_query_tokens=32,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
 
         if vision_config is None:
             vision_config = {}
-            logger.info(
-                "vision_config is None. initializing the MiniGPT4VisionConfig with default values."
-            )
+            logger.info("vision_config is None. initializing the MiniGPT4VisionConfig with default values.")
 
         if qformer_config is None:
             qformer_config = {}
-            logger.info(
-                "qformer_config is None. Initializing the MiniGPT4QFormerConfig with default values."
-            )
+            logger.info("qformer_config is None. Initializing the MiniGPT4QFormerConfig with default values.")
 
         if text_config is None:
             text_config = {}
-            logger.info(
-                "text_config is None. Initializing the text config with default values (`LlamaConfig`)."
-            )
+            logger.info("text_config is None. Initializing the text config with default values (`LlamaConfig`).")
         self.vision_config = MiniGPT4VisionConfig(**vision_config)
         self.qformer_config = MiniGPT4QFormerConfig(**qformer_config)
-        text_model_type = (text_config["model_type"]
-                           if "model_type" in text_config else "llama")
+        text_model_type = text_config["model_type"] if "model_type" in text_config else "llama"
 
         if text_model_type == "llama":
             self.text_config = LlamaConfig(**text_config)
         else:
-            raise ValueError(
-                "Only llama accepted for model_type, but accepted {}.".format(
-                    text_model_type))
+            raise ValueError("Only llama accepted for model_type, but accepted {}.".format(text_model_type))
 
         self.num_query_tokens = num_query_tokens
         self.qformer_config.encoder_hidden_size = self.vision_config.hidden_size
-        self.use_decoder_only_language_model = (
-            self.text_config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES)
+        self.use_decoder_only_language_model = self.text_config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
 
         self.initializer_factor = 1.0
         self.initializer_range = 0.02
 
     @classmethod
     def from_vision_qformer_text_configs(
-            cls,
-            vision_config: MiniGPT4VisionConfig,
-            qformer_config: MiniGPT4QFormerConfig,
-            text_config: PretrainedConfig,
-            **kwargs, ):
+        cls,
+        vision_config: MiniGPT4VisionConfig,
+        qformer_config: MiniGPT4QFormerConfig,
+        text_config: PretrainedConfig,
+        **kwargs,
+    ):
         r"""
         Instantiate a [`MiniGPT4Config`] (or a derived class) from a vision model, Q-Former and language model
         configurations.
@@ -353,7 +338,8 @@ class MiniGPT4Config(PretrainedConfig):
             vision_config=vision_config.to_dict(),
             qformer_config=qformer_config.to_dict(),
             text_config=text_config.to_dict(),
-            **kwargs, )
+            **kwargs,
+        )
 
     def to_dict(self):
         """

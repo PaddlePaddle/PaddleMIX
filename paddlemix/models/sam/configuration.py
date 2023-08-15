@@ -17,6 +17,8 @@ from typing import Union
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
+from paddlemix.utils.log import logger
+
 __all__ = ["SamConfig"]
 
 
@@ -25,16 +27,17 @@ class SamConfig(PretrainedConfig):
     model_type = "Sam"
 
     def __init__(
-            self,
-            modelname="Sam",
-            prompt_embed_dim=256,
-            image_size=1024,
-            vit_patch_size=16,
-            encoder_embed_dim=768,
-            encoder_depth=12,
-            encoder_num_heads=12,
-            encoder_global_attn_indexes=[2, 5, 8, 11],
-            input_type=None, ):
+        self,
+        modelname="Sam",
+        prompt_embed_dim=256,
+        image_size=1024,
+        vit_patch_size=16,
+        encoder_embed_dim=768,
+        encoder_depth=12,
+        encoder_num_heads=12,
+        encoder_global_attn_indexes=[2, 5, 8, 11],
+        input_type=None,
+    ):
         super().__init__()
         self.modelname = modelname
         self.prompt_embed_dim = prompt_embed_dim
@@ -45,18 +48,14 @@ class SamConfig(PretrainedConfig):
         self.encoder_num_heads = encoder_num_heads
         self.encoder_global_attn_indexes = encoder_global_attn_indexes
         self.input_type = input_type
-        self.pixel_mean = ([123.675, 116.28, 103.53], )
+        self.pixel_mean = ([123.675, 116.28, 103.53],)
         self.pixel_std = [58.395, 57.12, 57.375]
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
-                                                  **kwargs)
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
 
-        if ("model_type" in config_dict and hasattr(cls, "model_type") and
-                config_dict["model_type"] != cls.model_type):
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."

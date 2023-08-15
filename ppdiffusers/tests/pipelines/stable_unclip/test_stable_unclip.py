@@ -16,14 +16,24 @@
 import unittest
 
 import paddle
-from paddlenlp.transformers import (CLIPTextConfig, CLIPTextModel,
-                                    CLIPTextModelWithProjection, CLIPTokenizer)
+from paddlenlp.transformers import (
+    CLIPTextConfig,
+    CLIPTextModel,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+)
 
-from ppdiffusers import (AutoencoderKL, DDIMScheduler, DDPMScheduler,
-                         PriorTransformer, StableUnCLIPPipeline,
-                         UNet2DConditionModel)
-from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import \
-    StableUnCLIPImageNormalizer
+from ppdiffusers import (
+    AutoencoderKL,
+    DDIMScheduler,
+    DDPMScheduler,
+    PriorTransformer,
+    StableUnCLIPPipeline,
+    UNet2DConditionModel,
+)
+from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import (
+    StableUnCLIPImageNormalizer,
+)
 
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
@@ -39,8 +49,7 @@ class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         embedder_hidden_size = 32
         embedder_projection_dim = embedder_hidden_size
         paddle.seed(0)
-        prior_tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        prior_tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         paddle.seed(0)
         prior_text_encoder = CLIPTextModelWithProjection(
             CLIPTextConfig(
@@ -53,13 +62,16 @@ class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
                 num_attention_heads=4,
                 num_hidden_layers=5,
                 pad_token_id=1,
-                vocab_size=1000, ))
+                vocab_size=1000,
+            )
+        )
         paddle.seed(0)
         prior = PriorTransformer(
             num_attention_heads=2,
             attention_head_dim=12,
             embedding_dim=embedder_projection_dim,
-            num_layers=1, )
+            num_layers=1,
+        )
         paddle.seed(0)
         prior_scheduler = DDPMScheduler(
             variance_type="fixed_small_log",
@@ -67,15 +79,13 @@ class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             num_train_timesteps=1000,
             clip_sample=True,
             clip_sample_range=5.0,
-            beta_schedule="squaredcos_cap_v2", )
+            beta_schedule="squaredcos_cap_v2",
+        )
         paddle.seed(0)
-        image_normalizer = StableUnCLIPImageNormalizer(
-            embedding_dim=embedder_hidden_size)
-        image_noising_scheduler = DDPMScheduler(
-            beta_schedule="squaredcos_cap_v2")
+        image_normalizer = StableUnCLIPImageNormalizer(embedding_dim=embedder_hidden_size)
+        image_noising_scheduler = DDPMScheduler(beta_schedule="squaredcos_cap_v2")
         paddle.seed(0)
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         paddle.seed(0)
         text_encoder = CLIPTextModel(
             CLIPTextConfig(
@@ -88,7 +98,9 @@ class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
                 num_attention_heads=4,
                 num_hidden_layers=5,
                 pad_token_id=1,
-                vocab_size=1000, ))
+                vocab_size=1000,
+            )
+        )
         paddle.seed(0)
         unet = UNet2DConditionModel(
             sample_size=32,
@@ -103,7 +115,8 @@ class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             cross_attention_dim=embedder_hidden_size,
             layers_per_block=1,
             upcast_attention=True,
-            use_linear_projection=True, )
+            use_linear_projection=True,
+        )
         paddle.seed(0)
         scheduler = DDIMScheduler(
             beta_schedule="scaled_linear",
@@ -111,7 +124,8 @@ class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             beta_end=0.012,
             prediction_type="v_prediction",
             set_alpha_to_one=False,
-            steps_offset=1, )
+            steps_offset=1,
+        )
         paddle.seed(0)
         vae = AutoencoderKL()
         components = {
@@ -143,13 +157,11 @@ class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 
     def test_attention_slicing_forward_pass(self):
         test_max_difference = False
-        self._test_attention_slicing_forward_pass(
-            test_max_difference=test_max_difference)
+        self._test_attention_slicing_forward_pass(test_max_difference=test_max_difference)
 
     def test_inference_batch_single_identical(self):
         test_max_difference = False
-        self._test_inference_batch_single_identical(
-            test_max_difference=test_max_difference)
+        self._test_inference_batch_single_identical(test_max_difference=test_max_difference)
 
 
 # @slow

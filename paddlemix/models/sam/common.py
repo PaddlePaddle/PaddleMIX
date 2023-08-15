@@ -19,10 +19,7 @@ import paddle.nn as nn
 
 
 class MLPBlock(nn.Layer):
-    def __init__(self,
-                 embedding_dim: int,
-                 mlp_dim: int,
-                 act: Type[nn.Layer]=nn.GELU) -> None:
+    def __init__(self, embedding_dim: int, mlp_dim: int, act: Type[nn.Layer] = nn.GELU) -> None:
         super().__init__()
         self.lin1 = nn.Linear(embedding_dim, mlp_dim)
         self.lin2 = nn.Linear(mlp_dim, embedding_dim)
@@ -33,16 +30,18 @@ class MLPBlock(nn.Layer):
 
 
 class LayerNorm2d(nn.Layer):
-    def __init__(self, num_channels: int, eps: float=1e-06) -> None:
+    def __init__(self, num_channels: int, eps: float = 1e-06) -> None:
         super().__init__()
         self.weight = paddle.create_parameter(
             shape=[num_channels],
             dtype="float32",
-            default_initializer=nn.initializer.Constant(value=1.0), )
+            default_initializer=nn.initializer.Constant(value=1.0),
+        )
         self.bias = paddle.create_parameter(
             shape=[num_channels],
             dtype="float32",
-            default_initializer=nn.initializer.Constant(value=0.0), )
+            default_initializer=nn.initializer.Constant(value=0.0),
+        )
         self.eps = eps
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:

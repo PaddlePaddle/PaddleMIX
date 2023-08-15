@@ -14,8 +14,6 @@
 
 from paddlenlp import Taskflow
 
-from paddlemix.utils.log import logger
-
 from .apptask import AppTask
 
 
@@ -41,15 +39,16 @@ class ChatGlmTask(AppTask):
     def _preprocess(self, inputs):
         """ """
         image = inputs.get("image", None)
-        assert image is not None, f"The image is None"
+        assert image is not None, "The image is None"
         prompt = inputs.get("prompt", None)
-        assert prompt is not None, f"The prompt is None"
+        assert prompt is not None, "The prompt is None"
 
         prompt = (
             "Given caption,extract the main object to be replaced and marked it as 'main_object', "
-            + f"Extract the remaining part as 'other prompt', " +
-            f"Return main_object, other prompt in English" +
-            f"Given caption: {prompt}.")
+            + "Extract the remaining part as 'other prompt', "
+            + "Return main_object, other prompt in English"
+            + "Given caption: {}.".format(prompt)
+        )
 
         inputs["prompt"] = prompt
 
@@ -74,7 +73,8 @@ class ChatGlmTask(AppTask):
 
         prompt, inpaint_prompt = (
             inputs["result"].split("\n")[0].split(":")[-1].strip(),
-            inputs["result"].split("\n")[-1].split(":")[-1].strip(), )
+            inputs["result"].split("\n")[-1].split(":")[-1].strip(),
+        )
 
         inputs.pop("result", None)
 

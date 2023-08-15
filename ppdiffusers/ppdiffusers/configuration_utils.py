@@ -33,9 +33,16 @@ except:
 import numpy as np
 import paddle
 
-from .utils import (DIFFUSERS_CACHE, PPDIFFUSERS_CACHE, DummyObject,
-                    bos_hf_download, deprecate, extract_commit_hash,
-                    http_user_agent, logging)
+from .utils import (
+    DIFFUSERS_CACHE,
+    PPDIFFUSERS_CACHE,
+    DummyObject,
+    bos_hf_download,
+    deprecate,
+    extract_commit_hash,
+    http_user_agent,
+    logging,
+)
 from .utils.constants import FROM_HF_HUB
 from .version import VERSION as __version__
 
@@ -54,36 +61,25 @@ class FrozenDict(OrderedDict):
         self.__frozen = True
 
     def __delitem__(self, *args, **kwargs):
-        raise Exception(
-            f"You cannot use ``__delitem__`` on a {self.__class__.__name__} instance."
-        )
+        raise Exception(f"You cannot use ``__delitem__`` on a {self.__class__.__name__} instance.")
 
     def setdefault(self, *args, **kwargs):
-        raise Exception(
-            f"You cannot use ``setdefault`` on a {self.__class__.__name__} instance."
-        )
+        raise Exception(f"You cannot use ``setdefault`` on a {self.__class__.__name__} instance.")
 
     def pop(self, *args, **kwargs):
-        raise Exception(
-            f"You cannot use ``pop`` on a {self.__class__.__name__} instance.")
+        raise Exception(f"You cannot use ``pop`` on a {self.__class__.__name__} instance.")
 
     def update(self, *args, **kwargs):
-        raise Exception(
-            f"You cannot use ``update`` on a {self.__class__.__name__} instance."
-        )
+        raise Exception(f"You cannot use ``update`` on a {self.__class__.__name__} instance.")
 
     def __setattr__(self, name, value):
         if hasattr(self, "__frozen") and self.__frozen:
-            raise Exception(
-                f"You cannot use ``__setattr__`` on a {self.__class__.__name__} instance."
-            )
+            raise Exception(f"You cannot use ``__setattr__`` on a {self.__class__.__name__} instance.")
         super().__setattr__(name, value)
 
     def __setitem__(self, name, value):
         if hasattr(self, "__frozen") and self.__frozen:
-            raise Exception(
-                f"You cannot use ``__setattr__`` on a {self.__class__.__name__} instance."
-            )
+            raise Exception(f"You cannot use ``__setattr__`` on a {self.__class__.__name__} instance.")
         super().__setitem__(name, value)
 
 
@@ -112,9 +108,7 @@ class ConfigMixin:
 
     def register_to_config(self, **kwargs):
         if self.config_name is None:
-            raise NotImplementedError(
-                f"Make sure that {self.__class__} has defined a class name `config_name`"
-            )
+            raise NotImplementedError(f"Make sure that {self.__class__} has defined a class name `config_name`")
         # Special case for `kwargs` used in deprecation warning added to schedulers
         # TODO: remove this when we remove the deprecation warning, and the `kwargs` argument,
         # or solve in a more general way.
@@ -124,9 +118,8 @@ class ConfigMixin:
             internal_dict = kwargs
         else:
             previous_dict = dict(self._internal_dict)
-            internal_dict = { ** self._internal_dict, ** kwargs}
-            logger.debug(
-                f"Updating config from {previous_dict} to {internal_dict}")
+            internal_dict = {**self._internal_dict, **kwargs}
+            logger.debug(f"Updating config from {previous_dict} to {internal_dict}")
 
         self._internal_dict = FrozenDict(internal_dict)
 
@@ -137,8 +130,7 @@ class ConfigMixin:
         https://pytorch.org/docs/stable/_modules/torch/nn/modules/module.html#Module
         """
 
-        is_in_config = "_internal_dict" in self.__dict__ and hasattr(
-            self.__dict__["_internal_dict"], name)
+        is_in_config = "_internal_dict" in self.__dict__ and hasattr(self.__dict__["_internal_dict"], name)
         is_attribute = name in self.__dict__
 
         if is_in_config and not is_attribute:
@@ -147,18 +139,19 @@ class ConfigMixin:
                 "direct config name access",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False, )
+                standard_warn=False,
+            )
             return self._internal_dict[name]
 
-        raise AttributeError(
-            f"'{type(self).__name__}' object has no attribute '{name}'")
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def save_config(
-            self,
-            save_directory: Union[str, os.PathLike],
-            push_to_hub: bool=False,
-            to_diffusers=False,
-            **kwargs, ):
+        self,
+        save_directory: Union[str, os.PathLike],
+        push_to_hub: bool = False,
+        to_diffusers=False,
+        **kwargs,
+    ):
         """
         Save a configuration object to the directory `save_directory`, so that it can be re-loaded using the
         [`~ConfigMixin.from_config`] class method.
@@ -168,9 +161,7 @@ class ConfigMixin:
                 Directory where the configuration JSON file will be saved (will be created if it does not exist).
         """
         if os.path.isfile(save_directory):
-            raise AssertionError(
-                f"Provided path ({save_directory}) should be a directory, not a file"
-            )
+            raise AssertionError(f"Provided path ({save_directory}) should be a directory, not a file")
 
         os.makedirs(save_directory, exist_ok=True)
 
@@ -182,10 +173,11 @@ class ConfigMixin:
 
     @classmethod
     def from_config(
-            cls,
-            config: Union[FrozenDict, Dict[str, Any]]=None,
-            return_unused_kwargs=False,
-            **kwargs, ):
+        cls,
+        config: Union[FrozenDict, Dict[str, Any]] = None,
+        return_unused_kwargs=False,
+        **kwargs,
+    ):
         r"""
         Instantiate a Python class from a config dictionary
 
@@ -222,9 +214,7 @@ class ConfigMixin:
             config = kwargs.pop("pretrained_model_name_or_path")
 
         if config is None:
-            raise ValueError(
-                "Please make sure to provide a config as the first positional argument."
-            )
+            raise ValueError("Please make sure to provide a config as the first positional argument.")
         # ======>
 
         if not isinstance(config, dict):
@@ -233,24 +223,27 @@ class ConfigMixin:
                 deprecation_message += (
                     f"If you were trying to load a scheduler, please use {cls}.from_pretrained(...) instead."
                     " Otherwise, please make sure to pass a configuration dictionary instead. This functionality will"
-                    " be removed in v1.0.0.")
+                    " be removed in v1.0.0."
+                )
             elif "Model" in cls.__name__:
                 deprecation_message += (
                     f"If you were trying to load a model, please use {cls}.load_config(...) followed by"
                     f" {cls}.from_config(...) instead. Otherwise, please make sure to pass a configuration dictionary"
-                    " instead. This functionality will be removed in v1.0.0.")
+                    " instead. This functionality will be removed in v1.0.0."
+                )
             deprecate(
                 "config-passed-as-path",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False, )
+                standard_warn=False,
+            )
             config, kwargs = cls.load_config(
                 pretrained_model_name_or_path=config,
                 return_unused_kwargs=True,
-                **kwargs, )
+                **kwargs,
+            )
 
-        init_dict, unused_kwargs, hidden_dict = cls.extract_init_dict(config,
-                                                                      **kwargs)
+        init_dict, unused_kwargs, hidden_dict = cls.extract_init_dict(config, **kwargs)
 
         # Allow dtype to be specified on initialization
         if "dtype" in unused_kwargs:
@@ -259,8 +252,7 @@ class ConfigMixin:
         # add possible deprecated kwargs
         for deprecated_kwarg in cls._deprecated_kwargs:
             if deprecated_kwarg in unused_kwargs:
-                init_dict[deprecated_kwarg] = unused_kwargs.pop(
-                    deprecated_kwarg)
+                init_dict[deprecated_kwarg] = unused_kwargs.pop(deprecated_kwarg)
 
         # Return model and optionally state and/or unused_kwargs
         model = cls(**init_dict)
@@ -269,7 +261,7 @@ class ConfigMixin:
         model.register_to_config(**hidden_dict)
 
         # add hidden kwargs of compatible classes to unused_kwargs
-        unused_kwargs = { ** unused_kwargs, ** hidden_dict}
+        unused_kwargs = {**unused_kwargs, **hidden_dict}
 
         if return_unused_kwargs:
             return (model, unused_kwargs)
@@ -280,21 +272,19 @@ class ConfigMixin:
     def get_config_dict(cls, *args, **kwargs):
         deprecation_message = (
             f" The function get_config_dict is deprecated. Please use {cls}.load_config instead. This function will be"
-            " removed in version v1.0.0")
-        deprecate(
-            "get_config_dict",
-            "1.0.0",
-            deprecation_message,
-            standard_warn=False)
+            " removed in version v1.0.0"
+        )
+        deprecate("get_config_dict", "1.0.0", deprecation_message, standard_warn=False)
         return cls.load_config(*args, **kwargs)
 
     @classmethod
     def load_config(
-            cls,
-            pretrained_model_name_or_path: Union[str, os.PathLike],
-            return_unused_kwargs=False,
-            return_commit_hash=False,
-            **kwargs, ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        cls,
+        pretrained_model_name_or_path: Union[str, os.PathLike],
+        return_unused_kwargs=False,
+        return_commit_hash=False,
+        **kwargs,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         r"""
         Instantiate a Python class from a config dictionary
 
@@ -354,8 +344,9 @@ class ConfigMixin:
         </Tip>
         """
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
-        cache_dir = (kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub
-                     else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE))
+        cache_dir = (
+            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
+        )
         force_download = kwargs.pop("force_download", False)
         resume_download = kwargs.pop("resume_download", False)
         proxies = kwargs.pop("proxies", None)
@@ -365,7 +356,7 @@ class ConfigMixin:
         _ = kwargs.pop("mirror", None)
         subfolder = kwargs.pop("subfolder", None)
         user_agent = kwargs.pop("user_agent", {})
-        user_agent = { ** user_agent, "file_type": "config"}
+        user_agent = {**user_agent, "file_type": "config"}
         user_agent = http_user_agent(user_agent)
         # new add return_config_file
         return_config_file = kwargs.pop("return_config_file", False)
@@ -381,17 +372,13 @@ class ConfigMixin:
         if os.path.isfile(pretrained_model_name_or_path):
             config_file = pretrained_model_name_or_path
         elif os.path.isdir(pretrained_model_name_or_path):
-            if os.path.isfile(
-                    os.path.join(pretrained_model_name_or_path,
-                                 cls.config_name)):
+            if os.path.isfile(os.path.join(pretrained_model_name_or_path, cls.config_name)):
                 # Load from a PyTorch checkpoint
-                config_file = os.path.join(pretrained_model_name_or_path,
-                                           cls.config_name)
+                config_file = os.path.join(pretrained_model_name_or_path, cls.config_name)
             elif subfolder is not None and os.path.isfile(
-                    os.path.join(pretrained_model_name_or_path, subfolder,
-                                 cls.config_name)):
-                config_file = os.path.join(pretrained_model_name_or_path,
-                                           subfolder, cls.config_name)
+                os.path.join(pretrained_model_name_or_path, subfolder, cls.config_name)
+            ):
+                config_file = os.path.join(pretrained_model_name_or_path, subfolder, cls.config_name)
             else:
                 raise EnvironmentError(
                     f"Error no file named {cls.config_name} found in directory {pretrained_model_name_or_path}."
@@ -409,7 +396,8 @@ class ConfigMixin:
                 user_agent=user_agent,
                 subfolder=subfolder,
                 revision=revision,
-                from_hf_hub=from_hf_hub, )
+                from_hf_hub=from_hf_hub,
+            )
 
         try:
             # Load config dict
@@ -417,23 +405,20 @@ class ConfigMixin:
             commit_hash = extract_commit_hash(config_file)
 
         except (json.JSONDecodeError, UnicodeDecodeError):
-            raise EnvironmentError(
-                f"It looks like the config file at '{config_file}' is not a valid JSON file."
-            )
+            raise EnvironmentError(f"It looks like the config file at '{config_file}' is not a valid JSON file.")
 
-        if not (return_unused_kwargs or return_commit_hash or
-                return_config_file):
+        if not (return_unused_kwargs or return_commit_hash or return_config_file):
             return config_dict
 
-        outputs = (config_dict, )
+        outputs = (config_dict,)
         if return_unused_kwargs:
-            outputs += (kwargs, )
+            outputs += (kwargs,)
 
         if return_commit_hash:
-            outputs += (commit_hash, )
+            outputs += (commit_hash,)
 
         if return_config_file:
-            outputs += (config_file, )
+            outputs += (config_file,)
 
         return outputs
 
@@ -462,43 +447,26 @@ class ConfigMixin:
         ppdiffusers_library = importlib.import_module(__name__.split(".")[0])
 
         if cls.has_compatibles:
-            compatible_classes = [
-                c for c in cls._get_compatibles()
-                if not isinstance(c, DummyObject)
-            ]
+            compatible_classes = [c for c in cls._get_compatibles() if not isinstance(c, DummyObject)]
         else:
             compatible_classes = []
 
         expected_keys_comp_cls = set()
         for c in compatible_classes:
             expected_keys_c = cls._get_init_keys(c)
-            expected_keys_comp_cls = expected_keys_comp_cls.union(
-                expected_keys_c)
-        expected_keys_comp_cls = expected_keys_comp_cls - cls._get_init_keys(
-            cls)
-        config_dict = {
-            k: v
-            for k, v in config_dict.items() if k not in expected_keys_comp_cls
-        }
+            expected_keys_comp_cls = expected_keys_comp_cls.union(expected_keys_c)
+        expected_keys_comp_cls = expected_keys_comp_cls - cls._get_init_keys(cls)
+        config_dict = {k: v for k, v in config_dict.items() if k not in expected_keys_comp_cls}
 
         # remove attributes from orig class that cannot be expected
         orig_cls_name = config_dict.pop("_class_name", cls.__name__)
-        if orig_cls_name != cls.__name__ and hasattr(ppdiffusers_library,
-                                                     orig_cls_name):
+        if orig_cls_name != cls.__name__ and hasattr(ppdiffusers_library, orig_cls_name):
             orig_cls = getattr(ppdiffusers_library, orig_cls_name)
-            unexpected_keys_from_orig = cls._get_init_keys(
-                orig_cls) - expected_keys
-            config_dict = {
-                k: v
-                for k, v in config_dict.items()
-                if k not in unexpected_keys_from_orig
-            }
+            unexpected_keys_from_orig = cls._get_init_keys(orig_cls) - expected_keys
+            config_dict = {k: v for k, v in config_dict.items() if k not in unexpected_keys_from_orig}
 
         # remove private attributes
-        config_dict = {
-            k: v
-            for k, v in config_dict.items() if not k.startswith("_")
-        }
+        config_dict = {k: v for k, v in config_dict.items() if not k.startswith("_")}
 
         # 3. Create keyword arguments that will be passed to __init__ from expected keyword arguments
         init_dict = {}
@@ -520,7 +488,8 @@ class ConfigMixin:
             logger.warning(
                 f"The config attributes {config_dict} were passed to {cls.__name__}, "
                 "but are not expected and will be ignored. Please verify your "
-                f"{cls.config_name} configuration file.")
+                f"{cls.config_name} configuration file."
+            )
 
         # 5. Give nice info if config attributes are initiliazed to default because they have not been passed
         passed_keys = set(init_dict.keys())
@@ -530,13 +499,10 @@ class ConfigMixin:
             )
 
         # 6. Define unused keyword arguments
-        unused_kwargs = { ** config_dict, ** kwargs}
+        unused_kwargs = {**config_dict, **kwargs}
 
         # 7. Define "hidden" config parameters that were saved for compatible classes
-        hidden_config_dict = {
-            k: v
-            for k, v in original_dict.items() if k not in init_dict
-        }
+        hidden_config_dict = {k: v for k, v in original_dict.items() if k not in init_dict}
 
         return init_dict, unused_kwargs, hidden_config_dict
 
@@ -546,8 +512,7 @@ class ConfigMixin:
             text = reader.read()
         data = json.loads(text)
         if "_diffusers_version" in data and "_ppdiffusers_version" not in data:
-            data["_ppdiffusers_version"] = data.pop("_diffusers_version",
-                                                    __version__)
+            data["_ppdiffusers_version"] = data.pop("_diffusers_version", __version__)
         if "_diffusers_version" not in data and "_ppdiffusers_version" not in data:
             data["_ppdiffusers_version"] = __version__
 
@@ -581,8 +546,7 @@ class ConfigMixin:
         Returns:
             `str`: String containing all the attributes that make up this configuration instance in JSON format.
         """
-        config_dict = self._internal_dict if hasattr(self,
-                                                     "_internal_dict") else {}
+        config_dict = self._internal_dict if hasattr(self, "_internal_dict") else {}
         config_dict["_class_name"] = self.__class__.__name__
 
         # json
@@ -609,14 +573,12 @@ class ConfigMixin:
         config_dict.pop("_ignore_files", None)
         json_string = json.dumps(config_dict, indent=2, sort_keys=True) + "\n"
         if to_diffusers:
-            json_string = json_string.replace(
-                '"ppdiffusers"', '"diffusers"').replace(
-                    '"paddlenlp.transformers"', '"transformers"')
+            json_string = json_string.replace('"ppdiffusers"', '"diffusers"').replace(
+                '"paddlenlp.transformers"', '"transformers"'
+            )
         return json_string
 
-    def to_json_file(self,
-                     json_file_path: Union[str, os.PathLike],
-                     to_diffusers=False):
+    def to_json_file(self, json_file_path: Union[str, os.PathLike], to_diffusers=False):
         """
         Save this instance to a JSON file.
 
@@ -641,41 +603,39 @@ def register_to_config(init):
     def inner_init(self, *args, **kwargs):
         # Ignore private kwargs in the init.
         init_kwargs = {k: v for k, v in kwargs.items() if not k.startswith("_")}
-        config_init_kwargs = {
-            k: v
-            for k, v in kwargs.items() if k.startswith("_")
-        }
+        config_init_kwargs = {k: v for k, v in kwargs.items() if k.startswith("_")}
         if not isinstance(self, ConfigMixin):
             raise RuntimeError(
                 f"`@register_for_config` was applied to {self.__class__.__name__} init method, but this class does "
-                "not inherit from `ConfigMixin`.")
+                "not inherit from `ConfigMixin`."
+            )
 
         ignore = getattr(self, "ignore_for_config", [])
         # Get positional arguments aligned with kwargs
         new_kwargs = {}
         signature = inspect.signature(init)
         parameters = {
-            name: p.default
-            for i, (name, p) in enumerate(signature.parameters.items())
-            if i > 0 and name not in ignore
+            name: p.default for i, (name, p) in enumerate(signature.parameters.items()) if i > 0 and name not in ignore
         }
         for arg, name in zip(args, parameters.keys()):
             new_kwargs[name] = arg
 
         # Then add all kwargs
-        new_kwargs.update({
-            k: init_kwargs.get(k, default)
-            for k, default in parameters.items()
-            if k not in ignore and k not in new_kwargs
-        })
-        new_kwargs = { ** config_init_kwargs, ** new_kwargs}
+        new_kwargs.update(
+            {
+                k: init_kwargs.get(k, default)
+                for k, default in parameters.items()
+                if k not in ignore and k not in new_kwargs
+            }
+        )
+        new_kwargs = {**config_init_kwargs, **new_kwargs}
         getattr(self, "register_to_config")(**new_kwargs)
         init(self, *args, **init_kwargs)
 
     return inner_init
 
 
-def finfo(dtype: paddle.dtype=None):
+def finfo(dtype: paddle.dtype = None):
     if dtype is None:
         dtype = paddle.get_default_dtype()
 
@@ -699,10 +659,11 @@ class ModuleUtilsMixin:
     """
 
     def get_extended_attention_mask(
-            self,
-            attention_mask: paddle.Tensor,
-            input_shape: Tuple[int],
-            dtype: paddle.float32=None, ) -> paddle.Tensor:
+        self,
+        attention_mask: paddle.Tensor,
+        input_shape: Tuple[int],
+        dtype: paddle.float32 = None,
+    ) -> paddle.Tensor:
         """
         Makes broadcastable attention and causal masks so that future and masked tokens are ignored.
         Arguments:
@@ -725,14 +686,15 @@ class ModuleUtilsMixin:
             extended_attention_mask = attention_mask[:, None, None, :]
         else:
             raise ValueError(
-                "Wrong shape for input_ids (shape {}) or attention_mask (shape {})".
-                format(input_shape, attention_mask.shape))
+                "Wrong shape for input_ids (shape {}) or attention_mask (shape {})".format(
+                    input_shape, attention_mask.shape
+                )
+            )
 
         # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
         # masked positions, this operation will create a tensor which is 0.0 for
         # positions we want to attend and -10000.0 for masked positions.
         # Since we are adding it to the raw scores before the softmax, this is
         # effectively the same as removing these entirely.
-        extended_attention_mask = (
-            1.0 - extended_attention_mask) * finfo(dtype).min
+        extended_attention_mask = (1.0 - extended_attention_mask) * finfo(dtype).min
         return extended_attention_mask

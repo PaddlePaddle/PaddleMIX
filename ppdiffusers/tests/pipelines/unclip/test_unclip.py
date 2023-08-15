@@ -18,18 +18,25 @@ import unittest
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import (CLIPTextConfig, CLIPTextModelWithProjection,
-                                    CLIPTokenizer)
+from paddlenlp.transformers import (
+    CLIPTextConfig,
+    CLIPTextModelWithProjection,
+    CLIPTokenizer,
+)
 
-from ppdiffusers import (PriorTransformer, UnCLIPPipeline, UnCLIPScheduler,
-                         UNet2DConditionModel, UNet2DModel)
+from ppdiffusers import (
+    PriorTransformer,
+    UnCLIPPipeline,
+    UnCLIPScheduler,
+    UNet2DConditionModel,
+    UNet2DModel,
+)
 from ppdiffusers.pipelines.unclip.text_proj import UnCLIPTextProjModel
 from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
-from ..test_pipelines_common import (PipelineTesterMixin,
-                                     assert_mean_pixel_difference)
+from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
 
 
 class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
@@ -44,13 +51,15 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         "cross_attention_kwargs",
     }
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
-    required_optional_params = frozenset([
-        "generator",
-        "return_dict",
-        "prior_num_inference_steps",
-        "decoder_num_inference_steps",
-        "super_res_num_inference_steps",
-    ])
+    required_optional_params = frozenset(
+        [
+            "generator",
+            "return_dict",
+            "prior_num_inference_steps",
+            "decoder_num_inference_steps",
+            "super_res_num_inference_steps",
+        ]
+    )
     test_xformers_attention = False
 
     @property
@@ -75,8 +84,7 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 
     @property
     def dummy_tokenizer(self):
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         return tokenizer
 
     @property
@@ -92,7 +100,8 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             num_attention_heads=4,
             num_hidden_layers=5,
             pad_token_id=1,
-            vocab_size=1000, )
+            vocab_size=1000,
+        )
         return CLIPTextModelWithProjection(config)
 
     @property
@@ -127,13 +136,14 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             "out_channels": 6,
             "down_block_types": (
                 "ResnetDownsampleBlock2D",
-                "SimpleCrossAttnDownBlock2D", ),
-            "up_block_types":
-            ("SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"),
+                "SimpleCrossAttnDownBlock2D",
+            ),
+            "up_block_types": ("SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"),
             "mid_block_type": "UNetMidBlock2DSimpleCrossAttn",
             "block_out_channels": (
                 self.block_out_channels_0,
-                self.block_out_channels_0 * 2, ),
+                self.block_out_channels_0 * 2,
+            ),
             "layers_per_block": 1,
             "cross_attention_dim": self.cross_attention_dim,
             "attention_head_dim": 4,
@@ -148,13 +158,12 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         return {
             "sample_size": 64,
             "layers_per_block": 1,
-            "down_block_types":
-            ("ResnetDownsampleBlock2D", "ResnetDownsampleBlock2D"),
-            "up_block_types":
-            ("ResnetUpsampleBlock2D", "ResnetUpsampleBlock2D"),
+            "down_block_types": ("ResnetDownsampleBlock2D", "ResnetDownsampleBlock2D"),
+            "up_block_types": ("ResnetUpsampleBlock2D", "ResnetUpsampleBlock2D"),
             "block_out_channels": (
                 self.block_out_channels_0,
-                self.block_out_channels_0 * 2, ),
+                self.block_out_channels_0 * 2,
+            ),
             "in_channels": 6,
             "out_channels": 3,
         }
@@ -183,15 +192,18 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             variance_type="fixed_small_log",
             prediction_type="sample",
             num_train_timesteps=1000,
-            clip_sample_range=5.0, )
+            clip_sample_range=5.0,
+        )
         decoder_scheduler = UnCLIPScheduler(
             variance_type="learned_range",
             prediction_type="epsilon",
-            num_train_timesteps=1000, )
+            num_train_timesteps=1000,
+        )
         super_res_scheduler = UnCLIPScheduler(
             variance_type="fixed_small_log",
             prediction_type="epsilon",
-            num_train_timesteps=1000, )
+            num_train_timesteps=1000,
+        )
         components = {
             "prior": prior,
             "decoder": decoder,
@@ -229,20 +241,21 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([
-            2.6383996e-04,
-            9.9658674e-01,
-            1.1275411e-03,
-            2.6383996e-04,
-            2.6383996e-04,
-            9.9702907e-01,
-            9.9973619e-01,
-            9.9545717e-01,
-            2.6383996e-04,
-        ])
+        expected_slice = np.array(
+            [
+                2.6383996e-04,
+                9.9658674e-01,
+                1.1275411e-03,
+                2.6383996e-04,
+                2.6383996e-04,
+                9.9702907e-01,
+                9.9973619e-01,
+                9.9545717e-01,
+                2.6383996e-04,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
     def test_unclip_passed_text_embed(self):
         class DummyScheduler:
@@ -264,29 +277,34 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             dtype=dtype,
             generator=generator,
             latents=None,
-            scheduler=DummyScheduler(), )
+            scheduler=DummyScheduler(),
+        )
         shape = (
             batch_size,
             decoder.config.in_channels,
             decoder.config.sample_size,
-            decoder.config.sample_size, )
+            decoder.config.sample_size,
+        )
         decoder_latents = pipe.prepare_latents(
             shape,
             dtype=dtype,
             generator=generator,
             latents=None,
-            scheduler=DummyScheduler(), )
+            scheduler=DummyScheduler(),
+        )
         shape = (
             batch_size,
             super_res_first.config.in_channels // 2,
             super_res_first.config.sample_size,
-            super_res_first.config.sample_size, )
+            super_res_first.config.sample_size,
+        )
         super_res_latents = pipe.prepare_latents(
             shape,
             dtype=dtype,
             generator=generator,
             latents=None,
-            scheduler=DummyScheduler(), )
+            scheduler=DummyScheduler(),
+        )
         pipe.set_progress_bar_config(disable=None)
         prompt = "this is a prompt example"
         generator = paddle.Generator().manual_seed(0)
@@ -299,14 +317,16 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             prior_latents=prior_latents,
             decoder_latents=decoder_latents,
             super_res_latents=super_res_latents,
-            output_type="np", )
+            output_type="np",
+        )
         image = output.images
         text_inputs = tokenizer(
             prompt,
             padding="max_length",
             max_length=tokenizer.model_max_length,
             return_attention_mask=True,
-            return_tensors="pd", )
+            return_tensors="pd",
+        )
         text_model_output = text_encoder(text_inputs.input_ids)
         text_attention_mask = text_inputs.attention_mask
         generator = paddle.Generator().manual_seed(0)
@@ -320,13 +340,13 @@ class UnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             super_res_latents=super_res_latents,
             text_model_output=text_model_output,
             text_attention_mask=text_attention_mask,
-            output_type="np", )[0]
+            output_type="np",
+        )[0]
         assert np.abs(image - image_from_text).max() < 0.0001
 
     def test_attention_slicing_forward_pass(self):
         test_max_difference = False
-        self._test_attention_slicing_forward_pass(
-            test_max_difference=test_max_difference, expected_max_diff=0.01)
+        self._test_attention_slicing_forward_pass(test_max_difference=test_max_difference, expected_max_diff=0.01)
 
     def test_inference_batch_single_identical(self):
         test_max_difference = False
@@ -365,8 +385,7 @@ class UnCLIPPipelineIntegrationTests(unittest.TestCase):
 
     def test_unclip_karlo(self):
         # Hard code image
-        expected_image = np.array([[0.73281264, 0.69175875, 0.64672112],
-                                   [0.71919304, 0.65395129, 0.60436499]])
+        expected_image = np.array([[0.73281264, 0.69175875, 0.64672112], [0.71919304, 0.65395129, 0.60436499]])
         pipeline = UnCLIPPipeline.from_pretrained("kakaobrain/karlo-v1-alpha")
         pipeline.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(0)

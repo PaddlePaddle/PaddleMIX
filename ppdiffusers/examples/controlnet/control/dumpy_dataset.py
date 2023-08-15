@@ -35,7 +35,8 @@ class Fill50kDataset(Dataset):
             padding="max_length",
             truncation=True,
             max_length=tokenizer.model_max_length,
-            return_tensors="np", ).input_ids[0]
+            return_tensors="np",
+        ).input_ids[0]
 
     def __len__(self):
         return len(self.data)
@@ -63,9 +64,7 @@ class Fill50kDataset(Dataset):
         input_ids = self.text_processing(prompt)
 
         return dict(
-            input_ids=paddle.to_tensor(
-                input_ids, dtype=paddle.int64),
-            pixel_values=paddle.to_tensor(
-                target.transpose([2, 0, 1]), dtype=paddle.float32),
-            controlnet_cond=paddle.to_tensor(
-                source.transpose([2, 0, 1]), dtype=paddle.float32), )
+            input_ids=paddle.to_tensor(input_ids, dtype=paddle.int64),
+            pixel_values=paddle.to_tensor(target.transpose([2, 0, 1]), dtype=paddle.float32),
+            controlnet_cond=paddle.to_tensor(source.transpose([2, 0, 1]), dtype=paddle.float32),
+        )

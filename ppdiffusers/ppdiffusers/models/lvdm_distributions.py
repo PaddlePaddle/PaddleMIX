@@ -58,21 +58,26 @@ class DiagonalGaussianDistribution(object):
         elif other is None:
             return 0.5 * paddle.sum(
                 x=paddle.pow(x=self.mean, y=2) + self.var - 1.0 - self.logvar,
-                axis=[1, 2, 3], )
+                axis=[1, 2, 3],
+            )
         else:
             return 0.5 * paddle.sum(
-                x=paddle.pow(x=self.mean - other.mean, y=2) / other.var +
-                self.var / other.var - 1.0 - self.logvar + other.logvar,
-                axis=[1, 2, 3], )
+                x=paddle.pow(x=self.mean - other.mean, y=2) / other.var
+                + self.var / other.var
+                - 1.0
+                - self.logvar
+                + other.logvar,
+                axis=[1, 2, 3],
+            )
 
     def nll(self, sample, dims=[1, 2, 3]):
         if self.deterministic:
             return paddle.to_tensor(data=[0.0], dtype="float32")
         logtwopi = np.log(2.0 * np.pi)
         return 0.5 * paddle.sum(
-            x=logtwopi + self.logvar + paddle.pow(x=sample - self.mean, y=2) /
-            self.var,
-            axis=dims, )
+            x=logtwopi + self.logvar + paddle.pow(x=sample - self.mean, y=2) / self.var,
+            axis=dims,
+        )
 
     def mode(self):
         return self.mean
@@ -91,11 +96,11 @@ def normal_kl(mean1, logvar1, mean2, logvar2):
             tensor = obj
             break
     assert tensor is not None, "at least one argument must be a Tensor"
-    logvar1, logvar2 = [
-        (x if isinstance(x, paddle.Tensor) else paddle.to_tensor(data=x))
-        for x in (logvar1, logvar2)
-    ]
+    logvar1, logvar2 = [(x if isinstance(x, paddle.Tensor) else paddle.to_tensor(data=x)) for x in (logvar1, logvar2)]
     return 0.5 * (
-        -1.0 + logvar2 - logvar1 + paddle.exp(x=(logvar1 - logvar2
-                                                 ).astype("float32")) +
-        (mean1 - mean2)**2 * paddle.exp(x=(-logvar2).astype("float32")))
+        -1.0
+        + logvar2
+        - logvar1
+        + paddle.exp(x=(logvar1 - logvar2).astype("float32"))
+        + (mean1 - mean2) ** 2 * paddle.exp(x=(-logvar2).astype("float32"))
+    )

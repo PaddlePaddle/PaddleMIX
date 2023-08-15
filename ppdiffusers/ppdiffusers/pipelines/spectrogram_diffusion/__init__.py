@@ -12,8 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ...utils import (OptionalDependencyNotAvailable, is_note_seq_available,
-                      is_paddle_available, is_paddlenlp_available)
+from ...utils import (
+    OptionalDependencyNotAvailable,
+    is_note_seq_available,
+    is_paddle_available,
+    is_paddlenlp_available,
+)
 
 try:
     if not (is_paddlenlp_available() and is_paddle_available()):
@@ -23,10 +27,12 @@ except OptionalDependencyNotAvailable:
 else:
     from .notes_encoder import SpectrogramNotesEncoder
     from .pipeline_spectrogram_diffusion import (
-        SpectrogramContEncoder, SpectrogramDiffusionPipeline, T5FilmDecoder)
+        SpectrogramContEncoder,
+        SpectrogramDiffusionPipeline,
+        T5FilmDecoder,
+    )
 try:
-    if not (is_paddlenlp_available() and is_paddle_available() and
-            is_note_seq_available()):
+    if not (is_paddlenlp_available() and is_paddle_available() and is_note_seq_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
     from ...utils.dummy_paddle_and_paddlenlp_and_note_seq_objects import *

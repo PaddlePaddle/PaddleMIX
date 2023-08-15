@@ -97,22 +97,19 @@ class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
         return init_dict, inputs_dict
 
     def test_from_pretrained_hub(self):
-        model, loading_info = UNet2DModel.from_pretrained(
-            "fusing/unet-ldm-dummy-update", output_loading_info=True)
+        model, loading_info = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update", output_loading_info=True)
         self.assertIsNotNone(model)
         self.assertEqual(len(loading_info["missing_keys"]), 0)
         image = model(**self.dummy_input).sample
         assert image is not None, "Make sure output is not None"
 
     def test_from_pretrained_accelerate(self):
-        model, _ = UNet2DModel.from_pretrained(
-            "fusing/unet-ldm-dummy-update", output_loading_info=True)
+        model, _ = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update", output_loading_info=True)
         image = model(**self.dummy_input).sample
         assert image is not None, "Make sure output is not None"
 
     def test_from_pretrained_accelerate_wont_change_results(self):
-        model_accelerate, _ = UNet2DModel.from_pretrained(
-            "fusing/unet-ldm-dummy-update", output_loading_info=True)
+        model_accelerate, _ = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update", output_loading_info=True)
         model_accelerate
         model_accelerate.eval()
         noise = paddle.randn(
@@ -122,7 +119,8 @@ class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
                 model_accelerate.config.sample_size,
                 model_accelerate.config.sample_size,
             ],
-            generator=paddle.Generator().manual_seed(0), )
+            generator=paddle.Generator().manual_seed(0),
+        )
         time_step = paddle.to_tensor([10] * noise.shape[0])
         arr_accelerate = model_accelerate(noise, time_step)["sample"]
         del model_accelerate
@@ -130,7 +128,8 @@ class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
         gc.collect()
         model_normal_load, _ = UNet2DModel.from_pretrained(
             "fusing/unet-ldm-dummy-update",
-            output_loading_info=True, )
+            output_loading_info=True,
+        )
         model_normal_load.eval()
         arr_normal_load = model_normal_load(noise, time_step)["sample"]
         assert paddle_all_close(arr_accelerate, arr_normal_load, rtol=0.001)
@@ -145,25 +144,26 @@ class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
                 model.config.sample_size,
                 model.config.sample_size,
             ],
-            generator=paddle.Generator().manual_seed(0), )
+            generator=paddle.Generator().manual_seed(0),
+        )
         time_step = paddle.to_tensor([10] * noise.shape[0])
         with paddle.no_grad():
             output = model(noise, time_step).sample
         output_slice = output[0, -1, -3:, -3:].flatten().cpu()
-        expected_output_slice = paddle.to_tensor([
-            0.43855608,
-            -10.29346752,
-            -9.60953522,
-            -8.39902020,
-            -16.29206276,
-            -13.07511997,
-            -9.30383205,
-            -13.69859409,
-            -10.52999401,
-        ])
-        self.assertTrue(
-            paddle_all_close(
-                output_slice, expected_output_slice, rtol=0.001))
+        expected_output_slice = paddle.to_tensor(
+            [
+                0.43855608,
+                -10.29346752,
+                -9.60953522,
+                -8.39902020,
+                -16.29206276,
+                -13.07511997,
+                -9.30383205,
+                -13.69859409,
+                -10.52999401,
+            ]
+        )
+        self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.001))
 
 
 class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
@@ -213,8 +213,7 @@ class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
 
     @slow
     def test_from_pretrained_hub(self):
-        model, loading_info = UNet2DModel.from_pretrained(
-            "google/ncsnpp-celebahq-256", output_loading_info=True)
+        model, loading_info = UNet2DModel.from_pretrained("google/ncsnpp-celebahq-256", output_loading_info=True)
         self.assertIsNotNone(model)
         self.assertEqual(len(loading_info["missing_keys"]), 0)
         inputs = self.dummy_input
@@ -235,24 +234,23 @@ class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
         with paddle.no_grad():
             output = model(noise, time_step).sample
         output_slice = output[0, -3:, -3:, -1].flatten().cpu()
-        expected_output_slice = paddle.to_tensor([
-            -4836.2231,
-            -6487.1387,
-            -3816.7969,
-            -7964.9253,
-            -10966.2842,
-            -20043.6016,
-            8137.0571,
-            2340.3499,
-            544.6114,
-        ])
-        self.assertTrue(
-            paddle_all_close(
-                output_slice, expected_output_slice, rtol=0.01))
+        expected_output_slice = paddle.to_tensor(
+            [
+                -4836.2231,
+                -6487.1387,
+                -3816.7969,
+                -7964.9253,
+                -10966.2842,
+                -20043.6016,
+                8137.0571,
+                2340.3499,
+                544.6114,
+            ]
+        )
+        self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.01))
 
     def test_output_pretrained_ve_large(self):
-        model = UNet2DModel.from_pretrained(
-            "fusing/ncsnpp-ffhq-ve-dummy-update")
+        model = UNet2DModel.from_pretrained("fusing/ncsnpp-ffhq-ve-dummy-update")
         paddle.seed(0)
         batch_size = 4
         num_channels = 3
@@ -262,13 +260,10 @@ class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
         with paddle.no_grad():
             output = model(noise, time_step).sample
         output_slice = output[0, -3:, -3:, -1].flatten().cpu()
-        expected_output_slice = paddle.to_tensor([
-            -0.0325, -0.09, -0.0869, -0.0332, -0.0725, -0.027, -0.0101, 0.0227,
-            0.0256
-        ])
-        self.assertTrue(
-            paddle_all_close(
-                output_slice, expected_output_slice, rtol=0.01))
+        expected_output_slice = paddle.to_tensor(
+            [-0.0325, -0.09, -0.0869, -0.0332, -0.0725, -0.027, -0.0101, 0.0227, 0.0256]
+        )
+        self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.01))
 
     def test_forward_with_norm_groups(self):
         pass

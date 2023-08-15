@@ -24,7 +24,8 @@ ModalityType = SimpleNamespace(
     AUDIO="audio",
     THERMAL="thermal",
     DEPTH="depth",
-    IMU="imu", )
+    IMU="imu",
+)
 
 
 class Normalize(paddle.nn.Layer):
@@ -38,10 +39,11 @@ class Normalize(paddle.nn.Layer):
 
 class LearnableLogitScaling(paddle.nn.Layer):
     def __init__(
-            self,
-            logit_scale_init: float=1 / 0.07,
-            learnable: bool=True,
-            max_logit_scale: float=100, ) -> None:
+        self,
+        logit_scale_init: float = 1 / 0.07,
+        learnable: bool = True,
+        max_logit_scale: float = 100,
+    ) -> None:
         super().__init__()
         self.max_logit_scale = max_logit_scale
         self.logit_scale_init = logit_scale_init
@@ -49,18 +51,15 @@ class LearnableLogitScaling(paddle.nn.Layer):
         log_logit_scale = paddle.ones(shape=[]) * np.log(self.logit_scale_init)
         if learnable:
             self.log_logit_scale = paddle.create_parameter(
-                shape=log_logit_scale.shape
-                if log_logit_scale.dim() != 0 else [1],
+                shape=log_logit_scale.shape if log_logit_scale.dim() != 0 else [1],
                 dtype=log_logit_scale.dtype,
-                default_initializer=paddle.nn.initializer.Assign(
-                    value=log_logit_scale), )
+                default_initializer=paddle.nn.initializer.Assign(value=log_logit_scale),
+            )
         else:
             self.register_buffer("log_logit_scale", log_logit_scale)
 
     def forward(self, x):
-        return (paddle.clip(
-            x=self.log_logit_scale.exp(),
-            max=self.max_logit_scale).unsqueeze(0) * x)
+        return paddle.clip(x=self.log_logit_scale.exp(), max=self.max_logit_scale).unsqueeze(0) * x
 
 
 class EinOpsRearrange(paddle.nn.Layer):
@@ -81,14 +80,20 @@ class VerboseNNModule(paddle.nn.Layer):
 
     @staticmethod
     def get_readable_tensor_repr(name: str, tensor: paddle.Tensor) -> str:
-        st = ("(" + name + "): " + "tensor(" + str(tuple(tensor[1].shape)) +
-              ", requires_grad=" + str(not tensor[1].stop_gradient) + ")\n")
+        st = (
+            "("
+            + name
+            + "): "
+            + "tensor("
+            + str(tuple(tensor[1].shape))
+            + ", requires_grad="
+            + str(not tensor[1].stop_gradient)
+            + ")\n"
+        )
         return st
 
 
-def cast_if_src_dtype(tensor: paddle.Tensor,
-                      src_dtype: paddle.dtype,
-                      tgt_dtype: paddle.dtype):
+def cast_if_src_dtype(tensor: paddle.Tensor, src_dtype: paddle.dtype, tgt_dtype: paddle.dtype):
     updated = False
     if tensor.dtype == src_dtype:
         tensor = tensor.cast(tgt_dtype)

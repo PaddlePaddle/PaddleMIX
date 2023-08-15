@@ -12,10 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
-
-from ppdiffusers import (StableDiffusionPipeline,
-                         VersatileDiffusionDualGuidedPipeline)
+from ppdiffusers import StableDiffusionPipeline, VersatileDiffusionDualGuidedPipeline
 
 from .apptask import AppTask
 
@@ -45,7 +42,7 @@ class StableDiffusionTask(AppTask):
     def _preprocess(self, inputs):
         """ """
         prompt = inputs.get("prompt", None)
-        assert prompt is not None, f"The prompt is None"
+        assert prompt is not None, "The prompt is None"
 
         return inputs
 
@@ -58,7 +55,8 @@ class StableDiffusionTask(AppTask):
             prompt=inputs["prompt"],
             guidance_scale=self._guidance_scale,
             height=self._height,
-            width=self._width, ).images[0]
+            width=self._width,
+        ).images[0]
 
         inputs.pop("prompt", None)
 
@@ -77,8 +75,7 @@ class StableDiffusionTask(AppTask):
 class VersatileDiffusionDualGuidedTask(AppTask):
     def __init__(self, task, model, **kwargs):
         super().__init__(task=task, model=model, **kwargs)
-        self._text_to_image_strength = kwargs.get("text_to_image_strength",
-                                                  0.75)
+        self._text_to_image_strength = kwargs.get("text_to_image_strength", 0.75)
         # Default to static mode
         self._static_mode = False
         self._construct_model(model)
@@ -89,17 +86,16 @@ class VersatileDiffusionDualGuidedTask(AppTask):
         """
 
         # bulid model
-        model_instance = VersatileDiffusionDualGuidedPipeline.from_pretrained(
-            model)
+        model_instance = VersatileDiffusionDualGuidedPipeline.from_pretrained(model)
         model_instance.remove_unused_weights()
         self._model = model_instance
 
     def _preprocess(self, inputs):
         """ """
         prompt = inputs.get("prompt", None)
-        assert prompt is not None, f"The prompt is None"
+        assert prompt is not None, "The prompt is None"
         image = inputs.get("image", None)
-        assert image is not None, f"The image is None"
+        assert image is not None, "The image is None"
 
         return inputs
 
@@ -111,7 +107,8 @@ class VersatileDiffusionDualGuidedTask(AppTask):
         result = self._model(
             prompt=inputs["prompt"],
             image=inputs["image"],
-            text_to_image_strength=self._text_to_image_strength, ).images[0]
+            text_to_image_strength=self._text_to_image_strength,
+        ).images[0]
 
         inputs.pop("prompt", None)
         inputs.pop("image", None)

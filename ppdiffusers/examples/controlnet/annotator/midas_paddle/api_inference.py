@@ -19,25 +19,23 @@ from paddlenlp.utils.downloader import get_path_from_url_with_filelock
 
 
 def checkmodel(model_dir, model_name):
-    if not os.path.exists(
-            os.path.join(model_dir, model_name, model_name + ".pdmodel")):
+    if not os.path.exists(os.path.join(model_dir, model_name, model_name + ".pdmodel")):
         model_url = "https://bj.bcebos.com/v1/paddledet/models/dpt_hybrid.zip"
         get_path_from_url_with_filelock(model_url, root_dir=model_dir)
 
 
 class MidasInference:
     def __init__(
-            self,
-            model_dir,
-            model_name="dpt_hybrid",
-            batchsize=8,
-            device="GPU",
-            run_mode="paddle", ):
+        self,
+        model_dir,
+        model_name="dpt_hybrid",
+        batchsize=8,
+        device="GPU",
+        run_mode="paddle",
+    ):
         checkmodel(model_dir, model_name)
-        model_file = os.path.join(model_dir, model_name,
-                                  model_name + ".pdmodel")
-        params_file = os.path.join(model_dir, model_name,
-                                   model_name + ".pdiparams")
+        model_file = os.path.join(model_dir, model_name, model_name + ".pdmodel")
+        params_file = os.path.join(model_dir, model_name, model_name + ".pdiparams")
         config = paddle_infer.Config(model_file, params_file)
         self.batchsize = batchsize
         if device == "GPU":
@@ -69,12 +67,12 @@ class MidasInference:
                 min_subgraph_size=3,
                 precision_mode=precision_map[run_mode],
                 use_static=False,
-                use_calib_mode=False, )
+                use_calib_mode=False,
+            )
             min_input_shape = {"image": [1, 3, 224, 224]}
             max_input_shape = {"image": [1, 3, 1280, 1280]}
             opt_input_shape = {"image": [1, 3, 384, 384]}
-            config.set_trt_dynamic_shape_info(min_input_shape, max_input_shape,
-                                              opt_input_shape)
+            config.set_trt_dynamic_shape_info(min_input_shape, max_input_shape, opt_input_shape)
 
         # disable print log when predict
         config.disable_glog_info()

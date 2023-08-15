@@ -22,7 +22,7 @@ import paddle.nn.functional as F
 import requests
 from paddlenlp import Taskflow
 from paddlenlp.trainer import PdArgumentParser
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
 from paddlemix.models.sam.modeling import SamModel
@@ -45,9 +45,7 @@ def show_mask(mask, ax, random_color=False):
 def show_box(box, ax, label):
     x0, y0 = box[0], box[1]
     w, h = box[2] - box[0], box[3] - box[1]
-    ax.add_patch(
-        plt.Rectangle(
-            (x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2))
+    ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2))
     ax.text(x0, y0, label)
 
 
@@ -60,11 +58,14 @@ class DataArguments:
     the command line.
     """
 
-    input_image: str = field(metadata={"help": "The name of input image."}, )
+    input_image: str = field(
+        metadata={"help": "The name of input image."},
+    )
 
     prompt: str = field(
         default=None,
-        metadata={"help": "The prompt of the image to be inpaint."}, )
+        metadata={"help": "The prompt of the image to be inpaint."},
+    )
 
 
 @dataclass
@@ -75,36 +76,45 @@ class ModelArguments:
 
     stable_diffusion_pipeline_name_or_path: str = field(
         default="stabilityai/stable-diffusion-2-inpainting",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     dino_model_name_or_path: str = field(
         default="GroundingDino/groundingdino-swint-ogc",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     sam_model_name_or_path: str = field(
         default="Sam/SamVitH-1024",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     chatglm_model_name_or_path: str = field(
         default="THUDM/chatglm-6b",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     box_threshold: float = field(
         default=0.3,
-        metadata={"help": "box threshold."}, )
+        metadata={"help": "box threshold."},
+    )
     text_threshold: float = field(
         default=0.25,
-        metadata={"help": "text threshold."}, )
+        metadata={"help": "text threshold."},
+    )
     output_dir: str = field(
         default="inpainting_output",
-        metadata={"help": "output directory."}, )
+        metadata={"help": "output directory."},
+    )
     visual: bool = field(
         default=True,
-        metadata={"help": "save visual image."}, )
+        metadata={"help": "save visual image."},
+    )
 
 
 def filter_prompts_with_chatglm(caption, model_name_or_path="THUDM/chatglm-6b"):
     prompt = (
         "Given caption,extract the main object to be replaced and marked it as 'main_object', "
-        + f"Extract the remaining part as 'other prompt', " +
-        f"Return main_object, other prompt in English" +
-        f"Given caption: {caption}.")
+        + "Extract the remaining part as 'other prompt', "
+        + "Return main_object, other prompt in English"
+        + "Given caption: {}.".format(caption)
+    )
 
     logger.info("chatglm: {}".format(model_name_or_path))
     textGen = Taskflow("text2text_generation", model=model_name_or_path)
@@ -113,7 +123,8 @@ def filter_prompts_with_chatglm(caption, model_name_or_path="THUDM/chatglm-6b"):
 
     det_prompt, inpaint_prompt = (
         reply.split("\n")[0].split(":")[-1].strip(),
-        reply.split("\n")[-1].split(":")[-1].strip(), )
+        reply.split("\n")[-1].split(":")[-1].strip(),
+    )
 
     return det_prompt, inpaint_prompt
 
@@ -125,21 +136,17 @@ def main():
 
     logger.info("dino_model: {}".format(model_args.dino_model_name_or_path))
     # bulid dino processor
-    dino_processor = GroudingDinoProcessor.from_pretrained(
-        model_args.dino_model_name_or_path)
+    dino_processor = GroudingDinoProcessor.from_pretrained(model_args.dino_model_name_or_path)
     # bulid dino model
-    dino_model = GroundingDinoModel.from_pretrained(
-        model_args.dino_model_name_or_path)
+    dino_model = GroundingDinoModel.from_pretrained(model_args.dino_model_name_or_path)
     dino_model.eval()
     logger.info("dino_model build finish!")
 
     # buidl sam processor
-    sam_processor = SamProcessor.from_pretrained(
-        model_args.sam_model_name_or_path)
+    sam_processor = SamProcessor.from_pretrained(model_args.sam_model_name_or_path)
     # bulid model
     logger.info("SamModel: {}".format(model_args.sam_model_name_or_path))
-    sam_model = SamModel.from_pretrained(
-        model_args.sam_model_name_or_path, input_type="boxs")
+    sam_model = SamModel.from_pretrained(model_args.sam_model_name_or_path, input_type="boxs")
     logger.info("SamModel build finish!")
 
     # read image
@@ -149,16 +156,14 @@ def main():
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw)
 
-    det_prompt, inpaint_prompt = filter_prompts_with_chatglm(
-        data_args.prompt, model_args.chatglm_model_name_or_path)
+    det_prompt, inpaint_prompt = filter_prompts_with_chatglm(data_args.prompt, model_args.chatglm_model_name_or_path)
     logger.info("det prompt: {}".format(det_prompt))
     logger.info("inpaint prompt: {}".format(inpaint_prompt))
 
     image_pil = image_pil.convert("RGB")
 
     # preprocess image text_prompt
-    image_tensor, mask, tokenized_out = dino_processor(
-        images=image_pil, text=det_prompt)
+    image_tensor, mask, tokenized_out = dino_processor(images=image_pil, text=det_prompt)
 
     with paddle.no_grad():
         outputs = dino_model(
@@ -166,9 +171,9 @@ def main():
             mask,
             input_ids=tokenized_out["input_ids"],
             attention_mask=tokenized_out["attention_mask"],
-            text_self_attention_masks=tokenized_out[
-                "text_self_attention_masks"],
-            position_ids=tokenized_out["position_ids"], )
+            text_self_attention_masks=tokenized_out["text_self_attention_masks"],
+            position_ids=tokenized_out["position_ids"],
+        )
 
     logits = F.sigmoid(outputs["pred_logits"])[0]  # (nq, 256)
     boxes = outputs["pred_boxes"][0]  # (nq, 4)
@@ -204,8 +209,7 @@ def main():
         x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
         boxes.append([x0, y0, x1, y1])
     boxes = np.array(boxes)
-    image_seg, prompt = sam_processor(
-        image_pil, input_type="boxs", box=boxes, point_coords=None)
+    image_seg, prompt = sam_processor(image_pil, input_type="boxs", box=boxes, point_coords=None)
     seg_masks = sam_model(img=image_seg, prompt=prompt)
     seg_masks = sam_processor.postprocess_masks(seg_masks)
 
@@ -227,12 +231,11 @@ def main():
             os.path.join(model_args.output_dir, "mask_pred.jpg"),
             bbox_inches="tight",
             dpi=300,
-            pad_inches=0.0, )
+            pad_inches=0.0,
+        )
 
-    logger.info("stable diffusion pipeline: {}".format(
-        model_args.stable_diffusion_pipeline_name_or_path))
-    pipe = StableDiffusionInpaintPipeline.from_pretrained(
-        model_args.stable_diffusion_pipeline_name_or_path)
+    logger.info("stable diffusion pipeline: {}".format(model_args.stable_diffusion_pipeline_name_or_path))
+    pipe = StableDiffusionInpaintPipeline.from_pretrained(model_args.stable_diffusion_pipeline_name_or_path)
     logger.info("stable diffusion pipeline build finish!")
 
     merge_mask = paddle.sum(seg_masks, axis=0).unsqueeze(0)
@@ -242,11 +245,9 @@ def main():
     image_pil = image_pil.resize((512, 512))
     mask_pil = mask_pil.resize((512, 512))
 
-    image = pipe(
-        prompt=inpaint_prompt, image=image_pil, mask_image=mask_pil).images[0]
+    image = pipe(prompt=inpaint_prompt, image=image_pil, mask_image=mask_pil).images[0]
     image = image.resize(size)
-    image.save(
-        os.path.join(model_args.output_dir, "grounded_sam_chatglm_output.jpg"))
+    image.save(os.path.join(model_args.output_dir, "grounded_sam_chatglm_output.jpg"))
 
     logger.info("finish!")
 

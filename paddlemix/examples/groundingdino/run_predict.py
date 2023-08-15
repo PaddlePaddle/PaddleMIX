@@ -78,9 +78,7 @@ class DataArguments:
     """
 
     input_image: str = field(metadata={"help": "The name of input image."})
-    prompt: str = field(
-        default=None,
-        metadata={"help": "The prompt of the image to be generated."})
+    prompt: str = field(default=None, metadata={"help": "The prompt of the image to be generated."})
 
 
 @dataclass
@@ -91,19 +89,24 @@ class ModelArguments:
 
     model_name_or_path: str = field(
         default="GroundingDino/groundingdino-swint-ogc",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     box_threshold: float = field(
         default=0.3,
-        metadata={"help": "box threshold."}, )
+        metadata={"help": "box threshold."},
+    )
     text_threshold: float = field(
         default=0.25,
-        metadata={"help": "text threshold."}, )
+        metadata={"help": "text threshold."},
+    )
     output_dir: str = field(
         default="output",
-        metadata={"help": "output directory."}, )
+        metadata={"help": "output directory."},
+    )
     visual: bool = field(
         default=True,
-        metadata={"help": "save visual image."}, )
+        metadata={"help": "save visual image."},
+    )
 
 
 def main():
@@ -111,12 +114,10 @@ def main():
     model_args, data_args = parser.parse_args_into_dataclasses()
 
     # bulid processor
-    processor = GroudingDinoProcessor.from_pretrained(
-        model_args.model_name_or_path)
+    processor = GroudingDinoProcessor.from_pretrained(model_args.model_name_or_path)
     # bulid model
     logger.info("dino_model: {}".format(model_args.model_name_or_path))
-    dino_model = GroundingDinoModel.from_pretrained(
-        model_args.model_name_or_path)
+    dino_model = GroundingDinoModel.from_pretrained(model_args.model_name_or_path)
     dino_model.eval()
     # read image
     url = data_args.input_image
@@ -125,11 +126,9 @@ def main():
         # read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     else:
-        image_pil = Image.open(requests.get(url, stream=True).raw).convert(
-            "RGB")
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
     # preprocess image text_prompt
-    image_tensor, mask, tokenized_out = processor(
-        images=image_pil, text=data_args.prompt)
+    image_tensor, mask, tokenized_out = processor(images=image_pil, text=data_args.prompt)
 
     with paddle.no_grad():
         outputs = dino_model(
@@ -137,9 +136,9 @@ def main():
             mask,
             input_ids=tokenized_out["input_ids"],
             attention_mask=tokenized_out["attention_mask"],
-            text_self_attention_masks=tokenized_out[
-                "text_self_attention_masks"],
-            position_ids=tokenized_out["position_ids"], )
+            text_self_attention_masks=tokenized_out["text_self_attention_masks"],
+            position_ids=tokenized_out["position_ids"],
+        )
 
     logits = F.sigmoid(outputs["pred_logits"])[0]  # (nq, 256)
     boxes = outputs["pred_boxes"][0]  # (nq, 4)

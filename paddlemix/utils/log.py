@@ -23,34 +23,13 @@ import colorlog
 loggers = {}
 
 log_config = {
-    "DEBUG": {
-        "level": 10,
-        "color": "purple"
-    },
-    "INFO": {
-        "level": 20,
-        "color": "green"
-    },
-    "TRAIN": {
-        "level": 21,
-        "color": "cyan"
-    },
-    "EVAL": {
-        "level": 22,
-        "color": "blue"
-    },
-    "WARNING": {
-        "level": 30,
-        "color": "yellow"
-    },
-    "ERROR": {
-        "level": 40,
-        "color": "red"
-    },
-    "CRITICAL": {
-        "level": 50,
-        "color": "bold_red"
-    },
+    "DEBUG": {"level": 10, "color": "purple"},
+    "INFO": {"level": 20, "color": "green"},
+    "TRAIN": {"level": 21, "color": "cyan"},
+    "EVAL": {"level": 22, "color": "blue"},
+    "WARNING": {"level": 30, "color": "yellow"},
+    "ERROR": {"level": 40, "color": "red"},
+    "CRITICAL": {"level": 50, "color": "bold_red"},
 }
 
 
@@ -62,22 +41,19 @@ class Logger(object):
         name(str) : Logger name, default is 'PaddleNLP'
     """
 
-    def __init__(self, name: str=None):
+    def __init__(self, name: str = None):
         name = "PaddleMIX" if not name else name
         self.logger = logging.getLogger(name)
 
         for key, conf in log_config.items():
             logging.addLevelName(conf["level"], key)
             self.__dict__[key] = functools.partial(self.__call__, conf["level"])
-            self.__dict__[key.lower()] = functools.partial(self.__call__,
-                                                           conf["level"])
+            self.__dict__[key.lower()] = functools.partial(self.__call__, conf["level"])
 
         self.format = colorlog.ColoredFormatter(
             "%(log_color)s[%(asctime)-15s] [%(levelname)8s]%(reset)s - %(message)s",
-            log_colors={
-                key: conf["color"]
-                for key, conf in log_config.items()
-            }, )
+            log_colors={key: conf["color"] for key, conf in log_config.items()},
+        )
 
         self.handler = logging.StreamHandler()
         self.handler.setFormatter(self.format)
@@ -95,8 +71,7 @@ class Logger(object):
         self._is_enable = True
 
     def set_level(self, log_level: str):
-        assert (log_level in log_config
-                ), f"Invalid log level. Choose among {log_config.keys()}"
+        assert log_level in log_config, f"Invalid log level. Choose among {log_config.keys()}"
         self.logger.setLevel(log_level)
 
     @property
@@ -117,7 +92,7 @@ class Logger(object):
         self.handler.terminator = old_terminator
 
     @contextlib.contextmanager
-    def processing(self, msg: str, interval: float=0.1):
+    def processing(self, msg: str, interval: float = 0.1):
         """
         Continuously print a progress bar with rotating special effects.
 

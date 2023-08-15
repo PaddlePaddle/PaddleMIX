@@ -18,17 +18,28 @@ from collections import OrderedDict
 import paddle
 import torch
 from diffusers import AltDiffusionPipeline as DiffusersAltDiffusionPipeline
-from paddlenlp.transformers import (CLIPFeatureExtractor, CLIPVisionConfig,
-                                    XLMRobertaTokenizer)
+from paddlenlp.transformers import (
+    CLIPFeatureExtractor,
+    CLIPVisionConfig,
+    XLMRobertaTokenizer,
+)
 
 from ppdiffusers import AltDiffusionPipeline as PPDiffusersAltDiffusionPipeline
 from ppdiffusers import (
-    AutoencoderKL, DDIMScheduler, DPMSolverMultistepScheduler,
-    EulerAncestralDiscreteScheduler, EulerDiscreteScheduler,
-    HeunDiscreteScheduler, LMSDiscreteScheduler, PNDMScheduler,
-    UNet2DConditionModel)
+    AutoencoderKL,
+    DDIMScheduler,
+    DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    HeunDiscreteScheduler,
+    LMSDiscreteScheduler,
+    PNDMScheduler,
+    UNet2DConditionModel,
+)
 from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
-    RobertaSeriesConfig, RobertaSeriesModelWithTransformation)
+    RobertaSeriesConfig,
+    RobertaSeriesModelWithTransformation,
+)
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionSafetyChecker
 
 paddle.set_device("cpu")
@@ -67,9 +78,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True):
         ".vision_model.": ".",
     }
     ignore_value = ["position_ids"]
-    donot_transpose = [
-        "embeddings", "norm", "concept_embeds", "special_care_embeds"
-    ]
+    donot_transpose = ["embeddings", "norm", "concept_embeds", "special_care_embeds"]
 
     for name, value in clip.state_dict().items():
         # step1: ignore position_ids
@@ -83,7 +92,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True):
             name = name.replace(hf_name, ppnlp_name)
         # step4: 0d tensor -> 1d tensor
         if name == "logit_scale":
-            value = value.reshape((1, ))
+            value = value.reshape((1,))
         # step5: safety_checker need prefix "clip."
         if "vision_model" in name:
             name = "clip." + name
@@ -108,8 +117,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True):
             "vision_heads": clip.config.vision_config.num_attention_heads,
             "vision_embed_dim": clip.config.vision_config.hidden_size,
             "vision_patch_size": clip.config.vision_config.patch_size,
-            "vision_mlp_ratio": clip.config.vision_config.intermediate_size //
-            clip.config.vision_config.hidden_size,
+            "vision_mlp_ratio": clip.config.vision_config.intermediate_size // clip.config.vision_config.hidden_size,
             "vision_hidden_act": clip.config.vision_config.hidden_act,
             "projection_dim": clip.config.projection_dim,
         }
@@ -119,10 +127,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32", is_text_encoder=True):
 def convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(xlm_roberta, dtype="float32"):
     new_model_state = {}
     mappings = [
-        [
-            "embeddings.word_embeddings.weight",
-            "embeddings.word_embeddings.weight"
-        ],
+        ["embeddings.word_embeddings.weight", "embeddings.word_embeddings.weight"],
         [
             "embeddings.position_embeddings.weight",
             "embeddings.position_embeddings.weight",
@@ -224,21 +229,17 @@ def convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(xlm_roberta, dtype="float32"):
             hf_name = prefix + hf_name
             pp_name = prefix + pp_name
         if need_transpose:
-            new_model_state[pp_name] = (
-                state_dict[hf_name].t().cpu().numpy().astype(dtype))
+            new_model_state[pp_name] = state_dict[hf_name].t().cpu().numpy().astype(dtype)
         else:
-            new_model_state[pp_name] = state_dict[hf_name].cpu().numpy().astype(
-                dtype)
+            new_model_state[pp_name] = state_dict[hf_name].cpu().numpy().astype(dtype)
 
     new_config = xlm_roberta.config.to_dict()
     return new_model_state, new_config
 
 
-def convert_diffusers_stable_diffusion_to_ppdiffusers(
-        pretrained_model_name_or_path, output_path=None):
+def convert_diffusers_stable_diffusion_to_ppdiffusers(pretrained_model_name_or_path, output_path=None):
     # 0. load diffusers pipe and convert to ppdiffusers weights format
-    diffusers_pipe = DiffusersAltDiffusionPipeline.from_pretrained(
-        pretrained_model_name_or_path, use_auth_token=True)
+    diffusers_pipe = DiffusersAltDiffusionPipeline.from_pretrained(pretrained_model_name_or_path, use_auth_token=True)
     vae_state_dict = convert_to_ppdiffusers(diffusers_pipe.vae)
     unet_state_dict = convert_to_ppdiffusers(diffusers_pipe.unet)
     (
@@ -246,7 +247,8 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(
         text_encoder_config,
     ) = convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(diffusers_pipe.text_encoder)
     safety_checker_state_dict, safety_checker_config = convert_hf_clip_to_ppnlp_clip(
-        diffusers_pipe.safety_checker, is_text_encoder=False)
+        diffusers_pipe.safety_checker, is_text_encoder=False
+    )
 
     # 1. vae
     pp_vae = AutoencoderKL.from_config(diffusers_pipe.vae.config)
@@ -264,8 +266,7 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(
     pp_text_encoder.set_dict(text_encoder_state_dict)
 
     # 4. safety_checker
-    pp_safety_checker = StableDiffusionSafetyChecker(
-        CLIPVisionConfig.from_dict(safety_checker_config))
+    pp_safety_checker = StableDiffusionSafetyChecker(CLIPVisionConfig.from_dict(safety_checker_config))
     pp_safety_checker.set_dict(safety_checker_state_dict)
 
     # 5. scheduler
@@ -281,7 +282,8 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(
         num_train_timesteps=num_train_timesteps,
         steps_offset=1,
         clip_sample=False,
-        set_alpha_to_one=False, )
+        set_alpha_to_one=False,
+    )
     # make sure scheduler works correctly with DDIM
     scheduler.register_to_config(clip_sample=False)
 
@@ -296,8 +298,7 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(
     elif scheduler_type == "euler":
         scheduler = EulerDiscreteScheduler.from_config(scheduler.config)
     elif scheduler_type == "euler-ancestral":
-        scheduler = EulerAncestralDiscreteScheduler.from_config(
-            scheduler.config)
+        scheduler = EulerAncestralDiscreteScheduler.from_config(scheduler.config)
     elif scheduler_type == "dpm":
         scheduler = DPMSolverMultistepScheduler.from_config(scheduler.config)
     elif scheduler_type == "ddim":
@@ -308,8 +309,7 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(
     with tempfile.TemporaryDirectory() as tmpdirname:
         # 6. feature_extractor
         # diffusers_pipe.feature_extractor.save_pretrained(tmpdirname)
-        pp_feature_extractor = CLIPFeatureExtractor.from_pretrained(
-            "CompVis/stable-diffusion-v1-4/feature_extractor")
+        pp_feature_extractor = CLIPFeatureExtractor.from_pretrained("CompVis/stable-diffusion-v1-4/feature_extractor")
 
         # 7. tokenizer
         diffusers_pipe.tokenizer.save_pretrained(tmpdirname)
@@ -323,15 +323,15 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(
             unet=pp_unet,
             safety_checker=pp_safety_checker,
             feature_extractor=pp_feature_extractor,
-            scheduler=scheduler, )
+            scheduler=scheduler,
+        )
         # 9. save_pretrained
         paddle_pipe.save_pretrained(output_path)
     return paddle_pipe
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Pytorch model weights to Paddle model weights.")
+    parser = argparse.ArgumentParser(description="Pytorch model weights to Paddle model weights.")
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -342,7 +342,9 @@ if __name__ == "__main__":
         "--output_path",
         type=str,
         default="AltDiffusion-ppdiffusers",
-        help="The model output path.", )
+        help="The model output path.",
+    )
     args = parser.parse_args()
     ppdiffusers_pipe = convert_diffusers_stable_diffusion_to_ppdiffusers(
-        args.pretrained_model_name_or_path, args.output_path)
+        args.pretrained_model_name_or_path, args.output_path
+    )

@@ -16,8 +16,7 @@ import copy
 import os
 from typing import Union
 
-from paddlenlp.transformers.clip.configuration import (CLIPTextConfig,
-                                                       CLIPVisionConfig)
+from paddlenlp.transformers.clip.configuration import CLIPTextConfig, CLIPVisionConfig
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 from paddlemix.utils.log import logger
@@ -35,28 +34,23 @@ class ImageBindVisionConfig(CLIPVisionConfig):
     model_type = "imagebind_vision_model"
 
     def __init__(
-            self,
-            **kwargs, ):
-        kwargs["return_dict"] = kwargs.pop("return_dict", True)
-        super().__init__(**kwargs)
-
-    def __init__(
-            self,
-            hidden_size=768,
-            intermediate_size=3072,
-            projection_dim=512,
-            num_hidden_layers=12,
-            num_attention_heads=12,
-            num_channels=3,
-            image_size=224,
-            patch_size=32,
-            hidden_act="quick_gelu",
-            layer_norm_eps=0.00001,
-            dropout=0.0,
-            attention_dropout=0.0,
-            initializer_range=0.02,
-            initializer_factor=1.0,
-            **kwargs, ):
+        self,
+        hidden_size=768,
+        intermediate_size=3072,
+        projection_dim=512,
+        num_hidden_layers=12,
+        num_attention_heads=12,
+        num_channels=3,
+        image_size=224,
+        patch_size=32,
+        hidden_act="quick_gelu",
+        layer_norm_eps=0.00001,
+        dropout=0.0,
+        attention_dropout=0.0,
+        initializer_range=0.02,
+        initializer_factor=1.0,
+        **kwargs,
+    ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
@@ -81,29 +75,31 @@ class ImageBindTextConfig(CLIPTextConfig):
     model_type = "imagebind_text_model"
 
     def __init__(
-            self,
-            vocab_size=49408,
-            hidden_size=512,
-            intermediate_size=2048,
-            projection_dim=512,
-            num_hidden_layers=12,
-            num_attention_heads=8,
-            max_position_embeddings=77,
-            hidden_act="quick_gelu",
-            layer_norm_eps=0.00001,
-            dropout=0.0,
-            attention_dropout=0.0,
-            initializer_range=0.02,
-            initializer_factor=1.0,
-            pad_token_id=1,
-            bos_token_id=0,
-            eos_token_id=2,
-            **kwargs, ):
+        self,
+        vocab_size=49408,
+        hidden_size=512,
+        intermediate_size=2048,
+        projection_dim=512,
+        num_hidden_layers=12,
+        num_attention_heads=8,
+        max_position_embeddings=77,
+        hidden_act="quick_gelu",
+        layer_norm_eps=0.00001,
+        dropout=0.0,
+        attention_dropout=0.0,
+        initializer_range=0.02,
+        initializer_factor=1.0,
+        pad_token_id=1,
+        bos_token_id=0,
+        eos_token_id=2,
+        **kwargs,
+    ):
         super().__init__(
             pad_token_id=pad_token_id,
             bos_token_id=bos_token_id,
             eos_token_id=eos_token_id,
-            **kwargs, )
+            **kwargs,
+        )
 
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size
@@ -125,24 +121,21 @@ class ImageBindAudioConfig(PretrainedConfig):
     model_type = "imagebind_audio_model"
 
     def __init__(
-            self,
-            **kwargs, ):
+        self,
+        **kwargs,
+    ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
-                                                  **kwargs)
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
 
         # get the qformer config dict if we are loading from Blip2Config
         if config_dict.get("model_type") == "imagebind":
             config_dict = config_dict["audio_config"]
 
-        if ("model_type" in config_dict and hasattr(cls, "model_type") and
-                config_dict["model_type"] != cls.model_type):
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -156,24 +149,21 @@ class ImageBindDepthConfig(PretrainedConfig):
     model_type = "imagebind_depth_model"
 
     def __init__(
-            self,
-            **kwargs, ):
+        self,
+        **kwargs,
+    ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
-                                                  **kwargs)
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
 
         # get the qformer config dict if we are loading from Blip2Config
         if config_dict.get("model_type") == "imagebind":
             config_dict = config_dict["depth_config"]
 
-        if ("model_type" in config_dict and hasattr(cls, "model_type") and
-                config_dict["model_type"] != cls.model_type):
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -187,24 +177,21 @@ class ImageBindThermalConfig(PretrainedConfig):
     model_type = "imagebind_thermal_model"
 
     def __init__(
-            self,
-            **kwargs, ):
+        self,
+        **kwargs,
+    ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
-                                                  **kwargs)
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
 
         # get the qformer config dict if we are loading from Blip2Config
         if config_dict.get("model_type") == "imagebind":
             config_dict = config_dict["thermal_config"]
 
-        if ("model_type" in config_dict and hasattr(cls, "model_type") and
-                config_dict["model_type"] != cls.model_type):
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -218,24 +205,21 @@ class ImageBindIMUConfig(PretrainedConfig):
     model_type = "imagebind_imu_model"
 
     def __init__(
-            self,
-            **kwargs, ):
+        self,
+        **kwargs,
+    ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
-                                                  **kwargs)
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
 
         # get the qformer config dict if we are loading from Blip2Config
         if config_dict.get("model_type") == "imagebind":
             config_dict = config_dict["imu_config"]
 
-        if ("model_type" in config_dict and hasattr(cls, "model_type") and
-                config_dict["model_type"] != cls.model_type):
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -250,16 +234,17 @@ class ImageBindConfig(PretrainedConfig):
     is_composition = True
 
     def __init__(
-            self,
-            text_config=None,
-            vision_config=None,
-            audio_config=None,
-            depth_config=None,
-            thermal_config=None,
-            imu_config=None,
-            projection_dim=512,
-            logit_scale_init_value=2.6592,
-            **kwargs, ):
+        self,
+        text_config=None,
+        vision_config=None,
+        audio_config=None,
+        depth_config=None,
+        thermal_config=None,
+        imu_config=None,
+        projection_dim=512,
+        logit_scale_init_value=2.6592,
+        **kwargs,
+    ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
@@ -285,39 +270,27 @@ class ImageBindConfig(PretrainedConfig):
 
         if text_config is None:
             text_config = {}
-            logger.info(
-                "text_config is None. Initializing the ImageBindTextConfig with default values."
-            )
+            logger.info("text_config is None. Initializing the ImageBindTextConfig with default values.")
 
         if vision_config is None:
             vision_config = {}
-            logger.info(
-                "vision_config is None. initializing the ImageBindVisionConfig with default values."
-            )
+            logger.info("vision_config is None. initializing the ImageBindVisionConfig with default values.")
 
         if audio_config is None:
             audio_config = {}
-            logger.info(
-                "audio_config is None. initializing the ImageBindAudioConfig with default values."
-            )
+            logger.info("audio_config is None. initializing the ImageBindAudioConfig with default values.")
 
         if depth_config is None:
             depth_config = {}
-            logger.info(
-                "depth_config is None. initializing the ImageBindDepthConfig with default values."
-            )
+            logger.info("depth_config is None. initializing the ImageBindDepthConfig with default values.")
 
         if thermal_config is None:
             thermal_config = {}
-            logger.info(
-                "thermal_config is None. initializing the ImageBindThermalConfig with default values."
-            )
+            logger.info("thermal_config is None. initializing the ImageBindThermalConfig with default values.")
 
         if imu_config is None:
             imu_config = {}
-            logger.info(
-                "imu_config is None. initializing the ImageBindIMUConfig with default values."
-            )
+            logger.info("imu_config is None. initializing the ImageBindIMUConfig with default values.")
 
         # text_config["projection_dim"] = projection_dim
         # vision_config["projection_dim"] = projection_dim
@@ -334,10 +307,11 @@ class ImageBindConfig(PretrainedConfig):
 
     @classmethod
     def from_text_vision_configs(
-            cls,
-            text_config: ImageBindTextConfig,
-            vision_config: ImageBindVisionConfig,
-            **kwargs, ):
+        cls,
+        text_config: ImageBindTextConfig,
+        vision_config: ImageBindVisionConfig,
+        **kwargs,
+    ):
         r"""
         Instantiate a [`ImageBindConfig`] (or a derived class) from clip text model configuration and clip vision model
         configuration.
@@ -349,7 +323,8 @@ class ImageBindConfig(PretrainedConfig):
         return cls(
             text_config=text_config.to_dict(),
             vision_config=vision_config.to_dict(),
-            **kwargs, )
+            **kwargs,
+        )
 
     def to_dict(self):
         """

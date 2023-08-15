@@ -72,22 +72,23 @@ class VisualGLMVisionConfig(PretrainedConfig):
     model_type = "visualglm_vision_model"
 
     def __init__(
-            self,
-            hidden_size=1408,
-            intermediate_size=6144,
-            num_hidden_layers=39,
-            num_attention_heads=16,
-            num_channels=3,
-            image_size=224,
-            patch_size=14,
-            hidden_act="gelu",
-            layer_norm_eps=0.00001,
-            dropout=0.1,
-            attention_dropout=0.1,
-            initializer_range=1e-10,
-            initializer_factor=1.0,
-            qkv_bias=True,
-            **kwargs, ):
+        self,
+        hidden_size=1408,
+        intermediate_size=6144,
+        num_hidden_layers=39,
+        num_attention_heads=16,
+        num_channels=3,
+        image_size=224,
+        patch_size=14,
+        hidden_act="gelu",
+        layer_norm_eps=0.00001,
+        dropout=0.1,
+        attention_dropout=0.1,
+        initializer_range=1e-10,
+        initializer_factor=1.0,
+        qkv_bias=True,
+        **kwargs,
+    ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
 
@@ -107,17 +108,13 @@ class VisualGLMVisionConfig(PretrainedConfig):
         self.qkv_bias = qkv_bias
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
-                                                  **kwargs)
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
         # get the vision config dict if we are loading from VisualGLMConfig
         if config_dict.get("model_type") == "visualglm":
             config_dict = config_dict["vision_config"]
 
-        if ("model_type" in config_dict and hasattr(cls, "model_type") and
-                config_dict["model_type"] != cls.model_type):
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -181,23 +178,24 @@ class VisualGLMQFormerConfig(PretrainedConfig):
     model_type = "visualglm_qformer_model"
 
     def __init__(
-            self,
-            hidden_size=768,
-            num_hidden_layers=12,
-            num_attention_heads=12,
-            intermediate_size=3072,
-            hidden_act="gelu",
-            hidden_dropout_prob=0.1,
-            attention_probs_dropout_prob=0.1,
-            max_position_embeddings=512,
-            initializer_range=0.02,
-            layer_norm_eps=1e-12,
-            pad_token_id=0,
-            position_embedding_type="absolute",
-            classifier_dropout=None,
-            cross_attention_frequency=2,
-            encoder_hidden_size=1408,
-            **kwargs, ):
+        self,
+        hidden_size=768,
+        num_hidden_layers=12,
+        num_attention_heads=12,
+        intermediate_size=3072,
+        hidden_act="gelu",
+        hidden_dropout_prob=0.1,
+        attention_probs_dropout_prob=0.1,
+        max_position_embeddings=512,
+        initializer_range=0.02,
+        layer_norm_eps=1e-12,
+        pad_token_id=0,
+        position_embedding_type="absolute",
+        classifier_dropout=None,
+        cross_attention_frequency=2,
+        encoder_hidden_size=1408,
+        **kwargs,
+    ):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
 
         self.hidden_size = hidden_size
@@ -216,18 +214,14 @@ class VisualGLMQFormerConfig(PretrainedConfig):
         self.encoder_hidden_size = encoder_hidden_size
 
     @classmethod
-    def from_pretrained(cls,
-                        pretrained_model_name_or_path: Union[str, os.PathLike],
-                        **kwargs) -> "PretrainedConfig":
-        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path,
-                                                  **kwargs)
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
 
         # get the qformer config dict if we are loading from VisualGLMConfig
         if config_dict.get("model_type") == "visualglm":
             config_dict = config_dict["qformer_config"]
 
-        if ("model_type" in config_dict and hasattr(cls, "model_type") and
-                config_dict["model_type"] != cls.model_type):
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
             logger.warning(
                 f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
                 f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
@@ -280,42 +274,34 @@ class VisualGLMConfig(PretrainedConfig):
     model_type = "visualglm"
 
     def __init__(
-            self,
-            vision_config=None,
-            qformer_config=None,
-            text_config=None,
-            num_query_tokens=32,
-            **kwargs, ):
+        self,
+        vision_config=None,
+        qformer_config=None,
+        text_config=None,
+        num_query_tokens=32,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
 
         if vision_config is None:
             vision_config = {}
-            logger.info(
-                "vision_config is None. initializing the VisualGLMVisionConfig with default values."
-            )
+            logger.info("vision_config is None. initializing the VisualGLMVisionConfig with default values.")
 
         if qformer_config is None:
             qformer_config = {}
-            logger.info(
-                "qformer_config is None. Initializing the VisualGLMQFormerConfig with default values."
-            )
+            logger.info("qformer_config is None. Initializing the VisualGLMQFormerConfig with default values.")
 
         if text_config is None:
             text_config = {}
-            logger.info(
-                "text_config is None. Initializing the text config with default values (`ChatGLMConfig`)."
-            )
+            logger.info("text_config is None. Initializing the text config with default values (`ChatGLMConfig`).")
         self.vision_config = VisualGLMVisionConfig(**vision_config)
         self.qformer_config = VisualGLMQFormerConfig(**qformer_config)
-        text_model_type = (text_config["model_type"]
-                           if "model_type" in text_config else "chatglm")
+        text_model_type = text_config["model_type"] if "model_type" in text_config else "chatglm"
 
         if text_model_type == "chatglm":
             self.text_config = ChatGLMConfig(**text_config)
         else:
-            raise ValueError(
-                "Only chatglm accepted for model_type, but accepted {}.".format(
-                    text_model_type))
+            raise ValueError("Only chatglm accepted for model_type, but accepted {}.".format(text_model_type))
 
         self.num_query_tokens = num_query_tokens
         self.qformer_config.encoder_hidden_size = self.vision_config.hidden_size
@@ -325,11 +311,12 @@ class VisualGLMConfig(PretrainedConfig):
 
     @classmethod
     def from_vision_qformer_text_configs(
-            cls,
-            vision_config: VisualGLMVisionConfig,
-            qformer_config: VisualGLMQFormerConfig,
-            text_config: PretrainedConfig,
-            **kwargs, ):
+        cls,
+        vision_config: VisualGLMVisionConfig,
+        qformer_config: VisualGLMQFormerConfig,
+        text_config: PretrainedConfig,
+        **kwargs,
+    ):
         r"""
         Instantiate a [`VisualGLMConfig`] (or a derived class) from a vision model, Q-Former and language model
         configurations.
@@ -341,7 +328,8 @@ class VisualGLMConfig(PretrainedConfig):
             vision_config=vision_config.to_dict(),
             qformer_config=qformer_config.to_dict(),
             text_config=text_config.to_dict(),
-            **kwargs, )
+            **kwargs,
+        )
 
     def to_dict(self):
         """

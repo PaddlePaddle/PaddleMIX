@@ -27,4 +27,5 @@ for i, audio in enumerate(audios):
     write(
         f"unconditional_audio_generation-dance_diffusion-result_{i}.wav",
         pipe.unet.sample_rate,
-        audio.transpose(), )
+        audio.transpose(),
+    )

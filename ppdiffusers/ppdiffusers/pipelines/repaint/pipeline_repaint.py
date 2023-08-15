@@ -38,11 +38,7 @@ def _preprocess_image(image: Union[List, PIL.Image.Image, paddle.Tensor]):
         w, h = image[0].size
         w, h = (x - x % 8 for x in (w, h))  # resize to integer multiple of 8
 
-        image = [
-            np.array(i.resize(
-                (w, h), resample=PIL_INTERPOLATION["lanczos"]))[None, :]
-            for i in image
-        ]
+        image = [np.array(i.resize((w, h), resample=PIL_INTERPOLATION["lanczos"]))[None, :] for i in image]
         image = np.concatenate(image, axis=0)
         image = np.array(image).astype(np.float32) / 255.0
         image = image.transpose(0, 3, 1, 2)
@@ -62,12 +58,7 @@ def _preprocess_mask(mask: Union[List, PIL.Image.Image, paddle.Tensor]):
     if isinstance(mask[0], PIL.Image.Image):
         w, h = mask[0].size
         w, h = (x - x % 32 for x in (w, h))  # resize to integer multiple of 32
-        mask = [
-            np.array(
-                m.convert("L").resize(
-                    (w, h), resample=PIL_INTERPOLATION["nearest"]))[None, :]
-            for m in mask
-        ]
+        mask = [np.array(m.convert("L").resize((w, h), resample=PIL_INTERPOLATION["nearest"]))[None, :] for m in mask]
         mask = np.concatenate(mask, axis=0)
         mask = mask.astype(np.float32) / 255.0
         mask[mask < 0.5] = 0
@@ -88,17 +79,17 @@ class RePaintPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            image: Union[paddle.Tensor, PIL.Image.Image],
-            mask_image: Union[paddle.Tensor, PIL.Image.Image],
-            num_inference_steps: int=250,
-            eta: float=0.0,
-            jump_length: int=10,
-            jump_n_sample: int=10,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True, ) -> Union[ImagePipelineOutput, Tuple]:
+        self,
+        image: Union[paddle.Tensor, PIL.Image.Image],
+        mask_image: Union[paddle.Tensor, PIL.Image.Image],
+        num_inference_steps: int = 250,
+        eta: float = 0.0,
+        jump_length: int = 10,
+        jump_n_sample: int = 10,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+    ) -> Union[ImagePipelineOutput, Tuple]:
         r"""
         Args:
             image (`paddle.Tensor` or `PIL.Image.Image`):
@@ -146,12 +137,10 @@ class RePaintPipeline(DiffusionPipeline):
             )
 
         image_shape = original_image.shape
-        image = randn_tensor(
-            image_shape, generator=generator, dtype=self.unet.dtype)
+        image = randn_tensor(image_shape, generator=generator, dtype=self.unet.dtype)
 
         # set step values
-        self.scheduler.set_timesteps(num_inference_steps, jump_length,
-                                     jump_n_sample)
+        self.scheduler.set_timesteps(num_inference_steps, jump_length, jump_n_sample)
         self.scheduler.eta = eta
 
         t_last = self.scheduler.timesteps[0] + 1
@@ -161,9 +150,7 @@ class RePaintPipeline(DiffusionPipeline):
                 # predict the noise residual
                 model_output = self.unet(image, t).sample
                 # compute previous image: x_t -> x_t-1
-                image = self.scheduler.step(model_output, t, image,
-                                            original_image, mask_image,
-                                            generator).prev_sample
+                image = self.scheduler.step(model_output, t, image, original_image, mask_image, generator).prev_sample
 
             else:
                 # compute the reverse: x_t-1 -> x_t
@@ -176,6 +163,6 @@ class RePaintPipeline(DiffusionPipeline):
             image = self.numpy_to_pil(image)
 
         if not return_dict:
-            return (image, )
+            return (image,)
 
         return ImagePipelineOutput(images=image)

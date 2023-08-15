@@ -18,11 +18,9 @@ from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
-import paddle
-import paddle.nn.functional as F
 import requests
 from paddlenlp.trainer import PdArgumentParser
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from paddlemix.models.sam.modeling import SamModel
 from paddlemix.processors.sam_processing import SamProcessor
@@ -56,11 +54,8 @@ class DataArguments:
     """
 
     input_image: str = field(metadata={"help": "The name of input image."})
-    box_prompt: List[int] = field(
-        default=None, metadata={"help": "box promt format as xyxyxyxy...]."})
-    points_prompt: List[int] = field(
-        default=None,
-        metadata={"help": "point promt format as [[xy],[xy]...]."})
+    box_prompt: List[int] = field(default=None, metadata={"help": "box promt format as xyxyxyxy...]."})
+    points_prompt: List[int] = field(default=None, metadata={"help": "point promt format as [[xy],[xy]...]."})
 
 
 @dataclass
@@ -71,19 +66,20 @@ class ModelArguments:
 
     model_name_or_path: str = field(
         default="Sam/SamVitH-1024",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     input_type: str = field(
         default="boxs",
-        metadata={
-            "help":
-            "The model prompt type, choices ['boxs', 'points', 'points_grid']."
-        }, )
+        metadata={"help": "The model prompt type, choices ['boxs', 'points', 'points_grid']."},
+    )
     output_dir: str = field(
         default="seg_output",
-        metadata={"help": "output directory."}, )
+        metadata={"help": "output directory."},
+    )
     visual: bool = field(
         default=True,
-        metadata={"help": "save visual image."}, )
+        metadata={"help": "save visual image."},
+    )
 
 
 def main():
@@ -94,15 +90,13 @@ def main():
         # read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     else:
-        image_pil = Image.open(requests.get(url, stream=True).raw).convert(
-            "RGB")
+        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
 
     # bulid processor
     processor = SamProcessor.from_pretrained(model_args.model_name_or_path)
     # bulid model
     logger.info("SamModel: {}".format(model_args.model_name_or_path))
-    sam_model = SamModel.from_pretrained(
-        model_args.model_name_or_path, input_type=model_args.input_type)
+    sam_model = SamModel.from_pretrained(model_args.model_name_or_path, input_type=model_args.input_type)
 
     if data_args.box_prompt is not None:
         data_args.box_prompt = np.array(data_args.box_prompt)
@@ -113,7 +107,8 @@ def main():
         image_pil,
         input_type=model_args.input_type,
         box=data_args.box_prompt,
-        point_coords=data_args.points_prompt, )
+        point_coords=data_args.points_prompt,
+    )
     seg_masks = sam_model(img=image_seg, prompt=prompt)
     seg_masks = processor.postprocess_masks(seg_masks)
 
@@ -131,7 +126,8 @@ def main():
             os.path.join(model_args.output_dir, "mask_pred.jpg"),
             bbox_inches="tight",
             dpi=300,
-            pad_inches=0.0, )
+            pad_inches=0.0,
+        )
 
 
 if __name__ == "__main__":

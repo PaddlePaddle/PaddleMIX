@@ -64,7 +64,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
     """
 
     def alpha_bar(time_step):
-        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2)**2
+        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2) ** 2
 
     betas = []
     for i in range(num_diffusion_timesteps):
@@ -102,17 +102,16 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            num_train_timesteps: int=1000,
-            variance_type: str="fixed_small_log",
-            clip_sample: bool=True,
-            clip_sample_range: Optional[float]=1.0,
-            prediction_type: str="epsilon",
-            beta_schedule: str="squaredcos_cap_v2", ):
+        self,
+        num_train_timesteps: int = 1000,
+        variance_type: str = "fixed_small_log",
+        clip_sample: bool = True,
+        clip_sample_range: Optional[float] = 1.0,
+        prediction_type: str = "epsilon",
+        beta_schedule: str = "squaredcos_cap_v2",
+    ):
         if beta_schedule != "squaredcos_cap_v2":
-            raise ValueError(
-                "UnCLIPScheduler only supports `beta_schedule`: 'squaredcos_cap_v2'"
-            )
+            raise ValueError("UnCLIPScheduler only supports `beta_schedule`: 'squaredcos_cap_v2'")
 
         self.betas = betas_for_alpha_bar(num_train_timesteps)
 
@@ -125,14 +124,11 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
 
         # setable values
         self.num_inference_steps = None
-        self.timesteps = paddle.to_tensor(
-            np.arange(0, num_train_timesteps)[::-1].copy())
+        self.timesteps = paddle.to_tensor(np.arange(0, num_train_timesteps)[::-1].copy())
 
         self.variance_type = variance_type
 
-    def scale_model_input(self,
-                          sample: paddle.Tensor,
-                          timestep: Optional[int]=None) -> paddle.Tensor:
+    def scale_model_input(self, sample: paddle.Tensor, timestep: Optional[int] = None) -> paddle.Tensor:
         """
         Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
         current timestep.
@@ -159,23 +155,16 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
                 the number of diffusion steps used when generating samples with a pre-trained model.
         """
         self.num_inference_steps = num_inference_steps
-        step_ratio = (self.config.num_train_timesteps - 1) / (
-            self.num_inference_steps - 1)
-        timesteps = ((np.arange(0, num_inference_steps) * step_ratio)
-                     .round()[::-1].copy().astype(np.int64))
+        step_ratio = (self.config.num_train_timesteps - 1) / (self.num_inference_steps - 1)
+        timesteps = (np.arange(0, num_inference_steps) * step_ratio).round()[::-1].copy().astype(np.int64)
         self.timesteps = paddle.to_tensor(timesteps)
 
-    def _get_variance(self,
-                      t,
-                      prev_timestep=None,
-                      predicted_variance=None,
-                      variance_type=None):
+    def _get_variance(self, t, prev_timestep=None, predicted_variance=None, variance_type=None):
         if prev_timestep is None:
             prev_timestep = t - 1
 
         alpha_prod_t = self.alphas_cumprod[t]
-        alpha_prod_t_prev = (self.alphas_cumprod[prev_timestep]
-                             if prev_timestep >= 0 else self.one)
+        alpha_prod_t_prev = self.alphas_cumprod[prev_timestep] if prev_timestep >= 0 else self.one
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
 
@@ -207,13 +196,14 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
         return variance
 
     def step(
-            self,
-            model_output: paddle.Tensor,
-            timestep: int,
-            sample: paddle.Tensor,
-            prev_timestep: Optional[int]=None,
-            generator=None,
-            return_dict: bool=True, ) -> Union[UnCLIPSchedulerOutput, Tuple]:
+        self,
+        model_output: paddle.Tensor,
+        timestep: int,
+        sample: paddle.Tensor,
+        prev_timestep: Optional[int] = None,
+        generator=None,
+        return_dict: bool = True,
+    ) -> Union[UnCLIPSchedulerOutput, Tuple]:
         """
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
         process from the learned model outputs (most often the predicted noise).
@@ -236,12 +226,11 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
         """
         t = timestep
 
-        if (model_output.shape[1] == sample.shape[1] * 2 and
-                self.variance_type == "learned_range"):
+        if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type == "learned_range":
             # must split like this, 3 -> split 2 -> [2, 1]
             model_output, predicted_variance = model_output.split(
-                [sample.shape[1], model_output.shape[1] - sample.shape[1]],
-                axis=1)
+                [sample.shape[1], model_output.shape[1] - sample.shape[1]], axis=1
+            )
         else:
             predicted_variance = None
 
@@ -250,8 +239,7 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
             prev_timestep = t - 1
 
         alpha_prod_t = self.alphas_cumprod[t]
-        alpha_prod_t_prev = (self.alphas_cumprod[prev_timestep]
-                             if prev_timestep >= 0 else self.one)
+        alpha_prod_t_prev = self.alphas_cumprod[prev_timestep] if prev_timestep >= 0 else self.one
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
 
@@ -265,32 +253,31 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
         # 2. compute predicted original sample from predicted noise also called
         # "predicted x_0" of formula (15) from https://arxiv.org/pdf/2006.11239.pdf
         if self.config.prediction_type == "epsilon":
-            pred_original_sample = (sample - beta_prod_t**
-                                    (0.5) * model_output) / alpha_prod_t**(0.5)
+            pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
         elif self.config.prediction_type == "sample":
             pred_original_sample = model_output
         else:
             raise ValueError(
                 f"prediction_type given as {self.config.prediction_type} must be one of `epsilon` or `sample`"
-                " for the UnCLIPScheduler.")
+                " for the UnCLIPScheduler."
+            )
 
         # 3. Clip "predicted x_0"
         if self.config.clip_sample:
             pred_original_sample = paddle.clip(
                 pred_original_sample,
                 -self.config.clip_sample_range,
-                self.config.clip_sample_range, )
+                self.config.clip_sample_range,
+            )
 
         # 4. Compute coefficients for pred_original_sample x_0 and current sample x_t
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
-        pred_original_sample_coeff = (alpha_prod_t_prev
-                                      **(0.5) * beta) / beta_prod_t
-        current_sample_coeff = alpha**(0.5) * beta_prod_t_prev / beta_prod_t
+        pred_original_sample_coeff = (alpha_prod_t_prev ** (0.5) * beta) / beta_prod_t
+        current_sample_coeff = alpha ** (0.5) * beta_prod_t_prev / beta_prod_t
 
         # 5. Compute predicted previous sample µ_t
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
-        pred_prev_sample = (pred_original_sample_coeff * pred_original_sample +
-                            current_sample_coeff * sample)
+        pred_prev_sample = pred_original_sample_coeff * pred_original_sample + current_sample_coeff * sample
 
         # 6. Add noise
         variance = 0
@@ -298,12 +285,14 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
             variance_noise = randn_tensor(
                 model_output.shape,
                 dtype=model_output.dtype,
-                generator=generator, )
+                generator=generator,
+            )
 
             variance = self._get_variance(
                 t,
                 predicted_variance=predicted_variance,
-                prev_timestep=prev_timestep, )
+                prev_timestep=prev_timestep,
+            )
 
             if self.variance_type == "fixed_small_log":
                 variance = variance
@@ -312,15 +301,14 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
             else:
                 raise ValueError(
                     f"variance_type given as {self.variance_type} must be one of `fixed_small_log` or `learned_range`"
-                    " for the UnCLIPScheduler.")
+                    " for the UnCLIPScheduler."
+                )
 
             variance = variance * variance_noise
 
         pred_prev_sample = pred_prev_sample + variance
 
         if not return_dict:
-            return (pred_prev_sample, )
+            return (pred_prev_sample,)
 
-        return UnCLIPSchedulerOutput(
-            prev_sample=pred_prev_sample,
-            pred_original_sample=pred_original_sample)
+        return UnCLIPSchedulerOutput(prev_sample=pred_prev_sample, pred_original_sample=pred_original_sample)
