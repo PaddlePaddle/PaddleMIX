@@ -26,10 +26,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../
 
 import requests
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments
-from paddlenlp.transformers import AutoTokenizer
 from PIL import Image
 
-from paddlemix.examples.blip2.utils import LLM_LIST, load_model
+from paddlemix.examples.blip2.utils import LLM_LIST, create_tokenizer, load_model
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
@@ -137,7 +136,7 @@ def main():
     model_args.data_world_size = training_args.data_world_size
     paddle.set_device(training_args.device)
     prompt = data_args.prompt
-    tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path, use_fast=False)
+    tokenizer_class = create_tokenizer(model_args.text_model_name_or_path)
     image_processor = BlipImageProcessor.from_pretrained(
         os.path.join(model_args.model_name_or_path, "processor", "eval")
     )

@@ -28,7 +28,7 @@ from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_chec
 from paddlenlp.transformers import AutoTokenizer
 
 from paddlemix.datasets import load_dataset
-from paddlemix.examples.blip2.utils import BlipCollator
+from paddlemix.examples.blip2.utils import BlipCollator, create_tokenizer
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
@@ -164,7 +164,7 @@ def main():
             )
 
     # create dataset
-    tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path, use_fast=False)
+    tokenizer_class = create_tokenizer(model_args.text_model_name_or_path)
     image_processor = BlipImageProcessor.from_pretrained(
         os.path.join(model_args.model_name_or_path, "processor", "train")
     )
