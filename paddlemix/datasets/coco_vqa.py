@@ -21,10 +21,7 @@ from paddlemix.utils.log import logger
 
 from .dataset import DatasetBuilder
 
-# from paddle.dataset.common import md5file
-# from paddle.utils.download import get_path_from_url
-
-__all__ = ["VQADataset", "VQAEvalDataset"]
+__all__ = ["VQADataset"]
 
 
 class VQADataset(DatasetBuilder):
@@ -33,31 +30,26 @@ class VQADataset(DatasetBuilder):
     """
 
     URL = "https://bj.bcebos.com/paddlemix/datasets/coco.tar.gz"
-    META_INFO = collections.namedtuple(
-        "META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
+    META_INFO = collections.namedtuple("META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
     MD5 = ""
     SPLITS = {
         "train": META_INFO(
             os.path.join("coco", "images"),
-            [
-                os.path.join("coco", "annotations/vqa_train.json"),
-                os.path.join("coco", "annotations/vqa_val.json")
-            ],
+            [os.path.join("coco", "annotations/vqa_train.json"), os.path.join("coco", "annotations/vqa_val.json")],
             "",
-            "aa31ac474cf6250ebb81d18348a07ed8", ),
+            "aa31ac474cf6250ebb81d18348a07ed8",
+        ),
         "val": META_INFO(
             os.path.join("coco", "images"),
             [
                 os.path.join("coco", "annotations/vqa_val_eval.json"),
                 os.path.join("coco", "annotations/answer_list.json"),
-                os.path.join(
-                    "coco",
-                    "annotations/v2_OpenEnded_mscoco_val2014_questions.json"),
-                os.path.join("coco",
-                             "annotations/v2_mscoco_val2014_annotations.json"),
+                os.path.join("coco", "annotations/v2_OpenEnded_mscoco_val2014_questions.json"),
+                os.path.join("coco", "annotations/v2_mscoco_val2014_annotations.json"),
             ],
             "",
-            "b273847456ef5580e33713b1f7de52a0", ),
+            "b273847456ef5580e33713b1f7de52a0",
+        ),
         "test": META_INFO(
             os.path.join("coco", "images"),
             [
@@ -65,11 +57,11 @@ class VQADataset(DatasetBuilder):
                 os.path.join("coco", "annotation/vqa_test.json"),
             ],
             "",
-            "3ff34b0ef2db02d01c37399f6a2a6cd1", ),
+            "3ff34b0ef2db02d01c37399f6a2a6cd1",
+        ),
     }
 
     def _get_data(self, mode, **kwargs):
-        # default_root = '/paddle/wangguanzhong/blip-jinman/PaddleNLP/blip2'
         logger.info("default dataset root is {}".format(DATA_HOME))
         images, annotations, image_hash, anno_hash = self.SPLITS[mode]
         image_fullname = os.path.join(DATA_HOME, images)
@@ -94,7 +86,9 @@ class VQADataset(DatasetBuilder):
         for ann in annotations:
             image_path = os.path.join(image_root, ann["image"])
             if mode == "train":
-                yield_data = {"image": image_path, }
+                yield_data = {
+                    "image": image_path,
+                }
                 yield_data["text_input"] = ann["question"]
                 yield_data["answers"]: ann["answers"]
                 yield_data["image_ids"]: ann["image_ids"]
@@ -104,8 +98,7 @@ class VQADataset(DatasetBuilder):
                     "image": image_path,
                     "text_input": ann["question"],
                     "question_id": ann["question_id"],
-                    "image_id":
-                    ann["image"].split("/")[-1].strip(".jpg").split("_")[-1]
+                    "image_id": ann["image"].split("/")[-1].strip(".jpg").split("_")[-1],
                 }
                 yield_data["image_ids"]: ann["image_ids"]
             yield yield_data
@@ -115,8 +108,7 @@ class VQADataset(DatasetBuilder):
         n = 0
         for ann in anno:
             if "image_id" not in ann.keys():
-                img_id = ann["image"].split("/")[-1].strip(".jpg").split("_")[
-                    -1]
+                img_id = ann["image"].split("/")[-1].strip(".jpg").split("_")[-1]
             else:
                 img_id = ann["image_id"]
             if img_id not in img_ids.keys():
