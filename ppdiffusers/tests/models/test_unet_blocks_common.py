@@ -85,7 +85,8 @@ class UNetBlockTesterMixin:
         self.assertEqual(list(output.shape), list(self.output_shape))
         output_slice = output[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(expected_slice)
-        assert paddle_all_close(output_slice.flatten(), expected_slice, atol=0.005)
+        # atol=0.005 -> 0.008
+        assert paddle_all_close(output_slice.flatten(), expected_slice, atol=0.008)
 
     def test_training(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()

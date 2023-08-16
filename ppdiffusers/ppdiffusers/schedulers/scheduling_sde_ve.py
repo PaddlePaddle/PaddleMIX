@@ -152,10 +152,14 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         self.sigmas = paddle.to_tensor([sigma_min * (sigma_max / sigma_min) ** t for t in self.timesteps])
 
     def get_adjacent_sigma(self, timesteps, t):
+        # (TODO, junnyu) BUG in PaddlePaddle, here is the issue https://github.com/PaddlePaddle/Paddle/issues/56335
+        index = timesteps - 1
+        if (index < 0).all():
+            index += self.discrete_sigmas.shape[0]
         return paddle.where(
             timesteps == 0,
             paddle.zeros_like(t),
-            self.discrete_sigmas[timesteps - 1],
+            self.discrete_sigmas[index],
         )
 
     def step_pred(
