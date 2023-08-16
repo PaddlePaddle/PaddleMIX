@@ -62,7 +62,7 @@ pip install -e .
 
 ## 教程
 
-- [快速开始](application/README.md)
+- [快速开始](applications/README.md)
 - [训练微调](docs/train_tutorial.md)
 - [推理部署](deploy/README.md)
 
