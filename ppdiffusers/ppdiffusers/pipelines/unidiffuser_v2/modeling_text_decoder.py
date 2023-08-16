@@ -123,13 +123,13 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
                 labels: Optional[paddle.Tensor]=None):
         """
         Args:
-            input_ids (`torch.Tensor` of shape `(N, max_seq_len)`):
+            input_ids (`paddle.Tensor` of shape `(N, max_seq_len)`):
                 Text tokens to use for inference.
-            prefix_embeds (`torch.Tensor` of shape `(N, prefix_length, 768)`):
+            prefix_embeds (`paddle.Tensor` of shape `(N, prefix_length, 768)`):
                 Prefix embedding to preprend to the embedded tokens.
-            attention_mask (`torch.Tensor` of shape `(N, prefix_length + max_seq_len, 768)`, *optional*):
+            attention_mask (`paddle.Tensor` of shape `(N, prefix_length + max_seq_len, 768)`, *optional*):
                 Attention mask for the prefix embedding.
-            labels (`torch.Tensor`, *optional*):
+            labels (`paddle.Tensor`, *optional*):
                 Labels to use for language modeling.
         """
         embedding_text = self.transformer.transformer.wte(input_ids)
@@ -137,8 +137,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         prefix_embeds = self.decode_prefix(hidden)
         embedding_cat = paddle.concat(x=(prefix_embeds, embedding_text), axis=1)
         if labels is not None:
-            dummy_token = self.get_dummy_token(input_ids.shape[0],
-                                               input_ids.place)
+            dummy_token = self.get_dummy_token(input_ids.shape[0])
             labels = paddle.concat(x=(dummy_token, input_ids), axis=1)
         out = self.transformer(
             inputs_embeds=embedding_cat,
@@ -149,7 +148,9 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         else:
             return out
 
-    def get_dummy_token(self, batch_size: int, device: str) -> paddle.Tensor:
+    def get_dummy_token(
+            self,
+            batch_size: int, ) -> paddle.Tensor:
         return paddle.zeros(
             shape=[batch_size, self.prefix_length], dtype='int64')
 
@@ -157,17 +158,18 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         return self.encode_prefix(prefix)
 
     @paddle.no_grad()
-    def generate_captions(self, features, eos_token_id, device):
+    def generate_captions(
+            self,
+            features,
+            eos_token_id, ):
         """
         Generate captions given text embedding features. Returns list[L].
 
         Args:
-            features (`torch.Tensor` of shape `(B, L, D)`):
+            features (`paddle.Tensor` of shape `(B, L, D)`):
                 Text embedding features to generate captions from.
             eos_token_id (`int`):
                 The token ID of the EOS token for the text decoder model.
-            device:
-                Device to perform text generation on.
 
         Returns:
             `List[str]`: A list of strings generated from the decoder model.
@@ -177,9 +179,9 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         generated_tokens = []
         generated_seq_lengths = []
         for feature in features:
-            feature = self.decode_prefix(feature.to(device))
+            feature = self.decode_prefix(feature)
             output_tokens, seq_lengths = self.generate_beam(
-                input_embeds=feature, device=device, eos_token_id=eos_token_id)
+                input_embeds=feature, eos_token_id=eos_token_id)
             generated_tokens.append(output_tokens[0])
             generated_seq_lengths.append(seq_lengths[0])
         generated_tokens = paddle.stack(x=generated_tokens)
@@ -190,7 +192,6 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
     def generate_beam(self,
                       input_ids=None,
                       input_embeds=None,
-                      device=None,
                       beam_size: int=5,
                       entry_length: int=67,
                       temperature: float=1.0,
@@ -203,14 +204,12 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         Args:
             eos_token_id (`int`, *optional*):
                 The token ID of the EOS token for the text decoder model.
-            input_ids (`torch.LongTensor` of shape `(batch_size, input_ids_length)`, *optional*):
+            input_ids (`paddle.Tensor` of shape `(batch_size, input_ids_length)`, *optional*):
                 Tokenizer indices of input sequence tokens in the vocabulary. One of `input_ids` and `input_embeds`
                 must be supplied.
-            input_embeds (`torch.FloatTensor` of shape `(batch_size, seq_len, hidden_size)`, *optional*):
+            input_embeds (`paddle.Tensor` of shape `(batch_size, seq_len, hidden_size)`, *optional*):
                 An embedded representation to directly pass to the transformer as a prefix for beam search. One of
                 `input_ids` and `input_embeds` must be supplied.
-            device:
-                The device to perform beam search on.
             beam_size (`int`, *optional*, defaults to `5`):
                 The number of best states to store during beam search.
             entry_length (`int`, *optional*, defaults to `67`):
@@ -219,7 +218,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
                 The temperature to use when performing the softmax over logits from the decoding model.
 
         Returns:
-            `Tuple(torch.Tensor, torch.Tensor)`: A tuple of tensors where the first element is a tensor of generated
+            `Tuple(paddle.Tensor, paddle.Tensor)`: A tuple of tensors where the first element is a tensor of generated
             token sequences sorted by score in descending order, and the second element is the sequence lengths
             corresponding to those sequences.
         """

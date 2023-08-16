@@ -92,19 +92,19 @@ class ConsistencyModelPipeline(DiffusionPipeline):
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    # Follows diffusers.VaeImageProcessor.postprocess
+    # Follows ppdiffusers.VaeImageProcessor.postprocess
     def postprocess_image(self, sample: paddle.Tensor, output_type: str='pil'):
         if output_type not in ['pd', 'np', 'pil']:
             raise ValueError(
                 f"output_type={output_type} is not supported. Make sure to choose one of ['pd', 'np', or 'pil']"
             )
 
-        # Equivalent to diffusers.VaeImageProcessor.denormalize
+        # Equivalent to ppdiffusers.VaeImageProcessor.denormalize
         sample = (sample / 2 + 0.5).clip(min=0, max=1)
         if output_type == 'pd':
             return sample
 
-        # Equivalent to diffusers.VaeImageProcessor.pt_to_numpy
+        # Equivalent to ppdiffusers.VaeImageProcessor.pt_to_numpy
         sample = sample.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
         if output_type == 'np':
             return sample

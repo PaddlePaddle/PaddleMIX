@@ -115,7 +115,7 @@ class StableDiffusionParadigmsPipeline(DiffusionPipeline,
             vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
-        # attribute to wrap the unet with torch.nn.DataParallel when running multiple denoising steps on multiple GPUs
+        # attribute to wrap the unet with paddle.nn.DataParallel when running multiple denoising steps on multiple GPUs
         self.wrapped_unet = self.unet
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt

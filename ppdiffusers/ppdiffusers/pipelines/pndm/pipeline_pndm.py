@@ -66,8 +66,8 @@ class PNDMPipeline(DiffusionPipeline):
             num_inference_steps (`int`, `optional`, defaults to 50):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
-            generator (`torch.Generator`, `optional`):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator`, `optional`):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
             output_type (`str`, `optional`, defaults to `"pil"`):
                 The output format of the generated image. Choose between `PIL.Image` or `np.array`.
@@ -77,7 +77,7 @@ class PNDMPipeline(DiffusionPipeline):
         Example:
 
         ```py
-        >>> from diffusers import PNDMPipeline
+        >>> from ppdiffusers import PNDMPipeline
 
         >>> # load model and scheduler
         >>> pndm = PNDMPipeline.from_pretrained("google/ddpm-cifar10-32")

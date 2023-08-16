@@ -9,7 +9,7 @@ from ...image_processor import VaeImageProcessor
 from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, MultiAdapter, T2IAdapter, UNet2DConditionModel
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import PIL_INTERPOLATION, BaseOutput, is_accelerate_available, is_accelerate_version, logging, randn_tensor, replace_example_docstring
+from ...utils import PIL_INTERPOLATION, BaseOutput, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion.safety_checker import StableDiffusionSafetyChecker
 
@@ -34,9 +34,9 @@ EXAMPLE_DOC_STRING = """
     Examples:
         ```py
         >>> from PIL import Image
-        >>> from diffusers.utils import load_image
-        >>> import torch
-        >>> from diffusers import StableDiffusionAdapterPipeline, T2IAdapter
+        >>> from ppdiffusers.utils import load_image
+        >>> import paddle
+        >>> from ppdiffusers import StableDiffusionAdapterPipeline, T2IAdapter
 
         >>> image = load_image(
         ...     "https://huggingface.co/datasets/diffusers/docs-images/resolve/main/t2i-adapter/color_ref.png"
@@ -45,14 +45,12 @@ EXAMPLE_DOC_STRING = """
         >>> color_palette = image.resize((8, 8))
         >>> color_palette = color_palette.resize((512, 512), resample=Image.Resampling.NEAREST)
 
-        >>> adapter = T2IAdapter.from_pretrained("TencentARC/t2iadapter_color_sd14v1", torch_dtype=torch.float16)
+        >>> adapter = T2IAdapter.from_pretrained("TencentARC/t2iadapter_color_sd14v1", paddle_dtype=paddle.float16)
         >>> pipe = StableDiffusionAdapterPipeline.from_pretrained(
         ...     "CompVis/stable-diffusion-v1-4",
         ...     adapter=adapter,
-        ...     torch_dtype=torch.float16,
+        ...     paddle_dtype=paddle.float16,
         ... )
-
-        >>> pipe.to("cuda")
 
         >>> out_image = pipe(
         ...     "At night, glowing cubes in front of the beach",
@@ -130,13 +128,13 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
 
     def __init__(self,
                  vae: AutoencoderKL,
-                 text_encoder: transformers.CLIPTextModel,
-                 tokenizer: transformers.CLIPTokenizer,
+                 text_encoder: CLIPTextModel,
+                 tokenizer: CLIPTokenizer,
                  unet: UNet2DConditionModel,
                  adapter: Union[T2IAdapter, MultiAdapter, List[T2IAdapter]],
                  scheduler: KarrasDiffusionSchedulers,
                  safety_checker: StableDiffusionSafetyChecker,
-                 feature_extractor: transformers.CLIPFeatureExtractor,
+                 feature_extractor: CLIPFeatureExtractor,
                  adapter_weights: Optional[List[float]]=None,
                  requires_safety_checker: bool=True):
         super().__init__()
@@ -178,35 +176,8 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
         """
         self.vae.disable_slicing()
 
-    def enable_model_cpu_offload(self, gpu_id=0):
-        """
-        Offloads all models to CPU using accelerate, reducing memory usage with a low impact on performance. Compared
-        to `enable_sequential_cpu_offload`, this method moves one whole model at a time to the GPU when its `forward`
-        method is called, and the model remains in GPU until the next model runs. Memory savings are lower than with
-        `enable_sequential_cpu_offload`, but performance is much better due to the iterative execution of the `unet`.
-        """
-        if is_accelerate_available() and is_accelerate_version('>=',
-                                                               '0.17.0.dev0'):
-            from accelerate import cpu_offload_with_hook
-        else:
-            raise ImportError(
-                '`enable_model_offload` requires `accelerate v0.17.0` or higher.'
-            )
-        device = str(f'cuda:{gpu_id}').replace('cuda', 'gpu')
-        hook = None
-        for cpu_offloaded_model in [
-                self.text_encoder, self.adapter, self.unet, self.vae
-        ]:
-            _, hook = cpu_offload_with_hook(
-                cpu_offloaded_model, device, prev_module_hook=hook)
-        if self.safety_checker is not None:
-            _, hook = cpu_offload_with_hook(
-                self.safety_checker, device, prev_module_hook=hook)
-        self.final_offload_hook = hook
-
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None,
@@ -219,8 +190,6 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
         Args:
              prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -229,10 +198,10 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
                 less than `1`).
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -255,10 +224,10 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 padding='max_length',
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -269,14 +238,13 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 )
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = text_inputs.attention_mask.to(device)
+                attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
-                text_input_ids.to(device), attention_mask=attention_mask)
+                text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype,
-                                         device=device)
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -308,20 +276,19 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.to(
-                dtype=self.text_encoder.dtype, device=device)
+            negative_prompt_embeds = negative_prompt_embeds.cast(
+                dtype=self.text_encoder.dtype)
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
@@ -330,7 +297,7 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
-    def run_safety_checker(self, image, device, dtype):
+    def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
         else:
@@ -341,10 +308,10 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 feature_extractor_input = self.image_processor.numpy_to_pil(
                     image)
             safety_checker_input = self.feature_extractor(
-                feature_extractor_input, return_tensors='pt').to(device)
+                feature_extractor_input, return_tensors='pd')
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.to(dtype))
+                clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
     def decode_latents(self, latents):
@@ -416,7 +383,6 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None):
         shape = (batch_size, num_channels_latents, height //
@@ -426,10 +392,7 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
-        else:
-            latents = latents.to(device)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -466,8 +429,8 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
@@ -484,9 +447,9 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide the image generation. If not defined, one has to pass `prompt_embeds`.
                 instead.
-            image (`torch.FloatTensor`, `PIL.Image.Image`, `List[torch.FloatTensor]` or `List[PIL.Image.Image]` or `List[List[PIL.Image.Image]]`):
+            image (`paddle.Tensor`, `PIL.Image.Image`, `List[paddle.Tensor]` or `List[PIL.Image.Image]` or `List[List[PIL.Image.Image]]`):
                 The Adapter input condition. Adapter uses this input condition to generate guidance to Unet. If the
-                type is specified as `Torch.FloatTensor`, it is passed to Adapter as is. PIL.Image.Image` can also be
+                type is specified as `paddle.Tensor`, it is passed to Adapter as is. PIL.Image.Image` can also be
                 accepted as an image. The control image is automatically resized to fit the output image.
             height (`int`, *optional*, defaults to self.unet.config.sample_size * self.vae_scale_factor):
                 The height in pixels of the generated image.
@@ -510,17 +473,17 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
                 [`schedulers.DDIMScheduler`], will be ignored for others.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of [paddle generator(s)](https://pypaddle.org/docs/stable/generated/paddle.Generator.html)
                 to make generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -532,14 +495,14 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
                 of a plain tuple.
             callback (`Callable`, *optional*):
                 A function that will be called every `callback_steps` steps during inference. The function will be
-                called with the following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                called with the following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function will be called. If not specified, the callback will be
                 called at every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttnProcessor` as defined under
                 `self.processor` in
-                [diffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                [ppdiffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
             adapter_conditioning_scale (`float` or `List[float]`, *optional*, defaults to 1.0):
                 The outputs of the adapter are multiplied by `adapter_conditioning_scale` before they are added to the
                 residual in the original unet. If multiple adapters are specified in init, you can set the
@@ -555,23 +518,20 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
             "not-safe-for-work" (nsfw) content, according to the `safety_checker`.
         """
         height, width = self._default_height_width(height, width, image)
-        device = self._execution_device
         self.check_inputs(prompt, height, width, callback_steps,
                           negative_prompt, prompt_embeds,
                           negative_prompt_embeds)
         is_multi_adapter = isinstance(self.adapter, MultiAdapter)
         if is_multi_adapter:
             adapter_input = [
-                _preprocess_adapter_image(img, height, width).to(device)
-                for img in image
+                _preprocess_adapter_image(img, height, width) for img in image
             ]
             n, c, h, w = adapter_input[0].shape
             adapter_input = paddle.stack(
                 x=[x.reshape([n * c, h, w]) for x in adapter_input])
         else:
-            adapter_input = _preprocess_adapter_image(image, height,
-                                                      width).to(device)
-        adapter_input = adapter_input.to(self.adapter.dtype)
+            adapter_input = _preprocess_adapter_image(image, height, width)
+        adapter_input = adapter_input.cast(self.adapter.dtype)
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
@@ -581,18 +541,17 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
         do_classifier_free_guidance = guidance_scale > 1.0
         prompt_embeds = self._encode_prompt(
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_channels_latents = self.unet.config.in_channels
-        latents = self.prepare_latents(
-            batch_size * num_images_per_prompt, num_channels_latents, height,
-            width, prompt_embeds.dtype, device, generator, latents)
+        latents = self.prepare_latents(batch_size * num_images_per_prompt,
+                                       num_channels_latents, height, width,
+                                       prompt_embeds.dtype, generator, latents)
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         adapter_state = self.adapter(adapter_input)
         for k, v in enumerate(adapter_state):
@@ -638,16 +597,13 @@ class StableDiffusionAdapterPipeline(DiffusionPipeline):
         elif output_type == 'pil':
             image = self.decode_latents(latents)
             image, has_nsfw_concept = self.run_safety_checker(
-                image, device, prompt_embeds.dtype)
+                image, prompt_embeds.dtype)
             image = self.numpy_to_pil(image)
         else:
             image = self.decode_latents(latents)
             image, has_nsfw_concept = self.run_safety_checker(
-                image, device, prompt_embeds.dtype)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
+                image, prompt_embeds.dtype)
+
         if not return_dict:
             return image, has_nsfw_concept
         return StableDiffusionAdapterPipelineOutput(

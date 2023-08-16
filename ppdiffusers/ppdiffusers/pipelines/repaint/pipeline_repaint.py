@@ -120,9 +120,9 @@ class RePaintPipeline(DiffusionPipeline):
         The call function to the pipeline for generation.
 
         Args:
-            image (`torch.FloatTensor` or `PIL.Image.Image`):
+            image (`paddle.Tensor` or `PIL.Image.Image`):
                 The original image to inpaint on.
-            mask_image (`torch.FloatTensor` or `PIL.Image.Image`):
+            mask_image (`paddle.Tensor` or `PIL.Image.Image`):
                 The mask_image where 0.0 define which part of the original image to inpaint.
             num_inference_steps (`int`, *optional*, defaults to 1000):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
@@ -136,8 +136,8 @@ class RePaintPipeline(DiffusionPipeline):
             jump_n_sample (`int`, *optional*, defaults to 10):
                 The number of times to make a forward time jump for a given chosen time sample. Take a look at Figure 9
                 and 10 in the [paper](https://arxiv.org/pdf/2201.09865.pdf).
-            generator (`torch.Generator`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
             output_type (`str`, `optional`, defaults to `"pil"`):
                 The output format of the generated image. Choose between `PIL.Image` or `np.array`.
@@ -148,10 +148,10 @@ class RePaintPipeline(DiffusionPipeline):
 
         ```py
         >>> from io import BytesIO
-        >>> import torch
+        >>> import paddle
         >>> import PIL
         >>> import requests
-        >>> from diffusers import RePaintPipeline, RePaintScheduler
+        >>> from ppdiffusers import RePaintPipeline, RePaintScheduler
 
 
         >>> def download_image(url):
@@ -169,9 +169,8 @@ class RePaintPipeline(DiffusionPipeline):
         >>> # Load the RePaint scheduler and pipeline based on a pretrained DDPM model
         >>> scheduler = RePaintScheduler.from_pretrained("google/ddpm-ema-celebahq-256")
         >>> pipe = RePaintPipeline.from_pretrained("google/ddpm-ema-celebahq-256", scheduler=scheduler)
-        >>> pipe = pipe.to("cuda")
 
-        >>> generator = torch.Generator(device="cuda").manual_seed(0)
+        >>> generator = paddle.Generator().manual_seed(0)
         >>> output = pipe(
         ...     image=original_image,
         ...     mask_image=mask_image,

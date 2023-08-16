@@ -66,9 +66,8 @@ def tensor2vid(video: paddle.Tensor, mean=[0.5, 0.5, 0.5],
                std=[0.5, 0.5, 0.5]) -> List[np.ndarray]:
     # This code is copied from https://github.com/modelscope/modelscope/blob/1509fdb973e5871f37148a4b5e5964cafd43e64d/modelscope/pipelines/multi_modal/text_to_video_synthesis_pipeline.py#L78
     # reshape to ncfhw
-    mean = paddle.to_tensor(
-        data=mean, place=video.place).reshape(1, -1, 1, 1, 1)
-    std = paddle.to_tensor(data=std, place=video.place).reshape(1, -1, 1, 1, 1)
+    mean = paddle.to_tensor(data=mean).reshape(1, -1, 1, 1, 1)
+    std = paddle.to_tensor(data=std).reshape(1, -1, 1, 1, 1)
     # unnormalize back to [0,1]
     video = video.multiply(std).add(y=paddle.to_tensor(mean))
     video.clip_(min=0, max=1)

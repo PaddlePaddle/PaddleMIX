@@ -59,8 +59,8 @@ class ScoreSdeVePipeline(DiffusionPipeline):
         Args:
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
-            generator (`torch.Generator`, `optional`):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator`, `optional`):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
             output_type (`str`, `optional`, defaults to `"pil"`):
                 The output format of the generated image. Choose between `PIL.Image` or `np.array`.

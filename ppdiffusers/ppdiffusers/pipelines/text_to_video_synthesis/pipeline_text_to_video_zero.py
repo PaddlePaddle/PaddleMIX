@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional, Union
 import numpy as np
 import PIL
-from diffusers.models import AutoencoderKL, UNet2DConditionModel
-from diffusers.pipelines.stable_diffusion import StableDiffusionPipeline, StableDiffusionSafetyChecker
-from diffusers.schedulers import KarrasDiffusionSchedulers
-from diffusers.utils import BaseOutput
+from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
+from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipeline, StableDiffusionSafetyChecker
+from ppdiffusers.schedulers import KarrasDiffusionSchedulers
+from ppdiffusers.utils import BaseOutput
 from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 
 
@@ -105,7 +105,7 @@ class TextToVideoPipelineOutput(BaseOutput):
     nsfw_content_detected: Optional[List[bool]]
 
 
-def coords_grid(batch, ht, wd, device):
+def coords_grid(batch, ht, wd):
     coords = paddle.meshgrid(paddle.arange(end=ht), paddle.arange(end=wd))
     coords = paddle.stack(x=coords[::-1], axis=0).astype(dtype='float32')
     return coords[None].tile(repeat_times=[batch, 1, 1, 1])
@@ -124,7 +124,7 @@ def warp_single_latent(latent, reference_flow):
     """
     _, _, H, W = reference_flow.shape
     _, _, h, w = latent.shape
-    coords0 = coords_grid(1, H, W, device=latent.place).to(latent.dtype)
+    coords0 = coords_grid(1, H, W).cast(latent.dtype)
     coords_t0 = coords0 + reference_flow
     coords_t0[:, 0] /= W
     coords_t0[:, 1] /= H
@@ -138,7 +138,7 @@ def warp_single_latent(latent, reference_flow):
 
 
 def create_motion_field(motion_field_strength_x, motion_field_strength_y,
-                        frame_ids, device, dtype):
+                        frame_ids, dtype):
     """
     Create translation motion field
 
@@ -147,7 +147,6 @@ def create_motion_field(motion_field_strength_x, motion_field_strength_y,
         motion_field_strength_y: motion strength along y-axis
         frame_ids: indexes of the frames the latents of which are being processed.
             This is needed when we perform chunk-by-chunk inference
-        device: device
         dtype: dtype
 
     Returns:
@@ -182,7 +181,6 @@ def create_motion_field_and_warp_latents(
         motion_field_strength_x=motion_field_strength_x,
         motion_field_strength_y=motion_field_strength_y,
         frame_ids=frame_ids,
-        device=latents.place,
         dtype=latents.dtype)
     warped_latents = latents.clone().detach()
     for i in range(len(warped_latents)):
@@ -220,20 +218,17 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
 
     def __init__(self,
                  vae: AutoencoderKL,
-                 text_encoder: transformers.CLIPTextModel,
-                 tokenizer: transformers.CLIPTokenizer,
+                 text_encoder: CLIPTextModel,
+                 tokenizer: CLIPTokenizer,
                  unet: UNet2DConditionModel,
                  scheduler: KarrasDiffusionSchedulers,
                  safety_checker: StableDiffusionSafetyChecker,
-                 feature_extractor: transformers.CLIPImageProcessor,
+                 feature_extractor: CLIPImageProcessor,
                  requires_safety_checker: bool=True):
         super().__init__(vae, text_encoder, tokenizer, unet, scheduler,
                          safety_checker, feature_extractor,
                          requires_safety_checker)
-        processor = CrossFrameAttnProcessor2_0(batch_size=2) if hasattr(
-            torch.nn.functional,
-            'scaled_dot_product_attention') else CrossFrameAttnProcessor(
-                batch_size=2)
+        processor = CrossFrameAttnProcessor(batch_size=2)
         self.unet.set_attn_processor(processor)
 
     def forward_loop(self, x_t0, t0, t1, generator):
@@ -247,8 +242,8 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
                 Timestep at t0.
             t1:
                 Timestamp at t1.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
 
         Returns:
@@ -287,7 +282,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
                 `prompt` at the expense of lower image quality. Guidance scale is enabled when `guidance_scale > 1`.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -342,8 +337,8 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_videos_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             motion_field_strength_x: float=12,
             motion_field_strength_y: float=12,
@@ -380,10 +375,10 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for video
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
@@ -395,7 +390,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
                 a plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -434,17 +429,16 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         width = width or self.unet.config.sample_size * self.vae_scale_factor
         self.check_inputs(prompt, height, width, callback_steps)
         batch_size = 1 if isinstance(prompt, str) else len(prompt)
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
-        prompt_embeds = self._encode_prompt(
-            prompt, device, num_videos_per_prompt, do_classifier_free_guidance,
-            negative_prompt)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        prompt_embeds = self._encode_prompt(prompt, num_videos_per_prompt,
+                                            do_classifier_free_guidance,
+                                            negative_prompt)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_channels_latents = self.unet.config.in_channels
-        latents = self.prepare_latents(
-            batch_size * num_videos_per_prompt, num_channels_latents, height,
-            width, prompt_embeds.dtype, device, generator, latents)
+        latents = self.prepare_latents(batch_size * num_videos_per_prompt,
+                                       num_channels_latents, height, width,
+                                       prompt_embeds.dtype, generator, latents)
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
@@ -494,10 +488,6 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             extra_step_kwargs=extra_step_kwargs,
             num_warmup_steps=0)
         latents = x_1k_0
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.unet.to('cpu')
         paddle.device.cuda.empty_cache()
         if output_type == 'latent':
             image = latents
@@ -505,11 +495,8 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         else:
             image = self.decode_latents(latents)
             image, has_nsfw_concept = self.run_safety_checker(
-                image, device, prompt_embeds.dtype)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
+                image, prompt_embeds.dtype)
+
         if not return_dict:
             return image, has_nsfw_concept
         return TextToVideoPipelineOutput(

@@ -29,7 +29,7 @@ EXAMPLE_DOC_STRING = """
         >>> import numpy as np
 
         >>> from ppdiffusers import KandinskyV22PriorEmb2EmbPipeline, KandinskyV22ControlnetImg2ImgPipeline
-        >>> from transformers import pipeline
+        >>> from paddlenlp.transformers import pipeline
         >>> from ppdiffusers.utils import load_image
 
 

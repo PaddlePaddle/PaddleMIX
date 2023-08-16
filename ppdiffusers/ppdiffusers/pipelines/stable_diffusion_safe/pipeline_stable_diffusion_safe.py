@@ -45,12 +45,12 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
 
     def __init__(self,
                  vae: AutoencoderKL,
-                 text_encoder: transformers.CLIPTextModel,
-                 tokenizer: transformers.CLIPTokenizer,
+                 text_encoder: CLIPTextModel,
+                 tokenizer: CLIPTokenizer,
                  unet: UNet2DConditionModel,
                  scheduler: KarrasDiffusionSchedulers,
                  safety_checker: SafeStableDiffusionSafetyChecker,
-                 feature_extractor: transformers.CLIPImageProcessor,
+                 feature_extractor: CLIPImageProcessor,
                  requires_safety_checker: bool=True):
         super().__init__()
         safety_concept: Optional[str] = (
@@ -146,7 +146,7 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
         """
         self._safety_text_concept = concept
 
-    def _encode_prompt(self, prompt, device, num_images_per_prompt,
+    def _encode_prompt(self, prompt, num_images_per_prompt,
                        do_classifier_free_guidance, negative_prompt,
                        enable_safety_guidance):
         """
@@ -155,8 +155,6 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
         Args:
             prompt (`str` or `List[str]`):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -171,10 +169,10 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             padding='max_length',
             max_length=self.tokenizer.model_max_length,
             truncation=True,
-            return_tensors='pt')
+            return_tensors='pd')
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer(
-            prompt, padding='max_length', return_tensors='pt').input_ids
+            prompt, padding='max_length', return_tensors='pd').input_ids
         if not paddle.equal_all(x=text_input_ids, y=untruncated_ids).item():
             removed_text = self.tokenizer.batch_decode(
                 untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
@@ -183,11 +181,11 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             )
         if hasattr(self.text_encoder.config, 'use_attention_mask'
                    ) and self.text_encoder.config.use_attention_mask:
-            attention_mask = text_inputs.attention_mask.to(device)
+            attention_mask = text_inputs.attention_mask
         else:
             attention_mask = None
         prompt_embeds = self.text_encoder(
-            text_input_ids.to(device), attention_mask=attention_mask)
+            text_input_ids, attention_mask=attention_mask)
         prompt_embeds = prompt_embeds[0]
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
@@ -216,15 +214,14 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.tile(
@@ -237,9 +234,9 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                     padding='max_length',
                     max_length=max_length,
                     truncation=True,
-                    return_tensors='pt')
+                    return_tensors='pd')
                 safety_embeddings = self.text_encoder(
-                    safety_concept_input.input_ids.to(self.place))[0]
+                    safety_concept_input.input_ids)[0]
                 seq_len = safety_embeddings.shape[1]
                 safety_embeddings = safety_embeddings.tile(
                     repeat_times=[batch_size, num_images_per_prompt, 1])
@@ -253,14 +250,14 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                     x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
-    def run_safety_checker(self, image, device, dtype, enable_safety_guidance):
+    def run_safety_checker(self, image, dtype, enable_safety_guidance):
         if self.safety_checker is not None:
             images = image.copy()
             safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors='pt').to(device)
+                self.numpy_to_pil(image), return_tensors='pd')
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.to(dtype))
+                clip_input=safety_checker_input.pixel_values.cast(dtype))
             flagged_images = np.zeros((2, *image.shape[1:]))
             if any(has_nsfw_concept):
                 logger.warning(
@@ -344,7 +341,6 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None):
         shape = (batch_size, num_channels_latents, height //
@@ -354,10 +350,9 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            latents = latents.to(device)
+            latents = latents
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -402,8 +397,8 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             output_type: Optional[str]='pil',
             return_dict: bool=True,
@@ -438,10 +433,10 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
@@ -452,7 +447,7 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -482,11 +477,11 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
         Examples:
 
         ```py
-        import torch
-        from diffusers import StableDiffusionPipelineSafe
+        import paddle
+        from ppdiffusers import StableDiffusionPipelineSafe
 
         pipeline = StableDiffusionPipelineSafe.from_pretrained(
-            "AIML-TUDA/stable-diffusion-safe", torch_dtype=torch.float16
+            "AIML-TUDA/stable-diffusion-safe", paddle_dtype=paddle.float16
         )
         prompt = "the four horsewomen of the apocalypse, painting by tom of finland, gaston bussiere, craig mullins, j. c. leyendecker"
         image = pipeline(prompt=prompt, **SafetyConfig.MEDIUM).images[0]
@@ -496,21 +491,20 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
         width = width or self.unet.config.sample_size * self.vae_scale_factor
         self.check_inputs(prompt, height, width, callback_steps)
         batch_size = 1 if isinstance(prompt, str) else len(prompt)
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         enable_safety_guidance = (sld_guidance_scale > 1.0 and
                                   do_classifier_free_guidance)
         if not enable_safety_guidance:
             warnings.warn('Safety checker disabled!')
         prompt_embeds = self._encode_prompt(
-            prompt, device, num_images_per_prompt, do_classifier_free_guidance,
+            prompt, num_images_per_prompt, do_classifier_free_guidance,
             negative_prompt, enable_safety_guidance)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_channels_latents = self.unet.config.in_channels
-        latents = self.prepare_latents(
-            batch_size * num_images_per_prompt, num_channels_latents, height,
-            width, prompt_embeds.dtype, device, generator, latents)
+        latents = self.prepare_latents(batch_size * num_images_per_prompt,
+                                       num_channels_latents, height, width,
+                                       prompt_embeds.dtype, generator, latents)
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         safety_momentum = None
         num_warmup_steps = len(
@@ -569,7 +563,7 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                         callback(i, t, latents)
         image = self.decode_latents(latents)
         image, has_nsfw_concept, flagged_images = self.run_safety_checker(
-            image, device, prompt_embeds.dtype, enable_safety_guidance)
+            image, prompt_embeds.dtype, enable_safety_guidance)
         if output_type == 'pil':
             image = self.numpy_to_pil(image)
             if flagged_images is not None:

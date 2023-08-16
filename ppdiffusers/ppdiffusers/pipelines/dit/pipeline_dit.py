@@ -110,7 +110,7 @@ class DiTPipeline(DiffusionPipeline):
                 A higher guidance scale value encourages the model to generate images closely linked to the text
                 `prompt` at the expense of lower image quality. Guidance scale is enabled when `guidance_scale > 1`.
             generator (`paddle.Generator`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
             num_inference_steps (`int`, *optional*, defaults to 250):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the

@@ -132,8 +132,6 @@ class KandinskyPriorPipeline(DiffusionPipeline):
             A scheduler to be used in combination with `prior` to generate image embedding.
     """
 
-    # _exclude_from_cpu_offload = ['prior']
-
     def __init__(
             self,
             prior: PriorTransformer,

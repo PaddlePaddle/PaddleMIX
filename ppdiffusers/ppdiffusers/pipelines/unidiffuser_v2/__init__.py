@@ -1,9 +1,9 @@
-from ...utils import OptionalDependencyNotAvailable, is_torch_available, is_transformers_available, is_transformers_version
+from ...utils import OptionalDependencyNotAvailable, is_paddle_available, is_transformers_available, is_transformers_version
 try:
-    if not (is_transformers_available() and is_torch_available()):
+    if not (is_transformers_available() and is_paddle_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
-    from ...utils.dummy_torch_and_transformers_objects import ImageTextPipelineOutput, UniDiffuserPipeline
+    from ...utils.dummy_paddle_and_transformers_objects import ImageTextPipelineOutput, UniDiffuserPipeline
 else:
     from .modeling_text_decoder import UniDiffuserTextDecoder
     from .modeling_uvit import UniDiffuserModel, UTransformer2DModel

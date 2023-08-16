@@ -42,10 +42,10 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
     """
     decoder: UNet2DConditionModel
     text_proj: UnCLIPTextProjModel
-    text_encoder: transformers.CLIPTextModelWithProjection
-    tokenizer: transformers.CLIPTokenizer
-    feature_extractor: transformers.CLIPImageProcessor
-    image_encoder: transformers.CLIPVisionModelWithProjection
+    text_encoder: CLIPTextModelWithProjection
+    tokenizer: CLIPTokenizer
+    feature_extractor: CLIPImageProcessor
+    image_encoder: CLIPVisionModelWithProjection
     super_res_first: UNet2DModel
     super_res_last: UNet2DModel
     decoder_scheduler: UnCLIPScheduler
@@ -53,11 +53,11 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
 
     def __init__(self,
                  decoder: UNet2DConditionModel,
-                 text_encoder: transformers.CLIPTextModelWithProjection,
-                 tokenizer: transformers.CLIPTokenizer,
+                 text_encoder: CLIPTextModelWithProjection,
+                 tokenizer: CLIPTokenizer,
                  text_proj: UnCLIPTextProjModel,
-                 feature_extractor: transformers.CLIPImageProcessor,
-                 image_encoder: transformers.CLIPVisionModelWithProjection,
+                 feature_extractor: CLIPImageProcessor,
+                 image_encoder: CLIPVisionModelWithProjection,
                  super_res_first: UNet2DModel,
                  super_res_last: UNet2DModel,
                  decoder_scheduler: UnCLIPScheduler,
@@ -75,31 +75,29 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
             decoder_scheduler=decoder_scheduler,
             super_res_scheduler=super_res_scheduler)
 
-    def prepare_latents(self, shape, dtype, device, generator, latents,
-                        scheduler):
+    def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             if latents.shape != shape:
                 raise ValueError(
                     f'Unexpected latents shape, got {latents.shape}, expected {shape}'
                 )
-            latents = latents.to(device)
+            latents = latents
         latents = latents * scheduler.init_noise_sigma
         return latents
 
-    def _encode_prompt(self, prompt, device, num_images_per_prompt,
+    def _encode_prompt(self, prompt, num_images_per_prompt,
                        do_classifier_free_guidance):
         batch_size = len(prompt) if isinstance(prompt, list) else 1
         text_inputs = self.tokenizer(
             prompt,
             padding='max_length',
             max_length=self.tokenizer.model_max_length,
-            return_tensors='pt')
+            return_tensors='pd')
         text_input_ids = text_inputs.input_ids
-        text_mask = text_inputs.attention_mask.bool().to(device)
-        text_encoder_output = self.text_encoder(text_input_ids.to(device))
+        text_mask = text_inputs.attention_mask.bool()
+        text_encoder_output = self.text_encoder(text_input_ids)
         prompt_embeds = text_encoder_output.text_embeds
         text_encoder_hidden_states = text_encoder_output.last_hidden_state
         prompt_embeds = prompt_embeds.repeat_interleave(
@@ -117,10 +115,10 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
-            uncond_text_mask = uncond_input.attention_mask.bool().to(device)
+                return_tensors='pd')
+            uncond_text_mask = uncond_input.attention_mask.bool()
             negative_prompt_embeds_text_encoder_output = self.text_encoder(
-                uncond_input.input_ids.to(device))
+                uncond_input.input_ids)
             negative_prompt_embeds = (
                 negative_prompt_embeds_text_encoder_output.text_embeds)
             uncond_text_encoder_hidden_states = (
@@ -149,15 +147,14 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
 
     def _encode_image(self,
                       image,
-                      device,
                       num_images_per_prompt,
                       image_embeddings: Optional[paddle.Tensor]=None):
         dtype = next(self.image_encoder.parameters()).dtype
         if image_embeddings is None:
             if not isinstance(image, paddle.Tensor):
                 image = self.feature_extractor(
-                    images=image, return_tensors='pt').pixel_values
-            image = image.to(device=device, dtype=dtype)
+                    images=image, return_tensors='pd').pixel_values
+            image = image.cast(dtype=dtype)
             image_embeddings = self.image_encoder(image).image_embeds
         image_embeddings = image_embeddings.repeat_interleave(
             repeats=num_images_per_prompt, axis=0)
@@ -170,7 +167,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
                  num_images_per_prompt: int=1,
                  decoder_num_inference_steps: int=25,
                  super_res_num_inference_steps: int=7,
-                 generator: Optional[torch.Generator]=None,
+                 generator: Optional[paddle.Generator]=None,
                  decoder_latents: Optional[paddle.Tensor]=None,
                  super_res_latents: Optional[paddle.Tensor]=None,
                  image_embeddings: Optional[paddle.Tensor]=None,
@@ -181,7 +178,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
         The call function to the pipeline for generation.
 
         Args:
-            image (`PIL.Image.Image` or `List[PIL.Image.Image]` or `torch.FloatTensor`):
+            image (`PIL.Image.Image` or `List[PIL.Image.Image]` or `paddle.Tensor`):
                 `Image` or tensor representing an image batch to be used as the starting point. If you provide a
                 tensor, it needs to be compatible with the [`CLIPImageProcessor`]
                 [configuration](https://huggingface.co/fusing/karlo-image-variations-diffusers/blob/main/feature_extractor/preprocessor_config.json).
@@ -194,17 +191,17 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
             super_res_num_inference_steps (`int`, *optional*, defaults to 7):
                 The number of denoising steps for super resolution. More denoising steps usually lead to a higher
                 quality image at the expense of slower inference.
-            generator (`torch.Generator`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            decoder_latents (`torch.FloatTensor` of shape (batch size, channels, height, width), *optional*):
+            decoder_latents (`paddle.Tensor` of shape (batch size, channels, height, width), *optional*):
                 Pre-generated noisy latents to be used as inputs for the decoder.
-            super_res_latents (`torch.FloatTensor` of shape (batch size, channels, super res height, super res width), *optional*):
+            super_res_latents (`paddle.Tensor` of shape (batch size, channels, super res height, super res width), *optional*):
                 Pre-generated noisy latents to be used as inputs for the decoder.
             decoder_guidance_scale (`float`, *optional*, defaults to 4.0):
                 A higher guidance scale value encourages the model to generate images closely linked to the text
                 `prompt` at the expense of lower image quality. Guidance scale is enabled when `guidance_scale > 1`.
-            image_embeddings (`torch.Tensor`, *optional*):
+            image_embeddings (`paddle.Tensor`, *optional*):
                 Pre-defined image embeddings that can be derived from the image encoder. Pre-defined image embeddings
                 can be passed for tasks like image interpolations. `image` can be left as `None`.
             output_type (`str`, *optional*, defaults to `"pil"`):
@@ -227,14 +224,13 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
         else:
             batch_size = image_embeddings.shape[0]
         prompt = [''] * batch_size
-        device = self._execution_device
         batch_size = batch_size * num_images_per_prompt
         do_classifier_free_guidance = decoder_guidance_scale > 1.0
         prompt_embeds, text_encoder_hidden_states, text_mask = (
-            self._encode_prompt(prompt, device, num_images_per_prompt,
+            self._encode_prompt(prompt, num_images_per_prompt,
                                 do_classifier_free_guidance))
-        image_embeddings = self._encode_image(
-            image, device, num_images_per_prompt, image_embeddings)
+        image_embeddings = self._encode_image(image, num_images_per_prompt,
+                                              image_embeddings)
         text_encoder_hidden_states, additive_clip_time_embeddings = (
             self.text_proj(
                 image_embeddings=image_embeddings,
@@ -248,8 +244,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
             value=1,
             data_format="NCL").squeeze(0)
 
-        self.decoder_scheduler.set_timesteps(
-            decoder_num_inference_steps, device=device)
+        self.decoder_scheduler.set_timesteps(decoder_num_inference_steps)
         decoder_timesteps_tensor = self.decoder_scheduler.timesteps
         num_channels_latents = self.decoder.config.in_channels
         height = self.decoder.config.sample_size
@@ -257,7 +252,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
         if decoder_latents is None:
             decoder_latents = self.prepare_latents(
                 (batch_size, num_channels_latents, height,
-                 width), text_encoder_hidden_states.dtype, device, generator,
+                 width), text_encoder_hidden_states.dtype, generator,
                 decoder_latents, self.decoder_scheduler)
         for i, t in enumerate(self.progress_bar(decoder_timesteps_tensor)):
             latent_model_input = paddle.concat(
@@ -272,9 +267,11 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
                 noise_pred_uncond, _ = noise_pred_uncond.split(
-                    latent_model_input.shape[1], dim=1)
+                    noise_pred_uncond.shape[1] // latent_model_input.shape[1],
+                    axis=1)
                 noise_pred_text, predicted_variance = noise_pred_text.split(
-                    latent_model_input.shape[1], dim=1)
+                    noise_pred_text.shape[1] // latent_model_input.shape[1],
+                    axis=1)
                 noise_pred = noise_pred_uncond + decoder_guidance_scale * (
                     noise_pred_text - noise_pred_uncond)
                 noise_pred = paddle.concat(
@@ -291,8 +288,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
                 generator=generator).prev_sample
         decoder_latents = decoder_latents.clip(min=-1, max=1)
         image_small = decoder_latents
-        self.super_res_scheduler.set_timesteps(
-            super_res_num_inference_steps, device=device)
+        self.super_res_scheduler.set_timesteps(super_res_num_inference_steps)
         super_res_timesteps_tensor = self.super_res_scheduler.timesteps
         channels = self.super_res_first.config.in_channels // 2
         height = self.super_res_first.config.sample_size
@@ -300,7 +296,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
         if super_res_latents is None:
             super_res_latents = self.prepare_latents(
                 (batch_size, channels, height, width), image_small.dtype,
-                device, generator, super_res_latents, self.super_res_scheduler)
+                generator, super_res_latents, self.super_res_scheduler)
 
         interpolate_antialias = {}
         if "antialias" in inspect.signature(F.interpolate).parameters:

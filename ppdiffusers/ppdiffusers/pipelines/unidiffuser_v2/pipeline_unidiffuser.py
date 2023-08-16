@@ -8,7 +8,7 @@ import PIL
 
 from ...models import AutoencoderKL
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import PIL_INTERPOLATION, deprecate, is_accelerate_available, is_accelerate_version, logging, randn_tensor
+from ...utils import PIL_INTERPOLATION, deprecate, logging, randn_tensor
 from ...utils.outputs import BaseOutput
 from ..pipeline_utils import DiffusionPipeline
 from .modeling_text_decoder import UniDiffuserTextDecoder
@@ -20,6 +20,7 @@ from paddlenlp.transformers import (
     CLIPTokenizer,
     CLIPVisionModelWithProjection,
     GPTTokenizer, )
+
 logger = logging.get_logger(__name__)
 
 
@@ -102,12 +103,12 @@ class UniDiffuserPipeline(DiffusionPipeline):
 
     def __init__(self,
                  vae: AutoencoderKL,
-                 text_encoder: transformers.CLIPTextModel,
-                 image_encoder: transformers.CLIPVisionModelWithProjection,
-                 image_processor: transformers.CLIPImageProcessor,
-                 clip_tokenizer: transformers.CLIPTokenizer,
+                 text_encoder: CLIPTextModel,
+                 image_encoder: CLIPVisionModelWithProjection,
+                 image_processor: CLIPImageProcessor,
+                 clip_tokenizer: CLIPTokenizer,
                  text_decoder: UniDiffuserTextDecoder,
-                 text_tokenizer: transformers.GPTTokenizer,
+                 text_tokenizer: GPTTokenizer,
                  unet: UniDiffuserModel,
                  scheduler: KarrasDiffusionSchedulers):
         super().__init__()
@@ -136,33 +137,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
             self.text_intermediate_dim = self.text_decoder.prefix_hidden_dim
         self.mode = None
         self.safety_checker = None
-
-    def enable_model_cpu_offload(self, gpu_id=0):
-        """
-        Offloads all models to CPU using accelerate, reducing memory usage with a low impact on performance. Compared
-        to `enable_sequential_cpu_offload`, this method moves one whole model at a time to the GPU when its `forward`
-        method is called, and the model remains in GPU until the next model runs. Memory savings are lower than with
-        `enable_sequential_cpu_offload`, but performance is much better due to the iterative execution of the `unet`.
-        """
-        if is_accelerate_available() and is_accelerate_version('>=',
-                                                               '0.17.0.dev0'):
-            from accelerate import cpu_offload_with_hook
-        else:
-            raise ImportError(
-                '`enable_model_cpu_offload` requires `accelerate v0.17.0` or higher.'
-            )
-        device = str(f'cuda:{gpu_id}').replace('cuda', 'gpu')
-        hook = None
-        for cpu_offloaded_model in [
-                self.text_encoder, self.unet, self.vae, self.image_encoder,
-                self.text_decoder
-        ]:
-            _, hook = cpu_offload_with_hook(
-                cpu_offloaded_model, device, prev_module_hook=hook)
-        if self.safety_checker is not None:
-            _, hook = cpu_offload_with_hook(
-                self.safety_checker, device, prev_module_hook=hook)
-        self.final_offload_hook = hook
 
     def prepare_extra_step_kwargs(self, generator, eta):
         accepts_eta = 'eta' in set(
@@ -306,7 +280,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
 
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None,
@@ -318,8 +291,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
         Args:
             prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -328,10 +299,10 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds`. instead. If not defined, one has to pass `negative_prompt_embeds`. instead.
                 Ignored when not using guidance (i.e., ignored if `guidance_scale` is less than `1`).
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -348,10 +319,10 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 padding='max_length',
                 max_length=self.clip_tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.clip_tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -363,14 +334,13 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 )
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = text_inputs.attention_mask.to(device)
+                attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
-                text_input_ids.to(device), attention_mask=attention_mask)
+                text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype,
-                                         device=device)
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -398,20 +368,19 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.to(
-                dtype=self.text_encoder.dtype, device=device)
+            negative_prompt_embeds = negative_prompt_embeds.cast(
+                dtype=self.text_encoder.dtype)
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
@@ -425,14 +394,13 @@ class UniDiffuserPipeline(DiffusionPipeline):
                                  batch_size,
                                  num_prompts_per_image,
                                  dtype,
-                                 device,
                                  do_classifier_free_guidance,
                                  generator=None):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
-                f'`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
             )
-        image = image.to(device=device, dtype=dtype)
+        image = image.cast(dtype=dtype)
         batch_size = batch_size * num_prompts_per_image
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -479,15 +447,14 @@ class UniDiffuserPipeline(DiffusionPipeline):
                                   batch_size,
                                   num_prompts_per_image,
                                   dtype,
-                                  device,
                                   generator=None):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
-                f'`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
             )
         preprocessed_image = self.image_processor.preprocess(
-            image, return_tensors='pt')
-        preprocessed_image = preprocessed_image.to(device=device, dtype=dtype)
+            image, return_tensors='pd')
+        preprocessed_image = preprocessed_image.cast(dtype=dtype)
         batch_size = batch_size * num_prompts_per_image
         if isinstance(generator, list):
             image_latents = [
@@ -538,7 +505,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
                              seq_len,
                              hidden_size,
                              dtype,
-                             device,
                              generator,
                              latents=None):
         shape = batch_size * num_images_per_prompt, seq_len, hidden_size
@@ -547,11 +513,10 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             latents = latents.tile(repeat_times=[num_images_per_prompt, 1, 1])
-            latents = latents.to(device=device, dtype=dtype)
+            latents = latents.cast(dtype=dtype)
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -562,7 +527,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
                                   height,
                                   width,
                                   dtype,
-                                  device,
                                   generator,
                                   latents=None):
         shape = (batch_size * num_prompts_per_image, num_channels_latents,
@@ -573,12 +537,11 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             latents = latents.tile(
                 repeat_times=[num_prompts_per_image, 1, 1, 1])
-            latents = latents.to(device=device, dtype=dtype)
+            latents = latents.cast(dtype=dtype)
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -587,7 +550,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
                                    num_prompts_per_image,
                                    clip_img_dim,
                                    dtype,
-                                   device,
                                    generator,
                                    latents=None):
         shape = batch_size * num_prompts_per_image, 1, clip_img_dim
@@ -596,11 +558,10 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             latents = latents.tile(repeat_times=[num_prompts_per_image, 1, 1])
-            latents = latents.to(device=device, dtype=dtype)
+            latents = latents.cast(dtype=dtype)
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -614,7 +575,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
         latent_width = width // self.vae_scale_factor
         img_vae_dim = self.num_channels_latents * latent_height * latent_width
         img_vae, img_clip = x.split(
-            [img_vae_dim, self.image_encoder_projection_dim], dim=1)
+            [img_vae_dim, self.image_encoder_projection_dim], axis=1)
         img_vae = paddle.reshape(
             x=img_vae,
             shape=(batch_size, self.num_channels_latents, latent_height,
@@ -645,7 +606,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
         img_vae_dim = self.num_channels_latents * latent_height * latent_width
         text_dim = self.text_encoder_seq_len * self.text_intermediate_dim
         img_vae, img_clip, text = x.split(
-            [img_vae_dim, self.image_encoder_projection_dim, text_dim], dim=1)
+            [img_vae_dim, self.image_encoder_projection_dim, text_dim], axis=1)
         img_vae = paddle.reshape(
             x=img_vae,
             shape=(batch_size, self.num_channels_latents, latent_height,
@@ -672,7 +633,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
 
     def _get_noise_pred(self, mode, latents, t, prompt_embeds, img_vae,
                         img_clip, max_timestep, data_type, guidance_scale,
-                        generator, device, height, width):
+                        generator, height, width):
         """
         Gets the noise prediction using the `unet` and performs classifier-free guidance, if necessary.
         """
@@ -690,19 +651,12 @@ class UniDiffuserPipeline(DiffusionPipeline):
             if guidance_scale <= 1.0:
                 return x_out
             img_vae_T = randn_tensor(
-                img_vae.shape,
-                generator=generator,
-                device=device,
-                dtype=img_vae.dtype)
+                img_vae.shape, generator=generator, dtype=img_vae.dtype)
             img_clip_T = randn_tensor(
-                img_clip.shape,
-                generator=generator,
-                device=device,
-                dtype=img_clip.dtype)
+                img_clip.shape, generator=generator, dtype=img_clip.dtype)
             text_T = randn_tensor(
                 prompt_embeds.shape,
                 generator=generator,
-                device=device,
                 dtype=prompt_embeds.dtype)
             _, _, text_out_uncond = self.unet(
                 img_vae_T,
@@ -738,7 +692,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
             text_T = randn_tensor(
                 prompt_embeds.shape,
                 generator=generator,
-                device=device,
                 dtype=prompt_embeds.dtype)
             img_vae_out_uncond, img_clip_out_uncond, text_out_uncond = (
                 self.unet(
@@ -763,15 +716,9 @@ class UniDiffuserPipeline(DiffusionPipeline):
             if guidance_scale <= 1.0:
                 return text_out
             img_vae_T = randn_tensor(
-                img_vae.shape,
-                generator=generator,
-                device=device,
-                dtype=img_vae.dtype)
+                img_vae.shape, generator=generator, dtype=img_vae.dtype)
             img_clip_T = randn_tensor(
-                img_clip.shape,
-                generator=generator,
-                device=device,
-                dtype=img_clip.dtype)
+                img_clip.shape, generator=generator, dtype=img_clip.dtype)
             img_vae_out_uncond, img_clip_out_uncond, text_out_uncond = (
                 self.unet(
                     img_vae_T,
@@ -935,8 +882,8 @@ class UniDiffuserPipeline(DiffusionPipeline):
             num_images_per_prompt: Optional[int]=1,
             num_prompts_per_image: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_latents: Optional[paddle.Tensor]=None,
             vae_latents: Optional[paddle.Tensor]=None,
@@ -954,7 +901,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
             prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide image generation. If not defined, you need to pass `prompt_embeds`.
                 Required for text-conditioned image generation (`text2img`) mode.
-            image (`torch.FloatTensor` or `PIL.Image.Image`, *optional*):
+            image (`paddle.Tensor` or `PIL.Image.Image`, *optional*):
                 `Image` or tensor representing an image batch. Required for image-conditioned text generation
                 (`img2text`) mode.
             height (`int`, *optional*, defaults to `self.unet.config.sample_size * self.vae_scale_factor`):
@@ -986,32 +933,32 @@ class UniDiffuserPipeline(DiffusionPipeline):
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for joint
                 image-text generation. Can be used to tweak the same generation with different prompts. If not
                 provided, a latents tensor is generated by sampling using the supplied random `generator`. This assumes
                 a full set of VAE, CLIP, and text latents, if supplied, overrides the value of `prompt_latents`,
                 `vae_latents`, and `clip_latents`.
-            prompt_latents (`torch.FloatTensor`, *optional*):
+            prompt_latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for text
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
-            vae_latents (`torch.FloatTensor`, *optional*):
+            vae_latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
-            clip_latents (`torch.FloatTensor`, *optional*):
+            clip_latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs (prompt weighting). If not
                 provided, text embeddings are generated from the `prompt` input argument. Used in text-conditioned
                 image generation (`text2img`) mode.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs (prompt weighting). If
                 not provided, `negative_prompt_embeds` are be generated from the `negative_prompt` input argument. Used
                 in text-conditioned image generation (`text2img`) mode.
@@ -1021,7 +968,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 Whether or not to return a [`~pipelines.ImageTextPipelineOutput`] instead of a plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -1044,7 +991,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
             mode, prompt, prompt_embeds, image, num_images_per_prompt,
             num_prompts_per_image, latents, prompt_latents, vae_latents,
             clip_latents)
-        device = self._execution_device
         reduce_text_emb_dim = (
             self.text_intermediate_dim < self.text_encoder_hidden_size or
             self.mode != 'text2img')
@@ -1055,7 +1001,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
             assert prompt is not None or prompt_embeds is not None
             prompt_embeds = self._encode_prompt(
                 prompt=prompt,
-                device=device,
                 num_images_per_prompt=multiplier,
                 do_classifier_free_guidance=False,
                 negative_prompt=negative_prompt,
@@ -1068,7 +1013,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 seq_len=self.text_encoder_seq_len,
                 hidden_size=self.text_encoder_hidden_size,
                 dtype=self.text_encoder.dtype,
-                device=device,
                 generator=generator,
                 latents=prompt_latents)
         if reduce_text_emb_dim:
@@ -1082,7 +1026,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 batch_size=batch_size,
                 num_prompts_per_image=multiplier,
                 dtype=prompt_embeds.dtype,
-                device=device,
                 do_classifier_free_guidance=False,
                 generator=generator)
             image_clip_latents = self.encode_image_clip_latents(
@@ -1090,7 +1033,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 batch_size=batch_size,
                 num_prompts_per_image=multiplier,
                 dtype=prompt_embeds.dtype,
-                device=device,
                 generator=generator)
             image_clip_latents = image_clip_latents.unsqueeze(axis=1)
         else:
@@ -1101,7 +1043,6 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 height=height,
                 width=width,
                 dtype=prompt_embeds.dtype,
-                device=device,
                 generator=generator,
                 latents=vae_latents)
             image_clip_latents = self.prepare_image_clip_latents(
@@ -1109,10 +1050,9 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 num_prompts_per_image=multiplier,
                 clip_img_dim=self.image_encoder_projection_dim,
                 dtype=prompt_embeds.dtype,
-                device=device,
                 generator=generator,
                 latents=clip_latents)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         max_timestep = self.scheduler.config.num_train_timesteps
         if mode == 'joint':
@@ -1131,7 +1071,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 noise_pred = self._get_noise_pred(
                     mode, latents, t, prompt_embeds, image_vae_latents,
                     image_clip_latents, max_timestep, data_type, guidance_scale,
-                    generator, device, height, width)
+                    generator, height, width)
                 latents = self.scheduler.step(noise_pred, t, latents,
                                               **extra_step_kwargs).prev_sample
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
@@ -1148,8 +1088,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
             output_token_list, seq_lengths = (
                 self.text_decoder.generate_captions(
                     text_latents,
-                    self.text_tokenizer.eos_token_id,
-                    device=device))
+                    self.text_tokenizer.eos_token_id, ))
             output_list = output_token_list.cpu().numpy()
             gen_text = [
                 self.text_tokenizer.decode(
@@ -1165,8 +1104,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
             output_token_list, seq_lengths = (
                 self.text_decoder.generate_captions(
                     text_latents,
-                    self.text_tokenizer.eos_token_id,
-                    device=device))
+                    self.text_tokenizer.eos_token_id, ))
             output_list = output_token_list.cpu().numpy()
             gen_text = [
                 self.text_tokenizer.decode(
@@ -1175,10 +1113,7 @@ class UniDiffuserPipeline(DiffusionPipeline):
             ]
         if output_type == 'pil' and gen_image is not None:
             gen_image = self.numpy_to_pil(gen_image)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
+
         if not return_dict:
             return gen_image, gen_text
         return ImageTextPipelineOutput(images=gen_image, text=gen_text)

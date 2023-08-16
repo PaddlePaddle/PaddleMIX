@@ -103,7 +103,6 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
         image_processor ([`CLIPImageProcessor`]):
             A image_processor to be used to preprocess image from clip.
     """
-    _exclude_from_cpu_offload = ['prior']
 
     def __init__(
             self,
@@ -451,8 +450,7 @@ class KandinskyV22PriorPipeline(DiffusionPipeline):
 
         # if negative prompt has been defined, we retrieve split the image embedding into two
         if negative_prompt is None:
-            zero_embeds = self.get_zero_embed(
-                latents.shape[0], device=latents.place)
+            zero_embeds = self.get_zero_embed(latents.shape[0])
 
         else:
             image_embeddings, zero_embeds = image_embeddings.chunk(chunks=2)

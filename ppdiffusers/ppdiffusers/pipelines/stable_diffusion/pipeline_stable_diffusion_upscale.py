@@ -9,7 +9,7 @@ from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...models.attention_processor import AttnProcessor2_0, LoRAAttnProcessor2_0, LoRAXFormersAttnProcessor, XFormersAttnProcessor
 from ...schedulers import DDPMScheduler, KarrasDiffusionSchedulers
-from ...utils import deprecate, is_accelerate_available, is_accelerate_version, logging, randn_tensor
+from ...utils import deprecate, logging, randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer, CLIPImageProcessor
@@ -66,18 +66,17 @@ class StableDiffusionUpscalePipeline(
         'watermarker', 'safety_checker', 'feature_extractor'
     ]
 
-    def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: transformers.CLIPTextModel,
-            tokenizer: transformers.CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            low_res_scheduler: DDPMScheduler,
-            scheduler: KarrasDiffusionSchedulers,
-            safety_checker: Optional[Any]=None,
-            feature_extractor: Optional[transformers.CLIPImageProcessor]=None,
-            watermarker: Optional[Any]=None,
-            max_noise_level: int=350):
+    def __init__(self,
+                 vae: AutoencoderKL,
+                 text_encoder: CLIPTextModel,
+                 tokenizer: CLIPTokenizer,
+                 unet: UNet2DConditionModel,
+                 low_res_scheduler: DDPMScheduler,
+                 scheduler: KarrasDiffusionSchedulers,
+                 safety_checker: Optional[Any]=None,
+                 feature_extractor: Optional[CLIPImageProcessor]=None,
+                 watermarker: Optional[Any]=None,
+                 max_noise_level: int=350):
         super().__init__()
         if hasattr(vae, 'config'):
             is_vae_scaling_factor_set_to_0_08333 = hasattr(
@@ -108,47 +107,20 @@ class StableDiffusionUpscalePipeline(
             vae_scale_factor=self.vae_scale_factor, resample='bicubic')
         self.register_to_config(max_noise_level=max_noise_level)
 
-    def enable_model_cpu_offload(self, gpu_id=0):
-        """
-        Offload all models to CPU to reduce memory usage with a low impact on performance. Moves one whole model at a
-        time to the GPU when its `forward` method is called, and the model remains in GPU until the next model runs.
-        Memory savings are lower than using `enable_sequential_cpu_offload`, but performance is much better due to the
-        iterative execution of the `unet`.
-        """
-        if is_accelerate_available() and is_accelerate_version('>=',
-                                                               '0.17.0.dev0'):
-            from accelerate import cpu_offload_with_hook
-        else:
-            raise ImportError(
-                '`enable_model_cpu_offload` requires `accelerate v0.17.0` or higher.'
-            )
-        device = str(f'cuda:{gpu_id}').replace('cuda', 'gpu')
-        hook = None
-        for cpu_offloaded_model in [self.unet, self.text_encoder, self.vae]:
-            if cpu_offloaded_model is not None:
-                _, hook = cpu_offload_with_hook(
-                    cpu_offloaded_model, device, prev_module_hook=hook)
-        self.final_offload_hook = hook
-
-    def run_safety_checker(self, image, device, dtype):
+    def run_safety_checker(self, image, dtype):
         if self.safety_checker is not None:
             safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors='pt').to(device)
+                self.numpy_to_pil(image), return_tensors='pd')
             image, nsfw_detected, watermark_detected = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.to(dtype=dtype))
+                clip_input=safety_checker_input.pixel_values.cast(dtype=dtype))
         else:
             nsfw_detected = None
             watermark_detected = None
-            if hasattr(
-                    self,
-                    'unet_offload_hook') and self.unet_offload_hook is not None:
-                self.unet_offload_hook.offload()
         return image, nsfw_detected, watermark_detected
 
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None,
@@ -161,8 +133,6 @@ class StableDiffusionUpscalePipeline(
         Args:
              prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -171,10 +141,10 @@ class StableDiffusionUpscalePipeline(
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
                 less than `1`).
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -197,10 +167,10 @@ class StableDiffusionUpscalePipeline(
                 padding='max_length',
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -211,14 +181,13 @@ class StableDiffusionUpscalePipeline(
                 )
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = text_inputs.attention_mask.to(device)
+                attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
-                text_input_ids.to(device), attention_mask=attention_mask)
+                text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype,
-                                         device=device)
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -250,20 +219,19 @@ class StableDiffusionUpscalePipeline(
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.to(
-                dtype=self.text_encoder.dtype, device=device)
+            negative_prompt_embeds = negative_prompt_embeds.cast(
+                dtype=self.text_encoder.dtype)
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
@@ -334,7 +302,7 @@ class StableDiffusionUpscalePipeline(
                 image, PIL.Image.Image) and not isinstance(
                     image, np.ndarray) and not isinstance(image, list):
             raise ValueError(
-                f'`image` has to be of type `torch.Tensor`, `np.ndarray`, `PIL.Image.Image` or `list` but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor`, `np.ndarray`, `PIL.Image.Image` or `list` but is {type(image)}'
             )
         if isinstance(image, list) or isinstance(
                 image, paddle.Tensor) or isinstance(image, np.ndarray):
@@ -368,30 +336,27 @@ class StableDiffusionUpscalePipeline(
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None):
         shape = batch_size, num_channels_latents, height, width
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             if latents.shape != shape:
                 raise ValueError(
                     f'Unexpected latents shape, got {latents.shape}, expected {shape}'
                 )
-            latents = latents.to(device)
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
     def upcast_vae(self):
         dtype = self.vae.dtype
         self.vae.to(dtype='float32')
-        use_torch_2_0_or_xformers = isinstance(
-            self.vae.decoder.mid_block.attentions[0].processor,
-            (AttnProcessor2_0, XFormersAttnProcessor, LoRAXFormersAttnProcessor,
-             LoRAAttnProcessor2_0))
-        if use_torch_2_0_or_xformers:
+        use_xformers = isinstance(
+            self.vae.decoder.mid_block.attentions[0].processor, (
+                XFormersAttnProcessor,
+                LoRAXFormersAttnProcessor, ))
+        if use_xformers:
             self.vae.post_quant_conv.to(dtype)
             self.vae.decoder.conv_in.to(dtype)
             self.vae.decoder.mid_block.to(dtype)
@@ -408,8 +373,8 @@ class StableDiffusionUpscalePipeline(
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
@@ -424,7 +389,7 @@ class StableDiffusionUpscalePipeline(
         Args:
             prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide image generation. If not defined, you need to pass `prompt_embeds`.
-            image (`torch.FloatTensor`, `PIL.Image.Image`, `np.ndarray`, `List[torch.FloatTensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
+            image (`paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image` or tensor representing an image batch to be upscaled.
             num_inference_steps (`int`, *optional*, defaults to 50):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
@@ -440,17 +405,17 @@ class StableDiffusionUpscalePipeline(
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs (prompt weighting). If not
                 provided, text embeddings are generated from the `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs (prompt weighting). If
                 not provided, `negative_prompt_embeds` are generated from the `negative_prompt` input argument.
             output_type (`str`, *optional*, defaults to `"pil"`):
@@ -460,7 +425,7 @@ class StableDiffusionUpscalePipeline(
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -473,15 +438,14 @@ class StableDiffusionUpscalePipeline(
         >>> import requests
         >>> from PIL import Image
         >>> from io import BytesIO
-        >>> from diffusers import StableDiffusionUpscalePipeline
-        >>> import torch
+        >>> from ppdiffusers import StableDiffusionUpscalePipeline
+        >>> import paddle
 
         >>> # load model and scheduler
         >>> model_id = "stabilityai/stable-diffusion-x4-upscaler"
         >>> pipeline = StableDiffusionUpscalePipeline.from_pretrained(
-        ...     model_id, revision="fp16", torch_dtype=torch.float16
+        ...     model_id, revision="fp16", paddle_dtype=paddle.float16
         ... )
-        >>> pipeline = pipeline.to("cuda")
 
         >>> # let's download an  image
         >>> url = "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/low_res_cat.png"
@@ -512,13 +476,11 @@ class StableDiffusionUpscalePipeline(
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         prompt_embeds = self._encode_prompt(
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             negative_prompt,
@@ -526,16 +488,12 @@ class StableDiffusionUpscalePipeline(
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale)
         image = self.image_processor.preprocess(image)
-        image = image.to(dtype=prompt_embeds.dtype, device=device)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        image = image.cast(dtype=prompt_embeds.dtype)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
-        noise_level = paddle.to_tensor(
-            data=[noise_level], dtype='int64', place=device)
+        noise_level = paddle.to_tensor(data=[noise_level], dtype='int64')
         noise = randn_tensor(
-            image.shape,
-            generator=generator,
-            device=device,
-            dtype=prompt_embeds.dtype)
+            image.shape, generator=generator, dtype=prompt_embeds.dtype)
         image = self.low_res_scheduler.add_noise(image, noise, noise_level)
         batch_multiplier = 2 if do_classifier_free_guidance else 1
         image = paddle.concat(x=[image] * batch_multiplier *
@@ -543,9 +501,9 @@ class StableDiffusionUpscalePipeline(
         noise_level = paddle.concat(x=[noise_level] * image.shape[0])
         height, width = image.shape[2:]
         num_channels_latents = self.vae.config.latent_channels
-        latents = self.prepare_latents(
-            batch_size * num_images_per_prompt, num_channels_latents, height,
-            width, prompt_embeds.dtype, device, generator, latents)
+        latents = self.prepare_latents(batch_size * num_images_per_prompt,
+                                       num_channels_latents, height, width,
+                                       prompt_embeds.dtype, generator, latents)
         num_channels_image = image.shape[1]
         if (num_channels_latents + num_channels_image !=
                 self.unet.config.in_channels):
@@ -588,13 +546,13 @@ class StableDiffusionUpscalePipeline(
                         callback(i, t, latents)
         if self.vae.dtype == 'float16' and self.vae.config.force_upcast:
             self.upcast_vae()
-            latents = latents.to(
+            latents = latents.cast(
                 next(iter(self.vae.post_quant_conv.parameters())).dtype)
         if not output_type == 'latent':
             image = self.vae.decode(
                 latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept, _ = self.run_safety_checker(
-                image, device, prompt_embeds.dtype)
+                image, prompt_embeds.dtype)
         else:
             image = latents
             has_nsfw_concept = None
@@ -606,10 +564,6 @@ class StableDiffusionUpscalePipeline(
             image, output_type=output_type, do_denormalize=do_denormalize)
         if output_type == 'pil' and self.watermarker is not None:
             image = self.watermarker.apply_watermark(image)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
         if not return_dict:
             return image, has_nsfw_concept
         return StableDiffusionPipelineOutput(

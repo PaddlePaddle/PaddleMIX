@@ -11,7 +11,7 @@ from ...models.dual_transformer_2d import DualTransformer2DModel
 from ...models.embeddings import GaussianFourierProjection, ImageHintTimeEmbedding, ImageProjection, ImageTimeEmbedding, TextImageProjection, TextImageTimeEmbedding, TextTimeEmbedding, TimestepEmbedding, Timesteps
 from ...models.transformer_2d import Transformer2DModel
 from ...models.unet_2d_condition import UNet2DConditionOutput
-from ...utils import is_torch_version, logging
+from ...utils import is_paddle_version, logging
 logger = logging.get_logger(__name__)
 
 
@@ -729,12 +729,12 @@ class UNetFlatConditionModel(ModelMixin, ConfigMixin):
         The [`UNetFlatConditionModel`] forward method.
 
         Args:
-            sample (`torch.FloatTensor`):
+            sample (`paddle.Tensor`):
                 The noisy input tensor with the following shape `(batch, channel, height, width)`.
-            timestep (`torch.FloatTensor` or `float` or `int`): The number of timesteps to denoise an input.
-            encoder_hidden_states (`torch.FloatTensor`):
+            timestep (`paddle.Tensor` or `float` or `int`): The number of timesteps to denoise an input.
+            encoder_hidden_states (`paddle.Tensor`):
                 The encoder hidden states with shape `(batch, sequence_length, feature_dim)`.
-            encoder_attention_mask (`torch.Tensor`):
+            encoder_attention_mask (`paddle.Tensor`):
                 A cross-attention mask of shape `(batch, sequence_length)` is applied to `encoder_hidden_states`. If
                 `True` the mask is kept, otherwise if `False` it is discarded. Mask will be converted into a bias,
                 which adds large negative values to the attention scores corresponding to "discard" tokens.
@@ -760,28 +760,26 @@ class UNetFlatConditionModel(ModelMixin, ConfigMixin):
                 'Forward upsample size to force interpolation output size.')
             forward_upsample_size = True
         if attention_mask is not None:
-            attention_mask = (1 - attention_mask.to(sample.dtype)) * -10000.0
+            attention_mask = (1 - attention_mask.cast(sample.dtype)) * -10000.0
             attention_mask = attention_mask.unsqueeze(axis=1)
         if encoder_attention_mask is not None:
             encoder_attention_mask = (
-                1 - encoder_attention_mask.to(sample.dtype)) * -10000.0
+                1 - encoder_attention_mask.cast(sample.dtype)) * -10000.0
             encoder_attention_mask = encoder_attention_mask.unsqueeze(axis=1)
         if self.config.center_input_sample:
             sample = 2 * sample - 1.0
         timesteps = timestep
         if not paddle.is_tensor(x=timesteps):
-            is_mps = sample.device.type == 'mps'
             if isinstance(timestep, float):
-                dtype = 'float32' if is_mps else 'float64'
+                dtype = 'float64'
             else:
-                dtype = 'int32' if is_mps else 'int64'
-            timesteps = paddle.to_tensor(
-                data=[timesteps], dtype=dtype, place=sample.place)
+                dtype = 'int64'
+            timesteps = paddle.to_tensor(data=[timesteps], dtype=dtype)
         elif len(timesteps.shape) == 0:
-            timesteps = timesteps[None].to(sample.place)
+            timesteps = timesteps[None]
         timesteps = timesteps.expand(shape=sample.shape[0])
         t_emb = self.time_proj(timesteps)
-        t_emb = t_emb.to(dtype=sample.dtype)
+        t_emb = t_emb.cast(dtype=sample.dtype)
         emb = self.time_embedding(t_emb, timestep_cond)
         aug_emb = None
         if self.class_embedding is not None:
@@ -790,8 +788,8 @@ class UNetFlatConditionModel(ModelMixin, ConfigMixin):
                     'class_labels should be provided when num_class_embeds > 0')
             if self.config.class_embed_type == 'timestep':
                 class_labels = self.time_proj(class_labels)
-                class_labels = class_labels.to(dtype=sample.dtype)
-            class_emb = self.class_embedding(class_labels).to(
+                class_labels = class_labels.cast(dtype=sample.dtype)
+            class_emb = self.class_embedding(class_labels).cast(
                 dtype=sample.dtype)
             if self.config.class_embeddings_concat:
                 emb = paddle.concat(x=[emb, class_emb], axis=-1)
@@ -822,7 +820,7 @@ class UNetFlatConditionModel(ModelMixin, ConfigMixin):
             time_embeds = self.add_time_proj(time_ids.flatten())
             time_embeds = time_embeds.reshape((text_embeds.shape[0], -1))
             add_embeds = paddle.concat(x=[text_embeds, time_embeds], axis=-1)
-            add_embeds = add_embeds.to(emb.dtype)
+            add_embeds = add_embeds.cast(emb.dtype)
             aug_emb = self.add_embedding(add_embeds)
         elif self.config.addition_embed_type == 'image':
             if 'image_embeds' not in added_cond_kwargs:

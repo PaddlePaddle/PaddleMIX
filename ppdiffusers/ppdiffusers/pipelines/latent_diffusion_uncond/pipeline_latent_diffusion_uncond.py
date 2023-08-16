@@ -62,8 +62,8 @@ class LDMPipeline(DiffusionPipeline):
         Args:
             batch_size (`int`, *optional*, defaults to 1):
                 Number of images to generate.
-            generator (`torch.Generator`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
             num_inference_steps (`int`, *optional*, defaults to 50):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
@@ -76,7 +76,7 @@ class LDMPipeline(DiffusionPipeline):
         Example:
 
         ```py
-        >>> from diffusers import LDMPipeline
+        >>> from ppdiffusers import LDMPipeline
 
         >>> # load model and scheduler
         >>> pipe = LDMPipeline.from_pretrained("CompVis/ldm-celebahq-256")

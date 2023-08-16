@@ -27,7 +27,6 @@ from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
 if is_invisible_watermark_available():
     from .watermark import StableDiffusionXLWatermarker
-import paddlenlp
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 

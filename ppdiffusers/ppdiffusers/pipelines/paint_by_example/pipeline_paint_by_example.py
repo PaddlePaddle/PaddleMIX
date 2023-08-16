@@ -19,35 +19,35 @@ logger = logging.get_logger(__name__)
 def prepare_mask_and_masked_image(image, mask):
     """
     Prepares a pair (image, mask) to be consumed by the Paint by Example pipeline. This means that those inputs will be
-    converted to ``torch.Tensor`` with shapes ``batch x channels x height x width`` where ``channels`` is ``3`` for the
+    converted to ``paddle.Tensor`` with shapes ``batch x channels x height x width`` where ``channels`` is ``3`` for the
     ``image`` and ``1`` for the ``mask``.
 
-    The ``image`` will be converted to ``torch.float32`` and normalized to be in ``[-1, 1]``. The ``mask`` will be
-    binarized (``mask > 0.5``) and cast to ``torch.float32`` too.
+    The ``image`` will be converted to ``paddle.float32`` and normalized to be in ``[-1, 1]``. The ``mask`` will be
+    binarized (``mask > 0.5``) and cast to ``paddle.float32`` too.
 
     Args:
-        image (Union[np.array, PIL.Image, torch.Tensor]): The image to inpaint.
+        image (Union[np.array, PIL.Image, paddle.Tensor]): The image to inpaint.
             It can be a ``PIL.Image``, or a ``height x width x 3`` ``np.array`` or a ``channels x height x width``
-            ``torch.Tensor`` or a ``batch x channels x height x width`` ``torch.Tensor``.
+            ``paddle.Tensor`` or a ``batch x channels x height x width`` ``paddle.Tensor``.
         mask (_type_): The mask to apply to the image, i.e. regions to inpaint.
             It can be a ``PIL.Image``, or a ``height x width`` ``np.array`` or a ``1 x height x width``
-            ``torch.Tensor`` or a ``batch x 1 x height x width`` ``torch.Tensor``.
+            ``paddle.Tensor`` or a ``batch x 1 x height x width`` ``paddle.Tensor``.
 
 
     Raises:
-        ValueError: ``torch.Tensor`` images should be in the ``[-1, 1]`` range. ValueError: ``torch.Tensor`` mask
+        ValueError: ``paddle.Tensor`` images should be in the ``[-1, 1]`` range. ValueError: ``paddle.Tensor`` mask
         should be in the ``[0, 1]`` range. ValueError: ``mask`` and ``image`` should have the same spatial dimensions.
-        TypeError: ``mask`` is a ``torch.Tensor`` but ``image`` is not
+        TypeError: ``mask`` is a ``paddle.Tensor`` but ``image`` is not
             (ot the other way around).
 
     Returns:
-        tuple[torch.Tensor]: The pair (mask, masked_image) as ``torch.Tensor`` with 4
+        tuple[paddle.Tensor]: The pair (mask, masked_image) as ``paddle.Tensor`` with 4
             dimensions: ``batch x channels x height x width``.
     """
     if isinstance(image, paddle.Tensor):
         if not isinstance(mask, paddle.Tensor):
             raise TypeError(
-                f'`image` is a torch.Tensor but `mask` (type: {type(mask)} is not'
+                f'`image` is a paddle.Tensor but `mask` (type: {type(mask)} is not'
             )
         if image.ndim == 3:
             assert image.shape[
@@ -73,17 +73,17 @@ def prepare_mask_and_masked_image(image, mask):
         mask = 1 - mask
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
-        image = image.to(dtype='float32')
+        image = image.cast(dtype='float32')
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(
-            f'`mask` is a torch.Tensor but `image` (type: {type(image)} is not')
+            f'`mask` is a paddle.Tensor but `image` (type: {type(image)} is not')
     else:
         if isinstance(image, PIL.Image.Image):
             image = [image]
         image = np.concatenate(
             [np.array(i.convert('RGB'))[None, :] for i in image], axis=0)
         image = image.transpose(0, 3, 1, 2)
-        image = paddle.to_tensor(data=image).to(dtype='float32') / 127.5 - 1.0
+        image = paddle.to_tensor(data=image).cast(dtype='float32') / 127.5 - 1.0
         if isinstance(mask, PIL.Image.Image):
             mask = [mask]
         mask = np.concatenate(
@@ -154,7 +154,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
             vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
-    def run_safety_checker(self, image, device, dtype):
+    def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
         else:
@@ -165,10 +165,10 @@ class PaintByExamplePipeline(DiffusionPipeline):
                 feature_extractor_input = self.image_processor.numpy_to_pil(
                     image)
             safety_checker_input = self.feature_extractor(
-                feature_extractor_input, return_tensors='pt').to(device)
+                feature_extractor_input, return_tensors='pd')
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.to(dtype))
+                clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
     def prepare_extra_step_kwargs(self, generator, eta):
@@ -198,7 +198,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
         if not isinstance(image, paddle.Tensor) and not isinstance(
                 image, PIL.Image.Image) and not isinstance(image, list):
             raise ValueError(
-                f'`image` has to be of type `torch.FloatTensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is {type(image)}'
             )
         if height % 8 != 0 or width % 8 != 0:
             raise ValueError(
@@ -216,7 +216,6 @@ class PaintByExamplePipeline(DiffusionPipeline):
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None):
         shape = (batch_size, num_channels_latents, height //
@@ -226,22 +225,21 @@ class PaintByExamplePipeline(DiffusionPipeline):
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            latents = latents.to(device)
+            latents = latents
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
     def prepare_mask_latents(self, mask, masked_image, batch_size, height,
-                             width, dtype, device, generator,
+                             width, dtype, generator,
                              do_classifier_free_guidance):
         mask = paddle.nn.functional.interpolate(
             x=mask,
             size=(height // self.vae_scale_factor,
                   width // self.vae_scale_factor))
-        mask = mask.to(device=device, dtype=dtype)
-        masked_image = masked_image.to(device=device, dtype=dtype)
+        mask = mask.cast(dtype=dtype)
+        masked_image = masked_image.cast(dtype=dtype)
         masked_image_latents = self._encode_vae_image(
             masked_image, generator=generator)
         if mask.shape[0] < batch_size:
@@ -264,13 +262,12 @@ class PaintByExamplePipeline(DiffusionPipeline):
         masked_image_latents = paddle.concat(
             x=[masked_image_latents] *
             2) if do_classifier_free_guidance else masked_image_latents
-        masked_image_latents = masked_image_latents.to(device=device,
-                                                       dtype=dtype)
+        masked_image_latents = masked_image_latents.cast(dtype=dtype)
         return mask, masked_image_latents
 
     def _encode_vae_image(self,
                           image: paddle.Tensor,
-                          generator: torch.Generator):
+                          generator: paddle.Generator):
         if isinstance(generator, list):
             image_latents = [
                 self.vae.encode(image[i:i + 1]).latent_dist.sample(
@@ -283,13 +280,13 @@ class PaintByExamplePipeline(DiffusionPipeline):
         image_latents = self.vae.config.scaling_factor * image_latents
         return image_latents
 
-    def _encode_image(self, image, device, num_images_per_prompt,
+    def _encode_image(self, image, num_images_per_prompt,
                       do_classifier_free_guidance):
         dtype = next(self.image_encoder.parameters()).dtype
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(
-                images=image, return_tensors='pt').pixel_values
-        image = image.to(device=device, dtype=dtype)
+                images=image, return_tensors='pd').pixel_values
+        image = image.cast(dtype=dtype)
         image_embeddings, negative_prompt_embeds = self.image_encoder(
             image, return_uncond_vector=True)
         bs_embed, seq_len, _ = image_embeddings.shape
@@ -319,8 +316,8 @@ class PaintByExamplePipeline(DiffusionPipeline):
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             output_type: Optional[str]='pil',
             return_dict: bool=True,
@@ -330,12 +327,12 @@ class PaintByExamplePipeline(DiffusionPipeline):
         The call function to the pipeline for generation.
 
         Args:
-            example_image (`torch.FloatTensor` or `PIL.Image.Image` or `List[PIL.Image.Image]`):
+            example_image (`paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]`):
                 An example image to guide image generation.
-            image (`torch.FloatTensor` or `PIL.Image.Image` or `List[PIL.Image.Image]`):
+            image (`paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]`):
                 `Image` or tensor representing an image batch to be inpainted (parts of the image are masked out with
                 `mask_image` and repainted according to `prompt`).
-            mask_image (`torch.FloatTensor` or `PIL.Image.Image` or `List[PIL.Image.Image]`):
+            mask_image (`paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]`):
                 `Image` or tensor representing an image batch to mask `image`. White pixels in the mask are repainted,
                 while black pixels are preserved. If `mask_image` is a PIL image, it is converted to a single channel
                 (luminance) before use. If it's a tensor, it should contain one color channel (L) instead of 3, so the
@@ -358,10 +355,10 @@ class PaintByExamplePipeline(DiffusionPipeline):
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
@@ -372,7 +369,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -382,9 +379,9 @@ class PaintByExamplePipeline(DiffusionPipeline):
         ```py
         >>> import PIL
         >>> import requests
-        >>> import torch
+        >>> import paddle
         >>> from io import BytesIO
-        >>> from diffusers import PaintByExamplePipeline
+        >>> from ppdiffusers import PaintByExamplePipeline
 
 
         >>> def download_image(url):
@@ -406,9 +403,8 @@ class PaintByExamplePipeline(DiffusionPipeline):
 
         >>> pipe = PaintByExamplePipeline.from_pretrained(
         ...     "Fantasy-Studio/Paint-by-Example",
-        ...     torch_dtype=torch.float16,
+        ...     paddle_dtype=paddle.float16,
         ... )
-        >>> pipe = pipe.to("cuda")
 
         >>> image = pipe(image=init_image, mask_image=mask_image, example_image=example_image).images[0]
         >>> image
@@ -427,23 +423,21 @@ class PaintByExamplePipeline(DiffusionPipeline):
             batch_size = len(image)
         else:
             batch_size = image.shape[0]
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         mask, masked_image = prepare_mask_and_masked_image(image, mask_image)
         height, width = masked_image.shape[-2:]
         self.check_inputs(example_image, height, width, callback_steps)
-        image_embeddings = self._encode_image(example_image, device,
-                                              num_images_per_prompt,
-                                              do_classifier_free_guidance)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        image_embeddings = self._encode_image(
+            example_image, num_images_per_prompt, do_classifier_free_guidance)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_channels_latents = self.vae.config.latent_channels
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt, num_channels_latents, height,
-            width, image_embeddings.dtype, device, generator, latents)
+            width, image_embeddings.dtype, generator, latents)
         mask, masked_image_latents = self.prepare_mask_latents(
             mask, masked_image, batch_size * num_images_per_prompt, height,
-            width, image_embeddings.dtype, device, generator,
+            width, image_embeddings.dtype, generator,
             do_classifier_free_guidance)
         num_channels_mask = mask.shape[1]
         num_channels_masked_image = masked_image_latents.shape[1]
@@ -483,7 +477,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
             image = self.vae.decode(
                 latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(
-                image, device, image_embeddings.dtype)
+                image, image_embeddings.dtype)
         else:
             image = latents
             has_nsfw_concept = None

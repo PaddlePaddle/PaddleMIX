@@ -105,20 +105,9 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
     def decode(self, encodings_and_masks, input_tokens, noise_time):
         timesteps = noise_time
         if not paddle.is_tensor(x=timesteps):
-            timesteps = paddle.to_tensor(
-                data=[timesteps], dtype="int64", place=input_tokens.place)
+            timesteps = paddle.to_tensor(data=[timesteps], dtype="int64")
         elif paddle.is_tensor(x=timesteps) and len(timesteps.shape) == 0:
-            if isinstance(input_tokens.place, paddle.dtype):
-                dtype = input_tokens.place
-            elif isinstance(
-                    input_tokens.place, str
-            ) and input_tokens.place not in ["cpu", "cuda", "ipu", "xpu"]:
-                dtype = input_tokens.place
-            elif isinstance(input_tokens.place, paddle.Tensor):
-                dtype = input_tokens.place.dtype
-            else:
-                dtype = timesteps[None].dtype
-            timesteps = timesteps[None].cast(dtype)
+            timesteps = timesteps[None]
         # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
         timesteps = timesteps * paddle.ones(
             shape=input_tokens.shape[0], dtype=timesteps.dtype)
@@ -149,7 +138,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
         Args:
             input_tokens (`List[List[int]]`):
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
             num_inference_steps (`int`, *optional*, defaults to 100):
                 The number of denoising steps. More denoising steps usually lead to a higher quality audio at the
@@ -160,7 +149,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
                 The output format of the generated audio.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.

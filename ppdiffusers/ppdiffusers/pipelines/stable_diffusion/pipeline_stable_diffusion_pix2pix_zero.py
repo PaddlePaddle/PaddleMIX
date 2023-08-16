@@ -11,7 +11,7 @@ from ...models import AutoencoderKL, UNet2DConditionModel
 from ...models.attention_processor import Attention
 from ...schedulers import DDIMScheduler, DDPMScheduler, EulerAncestralDiscreteScheduler, LMSDiscreteScheduler
 from ...schedulers.scheduling_ddim_inverse import DDIMInverseScheduler
-from ...utils import PIL_INTERPOLATION, BaseOutput, deprecate, is_accelerate_available, is_accelerate_version, logging, randn_tensor, replace_example_docstring
+from ...utils import PIL_INTERPOLATION, BaseOutput, deprecate, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
@@ -30,7 +30,7 @@ class Pix2PixInversionPipelineOutput(BaseOutput, TextualInversionLoaderMixin):
     Output class for Stable Diffusion pipelines.
 
     Args:
-        latents (`torch.FloatTensor`)
+        latents (`paddle.Tensor`)
             inverted latents tensor
         images (`List[PIL.Image.Image]` or `np.ndarray`)
             List of denoised PIL images of length `batch_size` or numpy array of shape `(batch_size, height, width,
@@ -44,9 +44,9 @@ EXAMPLE_DOC_STRING = """
     Examples:
         ```py
         >>> import requests
-        >>> import torch
+        >>> import paddle
 
-        >>> from diffusers import DDIMScheduler, StableDiffusionPix2PixZeroPipeline
+        >>> from ppdiffusers import DDIMScheduler, StableDiffusionPix2PixZeroPipeline
 
 
         >>> def download(embedding_url, local_filepath):
@@ -56,9 +56,8 @@ EXAMPLE_DOC_STRING = """
 
 
         >>> model_ckpt = "CompVis/stable-diffusion-v1-4"
-        >>> pipeline = StableDiffusionPix2PixZeroPipeline.from_pretrained(model_ckpt, torch_dtype=torch.float16)
+        >>> pipeline = StableDiffusionPix2PixZeroPipeline.from_pretrained(model_ckpt, paddle_dtype=paddle.float16)
         >>> pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
-        >>> pipeline.to("cuda")
 
         >>> prompt = "a high resolution painting of a cat in the style of van gough"
         >>> source_emb_url = "https://hf.co/datasets/sayakpaul/sample-datasets/resolve/main/cat.pt"
@@ -67,8 +66,8 @@ EXAMPLE_DOC_STRING = """
         >>> for url in [source_emb_url, target_emb_url]:
         ...     download(url, url.split("/")[-1])
 
-        >>> src_embeds = torch.load(source_emb_url.split("/")[-1])
-        >>> target_embeds = torch.load(target_emb_url.split("/")[-1])
+        >>> src_embeds = paddle.load(source_emb_url.split("/")[-1])
+        >>> target_embeds = paddle.load(target_emb_url.split("/")[-1])
         >>> images = pipeline(
         ...     prompt,
         ...     source_embeds=src_embeds,
@@ -83,9 +82,9 @@ EXAMPLE_DOC_STRING = """
 EXAMPLE_INVERT_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
-        >>> from transformers import BlipForConditionalGeneration, BlipProcessor
-        >>> from diffusers import DDIMScheduler, DDIMInverseScheduler, StableDiffusionPix2PixZeroPipeline
+        >>> import paddle
+        >>> from paddlenlp.transformers import BlipForConditionalGeneration, BlipProcessor
+        >>> from ppdiffusers import DDIMScheduler, DDIMInverseScheduler, StableDiffusionPix2PixZeroPipeline
 
         >>> import requests
         >>> from PIL import Image
@@ -93,7 +92,7 @@ EXAMPLE_INVERT_DOC_STRING = """
         >>> captioner_id = "Salesforce/blip-image-captioning-base"
         >>> processor = BlipProcessor.from_pretrained(captioner_id)
         >>> model = BlipForConditionalGeneration.from_pretrained(
-        ...     captioner_id, torch_dtype=torch.float16, low_cpu_mem_usage=True
+        ...     captioner_id, paddle_dtype=paddle.float16, low_cpu_mem_usage=True
         ... )
 
         >>> sd_model_ckpt = "CompVis/stable-diffusion-v1-4"
@@ -101,14 +100,13 @@ EXAMPLE_INVERT_DOC_STRING = """
         ...     sd_model_ckpt,
         ...     caption_generator=model,
         ...     caption_processor=processor,
-        ...     torch_dtype=torch.float16,
+        ...     paddle_dtype=paddle.float16,
         ...     safety_checker=None,
         ... )
 
         >>> pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
         >>> pipeline.inverse_scheduler = DDIMInverseScheduler.from_config(pipeline.scheduler.config)
-        >>> pipeline.enable_model_cpu_offload()
-
+\
         >>> img_url = "https://github.com/pix2pixzero/pix2pix-zero/raw/main/assets/test_images/cats/cat_6.png"
 
         >>> raw_image = Image.open(requests.get(img_url, stream=True).raw).convert("RGB").resize((512, 512))
@@ -238,8 +236,7 @@ class Pix2PixZeroAttnProcessor:
             elif loss is not None:
                 prev_attn_probs = self.reference_cross_attn_map.pop(
                     timestep.item())
-                loss.compute_loss(attention_probs,
-                                  prev_attn_probs.to(attention_probs.place))
+                loss.compute_loss(attention_probs, prev_attn_probs)
         hidden_states = paddle.bmm(x=attention_probs, y=value)
         hidden_states = attn.batch_to_head_dim(hidden_states)
         hidden_states = attn.to_out[0](hidden_states)
@@ -321,35 +318,8 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
-    def enable_model_cpu_offload(self, gpu_id=0):
-        """
-        Offloads all models to CPU using accelerate, reducing memory usage with a low impact on performance. Compared
-        to `enable_sequential_cpu_offload`, this method moves one whole model at a time to the GPU when its `forward`
-        method is called, and the model remains in GPU until the next model runs. Memory savings are lower than with
-        `enable_sequential_cpu_offload`, but performance is much better due to the iterative execution of the `unet`.
-        """
-        if is_accelerate_available() and is_accelerate_version('>=',
-                                                               '0.17.0.dev0'):
-            from accelerate import cpu_offload_with_hook
-        else:
-            raise ImportError(
-                '`enable_model_cpu_offload` requires `accelerate v0.17.0` or higher.'
-            )
-        device = str(f'cuda:{gpu_id}').replace('cuda', 'gpu')
-        hook = None
-        for cpu_offloaded_model in [
-                self.vae, self.text_encoder, self.unet, self.vae
-        ]:
-            _, hook = cpu_offload_with_hook(
-                cpu_offloaded_model, device, prev_module_hook=hook)
-        if self.safety_checker is not None:
-            _, hook = cpu_offload_with_hook(
-                self.safety_checker, device, prev_module_hook=hook)
-        self.final_offload_hook = hook
-
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None,
@@ -362,8 +332,6 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
         Args:
              prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -372,10 +340,10 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
                 less than `1`).
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -398,10 +366,10 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 padding='max_length',
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -412,14 +380,13 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 )
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = text_inputs.attention_mask.to(device)
+                attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
-                text_input_ids.to(device), attention_mask=attention_mask)
+                text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype,
-                                         device=device)
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -451,20 +418,19 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.to(
-                dtype=self.text_encoder.dtype, device=device)
+            negative_prompt_embeds = negative_prompt_embeds.cast(
+                dtype=self.text_encoder.dtype)
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
@@ -473,7 +439,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
-    def run_safety_checker(self, image, device, dtype):
+    def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
         else:
@@ -484,10 +450,10 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 feature_extractor_input = self.image_processor.numpy_to_pil(
                     image)
             safety_checker_input = self.feature_extractor(
-                feature_extractor_input, return_tensors='pt').to(device)
+                feature_extractor_input, return_tensors='pd')
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.to(dtype))
+                clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
     def decode_latents(self, latents):
@@ -547,7 +513,6 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None):
         shape = (batch_size, num_channels_latents, height //
@@ -556,11 +521,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             raise ValueError(
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
-        if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
-        else:
-            latents = latents.to(device)
+        latents = randn_tensor(shape, generator=generator, dtype=dtype)
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -568,15 +529,10 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
     def generate_caption(self, images):
         """Generates caption for a given image."""
         text = 'a photography of'
-        prev_device = self.caption_generator.place
-        device = self._execution_device
         inputs = self.caption_processor(
             images, text,
-            return_tensors='pt').to(device=device,
-                                    dtype=self.caption_generator.dtype)
-        self.caption_generator.to(device)
+            return_tensors='pd').cast(dtype=self.caption_generator.dtype)
         outputs = self.caption_generator.generate(**inputs, max_new_tokens=128)
-        self.caption_generator.to(prev_device)
         caption = self.caption_processor.batch_decode(
             outputs, skip_special_tokens=True)[0]
         return caption
@@ -600,22 +556,16 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 padding='max_length',
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt').input_ids
-            input_ids = input_ids.to(self.text_encoder.place)
+                return_tensors='pd').input_ids
             embeds.append(self.text_encoder(input_ids)[0])
         return paddle.concat(x=embeds, axis=0).mean(axis=0)[None]
 
-    def prepare_image_latents(self,
-                              image,
-                              batch_size,
-                              dtype,
-                              device,
-                              generator=None):
+    def prepare_image_latents(self, image, batch_size, dtype, generator=None):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
-                f'`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}'
             )
-        image = image.to(device=device, dtype=dtype)
+        image = image.cast(dtype=dtype)
         if image.shape[1] == 4:
             latents = image
         else:
@@ -710,8 +660,8 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
@@ -728,10 +678,10 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide the image generation. If not defined, one has to pass `prompt_embeds`.
                 instead.
-            source_embeds (`torch.Tensor`):
+            source_embeds (`paddle.Tensor`):
                 Source concept embeddings. Generation of the embeddings as per the [original
                 paper](https://arxiv.org/abs/2302.03027). Used in discovering the edit direction.
-            target_embeds (`torch.Tensor`):
+            target_embeds (`paddle.Tensor`):
                 Target concept embeddings. Generation of the embeddings as per the [original
                 paper](https://arxiv.org/abs/2302.03027). Used in discovering the edit direction.
             height (`int`, *optional*, defaults to self.unet.config.sample_size * self.vae_scale_factor):
@@ -756,17 +706,17 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
                 [`schedulers.DDIMScheduler`], will be ignored for others.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of [paddle generator(s)](https://pytorch.org/docs/stable/generated/paddle.Generator.html)
                 to make generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -780,7 +730,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that will be called every `callback_steps` steps during inference. The function will be
-                called with the following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                called with the following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function will be called. If not specified, the callback will be
                 called at every step.
@@ -806,22 +756,20 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             batch_size = prompt_embeds.shape[0]
         if cross_attention_kwargs is None:
             cross_attention_kwargs = {}
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         prompt_embeds = self._encode_prompt(
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_channels_latents = self.unet.config.in_channels
-        latents = self.prepare_latents(
-            batch_size * num_images_per_prompt, num_channels_latents, height,
-            width, prompt_embeds.dtype, device, generator, latents)
+        latents = self.prepare_latents(batch_size * num_images_per_prompt,
+                                       num_channels_latents, height, width,
+                                       prompt_embeds.dtype, generator, latents)
         latents_init = latents.clone()
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         self.unet = prepare_unet(self.unet)
@@ -850,8 +798,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
-        edit_direction = self.construct_direction(
-            source_embeds, target_embeds).to(prompt_embeds.place)
+        edit_direction = self.construct_direction(source_embeds, target_embeds)
         prompt_embeds_edit = prompt_embeds.clone()
         prompt_embeds_edit[1:2] += edit_direction
         latents = latents_init
@@ -899,7 +846,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             image = self.vae.decode(
                 latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(
-                image, device, prompt_embeds.dtype)
+                image, prompt_embeds.dtype)
         else:
             image = latents
             has_nsfw_concept = None
@@ -909,10 +856,6 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             do_denormalize = [(not has_nsfw) for has_nsfw in has_nsfw_concept]
         image = self.image_processor.postprocess(
             image, output_type=output_type, do_denormalize=do_denormalize)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
         if not return_dict:
             return image, has_nsfw_concept
         return StableDiffusionPipelineOutput(
@@ -927,8 +870,8 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 paddle.Tensor], List[PIL.Image.Image], List[np.ndarray]]=None,
             num_inference_steps: int=50,
             guidance_scale: float=1,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             cross_attention_guidance_amount: float=0.1,
@@ -948,7 +891,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts to guide the image generation. If not defined, one has to pass `prompt_embeds`.
                 instead.
-            image (`torch.FloatTensor` `np.ndarray`, `PIL.Image.Image`, `List[torch.FloatTensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
+            image (`paddle.Tensor` `np.ndarray`, `PIL.Image.Image`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image`, or tensor representing an image batch which will be used for conditioning. Can also accpet
                 image latents as `image`, if passing latents directly, it will not be encoded again.
             num_inference_steps (`int`, *optional*, defaults to 50):
@@ -960,14 +903,14 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 Paper](https://arxiv.org/pdf/2205.11487.pdf). Guidance scale is enabled by setting `guidance_scale >
                 1`. Higher guidance scale encourages to generate images that are closely linked to the text `prompt`,
                 usually at the expense of lower image quality.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of [paddle generator(s)](https://pytorch.org/docs/stable/generated/paddle.Generator.html)
                 to make generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor will ge generated by sampling using the supplied random `generator`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
             cross_attention_guidance_amount (`float`, defaults to 0.1):
@@ -980,7 +923,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that will be called every `callback_steps` steps during inference. The function will be
-                called with the following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                called with the following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function will be called. If not specified, the callback will be
                 called at every step.
@@ -1010,19 +953,17 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             batch_size = prompt_embeds.shape[0]
         if cross_attention_kwargs is None:
             cross_attention_kwargs = {}
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         image = self.image_processor.preprocess(image)
         latents = self.prepare_image_latents(image, batch_size, self.vae.dtype,
-                                             device, generator)
+                                             generator)
         num_images_per_prompt = 1
         prompt_embeds = self._encode_prompt(
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             prompt_embeds=prompt_embeds)
-        self.inverse_scheduler.set_timesteps(num_inference_steps, device=device)
+        self.inverse_scheduler.set_timesteps(num_inference_steps)
         timesteps = self.inverse_scheduler.timesteps
         self.unet = prepare_unet(self.unet)
         num_warmup_steps = len(
@@ -1079,10 +1020,6 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
         image = self.vae.decode(
             latents / self.vae.config.scaling_factor, return_dict=False)[0]
         image = self.image_processor.postprocess(image, output_type=output_type)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
         if not return_dict:
             return inverted_latents, image
         return Pix2PixInversionPipelineOutput(

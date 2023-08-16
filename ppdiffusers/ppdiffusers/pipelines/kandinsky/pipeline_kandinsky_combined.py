@@ -130,7 +130,7 @@ class KandinskyCombinedPipeline(DiffusionPipeline):
     def __init__(
             self,
             text_encoder: MultilingualCLIP,
-            tokenizer: paddlenlp.transformers.XLMRobertaTokenizer,
+            tokenizer: XLMRobertaTokenizer,
             unet: UNet2DConditionModel,
             scheduler: Union[DDIMScheduler, DDPMScheduler],
             movq: VQModel,
@@ -321,7 +321,7 @@ class KandinskyImg2ImgCombinedPipeline(DiffusionPipeline):
     def __init__(
             self,
             text_encoder: MultilingualCLIP,
-            tokenizer: paddlenlp.transformers.XLMRobertaTokenizer,
+            tokenizer: XLMRobertaTokenizer,
             unet: UNet2DConditionModel,
             scheduler: Union[DDIMScheduler, DDPMScheduler],
             movq: VQModel,

@@ -98,13 +98,13 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
             vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
-    def _encode_image(self, image, device, num_images_per_prompt,
+    def _encode_image(self, image, num_images_per_prompt,
                       do_classifier_free_guidance):
         dtype = next(self.image_encoder.parameters()).dtype
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(
-                images=image, return_tensors='pt').pixel_values
-        image = image.to(device=device, dtype=dtype)
+                images=image, return_tensors='pd').pixel_values
+        image = image.cast(dtype=dtype)
         image_embeddings = self.image_encoder(image).image_embeds
         image_embeddings = image_embeddings.unsqueeze(axis=1)
         bs_embed, seq_len, _ = image_embeddings.shape
@@ -118,7 +118,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
                 x=[negative_prompt_embeds, image_embeddings])
         return image_embeddings
 
-    def run_safety_checker(self, image, device, dtype):
+    def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
         else:
@@ -129,10 +129,10 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
                 feature_extractor_input = self.image_processor.numpy_to_pil(
                     image)
             safety_checker_input = self.feature_extractor(
-                feature_extractor_input, return_tensors='pt').to(device)
+                feature_extractor_input, return_tensors='pd')
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.to(dtype))
+                clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
     def decode_latents(self, latents):
@@ -162,7 +162,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         if not isinstance(image, paddle.Tensor) and not isinstance(
                 image, PIL.Image.Image) and not isinstance(image, list):
             raise ValueError(
-                f'`image` has to be of type `torch.FloatTensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is {type(image)}'
             )
         if height % 8 != 0 or width % 8 != 0:
             raise ValueError(
@@ -180,7 +180,6 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None):
         shape = (batch_size, num_channels_latents, height //
@@ -190,10 +189,9 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            latents = latents.to(device)
+            latents = latents
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -207,8 +205,8 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
             guidance_scale: float=7.5,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             output_type: Optional[str]='pil',
             return_dict: bool=True,
@@ -218,7 +216,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         The call function to the pipeline for generation.
 
         Args:
-            image (`PIL.Image.Image` or `List[PIL.Image.Image]` or `torch.FloatTensor`):
+            image (`PIL.Image.Image` or `List[PIL.Image.Image]` or `paddle.Tensor`):
                 Image or images to guide image generation. If you provide a tensor, it needs to be compatible with
                 [`CLIPImageProcessor`](https://huggingface.co/lambdalabs/sd-image-variations-diffusers/blob/main/feature_extractor/preprocessor_config.json).
             height (`int`, *optional*, defaults to `self.unet.config.sample_size * self.vae_scale_factor`):
@@ -236,10 +234,10 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
@@ -250,7 +248,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -265,7 +263,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         Examples:
 
         ```py
-        from diffusers import StableDiffusionImageVariationPipeline
+        from ppdiffusers import StableDiffusionImageVariationPipeline
         from PIL import Image
         from io import BytesIO
         import requests
@@ -273,7 +271,6 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         pipe = StableDiffusionImageVariationPipeline.from_pretrained(
             "lambdalabs/sd-image-variations-diffusers", revision="v2.0"
         )
-        pipe = pipe.to("cuda")
 
         url = "https://lh3.googleusercontent.com/y-iFOHfLTwkuQSUegpwDdgKmOjRSTvPxat63dQLB25xkTs4lhIbRUFeNBWZzYf370g=s1200"
 
@@ -293,16 +290,15 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
             batch_size = len(image)
         else:
             batch_size = image.shape[0]
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
-        image_embeddings = self._encode_image(
-            image, device, num_images_per_prompt, do_classifier_free_guidance)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        image_embeddings = self._encode_image(image, num_images_per_prompt,
+                                              do_classifier_free_guidance)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_channels_latents = self.unet.config.in_channels
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt, num_channels_latents, height,
-            width, image_embeddings.dtype, device, generator, latents)
+            width, image_embeddings.dtype, generator, latents)
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
@@ -332,7 +328,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
             image = self.vae.decode(
                 latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(
-                image, device, image_embeddings.dtype)
+                image, image_embeddings.dtype)
         else:
             image = latents
             has_nsfw_concept = None

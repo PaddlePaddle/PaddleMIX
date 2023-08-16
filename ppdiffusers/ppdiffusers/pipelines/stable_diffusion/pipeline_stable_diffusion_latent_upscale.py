@@ -71,7 +71,7 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
         self.image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor, resample='bicubic')
 
-    def _encode_prompt(self, prompt, device, do_classifier_free_guidance,
+    def _encode_prompt(self, prompt, do_classifier_free_guidance,
                        negative_prompt):
         """
         Encodes the prompt into text encoder hidden states.
@@ -79,8 +79,6 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
         Args:
             prompt (`str` or `list(int)`):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             do_classifier_free_guidance (`bool`):
                 whether to use classifier free guidance or not
             negative_prompt (`str` or `List[str]`):
@@ -94,10 +92,10 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             max_length=self.tokenizer.model_max_length,
             truncation=True,
             return_length=True,
-            return_tensors='pt')
+            return_tensors='pd')
         text_input_ids = text_inputs.input_ids
         untruncated_ids = self.tokenizer(
-            prompt, padding='longest', return_tensors='pt').input_ids
+            prompt, padding='longest', return_tensors='pd').input_ids
         if untruncated_ids.shape[-1] >= text_input_ids.shape[
                 -1] and not paddle.equal_all(
                     x=text_input_ids, y=untruncated_ids).item():
@@ -107,7 +105,7 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                 f'The following part of your input was truncated because CLIP can only handle sequences up to {self.tokenizer.model_max_length} tokens: {removed_text}'
             )
         text_encoder_out = self.text_encoder(
-            text_input_ids.to(device), output_hidden_states=True)
+            text_input_ids, output_hidden_states=True)
         text_embeddings = text_encoder_out.hidden_states[-1]
         text_pooler_out = text_encoder_out.pooler_output
         if do_classifier_free_guidance:
@@ -133,9 +131,9 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                 max_length=max_length,
                 truncation=True,
                 return_length=True,
-                return_tensors='pt')
+                return_tensors='pd')
             uncond_encoder_out = self.text_encoder(
-                uncond_input.input_ids.to(device), output_hidden_states=True)
+                uncond_input.input_ids, output_hidden_states=True)
             uncond_embeddings = uncond_encoder_out.hidden_states[-1]
             uncond_pooler_out = uncond_encoder_out.pooler_output
             text_embeddings = paddle.concat(
@@ -163,7 +161,7 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
         if not isinstance(image, paddle.Tensor) and not isinstance(
                 image, PIL.Image.Image) and not isinstance(image, list):
             raise ValueError(
-                f'`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or `list` but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or `list` but is {type(image)}'
             )
         if isinstance(image, list) or isinstance(image, paddle.Tensor):
             if isinstance(prompt, str):
@@ -190,19 +188,17 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None):
         shape = batch_size, num_channels_latents, height, width
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             if latents.shape != shape:
                 raise ValueError(
                     f'Unexpected latents shape, got {latents.shape}, expected {shape}'
                 )
-            latents = latents.to(device)
+            latents = latents
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -215,8 +211,8 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             num_inference_steps: int=75,
             guidance_scale: float=9.0,
             negative_prompt: Optional[Union[str, List[str]]]=None,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             output_type: Optional[str]='pil',
             return_dict: bool=True,
@@ -228,7 +224,7 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
         Args:
             prompt (`str` or `List[str]`):
                 The prompt or prompts to guide image upscaling.
-            image (`torch.FloatTensor`, `PIL.Image.Image`, `np.ndarray`, `List[torch.FloatTensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
+            image (`paddle.Tensor`, `PIL.Image.Image`, `np.ndarray`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image` or tensor representing an image batch to be upscaled. If it's a tensor, it can be either a
                 latent output from a Stable Diffusion model or an image tensor in the range `[-1, 1]`. It is considered
                 a `latent` if `image.shape[1]` is `4`; otherwise, it is considered to be an image representation and
@@ -245,10 +241,10 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
@@ -259,32 +255,30 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
 
         Examples:
         ```py
-        >>> from diffusers import StableDiffusionLatentUpscalePipeline, StableDiffusionPipeline
-        >>> import torch
+        >>> from ppdiffusers import StableDiffusionLatentUpscalePipeline, StableDiffusionPipeline
+        >>> import paddle
 
 
         >>> pipeline = StableDiffusionPipeline.from_pretrained(
-        ...     "CompVis/stable-diffusion-v1-4", torch_dtype=torch.float16
+        ...     "CompVis/stable-diffusion-v1-4", paddle_dtype=paddle.float16
         ... )
-        >>> pipeline.to("cuda")
 
         >>> model_id = "stabilityai/sd-x2-latent-upscaler"
-        >>> upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(model_id, torch_dtype=torch.float16)
-        >>> upscaler.to("cuda")
+        >>> upscaler = StableDiffusionLatentUpscalePipeline.from_pretrained(model_id, paddle_dtype=paddle.float16)
 
         >>> prompt = "a photo of an astronaut high resolution, unreal engine, ultra realistic"
-        >>> generator = torch.manual_seed(33)
+        >>> generator = paddle.Generator().manual_seed(33)
 
         >>> low_res_latents = pipeline(prompt, generator=generator, output_type="latent").images
 
-        >>> with torch.no_grad():
+        >>> with paddle.no_grad():
         ...     image = pipeline.decode_latents(low_res_latents)
         >>> image = pipeline.numpy_to_pil(image)[0]
 
@@ -308,30 +302,28 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
         """
         self.check_inputs(prompt, image, callback_steps)
         batch_size = 1 if isinstance(prompt, str) else len(prompt)
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         if guidance_scale == 0:
             prompt = [''] * batch_size
         text_embeddings, text_pooler_out = self._encode_prompt(
-            prompt, device, do_classifier_free_guidance, negative_prompt)
+            prompt, do_classifier_free_guidance, negative_prompt)
         image = self.image_processor.preprocess(image)
-        image = image.to(dtype=text_embeddings.dtype, device=device)
+        image = image.cast(dtype=text_embeddings.dtype)
         if image.shape[1] == 3:
             image = self.vae.encode(image).latent_dist.sample(
             ) * self.vae.config.scaling_factor
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         batch_multiplier = 2 if do_classifier_free_guidance else 1
         image = image[None, :] if image.ndim == 3 else image
         image = paddle.concat(x=[image] * batch_multiplier)
-        noise_level = paddle.to_tensor(
-            data=[0.0], dtype='float32', place=device)
+        noise_level = paddle.to_tensor(data=[0.0], dtype='float32')
         noise_level = paddle.concat(x=[noise_level] * image.shape[0])
         inv_noise_level = (noise_level**2 + 1)**-0.5
         image_cond = paddle.nn.functional.interpolate(
             x=image, scale_factor=2,
             mode='nearest') * inv_noise_level[:, None, None, None]
-        image_cond = image_cond.to(text_embeddings.dtype)
+        image_cond = image_cond.cast(text_embeddings.dtype)
         noise_level_embed = paddle.concat(
             x=[
                 paddle.ones(
@@ -347,7 +339,7 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
         num_channels_latents = self.vae.config.latent_channels
         latents = self.prepare_latents(
             batch_size, num_channels_latents, height * 2, width * 2,
-            text_embeddings.dtype, device, generator, latents)
+            text_embeddings.dtype, generator, latents)
         num_channels_image = image.shape[1]
         if (num_channels_latents + num_channels_image !=
                 self.unet.config.in_channels):

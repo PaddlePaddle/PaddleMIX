@@ -7,7 +7,7 @@ from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, PriorTransformer, UNet2DConditionModel
 from ...models.embeddings import get_timestep_embedding
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import is_accelerate_available, is_accelerate_version, logging, randn_tensor, replace_example_docstring
+from ...utils import logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 from .stable_unclip_image_normalizer import StableUnCLIPImageNormalizer
 from paddlenlp.transformers import (
@@ -19,13 +19,12 @@ logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import torch
-        >>> from diffusers import StableUnCLIPPipeline
+        >>> import paddle
+        >>> from ppdiffusers import StableUnCLIPPipeline
 
         >>> pipe = StableUnCLIPPipeline.from_pretrained(
-        ...     "fusing/stable-unclip-2-1-l", torch_dtype=torch.float16
+        ...     "fusing/stable-unclip-2-1-l", paddle_dtype=paddle.float16
         ... )  # TODO update model path
-        >>> pipe = pipe.to("cuda")
 
         >>> prompt = "a photo of an astronaut riding a horse on mars"
         >>> images = pipe(prompt).images
@@ -68,7 +67,6 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         vae ([`AutoencoderKL`]):
             Variational Auto-Encoder (VAE) Model to encode and decode images to and from latent representations.
     """
-    _exclude_from_cpu_offload = ['prior', 'image_normalizer']
     prior_tokenizer: CLIPTokenizer
     prior_text_encoder: CLIPTextModelWithProjection
     prior: PriorTransformer
@@ -82,14 +80,14 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
     vae: AutoencoderKL
 
     def __init__(self,
-                 prior_tokenizer: transformers.CLIPTokenizer,
-                 prior_text_encoder: transformers.CLIPTextModelWithProjection,
+                 prior_tokenizer: CLIPTokenizer,
+                 prior_text_encoder: CLIPTextModelWithProjection,
                  prior: PriorTransformer,
                  prior_scheduler: KarrasDiffusionSchedulers,
                  image_normalizer: StableUnCLIPImageNormalizer,
                  image_noising_scheduler: KarrasDiffusionSchedulers,
-                 tokenizer: transformers.CLIPTokenizer,
-                 text_encoder: transformers.CLIPTextModelWithProjection,
+                 tokenizer: CLIPTokenizer,
+                 text_encoder: CLIPTextModelWithProjection,
                  unet: UNet2DConditionModel,
                  scheduler: KarrasDiffusionSchedulers,
                  vae: AutoencoderKL):
@@ -124,33 +122,9 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         """
         self.vae.disable_slicing()
 
-    def enable_model_cpu_offload(self, gpu_id=0):
-        """
-        Offload all models to CPU to reduce memory usage with a low impact on performance. Moves one whole model at a
-        time to the GPU when its `forward` method is called, and the model remains in GPU until the next model runs.
-        Memory savings are lower than using `enable_sequential_cpu_offload`, but performance is much better due to the
-        iterative execution of the `unet`.
-        """
-        if is_accelerate_available() and is_accelerate_version('>=',
-                                                               '0.17.0.dev0'):
-            from accelerate import cpu_offload_with_hook
-        else:
-            raise ImportError(
-                '`enable_model_cpu_offload` requires `accelerate v0.17.0` or higher.'
-            )
-        device = str(f'cuda:{gpu_id}').replace('cuda', 'gpu')
-        hook = None
-        for cpu_offloaded_model in [
-                self.text_encoder, self.prior_text_encoder, self.unet, self.vae
-        ]:
-            _, hook = cpu_offload_with_hook(
-                cpu_offloaded_model, device, prev_module_hook=hook)
-        self.final_offload_hook = hook
-
     def _encode_prior_prompt(
             self,
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             text_model_output: Optional[Union[CLIPTextModelOutput, Tuple]]=None,
@@ -162,11 +136,11 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 padding='max_length',
                 max_length=self.prior_tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
-            text_mask = text_inputs.attention_mask.bool().to(device)
+            text_mask = text_inputs.attention_mask.bool()
             untruncated_ids = self.prior_tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -178,8 +152,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 )
                 text_input_ids = text_input_ids[:, :self.prior_tokenizer.
                                                 model_max_length]
-            prior_text_encoder_output = self.prior_text_encoder(
-                text_input_ids.to(device))
+            prior_text_encoder_output = self.prior_text_encoder(text_input_ids)
             prompt_embeds = prior_text_encoder_output.text_embeds
             prior_text_encoder_hidden_states = (
                 prior_text_encoder_output.last_hidden_state)
@@ -202,10 +175,10 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 padding='max_length',
                 max_length=self.prior_tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
-            uncond_text_mask = uncond_input.attention_mask.bool().to(device)
+                return_tensors='pd')
+            uncond_text_mask = uncond_input.attention_mask.bool()
             negative_prompt_embeds_prior_text_encoder_output = (
-                self.prior_text_encoder(uncond_input.input_ids.to(device)))
+                self.prior_text_encoder(uncond_input.input_ids))
             negative_prompt_embeds = (
                 negative_prompt_embeds_prior_text_encoder_output.text_embeds)
             uncond_prior_text_encoder_hidden_states = (
@@ -236,7 +209,6 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
 
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None,
@@ -249,8 +221,6 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         Args:
              prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -259,10 +229,10 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
                 less than `1`).
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -285,10 +255,10 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 padding='max_length',
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -299,14 +269,13 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 )
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = text_inputs.attention_mask.to(device)
+                attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
-                text_input_ids.to(device), attention_mask=attention_mask)
+                text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype,
-                                         device=device)
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -338,20 +307,19 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.to(
-                dtype=self.text_encoder.dtype, device=device)
+            negative_prompt_embeds = negative_prompt_embeds.cast(
+                dtype=self.text_encoder.dtype)
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
@@ -446,17 +414,14 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 f'`noise_level` must be between 0 and {self.image_noising_scheduler.config.num_train_timesteps - 1}, inclusive.'
             )
 
-    def prepare_latents(self, shape, dtype, device, generator, latents,
-                        scheduler):
+    def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             if latents.shape != shape:
                 raise ValueError(
                     f'Unexpected latents shape, got {latents.shape}, expected {shape}'
                 )
-            latents = latents.to(device)
         latents = latents * scheduler.init_noise_sigma
         return latents
 
@@ -464,7 +429,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                                image_embeds: paddle.Tensor,
                                noise_level: int,
                                noise: Optional[paddle.Tensor]=None,
-                               generator: Optional[torch.Generator]=None):
+                               generator: Optional[paddle.Generator]=None):
         """
         Add noise to the image embeddings. The amount of noise is controlled by a `noise_level` input. A higher
         `noise_level` increases the variance in the final un-noised images.
@@ -481,12 +446,9 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             noise = randn_tensor(
                 image_embeds.shape,
                 generator=generator,
-                device=image_embeds.place,
                 dtype=image_embeds.dtype)
-        noise_level = paddle.to_tensor(
-            data=[noise_level] * image_embeds.shape[0],
-            place=image_embeds.place)
-        self.image_normalizer.to(image_embeds.place)
+        noise_level = paddle.to_tensor(data=[noise_level] *
+                                       image_embeds.shape[0])
         image_embeds = self.image_normalizer.scale(image_embeds)
         image_embeds = self.image_noising_scheduler.add_noise(
             image_embeds, timesteps=noise_level, noise=noise)
@@ -496,7 +458,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             embedding_dim=image_embeds.shape[-1],
             flip_sin_to_cos=True,
             downscale_freq_shift=0)
-        noise_level = noise_level.to(image_embeds.dtype)
+        noise_level = noise_level.cast(image_embeds.dtype)
         image_embeds = paddle.concat(x=(image_embeds, noise_level), axis=1)
         return image_embeds
 
@@ -512,7 +474,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[torch.Generator]=None,
+            generator: Optional[paddle.Generator]=None,
             latents: Optional[paddle.Tensor]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             negative_prompt_embeds: Optional[paddle.Tensor]=None,
@@ -549,17 +511,17 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs (prompt weighting). If not
                 provided, text embeddings are generated from the `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs (prompt weighting). If
                 not provided, `negative_prompt_embeds` are generated from the `negative_prompt` input argument.
             output_type (`str`, *optional*, defaults to `"pil"`):
@@ -568,7 +530,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 Whether or not to return a [`~pipelines.ImagePipelineOutput`] instead of a plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -584,7 +546,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             prior_guidance_scale (`float`, *optional*, defaults to 4.0):
                 A higher guidance scale value encourages the model to generate images closely linked to the text
                 `prompt` at the expense of lower image quality. Guidance scale is enabled when `guidance_scale > 1`.
-            prior_latents (`torch.FloatTensor`, *optional*):
+            prior_latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 embedding generation in the prior denoising process. Can be used to tweak the same generation with
                 different prompts. If not provided, a latents tensor is generated by sampling using the supplied random
@@ -615,21 +577,18 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         else:
             batch_size = prompt_embeds.shape[0]
         batch_size = batch_size * num_images_per_prompt
-        device = self._execution_device
         prior_do_classifier_free_guidance = prior_guidance_scale > 1.0
         (prior_prompt_embeds, prior_text_encoder_hidden_states,
          prior_text_mask) = (self._encode_prior_prompt(
              prompt=prompt,
-             device=device,
              num_images_per_prompt=num_images_per_prompt,
              do_classifier_free_guidance=prior_do_classifier_free_guidance))
-        self.prior_scheduler.set_timesteps(
-            prior_num_inference_steps, device=device)
+        self.prior_scheduler.set_timesteps(prior_num_inference_steps)
         prior_timesteps_tensor = self.prior_scheduler.timesteps
         embedding_dim = self.prior.config.embedding_dim
         prior_latents = self.prepare_latents(
-            (batch_size, embedding_dim), prior_prompt_embeds.dtype, device,
-            generator, prior_latents, self.prior_scheduler)
+            (batch_size, embedding_dim), prior_prompt_embeds.dtype, generator,
+            prior_latents, self.prior_scheduler)
         prior_extra_step_kwargs = self.prepare_prior_extra_step_kwargs(
             generator, eta)
         for i, t in enumerate(self.progress_bar(prior_timesteps_tensor)):
@@ -667,7 +626,6 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             'scale', None) if cross_attention_kwargs is not None else None
         prompt_embeds = self._encode_prompt(
             prompt=prompt,
-            device=device,
             num_images_per_prompt=num_images_per_prompt,
             do_classifier_free_guidance=do_classifier_free_guidance,
             negative_prompt=negative_prompt,
@@ -682,7 +640,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             negative_prompt_embeds = paddle.zeros_like(x=image_embeds)
             image_embeds = paddle.concat(
                 x=[negative_prompt_embeds, image_embeds])
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_channels_latents = self.unet.config.in_channels
         shape = (batch_size, num_channels_latents, height //
@@ -690,7 +648,6 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         latents = self.prepare_latents(
             shape=shape,
             dtype=prompt_embeds.dtype,
-            device=device,
             generator=generator,
             latents=latents,
             scheduler=self.scheduler)
@@ -722,10 +679,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         else:
             image = latents
         image = self.image_processor.postprocess(image, output_type=output_type)
-        if hasattr(
-                self,
-                'final_offload_hook') and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
+
         if not return_dict:
             return image,
         return ImagePipelineOutput(images=image)

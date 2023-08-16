@@ -37,13 +37,13 @@ def trunc_normal_(tensor, mean=0.0, std=1.0, a=-2.0, b=2.0):
     generating the random values works best when :math:`a \\leq \\text{mean} \\leq b`.
 
     Args:
-        tensor: an n-dimensional `torch.Tensor`
+        tensor: an n-dimensional `paddle.Tensor`
         mean: the mean of the normal distribution
         std: the standard deviation of the normal distribution
         a: the minimum cutoff value
         b: the maximum cutoff value
     Examples:
-        >>> w = torch.empty(3, 5) >>> nn.init.trunc_normal_(w)
+        >>> w = paddle.empty(3, 5) >>> nn.init.trunc_normal_(w)
     """
     return _no_grad_trunc_normal_(tensor, mean, std, a, b)
 
@@ -487,11 +487,11 @@ class UTransformer2DModel(ModelMixin, ConfigMixin):
         upcast_attention (`bool`, *optional*):
             Whether to upcast the query and key to float() when performing the attention calculation.
         norm_type (`str`, *optional*, defaults to `"layer_norm"`):
-            The Layer Normalization implementation to use. Defaults to `torch.nn.LayerNorm`.
+            The Layer Normalization implementation to use. Defaults to `paddle.nn.LayerNorm`.
         block_type (`str`, *optional*, defaults to `"unidiffuser"`):
             The transformer block implementation to use. If `"unidiffuser"`, has the LayerNorms on the residual
             backbone of each transformer block; otherwise has them in the attention/feedforward branches (the standard
-            behavior in `diffusers`.)
+            behavior in `ppdiffusers`.)
         pre_layer_norm (`bool`, *optional*):
             Whether to perform layer normalization before the attention and feedforward operations ("pre-LayerNorm"),
             as opposed to after ("post-LayerNorm"). The original UniDiffuser implementation is post-LayerNorm
@@ -617,15 +617,15 @@ class UTransformer2DModel(ModelMixin, ConfigMixin):
                 unpatchify: bool=True):
         """
         Args:
-            hidden_states ( When discrete, `torch.LongTensor` of shape `(batch size, num latent pixels)`.
-                When continuous, `torch.FloatTensor` of shape `(batch size, channel, height, width)`): Input
+            hidden_states ( When discrete, `paddle.Tensor` of shape `(batch size, num latent pixels)`.
+                When continuous, `paddle.Tensor` of shape `(batch size, channel, height, width)`): Input
                 hidden_states
-            encoder_hidden_states ( `torch.LongTensor` of shape `(batch size, encoder_hidden_states dim)`, *optional*):
+            encoder_hidden_states ( `paddle.Tensor` of shape `(batch size, encoder_hidden_states dim)`, *optional*):
                 Conditional embeddings for cross attention layer. If not given, cross-attention defaults to
                 self-attention.
-            timestep ( `torch.long`, *optional*):
+            timestep ( `paddle.int64`, *optional*):
                 Optional timestep to be applied as an embedding in AdaLayerNorm's. Used to indicate denoising step.
-            class_labels ( `torch.LongTensor` of shape `(batch size, num classes)`, *optional*):
+            class_labels ( `paddle.Tensor` of shape `(batch size, num classes)`, *optional*):
                 Optional class labels to be applied as an embedding in AdaLayerZeroNorm. Used to indicate class labels
                 conditioning.
             cross_attention_kwargs (*optional*):
@@ -727,11 +727,11 @@ class UniDiffuserModel(ModelMixin, ConfigMixin):
         upcast_attention (`bool`, *optional*):
             Whether to upcast the query and key to float32 when performing the attention calculation.
         norm_type (`str`, *optional*, defaults to `"layer_norm"`):
-            The Layer Normalization implementation to use. Defaults to `torch.nn.LayerNorm`.
+            The Layer Normalization implementation to use. Defaults to `paddle.nn.LayerNorm`.
         block_type (`str`, *optional*, defaults to `"unidiffuser"`):
             The transformer block implementation to use. If `"unidiffuser"`, has the LayerNorms on the residual
             backbone of each transformer block; otherwise has them in the attention/feedforward branches (the standard
-            behavior in `diffusers`.)
+            behavior in `ppdiffusers`.)
         pre_layer_norm (`bool`, *optional*):
             Whether to perform layer normalization before the attention and feedforward operations ("pre-LayerNorm"),
             as opposed to after ("post-LayerNorm"). The original UniDiffuser implementation is post-LayerNorm
@@ -880,20 +880,20 @@ class UniDiffuserModel(ModelMixin, ConfigMixin):
                 cross_attention_kwargs=None):
         """
         Args:
-            latent_image_embeds (`torch.FloatTensor` of shape `(batch size, latent channels, height, width)`):
+            latent_image_embeds (`paddle.Tensor` of shape `(batch size, latent channels, height, width)`):
                 Latent image representation from the VAE encoder.
-            image_embeds (`torch.FloatTensor` of shape `(batch size, 1, clip_img_dim)`):
+            image_embeds (`paddle.Tensor` of shape `(batch size, 1, clip_img_dim)`):
                 CLIP-embedded image representation (unsqueezed in the first dimension).
-            prompt_embeds (`torch.FloatTensor` of shape `(batch size, seq_len, text_dim)`):
+            prompt_embeds (`paddle.Tensor` of shape `(batch size, seq_len, text_dim)`):
                 CLIP-embedded text representation.
-            timestep_img (`torch.long` or `float` or `int`):
+            timestep_img (`paddle.int64` or `float` or `int`):
                 Current denoising step for the image.
-            timestep_text (`torch.long` or `float` or `int`):
+            timestep_text (`paddle.int64` or `float` or `int`):
                 Current denoising step for the text.
-            data_type: (`torch.int` or `float` or `int`, *optional*, defaults to `1`):
+            data_type: (`paddle.int32` or `float` or `int`, *optional*, defaults to `1`):
                 Only used in UniDiffuser-v1-style models. Can be either `1`, to use weights trained on nonpublic data,
                 or `0` otherwise.
-            encoder_hidden_states ( `torch.LongTensor` of shape `(batch size, encoder_hidden_states dim)`, *optional*):
+            encoder_hidden_states ( `paddle.Tensor` of shape `(batch size, encoder_hidden_states dim)`, *optional*):
                 Conditional embeddings for cross attention layer. If not given, cross-attention defaults to
                 self-attention.
             cross_attention_kwargs (*optional*):
@@ -912,34 +912,26 @@ class UniDiffuserModel(ModelMixin, ConfigMixin):
         num_text_tokens, num_img_tokens = text_hidden_states.shape[
             1], vae_hidden_states.shape[1]
         if not paddle.is_tensor(x=timestep_img):
-            timestep_img = paddle.to_tensor(
-                data=[timestep_img],
-                dtype='int64',
-                place=vae_hidden_states.place)
+            timestep_img = paddle.to_tensor(data=[timestep_img], dtype='int64')
         timestep_img = timestep_img * paddle.ones(
             shape=batch_size, dtype=timestep_img.dtype)
         timestep_img_token = self.timestep_img_proj(timestep_img)
-        timestep_img_token = timestep_img_token.to(dtype=self.dtype)
+        timestep_img_token = timestep_img_token.cast(dtype=self.dtype)
         timestep_img_token = self.timestep_img_embed(timestep_img_token)
         timestep_img_token = timestep_img_token.unsqueeze(axis=1)
         if not paddle.is_tensor(x=timestep_text):
             timestep_text = paddle.to_tensor(
-                data=[timestep_text],
-                dtype='int64',
-                place=vae_hidden_states.place)
+                data=[timestep_text], dtype='int64')
         timestep_text = timestep_text * paddle.ones(
             shape=batch_size, dtype=timestep_text.dtype)
         timestep_text_token = self.timestep_text_proj(timestep_text)
-        timestep_text_token = timestep_text_token.to(dtype=self.dtype)
+        timestep_text_token = timestep_text_token.cast(dtype=self.dtype)
         timestep_text_token = self.timestep_text_embed(timestep_text_token)
         timestep_text_token = timestep_text_token.unsqueeze(axis=1)
         if self.use_data_type_embedding:
             assert data_type is not None, 'data_type must be supplied if the model uses a data type embedding'
             if not paddle.is_tensor(x=data_type):
-                data_type = paddle.to_tensor(
-                    data=[data_type],
-                    dtype='int32',
-                    place=vae_hidden_states.place)
+                data_type = paddle.to_tensor(data=[data_type], dtype='int32')
             data_type = data_type * paddle.ones(
                 shape=batch_size, dtype=data_type.dtype)
             data_type_token = self.data_type_token_embedding(
@@ -980,11 +972,11 @@ class UniDiffuserModel(ModelMixin, ConfigMixin):
         if self.use_data_type_embedding:
             (t_img_token_out, t_text_token_out, data_type_token_out, text_out,
              img_clip_out, img_vae_out) = (hidden_states.split(
-                 (1, 1, 1, num_text_tokens, 1, num_img_tokens), dim=1))
+                 (1, 1, 1, num_text_tokens, 1, num_img_tokens), axis=1))
         else:
             (t_img_token_out, t_text_token_out, text_out, img_clip_out,
              img_vae_out) = (hidden_states.split(
-                 (1, 1, num_text_tokens, 1, num_img_tokens), dim=1))
+                 (1, 1, num_text_tokens, 1, num_img_tokens), axis=1))
         img_vae_out = self.vae_img_out(img_vae_out)
         height = width = int(img_vae_out.shape[1]**0.5)
         img_vae_out = img_vae_out.reshape(

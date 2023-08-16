@@ -25,6 +25,7 @@ from paddlenlp.transformers import (
     PretrainedModel,
     PretrainedTokenizer,
     register_base_model, )
+
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPoolingAndCrossAttentions, )
 

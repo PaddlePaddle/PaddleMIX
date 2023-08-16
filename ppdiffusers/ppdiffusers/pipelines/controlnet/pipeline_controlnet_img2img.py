@@ -522,7 +522,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
             image = paddle.concat(x=[image] * 2)
         return image
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.get_timesteps
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.get_timesteps
     def get_timesteps(self, num_inference_steps, strength):
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
@@ -530,7 +530,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
         timesteps = self.scheduler.timesteps[t_start * self.scheduler.order:]
         return timesteps, num_inference_steps - t_start
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.prepare_latents
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.prepare_latents
     def prepare_latents(self,
                         image,
                         timestep,

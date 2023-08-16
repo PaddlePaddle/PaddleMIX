@@ -5,7 +5,6 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import PIL
 from packaging import version
-from diffusers.utils import is_accelerate_available, is_accelerate_version
 from ...configuration_utils import FrozenDict
 from ...image_processor import VaeImageProcessor
 from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
@@ -60,10 +59,7 @@ def posterior_sample(scheduler, latents, timestep, clean_latents, generator,
         1 - alpha_prod_t)**0.5
     dir_xt = (1.0 - alpha_prod_t_prev - std_dev_t**2)**0.5 * e_t
     noise = std_dev_t * randn_tensor(
-        clean_latents.shape,
-        dtype=clean_latents.dtype,
-        device=clean_latents.place,
-        generator=generator)
+        clean_latents.shape, dtype=clean_latents.dtype, generator=generator)
     prev_latents = alpha_prod_t_prev**0.5 * clean_latents + dir_xt + noise
     return prev_latents
 
@@ -185,33 +181,8 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
-    def enable_model_cpu_offload(self, gpu_id=0):
-        """
-        Offload all models to CPU to reduce memory usage with a low impact on performance. Moves one whole model at a
-        time to the GPU when its `forward` method is called, and the model remains in GPU until the next model runs.
-        Memory savings are lower than using `enable_sequential_cpu_offload`, but performance is much better due to the
-        iterative execution of the `unet`.
-        """
-        if is_accelerate_available() and is_accelerate_version('>=',
-                                                               '0.17.0.dev0'):
-            from accelerate import cpu_offload_with_hook
-        else:
-            raise ImportError(
-                '`enable_model_cpu_offload` requires `accelerate v0.17.0` or higher.'
-            )
-        device = str(f'cuda:{gpu_id}').replace('cuda', 'gpu')
-        hook = None
-        for cpu_offloaded_model in [self.text_encoder, self.unet, self.vae]:
-            _, hook = cpu_offload_with_hook(
-                cpu_offloaded_model, device, prev_module_hook=hook)
-        if self.safety_checker is not None:
-            _, hook = cpu_offload_with_hook(
-                self.safety_checker, device, prev_module_hook=hook)
-        self.final_offload_hook = hook
-
     def _encode_prompt(self,
                        prompt,
-                       device,
                        num_images_per_prompt,
                        do_classifier_free_guidance,
                        negative_prompt=None,
@@ -224,8 +195,6 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         Args:
              prompt (`str` or `List[str]`, *optional*):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -234,10 +203,10 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 The prompt or prompts not to guide the image generation. If not defined, one has to pass
                 `negative_prompt_embeds` instead. Ignored when not using guidance (i.e., ignored if `guidance_scale` is
                 less than `1`).
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt weighting. If not
                 provided, text embeddings will be generated from `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, negative_prompt_embeds will be generated from `negative_prompt` input
                 argument.
@@ -260,10 +229,10 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 padding='max_length',
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             text_input_ids = text_inputs.input_ids
             untruncated_ids = self.tokenizer(
-                prompt, padding='longest', return_tensors='pt').input_ids
+                prompt, padding='longest', return_tensors='pd').input_ids
             if untruncated_ids.shape[-1] >= text_input_ids.shape[
                     -1] and not paddle.equal_all(
                         x=text_input_ids, y=untruncated_ids).item():
@@ -274,14 +243,13 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 )
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = text_inputs.attention_mask.to(device)
+                attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
-                text_input_ids.to(device), attention_mask=attention_mask)
+                text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-        prompt_embeds = prompt_embeds.to(dtype=self.text_encoder.dtype,
-                                         device=device)
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -313,20 +281,19 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 padding='max_length',
                 max_length=max_length,
                 truncation=True,
-                return_tensors='pt')
+                return_tensors='pd')
             if hasattr(self.text_encoder.config, 'use_attention_mask'
                        ) and self.text_encoder.config.use_attention_mask:
-                attention_mask = uncond_input.attention_mask.to(device)
+                attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
             negative_prompt_embeds = self.text_encoder(
-                uncond_input.input_ids.to(device),
-                attention_mask=attention_mask)
+                uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
             seq_len = negative_prompt_embeds.shape[1]
-            negative_prompt_embeds = negative_prompt_embeds.to(
-                dtype=self.text_encoder.dtype, device=device)
+            negative_prompt_embeds = negative_prompt_embeds.cast(
+                dtype=self.text_encoder.dtype)
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
@@ -385,7 +352,7 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
 
-    def run_safety_checker(self, image, device, dtype):
+    def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
         else:
@@ -396,10 +363,10 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 feature_extractor_input = self.image_processor.numpy_to_pil(
                     image)
             safety_checker_input = self.feature_extractor(
-                feature_extractor_input, return_tensors='pt').to(device)
+                feature_extractor_input, return_tensors='pd')
             image, has_nsfw_concept = self.safety_checker(
                 images=image,
-                clip_input=safety_checker_input.pixel_values.to(dtype))
+                clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
     def decode_latents(self, latents):
@@ -413,7 +380,7 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             dtype='float32').numpy()
         return image
 
-    def get_timesteps(self, num_inference_steps, strength, device):
+    def get_timesteps(self, num_inference_steps, strength):
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
         t_start = max(num_inference_steps - init_timestep, 0)
@@ -426,9 +393,8 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                         batch_size,
                         num_images_per_prompt,
                         dtype,
-                        device,
                         generator=None):
-        image = image.to(device=device, dtype=dtype)
+        image = image.cast(dtype=dtype)
         batch_size = image.shape[0]
         if image.shape[1] == 4:
             init_latents = image
@@ -471,8 +437,7 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             init_latents = paddle.concat(
                 x=[init_latents] * num_images_per_prompt, axis=0)
         shape = init_latents.shape
-        noise = randn_tensor(
-            shape, generator=generator, device=device, dtype=dtype)
+        noise = randn_tensor(shape, generator=generator, dtype=dtype)
         clean_latents = init_latents
         init_latents = self.scheduler.add_noise(init_latents, noise, timestep)
         latents = init_latents
@@ -491,8 +456,8 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             source_guidance_scale: Optional[float]=1,
             num_images_per_prompt: Optional[int]=1,
             eta: Optional[float]=0.1,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             prompt_embeds: Optional[paddle.Tensor]=None,
             output_type: Optional[str]='pil',
             return_dict: bool=True,
@@ -505,7 +470,7 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         Args:
             prompt (`str` or `List[str]`):
                 The prompt or prompts to guide the image generation.
-            image (`torch.FloatTensor` `np.ndarray`, `PIL.Image.Image`, `List[torch.FloatTensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
+            image (`paddle.Tensor` `np.ndarray`, `PIL.Image.Image`, `List[paddle.Tensor]`, `List[PIL.Image.Image]`, or `List[np.ndarray]`):
                 `Image` or tensor representing an image batch to be used as the starting point. Can also accept image
                 latents as `image`, but if passing latents directly it is not encoded again.
             strength (`float`, *optional*, defaults to 0.8):
@@ -528,13 +493,13 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            prompt_embeds (`torch.FloatTensor`, *optional*):
+            prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated text embeddings. Can be used to easily tweak text inputs (prompt weighting). If not
                 provided, text embeddings are generated from the `prompt` input argument.
-            negative_prompt_embeds (`torch.FloatTensor`, *optional*):
+            negative_prompt_embeds (`paddle.Tensor`, *optional*):
                 Pre-generated negative text embeddings. Can be used to easily tweak text inputs (prompt weighting). If
                 not provided, `negative_prompt_embeds` are generated from the `negative_prompt` input argument.
             output_type (`str`, *optional*, defaults to `"pil"`):
@@ -544,7 +509,7 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -556,17 +521,17 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
 
         ```py
         import requests
-        import torch
+        import paddle
         from PIL import Image
         from io import BytesIO
 
-        from diffusers import CycleDiffusionPipeline, DDIMScheduler
+        from ppdiffusers import CycleDiffusionPipeline, DDIMScheduler
 
         # load the pipeline
         # make sure you're logged in with `huggingface-cli login`
         model_id_or_path = "CompVis/stable-diffusion-v1-4"
         scheduler = DDIMScheduler.from_pretrained(model_id_or_path, subfolder="scheduler")
-        pipe = CycleDiffusionPipeline.from_pretrained(model_id_or_path, scheduler=scheduler).to("cuda")
+        pipe = CycleDiffusionPipeline.from_pretrained(model_id_or_path, scheduler=scheduler)
 
         # let's download an initial image
         url = "https://raw.githubusercontent.com/ChenWu98/cycle-diffusion/main/data/dalle2/An%20astronaut%20riding%20a%20horse.png"
@@ -607,7 +572,7 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         prompt = "A blue colored car"
 
         # call the pipeline
-        torch.manual_seed(0)
+        paddle.manual_seed(0)
         image = pipe(
             prompt=prompt,
             source_prompt=source_prompt,
@@ -631,29 +596,27 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         """
         self.check_inputs(prompt, strength, callback_steps)
         batch_size = 1 if isinstance(prompt, str) else len(prompt)
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         prompt_embeds = self._encode_prompt(
             prompt,
-            device,
             num_images_per_prompt,
             do_classifier_free_guidance,
             prompt_embeds=prompt_embeds,
             lora_scale=text_encoder_lora_scale)
         source_prompt_embeds = self._encode_prompt(
-            source_prompt, device, num_images_per_prompt,
-            do_classifier_free_guidance, None)
+            source_prompt, num_images_per_prompt, do_classifier_free_guidance,
+            None)
         image = self.image_processor.preprocess(image)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps,
-                                                            strength, device)
+                                                            strength)
         latent_timestep = timesteps[:1].tile(
             repeat_times=[batch_size * num_images_per_prompt])
         latents, clean_latents = self.prepare_latents(
             image, latent_timestep, batch_size, num_images_per_prompt,
-            prompt_embeds.dtype, device, generator)
+            prompt_embeds.dtype, generator)
         source_latents = latents
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         generator = extra_step_kwargs.pop('generator', None)
@@ -733,7 +696,7 @@ class CycleDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             image = self.vae.decode(
                 latents / self.vae.config.scaling_factor, return_dict=False)[0]
             image, has_nsfw_concept = self.run_safety_checker(
-                image, device, prompt_embeds.dtype)
+                image, prompt_embeds.dtype)
         else:
             image = latents
             has_nsfw_concept = None

@@ -26,7 +26,7 @@ EXAMPLE_DOC_STRING = """
         >>> import numpy as np
 
         >>> from ppdiffusers import KandinskyV22PriorPipeline, KandinskyV22ControlnetPipeline
-        >>> from transformers import pipeline
+        >>> from paddlenlp.transformers import pipeline
         >>> from ppdiffusers.utils import load_image
 
 

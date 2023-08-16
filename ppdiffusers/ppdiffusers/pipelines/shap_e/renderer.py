@@ -944,7 +944,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
                 self.volume.bbox_max - self.volume.bbox_min)
             mesh_mask.append(True)
             raw_meshes.append(raw_mesh)
-        mesh_mask = paddle.to_tensor(data=mesh_mask, place=fields.place)
+        mesh_mask = paddle.to_tensor(data=mesh_mask)
         max_vertices = max(len(m.verts) for m in raw_meshes)
 
         # 3.2. query the texture color head at each vertex of the resulting mesh.

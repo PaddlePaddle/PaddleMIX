@@ -34,15 +34,15 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
             A scheduler to be used in combination with `unet` to denoise the encoded image latents. Can be one of
             [`DDIMScheduler`], [`LMSDiscreteScheduler`], or [`PNDMScheduler`].
     """
-    image_feature_extractor: transformers.CLIPImageProcessor
-    image_encoder: transformers.CLIPVisionModelWithProjection
+    image_feature_extractor: CLIPImageProcessor
+    image_encoder: CLIPVisionModelWithProjection
     image_unet: UNet2DConditionModel
     vae: AutoencoderKL
     scheduler: KarrasDiffusionSchedulers
 
     def __init__(self,
-                 image_feature_extractor: transformers.CLIPImageProcessor,
-                 image_encoder: transformers.CLIPVisionModelWithProjection,
+                 image_feature_extractor: CLIPImageProcessor,
+                 image_encoder: CLIPVisionModelWithProjection,
                  image_unet: UNet2DConditionModel,
                  vae: AutoencoderKL,
                  scheduler: KarrasDiffusionSchedulers):
@@ -57,7 +57,7 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         self.image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor)
 
-    def _encode_prompt(self, prompt, device, num_images_per_prompt,
+    def _encode_prompt(self, prompt, num_images_per_prompt,
                        do_classifier_free_guidance, negative_prompt):
         """
         Encodes the prompt into text encoder hidden states.
@@ -65,8 +65,6 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         Args:
             prompt (`str` or `List[str]`):
                 prompt to be encoded
-            device: (`torch.device`):
-                torch device
             num_images_per_prompt (`int`):
                 number of images that should be generated per prompt
             do_classifier_free_guidance (`bool`):
@@ -89,9 +87,8 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
             prompt = list(prompt)
         batch_size = len(prompt) if isinstance(prompt, list) else 1
         image_input = self.image_feature_extractor(
-            images=prompt, return_tensors='pt')
-        pixel_values = image_input.pixel_values.to(device).to(
-            self.image_encoder.dtype)
+            images=prompt, return_tensors='pd')
+        pixel_values = image_input.pixel_values.cast(self.image_encoder.dtype)
         image_embeddings = self.image_encoder(pixel_values)
         image_embeddings = normalize_embeddings(image_embeddings)
         bs_embed, seq_len, _ = image_embeddings.shape
@@ -116,8 +113,8 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
             else:
                 uncond_images = negative_prompt
             uncond_images = self.image_feature_extractor(
-                images=uncond_images, return_tensors='pt')
-            pixel_values = uncond_images.pixel_values.to(device).to(
+                images=uncond_images, return_tensors='pd')
+            pixel_values = uncond_images.pixel_values.cast(
                 self.image_encoder.dtype)
             negative_prompt_embeds = self.image_encoder(pixel_values)
             negative_prompt_embeds = normalize_embeddings(
@@ -158,7 +155,7 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         if not isinstance(image, paddle.Tensor) and not isinstance(
                 image, PIL.Image.Image) and not isinstance(image, list):
             raise ValueError(
-                f'`image` has to be of type `torch.FloatTensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is {type(image)}'
+                f'`image` has to be of type `paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is {type(image)}'
             )
         if height % 8 != 0 or width % 8 != 0:
             raise ValueError(
@@ -176,7 +173,6 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
                         height,
                         width,
                         dtype,
-                        device,
                         generator,
                         latents=None):
         shape = (batch_size, num_channels_latents, height //
@@ -186,10 +182,9 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
         if latents is None:
-            latents = randn_tensor(
-                shape, generator=generator, device=device, dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            latents = latents.to(device)
+            latents = latents
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -204,8 +199,8 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
             negative_prompt: Optional[Union[str, List[str]]]=None,
             num_images_per_prompt: Optional[int]=1,
             eta: float=0.0,
-            generator: Optional[Union[torch.Generator, List[
-                torch.Generator]]]=None,
+            generator: Optional[Union[paddle.Generator, List[
+                paddle.Generator]]]=None,
             latents: Optional[paddle.Tensor]=None,
             output_type: Optional[str]='pil',
             return_dict: bool=True,
@@ -216,7 +211,7 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         The call function to the pipeline for generation.
 
         Args:
-            image (`PIL.Image.Image`, `List[PIL.Image.Image]` or `torch.Tensor`):
+            image (`PIL.Image.Image`, `List[PIL.Image.Image]` or `paddle.Tensor`):
                 The image prompt or prompts to guide the image generation.
             height (`int`, *optional*, defaults to `self.image_unet.config.sample_size * self.vae_scale_factor`):
                 The height in pixels of the generated image.
@@ -236,10 +231,10 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`torch.Generator`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+            generator (`paddle.Generator`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
                 generation deterministic.
-            latents (`torch.FloatTensor`, *optional*):
+            latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
@@ -250,7 +245,7 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
                 plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -258,8 +253,8 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         Examples:
 
         ```py
-        >>> from diffusers import VersatileDiffusionImageVariationPipeline
-        >>> import torch
+        >>> from ppdiffusers import VersatileDiffusionImageVariationPipeline
+        >>> import paddle
         >>> import requests
         >>> from io import BytesIO
         >>> from PIL import Image
@@ -271,11 +266,10 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         >>> image = Image.open(BytesIO(response.content)).convert("RGB")
 
         >>> pipe = VersatileDiffusionImageVariationPipeline.from_pretrained(
-        ...     "shi-labs/versatile-diffusion", torch_dtype=torch.float16
+        ...     "shi-labs/versatile-diffusion", paddle_dtype=paddle.float16
         ... )
-        >>> pipe = pipe.to("cuda")
 
-        >>> generator = torch.Generator(device="cuda").manual_seed(0)
+        >>> generator = paddle.Generator().manual_seed(0)
         >>> image = pipe(image, generator=generator).images[0]
         >>> image.save("./car_variation.png")
         ```
@@ -291,17 +285,16 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
                  self.image_unet.config.sample_size * self.vae_scale_factor)
         self.check_inputs(image, height, width, callback_steps)
         batch_size = 1 if isinstance(image, PIL.Image.Image) else len(image)
-        device = self._execution_device
         do_classifier_free_guidance = guidance_scale > 1.0
-        image_embeddings = self._encode_prompt(
-            image, device, num_images_per_prompt, do_classifier_free_guidance,
-            negative_prompt)
-        self.scheduler.set_timesteps(num_inference_steps, device=device)
+        image_embeddings = self._encode_prompt(image, num_images_per_prompt,
+                                               do_classifier_free_guidance,
+                                               negative_prompt)
+        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         num_channels_latents = self.image_unet.config.in_channels
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt, num_channels_latents, height,
-            width, image_embeddings.dtype, device, generator, latents)
+            width, image_embeddings.dtype, generator, latents)
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         for i, t in enumerate(self.progress_bar(timesteps)):
             latent_model_input = paddle.concat(
