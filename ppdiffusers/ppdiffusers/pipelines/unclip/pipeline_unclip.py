@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 from typing import List, Optional, Tuple, Union
@@ -97,6 +111,7 @@ class UnCLIPPipeline(DiffusionPipeline):
             text_attention_mask: Optional[paddle.Tensor]=None):
         if text_model_output is None:
             batch_size = len(prompt) if isinstance(prompt, list) else 1
+            # get prompt text embeddings
             text_inputs = self.tokenizer(
                 prompt,
                 padding='max_length',
@@ -147,6 +162,8 @@ class UnCLIPPipeline(DiffusionPipeline):
                 negative_prompt_embeds_text_encoder_output.text_embeds)
             uncond_text_encoder_hidden_states = (
                 negative_prompt_embeds_text_encoder_output.last_hidden_state)
+
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt])
@@ -161,6 +178,12 @@ class UnCLIPPipeline(DiffusionPipeline):
                     [batch_size * num_images_per_prompt, seq_len, -1]))
             uncond_text_mask = uncond_text_mask.repeat_interleave(
                 repeats=num_images_per_prompt, axis=0)
+
+            # done duplicates
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
             text_encoder_hidden_states = paddle.concat(x=[
@@ -256,6 +279,9 @@ class UnCLIPPipeline(DiffusionPipeline):
             self._encode_prompt(prompt, num_images_per_prompt,
                                 do_classifier_free_guidance, text_model_output,
                                 text_attention_mask))
+
+        # prior
+
         self.prior_scheduler.set_timesteps(prior_num_inference_steps)
         prior_timesteps_tensor = self.prior_scheduler.timesteps
         embedding_dim = self.prior.config.embedding_dim
@@ -263,6 +289,7 @@ class UnCLIPPipeline(DiffusionPipeline):
             (batch_size, embedding_dim), prompt_embeds.dtype, generator,
             prior_latents, self.prior_scheduler)
         for i, t in enumerate(self.progress_bar(prior_timesteps_tensor)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[prior_latents] *
                 2) if do_classifier_free_guidance else prior_latents
@@ -292,6 +319,11 @@ class UnCLIPPipeline(DiffusionPipeline):
                 prev_timestep=prev_timestep).prev_sample
         prior_latents = self.prior.post_process_latents(prior_latents)
         image_embeddings = prior_latents
+
+        # done prior
+
+        # decoder
+
         text_encoder_hidden_states, additive_clip_time_embeddings = (
             self.text_proj(
                 image_embeddings=image_embeddings,
@@ -315,6 +347,7 @@ class UnCLIPPipeline(DiffusionPipeline):
              width), text_encoder_hidden_states.dtype, generator,
             decoder_latents, self.decoder_scheduler)
         for i, t in enumerate(self.progress_bar(decoder_timesteps_tensor)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[decoder_latents] *
                 2) if do_classifier_free_guidance else decoder_latents
@@ -340,6 +373,8 @@ class UnCLIPPipeline(DiffusionPipeline):
                 prev_timestep = None
             else:
                 prev_timestep = decoder_timesteps_tensor[i + 1]
+
+            # compute the previous noisy sample x_t -> x_t-1
             decoder_latents = self.decoder_scheduler.step(
                 noise_pred,
                 t,
@@ -348,6 +383,11 @@ class UnCLIPPipeline(DiffusionPipeline):
                 generator=generator).prev_sample
         decoder_latents = decoder_latents.clip(min=-1, max=1)
         image_small = decoder_latents
+
+        # done decoder
+
+        # super res
+
         self.super_res_scheduler.set_timesteps(super_res_num_inference_steps)
         super_res_timesteps_tensor = self.super_res_scheduler.timesteps
         channels = self.super_res_first.config.in_channels // 2
@@ -369,6 +409,8 @@ class UnCLIPPipeline(DiffusionPipeline):
             **interpolate_antialias)
 
         for i, t in enumerate(self.progress_bar(super_res_timesteps_tensor)):
+            # no classifier free guidance
+
             if i == super_res_timesteps_tensor.shape[0] - 1:
                 unet = self.super_res_last
             else:
@@ -380,6 +422,8 @@ class UnCLIPPipeline(DiffusionPipeline):
                 prev_timestep = None
             else:
                 prev_timestep = super_res_timesteps_tensor[i + 1]
+
+            # compute the previous noisy sample x_t -> x_t-1
             super_res_latents = self.super_res_scheduler.step(
                 noise_pred,
                 t,
@@ -387,6 +431,10 @@ class UnCLIPPipeline(DiffusionPipeline):
                 prev_timestep=prev_timestep,
                 generator=generator).prev_sample
         image = super_res_latents
+        # done super res
+
+        # post processing
+
         image = image * 0.5 + 0.5
         image = image.clip(min=0, max=1)
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(

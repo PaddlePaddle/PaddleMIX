@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 from typing import Callable, List, Optional, Union
@@ -12,9 +26,9 @@ from .pipeline_versatile_diffusion_text_to_image import VersatileDiffusionTextTo
 
 from paddlenlp.transformers import (
     CLIPImageProcessor,
-    CLIPTextModelWithProjection,
+    CLIPTextModel,
     CLIPTokenizer,
-    CLIPVisionModelWithProjection, )
+    CLIPVisionModel, )
 logger = logging.get_logger(__name__)
 
 
@@ -295,6 +309,8 @@ class VersatileDiffusionPipeline(DiffusionPipeline):
             return_dict=return_dict,
             callback=callback,
             callback_steps=callback_steps)
+
+        # swap the attention blocks back to the original state
         temp_pipeline._swap_unet_attention_blocks()
         return output
 

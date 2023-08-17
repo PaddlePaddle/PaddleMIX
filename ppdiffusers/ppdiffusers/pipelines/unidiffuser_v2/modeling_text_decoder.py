@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 from typing import Optional
 import numpy as np
@@ -8,6 +22,7 @@ from paddlenlp.transformers import GPTConfig, GPTLMHeadModel
 # from paddlenlp.transformers.model_utils import ModuleUtilsMixin
 
 
+# Modified from ClipCaptionModel in https://github.com/thu-ml/unidiffuser/blob/main/libs/caption_decoder.py
 class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
     """
     Text decoder model for a image-text [UniDiffuser](https://arxiv.org/pdf/2303.06555.pdf) model. This is used to
@@ -180,6 +195,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         generated_seq_lengths = []
         for feature in features:
             feature = self.decode_prefix(feature)
+            # Only support beam search for now
             output_tokens, seq_lengths = self.generate_beam(
                 input_embeds=feature, eos_token_id=eos_token_id)
             generated_tokens.append(output_tokens[0])
@@ -222,6 +238,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
             token sequences sorted by score in descending order, and the second element is the sequence lengths
             corresponding to those sequences.
         """
+        # Generates text until stop_token is reached using beam search with the desired beam size.
         stop_token_index = eos_token_id
         tokens = None
         scores = None
@@ -275,6 +292,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
                 break
         scores = scores / seq_lengths
         order = scores.argsort(descending=True)
+        # tokens tensors are already padded to max_seq_length
         output_texts = [tokens[i] for i in order]
         output_texts = paddle.stack(x=output_texts, axis=0)
         seq_lengths = paddle.to_tensor(

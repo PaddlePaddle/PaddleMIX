@@ -7,3 +7,4 @@ invisible-watermark>=0.2.0
 omegaconf
 note_seq
 urllib3<=2.0.0
+opencv-python

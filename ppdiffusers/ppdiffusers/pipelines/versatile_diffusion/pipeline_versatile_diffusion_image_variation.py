@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 import warnings
@@ -86,16 +100,22 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         if isinstance(prompt, paddle.Tensor) and len(prompt.shape) == 4:
             prompt = list(prompt)
         batch_size = len(prompt) if isinstance(prompt, list) else 1
+
+        # get prompt text embeddings
         image_input = self.image_feature_extractor(
             images=prompt, return_tensors='pd')
         pixel_values = image_input.pixel_values.cast(self.image_encoder.dtype)
         image_embeddings = self.image_encoder(pixel_values)
         image_embeddings = normalize_embeddings(image_embeddings)
+
+        # duplicate image embeddings for each generation per prompt, using mps friendly method
         bs_embed, seq_len, _ = image_embeddings.shape
         image_embeddings = image_embeddings.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         image_embeddings = image_embeddings.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance:
             uncond_images: List[str]
             if negative_prompt is None:
@@ -119,15 +139,22 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
             negative_prompt_embeds = self.image_encoder(pixel_values)
             negative_prompt_embeds = normalize_embeddings(
                 negative_prompt_embeds)
+
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and conditional embeddings into a single batch
+            # to avoid doing two forward passes
             image_embeddings = paddle.concat(
                 x=[negative_prompt_embeds, image_embeddings])
         return image_embeddings
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -135,22 +162,32 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
+
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_image_variation.StableDiffusionImageVariationPipeline.check_inputs
     def check_inputs(self, image, height, width, callback_steps):
         if not isinstance(image, paddle.Tensor) and not isinstance(
                 image, PIL.Image.Image) and not isinstance(image, list):
@@ -167,6 +204,7 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
                 f'`callback_steps` has to be a positive integer but is {callback_steps} of type {type(callback_steps)}.'
             )
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(self,
                         batch_size,
                         num_channels_latents,
@@ -185,6 +223,8 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             latents = latents
+
+        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -260,7 +300,7 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         >>> from PIL import Image
 
         >>> # let's download an initial image
-        >>> url = "https://huggingface.co/datasets/diffusers/images/resolve/main/benz.jpg"
+        >>> url = "https://huggingface.co/datasets/ppdiffusers/images/resolve/main/benz.jpg"
 
         >>> response = requests.get(url)
         >>> image = Image.open(BytesIO(response.content)).convert("RGB")
@@ -279,37 +319,65 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
                 If `return_dict` is `True`, [`~pipelines.stable_diffusion.StableDiffusionPipelineOutput`] is returned,
                 otherwise a `tuple` is returned where the first element is a list with the generated images.
         """
+        # 0. Default height and width to unet
         height = (height or
                   self.image_unet.config.sample_size * self.vae_scale_factor)
         width = (width or
                  self.image_unet.config.sample_size * self.vae_scale_factor)
+
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(image, height, width, callback_steps)
+
+        # 2. Define call parameters
         batch_size = 1 if isinstance(image, PIL.Image.Image) else len(image)
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
+
+        # 3. Encode input prompt
         image_embeddings = self._encode_prompt(image, num_images_per_prompt,
                                                do_classifier_free_guidance,
                                                negative_prompt)
+
+        # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
+
+        # 5. Prepare latent variables
         num_channels_latents = self.image_unet.config.in_channels
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt, num_channels_latents, height,
             width, image_embeddings.dtype, generator, latents)
+
+        # 6. Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+
+        # 7. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
+
+            # predict the noise residual
             noise_pred = self.image_unet(
                 latent_model_input, t,
                 encoder_hidden_states=image_embeddings).sample
+
+            # perform guidance
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
                 noise_pred = noise_pred_uncond + guidance_scale * (
                     noise_pred_text - noise_pred_uncond)
+
+            # compute the previous noisy sample x_t -> x_t-1
             latents = self.scheduler.step(noise_pred, t, latents,
                                           **extra_step_kwargs).prev_sample
+
+            # call the callback, if provided
             if callback is not None and i % callback_steps == 0:
                 callback(i, t, latents)
         if not output_type == 'latent':

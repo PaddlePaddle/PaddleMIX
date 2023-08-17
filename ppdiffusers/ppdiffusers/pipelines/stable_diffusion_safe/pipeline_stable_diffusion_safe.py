@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 import warnings
@@ -187,11 +201,15 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
         prompt_embeds = self.text_encoder(
             text_input_ids, attention_mask=attention_mask)
         prompt_embeds = prompt_embeds[0]
+
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         bs_embed, seq_len, _ = prompt_embeds.shape
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -223,11 +241,15 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             negative_prompt_embeds = self.text_encoder(
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
+
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # Encode the safety concept text
             if enable_safety_guidance:
                 safety_concept_input = self.tokenizer(
                     [self._safety_text_concept],
@@ -237,15 +259,24 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                     return_tensors='pd')
                 safety_embeddings = self.text_encoder(
                     safety_concept_input.input_ids)[0]
+
+                # duplicate safety embeddings for each generation per prompt, using mps friendly method
                 seq_len = safety_embeddings.shape[1]
                 safety_embeddings = safety_embeddings.tile(
                     repeat_times=[batch_size, num_images_per_prompt, 1])
                 safety_embeddings = safety_embeddings.reshape(
                     [batch_size * num_images_per_prompt, seq_len, -1])
+
+                # For classifier free guidance + sld, we need to do three forward passes.
+                # Here we concatenate the unconditional and text embeddings into a single batch
+                # to avoid doing three forward passes
                 prompt_embeds = paddle.concat(x=[
                     negative_prompt_embeds, prompt_embeds, safety_embeddings
                 ])
             else:
+                # For classifier free guidance, we need to do two forward passes.
+                # Here we concatenate the unconditional and text embeddings into a single batch
+                # to avoid doing two forward passes
                 prompt_embeds = paddle.concat(
                     x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
@@ -272,6 +303,7 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             flagged_images = None
         return image, has_nsfw_concept, flagged_images
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -279,11 +311,17 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
@@ -291,10 +329,13 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             extra_step_kwargs['eta'] = eta
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
+
+        # check if the scheduler accepts generator
         if accepts_generator:
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.check_inputs
     def check_inputs(self,
                      prompt,
                      height,
@@ -335,6 +376,7 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
                     f'`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}.'
                 )
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(self,
                         batch_size,
                         num_channels_latents,
@@ -353,6 +395,8 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             latents = latents
+
+        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -360,29 +404,42 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
             self, enable_safety_guidance, safety_momentum, noise_guidance,
             noise_pred_out, i, sld_guidance_scale, sld_warmup_steps,
             sld_threshold, sld_momentum_scale, sld_mom_beta):
+
+        # Perform SLD guidance
         if enable_safety_guidance:
             if safety_momentum is None:
                 safety_momentum = paddle.zeros_like(x=noise_guidance)
             noise_pred_text, noise_pred_uncond = noise_pred_out[
                 0], noise_pred_out[1]
             noise_pred_safety_concept = noise_pred_out[2]
+
+            # Equation 6
             scale = paddle.clip(
                 x=paddle.abs(x=noise_pred_text - noise_pred_safety_concept) *
                 sld_guidance_scale,
                 max=1.0)
+
+            # Equation 6
             safety_concept_scale = paddle.where(
                 condition=noise_pred_text - noise_pred_safety_concept >=
                 sld_threshold,
                 x=paddle.zeros_like(x=scale),
                 y=scale)
+
+            # Equation 4
             noise_guidance_safety = (
                 noise_pred_safety_concept - noise_pred_uncond
             ) * safety_concept_scale
+
+            # Equation 7
             noise_guidance_safety = (
                 noise_guidance_safety + sld_momentum_scale * safety_momentum)
+
+            # Equation 8
             safety_momentum = sld_mom_beta * safety_momentum + (
                 1 - sld_mom_beta) * noise_guidance_safety
             if i >= sld_warmup_steps:
+                # Equation 3
                 noise_guidance = noise_guidance - noise_guidance_safety
         return noise_guidance, safety_momentum
 
@@ -487,83 +544,129 @@ class StableDiffusionPipelineSafe(DiffusionPipeline):
         image = pipeline(prompt=prompt, **SafetyConfig.MEDIUM).images[0]
         ```
         """
+        # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
+
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(prompt, height, width, callback_steps)
+
+        # 2. Define call parameters
         batch_size = 1 if isinstance(prompt, str) else len(prompt)
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
         enable_safety_guidance = (sld_guidance_scale > 1.0 and
                                   do_classifier_free_guidance)
         if not enable_safety_guidance:
             warnings.warn('Safety checker disabled!')
+
+        # 3. Encode input prompt
         prompt_embeds = self._encode_prompt(
             prompt, num_images_per_prompt, do_classifier_free_guidance,
             negative_prompt, enable_safety_guidance)
+
+        # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
+
+        # 5. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
         latents = self.prepare_latents(batch_size * num_images_per_prompt,
                                        num_channels_latents, height, width,
                                        prompt_embeds.dtype, generator, latents)
+
+        # 6. Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         safety_momentum = None
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(x=[latents] * (
                     3 if enable_safety_guidance else
                     2)) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
+
+                # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input, t,
                     encoder_hidden_states=prompt_embeds).sample
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_out = noise_pred.chunk(chunks=3
                                                       if enable_safety_guidance
                                                       else 2)
+
+                    # default classifier free guidance
                     noise_pred_uncond, noise_pred_text = noise_pred_out[
                         0], noise_pred_out[1]
                     noise_guidance = noise_pred_text - noise_pred_uncond
+
+                    # Perform SLD guidance
                     if enable_safety_guidance:
                         if safety_momentum is None:
                             safety_momentum = paddle.zeros_like(
                                 x=noise_guidance)
                         noise_pred_safety_concept = noise_pred_out[2]
+
+                        # Equation 6
                         scale = paddle.clip(
                             x=paddle.abs(
                                 x=noise_pred_text - noise_pred_safety_concept) *
                             sld_guidance_scale,
                             max=1.0)
+
+                        # Equation 6
                         safety_concept_scale = paddle.where(
                             condition=noise_pred_text -
                             noise_pred_safety_concept >= sld_threshold,
                             x=paddle.zeros_like(x=scale),
                             y=scale)
+
+                        # Equation 4
                         noise_guidance_safety = (
                             noise_pred_safety_concept - noise_pred_uncond
                         ) * safety_concept_scale
+
+                        # Equation 7
                         noise_guidance_safety = (
                             noise_guidance_safety + sld_momentum_scale *
                             safety_momentum)
+
+                        # Equation 8
                         safety_momentum = sld_mom_beta * safety_momentum + (
                             1 - sld_mom_beta) * noise_guidance_safety
                         if i >= sld_warmup_steps:
+                            # Equation 3
                             noise_guidance = (
                                 noise_guidance - noise_guidance_safety)
                     noise_pred = (
                         noise_pred_uncond + guidance_scale * noise_guidance)
+                    # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents,
                                               **extra_step_kwargs).prev_sample
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
+
+        # 8. Post-processing
         image = self.decode_latents(latents)
+
+        # 9. Run safety checker
         image, has_nsfw_concept, flagged_images = self.run_safety_checker(
             image, prompt_embeds.dtype, enable_safety_guidance)
+
+        # 10. Convert to PIL
         if output_type == 'pil':
             image = self.numpy_to_pil(image)
             if flagged_images is not None:

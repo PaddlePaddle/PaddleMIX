@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import paddle
+import paddlenlp
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import numpy as np

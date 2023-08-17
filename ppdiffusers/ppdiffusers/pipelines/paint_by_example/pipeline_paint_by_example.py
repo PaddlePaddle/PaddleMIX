@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 import warnings
@@ -49,13 +63,20 @@ def prepare_mask_and_masked_image(image, mask):
             raise TypeError(
                 f'`image` is a paddle.Tensor but `mask` (type: {type(mask)} is not'
             )
+
+        # Batch single image
         if image.ndim == 3:
             assert image.shape[
                 0] == 3, 'Image outside a batch should be of shape (3, H, W)'
             image = image.unsqueeze(axis=0)
+
+        # Batch and add channel dim for single mask
         if mask.ndim == 2:
             mask = mask.unsqueeze(axis=0).unsqueeze(axis=0)
+
+        # Batch single mask or add channel dim
         if mask.ndim == 3:
+            # Batched mask
             if mask.shape[0] == image.shape[0]:
                 mask = mask.unsqueeze(axis=1)
             else:
@@ -66,13 +87,22 @@ def prepare_mask_and_masked_image(image, mask):
         assert image.shape[0] == mask.shape[
             0], 'Image and Mask must have the same batch size'
         assert mask.shape[1] == 1, 'Mask image must have a single channel'
+
+        # Check image is in [-1, 1]
         if image.min() < -1 or image.max() > 1:
             raise ValueError('Image should be in [-1, 1] range')
+
+        # Check mask is in [0, 1]
         if mask.min() < 0 or mask.max() > 1:
             raise ValueError('Mask should be in [0, 1] range')
+
+        # paint-by-example inverses the mask
         mask = 1 - mask
+        # Binarize mask
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
+
+        # Image as float32
         image = image.cast(dtype='float32')
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(
@@ -84,11 +114,15 @@ def prepare_mask_and_masked_image(image, mask):
             [np.array(i.convert('RGB'))[None, :] for i in image], axis=0)
         image = image.transpose(0, 3, 1, 2)
         image = paddle.to_tensor(data=image).cast(dtype='float32') / 127.5 - 1.0
+
+        # preprocess mask
         if isinstance(mask, PIL.Image.Image):
             mask = [mask]
         mask = np.concatenate(
             [np.array(m.convert('L'))[None, None, :] for m in mask], axis=0)
         mask = mask.astype(np.float32) / 255.0
+
+        # paint-by-example inverses the mask
         mask = 1 - mask
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
@@ -130,6 +164,8 @@ class PaintByExamplePipeline(DiffusionPipeline):
             A `CLIPImageProcessor` to extract features from generated images; used as inputs to the `safety_checker`.
 
     """
+    # TODO: feature_extractor is required to encode initial images (if they are in PIL format),
+    # we should give a descriptive message if the pipeline doesn't have one.
     _optional_components = ['safety_checker']
 
     def __init__(self,
@@ -154,6 +190,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
             vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
@@ -171,18 +208,27 @@ class PaintByExamplePipeline(DiffusionPipeline):
                 clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
+
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -194,6 +240,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
             dtype='float32').numpy()
         return image
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_image_variation.StableDiffusionImageVariationPipeline.check_inputs
     def check_inputs(self, image, height, width, callback_steps):
         if not isinstance(image, paddle.Tensor) and not isinstance(
                 image, PIL.Image.Image) and not isinstance(image, list):
@@ -210,6 +257,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
                 f'`callback_steps` has to be a positive integer but is {callback_steps} of type {type(callback_steps)}.'
             )
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(self,
                         batch_size,
                         num_channels_latents,
@@ -228,12 +276,17 @@ class PaintByExamplePipeline(DiffusionPipeline):
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             latents = latents
+
+        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_inpaint.StableDiffusionInpaintPipeline.prepare_mask_latents
     def prepare_mask_latents(self, mask, masked_image, batch_size, height,
                              width, dtype, generator,
                              do_classifier_free_guidance):
+        # we do that before converting to dtype to avoid breaking in case we're using cpu_offload
+        # and half precision
         mask = paddle.nn.functional.interpolate(
             x=mask,
             size=(height // self.vae_scale_factor,
@@ -242,6 +295,8 @@ class PaintByExamplePipeline(DiffusionPipeline):
         masked_image = masked_image.cast(dtype=dtype)
         masked_image_latents = self._encode_vae_image(
             masked_image, generator=generator)
+
+        # duplicate mask and masked_image_latents for each generation per prompt, using mps friendly method
         if mask.shape[0] < batch_size:
             if not batch_size % mask.shape[0] == 0:
                 raise ValueError(
@@ -262,9 +317,12 @@ class PaintByExamplePipeline(DiffusionPipeline):
         masked_image_latents = paddle.concat(
             x=[masked_image_latents] *
             2) if do_classifier_free_guidance else masked_image_latents
+
+        # aligning device to prevent device errors when concating it with the latent model input
         masked_image_latents = masked_image_latents.cast(dtype=dtype)
         return mask, masked_image_latents
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_inpaint.StableDiffusionInpaintPipeline._encode_vae_image
     def _encode_vae_image(self,
                           image: paddle.Tensor,
                           generator: paddle.Generator):
@@ -289,6 +347,8 @@ class PaintByExamplePipeline(DiffusionPipeline):
         image = image.cast(dtype=dtype)
         image_embeddings, negative_prompt_embeds = self.image_encoder(
             image, return_uncond_vector=True)
+
+        # duplicate image embeddings for each generation per prompt, using mps friendly method
         bs_embed, seq_len, _ = image_embeddings.shape
         image_embeddings = image_embeddings.tile(
             repeat_times=[1, num_images_per_prompt, 1])
@@ -299,6 +359,10 @@ class PaintByExamplePipeline(DiffusionPipeline):
                 repeat_times=[1, image_embeddings.shape[0], 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [bs_embed * num_images_per_prompt, 1, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             image_embeddings = paddle.concat(
                 x=[negative_prompt_embeds, image_embeddings])
         return image_embeddings
@@ -417,28 +481,47 @@ class PaintByExamplePipeline(DiffusionPipeline):
                 second element is a list of `bool`s indicating whether the corresponding generated image contains
                 "not-safe-for-work" (nsfw) content.
         """
+        # 1. Define call parameters
         if isinstance(image, PIL.Image.Image):
             batch_size = 1
         elif isinstance(image, list):
             batch_size = len(image)
         else:
             batch_size = image.shape[0]
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
+
+        # 2. Preprocess mask and image
         mask, masked_image = prepare_mask_and_masked_image(image, mask_image)
         height, width = masked_image.shape[-2:]
+
+        # 3. Check inputs
         self.check_inputs(example_image, height, width, callback_steps)
+
+        # 4. Encode input image
         image_embeddings = self._encode_image(
             example_image, num_images_per_prompt, do_classifier_free_guidance)
+
+        # 5. set timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
+
+        # 6. Prepare latent variables
         num_channels_latents = self.vae.config.latent_channels
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt, num_channels_latents, height,
             width, image_embeddings.dtype, generator, latents)
+
+        # 7. Prepare mask latent variables
         mask, masked_image_latents = self.prepare_mask_latents(
             mask, masked_image, batch_size * num_images_per_prompt, height,
             width, image_embeddings.dtype, generator,
             do_classifier_free_guidance)
+
+        # 8. Check that sizes of mask, masked image and latents match
         num_channels_mask = mask.shape[1]
         num_channels_masked_image = masked_image_latents.shape[1]
         if (num_channels_latents + num_channels_mask + num_channels_masked_image
@@ -446,28 +529,43 @@ class PaintByExamplePipeline(DiffusionPipeline):
             raise ValueError(
                 f'Incorrect configuration settings! The config of `pipeline.unet`: {self.unet.config} expects {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} + `num_channels_mask`: {num_channels_mask} + `num_channels_masked_image`: {num_channels_masked_image} = {num_channels_latents + num_channels_masked_image + num_channels_mask}. Please verify the config of `pipeline.unet` or your `mask_image` or `image` input.'
             )
+
+        # 9. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
+
+        # 10. Denoising loop
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[latents] * 2) if do_classifier_free_guidance else latents
+
+                # concat latents, mask, masked_image_latents in the channel dimension
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
                 latent_model_input = paddle.concat(
                     x=[latent_model_input, masked_image_latents, mask], axis=1)
+
+                # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=image_embeddings).sample
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents,
                                               **extra_step_kwargs).prev_sample
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
