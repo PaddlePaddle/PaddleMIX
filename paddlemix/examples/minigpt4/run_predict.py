@@ -59,7 +59,7 @@ def predict(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pretrained_name_or_path", default="/wangqinghui/mynlp/PaddleNLP/paddlenlp/transformers/minigpt4/minigpt4-13b", type=str, help="The dir name of minigpt4 checkpoint.")
+    parser.add_argument("--pretrained_name_or_path", default="your minigpt4 path", type=str, help="The dir name of minigpt4 checkpoint.")
     parser.add_argument("--image_path", default="https://paddlenlp.bj.bcebos.com/data/images/mugs.png", type=str, help="The image path, you can input a url or a local path.")
     parser.add_argument("--decode_strategy", default="greedy_search", type=str, help="The decoding strategy in generation. Currently, there are three decoding strategies supported: greedy_search, sampling and beam_search. Default to greedy_search.")
     parser.add_argument("--max_length", default=300, type=int, help="The maximum length of the sequence to be generated. Default to 300.")
