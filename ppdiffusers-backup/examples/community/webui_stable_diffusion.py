@@ -383,7 +383,7 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
             safety_checker: StableDiffusionSafetyChecker,
             feature_extractor: CLIPFeatureExtractor,
             controlnet: Union[ControlNetModel, List[ControlNetModel], Tuple[
-                ControlNetModel], MultiControlNetModel] = None,
+                ControlNetModel], MultiControlNetModel]=None,
             requires_safety_checker: bool=True, ):
         super().__init__()
 
