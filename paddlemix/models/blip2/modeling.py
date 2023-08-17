@@ -23,7 +23,6 @@ from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.transformers.model_outputs import ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
 from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
-from paddlenlp.utils.initializer import normal_, ones_, zeros_
 
 from paddlemix.models.blip2.modeling_opt import OPTForCausalLM
 from paddlemix.models.blip2.modeling_utils import (
@@ -414,12 +413,13 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 else:
                     raise NotImplementedError
             else:
-                if "t5" in config.text_config:
-                    language_model = T5ForConditionalGeneration.from_pretrained(
-                        config.text_config, load_state_as_np=True, mp_degree=config.mp_degree
-                    )
-                else:
-                    raise NotImplementedError
+                from paddlenlp.transformers import T5Config
+
+                t5_config = T5Config(config.text_config)
+                for key, value in config.text_config.items():
+                    t5_config[key] = config.text_config[key]
+                language_model = T5ForConditionalGeneration(t5_config)
+                language_model.hidden_size = config.text_config["d_model"]
 
             self.language_model = language_model
             for name, param in self.language_model.named_parameters():
@@ -462,6 +462,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 input_ids,
                 attention_mask,
                 return_dict,
+                decoder_input_ids=kwargs.get("decoder_input_ids", None),
+                decoder_attention_mask=kwargs.get("decoder_attention_mask", None),
             )
 
     def forward_stage2(
@@ -470,7 +472,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         input_ids: paddle.Tensor,
         attention_mask: Optional[paddle.Tensor] = None,
         return_dict: Optional[bool] = None,
-        **kwargs
+        decoder_input_ids: Optional[paddle.Tensor] = None,
+        decoder_attention_mask: Optional[paddle.Tensor] = None,
     ) -> Union[Tuple, Blip2ForConditionalGenerationModelOutput]:
         r"""
         Returns:
@@ -538,21 +541,36 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
 
         attention_mask = paddle.concat([language_model_attention_mask, attention_mask], axis=1)
 
-        targets = input_ids * (1 - (input_ids == self.pad_token_id).astype(input_ids.dtype)) + (
-            input_ids == self.pad_token_id
-        ).astype(input_ids.dtype) * (-100)
+        if self.config.use_decoder_only_language_model:
+            targets = input_ids * (1 - (input_ids == self.pad_token_id).astype(input_ids.dtype)) + (
+                input_ids == self.pad_token_id
+            ).astype(input_ids.dtype) * (-100)
 
-        empty_targets = paddle.ones(language_model_attention_mask.shape, dtype="int64").fill_(-100)
-        labels = paddle.concat([empty_targets, targets], axis=1)
-        labels.stop_gradient = True
-        with paddle.amp.auto_cast(level="O2"):
-            outputs = self.language_model(
-                inputs_embeds=inputs_embeds,
-                attention_mask=attention_mask,
-                return_dict=True,
-                labels=labels,
-            )
-            loss = outputs.loss
+            empty_targets = paddle.ones(language_model_attention_mask.shape, dtype="int64").fill_(-100)
+            labels = paddle.concat([empty_targets, targets], axis=1)
+            labels.stop_gradient = True
+            with paddle.amp.auto_cast(level="O2"):
+                outputs = self.language_model(
+                    inputs_embeds=inputs_embeds,
+                    attention_mask=attention_mask,
+                    return_dict=True,
+                    labels=labels,
+                )
+                loss = outputs.loss
+        else:
+            targets = decoder_input_ids * (
+                1 - (decoder_input_ids == self.pad_token_id).astype(decoder_input_ids.dtype)
+            ) + (decoder_input_ids == self.pad_token_id).astype(input_ids.dtype) * (-100)
+            targets.stop_gradient = True
+            with paddle.amp.auto_cast(level="O2"):
+                outputs = self.language_model(
+                    inputs_embeds=inputs_embeds,
+                    attention_mask=attention_mask,
+                    decoder_attention_mask=decoder_attention_mask,
+                    return_dict=return_dict,
+                    labels=targets,
+                )
+                loss = outputs[0]
         return Blip2ForConditionalGenerationModelOutput(
             loss=loss,
         )

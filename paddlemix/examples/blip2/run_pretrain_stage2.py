@@ -25,10 +25,14 @@ import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
-from paddlenlp.transformers import AutoTokenizer
 
 from paddlemix.datasets import load_dataset
-from paddlemix.examples.blip2.utils import LLM_LIST, BlipCollator, load_model
+from paddlemix.examples.blip2.utils import (
+    LLM_LIST,
+    BlipCollator,
+    create_tokenizer,
+    load_model,
+)
 from paddlemix.models.blip2.configuration import Blip2Config
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
@@ -164,7 +168,7 @@ def main():
 
     # create dataset
 
-    tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path, use_fast=False)
+    tokenizer_class = create_tokenizer(model_args.text_model_name_or_path)
     image_processor = BlipImageProcessor.from_pretrained(
         os.path.join(model_args.model_name_or_path, "processor", "train")
     )

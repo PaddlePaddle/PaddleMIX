@@ -20,15 +20,17 @@ import sys
 import time
 
 import paddle
+from paddlenlp.transformers import AutoTokenizer, T5Tokenizer
 from pycocoevalcap.eval import COCOEvalCap
 from pycocotools.coco import COCO
 
 from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
-from paddlemix.utils.downloader import get_weights_path_from_url, is_url
+from paddlemix.utils.downloader import WEIGHTS_HOME, get_path_from_url, is_url
 from paddlemix.utils.log import logger
 
 LLM_LIST = {
     "facebook/opt-2.7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-2.7b/model_state.pdparams",
+    "facebook/opt-6.7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-6.7b/model_state.pdparams",
     "t5-small": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-small/model_state.pdparams",
     "t5-base": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-base/model_state.pdparams",
     "t5-large": "https://bj.bcebos.com/paddlenlp/models/transformers/t5/t5-large/model_state.pdparams",
@@ -41,6 +43,35 @@ LLM_LIST = {
     "facebook/llama-30b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-30b/model_state.pdparams",
     "facebook/llama-65b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-65b/model_state.pdparams",
 }
+
+
+def create_tokenizer(text_model_name_or_path):
+    if "opt" in text_model_name_or_path:
+        tokenizer_class = AutoTokenizer.from_pretrained(text_model_name_or_path, use_fast=False)
+    elif "t5" in text_model_name_or_path:
+        tokenizer_class = T5Tokenizer.from_pretrained(text_model_name_or_path, use_fast=False)
+    else:
+        raise NotImplementedError
+    return tokenizer_class
+
+
+def get_weights_path_from_url(url, md5sum=None):
+    """Get weights path from WEIGHT_HOME, if not exists,
+    download it from url.
+    Args:
+        url (str): download url
+        md5sum (str): md5 sum of download package
+
+    Returns:
+        str: a local path to save downloaded weights.
+    Examples:
+        .. code-block:: python
+            from paddle.utils.download import get_weights_path_from_url
+            resnet18_pretrained_weight_url = 'https://paddle-hapi.bj.bcebos.com/models/resnet18.pdparams'
+            local_weight_path = get_weights_path_from_url(resnet18_pretrained_weight_url)
+    """
+    path = get_path_from_url(url, os.path.join(WEIGHTS_HOME, url.split("/")[-2]), md5sum)
+    return path
 
 
 class BlipCollator:
