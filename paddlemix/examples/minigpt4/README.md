@@ -28,6 +28,7 @@ MiniGPT4 是一个具有图像理解能力的开源模型，其基于 Vicuna 大
 ```
 python run_predict.py \
     -- pretrained_name_or_path "your minigpt4 path" \
+    -- image_path "you image path" \
     -- decode_strategy "greedy_search" \
     -- max_length 300 \
     -- num_beams 1 \
@@ -40,6 +41,7 @@ python run_predict.py \
 
 你可以通过调整一些生成策略，来控制生成内容，例如一些常用的生成策略参数如下：
 `pretrained_name_or_path`: 默认为MiniGPT4模型的存放目录.
+`image_path`: 图片路径，支持传入URL或本地路径.
 `decode_strategy`: 文本生成时的解码策略，目前支持'gready_search', 'sampling', 'beam_search'三种方式.
 `max_length`: 生成序列的最大长度.
 `num_beams`: 'beam_search'策略的束宽.
