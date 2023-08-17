@@ -31,8 +31,10 @@ def predict(args):
     print("load processor and model done!")
 
     # prepare model inputs for MiniGPT4
-    url = "https://paddlenlp.bj.bcebos.com/data/images/mugs.png"
-    image = Image.open(requests.get(url, stream=True).raw)
+    if args.image_path.startswith("http"):
+        image = Image.open(requests.get(args.image_path, stream=True).raw)
+    else:
+         image = Image.open(args.image_path)
 
     text = "describe this image"
     prompt = "Give the following image: <Img>ImageContent</Img>. You will be able to see the image once I provide it to you. Please answer my questions.###Human: <Img><ImageHere></Img> <TextHere>###Assistant:"
@@ -58,6 +60,7 @@ def predict(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--pretrained_name_or_path", default="/wangqinghui/mynlp/PaddleNLP/paddlenlp/transformers/minigpt4/minigpt4-13b", type=str, help="The dir name of minigpt4 checkpoint.")
+    parser.add_argument("--image_path", default="https://paddlenlp.bj.bcebos.com/data/images/mugs.png", type=str, help="The image path, you can input a url or a local path.")
     parser.add_argument("--decode_strategy", default="greedy_search", type=str, help="The decoding strategy in generation. Currently, there are three decoding strategies supported: greedy_search, sampling and beam_search. Default to greedy_search.")
     parser.add_argument("--max_length", default=300, type=int, help="The maximum length of the sequence to be generated. Default to 300.")
     parser.add_argument("--num_beams", default=1, type=int, help="The number of beams in the beam_search strategy. Default to 1.")
