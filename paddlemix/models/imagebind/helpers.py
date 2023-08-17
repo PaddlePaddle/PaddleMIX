@@ -127,6 +127,6 @@ class SelectEOSAndProject(paddle.nn.Layer):
 
     def forward(self, x, seq_len):
         assert x.ndim == 3
-        x = x[paddle.arange(end=x.shape[0]).astype("int64"), seq_len]
-        x = self.proj(x)
+        x = x[paddle.arange(end=x.shape[0]).astype('int64'), seq_len]
+        x = self.proj(x[None,:])
         return x
