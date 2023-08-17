@@ -83,7 +83,11 @@ APPLICATIONS = {
             "stabilityai/stable-diffusion-2": {
                 "task_class": StableDiffusionTask,
                 "task_flag": "text2image_generation-stable-diffusion-2",
-            }
+            },
+            "runwayml/stable-diffusion-v1-5": {
+                "task_class": StableDiffusionTask,
+                "task_flag": "text2image_generation-stable-diffusion-v1-5",
+            },
         },
         "default": {
             "model": "stabilityai/stable-diffusion-2",
