@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 import warnings
@@ -36,7 +50,9 @@ def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
     std_text = noise_pred_text.std(axis=list(range(1, noise_pred_text.ndim)),
                                    keepdim=True)
     std_cfg = noise_cfg.std(axis=list(range(1, noise_cfg.ndim)), keepdim=True)
+    # rescale the results from guidance (fixes overexposure)
     noise_pred_rescaled = noise_cfg * (std_text / std_cfg)
+    # mix with the original results from guidance by factor guidance_rescale to avoid "plain looking" images
     noise_cfg = guidance_rescale * noise_pred_rescaled + (1 - guidance_rescale
                                                           ) * noise_cfg
     return noise_cfg
@@ -129,13 +145,14 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             unet.config, 'sample_size') and unet.config.sample_size < 64
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = """The configuration file of the unet has set the default `sample_size` to smaller than 64 which seems highly unlikely. If your checkpoint is a fine-tuned version of any of the following: 
-- CompVis/stable-diffusion-v1-4 
-- CompVis/stable-diffusion-v1-3 
-- CompVis/stable-diffusion-v1-2 
-- CompVis/stable-diffusion-v1-1 
-- runwayml/stable-diffusion-v1-5 
-- runwayml/stable-diffusion-inpainting 
- you should change 'sample_size' to 64 in the configuration file. Please make sure to update the config accordingly as leaving `sample_size=32` in the config might lead to incorrect results in future versions. If you have downloaded this checkpoint from the Hugging Face Hub, it would be very nice if you could open a Pull request for the `unet/config.json` file"""
+            - CompVis/stable-diffusion-v1-4 
+            - CompVis/stable-diffusion-v1-3 
+            - CompVis/stable-diffusion-v1-2 
+            - CompVis/stable-diffusion-v1-1 
+            - runwayml/stable-diffusion-v1-5 
+            - runwayml/stable-diffusion-inpainting 
+            you should change 'sample_size' to 64 in the configuration file. Please make sure to update the config accordingly as leaving `sample_size=32` in the config might lead to incorrect results in future versions. If you have downloaded this checkpoint from the Hugging Face Hub, it would be very nice if you could open a Pull request for the `unet/config.json` file
+            """
             deprecate(
                 'sample_size<64',
                 '1.0.0',
@@ -218,6 +235,8 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             lora_scale (`float`, *optional*):
                 A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
         if prompt is not None and isinstance(prompt, str):
@@ -227,6 +246,7 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         else:
             batch_size = prompt_embeds.shape[0]
         if prompt_embeds is None:
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
             text_inputs = self.tokenizer(
@@ -256,10 +276,13 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -277,6 +300,8 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 )
             else:
                 uncond_tokens = negative_prompt
+
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
                                                           self.tokenizer)
@@ -296,6 +321,7 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder.dtype)
@@ -303,6 +329,10 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
@@ -331,16 +361,24 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
 
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
+
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
@@ -493,17 +531,26 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 second element is a list of `bool`s indicating whether the corresponding generated image contains
                 "not-safe-for-work" (nsfw) content.
         """
+        # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
+
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(prompt, height, width, callback_steps,
                           negative_prompt, prompt_embeds,
                           negative_prompt_embeds)
+
+        # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
@@ -516,42 +563,60 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale)
         self.scheduler.set_timesteps(num_inference_steps)
+
+        # 4. Prepare timesteps
         timesteps = self.scheduler.timesteps
+
+        # 5. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
         latents = self.prepare_latents(batch_size * num_images_per_prompt,
                                        num_channels_latents, height, width,
                                        prompt_embeds.dtype, generator, latents)
+
+        # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
+
+        # 7. Denoising loop
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
+
+                # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
                     cross_attention_kwargs=cross_attention_kwargs,
                     return_dict=False)[0]
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
                 if do_classifier_free_guidance and guidance_rescale > 0.0:
+                    # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
                     noise_pred = rescale_noise_cfg(
                         noise_pred,
                         noise_pred_text,
                         guidance_rescale=guidance_rescale)
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(
                     noise_pred,
                     t,
                     latents,
                     **extra_step_kwargs,
                     return_dict=False)[0]
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()

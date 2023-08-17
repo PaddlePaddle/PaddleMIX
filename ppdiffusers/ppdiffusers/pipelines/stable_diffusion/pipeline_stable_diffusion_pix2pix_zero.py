@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 import warnings
@@ -142,6 +156,7 @@ EXAMPLE_INVERT_DOC_STRING = """
 """
 
 
+# Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.preprocess
 def preprocess(image):
     warnings.warn(
         'The preprocess method is deprecated and will be removed in a future version. Please use VaeImageProcessor.preprocess instead',
@@ -230,16 +245,22 @@ class Pix2PixZeroAttnProcessor:
         value = attn.head_to_batch_dim(value)
         attention_probs = attn.get_attention_scores(query, key, attention_mask)
         if self.is_pix2pix_zero and timestep is not None:
+            # new bookkeeping to save the attention weights.
             if loss is None:
                 self.reference_cross_attn_map[timestep.item(
                 )] = attention_probs.detach().cpu()
+
+            # compute loss
             elif loss is not None:
                 prev_attn_probs = self.reference_cross_attn_map.pop(
                     timestep.item())
                 loss.compute_loss(attention_probs, prev_attn_probs)
         hidden_states = paddle.bmm(x=attention_probs, y=value)
         hidden_states = attn.batch_to_head_dim(hidden_states)
+
+        # linear proj
         hidden_states = attn.to_out[0](hidden_states)
+        # dropout
         hidden_states = attn.to_out[1](hidden_states)
         return hidden_states
 
@@ -350,6 +371,8 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             lora_scale (`float`, *optional*):
                 A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
         if prompt is not None and isinstance(prompt, str):
@@ -359,6 +382,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
         else:
             batch_size = prompt_embeds.shape[0]
         if prompt_embeds is None:
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
             text_inputs = self.tokenizer(
@@ -388,10 +412,13 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -409,6 +436,8 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 )
             else:
                 uncond_tokens = negative_prompt
+
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
                                                           self.tokenizer)
@@ -428,6 +457,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder.dtype)
@@ -435,10 +465,15 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
@@ -456,6 +491,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -463,16 +499,25 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
+
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
@@ -507,6 +552,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                 f'`prompt` has to be of type `str` or `list` but is {type(prompt)}'
             )
 
+    #  Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(self,
                         batch_size,
                         num_channels_latents,
@@ -744,10 +790,15 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             list of `bool`s denoting whether the corresponding generated image likely represents "not-safe-for-work"
             (nsfw) content, according to the `safety_checker`.
         """
+        # 0. Define the spatial resolutions.
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
+
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(prompt, source_embeds, target_embeds, callback_steps,
                           prompt_embeds)
+
+        # 3. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
@@ -756,7 +807,13 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             batch_size = prompt_embeds.shape[0]
         if cross_attention_kwargs is None:
             cross_attention_kwargs = {}
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
+
+        # 3. Encode input prompt
         prompt_embeds = self._encode_prompt(
             prompt,
             num_images_per_prompt,
@@ -764,60 +821,96 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds)
+
+        # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
+
+        # 5. Generate the inverted noise from the input image or any other image
+        # generated from the input prompt.
         num_channels_latents = self.unet.config.in_channels
         latents = self.prepare_latents(batch_size * num_images_per_prompt,
                                        num_channels_latents, height, width,
                                        prompt_embeds.dtype, generator, latents)
         latents_init = latents.clone()
+
+        # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+
+        # 8. Rejig the UNet so that we can obtain the cross-attenion maps and
+        # use them for guiding the subsequent image generation.
         self.unet = prepare_unet(self.unet)
+
+        # 7. Denoising loop where we obtain the cross-attention maps.
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
+
+                # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
                     cross_attention_kwargs={'timestep': t}).sample
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents,
                                               **extra_step_kwargs).prev_sample
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
+
+        # 8. Compute the edit directions.
         edit_direction = self.construct_direction(source_embeds, target_embeds)
+
+        # 9. Edit the prompt embeddings as per the edit directions discovered.
         prompt_embeds_edit = prompt_embeds.clone()
         prompt_embeds_edit[1:2] += edit_direction
+
+        # 10. Second denoising loop to generate the edited image.
         latents = latents_init
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
+
+                # we want to learn the latent such that it steers the generation
+                # process towards the edited direction, so make the make initial
+                # noise learnable
                 x_in = latent_model_input.detach().clone()
                 x_in.stop_gradient = not True
+
                 # optimizer
                 opt = paddle.optimizer.SGD(
                     parameters=[x_in],
                     learning_rate=cross_attention_guidance_amount)
                 with paddle.enable_grad():
+                    # initialize loss
                     loss = Pix2PixZeroL2Loss()
+
+                    # predict the noise residual
                     noise_pred = self.unet(
                         x_in,
                         t,
@@ -826,19 +919,27 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                                                 'loss': loss}).sample
                     loss.loss.backward(retain_graph=False)
                     opt.step()
+
+                # recompute the noise
                 noise_pred = self.unet(
                     x_in.detach(),
                     t,
                     encoder_hidden_states=prompt_embeds_edit,
                     cross_attention_kwargs={'timestep': None}).sample
                 latents = x_in.detach().chunk(chunks=2)[0]
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents,
                                               **extra_step_kwargs).prev_sample
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
@@ -945,6 +1046,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             `return_dict` is True, otherwise a `tuple. When returning a tuple, the first element is the inverted
             latents tensor and then second is the corresponding decoded image.
         """
+        # 1. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
@@ -953,37 +1055,60 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
             batch_size = prompt_embeds.shape[0]
         if cross_attention_kwargs is None:
             cross_attention_kwargs = {}
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
+
+        # 3. Preprocess image
         image = self.image_processor.preprocess(image)
+
+        # 4. Prepare latent variables
         latents = self.prepare_image_latents(image, batch_size, self.vae.dtype,
                                              generator)
+
+        # 5. Encode input prompt
         num_images_per_prompt = 1
         prompt_embeds = self._encode_prompt(
             prompt,
             num_images_per_prompt,
             do_classifier_free_guidance,
             prompt_embeds=prompt_embeds)
+
+        # 4. Prepare timesteps
         self.inverse_scheduler.set_timesteps(num_inference_steps)
         timesteps = self.inverse_scheduler.timesteps
+
+        # 6. Rejig the UNet so that we can obtain the cross-attenion maps and
+        # use them for guiding the subsequent image generation.
         self.unet = prepare_unet(self.unet)
+        # 7. Denoising loop where we obtain the cross-attention maps.
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.inverse_scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.inverse_scheduler.scale_model_input(
                     latent_model_input, t)
+
+                # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
                     cross_attention_kwargs={'timestep': t}).sample
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
+
+                # regularization of the noise prediction
                 with paddle.enable_grad():
                     for _ in range(num_reg_steps):
                         if lambda_auto_corr > 0:
@@ -991,6 +1116,7 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                                 var = noise_pred.detach().clone()
                                 var.stop_gradient = False
 
+                                # Derive epsilon from model output before regularizing to IID standard normal
                                 var_epsilon = self.get_epsilon(
                                     var, latent_model_input.detach(), t)
                                 l_ac = self.auto_corr_loss(
@@ -1001,6 +1127,8 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                                     noise_pred - lambda_auto_corr * grad)
                         if lambda_kl > 0:
                             var = noise_pred.detach().clone()
+
+                            # Derive epsilon from model output before regularizing to IID standard normal
                             var.stop_gradient = False
                             var_epsilon = self.get_epsilon(
                                 var, latent_model_input.detach(), t)
@@ -1009,14 +1137,20 @@ class StableDiffusionPix2PixZeroPipeline(DiffusionPipeline):
                             grad = var.grad.detach()
                             noise_pred = noise_pred - lambda_kl * grad
                         noise_pred = noise_pred.detach()
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.inverse_scheduler.step(noise_pred, t,
                                                       latents).prev_sample
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.inverse_scheduler.order == 0:
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
         inverted_latents = latents.detach().clone()
+
+        # 8. Post-processing
         image = self.vae.decode(
             latents / self.vae.config.scaling_factor, return_dict=False)[0]
         image = self.image_processor.postprocess(image, output_type=output_type)

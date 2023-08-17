@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import importlib
 import inspect
@@ -78,6 +92,8 @@ class StableDiffusionKDiffusionPipeline(
         logger.info(
             f'{self.__class__} is an experimntal pipeline and is likely to change in the future. We recommend to use this pipeline for fast experimentation / iteration if needed, but advice to rely on existing pipelines as defined in https://huggingface.co/docs/diffusers/api/schedulers#implemented-schedulers for production settings.'
         )
+
+        # get correct sigmas from LMS
         scheduler = LMSDiscreteScheduler.from_config(scheduler.config)
         self.register_modules(
             vae=vae,
@@ -102,6 +118,7 @@ class StableDiffusionKDiffusionPipeline(
         sampling = getattr(library, 'sampling')
         self.sampler = getattr(sampling, scheduler_type)
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
     def _encode_prompt(self,
                        prompt,
                        num_images_per_prompt,
@@ -134,6 +151,8 @@ class StableDiffusionKDiffusionPipeline(
             lora_scale (`float`, *optional*):
                 A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
         if prompt is not None and isinstance(prompt, str):
@@ -143,6 +162,7 @@ class StableDiffusionKDiffusionPipeline(
         else:
             batch_size = prompt_embeds.shape[0]
         if prompt_embeds is None:
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
             text_inputs = self.tokenizer(
@@ -172,10 +192,13 @@ class StableDiffusionKDiffusionPipeline(
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -193,6 +216,8 @@ class StableDiffusionKDiffusionPipeline(
                 )
             else:
                 uncond_tokens = negative_prompt
+
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
                                                           self.tokenizer)
@@ -212,6 +237,7 @@ class StableDiffusionKDiffusionPipeline(
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder.dtype)
@@ -219,10 +245,15 @@ class StableDiffusionKDiffusionPipeline(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checke
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
@@ -240,6 +271,7 @@ class StableDiffusionKDiffusionPipeline(
                 clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latent
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -247,10 +279,12 @@ class StableDiffusionKDiffusionPipeline(
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.check_inputs
     def check_inputs(self,
                      prompt,
                      height,
@@ -308,6 +342,8 @@ class StableDiffusionKDiffusionPipeline(
                 raise ValueError(
                     f'Unexpected latents shape, got {latents.shape}, expected {shape}'
                 )
+
+        # scale the initial noise by the standard deviation required by the scheduler
         return latents
 
     @paddle.no_grad()
@@ -400,20 +436,31 @@ class StableDiffusionKDiffusionPipeline(
             list of `bool`s denoting whether the corresponding generated image likely represents "not-safe-for-work"
             (nsfw) content, according to the `safety_checker`.
         """
+        # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
+
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(prompt, height, width, callback_steps,
                           negative_prompt, prompt_embeds,
                           negative_prompt_embeds)
+
+        # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = True
         if guidance_scale <= 1.0:
             raise ValueError('has to use guidance_scale')
+
+        # 3. Encode input prompt
         prompt_embeds = self._encode_prompt(
             prompt,
             num_images_per_prompt,
@@ -421,7 +468,11 @@ class StableDiffusionKDiffusionPipeline(
             negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds)
+
+        # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
+
+        # 5. Prepare sigmas
         if use_karras_sigmas:
             sigma_min: float = self.k_diffusion_model.sigmas[0].item()
             sigma_max: float = self.k_diffusion_model.sigmas[-1].item()
@@ -430,6 +481,8 @@ class StableDiffusionKDiffusionPipeline(
         else:
             sigmas = self.scheduler.sigmas
         sigmas = sigmas.cast(prompt_embeds.dtype)
+
+        # 6. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
         latents = self.prepare_latents(batch_size * num_images_per_prompt,
                                        num_channels_latents, height, width,
@@ -438,6 +491,7 @@ class StableDiffusionKDiffusionPipeline(
         self.k_diffusion_model.sigmas = self.k_diffusion_model.sigmas
         self.k_diffusion_model.log_sigmas = (self.k_diffusion_model.log_sigmas)
 
+        # 7. Define model function
         def model_fn(x, t):
             latent_model_input = paddle.concat(x=[x] * 2)
             t = paddle.concat(x=[t] * 2)
@@ -448,6 +502,7 @@ class StableDiffusionKDiffusionPipeline(
                 noise_pred_text - noise_pred_uncond)
             return noise_pred
 
+        # 8. Run k-diffusion solver
         sampler_kwargs = {}
         if 'noise_sampler' in inspect.signature(self.sampler).parameters:
             min_sigma, max_sigma = sigmas[sigmas > 0].min(), sigmas.max()

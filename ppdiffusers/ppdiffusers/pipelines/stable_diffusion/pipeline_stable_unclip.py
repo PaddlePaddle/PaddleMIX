@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 import warnings
@@ -67,30 +81,40 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         vae ([`AutoencoderKL`]):
             Variational Auto-Encoder (VAE) Model to encode and decode images to and from latent representations.
     """
+    # prior components
     prior_tokenizer: CLIPTokenizer
     prior_text_encoder: CLIPTextModelWithProjection
     prior: PriorTransformer
     prior_scheduler: KarrasDiffusionSchedulers
+
+    # image noising components
     image_normalizer: StableUnCLIPImageNormalizer
     image_noising_scheduler: KarrasDiffusionSchedulers
+
+    # regular denoising components
     tokenizer: CLIPTokenizer
     text_encoder: CLIPTextModel
     unet: UNet2DConditionModel
     scheduler: KarrasDiffusionSchedulers
     vae: AutoencoderKL
 
-    def __init__(self,
-                 prior_tokenizer: CLIPTokenizer,
-                 prior_text_encoder: CLIPTextModelWithProjection,
-                 prior: PriorTransformer,
-                 prior_scheduler: KarrasDiffusionSchedulers,
-                 image_normalizer: StableUnCLIPImageNormalizer,
-                 image_noising_scheduler: KarrasDiffusionSchedulers,
-                 tokenizer: CLIPTokenizer,
-                 text_encoder: CLIPTextModelWithProjection,
-                 unet: UNet2DConditionModel,
-                 scheduler: KarrasDiffusionSchedulers,
-                 vae: AutoencoderKL):
+    def __init__(
+            self,
+            # prior components
+            prior_tokenizer: CLIPTokenizer,
+            prior_text_encoder: CLIPTextModelWithProjection,
+            prior: PriorTransformer,
+            prior_scheduler: KarrasDiffusionSchedulers,
+            # image noising components
+            image_normalizer: StableUnCLIPImageNormalizer,
+            image_noising_scheduler: KarrasDiffusionSchedulers,
+            # regular denoising components
+            tokenizer: CLIPTokenizer,
+            text_encoder: CLIPTextModelWithProjection,
+            unet: UNet2DConditionModel,
+            scheduler: KarrasDiffusionSchedulers,
+            # vae
+            vae: AutoencoderKL):
         super().__init__()
         self.register_modules(
             prior_tokenizer=prior_tokenizer,
@@ -108,6 +132,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         self.image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor)
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.enable_vae_slicing
     def enable_vae_slicing(self):
         """
         Enable sliced VAE decoding. When this option is enabled, the VAE will split the input tensor in slices to
@@ -115,6 +140,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         """
         self.vae.enable_slicing()
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.disable_vae_slicing
     def disable_vae_slicing(self):
         """
         Disable sliced VAE decoding. If `enable_vae_slicing` was previously enabled, this method will go back to
@@ -122,6 +148,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         """
         self.vae.disable_slicing()
 
+    # Copied from ppdiffusers.pipelines.unclip.pipeline_unclip.UnCLIPPipeline._encode_prompt with _encode_prompt->_encode_prior_prompt, tokenizer->prior_tokenizer, text_encoder->prior_text_encoder
     def _encode_prior_prompt(
             self,
             prompt,
@@ -131,6 +158,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             text_attention_mask: Optional[paddle.Tensor]=None):
         if text_model_output is None:
             batch_size = len(prompt) if isinstance(prompt, list) else 1
+            # get prompt text embeddings
             text_inputs = self.prior_tokenizer(
                 prompt,
                 padding='max_length',
@@ -184,6 +212,8 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             uncond_prior_text_encoder_hidden_states = (
                 negative_prompt_embeds_prior_text_encoder_output.
                 last_hidden_state)
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
+
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.tile(
                 repeat_times=[1, num_images_per_prompt])
@@ -198,6 +228,11 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                     [batch_size * num_images_per_prompt, seq_len, -1]))
             uncond_text_mask = uncond_text_mask.repeat_interleave(
                 repeats=num_images_per_prompt, axis=0)
+            # done duplicates
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
             prior_text_encoder_hidden_states = paddle.concat(x=[
@@ -207,6 +242,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             text_mask = paddle.concat(x=[uncond_text_mask, text_mask])
         return prompt_embeds, prior_text_encoder_hidden_states, text_mask
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
     def _encode_prompt(self,
                        prompt,
                        num_images_per_prompt,
@@ -277,10 +313,12 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -298,6 +336,8 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 )
             else:
                 uncond_tokens = negative_prompt
+
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
                                                           self.tokenizer)
@@ -317,6 +357,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder.dtype)
@@ -324,10 +365,15 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -335,23 +381,35 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs with prepare_extra_step_kwargs->prepare_prior_extra_step_kwargs, scheduler->prior_scheduler
     def prepare_prior_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the prior_scheduler step, since not all prior_schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other prior_schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
         accepts_eta = 'eta' in set(
             inspect.signature(self.prior_scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+        # check if the prior_scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.prior_scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
@@ -359,6 +417,8 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             extra_step_kwargs['eta'] = eta
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
+
+        # check if the scheduler accepts generator
         if accepts_generator:
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
@@ -414,6 +474,7 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 f'`noise_level` must be between 0 and {self.image_noising_scheduler.config.num_train_timesteps - 1}, inclusive.'
             )
 
+    # Copied from ppdiffusers.pipelines.unclip.pipeline_unclip.UnCLIPPipeline.prepare_latents
     def prepare_latents(self, shape, dtype, generator, latents, scheduler):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
@@ -458,6 +519,10 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             embedding_dim=image_embeds.shape[-1],
             flip_sin_to_cos=True,
             downscale_freq_shift=0)
+
+        # `get_timestep_embeddings` does not contain any weights and will always return f32 tensors,
+        # but we might actually be running in fp16. so we need to cast here.
+        # there might be better ways to encapsulate this.
         noise_level = noise_level.cast(image_embeds.dtype)
         image_embeds = paddle.concat(x=(image_embeds, noise_level), axis=1)
         return image_embeds
@@ -559,8 +624,11 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 [`~ pipeline_utils.ImagePipelineOutput`] if `return_dict` is True, otherwise a `tuple`. When returning
                 a tuple, the first element is a list with the generated images.
         """
+        # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
+
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(
             prompt=prompt,
             height=height,
@@ -570,6 +638,8 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             negative_prompt=negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds)
+
+        # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
@@ -577,21 +647,34 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
         else:
             batch_size = prompt_embeds.shape[0]
         batch_size = batch_size * num_images_per_prompt
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         prior_do_classifier_free_guidance = prior_guidance_scale > 1.0
+
+        # 3. Encode input prompt
         (prior_prompt_embeds, prior_text_encoder_hidden_states,
          prior_text_mask) = (self._encode_prior_prompt(
              prompt=prompt,
              num_images_per_prompt=num_images_per_prompt,
              do_classifier_free_guidance=prior_do_classifier_free_guidance))
+
+        # 4. Prepare prior timesteps
         self.prior_scheduler.set_timesteps(prior_num_inference_steps)
         prior_timesteps_tensor = self.prior_scheduler.timesteps
+
+        # 5. Prepare prior latent variables
         embedding_dim = self.prior.config.embedding_dim
         prior_latents = self.prepare_latents(
             (batch_size, embedding_dim), prior_prompt_embeds.dtype, generator,
             prior_latents, self.prior_scheduler)
+
+        # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         prior_extra_step_kwargs = self.prepare_prior_extra_step_kwargs(
             generator, eta)
         for i, t in enumerate(self.progress_bar(prior_timesteps_tensor)):
+            # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(
                 x=[prior_latents] *
                 2) if prior_do_classifier_free_guidance else prior_latents
@@ -621,7 +704,15 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 callback(i, t, prior_latents)
         prior_latents = self.prior.post_process_latents(prior_latents)
         image_embeds = prior_latents
+
+        # done prior
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
+
+        # 8. Encode input prompt
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         prompt_embeds = self._encode_prompt(
@@ -632,16 +723,26 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale)
+
+        # 9. Prepare image embeddings
         image_embeds = self.noise_image_embeddings(
             image_embeds=image_embeds,
             noise_level=noise_level,
             generator=generator)
         if do_classifier_free_guidance:
             negative_prompt_embeds = paddle.zeros_like(x=image_embeds)
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             image_embeds = paddle.concat(
                 x=[negative_prompt_embeds, image_embeds])
+
+        # 10. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
+
+        # 11. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
         shape = (batch_size, num_channels_latents, height //
                  self.vae_scale_factor, width // self.vae_scale_factor)
@@ -651,12 +752,18 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
             generator=generator,
             latents=latents,
             scheduler=self.scheduler)
+
+        # 12. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+
+        # 13. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
+
+            # predict the noise residual
             noise_pred = self.unet(
                 latent_model_input,
                 t,
@@ -664,10 +771,14 @@ class StableUnCLIPPipeline(DiffusionPipeline, TextualInversionLoaderMixin,
                 class_labels=image_embeds,
                 cross_attention_kwargs=cross_attention_kwargs,
                 return_dict=False)[0]
+
+            # perform guidance
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
                 noise_pred = noise_pred_uncond + guidance_scale * (
                     noise_pred_text - noise_pred_uncond)
+
+            # compute the previous noisy sample x_t -> x_t-1
             latents = self.scheduler.step(
                 noise_pred, t, latents, **extra_step_kwargs,
                 return_dict=False)[0]

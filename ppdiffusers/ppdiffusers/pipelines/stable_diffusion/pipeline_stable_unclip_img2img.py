@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 import warnings
@@ -76,26 +90,37 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
         vae ([`AutoencoderKL`]):
             Variational Auto-Encoder (VAE) Model to encode and decode images to and from latent representations.
     """
+    # image encoding components
     feature_extractor: CLIPImageProcessor
     image_encoder: CLIPVisionModelWithProjection
+
+    # image noising components
     image_normalizer: StableUnCLIPImageNormalizer
     image_noising_scheduler: KarrasDiffusionSchedulers
+
+    # regular denoising components
     tokenizer: CLIPTokenizer
     text_encoder: CLIPTextModel
     unet: UNet2DConditionModel
     scheduler: KarrasDiffusionSchedulers
     vae: AutoencoderKL
 
-    def __init__(self,
-                 feature_extractor: CLIPImageProcessor,
-                 image_encoder: CLIPVisionModelWithProjection,
-                 image_normalizer: StableUnCLIPImageNormalizer,
-                 image_noising_scheduler: KarrasDiffusionSchedulers,
-                 tokenizer: CLIPTokenizer,
-                 text_encoder: CLIPTextModel,
-                 unet: UNet2DConditionModel,
-                 scheduler: KarrasDiffusionSchedulers,
-                 vae: AutoencoderKL):
+    def __init__(
+            self,
+
+            # image encoding components
+            feature_extractor: CLIPImageProcessor,
+            image_encoder: CLIPVisionModelWithProjection,
+            # image noising components
+            image_normalizer: StableUnCLIPImageNormalizer,
+            image_noising_scheduler: KarrasDiffusionSchedulers,
+            # regular denoising components
+            tokenizer: CLIPTokenizer,
+            text_encoder: CLIPTextModel,
+            unet: UNet2DConditionModel,
+            scheduler: KarrasDiffusionSchedulers,
+            # vae
+            vae: AutoencoderKL):
         super().__init__()
         self.register_modules(
             feature_extractor=feature_extractor,
@@ -111,6 +136,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
         self.image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor)
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.enable_vae_slicing
     def enable_vae_slicing(self):
         """
         Enable sliced VAE decoding. When this option is enabled, the VAE will split the input tensor in slices to
@@ -118,6 +144,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
         """
         self.vae.enable_slicing()
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.disable_vae_slicing
     def disable_vae_slicing(self):
         """
         Disable sliced VAE decoding. If `enable_vae_slicing` was previously enabled, this method will go back to
@@ -125,6 +152,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
         """
         self.vae.disable_slicing()
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
     def _encode_prompt(self,
                        prompt,
                        num_images_per_prompt,
@@ -157,6 +185,8 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
             lora_scale (`float`, *optional*):
                 A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
         if prompt is not None and isinstance(prompt, str):
@@ -166,6 +196,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
         else:
             batch_size = prompt_embeds.shape[0]
         if prompt_embeds is None:
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
             text_inputs = self.tokenizer(
@@ -195,10 +226,13 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -216,6 +250,8 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                 )
             else:
                 uncond_tokens = negative_prompt
+
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
                                                           self.tokenizer)
@@ -235,6 +271,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder.dtype)
@@ -242,6 +279,10 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
@@ -251,8 +292,15 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                       image_embeds):
         dtype = next(self.image_encoder.parameters()).dtype
         if isinstance(image, PIL.Image.Image):
+            # the image embedding should repeated so it matches the total batch size of the prompt
             repeat_by = batch_size
         else:
+            # assume the image input is already properly batched and just needs to be repeated so
+            # it matches the num_images_per_prompt.
+            #
+            # NOTE(will) this is probably missing a few number of side cases. I.e. batched/non-batched
+            # `image_embeds`. If those happen to be common use cases, let's think harder about
+            # what the expected dimensions of inputs should be and how we handle the encoding.
             repeat_by = num_images_per_prompt
         if image_embeds is None:
             if not isinstance(image, paddle.Tensor):
@@ -264,6 +312,8 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
             image_embeds=image_embeds,
             noise_level=noise_level,
             generator=generator)
+
+        # duplicate image embeddings for each generation per prompt, using mps friendly method
         image_embeds = image_embeds.unsqueeze(axis=1)
         bs_embed, seq_len, _ = image_embeds.shape
         image_embeds = image_embeds.tile(repeat_times=[1, repeat_by, 1])
@@ -271,10 +321,15 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
         image_embeds = image_embeds.squeeze(axis=1)
         if do_classifier_free_guidance:
             negative_prompt_embeds = paddle.zeros_like(x=image_embeds)
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             image_embeds = paddle.concat(
                 x=[negative_prompt_embeds, image_embeds])
         return image_embeds
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -282,16 +337,24 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
+
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
@@ -365,6 +428,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                     f'`image` has to be of type `paddle.Tensor` or `PIL.Image.Image` or `List[PIL.Image.Image]` but is {type(image)}'
                 )
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(self,
                         batch_size,
                         num_channels_latents,
@@ -381,9 +445,12 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
             )
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
+
+        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_unclip.StableUnCLIPPipeline.noise_image_embeddings
     def noise_image_embeddings(self,
                                image_embeds: paddle.Tensor,
                                noise_level: int,
@@ -417,6 +484,10 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
             embedding_dim=image_embeds.shape[-1],
             flip_sin_to_cos=True,
             downscale_freq_shift=0)
+
+        # `get_timestep_embeddings` does not contain any weights and will always return f32 tensors,
+        # but we might actually be running in fp16. so we need to cast here.
+        # there might be better ways to encapsulate this.
         noise_level = noise_level.cast(image_embeds.dtype)
         image_embeds = paddle.concat(x=(image_embeds, noise_level), axis=1)
         return image_embeds
@@ -514,10 +585,13 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                 [`~ pipeline_utils.ImagePipelineOutput`] if `return_dict` is True, otherwise a `tuple`. When returning
                 a tuple, the first element is a list with the generated images.
         """
+        # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
         if prompt is None and prompt_embeds is None:
             prompt = len(image) * [''] if isinstance(image, list) else ''
+
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(
             prompt=prompt,
             image=image,
@@ -529,6 +603,8 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
             image_embeds=image_embeds)
+
+        # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
@@ -536,7 +612,13 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
         else:
             batch_size = prompt_embeds.shape[0]
         batch_size = batch_size * num_images_per_prompt
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
+
+        # 3. Encode input prompt
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         prompt_embeds = self._encode_prompt(
@@ -547,6 +629,8 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale)
+
+        # 4. Encoder input image
         noise_level = paddle.to_tensor(data=[noise_level])
         image_embeds = self._encode_image(
             image=image,
@@ -556,8 +640,12 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
             noise_level=noise_level,
             generator=generator,
             image_embeds=image_embeds)
+
+        # 5. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
+
+        # 6. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
         latents = self.prepare_latents(
             batch_size=batch_size,
@@ -567,12 +655,18 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
             dtype=prompt_embeds.dtype,
             generator=generator,
             latents=latents)
+
+        # 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+
+        # 8. Denoising loop
         for i, t in enumerate(self.progress_bar(timesteps)):
             latent_model_input = paddle.concat(
                 x=[latents] * 2) if do_classifier_free_guidance else latents
             latent_model_input = self.scheduler.scale_model_input(
                 latent_model_input, t)
+
+            # predict the noise residual
             noise_pred = self.unet(
                 latent_model_input,
                 t,
@@ -580,15 +674,21 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline,
                 class_labels=image_embeds,
                 cross_attention_kwargs=cross_attention_kwargs,
                 return_dict=False)[0]
+
+            # perform guidance
             if do_classifier_free_guidance:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
                 noise_pred = noise_pred_uncond + guidance_scale * (
                     noise_pred_text - noise_pred_uncond)
+
+            # compute the previous noisy sample x_t -> x_t-1
             latents = self.scheduler.step(
                 noise_pred, t, latents, **extra_step_kwargs,
                 return_dict=False)[0]
             if callback is not None and i % callback_steps == 0:
                 callback(i, t, latents)
+
+        # 9. Post-processing
         if not output_type == 'latent':
             image = self.vae.decode(
                 latents / self.vae.config.scaling_factor, return_dict=False)[0]

@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import warnings
 from typing import Callable, List, Optional, Union
@@ -12,6 +26,7 @@ from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 logger = logging.get_logger(__name__)
 
 
+# Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_upscale.preprocess
 def preprocess(image):
     warnings.warn(
         'The preprocess method is deprecated and will be removed in a future version. Please use VaeImageProcessor.preprocess instead',
@@ -108,6 +123,8 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             text_input_ids, output_hidden_states=True)
         text_embeddings = text_encoder_out.hidden_states[-1]
         text_pooler_out = text_encoder_out.pooler_output
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -136,12 +153,17 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                 uncond_input.input_ids, output_hidden_states=True)
             uncond_embeddings = uncond_encoder_out.hidden_states[-1]
             uncond_pooler_out = uncond_encoder_out.pooler_output
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             text_embeddings = paddle.concat(
                 x=[uncond_embeddings, text_embeddings])
             text_pooler_out = paddle.concat(
                 x=[uncond_pooler_out, text_pooler_out])
         return text_embeddings, text_pooler_out
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -149,6 +171,7 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
@@ -158,6 +181,8 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             raise ValueError(
                 f'`prompt` has to be of type `str` or `list` but is {type(prompt)}'
             )
+
+        # verify batch size of prompt and image are same if image is a list or tensor
         if not isinstance(image, paddle.Tensor) and not isinstance(
                 image, PIL.Image.Image) and not isinstance(image, list):
             raise ValueError(
@@ -182,6 +207,7 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                 f'`callback_steps` has to be a positive integer but is {callback_steps} of type {type(callback_steps)}.'
             )
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_upscale.StableDiffusionUpscalePipeline.prepare_latents
     def prepare_latents(self,
                         batch_size,
                         num_channels_latents,
@@ -199,6 +225,8 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                     f'Unexpected latents shape, got {latents.shape}, expected {shape}'
                 )
             latents = latents
+
+        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -300,23 +328,41 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                 If `return_dict` is `True`, [`~pipelines.stable_diffusion.StableDiffusionPipelineOutput`] is returned,
                 otherwise a `tuple` is returned where the first element is a list with the generated images.
         """
+
+        # 1. Check inputs
         self.check_inputs(prompt, image, callback_steps)
+
+        # 2. Define call parameters
         batch_size = 1 if isinstance(prompt, str) else len(prompt)
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
         if guidance_scale == 0:
             prompt = [''] * batch_size
+
+        # 3. Encode input prompt
         text_embeddings, text_pooler_out = self._encode_prompt(
             prompt, do_classifier_free_guidance, negative_prompt)
+
+        # 4. Preprocess image
         image = self.image_processor.preprocess(image)
         image = image.cast(dtype=text_embeddings.dtype)
         if image.shape[1] == 3:
+            # encode image if not in latent-space yet
             image = self.vae.encode(image).latent_dist.sample(
             ) * self.vae.config.scaling_factor
+
+        # 5. set timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
         batch_multiplier = 2 if do_classifier_free_guidance else 1
         image = image[None, :] if image.ndim == 3 else image
         image = paddle.concat(x=[image] * batch_multiplier)
+
+        # 5. Add noise to image (set to be 0):
+        # (see below notes from the author):
+        # "the This step theoretically can make the model work better on out-of-distribution inputs, but mostly just seems to make it match the input less, so it's turned off by default."
         noise_level = paddle.to_tensor(data=[0.0], dtype='float32')
         noise_level = paddle.concat(x=[noise_level] * image.shape[0])
         inv_noise_level = (noise_level**2 + 1)**-0.5
@@ -335,11 +381,15 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             axis=1)
         timestep_condition = paddle.concat(
             x=[noise_level_embed, text_pooler_out], axis=1)
+
+        # 6. Prepare latent variables
         height, width = image.shape[2:]
         num_channels_latents = self.vae.config.latent_channels
         latents = self.prepare_latents(
             batch_size, num_channels_latents, height * 2, width * 2,
             text_embeddings.dtype, generator, latents)
+
+        # 7. Check that sizes of image and latents match
         num_channels_image = image.shape[1]
         if (num_channels_latents + num_channels_image !=
                 self.unet.config.in_channels):
@@ -350,30 +400,42 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 sigma = self.scheduler.sigmas[i]
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[latents] * 2) if do_classifier_free_guidance else latents
                 scaled_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
                 scaled_model_input = paddle.concat(
                     x=[scaled_model_input, image_cond], axis=1)
+                # preconditioning parameter based on  Karras et al. (2022) (table 1)
                 timestep = paddle.log(x=sigma) * 0.25
                 noise_pred = self.unet(
                     scaled_model_input,
                     timestep,
                     encoder_hidden_states=text_embeddings,
                     timestep_cond=timestep_condition).sample
+
+                # in original repo, the output contains a variance channel that's not used
                 noise_pred = noise_pred[:, :-1]
+
+                # apply preconditioning, based on table 1 in Karras et al. (2022)
                 inv_sigma = 1 / (sigma**2 + 1)
                 noise_pred = (
                     inv_sigma * latent_model_input +
                     self.scheduler.scale_model_input(sigma, t) * noise_pred)
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t,
                                               latents).prev_sample
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()

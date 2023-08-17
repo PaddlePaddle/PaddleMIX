@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 import warnings
@@ -28,6 +42,7 @@ EXAMPLE_DOC_STRING = """
 """
 
 
+# processes and stores attention probabilities
 class CrossAttnStoreProcessor:
     def __init__(self):
         self.attention_probs = None
@@ -60,6 +75,7 @@ class CrossAttnStoreProcessor:
         return hidden_states
 
 
+# Modified to get self-attention guidance scale in this paper (https://arxiv.org/pdf/2210.00939.pdf) as an input
 class StableDiffusionSAGPipeline(DiffusionPipeline,
                                  TextualInversionLoaderMixin):
     """
@@ -112,13 +128,14 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
             vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
-    def enable_vae_slicing(self):
+        # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.enable_vae_slicing    def enable_vae_slicing(self):
         """
         Enable sliced VAE decoding. When this option is enabled, the VAE will split the input tensor in slices to
         compute decoding in several steps. This is useful to save some memory and allow larger batch sizes.
         """
         self.vae.enable_slicing()
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.disable_vae_slicing
     def disable_vae_slicing(self):
         """
         Disable sliced VAE decoding. If `enable_vae_slicing` was previously enabled, this method will go back to
@@ -126,6 +143,7 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
         """
         self.vae.disable_slicing()
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
     def _encode_prompt(self,
                        prompt,
                        num_images_per_prompt,
@@ -158,6 +176,8 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
             lora_scale (`float`, *optional*):
                 A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
         if prompt is not None and isinstance(prompt, str):
@@ -167,6 +187,7 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
         else:
             batch_size = prompt_embeds.shape[0]
         if prompt_embeds is None:
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
             text_inputs = self.tokenizer(
@@ -196,10 +217,13 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -217,6 +241,8 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                 )
             else:
                 uncond_tokens = negative_prompt
+
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
                                                           self.tokenizer)
@@ -236,6 +262,7 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder.dtype)
@@ -243,10 +270,15 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
@@ -264,6 +296,7 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                 clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -271,22 +304,31 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.check_inputs
     def check_inputs(self,
                      prompt,
                      height,
@@ -327,6 +369,7 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                     f'`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}.'
                 )
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(self,
                         batch_size,
                         num_channels_latents,
@@ -345,6 +388,8 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             latents = latents
+
+        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -434,19 +479,33 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                 second element is a list of `bool`s indicating whether the corresponding generated image contains
                 "not-safe-for-work" (nsfw) content.
         """
+        # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
+
+        # 1. Check inputs. Raise error if not correct
         self.check_inputs(prompt, height, width, callback_steps,
                           negative_prompt, prompt_embeds,
                           negative_prompt_embeds)
+
+        # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
+        # and `sag_scale` is` `s` of equation (16)
+        # of the self-attentnion guidance paper: https://arxiv.org/pdf/2210.00939.pdf
+        # `sag_scale = 0` means no self-attention guidance
         do_self_attention_guidance = sag_scale > 0.0
+
+        # 3. Encode input prompt
         prompt_embeds = self._encode_prompt(
             prompt,
             num_images_per_prompt,
@@ -455,12 +514,20 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds)
         self.scheduler.set_timesteps(num_inference_steps)
+
+        # 4. Prepare timesteps
         timesteps = self.scheduler.timesteps
+
+        # 5. Prepare latent variables
         num_channels_latents = self.unet.config.in_channels
         latents = self.prepare_latents(batch_size * num_images_per_prompt,
                                        num_channels_latents, height, width,
                                        prompt_embeds.dtype, generator, latents)
+
+        # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+
+        # 7. Denoising loop
         store_processor = CrossAttnStoreProcessor()
         self.unet.mid_block.attentions[0].transformer_blocks[
             0].attn1.processor = store_processor
@@ -476,32 +543,46 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                 hook=get_map_size):
             with self.progress_bar(total=num_inference_steps) as progress_bar:
                 for i, t in enumerate(timesteps):
+                    # expand the latents if we are doing classifier free guidance
                     latent_model_input = paddle.concat(
                         x=[latents] *
                         2) if do_classifier_free_guidance else latents
                     latent_model_input = self.scheduler.scale_model_input(
                         latent_model_input, t)
+
+                    # predict the noise residual
                     noise_pred = self.unet(
                         latent_model_input,
                         t,
                         encoder_hidden_states=prompt_embeds,
                         cross_attention_kwargs=cross_attention_kwargs).sample
+
+                    # perform guidance
                     if do_classifier_free_guidance:
                         noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                             chunks=2)
                         noise_pred = noise_pred_uncond + guidance_scale * (
                             noise_pred_text - noise_pred_uncond)
+
+                    # perform self-attention guidance with the stored self-attentnion map
                     if do_self_attention_guidance:
+                        # classifier-free guidance produces two chunks of attention map
+                        # and we only use unconditional one according to equation (25)
+                        # in https://arxiv.org/pdf/2210.00939.pdf
                         if do_classifier_free_guidance:
+                            # DDIM-like prediction of x0
                             pred_x0 = self.pred_x0(latents, noise_pred_uncond,
                                                    t)
+                            # get the stored attention maps
                             uncond_attn, cond_attn = (
                                 store_processor.attention_probs.chunk(2))
+                            # self-attention-based degrading of latents
                             degraded_latents = self.sag_masking(
                                 pred_x0, uncond_attn, map_size, t,
                                 self.pred_epsilon(latents, noise_pred_uncond,
                                                   t))
                             uncond_emb, _ = prompt_embeds.chunk(chunks=2)
+                            # forward and give guidance
                             degraded_pred = self.unet(
                                 degraded_latents,
                                 t,
@@ -509,19 +590,27 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                             noise_pred += sag_scale * (
                                 noise_pred_uncond - degraded_pred)
                         else:
+                            # DDIM-like prediction of x0
                             pred_x0 = self.pred_x0(latents, noise_pred, t)
+                            # get the stored attention maps
                             cond_attn = store_processor.attention_probs
+                            # self-attention-based degrading of latents
                             degraded_latents = self.sag_masking(
                                 pred_x0, cond_attn, map_size, t,
                                 self.pred_epsilon(latents, noise_pred, t))
+                            # forward and give guidance
                             degraded_pred = self.unet(
                                 degraded_latents,
                                 t,
                                 encoder_hidden_states=prompt_embeds).sample
                             noise_pred += sag_scale * (
                                 noise_pred - degraded_pred)
+
+                    # compute the previous noisy sample x_t -> x_t-1
                     latents = self.scheduler.step(
                         noise_pred, t, latents, **extra_step_kwargs).prev_sample
+
+                    # call the callback, if provided
                     if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                             i + 1) % self.scheduler.order == 0:
                         progress_bar.update()
@@ -547,11 +636,14 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
             images=image, nsfw_content_detected=has_nsfw_concept)
 
     def sag_masking(self, original_latents, attn_map, map_size, t, eps):
+        # Same masking process as in SAG paper: https://arxiv.org/pdf/2210.00939.pdf
         bh, hw1, hw2 = attn_map.shape
         b, latent_channel, latent_h, latent_w = original_latents.shape
         h = self.unet.config.attention_head_dim
         if isinstance(h, list):
             h = h[-1]
+
+        # Produce attention mask
         attn_map = attn_map.reshape(b, h, hw1, hw2)
         attn_mask = attn_map.mean(
             axis=1, keepdim=False).sum(axis=1, keepdim=False) > 1.0
@@ -560,14 +652,20 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
                 repeat_times=[1, latent_channel, 1, 1]).astype(attn_map.dtype)
         attn_mask = paddle.nn.functional.interpolate(
             x=attn_mask, size=(latent_h, latent_w))
+
+        # Blur according to the self-attention mask
         degraded_latents = gaussian_blur_2d(
             original_latents, kernel_size=9, sigma=1.0)
         degraded_latents = degraded_latents * attn_mask + original_latents * (
             1 - attn_mask)
+
+        # Noise it again to match the noise level
         degraded_latents = self.scheduler.add_noise(
             degraded_latents, noise=eps, timesteps=t)
         return degraded_latents
 
+    # Modified from diffusers.schedulers.scheduling_ddim.DDIMScheduler.step
+    # Note: there are some schedulers that clip or do not return x_0 (PNDMScheduler, DDIMScheduler, etc.
     def pred_x0(self, sample, model_output, timestep):
         alpha_prod_t = self.scheduler.alphas_cumprod[timestep]
         beta_prod_t = 1 - alpha_prod_t
@@ -579,6 +677,7 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
         elif self.scheduler.config.prediction_type == 'v_prediction':
             pred_original_sample = (
                 alpha_prod_t**0.5 * sample - beta_prod_t**0.5 * model_output)
+            # predict V
             model_output = (
                 alpha_prod_t**0.5 * model_output + beta_prod_t**0.5 * sample)
         else:
@@ -605,6 +704,7 @@ class StableDiffusionSAGPipeline(DiffusionPipeline,
         return pred_eps
 
 
+# Gaussian blur
 def gaussian_blur_2d(img, kernel_size, sigma):
     ksize_half = (kernel_size - 1) * 0.5
     x = paddle.linspace(start=-ksize_half, stop=ksize_half, num=kernel_size)

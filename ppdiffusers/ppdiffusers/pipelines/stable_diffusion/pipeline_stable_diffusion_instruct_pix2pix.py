@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 import warnings
@@ -16,6 +30,7 @@ from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer, CLIPImageProces
 logger = logging.get_logger(__name__)
 
 
+# Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.preprocess
 def preprocess(image):
     warnings.warn(
         'The preprocess method is deprecated and will be removed in a future version. Please use VaeImageProcessor.preprocess instead',
@@ -216,19 +231,30 @@ class StableDiffusionInstructPix2PixPipeline(
                 second element is a list of `bool`s indicating whether the corresponding generated image contains
                 "not-safe-for-work" (nsfw) content.
         """
+        # 0. Check inputs
         self.check_inputs(prompt, callback_steps, negative_prompt,
                           prompt_embeds, negative_prompt_embeds)
         if image is None:
             raise ValueError('`image` input cannot be undefined.')
+
+        # 1. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = (guidance_scale > 1.0 and
                                        image_guidance_scale >= 1.0)
+
+        # check if scheduler is in sigmas space
         scheduler_is_in_sigma_space = hasattr(self.scheduler, 'sigmas')
+
+        # 2. Encode input prompt
         prompt_embeds = self._encode_prompt(
             prompt,
             num_images_per_prompt,
@@ -236,46 +262,74 @@ class StableDiffusionInstructPix2PixPipeline(
             negative_prompt,
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds)
+
+        # 3. Preprocess image
         image = self.image_processor.preprocess(image)
+
+        # 4. set timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
+
+        # 5. Prepare Image latents
         image_latents = self.prepare_image_latents(
             image, batch_size, num_images_per_prompt, prompt_embeds.dtype,
             do_classifier_free_guidance, generator)
         height, width = image_latents.shape[-2:]
         height = height * self.vae_scale_factor
         width = width * self.vae_scale_factor
+
+        # 6. Prepare latent variables
         num_channels_latents = self.vae.config.latent_channels
         latents = self.prepare_latents(batch_size * num_images_per_prompt,
                                        num_channels_latents, height, width,
                                        prompt_embeds.dtype, generator, latents)
+
+        # 7. Check that shapes of latents and image match the UNet channels
         num_channels_image = image_latents.shape[1]
         if (num_channels_latents + num_channels_image !=
                 self.unet.config.in_channels):
             raise ValueError(
                 f'Incorrect configuration settings! The config of `pipeline.unet`: {self.unet.config} expects {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} + `num_channels_image`: {num_channels_image}  = {num_channels_latents + num_channels_image}. Please verify the config of `pipeline.unet` or your `image` input.'
             )
+
+        # 8. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+
+        # 9. Denoising loop
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # Expand the latents if we are doing classifier free guidance.
+                # The latents are expanded 3 times because for pix2pix the guidance\
+                # is applied for both the text and the input image.
                 latent_model_input = paddle.concat(
                     x=[latents] * 3) if do_classifier_free_guidance else latents
+
+                # concat latents, image_latents in the channel dimension
                 scaled_latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
                 scaled_latent_model_input = paddle.concat(
                     x=[scaled_latent_model_input, image_latents], axis=1)
+
+                # predict the noise residual
                 noise_pred = self.unet(
                     scaled_latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
                     return_dict=False)[0]
+
+                # Hack:
+                # For karras style schedulers the model does classifer free guidance using the
+                # predicted_original_sample instead of the noise_pred. So we need to compute the
+                # predicted_original_sample here if we are using a karras style scheduler.
                 if scheduler_is_in_sigma_space:
                     step_index = (
                         self.scheduler.timesteps == t).nonzero()[0].item()
                     sigma = self.scheduler.sigmas[step_index]
                     noise_pred = latent_model_input - sigma * noise_pred
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     (noise_pred_text, noise_pred_image,
                      noise_pred_uncond) = noise_pred.chunk(chunks=3)
@@ -283,14 +337,25 @@ class StableDiffusionInstructPix2PixPipeline(
                         noise_pred_text - noise_pred_image
                     ) + image_guidance_scale * (noise_pred_image -
                                                 noise_pred_uncond)
+
+                # Hack:
+                # For karras style schedulers the model does classifer free guidance using the
+                # predicted_original_sample instead of the noise_pred. But the scheduler.step function
+                # expects the noise_pred and computes the predicted_original_sample internally. So we
+                # need to overwrite the noise_pred here such that the value of the computed
+                # predicted_original_sample is correct.
                 if scheduler_is_in_sigma_space:
                     noise_pred = (noise_pred - latents) / -sigma
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(
                     noise_pred,
                     t,
                     latents,
                     **extra_step_kwargs,
                     return_dict=False)[0]
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
@@ -351,6 +416,7 @@ class StableDiffusionInstructPix2PixPipeline(
         else:
             batch_size = prompt_embeds.shape[0]
         if prompt_embeds is None:
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
             text_inputs = self.tokenizer(
@@ -380,10 +446,13 @@ class StableDiffusionInstructPix2PixPipeline(
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -400,6 +469,8 @@ class StableDiffusionInstructPix2PixPipeline(
                 )
             else:
                 uncond_tokens = negative_prompt
+
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
                                                           self.tokenizer)
@@ -419,6 +490,7 @@ class StableDiffusionInstructPix2PixPipeline(
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder.dtype)
@@ -426,11 +498,17 @@ class StableDiffusionInstructPix2PixPipeline(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
+            # pix2pix has two  negative embeddings, and unlike in other pipelines latents are ordered [prompt_embeds, negative_prompt_embeds, negative_prompt_embeds]
             prompt_embeds = paddle.concat(x=[
                 prompt_embeds, negative_prompt_embeds, negative_prompt_embeds
             ])
         return prompt_embeds
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
@@ -448,18 +526,25 @@ class StableDiffusionInstructPix2PixPipeline(
                 clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -467,6 +552,7 @@ class StableDiffusionInstructPix2PixPipeline(
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
@@ -505,6 +591,7 @@ class StableDiffusionInstructPix2PixPipeline(
                     f'`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}.'
                 )
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_latents
     def prepare_latents(self,
                         batch_size,
                         num_channels_latents,
@@ -519,7 +606,10 @@ class StableDiffusionInstructPix2PixPipeline(
             raise ValueError(
                 f'You have passed a list of generators of length {len(generator)}, but requested an effective batch size of {batch_size}. Make sure the batch size matches the length of the generators.'
             )
-        latents = randn_tensor(shape, generator=generator, dtype=dtype)
+        if latents is None:
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
+
+        # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
@@ -551,6 +641,8 @@ class StableDiffusionInstructPix2PixPipeline(
                 image_latents = paddle.concat(x=image_latents, axis=0)
             else:
                 image_latents = self.vae.encode(image).latent_dist.mode()
+
+        # expand image_latents for batch_size
         if batch_size > image_latents.shape[
                 0] and batch_size % image_latents.shape[0] == 0:
             deprecation_message = (

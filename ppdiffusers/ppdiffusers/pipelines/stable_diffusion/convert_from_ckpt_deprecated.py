@@ -947,7 +947,7 @@ textenc_conversion_lst = [
 textenc_conversion_map = {x[0]: x[1] for x in textenc_conversion_lst}
 
 textenc_transformer_conversion_lst = [
-    # (stable-diffusion, HF Diffusers)
+    # (stable-diffusion, ppdiffusers)
     ("resblocks.", "text_model.encoder.layers."),
     ("ln_1", "layer_norm1"),
     ("ln_2", "layer_norm2"),

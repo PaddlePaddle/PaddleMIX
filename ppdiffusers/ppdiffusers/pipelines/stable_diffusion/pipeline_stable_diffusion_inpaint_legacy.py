@@ -1,3 +1,17 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 import paddle
 import inspect
 import warnings
@@ -44,12 +58,15 @@ def preprocess_mask(mask, batch_size, scale_factor=8):
         return mask
     else:
         valid_mask_channel_sizes = [1, 3]
+        # if mask channel is fourth tensor dimension, permute dimensions to pytorch standard (B, C, H, W)
         if mask.shape[3] in valid_mask_channel_sizes:
             mask = mask.transpose(perm=[0, 3, 1, 2])
         elif mask.shape[1] not in valid_mask_channel_sizes:
             raise ValueError(
                 f'Mask channel dimension of size in {valid_mask_channel_sizes} should be second or fourth dimension, but received mask of shape {tuple(mask.shape)}'
             )
+
+        # (potentially) reduce mask channel dimension from 3 to 1 for broadcasting to latent shape
         mask = mask.mean(axis=1, keepdim=True)
         h, w = mask.shape[-2:]
         h, w = (x - x % 8 for x in (h, w))
@@ -217,6 +234,8 @@ class StableDiffusionInpaintPipelineLegacy(
             lora_scale (`float`, *optional*):
                 A lora scale that will be applied to all LoRA layers of the text encoder if LoRA layers are loaded.
         """
+        # set lora scale so that monkey patched LoRA
+        # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
         if prompt is not None and isinstance(prompt, str):
@@ -226,6 +245,7 @@ class StableDiffusionInpaintPipelineLegacy(
         else:
             batch_size = prompt_embeds.shape[0]
         if prompt_embeds is None:
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 prompt = self.maybe_convert_prompt(prompt, self.tokenizer)
             text_inputs = self.tokenizer(
@@ -255,10 +275,13 @@ class StableDiffusionInpaintPipelineLegacy(
             prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
+        # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(
             repeat_times=[1, num_images_per_prompt, 1])
         prompt_embeds = prompt_embeds.reshape(
             [bs_embed * num_images_per_prompt, seq_len, -1])
+
+        # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
             uncond_tokens: List[str]
             if negative_prompt is None:
@@ -276,6 +299,8 @@ class StableDiffusionInpaintPipelineLegacy(
                 )
             else:
                 uncond_tokens = negative_prompt
+
+            # textual inversion: procecss multi-vector tokens if necessary
             if isinstance(self, TextualInversionLoaderMixin):
                 uncond_tokens = self.maybe_convert_prompt(uncond_tokens,
                                                           self.tokenizer)
@@ -295,6 +320,7 @@ class StableDiffusionInpaintPipelineLegacy(
                 uncond_input.input_ids, attention_mask=attention_mask)
             negative_prompt_embeds = negative_prompt_embeds[0]
         if do_classifier_free_guidance:
+            # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
             negative_prompt_embeds = negative_prompt_embeds.cast(
                 dtype=self.text_encoder.dtype)
@@ -302,10 +328,15 @@ class StableDiffusionInpaintPipelineLegacy(
                 repeat_times=[1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape(
                 [batch_size * num_images_per_prompt, seq_len, -1])
+
+            # For classifier free guidance, we need to do two forward passes.
+            # Here we concatenate the unconditional and text embeddings into a single batch
+            # to avoid doing two forward passes
             prompt_embeds = paddle.concat(
                 x=[negative_prompt_embeds, prompt_embeds])
         return prompt_embeds
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
@@ -323,6 +354,7 @@ class StableDiffusionInpaintPipelineLegacy(
                 clip_input=safety_checker_input.pixel_values.cast(dtype))
         return image, has_nsfw_concept
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         warnings.warn(
             'The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead',
@@ -330,22 +362,32 @@ class StableDiffusionInpaintPipelineLegacy(
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
+        # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         image = image.cpu().transpose(perm=[0, 2, 3, 1]).astype(
             dtype='float32').numpy()
         return image
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
+        # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
+        # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
+        # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
+        # and should be between [0, 1]
+
         accepts_eta = 'eta' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs['eta'] = eta
+
+        # check if the scheduler accepts generator
         accepts_generator = 'generator' in set(
             inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs['generator'] = generator
         return extra_step_kwargs
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.check_inputs
     def check_inputs(self,
                      prompt,
                      strength,
@@ -384,7 +426,9 @@ class StableDiffusionInpaintPipelineLegacy(
                     f'`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}.'
                 )
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.get_timesteps
     def get_timesteps(self, num_inference_steps, strength):
+        # get the original timestep using init_timestep
         init_timestep = min(
             int(num_inference_steps * strength), num_inference_steps)
         t_start = max(num_inference_steps - init_timestep, 0)
@@ -397,9 +441,13 @@ class StableDiffusionInpaintPipelineLegacy(
         init_latent_dist = self.vae.encode(image).latent_dist
         init_latents = init_latent_dist.sample(generator=generator)
         init_latents = self.vae.config.scaling_factor * init_latents
+
+        # Expand init_latents for batch_size and num_images_per_prompt
         init_latents = paddle.concat(
             x=[init_latents] * num_images_per_prompt, axis=0)
         init_latents_orig = init_latents
+
+        # add noise to latents using the timesteps
         noise = randn_tensor(
             init_latents.shape, generator=generator, dtype=dtype)
         init_latents = self.scheduler.add_noise(init_latents, noise, timestep)
@@ -503,15 +551,24 @@ class StableDiffusionInpaintPipelineLegacy(
             list of `bool`s denoting whether the corresponding generated image likely represents "not-safe-for-work"
             (nsfw) content, according to the `safety_checker`.
         """
+        # 1. Check inputs
         self.check_inputs(prompt, strength, callback_steps, negative_prompt,
                           prompt_embeds, negative_prompt_embeds)
+
+        # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
             batch_size = len(prompt)
         else:
             batch_size = prompt_embeds.shape[0]
+
+        # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
+        # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
+        # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
+
+        # 3. Encode input prompt
         text_encoder_lora_scale = cross_attention_kwargs.get(
             'scale', None) if cross_attention_kwargs is not None else None
         prompt_embeds = self._encode_prompt(
@@ -522,46 +579,67 @@ class StableDiffusionInpaintPipelineLegacy(
             prompt_embeds=prompt_embeds,
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale)
+
+        # 4. Preprocess image and mask
         if not isinstance(image, paddle.Tensor):
             image = preprocess_image(image, batch_size)
         mask_image = preprocess_mask(mask_image, batch_size,
                                      self.vae_scale_factor)
+
+        # 5. set timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps,
                                                             strength)
+
+        # 6. Prepare latent variables
+        # encode the init image into latents and scale the latents
         latent_timestep = timesteps[:1].tile(
             repeat_times=[batch_size * num_images_per_prompt])
         latents, init_latents_orig, noise = self.prepare_latents(
             image, latent_timestep, num_images_per_prompt, prompt_embeds.dtype,
             generator)
+
+        # 7. Prepare mask latent
         mask = mask_image.cast(dtype=latents.dtype)
         mask = paddle.concat(x=[mask] * num_images_per_prompt)
+
+        # 8. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+
+        # 9. Denoising loop
         num_warmup_steps = len(
             timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
+                # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat(
                     x=[latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(
                     latent_model_input, t)
+
+                # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
                     cross_attention_kwargs=cross_attention_kwargs,
                     return_dict=False)[0]
+
+                # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(
                         chunks=2)
                     noise_pred = noise_pred_uncond + guidance_scale * (
                         noise_pred_text - noise_pred_uncond)
+
+                # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(
                     noise_pred,
                     t,
                     latents,
                     **extra_step_kwargs,
                     return_dict=False)[0]
+                # masking
                 if add_predicted_noise:
                     init_latents_proper = self.scheduler.add_noise(
                         init_latents_orig,
@@ -571,11 +649,15 @@ class StableDiffusionInpaintPipelineLegacy(
                     init_latents_proper = self.scheduler.add_noise(
                         init_latents_orig, noise, paddle.to_tensor(data=[t]))
                 latents = init_latents_proper * mask + latents * (1 - mask)
+
+                # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (
                         i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
+
+        # use original latents corresponding to unmasked portions of the image
         latents = init_latents_orig * mask + latents * (1 - mask)
         if not output_type == 'latent':
             image = self.vae.decode(
