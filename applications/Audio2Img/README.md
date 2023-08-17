@@ -62,10 +62,12 @@ cd applications/Audio2Img
 python audio2img_imagebind.py \
 --model_name_or_path The dir name of imagebind checkpoint. \
 --stable_unclip_model_name_or_path The dir name of StableUnCLIPImg2ImgPipeline pretrained checkpoint. \
---input_audio assets/bird_audio.wav  \
+--input_audio bird_audio.wav  \
 ```
 #### 3.1.2 效果
-![](../Audio2Img/vis_audio2img/audio2img_output_bird.jpg)
+|  输入音频 | 输出图像 |
+| --- | --- | 
+|[bird_audio.wav](https://github.com/luyao-cv/file_download/blob/main/assets/bird_audio.wav)| ![audio2img_output_bird](https://github.com/luyao-cv/file_download/blob/main/vis_audio2img/audio2img_output_bird.jpg)  |
 
 
 ### Audio+Text to Image
@@ -76,11 +78,13 @@ cd applications/Audio2Img
 python audio2img_imagebind.py \
 --model_name_or_path The dir name of imagebind checkpoint. \
 --stable_unclip_model_name_or_path The dir name of StableUnCLIPImg2ImgPipeline pretrained checkpoint. \
---input_audio assets/bird_audio.wav  \
+--input_audio bird_audio.wav  \
 --input_text 'A photo.' \
 ```
 #### 3.2.2 效果
-![图片](../Audio2Img/vis_audio2img/audio_text_to_img_output_bird_a_photo.jpg)
+|  输入音频 | 输入文本 | 输出图像 |
+| --- | --- |  --- | 
+|[bird_audio.wav](https://github.com/luyao-cv/file_download/blob/main/assets/bird_audio.wav) | 'A photo.' | ![audio_text_to_img_output_bird_a_photo](https://github.com/luyao-cv/file_download/blob/main/vis_audio2img/audio_text_to_img_output_bird_a_photo.jpg)
 
 
 ### Audio+Image to Image
@@ -91,9 +95,13 @@ cd applications/Audio2Img
 python audio2img_imagebind.py \
 --model_name_or_path The dir name of imagebind checkpoint. \
 --stable_unclip_model_name_or_path The dir name of StableUnCLIPImg2ImgPipeline pretrained checkpoint. \
---input_audio assets/wave.wav \
---input_image assets/dog_image.jpg \
+--input_audio wave.wav \
+--input_image dog_image.jpg \
 ```
 
 #### 3.3.2 效果
-![图片](../Audio2Img/vis_audio2img/audio_img_to_img_output_wave_dog.jpg)
+|  输入音频 | 输入图像 | 输出图像 |
+| --- | --- |  --- | 
+|[wave.wav](https://github.com/luyao-cv/file_download/blob/main/assets/wave.wav) | ![input_dog_image](https://github.com/luyao-cv/file_download/blob/main/assets/dog_image.jpg) | ![audio_img_to_img_output_wave_dog](https://github.com/luyao-cv/file_download/blob/main/vis_audio2img/audio_img_to_img_output_wave_dog.jpg)
+
+
