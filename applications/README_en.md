@@ -42,7 +42,7 @@ result = task(prompt=prompt)['result']
 ```
 
 ### Multi Modal And Scenario
-| 应用名称                           | 调用模型                         | 静态图推理    |
+| name                           | models                         | static mode    |
 | :--------------------------------- | -------------------------------- | ----------|
 | [开放世界检测分割（Openset-Det-Sam）](./CVinW/README.md/#开放世界检测分割grounded-sam-detect-and-segment-everything-with-text-prompt)              | `grounded sam`  |     ✅      |
 | [自动标注（AutoLabel）](./Automatic_label/README.md/#自动标注autolabel)              | `blip2 grounded sam`        |      ✅       |
