@@ -25,7 +25,8 @@ from ppdiffusers.utils import (
     load_ppnlp_numpy,
     paddle_all_close,
     require_paddle_gpu,
-    slow, )
+    slow,
+)
 
 from .test_modeling_common import ModelTesterMixin
 
@@ -104,13 +105,10 @@ class AutoencoderKLTests(ModelTesterMixin, unittest.TestCase):
         named_params_2 = dict(model_2.named_parameters())
         with paddle.no_grad():
             for name, param in named_params.items():
-                self.assertTrue(
-                    paddle_all_close(
-                        param.grad, named_params_2[name].grad, atol=5e-5))
+                self.assertTrue(paddle_all_close(param.grad, named_params_2[name].grad, atol=5e-5))
 
     def test_from_pretrained_hub(self):
-        model, loading_info = AutoencoderKL.from_pretrained(
-            "fusing/autoencoder-kl-dummy", output_loading_info=True)
+        model, loading_info = AutoencoderKL.from_pretrained("fusing/autoencoder-kl-dummy", output_loading_info=True)
         self.assertIsNotNone(model)
         self.assertEqual(len(loading_info["missing_keys"]), 0)
         image = model(**self.dummy_input)
@@ -123,28 +121,30 @@ class AutoencoderKLTests(ModelTesterMixin, unittest.TestCase):
         generator = paddle.Generator().manual_seed(0)
         image = paddle.randn(
             shape=[
-                1, model.config.in_channels, model.config.sample_size,
-                model.config.sample_size
+                1,
+                model.config.in_channels,
+                model.config.sample_size,
+                model.config.sample_size,
             ],
-            generator=paddle.Generator().manual_seed(0), )
+            generator=paddle.Generator().manual_seed(0),
+        )
         with paddle.no_grad():
-            output = model(
-                image, sample_posterior=True, generator=generator).sample
+            output = model(image, sample_posterior=True, generator=generator).sample
         output_slice = output[0, -1, -3:, -3:].flatten().cpu()
-        expected_output_slice = paddle.to_tensor([
-            -0.39049336,
-            0.34836933,
-            0.27105471,
-            -0.02148458,
-            0.00975929,
-            0.27822807,
-            -0.12224892,
-            -0.02011922,
-            0.19761699,
-        ])
-        self.assertTrue(
-            paddle_all_close(
-                output_slice, expected_output_slice, rtol=0.01))
+        expected_output_slice = paddle.to_tensor(
+            [
+                -0.39049336,
+                0.34836933,
+                0.27105471,
+                -0.02148458,
+                0.00975929,
+                0.27822807,
+                -0.12224892,
+                -0.02011922,
+                0.19761699,
+            ]
+        )
+        self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.01))
 
 
 @slow
@@ -159,115 +159,77 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
 
     def get_sd_image(self, seed=0, shape=(4, 3, 512, 512), fp16=False):
         dtype = paddle.float16 if fp16 else paddle.float32
-        image = paddle.to_tensor(data=load_ppnlp_numpy(
-            self.get_file_format(seed, shape))).cast(dtype)
+        image = paddle.to_tensor(data=load_ppnlp_numpy(self.get_file_format(seed, shape))).cast(dtype)
         return image
 
-    def get_sd_vae_model(self,
-                         model_id="CompVis/stable-diffusion-v1-4",
-                         fp16=False):
+    def get_sd_vae_model(self, model_id="CompVis/stable-diffusion-v1-4", fp16=False):
         revision = "fp16" if fp16 else None
         paddle_dtype = paddle.float16 if fp16 else paddle.float32
-        model = AutoencoderKL.from_pretrained(
-            model_id,
-            subfolder="vae",
-            paddle_dtype=paddle_dtype,
-            revision=revision)
+        model = AutoencoderKL.from_pretrained(model_id, subfolder="vae", paddle_dtype=paddle_dtype, revision=revision)
         model.eval()
         return model
 
     def get_generator(self, seed=0):
         return paddle.Generator().manual_seed(seed)
 
-    @parameterized.expand([
+    @parameterized.expand(
         [
-            33,
             [
-                -0.1603, 0.9878, -0.0495, -0.079, -0.2709, 0.8375, -0.206,
-                -0.0824
+                33,
+                [-0.1603, 0.9878, -0.0495, -0.079, -0.2709, 0.8375, -0.206, -0.0824],
+                [-0.2395, 0.0098, 0.0102, -0.0709, -0.284, -0.0274, -0.0718, -0.1824],
             ],
             [
-                -0.2395, 0.0098, 0.0102, -0.0709, -0.284, -0.0274, -0.0718,
-                -0.1824
+                47,
+                [-0.2376, 0.1168, 0.1332, -0.484, -0.2508, -0.0791, -0.0493, -0.4089],
+                [0.035, 0.0847, 0.0467, 0.0344, -0.0842, -0.0547, -0.0633, -0.1131],
             ],
-        ],
-        [
-            47,
-            [
-                -0.2376, 0.1168, 0.1332, -0.484, -0.2508, -0.0791, -0.0493,
-                -0.4089
-            ],
-            [
-                0.035, 0.0847, 0.0467, 0.0344, -0.0842, -0.0547, -0.0633,
-                -0.1131
-            ],
-        ],
-    ])
+        ]
+    )
     def test_stable_diffusion(self, seed, expected_slice, expected_slice_mps):
         model = self.get_sd_vae_model()
         image = self.get_sd_image(seed)
         generator = self.get_generator(seed)
         with paddle.no_grad():
-            sample = model(
-                image, generator=generator, sample_posterior=True).sample
+            sample = model(image, generator=generator, sample_posterior=True).sample
         assert sample.shape == image.shape
         output_slice = sample[-1, -2:, -2:, :2].flatten().cast("float32").cpu()
         expected_output_slice = paddle.to_tensor(expected_slice)
         assert paddle_all_close(output_slice, expected_output_slice, atol=0.01)
 
-    @parameterized.expand([
+    @parameterized.expand(
         [
-            33, [
-                -0.0513, 0.0289, 1.3799, 0.2166, -0.2573, -0.0871, 0.5103,
-                -0.0999
-            ]
-        ],
-        [
-            47, [
-                -0.4128, -0.132, -0.3704, 0.1965, -0.4116, -0.2332, -0.334,
-                0.2247
-            ]
-        ],
-    ])
+            [33, [-0.0513, 0.0289, 1.3799, 0.2166, -0.2573, -0.0871, 0.5103, -0.0999]],
+            [47, [-0.4128, -0.132, -0.3704, 0.1965, -0.4116, -0.2332, -0.334, 0.2247]],
+        ]
+    )
     @require_paddle_gpu
     def test_stable_diffusion_fp16(self, seed, expected_slice):
         model = self.get_sd_vae_model(fp16=True)
         image = self.get_sd_image(seed, fp16=True)
         generator = self.get_generator(seed)
         with paddle.no_grad():
-            sample = model(
-                image, generator=generator, sample_posterior=True).sample
+            sample = model(image, generator=generator, sample_posterior=True).sample
         assert sample.shape == image.shape
         output_slice = sample[-1, -2:, :2, -2:].flatten().cast("float32").cpu()
         expected_output_slice = paddle.to_tensor(expected_slice)
         assert paddle_all_close(output_slice, expected_output_slice, atol=0.01)
 
-    @parameterized.expand([
+    @parameterized.expand(
         [
-            33,
             [
-                -0.1609, 0.9866, -0.0487, -0.0777, -0.2716, 0.8368, -0.2055,
-                -0.0814
+                33,
+                [-0.1609, 0.9866, -0.0487, -0.0777, -0.2716, 0.8368, -0.2055, -0.0814],
+                [-0.2395, 0.0098, 0.0102, -0.0709, -0.284, -0.0274, -0.0718, -0.1824],
             ],
             [
-                -0.2395, 0.0098, 0.0102, -0.0709, -0.284, -0.0274, -0.0718,
-                -0.1824
+                47,
+                [-0.2377, 0.1147, 0.1333, -0.4841, -0.2506, -0.0805, -0.0491, -0.4085],
+                [0.035, 0.0847, 0.0467, 0.0344, -0.0842, -0.0547, -0.0633, -0.1131],
             ],
-        ],
-        [
-            47,
-            [
-                -0.2377, 0.1147, 0.1333, -0.4841, -0.2506, -0.0805, -0.0491,
-                -0.4085
-            ],
-            [
-                0.035, 0.0847, 0.0467, 0.0344, -0.0842, -0.0547, -0.0633,
-                -0.1131
-            ],
-        ],
-    ])
-    def test_stable_diffusion_mode(self, seed, expected_slice,
-                                   expected_slice_mps):
+        ]
+    )
+    def test_stable_diffusion_mode(self, seed, expected_slice, expected_slice_mps):
         model = self.get_sd_vae_model()
         image = self.get_sd_image(seed)
         with paddle.no_grad():
@@ -277,20 +239,27 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
         expected_output_slice = paddle.to_tensor(expected_slice)
         assert paddle_all_close(output_slice, expected_output_slice, atol=0.01)
 
-    @parameterized.expand([
+    @parameterized.expand(
         [
-            13, [
-                -0.2051, -0.1803, -0.2311, -0.2114, -0.3292, -0.3574, -0.2953,
-                -0.3323
-            ]
-        ],
-        [
-            37, [
-                -0.2632, -0.2625, -0.2199, -0.2741, -0.4539, -0.499, -0.372,
-                -0.4925
-            ]
-        ],
-    ])
+            [
+                13,
+                [
+                    -0.2051,
+                    -0.1803,
+                    -0.2311,
+                    -0.2114,
+                    -0.3292,
+                    -0.3574,
+                    -0.2953,
+                    -0.3323,
+                ],
+            ],
+            [
+                37,
+                [-0.2632, -0.2625, -0.2199, -0.2741, -0.4539, -0.499, -0.372, -0.4925],
+            ],
+        ]
+    )
     @require_paddle_gpu
     def test_stable_diffusion_decode(self, seed, expected_slice):
         model = self.get_sd_vae_model()
@@ -302,20 +271,27 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
         expected_output_slice = paddle.to_tensor(expected_slice)
         assert paddle_all_close(output_slice, expected_output_slice, atol=0.01)
 
-    @parameterized.expand([
+    @parameterized.expand(
         [
-            27, [
-                -0.0369, 0.0207, -0.0776, -0.0682, -0.1747, -0.193, -0.1465,
-                -0.2039
-            ]
-        ],
-        [
-            16, [
-                -0.1628, -0.2134, -0.2747, -0.2642, -0.3774, -0.4404, -0.3687,
-                -0.4277
-            ]
-        ],
-    ])
+            [
+                27,
+                [-0.0369, 0.0207, -0.0776, -0.0682, -0.1747, -0.193, -0.1465, -0.2039],
+            ],
+            [
+                16,
+                [
+                    -0.1628,
+                    -0.2134,
+                    -0.2747,
+                    -0.2642,
+                    -0.3774,
+                    -0.4404,
+                    -0.3687,
+                    -0.4277,
+                ],
+            ],
+        ]
+    )
     @require_paddle_gpu
     def test_stable_diffusion_decode_fp16(self, seed, expected_slice):
         model = self.get_sd_vae_model(fp16=True)
@@ -327,7 +303,7 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
         expected_output_slice = paddle.to_tensor(expected_slice)
         assert paddle_all_close(output_slice, expected_output_slice, atol=0.005)
 
-    @parameterized.expand([(13, ), (16, ), (27, )])
+    @parameterized.expand([(13,), (16,), (27,)])
     @require_paddle_gpu
     def test_stable_diffusion_decode_ppxformers_vs_2_5_fp16(self, seed):
         model = self.get_sd_vae_model(fp16=True)
@@ -344,7 +320,7 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
 
         assert paddle_all_close(sample, sample_2, atol=1e-1)
 
-    @parameterized.expand([(13, ), (16, ), (37, )])
+    @parameterized.expand([(13,), (16,), (37,)])
     @require_paddle_gpu
     def test_stable_diffusion_decode_ppxformers_vs_2_5(self, seed):
         model = self.get_sd_vae_model()
@@ -361,20 +337,38 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
 
         assert paddle_all_close(sample, sample_2, atol=1e-2)
 
-    @parameterized.expand([
+    @parameterized.expand(
         [
-            33, [
-                -0.3001, 0.0918, -2.6984, -3.972, -3.2099, -5.0353, 1.7338,
-                -0.2065, 3.4267
-            ]
-        ],
-        [
-            47, [
-                -1.503, -4.3871, -6.0355, -9.1157, -1.6661, -2.7853, 2.1607,
-                -5.0823, 2.5633
-            ]
-        ],
-    ])
+            [
+                33,
+                [
+                    -0.3001,
+                    0.0918,
+                    -2.6984,
+                    -3.972,
+                    -3.2099,
+                    -5.0353,
+                    1.7338,
+                    -0.2065,
+                    3.4267,
+                ],
+            ],
+            [
+                47,
+                [
+                    -1.503,
+                    -4.3871,
+                    -6.0355,
+                    -9.1157,
+                    -1.6661,
+                    -2.7853,
+                    2.1607,
+                    -5.0823,
+                    2.5633,
+                ],
+            ],
+        ]
+    )
     def test_stable_diffusion_encode_sample(self, seed, expected_slice):
         model = self.get_sd_vae_model()
         image = self.get_sd_image(seed)
@@ -382,11 +376,8 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
         with paddle.no_grad():
             dist = model.encode(image).latent_dist
             sample = dist.sample(generator=generator)
-        assert list(sample.shape) == [image.shape[0], 4] + [
-            (i // 8) for i in image.shape[2:]
-        ]
+        assert list(sample.shape) == [image.shape[0], 4] + [(i // 8) for i in image.shape[2:]]
         output_slice = sample[0, -1, -3:, -3:].flatten().cpu()
         expected_output_slice = paddle.to_tensor(expected_slice)
         tolerance = 0.01
-        assert paddle_all_close(
-            output_slice, expected_output_slice, atol=tolerance)
+        assert paddle_all_close(output_slice, expected_output_slice, atol=tolerance)

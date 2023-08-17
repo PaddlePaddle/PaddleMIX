@@ -48,12 +48,13 @@ class VaeImageProcessor(ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            do_resize: bool=True,
-            vae_scale_factor: int=8,
-            resample: str="lanczos",
-            do_normalize: bool=True,
-            do_convert_rgb: bool=False, ):
+        self,
+        do_resize: bool = True,
+        vae_scale_factor: int = 8,
+        resample: str = "lanczos",
+        do_normalize: bool = True,
+        do_convert_rgb: bool = False,
+    ):
         super().__init__()
 
     @staticmethod
@@ -66,26 +67,20 @@ class VaeImageProcessor(ConfigMixin):
         images = (images * 255).round().astype("uint8")
         if images.shape[-1] == 1:
             # special case for grayscale (single channel) images
-            pil_images = [
-                Image.fromarray(
-                    image.squeeze(), mode="L") for image in images
-            ]
+            pil_images = [Image.fromarray(image.squeeze(), mode="L") for image in images]
         else:
             pil_images = [Image.fromarray(image) for image in images]
 
         return pil_images
 
     @staticmethod
-    def pil_to_numpy(images: Union[List[PIL.Image.Image], PIL.Image.Image]
-                     ) -> np.ndarray:
+    def pil_to_numpy(images: Union[List[PIL.Image.Image], PIL.Image.Image]) -> np.ndarray:
         """
         Convert a PIL image or a list of PIL images to numpy arrays.
         """
         if not isinstance(images, list):
             images = [images]
-        images = [
-            np.array(image).astype(np.float32) / 255.0 for image in images
-        ]
+        images = [np.array(image).astype(np.float32) / 255.0 for image in images]
         images = np.stack(images, axis=0)
 
         return images
@@ -132,10 +127,11 @@ class VaeImageProcessor(ConfigMixin):
         return image
 
     def resize(
-            self,
-            image: PIL.Image.Image,
-            height: Optional[int]=None,
-            width: Optional[int]=None, ) -> PIL.Image.Image:
+        self,
+        image: PIL.Image.Image,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+    ) -> PIL.Image.Image:
         """
         Resize a PIL image. Both height and width will be downscaled to the next integer multiple of `vae_scale_factor`
         """
@@ -144,20 +140,18 @@ class VaeImageProcessor(ConfigMixin):
         if width is None:
             width = image.width
 
-        width, height = (x - x % self.config.vae_scale_factor
-                         for x in (width, height)
-                         )  # resize to integer multiple of vae_scale_factor
-        image = image.resize(
-            (width, height), resample=PIL_INTERPOLATION[self.config.resample])
+        width, height = (
+            x - x % self.config.vae_scale_factor for x in (width, height)
+        )  # resize to integer multiple of vae_scale_factor
+        image = image.resize((width, height), resample=PIL_INTERPOLATION[self.config.resample])
         return image
 
     def preprocess(
-            self,
-            image: Union[paddle.Tensor, PIL.Image.Image, np.ndarray],
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            do_normalize: Optional[
-                bool]=None,  # new added, not exists in diffusers
+        self,
+        image: Union[paddle.Tensor, PIL.Image.Image, np.ndarray],
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        do_normalize: Optional[bool] = None,  # new added, not exists in diffusers
     ) -> paddle.Tensor:
         """
         Preprocess the image input, accepted formats are PIL images, numpy arrays or paddle tensors"
@@ -165,8 +159,7 @@ class VaeImageProcessor(ConfigMixin):
         supported_formats = (PIL.Image.Image, np.ndarray, paddle.Tensor)
         if isinstance(image, supported_formats):
             image = [image]
-        elif not (isinstance(image, list) and all(
-                isinstance(i, supported_formats) for i in image)):
+        elif not (isinstance(image, list) and all(isinstance(i, supported_formats) for i in image)):
             raise ValueError(
                 f"Input is in incorrect format: {[type(i) for i in image]}. Currently, we only support {', '.join(supported_formats)}"
             )
@@ -180,23 +173,19 @@ class VaeImageProcessor(ConfigMixin):
             image = self.numpy_to_pd(image)  # to pd
 
         elif isinstance(image[0], np.ndarray):
-            image = np.concatenate(
-                image, axis=0) if image[0].ndim == 4 else np.stack(
-                    image, axis=0)
+            image = np.concatenate(image, axis=0) if image[0].ndim == 4 else np.stack(image, axis=0)
             image = self.numpy_to_pd(image)
             _, _, height, width = image.shape
             if self.config.do_resize and (
-                    height % self.config.vae_scale_factor != 0 or
-                    width % self.config.vae_scale_factor != 0):
+                height % self.config.vae_scale_factor != 0 or width % self.config.vae_scale_factor != 0
+            ):
                 raise ValueError(
                     f"Currently we only support resizing for PIL image - please resize your numpy array to be divisible by {self.config.vae_scale_factor}"
                     f"currently the sizes are {height} and {width}. You can also pass a PIL image instead to use resize option in VAEImageProcessor"
                 )
 
         elif isinstance(image[0], paddle.Tensor):
-            image = paddle.concat(
-                image, axis=0) if image[0].ndim == 4 else paddle.stack(
-                    image, axis=0)
+            image = paddle.concat(image, axis=0) if image[0].ndim == 4 else paddle.stack(image, axis=0)
             _, channel, height, width = image.shape
 
             # don't need any preprocess if the image is latents
@@ -204,8 +193,8 @@ class VaeImageProcessor(ConfigMixin):
                 return image
 
             if self.config.do_resize and (
-                    height % self.config.vae_scale_factor != 0 or
-                    width % self.config.vae_scale_factor != 0):
+                height % self.config.vae_scale_factor != 0 or width % self.config.vae_scale_factor != 0
+            ):
                 raise ValueError(
                     f"Currently we only support resizing for PIL image - please resize your paddle tensor to be divisible by {self.config.vae_scale_factor}"
                     f"currently the sizes are {height} and {width}. You can also pass a PIL image instead to use resize option in VAEImageProcessor"
@@ -217,7 +206,8 @@ class VaeImageProcessor(ConfigMixin):
             warnings.warn(
                 "Passing `image` as paddle tensor with value range in [-1,1] is deprecated. The expected value range for image tensor is [0,1] "
                 f"when passing as paddle tensor or numpy Array. You passed `image` with value range [{image.min()},{image.max()}]",
-                FutureWarning, )
+                FutureWarning,
+            )
             do_normalize = False
 
         if do_normalize:
@@ -226,10 +216,11 @@ class VaeImageProcessor(ConfigMixin):
         return image
 
     def postprocess(
-            self,
-            image: paddle.Tensor,
-            output_type: str="pil",
-            do_denormalize: Optional[List[bool]]=None, ):
+        self,
+        image: paddle.Tensor,
+        output_type: str = "pil",
+        do_denormalize: Optional[List[bool]] = None,
+    ):
         if not isinstance(image, paddle.Tensor):
             raise ValueError(
                 f"Input for postprocessing is in incorrect format: {type(image)}. We only support paddle tensor"
@@ -237,12 +228,14 @@ class VaeImageProcessor(ConfigMixin):
         if output_type not in ["latent", "pd", "np", "pil"]:
             deprecation_message = (
                 f"the output_type {output_type} is outdated and has been set to `np`. Please make sure to set it to one of these instead: "
-                "`pil`, `np`, `pd`, `latent`")
+                "`pil`, `np`, `pd`, `latent`"
+            )
             deprecate(
                 "Unsupported output_type",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False)
+                standard_warn=False,
+            )
             output_type = "np"
 
         if output_type == "latent":
@@ -251,10 +244,9 @@ class VaeImageProcessor(ConfigMixin):
         if do_denormalize is None:
             do_denormalize = [self.config.do_normalize] * image.shape[0]
 
-        image = paddle.stack([
-            self.denormalize(image[i]) if do_denormalize[i] else image[i]
-            for i in range(image.shape[0])
-        ])
+        image = paddle.stack(
+            [self.denormalize(image[i]) if do_denormalize[i] else image[i] for i in range(image.shape[0])]
+        )
 
         if output_type == "pd":
             return image

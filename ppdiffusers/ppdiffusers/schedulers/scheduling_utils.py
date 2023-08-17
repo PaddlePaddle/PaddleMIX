@@ -76,11 +76,12 @@ class SchedulerMixin:
 
     @classmethod
     def from_pretrained(
-            cls,
-            pretrained_model_name_or_path: Dict[str, Any]=None,
-            subfolder: Optional[str]=None,
-            return_unused_kwargs: bool=False,
-            **kwargs, ):
+        cls,
+        pretrained_model_name_or_path: Dict[str, Any] = None,
+        subfolder: Optional[str] = None,
+        return_unused_kwargs: bool = False,
+        **kwargs,
+    ):
         r"""
         Instantiate a Scheduler class from a pre-defined JSON configuration file inside a directory or Hub repo.
 
@@ -142,14 +143,16 @@ class SchedulerMixin:
             subfolder=subfolder,
             return_unused_kwargs=True,
             return_commit_hash=True,
-            **kwargs, )
-        return cls.from_config(
-            config, return_unused_kwargs=return_unused_kwargs, **kwargs)
+            **kwargs,
+        )
+        return cls.from_config(config, return_unused_kwargs=return_unused_kwargs, **kwargs)
 
-    def save_pretrained(self,
-                        save_directory: Union[str, os.PathLike],
-                        push_to_hub: bool=False,
-                        **kwargs):
+    def save_pretrained(
+        self,
+        save_directory: Union[str, os.PathLike],
+        push_to_hub: bool = False,
+        **kwargs,
+    ):
         """
         Save a scheduler configuration object to the directory `save_directory`, so that it can be re-loaded using the
         [`~SchedulerMixin.from_pretrained`] class method.
@@ -158,8 +161,7 @@ class SchedulerMixin:
             save_directory (`str` or `os.PathLike`):
                 Directory where the configuration JSON file will be saved (will be created if it does not exist).
         """
-        self.save_config(
-            save_directory=save_directory, push_to_hub=push_to_hub, **kwargs)
+        self.save_config(save_directory=save_directory, push_to_hub=push_to_hub, **kwargs)
 
     @property
     def compatibles(self):
@@ -176,7 +178,6 @@ class SchedulerMixin:
         compatible_classes_str = list(set([cls.__name__] + cls._compatibles))
         diffusers_library = importlib.import_module(__name__.split(".")[0])
         compatible_classes = [
-            getattr(diffusers_library, c) for c in compatible_classes_str
-            if hasattr(diffusers_library, c)
+            getattr(diffusers_library, c) for c in compatible_classes_str if hasattr(diffusers_library, c)
         ]
         return compatible_classes

@@ -18,8 +18,7 @@ from ppdiffusers.utils import load_image
 url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/benz.jpg"
 image = load_image(url)
 
-pipe = VersatileDiffusionImageVariationPipeline.from_pretrained(
-    "shi-labs/versatile-diffusion")
+pipe = VersatileDiffusionImageVariationPipeline.from_pretrained("shi-labs/versatile-diffusion")
 
 image = pipe(image).images[0]
 image.save("image_variation-versatile_diffusion-result.png")

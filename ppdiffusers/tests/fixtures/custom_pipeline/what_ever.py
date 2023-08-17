@@ -38,13 +38,14 @@ class CustomLocalPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            batch_size: int=1,
-            generator: Optional[paddle.Generator]=None,
-            num_inference_steps: int=50,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            **kwargs, ) -> Union[ImagePipelineOutput, Tuple]:
+        self,
+        batch_size: int = 1,
+        generator: Optional[paddle.Generator] = None,
+        num_inference_steps: int = 50,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        **kwargs,
+    ) -> Union[ImagePipelineOutput, Tuple]:
         r"""
         Args:
             batch_size (`int`, *optional*, defaults to 1):
@@ -70,9 +71,14 @@ class CustomLocalPipeline(DiffusionPipeline):
 
         # Sample gaussian noise to begin loop
         image = paddle.randn(
-            (batch_size, self.unet.config.in_channels,
-             self.unet.config.sample_size, self.unet.config.sample_size),
-            generator=generator, )
+            (
+                batch_size,
+                self.unet.config.in_channels,
+                self.unet.config.sample_size,
+                self.unet.config.sample_size,
+            ),
+            generator=generator,
+        )
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
@@ -92,6 +98,6 @@ class CustomLocalPipeline(DiffusionPipeline):
             image = self.numpy_to_pil(image)
 
         if not return_dict:
-            return (image, ), "This is a local test"
+            return (image,), "This is a local test"
 
         return ImagePipelineOutput(images=image), "This is a local test"

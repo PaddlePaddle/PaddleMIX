@@ -36,7 +36,8 @@ from ppdiffusers.models.unet_2d_blocks import (
     UNetMidBlock2DCrossAttn,
     UNetMidBlock2DSimpleCrossAttn,
     UpBlock2D,
-    UpDecoderBlock2D, )
+    UpDecoderBlock2D,
+)
 
 from .test_unet_blocks_common import UNetBlockTesterMixin
 
@@ -103,8 +104,7 @@ class CrossAttnDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
     block_type = "down"
 
     def prepare_init_args_and_inputs_for_common(self):
-        init_dict, inputs_dict = super(
-        ).prepare_init_args_and_inputs_for_common()
+        init_dict, inputs_dict = super().prepare_init_args_and_inputs_for_common()
         init_dict["cross_attention_dim"] = 32
         return init_dict, inputs_dict
 
@@ -132,8 +132,7 @@ class SimpleCrossAttnDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return super().get_dummy_input(include_encoder_hidden_states=True)
 
     def prepare_init_args_and_inputs_for_common(self):
-        init_dict, inputs_dict = super(
-        ).prepare_init_args_and_inputs_for_common()
+        init_dict, inputs_dict = super().prepare_init_args_and_inputs_for_common()
         init_dict["cross_attention_dim"] = 32
         return init_dict, inputs_dict
 
@@ -283,8 +282,7 @@ class UNetMidBlock2DCrossAttnTests(UNetBlockTesterMixin, unittest.TestCase):
     block_type = "mid"
 
     def prepare_init_args_and_inputs_for_common(self):
-        init_dict, inputs_dict = super(
-        ).prepare_init_args_and_inputs_for_common()
+        init_dict, inputs_dict = super().prepare_init_args_and_inputs_for_common()
         init_dict["cross_attention_dim"] = 32
         return init_dict, inputs_dict
 
@@ -303,8 +301,7 @@ class UNetMidBlock2DCrossAttnTests(UNetBlockTesterMixin, unittest.TestCase):
         super().test_output(expected_slice)
 
 
-class UNetMidBlock2DSimpleCrossAttnTests(UNetBlockTesterMixin,
-                                         unittest.TestCase):
+class UNetMidBlock2DSimpleCrossAttnTests(UNetBlockTesterMixin, unittest.TestCase):
     block_class = UNetMidBlock2DSimpleCrossAttn
     block_type = "mid"
 
@@ -313,8 +310,7 @@ class UNetMidBlock2DSimpleCrossAttnTests(UNetBlockTesterMixin,
         return super().get_dummy_input(include_encoder_hidden_states=True)
 
     def prepare_init_args_and_inputs_for_common(self):
-        init_dict, inputs_dict = super(
-        ).prepare_init_args_and_inputs_for_common()
+        init_dict, inputs_dict = super().prepare_init_args_and_inputs_for_common()
         init_dict["cross_attention_dim"] = 32
         return init_dict, inputs_dict
 
@@ -388,8 +384,7 @@ class CrossAttnUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return super().get_dummy_input(include_res_hidden_states_tuple=True)
 
     def prepare_init_args_and_inputs_for_common(self):
-        init_dict, inputs_dict = super(
-        ).prepare_init_args_and_inputs_for_common()
+        init_dict, inputs_dict = super().prepare_init_args_and_inputs_for_common()
         init_dict["cross_attention_dim"] = 32
         return init_dict, inputs_dict
 
@@ -414,13 +409,10 @@ class SimpleCrossAttnUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
     @property
     def dummy_input(self):
-        return super().get_dummy_input(
-            include_res_hidden_states_tuple=True,
-            include_encoder_hidden_states=True)
+        return super().get_dummy_input(include_res_hidden_states_tuple=True, include_encoder_hidden_states=True)
 
     def prepare_init_args_and_inputs_for_common(self):
-        init_dict, inputs_dict = super(
-        ).prepare_init_args_and_inputs_for_common()
+        init_dict, inputs_dict = super().prepare_init_args_and_inputs_for_common()
         init_dict["cross_attention_dim"] = 32
         return init_dict, inputs_dict
 

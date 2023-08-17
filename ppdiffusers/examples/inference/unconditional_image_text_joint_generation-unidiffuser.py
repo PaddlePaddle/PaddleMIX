@@ -19,6 +19,5 @@ result = pipe(mode="joint", image=None, prompt=None)
 image = result.images[0]
 image.save("unconditional_image_text_generation-unidiffuser-result.png")
 text = result.texts[0]
-with open("unconditional_image_text_generation-unidiffuser-result.txt",
-          "w") as f:
+with open("unconditional_image_text_generation-unidiffuser-result.txt", "w") as f:
     print("{}\n".format(text), file=f)

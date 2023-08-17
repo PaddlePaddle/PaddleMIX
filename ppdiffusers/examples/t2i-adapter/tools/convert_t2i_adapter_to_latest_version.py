@@ -76,13 +76,15 @@ if __name__ == "__main__":
         default=None,
         type=str,
         required=True,
-        help="Path to the checkpoint to convert.")
+        help="Path to the checkpoint to convert.",
+    )
     parser.add_argument(
         "--output_path",
         default=None,
         type=str,
         required=True,
-        help="Path to the store the result checkpoint.")
+        help="Path to the store the result checkpoint.",
+    )
     parser.add_argument(
         "--is_adapter_light",
         default=False,

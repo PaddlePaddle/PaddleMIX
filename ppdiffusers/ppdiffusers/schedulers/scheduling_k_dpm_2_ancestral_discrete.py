@@ -25,8 +25,7 @@ from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, Schedul
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
-def betas_for_alpha_bar(num_diffusion_timesteps,
-                        max_beta=0.999) -> paddle.Tensor:
+def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999) -> paddle.Tensor:
     """
     Create a beta schedule that discretizes the given alpha_t_bar function, which defines the cumulative product of
     (1-beta) over time from t = [0,1].
@@ -45,7 +44,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps,
     """
 
     def alpha_bar(time_step):
-        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2)**2
+        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2) ** 2
 
     betas = []
     for i in range(num_diffusion_timesteps):
@@ -87,31 +86,34 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            num_train_timesteps: int=1000,
-            beta_start: float=0.00085,  # sensible defaults
-            beta_end: float=0.012,
-            beta_schedule: str="linear",
-            trained_betas: Optional[Union[np.ndarray, List[float]]]=None,
-            prediction_type: str="epsilon", ):
+        self,
+        num_train_timesteps: int = 1000,
+        beta_start: float = 0.00085,  # sensible defaults
+        beta_end: float = 0.012,
+        beta_schedule: str = "linear",
+        trained_betas: Optional[Union[np.ndarray, List[float]]] = None,
+        prediction_type: str = "epsilon",
+    ):
         if trained_betas is not None:
             self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
         elif beta_schedule == "linear":
-            self.betas = paddle.linspace(
-                beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
+            self.betas = paddle.linspace(beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
-            self.betas = (paddle.linspace(
-                beta_start**0.5,
-                beta_end**0.5,
-                num_train_timesteps,
-                dtype=paddle.float32)**2)
+            self.betas = (
+                paddle.linspace(
+                    beta_start**0.5,
+                    beta_end**0.5,
+                    num_train_timesteps,
+                    dtype=paddle.float32,
+                )
+                ** 2
+            )
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
         else:
-            raise NotImplementedError(
-                f"{beta_schedule} does is not implemented for {self.__class__}")
+            raise NotImplementedError(f"{beta_schedule} does is not implemented for {self.__class__}")
 
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = paddle.cumprod(self.alphas, 0)
@@ -132,9 +134,10 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         return indices[pos].item()
 
     def scale_model_input(
-            self,
-            sample: paddle.Tensor,
-            timestep: Union[float, paddle.Tensor], ) -> paddle.Tensor:
+        self,
+        sample: paddle.Tensor,
+        timestep: Union[float, paddle.Tensor],
+    ) -> paddle.Tensor:
         """
         Args:
         Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
@@ -150,13 +153,14 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         else:
             sigma = self.sigmas_interpol[step_index - 1]
 
-        sample = sample / ((sigma**2 + 1)**0.5)
+        sample = sample / ((sigma**2 + 1) ** 0.5)
         return sample
 
     def set_timesteps(
-            self,
-            num_inference_steps: int,
-            num_train_timesteps: Optional[int]=None, ):
+        self,
+        num_inference_steps: int,
+        num_train_timesteps: Optional[int] = None,
+    ):
         """
         Sets the timesteps used for the diffusion chain. Supporting function to be run before inference.
 
@@ -168,12 +172,9 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
         num_train_timesteps = num_train_timesteps or self.config.num_train_timesteps
 
-        timesteps = np.linspace(
-            0, num_train_timesteps - 1, num_inference_steps,
-            dtype=float)[::-1].copy()
+        timesteps = np.linspace(0, num_train_timesteps - 1, num_inference_steps, dtype=float)[::-1].copy()
 
-        sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod)**
-                          0.5)
+        sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod) ** 0.5)
         self.log_sigmas = paddle.to_tensor(np.log(sigmas), dtype=paddle.float32)
 
         sigmas = np.interp(timesteps, np.arange(0, len(sigmas)), sigmas)
@@ -183,9 +184,8 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         # compute up and down sigmas
         sigmas_next = sigmas.roll(-1)
         sigmas_next[-1] = 0.0
-        sigmas_up = (sigmas_next**2 * (sigmas**2 - sigmas_next**2) / sigmas
-                     **2)**0.5
-        sigmas_down = (sigmas_next**2 - sigmas_up**2)**0.5
+        sigmas_up = (sigmas_next**2 * (sigmas**2 - sigmas_next**2) / sigmas**2) ** 0.5
+        sigmas_down = (sigmas_next**2 - sigmas_up**2) ** 0.5
         sigmas_down[-1] = 0.0
 
         # compute interpolated sigmas
@@ -193,19 +193,16 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         sigmas_interpol[-2:] = 0.0
 
         # set sigmas
-        self.sigmas = paddle.concat(
-            [sigmas[:1], sigmas[1:].repeat_interleave(2), sigmas[-1:]])
-        self.sigmas_interpol = paddle.concat([
-            sigmas_interpol[:1], sigmas_interpol[1:].repeat_interleave(2),
-            sigmas_interpol[-1:]
-        ])
-        self.sigmas_up = paddle.concat([
-            sigmas_up[:1], sigmas_up[1:].repeat_interleave(2), sigmas_up[-1:]
-        ])
-        self.sigmas_down = paddle.concat([
-            sigmas_down[:1], sigmas_down[1:].repeat_interleave(2),
-            sigmas_down[-1:]
-        ])
+        self.sigmas = paddle.concat([sigmas[:1], sigmas[1:].repeat_interleave(2), sigmas[-1:]])
+        self.sigmas_interpol = paddle.concat(
+            [
+                sigmas_interpol[:1],
+                sigmas_interpol[1:].repeat_interleave(2),
+                sigmas_interpol[-1:],
+            ]
+        )
+        self.sigmas_up = paddle.concat([sigmas_up[:1], sigmas_up[1:].repeat_interleave(2), sigmas_up[-1:]])
+        self.sigmas_down = paddle.concat([sigmas_down[:1], sigmas_down[1:].repeat_interleave(2), sigmas_down[-1:]])
 
         # standard deviation of the initial noise distribution
         self.init_noise_sigma = self.sigmas.max()
@@ -213,12 +210,9 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         timesteps = paddle.to_tensor(timesteps, dtype=paddle.float32)
 
         timesteps_interpol = self.sigma_to_t(sigmas_interpol)
-        timesteps_interpol = paddle.cast(
-            timesteps_interpol, dtype=timesteps.dtype)
+        timesteps_interpol = paddle.cast(timesteps_interpol, dtype=timesteps.dtype)
 
-        interleaved_timesteps = paddle.stack(
-            (timesteps_interpol[:-2, None], timesteps[1:, None]),
-            axis=-1).flatten()
+        interleaved_timesteps = paddle.stack((timesteps_interpol[:-2, None], timesteps[1:, None]), axis=-1).flatten()
 
         self.timesteps = paddle.concat([timesteps[:1], interleaved_timesteps])
 
@@ -232,8 +226,7 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         dists = log_sigma - self.log_sigmas[:, None]
 
         # get sigmas range
-        low_idx = (dists >= 0).cast("int64").cumsum(axis=0).argmax(axis=0).clip(
-            max=self.log_sigmas.shape[0] - 2)
+        low_idx = (dists >= 0).cast("int64").cumsum(axis=0).argmax(axis=0).clip(max=self.log_sigmas.shape[0] - 2)
         high_idx = low_idx + 1
 
         low = self.log_sigmas[low_idx]
@@ -253,13 +246,13 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         return self.sample is None
 
     def step(
-            self,
-            model_output: Union[paddle.Tensor, np.ndarray],
-            timestep: Union[float, paddle.Tensor],
-            sample: Union[paddle.Tensor, np.ndarray],
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            return_dict: bool=True, ) -> Union[SchedulerOutput, Tuple]:
+        self,
+        model_output: Union[paddle.Tensor, np.ndarray],
+        timestep: Union[float, paddle.Tensor],
+        sample: Union[paddle.Tensor, np.ndarray],
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        return_dict: bool = True,
+    ) -> Union[SchedulerOutput, Tuple]:
         """
         Args:
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
@@ -293,8 +286,7 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         gamma = 0
         sigma_hat = sigma * (gamma + 1)  # Note: sigma_hat == sigma for now
 
-        noise = randn_tensor(
-            model_output.shape, dtype=model_output.dtype, generator=generator)
+        noise = randn_tensor(model_output.shape, dtype=model_output.dtype, generator=generator)
 
         # 1. compute predicted original sample (x_0) from sigma-scaled predicted noise
         if self.config.prediction_type == "epsilon":
@@ -302,11 +294,11 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
             pred_original_sample = sample - sigma_input * model_output
         elif self.config.prediction_type == "v_prediction":
             sigma_input = sigma_hat if self.state_in_first_order else sigma_interpol
-            pred_original_sample = model_output * (-sigma_input / (
-                sigma_input**2 + 1)**0.5) + (sample / (sigma_input**2 + 1))
+            pred_original_sample = model_output * (-sigma_input / (sigma_input**2 + 1) ** 0.5) + (
+                sample / (sigma_input**2 + 1)
+            )
         elif self.config.prediction_type == "sample":
-            raise NotImplementedError(
-                "prediction_type not implemented yet: sample")
+            raise NotImplementedError("prediction_type not implemented yet: sample")
         else:
             raise ValueError(
                 f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, or `v_prediction`"
@@ -336,22 +328,21 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
             prev_sample = prev_sample + noise * sigma_up
 
         if not return_dict:
-            return (prev_sample, )
+            return (prev_sample,)
 
         return SchedulerOutput(prev_sample=prev_sample)
 
     def add_noise(
-            self,
-            original_samples: paddle.Tensor,
-            noise: paddle.Tensor,
-            timesteps: paddle.Tensor, ) -> paddle.Tensor:
+        self,
+        original_samples: paddle.Tensor,
+        noise: paddle.Tensor,
+        timesteps: paddle.Tensor,
+    ) -> paddle.Tensor:
         # Make sure sigmas and timesteps have the same dtype as original_samples
         sigmas = self.sigmas.cast(original_samples.dtype)
 
         schedule_timesteps = self.timesteps
-        step_indices = [
-            self.index_for_timestep(t, schedule_timesteps) for t in timesteps
-        ]
+        step_indices = [self.index_for_timestep(t, schedule_timesteps) for t in timesteps]
 
         sigma = sigmas[step_indices].flatten()
         while len(sigma.shape) < len(original_samples.shape):

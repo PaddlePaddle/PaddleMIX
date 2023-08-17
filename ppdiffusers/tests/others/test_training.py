@@ -26,10 +26,8 @@ from ppdiffusers.utils.testing_utils import slow
 class UNet2DModelTrainingTests(unittest.TestCase):
     def get_model_optimizer(self, resolution=32):
         set_seed(0)
-        model = UNet2DModel(
-            sample_size=resolution, in_channels=3, out_channels=3)
-        optimizer = paddle.optimizer.SGD(parameters=model.parameters(),
-                                         learning_rate=0.0001)
+        model = UNet2DModel(sample_size=resolution, in_channels=3, out_channels=3)
+        optimizer = paddle.optimizer.SGD(parameters=model.parameters(), learning_rate=0.0001)
         return model, optimizer
 
     @slow
@@ -39,33 +37,27 @@ class UNet2DModelTrainingTests(unittest.TestCase):
             beta_start=0.0001,
             beta_end=0.02,
             beta_schedule="linear",
-            clip_sample=True)
+            clip_sample=True,
+        )
         ddim_scheduler = DDIMScheduler(
             num_train_timesteps=1000,
             beta_start=0.0001,
             beta_end=0.02,
             beta_schedule="linear",
-            clip_sample=True)
+            clip_sample=True,
+        )
         assert ddpm_scheduler.config.num_train_timesteps == ddim_scheduler.config.num_train_timesteps
         set_seed(0)
-        clean_images = [
-            paddle.randn(shape=(4, 3, 32, 32)).clip(
-                min=-1, max=1) for _ in range(4)
-        ]
+        clean_images = [paddle.randn(shape=(4, 3, 32, 32)).clip(min=-1, max=1) for _ in range(4)]
         noise = [paddle.randn(shape=(4, 3, 32, 32)) for _ in range(4)]
-        timesteps = [
-            paddle.randint(0, 1000, (4, )).astype(dtype="int64")
-            for _ in range(4)
-        ]
+        timesteps = [paddle.randint(0, 1000, (4,)).astype(dtype="int64") for _ in range(4)]
         model, optimizer = self.get_model_optimizer(resolution=32)
         model.train()
         for i in range(4):
             optimizer.clear_grad()
-            ddpm_noisy_images = ddpm_scheduler.add_noise(clean_images[i],
-                                                         noise[i], timesteps[i])
+            ddpm_noisy_images = ddpm_scheduler.add_noise(clean_images[i], noise[i], timesteps[i])
             ddpm_noise_pred = model(ddpm_noisy_images, timesteps[i]).sample
-            loss = paddle.nn.functional.mse_loss(
-                input=ddpm_noise_pred, label=noise[i])
+            loss = paddle.nn.functional.mse_loss(input=ddpm_noise_pred, label=noise[i])
             loss.backward()
             optimizer.step()
         del model, optimizer
@@ -73,30 +65,22 @@ class UNet2DModelTrainingTests(unittest.TestCase):
         model.train()
         for i in range(4):
             optimizer.clear_grad()
-            ddim_noisy_images = ddim_scheduler.add_noise(clean_images[i],
-                                                         noise[i], timesteps[i])
+            ddim_noisy_images = ddim_scheduler.add_noise(clean_images[i], noise[i], timesteps[i])
             ddim_noise_pred = model(ddim_noisy_images, timesteps[i]).sample
-            loss = paddle.nn.functional.mse_loss(
-                input=ddim_noise_pred, label=noise[i])
+            loss = paddle.nn.functional.mse_loss(input=ddim_noise_pred, label=noise[i])
             loss.backward()
             optimizer.step()
         del model, optimizer
-        self.assertTrue(
-            paddle.allclose(
-                ddpm_noisy_images, ddim_noisy_images, atol=1e-05))
-        self.assertTrue(
-            paddle.allclose(
-                ddpm_noise_pred, ddim_noise_pred, atol=1e-04))
+        self.assertTrue(paddle.allclose(ddpm_noisy_images, ddim_noisy_images, atol=1e-05))
+        self.assertTrue(paddle.allclose(ddpm_noise_pred, ddim_noise_pred, atol=1e-04))
 
 
 # new added
 class UNet2DConditionModelTrainingTests(unittest.TestCase):
     def get_model_optimizer(self, resolution=32):
         set_seed(0)
-        model = UNet2DConditionModel(
-            sample_size=resolution, in_channels=3, out_channels=3)
-        optimizer = paddle.optimizer.AdamW(
-            parameters=model.parameters(), learning_rate=0.0001)
+        model = UNet2DConditionModel(sample_size=resolution, in_channels=3, out_channels=3)
+        optimizer = paddle.optimizer.AdamW(parameters=model.parameters(), learning_rate=0.0001)
         return model, optimizer
 
     @slow
@@ -105,36 +89,31 @@ class UNet2DConditionModelTrainingTests(unittest.TestCase):
             num_train_timesteps=1000,
             beta_start=0.00085,
             beta_end=0.012,
-            beta_schedule="scaled_linear")
+            beta_schedule="scaled_linear",
+        )
         ddim_scheduler = DDIMScheduler(
             num_train_timesteps=1000,
             beta_start=0.00085,
             beta_end=0.012,
-            beta_schedule="scaled_linear")
+            beta_schedule="scaled_linear",
+        )
         assert ddpm_scheduler.config.num_train_timesteps == ddim_scheduler.config.num_train_timesteps
         set_seed(0)
-        clean_images = [
-            paddle.randn(shape=(4, 3, 32, 32)).clip(
-                min=-1, max=1) for _ in range(4)
-        ]
+        clean_images = [paddle.randn(shape=(4, 3, 32, 32)).clip(min=-1, max=1) for _ in range(4)]
         noise = [paddle.randn(shape=(4, 3, 32, 32)) for _ in range(4)]
         text_embeddings = [paddle.randn(shape=(4, 77, 1280)) for _ in range(4)]
-        timesteps = [
-            paddle.randint(0, 1000, (4, )).astype(dtype="int64")
-            for _ in range(4)
-        ]
+        timesteps = [paddle.randint(0, 1000, (4,)).astype(dtype="int64") for _ in range(4)]
         model, optimizer = self.get_model_optimizer(resolution=32)
         model.train()
         for i in range(4):
             optimizer.clear_grad()
-            ddpm_noisy_images = ddpm_scheduler.add_noise(clean_images[i],
-                                                         noise[i], timesteps[i])
+            ddpm_noisy_images = ddpm_scheduler.add_noise(clean_images[i], noise[i], timesteps[i])
             ddpm_noise_pred = model(
                 ddpm_noisy_images,
                 timesteps[i],
-                encoder_hidden_states=text_embeddings[i]).sample
-            loss = paddle.nn.functional.mse_loss(
-                input=ddpm_noise_pred, label=noise[i])
+                encoder_hidden_states=text_embeddings[i],
+            ).sample
+            loss = paddle.nn.functional.mse_loss(input=ddpm_noise_pred, label=noise[i])
             loss.backward()
             optimizer.step()
         del model, optimizer
@@ -142,23 +121,18 @@ class UNet2DConditionModelTrainingTests(unittest.TestCase):
         model.train()
         for i in range(4):
             optimizer.clear_grad()
-            ddim_noisy_images = ddim_scheduler.add_noise(clean_images[i],
-                                                         noise[i], timesteps[i])
+            ddim_noisy_images = ddim_scheduler.add_noise(clean_images[i], noise[i], timesteps[i])
             ddim_noise_pred = model(
                 ddim_noisy_images,
                 timesteps[i],
-                encoder_hidden_states=text_embeddings[i]).sample
-            loss = paddle.nn.functional.mse_loss(
-                input=ddim_noise_pred, label=noise[i])
+                encoder_hidden_states=text_embeddings[i],
+            ).sample
+            loss = paddle.nn.functional.mse_loss(input=ddim_noise_pred, label=noise[i])
             loss.backward()
             optimizer.step()
         del model, optimizer
-        self.assertTrue(
-            paddle.allclose(
-                ddpm_noisy_images, ddim_noisy_images, atol=1e-05))
-        self.assertTrue(
-            paddle.allclose(
-                ddpm_noise_pred, ddim_noise_pred, atol=1e-04))
+        self.assertTrue(paddle.allclose(ddpm_noisy_images, ddim_noisy_images, atol=1e-05))
+        self.assertTrue(paddle.allclose(ddpm_noise_pred, ddim_noise_pred, atol=1e-04))
 
     @unittest.skipIf(
         not is_ppxformers_available(),
@@ -170,17 +144,12 @@ class UNet2DConditionModelTrainingTests(unittest.TestCase):
             num_train_timesteps=1000,
             beta_start=0.00085,
             beta_end=0.012,
-            beta_schedule="scaled_linear")
+            beta_schedule="scaled_linear",
+        )
         set_seed(0)
-        clean_images = [
-            paddle.randn(shape=(4, 3, 32, 32)).clip(
-                min=-1, max=1) for _ in range(4)
-        ]
+        clean_images = [paddle.randn(shape=(4, 3, 32, 32)).clip(min=-1, max=1) for _ in range(4)]
         noise = [paddle.randn(shape=(4, 3, 32, 32)) for _ in range(4)]
-        timesteps = [
-            paddle.randint(0, 1000, (4, )).astype(dtype="int64")
-            for _ in range(4)
-        ]
+        timesteps = [paddle.randint(0, 1000, (4,)).astype(dtype="int64") for _ in range(4)]
         text_embeddings = [paddle.randn(shape=(4, 77, 1280)) for _ in range(4)]
         model, optimizer = self.get_model_optimizer(resolution=32)
         model.enable_gradient_checkpointing()
@@ -188,13 +157,12 @@ class UNet2DConditionModelTrainingTests(unittest.TestCase):
         model.train()
         for i in range(4):
             optimizer.clear_grad()
-            ddpm_noisy_images = ddpm_scheduler.add_noise(clean_images[i],
-                                                         noise[i], timesteps[i])
+            ddpm_noisy_images = ddpm_scheduler.add_noise(clean_images[i], noise[i], timesteps[i])
             ddpm_noise_pred = model(
                 ddpm_noisy_images,
                 timesteps[i],
-                encoder_hidden_states=text_embeddings[i]).sample
-            loss = paddle.nn.functional.mse_loss(
-                input=ddpm_noise_pred, label=noise[i])
+                encoder_hidden_states=text_embeddings[i],
+            ).sample
+            loss = paddle.nn.functional.mse_loss(input=ddpm_noise_pred, label=noise[i])
             loss.backward()
             optimizer.step()

@@ -65,7 +65,7 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
     """
 
     def alpha_bar(time_step):
-        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2)**2
+        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2) ** 2
 
     betas = []
     for i in range(num_diffusion_timesteps):
@@ -123,31 +123,35 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            num_train_timesteps: int=1000,
-            beta_start: float=0.0001,
-            beta_end: float=0.02,
-            beta_schedule: str="linear",
-            trained_betas: Optional[Union[np.ndarray, List[float]]]=None,
-            variance_type: str="fixed_small",
-            clip_sample: bool=True,
-            prediction_type: str="epsilon",
-            thresholding: bool=False,
-            dynamic_thresholding_ratio: float=0.995,
-            clip_sample_range: float=1.0,
-            sample_max_value: float=1.0, ):
+        self,
+        num_train_timesteps: int = 1000,
+        beta_start: float = 0.0001,
+        beta_end: float = 0.02,
+        beta_schedule: str = "linear",
+        trained_betas: Optional[Union[np.ndarray, List[float]]] = None,
+        variance_type: str = "fixed_small",
+        clip_sample: bool = True,
+        prediction_type: str = "epsilon",
+        thresholding: bool = False,
+        dynamic_thresholding_ratio: float = 0.995,
+        clip_sample_range: float = 1.0,
+        sample_max_value: float = 1.0,
+    ):
         if trained_betas is not None:
             self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
         elif beta_schedule == "linear":
-            self.betas = paddle.linspace(
-                beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
+            self.betas = paddle.linspace(beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
-            self.betas = (paddle.linspace(
-                beta_start**0.5,
-                beta_end**0.5,
-                num_train_timesteps,
-                dtype=paddle.float32)**2)
+            self.betas = (
+                paddle.linspace(
+                    beta_start**0.5,
+                    beta_end**0.5,
+                    num_train_timesteps,
+                    dtype=paddle.float32,
+                )
+                ** 2
+            )
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
             self.betas = betas_for_alpha_bar(num_train_timesteps)
@@ -156,8 +160,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             betas = paddle.linspace(-6, 6, num_train_timesteps)
             self.betas = F.sigmoid(betas) * (beta_end - beta_start) + beta_start
         else:
-            raise NotImplementedError(
-                f"{beta_schedule} does is not implemented for {self.__class__}")
+            raise NotImplementedError(f"{beta_schedule} does is not implemented for {self.__class__}")
 
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = paddle.cumprod(self.alphas, 0)
@@ -169,14 +172,11 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # setable values
         self.custom_timesteps = False
         self.num_inference_steps = None
-        self.timesteps = paddle.to_tensor(
-            np.arange(0, num_train_timesteps)[::-1].copy())
+        self.timesteps = paddle.to_tensor(np.arange(0, num_train_timesteps)[::-1].copy())
 
         self.variance_type = variance_type
 
-    def scale_model_input(self,
-                          sample: paddle.Tensor,
-                          timestep: Optional[int]=None) -> paddle.Tensor:
+    def scale_model_input(self, sample: paddle.Tensor, timestep: Optional[int] = None) -> paddle.Tensor:
         """
         Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
         current timestep.
@@ -191,9 +191,10 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         return sample
 
     def set_timesteps(
-            self,
-            num_inference_steps: Optional[int]=None,
-            timesteps: Optional[List[int]]=None, ):
+        self,
+        num_inference_steps: Optional[int] = None,
+        timesteps: Optional[List[int]] = None,
+    ):
         """
         Sets the discrete timesteps used for the diffusion chain. Supporting function to be run before inference.
 
@@ -207,20 +208,18 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 must be `None`.
         """
         if num_inference_steps is not None and timesteps is not None:
-            raise ValueError(
-                "Can only pass one of `num_inference_steps` or `custom_timesteps`."
-            )
+            raise ValueError("Can only pass one of `num_inference_steps` or `custom_timesteps`.")
 
         if timesteps is not None:
             for i in range(1, len(timesteps)):
                 if timesteps[i] >= timesteps[i - 1]:
-                    raise ValueError(
-                        "`custom_timesteps` must be in descending order.")
+                    raise ValueError("`custom_timesteps` must be in descending order.")
 
             if timesteps[0] >= self.config.num_train_timesteps:
                 raise ValueError(
                     f"`timesteps` must start before `self.config.train_timesteps`:"
-                    f" {self.config.num_train_timesteps}.")
+                    f" {self.config.num_train_timesteps}."
+                )
 
             timesteps = np.array(timesteps, dtype=np.int64)
             self.custom_timesteps = True
@@ -229,11 +228,11 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
                 raise ValueError(
                     f"`num_inference_steps`: {num_inference_steps} cannot be larger than `self.config.train_timesteps`:"
                     f" {self.config.num_train_timesteps} as the unet model trained with this scheduler can only handle"
-                    f" maximal {self.config.num_train_timesteps} timesteps.")
+                    f" maximal {self.config.num_train_timesteps} timesteps."
+                )
             self.num_inference_steps = num_inference_steps
             step_ratio = self.config.num_train_timesteps // self.num_inference_steps
-            timesteps = (np.arange(0, num_inference_steps) *
-                         step_ratio).round()[::-1].copy().astype(np.int64)
+            timesteps = (np.arange(0, num_inference_steps) * step_ratio).round()[::-1].copy().astype(np.int64)
             self.custom_timesteps = False
 
         self.timesteps = paddle.to_tensor(timesteps)
@@ -242,8 +241,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         prev_t = self.previous_timestep(t)
 
         alpha_prod_t = self.alphas_cumprod[t]
-        alpha_prod_t_prev = self.alphas_cumprod[
-            prev_t] if prev_t >= 0 else self.one
+        alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
         current_beta_t = 1 - alpha_prod_t / alpha_prod_t_prev
 
         # For t > 0, compute predicted variance βt (see formula (6) and (7) from https://arxiv.org/pdf/2006.11239.pdf)
@@ -301,8 +299,7 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
 
         abs_sample = sample.abs()  # "a certain percentile absolute pixel value"
 
-        s = paddle.quantile(
-            abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
+        s = paddle.quantile(abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
         # paddle.clip donot support min > max
         if self.config.sample_max_value < 1:
             s = paddle.ones_like(s) * self.config.sample_max_value
@@ -310,11 +307,8 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             s = paddle.clip(
                 s, min=1, max=self.config.sample_max_value
             )  # When clip to min=1, equivalent to standard clipping to [-1, 1]
-        s = s.unsqueeze(
-            1)  # (batch_size, 1) because clip will broadcast along axis=0
-        sample = paddle.clip(
-            sample, -s, s
-        ) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
+        s = s.unsqueeze(1)  # (batch_size, 1) because clip will broadcast along axis=0
+        sample = paddle.clip(sample, -s, s) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
 
         sample = paddle.reshape(sample, [batch_size, channels, height, width])
         sample = paddle.cast(sample, dtype)
@@ -322,12 +316,13 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         return sample
 
     def step(
-            self,
-            model_output: paddle.Tensor,
-            timestep: int,
-            sample: paddle.Tensor,
-            generator=None,
-            return_dict: bool=True, ) -> Union[DDPMSchedulerOutput, Tuple]:
+        self,
+        model_output: paddle.Tensor,
+        timestep: int,
+        sample: paddle.Tensor,
+        generator=None,
+        return_dict: bool = True,
+    ) -> Union[DDPMSchedulerOutput, Tuple]:
         """
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
         process from the learned model outputs (most often the predicted noise).
@@ -349,16 +344,17 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         t = timestep
         prev_t = self.previous_timestep(t)
 
-        if model_output.shape[1] == sample.shape[
-                1] * 2 and self.variance_type in ["learned", "learned_range"]:
+        if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type in [
+            "learned",
+            "learned_range",
+        ]:
             model_output, predicted_variance = model_output.chunk(2, axis=1)
         else:
             predicted_variance = None
 
         # 1. compute alphas, betas
         alpha_prod_t = self.alphas_cumprod[t]
-        alpha_prod_t_prev = self.alphas_cumprod[
-            prev_t] if prev_t >= 0 else self.one
+        alpha_prod_t_prev = self.alphas_cumprod[prev_t] if prev_t >= 0 else self.one
         beta_prod_t = 1 - alpha_prod_t
         beta_prod_t_prev = 1 - alpha_prod_t_prev
         current_alpha_t = alpha_prod_t / alpha_prod_t_prev
@@ -367,32 +363,31 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # 2. compute predicted original sample from predicted noise also called
         # "predicted x_0" of formula (15) from https://arxiv.org/pdf/2006.11239.pdf
         if self.config.prediction_type == "epsilon":
-            pred_original_sample = (sample - beta_prod_t**
-                                    (0.5) * model_output) / alpha_prod_t**(0.5)
+            pred_original_sample = (sample - beta_prod_t ** (0.5) * model_output) / alpha_prod_t ** (0.5)
         elif self.config.prediction_type == "sample":
             pred_original_sample = model_output
         elif self.config.prediction_type == "v_prediction":
-            pred_original_sample = (alpha_prod_t**0.5) * sample - (
-                beta_prod_t**0.5) * model_output
+            pred_original_sample = (alpha_prod_t**0.5) * sample - (beta_prod_t**0.5) * model_output
         else:
             raise ValueError(
                 f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, `sample` or"
-                " `v_prediction`  for the DDPMScheduler.")
+                " `v_prediction`  for the DDPMScheduler."
+            )
 
         # 3. Clip or threshold "predicted x_0"
         if self.config.thresholding:
             pred_original_sample = self._threshold_sample(pred_original_sample)
         elif self.config.clip_sample:
-            pred_original_sample = paddle.clip(pred_original_sample,
-                                               -self.config.clip_sample_range,
-                                               self.config.clip_sample_range)
+            pred_original_sample = paddle.clip(
+                pred_original_sample,
+                -self.config.clip_sample_range,
+                self.config.clip_sample_range,
+            )
 
         # 4. Compute coefficients for pred_original_sample x_0 and current sample x_t
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
-        pred_original_sample_coeff = (alpha_prod_t_prev
-                                      **(0.5) * current_beta_t) / beta_prod_t
-        current_sample_coeff = current_alpha_t**(
-            0.5) * beta_prod_t_prev / beta_prod_t
+        pred_original_sample_coeff = (alpha_prod_t_prev ** (0.5) * current_beta_t) / beta_prod_t
+        current_sample_coeff = current_alpha_t ** (0.5) * beta_prod_t_prev / beta_prod_t
 
         # 5. Compute predicted previous sample µ_t
         # See formula (7) from https://arxiv.org/pdf/2006.11239.pdf
@@ -401,66 +396,54 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         # 6. Add noise
         variance = 0
         if t > 0:
-            variance_noise = randn_tensor(
-                model_output.shape,
-                generator=generator,
-                dtype=model_output.dtype)
+            variance_noise = randn_tensor(model_output.shape, generator=generator, dtype=model_output.dtype)
             if self.variance_type == "fixed_small_log":
-                variance = self._get_variance(
-                    t, predicted_variance=predicted_variance) * variance_noise
+                variance = self._get_variance(t, predicted_variance=predicted_variance) * variance_noise
             elif self.variance_type == "learned_range":
-                variance = self._get_variance(
-                    t, predicted_variance=predicted_variance)
+                variance = self._get_variance(t, predicted_variance=predicted_variance)
                 variance = paddle.exp(0.5 * variance) * variance_noise
             else:
-                variance = (self._get_variance(
-                    t, predicted_variance=predicted_variance)
-                            **0.5) * variance_noise
+                variance = (self._get_variance(t, predicted_variance=predicted_variance) ** 0.5) * variance_noise
 
         pred_prev_sample = pred_prev_sample + variance
 
         if not return_dict:
-            return (pred_prev_sample, )
+            return (pred_prev_sample,)
 
-        return DDPMSchedulerOutput(
-            prev_sample=pred_prev_sample,
-            pred_original_sample=pred_original_sample)
+        return DDPMSchedulerOutput(prev_sample=pred_prev_sample, pred_original_sample=pred_original_sample)
 
     def add_noise(
-            self,
-            original_samples: paddle.Tensor,
-            noise: paddle.Tensor,
-            timesteps: paddle.Tensor, ) -> paddle.Tensor:
+        self,
+        original_samples: paddle.Tensor,
+        noise: paddle.Tensor,
+        timesteps: paddle.Tensor,
+    ) -> paddle.Tensor:
         # Make sure alphas_cumprod and timestep have same dtype as original_samples
         alphas_cumprod = self.alphas_cumprod.cast(original_samples.dtype)
 
-        sqrt_alpha_prod = alphas_cumprod[timesteps]**0.5
+        sqrt_alpha_prod = alphas_cumprod[timesteps] ** 0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()
         while len(sqrt_alpha_prod.shape) < len(original_samples.shape):
             sqrt_alpha_prod = sqrt_alpha_prod.unsqueeze(-1)
 
-        sqrt_one_minus_alpha_prod = (1 - alphas_cumprod[timesteps])**0.5
+        sqrt_one_minus_alpha_prod = (1 - alphas_cumprod[timesteps]) ** 0.5
         sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.flatten()
-        while len(sqrt_one_minus_alpha_prod.shape) < len(
-                original_samples.shape):
+        while len(sqrt_one_minus_alpha_prod.shape) < len(original_samples.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
 
         noisy_samples = sqrt_alpha_prod * original_samples + sqrt_one_minus_alpha_prod * noise
         return noisy_samples
 
-    def get_velocity(self,
-                     sample: paddle.Tensor,
-                     noise: paddle.Tensor,
-                     timesteps: paddle.Tensor) -> paddle.Tensor:
+    def get_velocity(self, sample: paddle.Tensor, noise: paddle.Tensor, timesteps: paddle.Tensor) -> paddle.Tensor:
         # Make sure alphas_cumprod and timestep have same dtype as original_samples
         alphas_cumprod = self.alphas_cumprod.cast(sample.dtype)
 
-        sqrt_alpha_prod = alphas_cumprod[timesteps]**0.5
+        sqrt_alpha_prod = alphas_cumprod[timesteps] ** 0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()
         while len(sqrt_alpha_prod.shape) < len(sample.shape):
             sqrt_alpha_prod = sqrt_alpha_prod.unsqueeze(-1)
 
-        sqrt_one_minus_alpha_prod = (1 - alphas_cumprod[timesteps])**0.5
+        sqrt_one_minus_alpha_prod = (1 - alphas_cumprod[timesteps]) ** 0.5
         sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.flatten()
         while len(sqrt_one_minus_alpha_prod.shape) < len(sample.shape):
             sqrt_one_minus_alpha_prod = sqrt_one_minus_alpha_prod.unsqueeze(-1)
@@ -479,9 +462,9 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
             else:
                 prev_t = self.timesteps[index + 1]
         else:
-            num_inference_steps = (self.num_inference_steps
-                                   if self.num_inference_steps else
-                                   self.config.num_train_timesteps)
+            num_inference_steps = (
+                self.num_inference_steps if self.num_inference_steps else self.config.num_train_timesteps
+            )
             prev_t = timestep - self.config.num_train_timesteps // num_inference_steps
 
         return prev_t

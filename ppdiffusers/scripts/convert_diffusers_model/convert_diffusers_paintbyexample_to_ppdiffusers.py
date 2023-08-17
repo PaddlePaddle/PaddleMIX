@@ -21,11 +21,13 @@ from diffusers import PaintByExamplePipeline as DiffusersPaintByExamplePipeline
 
 # CLIPImageProcessor need paddlenlp latest
 from paddlenlp.transformers import CLIPImageProcessor, CLIPVisionConfig
+
 from ppdiffusers import AutoencoderKL
 from ppdiffusers import PaintByExamplePipeline as PPDiffusersPaintByExamplePipeline
 from ppdiffusers import PNDMScheduler, UNet2DConditionModel
 from ppdiffusers.pipelines.paint_by_example.image_encoder import (
-    PaintByExampleImageEncoder, )
+    PaintByExampleImageEncoder,
+)
 
 paddle.set_device("cpu")
 
@@ -62,9 +64,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32"):
         ".post_layernorm.": ".ln_post.",
     }
     ignore_value = ["position_ids", "mapper"]
-    donot_transpose = [
-        "embeddings", "norm", "concept_embeds", "special_care_embeds"
-    ]
+    donot_transpose = ["embeddings", "norm", "concept_embeds", "special_care_embeds"]
 
     for name, value in clip.state_dict().items():
         # step1: ignore position_ids and mapper
@@ -78,7 +78,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32"):
             name = name.replace(hf_name, ppnlp_name)
         # step4: 0d tensor -> 1d tensor
         if name == "logit_scale":
-            value = value.reshape((1, ))
+            value = value.reshape((1,))
 
         new_model_state[name] = value.cpu().numpy().astype(dtype)
 
@@ -92,8 +92,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32"):
         "vision_heads": clip.config.num_attention_heads,
         "vision_embed_dim": clip.config.hidden_size,
         "vision_patch_size": clip.config.patch_size,
-        "vision_mlp_ratio":
-        clip.config.intermediate_size // clip.config.hidden_size,
+        "vision_mlp_ratio": clip.config.intermediate_size // clip.config.hidden_size,
         "vision_hidden_act": clip.config.hidden_act,
         "projection_dim": clip.config.projection_dim,
     }
@@ -117,15 +116,14 @@ def check_keys(model, state_dict):
         print(f"{cls_name} Found mismatched_keys {mismatched_keys_str}!")
 
 
-def convert_diffusers_paintbyexample_to_ppdiffusers(
-        pretrained_model_name_or_path, output_path=None):
+def convert_diffusers_paintbyexample_to_ppdiffusers(pretrained_model_name_or_path, output_path=None):
     # 0. load diffusers pipe and convert to ppdiffusers weights format
     diffusers_pipe = DiffusersPaintByExamplePipeline.from_pretrained(
-        pretrained_model_name_or_path, use_auth_token=True)
+        pretrained_model_name_or_path, use_auth_token=True
+    )
     vae_state_dict = convert_to_ppdiffusers(diffusers_pipe.vae)
     unet_state_dict = convert_to_ppdiffusers(diffusers_pipe.unet)
-    image_encoder_state_dict, image_encoder_config = convert_hf_clip_to_ppnlp_clip(
-        diffusers_pipe.image_encoder)
+    image_encoder_state_dict, image_encoder_config = convert_hf_clip_to_ppnlp_clip(diffusers_pipe.image_encoder)
 
     # 1. vae
     pp_vae = AutoencoderKL.from_config(diffusers_pipe.vae.config)
@@ -137,8 +135,7 @@ def convert_diffusers_paintbyexample_to_ppdiffusers(
     check_keys(pp_unet, unet_state_dict)
 
     # 3. image_encoder
-    pp_image_encoder = PaintByExampleImageEncoder(
-        CLIPVisionConfig.from_dict(image_encoder_config))
+    pp_image_encoder = PaintByExampleImageEncoder(CLIPVisionConfig.from_dict(image_encoder_config))
     pp_image_encoder.set_dict(image_encoder_state_dict)
     check_keys(pp_image_encoder, image_encoder_state_dict)
     # 4. scheduler
@@ -157,7 +154,8 @@ def convert_diffusers_paintbyexample_to_ppdiffusers(
             scheduler=pp_scheduler,
             safety_checker=None,
             feature_extractor=feature_extractor,
-            requires_safety_checker=False, )
+            requires_safety_checker=False,
+        )
 
         # 6. save_pretrained
         paddle_pipe.save_pretrained(output_path)
@@ -165,8 +163,7 @@ def convert_diffusers_paintbyexample_to_ppdiffusers(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Pytorch model weights to Paddle model weights.")
+    parser = argparse.ArgumentParser(description="Pytorch model weights to Paddle model weights.")
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -177,7 +174,9 @@ if __name__ == "__main__":
         "--output_path",
         type=str,
         default="./Paint-by-Example",
-        help="The model output path.", )
+        help="The model output path.",
+    )
     args = parser.parse_args()
     ppdiffusers_pipe = convert_diffusers_paintbyexample_to_ppdiffusers(
-        args.pretrained_model_name_or_path, args.output_path)
+        args.pretrained_model_name_or_path, args.output_path
+    )

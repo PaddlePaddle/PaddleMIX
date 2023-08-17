@@ -50,10 +50,10 @@ class ImageProcessorTest(unittest.TestCase):
         for output_type in ["pd", "np", "pil"]:
             out = image_processor.postprocess(
                 image_processor.preprocess(input_pd),
-                output_type=output_type, )
+                output_type=output_type,
+            )
             out_np = self.to_np(out)
-            in_np = (input_np *
-                     255).round() if output_type == "pil" else input_np
+            in_np = (input_np * 255).round() if output_type == "pil" else input_np
             assert (
                 np.abs(in_np - out_np).max() < 1e-6
             ), f"decoded output does not match input for output_type {output_type}"
@@ -63,12 +63,10 @@ class ImageProcessorTest(unittest.TestCase):
         input_np = self.dummy_sample.transpose([0, 2, 3, 1]).cpu().numpy()
 
         for output_type in ["pd", "np", "pil"]:
-            out = image_processor.postprocess(
-                image_processor.preprocess(input_np), output_type=output_type)
+            out = image_processor.postprocess(image_processor.preprocess(input_np), output_type=output_type)
 
             out_np = self.to_np(out)
-            in_np = (input_np *
-                     255).round() if output_type == "pil" else input_np
+            in_np = (input_np * 255).round() if output_type == "pil" else input_np
             assert (
                 np.abs(in_np - out_np).max() < 1e-6
             ), f"decoded output does not match input for output_type {output_type}"
@@ -80,12 +78,10 @@ class ImageProcessorTest(unittest.TestCase):
         input_pil = image_processor.numpy_to_pil(input_np)
 
         for output_type in ["pd", "np", "pil"]:
-            out = image_processor.postprocess(
-                image_processor.preprocess(input_pil), output_type=output_type)
+            out = image_processor.postprocess(image_processor.preprocess(input_pil), output_type=output_type)
             for i, o in zip(input_pil, out):
                 in_np = np.array(i)
-                out_np = self.to_np(out) if output_type == "pil" else (
-                    self.to_np(out) * 255).round()
+                out_np = self.to_np(out) if output_type == "pil" else (self.to_np(out) * 255).round()
                 assert (
                     np.abs(in_np - out_np).max() < 1e-6
                 ), f"decoded output does not match input for output_type {output_type}"
@@ -98,20 +94,24 @@ class ImageProcessorTest(unittest.TestCase):
 
         out_pt_4d = image_processor.postprocess(
             image_processor.preprocess(input_pd_4d),
-            output_type="np", )
+            output_type="np",
+        )
         out_pt_3d = image_processor.postprocess(
             image_processor.preprocess(input_pd_3d),
-            output_type="np", )
+            output_type="np",
+        )
 
         input_np_4d = self.to_np(self.dummy_sample)
         input_np_3d = input_np_4d.squeeze(0)
 
         out_np_4d = image_processor.postprocess(
             image_processor.preprocess(input_np_4d),
-            output_type="np", )
+            output_type="np",
+        )
         out_np_3d = image_processor.postprocess(
             image_processor.preprocess(input_np_3d),
-            output_type="np", )
+            output_type="np",
+        )
 
         assert np.abs(out_pt_4d - out_pt_3d).max() < 1e-6
         assert np.abs(out_np_4d - out_np_3d).max() < 1e-6
@@ -124,22 +124,26 @@ class ImageProcessorTest(unittest.TestCase):
 
         out_pt_4d = image_processor.postprocess(
             image_processor.preprocess(input_pd_4d),
-            output_type="np", )
+            output_type="np",
+        )
 
         out_pt_list = image_processor.postprocess(
             image_processor.preprocess(input_pd_list),
-            output_type="np", )
+            output_type="np",
+        )
 
         input_np_4d = self.to_np(self.dummy_sample)
         list(input_np_4d)
 
         out_np_4d = image_processor.postprocess(
             image_processor.preprocess(input_pd_4d),
-            output_type="np", )
+            output_type="np",
+        )
 
         out_np_list = image_processor.postprocess(
             image_processor.preprocess(input_pd_list),
-            output_type="np", )
+            output_type="np",
+        )
 
         assert np.abs(out_pt_4d - out_pt_list).max() < 1e-6
         assert np.abs(out_np_4d - out_np_list).max() < 1e-6

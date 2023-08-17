@@ -19,9 +19,8 @@ from ppdiffusers.utils import load_image
 
 controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny")
 pipe = StableDiffusionControlNetPipeline.from_pretrained(
-    "runwayml/stable-diffusion-v1-5",
-    safety_checker=None,
-    controlnet=controlnet)
+    "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
+)
 pipe.set_progress_bar_config(disable=None)
 
 generator = paddle.Generator().manual_seed(0)

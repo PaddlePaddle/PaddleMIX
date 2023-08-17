@@ -68,8 +68,7 @@ def _compute_quantile(x, q, axis=None, keepdim=False, ignore_nan=False):
         if isinstance(axis, list):
             axis_src, axis_dst = [], []
             for axis_single in axis:
-                if not isinstance(axis_single, int) or not (
-                        axis_single < dims and axis_single >= -dims):
+                if not isinstance(axis_single, int) or not (axis_single < dims and axis_single >= -dims):
                     raise ValueError(
                         "Axis should be None, int, or a list, element should in range [-rank(x), rank(x))."
                     )
@@ -88,17 +87,13 @@ def _compute_quantile(x, q, axis=None, keepdim=False, ignore_nan=False):
                 axis = axis_dst[0]
         else:
             if not isinstance(axis, int) or not (axis < dims and axis >= -dims):
-                raise ValueError(
-                    "Axis should be None, int, or a list, element should in range [-rank(x), rank(x))."
-                )
+                raise ValueError("Axis should be None, int, or a list, element should in range [-rank(x), rank(x)).")
             if axis < 0:
                 axis += dims
             out_shape[axis] = 1
 
     mask = x.isnan()
-    valid_counts = mask.logical_not().sum(axis=axis,
-                                          keepdim=True,
-                                          dtype="float64")
+    valid_counts = mask.logical_not().sum(axis=axis, keepdim=True, dtype="float64")
 
     indices = []
 
@@ -127,15 +122,14 @@ def _compute_quantile(x, q, axis=None, keepdim=False, ignore_nan=False):
     for index in indices:
         indices_below = paddle.floor(index).astype(paddle.int32)
         indices_upper = paddle.ceil(index).astype(paddle.int32)
-        tensor_upper = paddle.take_along_axis(
-            sorted_tensor, indices_upper, axis=axis)
-        tensor_below = paddle.take_along_axis(
-            sorted_tensor, indices_below, axis=axis)
+        tensor_upper = paddle.take_along_axis(sorted_tensor, indices_upper, axis=axis)
+        tensor_below = paddle.take_along_axis(sorted_tensor, indices_below, axis=axis)
         weights = index - indices_below.astype("float64")
         out = paddle.lerp(
             tensor_below.astype("float64"),
             tensor_upper.astype("float64"),
-            weights, )
+            weights,
+        )
         if not keepdim:
             out = paddle.squeeze(out, axis=axis)
         else:

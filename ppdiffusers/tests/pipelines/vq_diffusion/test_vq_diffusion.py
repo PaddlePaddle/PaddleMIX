@@ -18,15 +18,17 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+
 from ppdiffusers import (
     Transformer2DModel,
     VQDiffusionPipeline,
     VQDiffusionScheduler,
-    VQModel, )
+    VQModel,
+)
 from ppdiffusers.pipelines.vq_diffusion.pipeline_vq_diffusion import (
-    LearnedClassifierFreeSamplingEmbeddings, )
+    LearnedClassifierFreeSamplingEmbeddings,
+)
 from ppdiffusers.utils import load_numpy, slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
@@ -60,13 +62,13 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
             up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D"],
             latent_channels=3,
             num_vq_embeddings=self.num_embed,
-            vq_embed_dim=3, )
+            vq_embed_dim=3,
+        )
         return model
 
     @property
     def dummy_tokenizer(self):
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         return tokenizer
 
     @property
@@ -81,7 +83,8 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
             num_attention_heads=4,
             num_hidden_layers=5,
             pad_token_id=1,
-            vocab_size=1000, )
+            vocab_size=1000,
+        )
         return CLIPTextModel(config).eval()
 
     @property
@@ -109,8 +112,7 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
         tokenizer = self.dummy_tokenizer
         transformer = self.dummy_transformer
         scheduler = VQDiffusionScheduler(self.num_embed)
-        learned_classifier_free_sampling_embeddings = LearnedClassifierFreeSamplingEmbeddings(
-            learnable=False)
+        learned_classifier_free_sampling_embeddings = LearnedClassifierFreeSamplingEmbeddings(learnable=False)
         pipe = VQDiffusionPipeline(
             vqvae=vqvae,
             text_encoder=text_encoder,
@@ -122,11 +124,7 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
         pipe.set_progress_bar_config(disable=None)
         prompt = "teddy bear playing in the pool"
         generator = paddle.Generator().manual_seed(0)
-        output = pipe(
-            [prompt],
-            generator=generator,
-            num_inference_steps=2,
-            output_type="np")
+        output = pipe([prompt], generator=generator, num_inference_steps=2, output_type="np")
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = pipe(
@@ -134,17 +132,26 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
             generator=generator,
             output_type="np",
             return_dict=False,
-            num_inference_steps=2)[0]
+            num_inference_steps=2,
+        )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 24, 24, 3)
-        expected_slice = np.array([
-            0.5900591, 0.83443725, 0.4418438, 0.604656, 0.89781034, 0.40088692,
-            0.6107253, 0.87849474, 0.64088374
-        ])
+        expected_slice = np.array(
+            [
+                0.5900591,
+                0.83443725,
+                0.4418438,
+                0.604656,
+                0.89781034,
+                0.40088692,
+                0.6107253,
+                0.87849474,
+                0.64088374,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
     def test_vq_diffusion_classifier_free_sampling(self):
         vqvae = self.dummy_vqvae
@@ -155,7 +162,8 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
         learned_classifier_free_sampling_embeddings = LearnedClassifierFreeSamplingEmbeddings(
             learnable=True,
             hidden_size=self.text_embedder_hidden_size,
-            length=tokenizer.model_max_length)
+            length=tokenizer.model_max_length,
+        )
         pipe = VQDiffusionPipeline(
             vqvae=vqvae,
             text_encoder=text_encoder,
@@ -167,11 +175,7 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
         pipe.set_progress_bar_config(disable=None)
         prompt = "teddy bear playing in the pool"
         generator = paddle.Generator().manual_seed(0)
-        output = pipe(
-            [prompt],
-            generator=generator,
-            num_inference_steps=2,
-            output_type="np")
+        output = pipe([prompt], generator=generator, num_inference_steps=2, output_type="np")
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = pipe(
@@ -179,17 +183,26 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
             generator=generator,
             output_type="np",
             return_dict=False,
-            num_inference_steps=2)[0]
+            num_inference_steps=2,
+        )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 24, 24, 3)
-        expected_slice = np.array([
-            0.61711097, 0.8419658, 0.5493732, 0.64064896, 0.97944254, 0.5611503,
-            0.6145399, 0.7063037, 0.54406035
-        ])
+        expected_slice = np.array(
+            [
+                0.61711097,
+                0.8419658,
+                0.5493732,
+                0.64064896,
+                0.97944254,
+                0.5611503,
+                0.6145399,
+                0.7063037,
+                0.54406035,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
 
 @slow
@@ -204,8 +217,7 @@ class VQDiffusionPipelineIntegrationTests(unittest.TestCase):
         expected_image = load_numpy(
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/vq_diffusion/teddy_bear_pool_classifier_free_sampling.npy"
         )
-        pipeline = VQDiffusionPipeline.from_pretrained(
-            "microsoft/vq-diffusion-ithq")
+        pipeline = VQDiffusionPipeline.from_pretrained("microsoft/vq-diffusion-ithq")
         pipeline = pipeline
         pipeline.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(0)
@@ -213,7 +225,8 @@ class VQDiffusionPipelineIntegrationTests(unittest.TestCase):
             "teddy bear playing in the pool",
             num_images_per_prompt=1,
             generator=generator,
-            output_type="np")
+            output_type="np",
+        )
         image = output.images[0]
         assert image.shape == (256, 256, 3)
         assert np.abs(expected_image - image).max() < 0.01

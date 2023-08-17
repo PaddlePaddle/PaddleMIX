@@ -24,13 +24,15 @@ LOG_PATH_ROOT = f"{CUR_DIR}/../../output"
 
 
 class PaddleInferBenchmark(object):
-    def __init__(self,
-                 config,
-                 model_info: dict={},
-                 data_info: dict={},
-                 perf_info: dict={},
-                 resource_info: dict={},
-                 **kwargs):
+    def __init__(
+        self,
+        config,
+        model_info: dict = {},
+        data_info: dict = {},
+        perf_info: dict = {},
+        resource_info: dict = {},
+        **kwargs,
+    ):
         """
         Construct PaddleInferBenchmark Class to format logs.
         args:
@@ -83,8 +85,7 @@ class PaddleInferBenchmark(object):
             self.inference_time_s = round(perf_info["inference_time_s"], 4)
         except:
             self.print_help()
-            raise ValueError(
-                "Set argument wrong, please check input argument and its type")
+            raise ValueError("Set argument wrong, please check input argument and its type")
 
         self.preprocess_time_s = perf_info.get("preprocess_time_s", 0)
         self.postprocess_time_s = perf_info.get("postprocess_time_s", 0)
@@ -141,13 +142,12 @@ class PaddleInferBenchmark(object):
             level=logging.INFO,
             format=FORMAT,
             handlers=[
-                logging.FileHandler(
-                    filename=log_output, mode="w"),
+                logging.FileHandler(filename=log_output, mode="w"),
                 logging.StreamHandler(),
-            ], )
+            ],
+        )
         self.logger = logging.getLogger(__name__)
-        self.logger.info(
-            f"Paddle Inference benchmark log will be saved to {log_output}")
+        self.logger.info(f"Paddle Inference benchmark log will be saved to {log_output}")
 
     def parse_config(self, config) -> dict:
         """
@@ -159,28 +159,22 @@ class PaddleInferBenchmark(object):
         """
         if isinstance(config, paddle_infer.Config):
             config_status = {}
-            config_status["runtime_device"] = "gpu" if config.use_gpu(
-            ) else "cpu"
+            config_status["runtime_device"] = "gpu" if config.use_gpu() else "cpu"
             config_status["ir_optim"] = config.ir_optim()
             config_status["enable_tensorrt"] = config.tensorrt_engine_enabled()
             config_status["precision"] = self.precision
             config_status["enable_mkldnn"] = config.mkldnn_enabled()
-            config_status[
-                "cpu_math_library_num_threads"] = config.cpu_math_library_num_threads(
-                )
+            config_status["cpu_math_library_num_threads"] = config.cpu_math_library_num_threads()
         elif isinstance(config, dict):
             config_status["runtime_device"] = config.get("runtime_device", "")
             config_status["ir_optim"] = config.get("ir_optim", "")
             config_status["enable_tensorrt"] = config.get("enable_tensorrt", "")
             config_status["precision"] = config.get("precision", "")
             config_status["enable_mkldnn"] = config.get("enable_mkldnn", "")
-            config_status["cpu_math_library_num_threads"] = config.get(
-                "cpu_math_library_num_threads", "")
+            config_status["cpu_math_library_num_threads"] = config.get("cpu_math_library_num_threads", "")
         else:
             self.print_help()
-            raise ValueError(
-                "Set argument config wrong, please check input argument and its type"
-            )
+            raise ValueError("Set argument config wrong, please check input argument and its type")
         return config_status
 
     def report(self, identifier=None):
@@ -195,54 +189,43 @@ class PaddleInferBenchmark(object):
             identifier = ""
 
         self.logger.info("\n")
-        self.logger.info(
-            "---------------------- Paddle info ----------------------")
+        self.logger.info("---------------------- Paddle info ----------------------")
         self.logger.info(f"{identifier} paddle_version: {self.paddle_version}")
         self.logger.info(f"{identifier} paddle_commit: {self.paddle_commit}")
         self.logger.info(f"{identifier} paddle_branch: {self.paddle_branch}")
         self.logger.info(f"{identifier} log_api_version: {self.log_version}")
-        self.logger.info(
-            "----------------------- Conf info -----------------------")
-        self.logger.info(
-            f"{identifier} runtime_device: {self.config_status['runtime_device']}"
-        )
-        self.logger.info(
-            f"{identifier} ir_optim: {self.config_status['ir_optim']}")
+        self.logger.info("----------------------- Conf info -----------------------")
+        self.logger.info(f"{identifier} runtime_device: {self.config_status['runtime_device']}")
+        self.logger.info(f"{identifier} ir_optim: {self.config_status['ir_optim']}")
         self.logger.info(f"{identifier} enable_memory_optim: {True}")
-        self.logger.info(
-            f"{identifier} enable_tensorrt: {self.config_status['enable_tensorrt']}"
-        )
-        self.logger.info(
-            f"{identifier} enable_mkldnn: {self.config_status['enable_mkldnn']}")
+        self.logger.info(f"{identifier} enable_tensorrt: {self.config_status['enable_tensorrt']}")
+        self.logger.info(f"{identifier} enable_mkldnn: {self.config_status['enable_mkldnn']}")
         self.logger.info(
             f"{identifier} cpu_math_library_num_threads: {self.config_status['cpu_math_library_num_threads']}"
         )
-        self.logger.info(
-            "----------------------- Model info ----------------------")
+        self.logger.info("----------------------- Model info ----------------------")
         self.logger.info(f"{identifier} model_name: {self.model_name}")
         self.logger.info(f"{identifier} precision: {self.precision}")
-        self.logger.info(
-            "----------------------- Data info -----------------------")
+        self.logger.info("----------------------- Data info -----------------------")
         self.logger.info(f"{identifier} batch_size: {self.batch_size}")
         self.logger.info(f"{identifier} input_shape: {self.shape}")
         self.logger.info(f"{identifier} data_num: {self.data_num}")
-        self.logger.info(
-            "----------------------- Perf info -----------------------")
+        self.logger.info("----------------------- Perf info -----------------------")
         self.logger.info(
             f"{identifier} cpu_rss(MB): {self.cpu_rss_mb}, cpu_vms: {self.cpu_vms_mb}, cpu_shared_mb: {self.cpu_shared_mb}, cpu_dirty_mb: {self.cpu_dirty_mb}, cpu_util: {self.cpu_util}%"
         )
         self.logger.info(
             f"{identifier} gpu_rss(MB): {self.gpu_rss_mb}, gpu_util: {self.gpu_util}%, gpu_mem_util: {self.gpu_mem_util}%"
         )
-        self.logger.info(
-            f"{identifier} total time spent(s): {self.total_time_s}")
+        self.logger.info(f"{identifier} total time spent(s): {self.total_time_s}")
 
         if self.with_tracker:
             self.logger.info(
                 f"{identifier} preprocess_time(ms): {round(self.preprocess_time_s*1000, 1)}, "
                 f"inference_time(ms): {round(self.inference_time_s*1000, 1)}, "
                 f"postprocess_time(ms): {round(self.postprocess_time_s*1000, 1)}, "
-                f"tracking_time(ms): {round(self.tracking_time_s*1000, 1)}")
+                f"tracking_time(ms): {round(self.tracking_time_s*1000, 1)}"
+            )
         else:
             self.logger.info(
                 f"{identifier} preprocess_time(ms): {round(self.preprocess_time_s*1000, 1)}, "
@@ -260,7 +243,8 @@ class PaddleInferBenchmark(object):
         """
         print function help
         """
-        print("""Usage:
+        print(
+            """Usage:
             ==== Print inference benchmark logs. ====
             config = paddle.inference.Config()
             model_info = {'model_name': 'resnet50'
@@ -277,7 +261,8 @@ class PaddleInferBenchmark(object):
                              'gpu_util': 60}
             log = PaddleInferBenchmark(config, model_info, data_info, perf_info, resource_info)
             log('Test')
-            """)
+            """
+        )
 
     def __call__(self, identifier=None):
         """

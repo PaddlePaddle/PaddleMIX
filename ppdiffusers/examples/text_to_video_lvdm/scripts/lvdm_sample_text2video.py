@@ -1,9 +1,23 @@
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
+
 from ppdiffusers import LVDMTextToVideoPipeline
 
 # 加载模型和scheduler
-pipe = LVDMTextToVideoPipeline.from_pretrained(
-    'westfish/lvdm_text2video_orig_webvid_2m')
+pipe = LVDMTextToVideoPipeline.from_pretrained("westfish/lvdm_text2video_orig_webvid_2m")
 
 # 执行pipeline进行推理
 seed = 2013
@@ -17,8 +31,9 @@ samples = pipe(
     generator=generator,
     guidance_scale=15,
     eta=1,
-    save_dir='.',
-    save_name='ddim_lvdm_text_to_video_ucf',
-    encoder_type='2d',
+    save_dir=".",
+    save_name="ddim_lvdm_text_to_video_ucf",
+    encoder_type="2d",
     scale_factor=0.18215,
-    shift_factor=0, )
+    shift_factor=0,
+)

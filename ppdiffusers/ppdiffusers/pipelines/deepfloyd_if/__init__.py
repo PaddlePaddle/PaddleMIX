@@ -22,7 +22,8 @@ from ...utils import (
     BaseOutput,
     OptionalDependencyNotAvailable,
     is_paddle_available,
-    is_paddlenlp_available, )
+    is_paddlenlp_available,
+)
 from .timesteps import (
     fast27_timesteps,
     smart27_timesteps,
@@ -31,7 +32,8 @@ from .timesteps import (
     smart185_timesteps,
     super27_timesteps,
     super40_timesteps,
-    super100_timesteps, )
+    super100_timesteps,
+)
 
 
 @dataclass
@@ -66,7 +68,8 @@ else:
     from .pipeline_if_img2img_superresolution import IFImg2ImgSuperResolutionPipeline
     from .pipeline_if_inpainting import IFInpaintingPipeline
     from .pipeline_if_inpainting_superresolution import (
-        IFInpaintingSuperResolutionPipeline, )
+        IFInpaintingSuperResolutionPipeline,
+    )
     from .pipeline_if_superresolution import IFSuperResolutionPipeline
     from .safety_checker import IFSafetyChecker
     from .watermark import IFWatermarker

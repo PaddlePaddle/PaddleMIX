@@ -19,7 +19,6 @@ import numpy as np
 import paddle
 import paddle.nn.functional as F
 import PIL
-
 from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 
 from ...models import AutoencoderKL, UNet2DConditionModel
@@ -76,12 +75,13 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
     """
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            scheduler: EulerDiscreteScheduler, ):
+        self,
+        vae: AutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: UNet2DConditionModel,
+        scheduler: EulerDiscreteScheduler,
+    ):
         super().__init__()
 
         self.register_modules(
@@ -89,10 +89,10 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             text_encoder=text_encoder,
             tokenizer=tokenizer,
             unet=unet,
-            scheduler=scheduler, )
+            scheduler=scheduler,
+        )
 
-    def _encode_prompt(self, prompt, do_classifier_free_guidance,
-                       negative_prompt):
+    def _encode_prompt(self, prompt, do_classifier_free_guidance, negative_prompt):
         r"""
         Encodes the prompt into text encoder hidden states.
 
@@ -113,23 +113,25 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             max_length=self.tokenizer.model_max_length,
             truncation=True,
             return_length=True,
-            return_tensors="pd", )
+            return_tensors="pd",
+        )
         text_input_ids = text_inputs.input_ids
 
-        untruncated_ids = self.tokenizer(
-            prompt, padding="longest", return_tensors="pd").input_ids
+        untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
-        if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                -1] and not paddle.equal_all(text_input_ids, untruncated_ids):
-            removed_text = self.tokenizer.batch_decode(
-                untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
+        if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+            text_input_ids, untruncated_ids
+        ):
+            removed_text = self.tokenizer.batch_decode(untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1])
             logger.warning(
                 "The following part of your input was truncated because CLIP can only handle sequences up to"
-                f" {self.tokenizer.model_max_length} tokens: {removed_text}")
+                f" {self.tokenizer.model_max_length} tokens: {removed_text}"
+            )
 
         text_encoder_out = self.text_encoder(
             text_input_ids,
-            output_hidden_states=True, )
+            output_hidden_states=True,
+        )
         text_embeddings = text_encoder_out.hidden_states[-1]
         text_pooler_out = text_encoder_out.pooler_output
 
@@ -141,14 +143,16 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             elif type(prompt) is not type(negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}.")
+                    f" {type(prompt)}."
+                )
             elif isinstance(negative_prompt, str):
                 uncond_tokens = [negative_prompt]
             elif batch_size != len(negative_prompt):
                 raise ValueError(
                     f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                     f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`.")
+                    " the batch size of `prompt`."
+                )
             else:
                 uncond_tokens = negative_prompt
 
@@ -159,11 +163,13 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                 max_length=max_length,
                 truncation=True,
                 return_length=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
 
             uncond_encoder_out = self.text_encoder(
                 uncond_input.input_ids,
-                output_hidden_states=True, )
+                output_hidden_states=True,
+            )
 
             uncond_embeddings = uncond_encoder_out.hidden_states[-1]
             uncond_pooler_out = uncond_encoder_out.pooler_output
@@ -171,10 +177,8 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            text_embeddings = paddle.concat(
-                [uncond_embeddings, text_embeddings])
-            text_pooler_out = paddle.concat(
-                [uncond_pooler_out, text_pooler_out])
+            text_embeddings = paddle.concat([uncond_embeddings, text_embeddings])
+            text_pooler_out = paddle.concat([uncond_pooler_out, text_pooler_out])
 
         return text_embeddings, text_pooler_out
 
@@ -189,13 +193,13 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
 
     def check_inputs(self, prompt, image, callback_steps):
         if not isinstance(prompt, str) and not isinstance(prompt, list):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
-        if (not isinstance(image, paddle.Tensor) and
-                not isinstance(image, PIL.Image.Image) and
-                not isinstance(image, list)):
+        if (
+            not isinstance(image, paddle.Tensor)
+            and not isinstance(image, PIL.Image.Image)
+            and not isinstance(image, list)
+        ):
             raise ValueError(
                 f"`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or `list` but is {type(image)}"
             )
@@ -217,29 +221,30 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                 )
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_upscale.StableDiffusionUpscalePipeline.prepare_latents
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
         shape = (batch_size, num_channels_latents, height, width)
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
             if latents.shape != list(shape):
-                raise ValueError(
-                    f"Unexpected latents shape, got {latents.shape}, expected {shape}"
-                )
+                raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {shape}")
 
         # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
@@ -247,19 +252,19 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            prompt: Union[str, List[str]],
-            image: Union[paddle.Tensor, PIL.Image.Image, List[PIL.Image.Image]],
-            num_inference_steps: int=75,
-            guidance_scale: float=9.0,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1, ):
+        self,
+        prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, PIL.Image.Image, List[PIL.Image.Image]],
+        num_inference_steps: int = 75,
+        guidance_scale: float = 9.0,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -362,16 +367,14 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             prompt = [""] * batch_size
 
         # 3. Encode input prompt
-        text_embeddings, text_pooler_out = self._encode_prompt(
-            prompt, do_classifier_free_guidance, negative_prompt)
+        text_embeddings, text_pooler_out = self._encode_prompt(prompt, do_classifier_free_guidance, negative_prompt)
 
         # 4. Preprocess image
         image = preprocess(image)
         image = image.cast(text_embeddings.dtype)
         if image.shape[1] == 3:
             # encode image if not in latent-space yet
-            image = self.vae.encode(image).latent_dist.sample(
-            ) * self.vae.config.scaling_factor
+            image = self.vae.encode(image).latent_dist.sample() * self.vae.config.scaling_factor
 
         # 5. set timesteps
         self.scheduler.set_timesteps(num_inference_steps)
@@ -386,27 +389,23 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
         # "the This step theoretically can make the model work better on out-of-distribution inputs, but mostly just seems to make it match the input less, so it's turned off by default."
         noise_level = paddle.to_tensor([0.0], dtype=paddle.float32)
         noise_level = paddle.concat([noise_level] * image.shape[0])
-        inv_noise_level = (noise_level**2 + 1)**(-0.5)
+        inv_noise_level = (noise_level**2 + 1) ** (-0.5)
 
         # TODO F.interpolate donot support float16
-        image_cond = (F.interpolate(
-            image.cast("float32"), scale_factor=2,
-            mode="nearest") * inv_noise_level[:, None, None, None])
+        image_cond = (
+            F.interpolate(image.cast("float32"), scale_factor=2, mode="nearest") * inv_noise_level[:, None, None, None]
+        )
         image_cond = image_cond.cast(text_embeddings.dtype)
 
         noise_level_embed = paddle.concat(
             [
-                paddle.ones(
-                    [text_pooler_out.shape[0], 64],
-                    dtype=text_pooler_out.dtype),
-                paddle.zeros(
-                    [text_pooler_out.shape[0], 64],
-                    dtype=text_pooler_out.dtype),
+                paddle.ones([text_pooler_out.shape[0], 64], dtype=text_pooler_out.dtype),
+                paddle.zeros([text_pooler_out.shape[0], 64], dtype=text_pooler_out.dtype),
             ],
-            axis=1, )
+            axis=1,
+        )
 
-        timestep_condition = paddle.concat(
-            [noise_level_embed, text_pooler_out], axis=1)
+        timestep_condition = paddle.concat([noise_level_embed, text_pooler_out], axis=1)
 
         # 6. Prepare latent variables
         height, width = image.shape[2:]
@@ -418,7 +417,8 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             width * 2,
             text_embeddings.dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # 7. Check that sizes of image and latents match
         num_channels_image = image.shape[1]
@@ -428,7 +428,8 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
                 f" {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} +"
                 f" `num_channels_image`: {num_channels_image} "
                 f" = {num_channels_latents+num_channels_image}. Please verify the config of"
-                " `pipeline.unet` or your `image` input.")
+                " `pipeline.unet` or your `image` input."
+            )
 
         # 9. Denoising loop
         num_warmup_steps = 0
@@ -437,47 +438,39 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             for i, t in enumerate(timesteps):
                 sigma = self.scheduler.sigmas[i]
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
-                scaled_model_input = self.scheduler.scale_model_input(
-                    latent_model_input, t)
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+                scaled_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 scaled_model_input = paddle.concat(
-                    [
-                        scaled_model_input,
-                        image_cond.cast(scaled_model_input.dtype)
-                    ],
-                    axis=1)
+                    [scaled_model_input, image_cond.cast(scaled_model_input.dtype)],
+                    axis=1,
+                )
                 # preconditioning parameter based on  Karras et al. (2022) (table 1)
                 timestep = paddle.log(sigma) * 0.25
                 noise_pred = self.unet(
                     scaled_model_input,
                     timestep,
                     encoder_hidden_states=text_embeddings,
-                    timestep_cond=timestep_condition, ).sample
+                    timestep_cond=timestep_condition,
+                ).sample
 
                 # in original repo, the output contains a variance channel that's not used
                 noise_pred = noise_pred[:, :-1]
 
                 # apply preconditioning, based on table 1 in Karras et al. (2022)
                 inv_sigma = 1 / (sigma**2 + 1)
-                noise_pred = inv_sigma * latent_model_input + self.scheduler.scale_model_input(
-                    sigma, t) * noise_pred
+                noise_pred = inv_sigma * latent_model_input + self.scheduler.scale_model_input(sigma, t) * noise_pred
 
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(noise_pred, t,
-                                              latents).prev_sample
+                latents = self.scheduler.step(noise_pred, t, latents).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -490,6 +483,6 @@ class StableDiffusionLatentUpscalePipeline(DiffusionPipeline):
             image = self.numpy_to_pil(image)
 
         if not return_dict:
-            return (image, )
+            return (image,)
 
         return ImagePipelineOutput(images=image)

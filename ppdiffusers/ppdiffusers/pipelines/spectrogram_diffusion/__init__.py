@@ -16,7 +16,8 @@ from ...utils import (
     OptionalDependencyNotAvailable,
     is_note_seq_available,
     is_paddle_available,
-    is_paddlenlp_available, )
+    is_paddlenlp_available,
+)
 
 try:
     if not (is_paddlenlp_available() and is_paddle_available()):
@@ -28,10 +29,10 @@ else:
     from .pipeline_spectrogram_diffusion import (
         SpectrogramContEncoder,
         SpectrogramDiffusionPipeline,
-        T5FilmDecoder, )
+        T5FilmDecoder,
+    )
 try:
-    if not (is_paddlenlp_available() and is_paddle_available() and
-            is_note_seq_available()):
+    if not (is_paddlenlp_available() and is_paddle_available() and is_note_seq_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
     from ...utils.dummy_paddle_and_paddlenlp_and_note_seq_objects import *

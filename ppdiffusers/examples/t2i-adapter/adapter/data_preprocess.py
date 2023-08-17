@@ -45,8 +45,7 @@ def process_data(line, filename, data_format):
             control_image_b64str = None
 
         caption = ""
-        caption += text_json.get("caption_en",
-                                 text_json.get("blip_caption_en", ""))
+        caption += text_json.get("caption_en", text_json.get("blip_caption_en", ""))
         if caption != "":
             image_base64 = image_b64str
         else:
@@ -65,11 +64,9 @@ def parse_line(line, filename, data_format="default"):
         res = process_data(line, filename, data_format)
         if res is not None:
             image_base64, caption, _id, control_image_base64 = res
-            image = Image.open(io.BytesIO(base64.b64decode(
-                image_base64))).convert("RGB")
+            image = Image.open(io.BytesIO(base64.b64decode(image_base64))).convert("RGB")
             if control_image_base64 is not None:
-                image_extract = io.BytesIO(
-                    base64.b64decode(control_image_base64))
+                image_extract = io.BytesIO(base64.b64decode(control_image_base64))
                 control_image = Image.open(image_extract).convert("RGB")
 
                 control_image = control_image.resize(image.size)
@@ -83,7 +80,8 @@ def parse_line(line, filename, data_format="default"):
                     (image.size[0] - image.size[1]) // 2,
                     0,
                     (image.size[0] + image.size[1]) // 2,
-                    image.size[1], )
+                    image.size[1],
+                )
             image = image.crop(crop_size)
             if control_image is not None:
                 control_image = control_image.crop(crop_size)
@@ -95,7 +93,8 @@ def parse_line(line, filename, data_format="default"):
                 image=image,
                 caption=caption,
                 _id=_id,
-                control_image=control_image, )
+                control_image=control_image,
+            )
         else:
             return None
     except Exception as e:

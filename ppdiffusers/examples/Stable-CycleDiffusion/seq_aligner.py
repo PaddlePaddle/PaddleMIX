@@ -66,8 +66,7 @@ def global_align(x, y, score):
         for j in range(1, len(y) + 1):
             left = matrix[i, j - 1] + score.gap
             up = matrix[i - 1, j] + score.gap
-            diag = matrix[i - 1, j - 1] + score.mis_match_char(x[i - 1],
-                                                               y[j - 1])
+            diag = matrix[i - 1, j - 1] + score.mis_match_char(x[i - 1], y[j - 1])
             matrix[i, j] = max(left, up, diag)
             if matrix[i, j] == left:
                 trace_back[i, j] = 1
@@ -112,14 +111,20 @@ def get_mapper(x: str, y: str, tokenizer, max_len=77):
     score = ScoreParams(0, 1, -1)
     matrix, trace_back = global_align(x_seq, y_seq, score)
     mapper_base = get_aligned_sequences(x_seq, y_seq, trace_back)[-1]
-    alphas = paddle.ones([max_len, ])
-    alphas[:mapper_base.shape[0]] = (mapper_base[:, 1] != -1).cast("float32")
+    alphas = paddle.ones(
+        [
+            max_len,
+        ]
+    )
+    alphas[: mapper_base.shape[0]] = (mapper_base[:, 1] != -1).cast("float32")
     mapper = paddle.zeros(
-        [max_len, ],
-        dtype=paddle.int64, )
-    mapper[:mapper_base.shape[0]] = mapper_base[:, 1]
-    mapper[mapper_base.shape[0]:] = len(y_seq) + paddle.arange(
-        max_len - len(y_seq), dtype="int64")
+        [
+            max_len,
+        ],
+        dtype=paddle.int64,
+    )
+    mapper[: mapper_base.shape[0]] = mapper_base[:, 1]
+    mapper[mapper_base.shape[0] :] = len(y_seq) + paddle.arange(max_len - len(y_seq), dtype="int64")
     return mapper, alphas
 
 
@@ -136,17 +141,12 @@ def get_refinement_mapper(prompts, tokenizer, max_len=77):
 def get_word_inds(text: str, word_place: int, tokenizer):
     split_text = text.split(" ")
     if type(word_place) is str:
-        word_place = [
-            i for i, word in enumerate(split_text) if word_place == word
-        ]
+        word_place = [i for i, word in enumerate(split_text) if word_place == word]
     elif type(word_place) is int:
         word_place = [word_place]
     out = []
     if len(word_place) > 0:
-        words_encode = [
-            tokenizer.decode([item]).strip("#")
-            for item in tokenizer.encode(text).input_ids
-        ][1:-1]
+        words_encode = [tokenizer.decode([item]).strip("#") for item in tokenizer.encode(text).input_ids][1:-1]
         cur_len, ptr = 0, 0
 
         for i in range(len(words_encode)):
@@ -175,8 +175,7 @@ def get_replacement_mapper_(x: str, y: str, tokenizer, max_len=77):
     cur_inds = 0
     while i < max_len and j < max_len:
         if cur_inds < len(inds_source) and inds_source[cur_inds][0] == i:
-            inds_source_, inds_target_ = inds_source[cur_inds], inds_target[
-                cur_inds]
+            inds_source_, inds_target_ = inds_source[cur_inds], inds_target[cur_inds]
             if len(inds_source_) == len(inds_target_):
                 mapper[inds_source_, inds_target_] = 1
             else:

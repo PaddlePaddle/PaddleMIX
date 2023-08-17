@@ -10,7 +10,7 @@ Paddle implementation of [Grounding DINO](https://arxiv.org/abs/2303.05499), a s
 ## 2.1 prepare
 ```bash
 #Multi-scale deformable attention custom OP compilation
-cd /paddlevlp/models/groundingdino/csrc/
+cd /paddlemix/models/groundingdino/csrc/
 python setup_ms_deformable_attn_op.py install
 
 ```
@@ -29,5 +29,3 @@ python export.py
  -prompt "Detect Cat"
 
 ```
-
-

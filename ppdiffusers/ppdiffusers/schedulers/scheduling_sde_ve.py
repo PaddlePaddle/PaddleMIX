@@ -71,13 +71,14 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
 
     @register_to_config
     def __init__(
-            self,
-            num_train_timesteps: int=2000,
-            snr: float=0.15,
-            sigma_min: float=0.01,
-            sigma_max: float=1348.0,
-            sampling_eps: float=1e-5,
-            correct_steps: int=1, ):
+        self,
+        num_train_timesteps: int = 2000,
+        snr: float = 0.15,
+        sigma_min: float = 0.01,
+        sigma_max: float = 1348.0,
+        sampling_eps: float = 1e-5,
+        correct_steps: int = 1,
+    ):
         # standard deviation of the initial noise distribution
         self.init_noise_sigma = sigma_max
 
@@ -86,9 +87,7 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
 
         self.set_sigmas(num_train_timesteps, sigma_min, sigma_max, sampling_eps)
 
-    def scale_model_input(self,
-                          sample: paddle.Tensor,
-                          timestep: Optional[int]=None) -> paddle.Tensor:
+    def scale_model_input(self, sample: paddle.Tensor, timestep: Optional[int] = None) -> paddle.Tensor:
         """
         Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
         current timestep.
@@ -102,7 +101,7 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         """
         return sample
 
-    def set_timesteps(self, num_inference_steps: int, sampling_eps: float=None):
+    def set_timesteps(self, num_inference_steps: int, sampling_eps: float = None):
         """
         Sets the continuous timesteps used for the diffusion chain. Supporting function to be run before inference.
 
@@ -117,11 +116,13 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
 
         self.timesteps = paddle.linspace(1, sampling_eps, num_inference_steps)
 
-    def set_sigmas(self,
-                   num_inference_steps: int,
-                   sigma_min: float=None,
-                   sigma_max: float=None,
-                   sampling_eps: float=None):
+    def set_sigmas(
+        self,
+        num_inference_steps: int,
+        sigma_min: float = None,
+        sigma_max: float = None,
+        sampling_eps: float = None,
+    ):
         """
         Sets the noise scales used for the diffusion chain. Supporting function to be run before inference.
 
@@ -144,28 +145,31 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         if self.timesteps is None:
             self.set_timesteps(num_inference_steps, sampling_eps)
 
-        self.sigmas = sigma_min * (sigma_max / sigma_min)**(self.timesteps /
-                                                            sampling_eps)
+        self.sigmas = sigma_min * (sigma_max / sigma_min) ** (self.timesteps / sampling_eps)
         self.discrete_sigmas = paddle.exp(
-            paddle.linspace(
-                math.log(sigma_min), math.log(sigma_max), num_inference_steps))
-        self.sigmas = paddle.to_tensor(
-            [sigma_min * (sigma_max / sigma_min)**t for t in self.timesteps])
+            paddle.linspace(math.log(sigma_min), math.log(sigma_max), num_inference_steps)
+        )
+        self.sigmas = paddle.to_tensor([sigma_min * (sigma_max / sigma_min) ** t for t in self.timesteps])
 
     def get_adjacent_sigma(self, timesteps, t):
+        # (TODO, junnyu) BUG in PaddlePaddle, here is the issue https://github.com/PaddlePaddle/Paddle/issues/56335
+        index = timesteps - 1
+        if (index < 0).all():
+            index += self.discrete_sigmas.shape[0]
         return paddle.where(
             timesteps == 0,
             paddle.zeros_like(t),
-            self.discrete_sigmas[timesteps - 1], )
+            self.discrete_sigmas[index],
+        )
 
     def step_pred(
-            self,
-            model_output: paddle.Tensor,
-            timestep: int,
-            sample: paddle.Tensor,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            return_dict: bool=True, ) -> Union[SdeVeOutput, Tuple]:
+        self,
+        model_output: paddle.Tensor,
+        timestep: int,
+        sample: paddle.Tensor,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        return_dict: bool = True,
+    ) -> Union[SdeVeOutput, Tuple]:
         """
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion
         process from the learned model outputs (most often the predicted noise).
@@ -188,15 +192,13 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
                 "`self.timesteps` is not set, you need to run 'set_timesteps' after creating the scheduler"
             )
 
-        timestep = timestep * paddle.ones(
-            (sample.shape[0],
-             ))  # paddle.repeat_interleave(timestep, sample.shape[0])
+        timestep = timestep * paddle.ones((sample.shape[0],))  # paddle.repeat_interleave(timestep, sample.shape[0])
         timesteps = (timestep * (len(self.timesteps) - 1)).cast("int64")
 
         sigma = self.discrete_sigmas[timesteps]
         adjacent_sigma = self.get_adjacent_sigma(timesteps, timestep)
         drift = paddle.zeros_like(sample)
-        diffusion = (sigma**2 - adjacent_sigma**2)**0.5
+        diffusion = (sigma**2 - adjacent_sigma**2) ** 0.5
 
         # equation 6 in the paper: the model_output modeled by the network is grad_x log pt(x)
         # also equation 47 shows the analog from SDE models to ancestral sampling methods
@@ -206,8 +208,7 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         drift = drift - diffusion**2 * model_output
 
         #  equation 6: sample noise for the diffusion term of
-        noise = randn_tensor(
-            sample.shape, generator=generator, dtype=sample.dtype)
+        noise = randn_tensor(sample.shape, generator=generator, dtype=sample.dtype)
         prev_sample_mean = sample - drift  # subtract because `dt` is a small negative timestep
         # TODO is the variable diffusion the correct scaling term for the noise?
         prev_sample = prev_sample_mean + diffusion * noise  # add impact of diffusion field g
@@ -215,16 +216,15 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         if not return_dict:
             return (prev_sample, prev_sample_mean)
 
-        return SdeVeOutput(
-            prev_sample=prev_sample, prev_sample_mean=prev_sample_mean)
+        return SdeVeOutput(prev_sample=prev_sample, prev_sample_mean=prev_sample_mean)
 
     def step_correct(
-            self,
-            model_output: paddle.Tensor,
-            sample: paddle.Tensor,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            return_dict: bool=True, ) -> Union[SchedulerOutput, Tuple]:
+        self,
+        model_output: paddle.Tensor,
+        sample: paddle.Tensor,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        return_dict: bool = True,
+    ) -> Union[SchedulerOutput, Tuple]:
         """
         Correct the predicted sample based on the output model_output of the network. This is often run repeatedly
         after making the prediction for the previous timestep.
@@ -251,12 +251,10 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         noise = randn_tensor(sample.shape, generator=generator)
 
         # compute step size from the model_output, the noise, and the snr
-        grad_norm = paddle.norm(
-            model_output.reshape([model_output.shape[0], -1]), axis=-1).mean()
-        noise_norm = paddle.norm(
-            noise.reshape([noise.shape[0], -1]), axis=-1).mean()
-        step_size = (self.config.snr * noise_norm / grad_norm)**2 * 2
-        step_size = step_size * paddle.ones((sample.shape[0], ))
+        grad_norm = paddle.norm(model_output.reshape([model_output.shape[0], -1]), axis=-1).mean()
+        noise_norm = paddle.norm(noise.reshape([noise.shape[0], -1]), axis=-1).mean()
+        step_size = (self.config.snr * noise_norm / grad_norm) ** 2 * 2
+        step_size = step_size * paddle.ones((sample.shape[0],))
         # self.repeat_scalar(step_size, sample.shape[0])
 
         # compute corrected sample: model_output term and noise term
@@ -264,23 +262,22 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         while len(step_size.shape) < len(sample.shape):
             step_size = step_size.unsqueeze(-1)
         prev_sample_mean = sample + step_size * model_output
-        prev_sample = prev_sample_mean + ((step_size * 2)**0.5) * noise
+        prev_sample = prev_sample_mean + ((step_size * 2) ** 0.5) * noise
 
         if not return_dict:
-            return (prev_sample, )
+            return (prev_sample,)
 
         return SchedulerOutput(prev_sample=prev_sample)
 
     def add_noise(
-            self,
-            original_samples: paddle.Tensor,
-            noise: paddle.Tensor,
-            timesteps: paddle.Tensor, ) -> paddle.Tensor:
+        self,
+        original_samples: paddle.Tensor,
+        noise: paddle.Tensor,
+        timesteps: paddle.Tensor,
+    ) -> paddle.Tensor:
         # Make sure sigmas and timesteps have the same dtype as original_samples
         sigmas = self.discrete_sigmas[timesteps]
-        noise = paddle.randn(
-            original_samples.shape,
-            dtype=original_samples.dtype) * sigmas[:, None, None, None]
+        noise = paddle.randn(original_samples.shape, dtype=original_samples.dtype) * sigmas[:, None, None, None]
         noisy_samples = noise + original_samples
         return noisy_samples
 

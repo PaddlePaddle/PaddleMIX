@@ -14,7 +14,6 @@
 
 import paddle
 import paddle.nn as nn
-
 from paddlenlp.transformers.t5.configuration import T5Config
 from paddlenlp.transformers.t5.modeling import T5Block, T5LayerNorm
 
@@ -25,17 +24,18 @@ from ...models import ModelMixin
 class SpectrogramNotesEncoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
     @register_to_config
     def __init__(
-            self,
-            max_length: int,
-            vocab_size: int,
-            d_model: int,
-            dropout_rate: float,
-            num_layers: int,
-            num_heads: int,
-            d_kv: int,
-            d_ff: int,
-            feed_forward_proj: str,
-            is_decoder: bool=False, ):
+        self,
+        max_length: int,
+        vocab_size: int,
+        d_model: int,
+        dropout_rate: float,
+        num_layers: int,
+        num_heads: int,
+        d_kv: int,
+        d_ff: int,
+        feed_forward_proj: str,
+        is_decoder: bool = False,
+    ):
         super().__init__()
         self.token_embedder = nn.Embedding(vocab_size, d_model)
         self.position_encoding = nn.Embedding(max_length, d_model)
@@ -50,7 +50,8 @@ class SpectrogramNotesEncoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
             dropout_rate=dropout_rate,
             feed_forward_proj=feed_forward_proj,
             is_decoder=is_decoder,
-            is_encoder_decoder=False, )
+            is_encoder_decoder=False,
+        )
         self.encoders = nn.LayerList()
         for lyr_num in range(num_layers):
             lyr = T5Block(t5config)
@@ -67,8 +68,7 @@ class SpectrogramNotesEncoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
 
         # inverted the attention mask
         input_shape = encoder_input_tokens.shape
-        extended_attention_mask = self.get_extended_attention_mask(
-            encoder_inputs_mask, input_shape)
+        extended_attention_mask = self.get_extended_attention_mask(encoder_inputs_mask, input_shape)
         for lyr in self.encoders:
             x = lyr(x, extended_attention_mask)[0]
         x = self.layer_norm(x)

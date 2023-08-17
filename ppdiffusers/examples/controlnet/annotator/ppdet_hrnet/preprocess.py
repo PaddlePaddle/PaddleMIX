@@ -64,16 +64,9 @@ class Resize_Mult32(object):
             im_info (dict): info of processed image
         """
         im_scale_y, im_scale_x = self.generate_scale(im)
-        im = cv2.resize(
-            im,
-            None,
-            None,
-            fx=im_scale_x,
-            fy=im_scale_y,
-            interpolation=self.interp)
+        im = cv2.resize(im, None, None, fx=im_scale_x, fy=im_scale_y, interpolation=self.interp)
         im_info["im_shape"] = np.array(im.shape[:2]).astype("float32")
-        im_info["scale_factor"] = np.array(
-            [im_scale_y, im_scale_x]).astype("float32")
+        im_info["scale_factor"] = np.array([im_scale_y, im_scale_x]).astype("float32")
         return im, im_info
 
     def generate_scale(self, img):
@@ -140,16 +133,9 @@ class Resize(object):
         assert len(self.target_size) == 2
         assert self.target_size[0] > 0 and self.target_size[1] > 0
         im_scale_y, im_scale_x = self.generate_scale(im)
-        im = cv2.resize(
-            im,
-            None,
-            None,
-            fx=im_scale_x,
-            fy=im_scale_y,
-            interpolation=self.interp)
+        im = cv2.resize(im, None, None, fx=im_scale_x, fy=im_scale_y, interpolation=self.interp)
         im_info["im_shape"] = np.array(im.shape[:2]).astype("float32")
-        im_info["scale_factor"] = np.array(
-            [im_scale_y, im_scale_x]).astype("float32")
+        im_info["scale_factor"] = np.array([im_scale_y, im_scale_x]).astype("float32")
         return im, im_info
 
     def generate_scale(self, im):
@@ -188,12 +174,14 @@ class ShortSizeScale(object):
         backend(str): Choose pillow or cv2 as the graphics processing backend. default: 'pillow'
     """
 
-    def __init__(self,
-                 short_size,
-                 fixed_ratio=True,
-                 keep_ratio=None,
-                 do_round=False,
-                 backend="pillow"):
+    def __init__(
+        self,
+        short_size,
+        fixed_ratio=True,
+        keep_ratio=None,
+        do_round=False,
+        backend="pillow",
+    ):
         self.short_size = short_size
         assert (fixed_ratio and not keep_ratio) or (
             not fixed_ratio
@@ -203,7 +191,8 @@ class ShortSizeScale(object):
         self.do_round = do_round
 
         assert backend in [
-            "pillow", "cv2"
+            "pillow",
+            "cv2",
         ], "Scale's backend must be pillow or cv2, but get {backend}"
 
         self.backend = backend
@@ -234,10 +223,8 @@ class ShortSizeScale(object):
                 oh = self.short_size
             else:
                 scale_factor = self.short_size / w
-                oh = int(h * float(scale_factor) +
-                         0.5) if self.do_round else int(h * self.short_size / w)
-                ow = int(w * float(scale_factor) +
-                         0.5) if self.do_round else int(w * self.short_size / h)
+                oh = int(h * float(scale_factor) + 0.5) if self.do_round else int(h * self.short_size / w)
+                ow = int(w * float(scale_factor) + 0.5) if self.do_round else int(w * self.short_size / h)
         else:
             oh = self.short_size
             if self.fixed_ratio:
@@ -246,10 +233,8 @@ class ShortSizeScale(object):
                 ow = self.short_size
             else:
                 scale_factor = self.short_size / h
-                oh = int(h * float(scale_factor) +
-                         0.5) if self.do_round else int(h * self.short_size / w)
-                ow = int(w * float(scale_factor) +
-                         0.5) if self.do_round else int(w * self.short_size / h)
+                oh = int(h * float(scale_factor) + 0.5) if self.do_round else int(h * self.short_size / w)
+                ow = int(w * float(scale_factor) + 0.5) if self.do_round else int(w * self.short_size / h)
 
         if type(img) == np.ndarray:
             img = Image.fromarray(img, mode="RGB")
@@ -257,12 +242,9 @@ class ShortSizeScale(object):
         if self.backend == "pillow":
             result_img = img.resize((ow, oh), Image.BILINEAR)
         elif self.backend == "cv2" and (self.keep_ratio is not None):
-            result_img = cv2.resize(
-                img, (ow, oh), interpolation=cv2.INTER_LINEAR)
+            result_img = cv2.resize(img, (ow, oh), interpolation=cv2.INTER_LINEAR)
         else:
-            result_img = Image.fromarray(
-                cv2.resize(
-                    np.asarray(img), (ow, oh), interpolation=cv2.INTER_LINEAR))
+            result_img = Image.fromarray(cv2.resize(np.asarray(img), (ow, oh), interpolation=cv2.INTER_LINEAR))
 
         return result_img
 
@@ -311,7 +293,9 @@ class Permute(object):
         channel_first (bool): whether convert HWC to CHW
     """
 
-    def __init__(self, ):
+    def __init__(
+        self,
+    ):
         super(Permute, self).__init__()
 
     def __call__(self, im, im_info):
@@ -375,18 +359,17 @@ class LetterBoxResize(object):
         ratio_h = float(height) / shape[0]
         ratio_w = float(width) / shape[1]
         ratio = min(ratio_h, ratio_w)
-        new_shape = (round(shape[1] * ratio),
-                     round(shape[0] * ratio))  # [width, height]
+        new_shape = (
+            round(shape[1] * ratio),
+            round(shape[0] * ratio),
+        )  # [width, height]
         padw = (width - new_shape[0]) / 2
         padh = (height - new_shape[1]) / 2
         top, bottom = round(padh - 0.1), round(padh + 0.1)
         left, right = round(padw - 0.1), round(padw + 0.1)
 
-        img = cv2.resize(
-            img, new_shape, interpolation=cv2.INTER_AREA)  # resized, no border
-        img = cv2.copyMakeBorder(
-            img, top, bottom, left, right, cv2.BORDER_CONSTANT,
-            value=color)  # padded rectangular
+        img = cv2.resize(img, new_shape, interpolation=cv2.INTER_AREA)  # resized, no border
+        img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # padded rectangular
         return img, ratio, padw, padh
 
     def __call__(self, im, im_info):
@@ -441,14 +424,16 @@ class Pad(object):
 class WarpAffine(object):
     """Warp affine the image"""
 
-    def __init__(self,
-                 keep_res=False,
-                 pad=31,
-                 input_h=512,
-                 input_w=512,
-                 scale=0.4,
-                 shift=0.1,
-                 down_ratio=4):
+    def __init__(
+        self,
+        keep_res=False,
+        pad=31,
+        input_h=512,
+        input_w=512,
+        scale=0.4,
+        shift=0.1,
+        down_ratio=4,
+    ):
         self.keep_res = keep_res
         self.pad = pad
         self.input_h = input_h
@@ -485,32 +470,32 @@ class WarpAffine(object):
 
         trans_input = get_affine_transform(c, s, 0, [input_w, input_h])
         img = cv2.resize(img, (w, h))
-        inp = cv2.warpAffine(
-            img, trans_input, (input_w, input_h), flags=cv2.INTER_LINEAR)
+        inp = cv2.warpAffine(img, trans_input, (input_w, input_h), flags=cv2.INTER_LINEAR)
 
         if not self.keep_res:
             out_h = input_h // self.down_ratio
             out_w = input_w // self.down_ratio
             trans_output = get_affine_transform(c, s, 0, [out_w, out_h])
 
-            im_info.update({
-                "center": c,
-                "scale": s,
-                "out_height": out_h,
-                "out_width": out_w,
-                "inp_height": input_h,
-                "inp_width": input_w,
-                "trans_input": trans_input,
-                "trans_output": trans_output,
-            })
+            im_info.update(
+                {
+                    "center": c,
+                    "scale": s,
+                    "out_height": out_h,
+                    "out_width": out_w,
+                    "inp_height": input_h,
+                    "inp_width": input_w,
+                    "trans_input": trans_input,
+                    "trans_output": trans_output,
+                }
+            )
         return inp, im_info
 
 
 def preprocess(im, preprocess_ops):
     # process image by preprocess_ops
     im_info = {
-        "scale_factor": np.array(
-            [1.0, 1.0], dtype=np.float32),
+        "scale_factor": np.array([1.0, 1.0], dtype=np.float32),
         "im_shape": None,
     }
     im, im_info = decode_image(im, im_info)

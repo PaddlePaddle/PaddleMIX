@@ -22,9 +22,9 @@ import paddle
 # isort: split
 import fastdeploy as fd
 import numpy as np
+from paddlenlp.trainer.argparser import strtobool
 from tqdm.auto import trange
 
-from paddlenlp.trainer.argparser import strtobool
 from ppdiffusers import DiffusionPipeline, FastDeployStableDiffusionMegaPipeline
 from ppdiffusers.utils import load_image
 
@@ -35,17 +35,20 @@ def parse_arguments():
     parser.add_argument(
         "--model_dir",
         default="runwayml/stable-diffusion-v1-5@fastdeploy",
-        help="The model directory of diffusion_model.", )
+        help="The model directory of diffusion_model.",
+    )
     parser.add_argument(
         "--inference_steps",
         type=int,
         default=50,
-        help="The number of unet inference steps.")
+        help="The number of unet inference steps.",
+    )
     parser.add_argument(
         "--benchmark_steps",
         type=int,
         default=1,
-        help="The number of performance benchmark steps.")
+        help="The number of performance benchmark steps.",
+    )
     parser.add_argument(
         "--backend",
         type=str,
@@ -65,7 +68,8 @@ def parse_arguments():
             "huawei_ascend_npu",
             "kunlunxin_xpu",
         ],
-        help="The inference runtime device of models.", )
+        help="The inference runtime device of models.",
+    )
     parser.add_argument(
         "--task_name",
         type=str,
@@ -90,22 +94,11 @@ def parse_arguments():
             "raw",
             "lpw",
         ],
-        help="The parse_prompt_type can be one of [raw, lpw]. ", )
-    parser.add_argument(
-        "--use_fp16",
-        type=strtobool,
-        default=True,
-        help="Wheter to use FP16 mode")
-    parser.add_argument(
-        "--use_bf16",
-        type=strtobool,
-        default=False,
-        help="Wheter to use BF16 mode")
-    parser.add_argument(
-        "--device_id",
-        type=int,
-        default=0,
-        help="The selected gpu id. -1 means use cpu")
+        help="The parse_prompt_type can be one of [raw, lpw]. ",
+    )
+    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
+    parser.add_argument("--use_bf16", type=strtobool, default=False, help="Wheter to use BF16 mode")
+    parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
         "--scheduler",
         type=str,
@@ -126,7 +119,8 @@ def parse_arguments():
             "kdpm2-ancestral",
             "kdpm2",
         ],
-        help="The scheduler type of stable diffusion.", )
+        help="The scheduler type of stable diffusion.",
+    )
     parser.add_argument(
         "--infer_op",
         type=str,
@@ -136,23 +130,13 @@ def parse_arguments():
             "raw",
             "all",
         ],
-        help="The type of infer op.", )
-    parser.add_argument(
-        "--height", type=int, default=512, help="Height of input image")
-    parser.add_argument(
-        "--width", type=int, default=512, help="Width of input image")
-    parser.add_argument(
-        "--hr_resize_height",
-        type=int,
-        default=768,
-        help="HR Height of input image")
-    parser.add_argument(
-        "--hr_resize_width",
-        type=int,
-        default=768,
-        help="HR Width of input image")
-    parser.add_argument(
-        "--is_sd2_0", type=strtobool, default=False, help="Is sd2_0 model?")
+        help="The type of infer op.",
+    )
+    parser.add_argument("--height", type=int, default=512, help="Height of input image")
+    parser.add_argument("--width", type=int, default=512, help="Width of input image")
+    parser.add_argument("--hr_resize_height", type=int, default=768, help="HR Height of input image")
+    parser.add_argument("--hr_resize_width", type=int, default=768, help="HR Width of input image")
+    parser.add_argument("--is_sd2_0", type=strtobool, default=False, help="Is sd2_0 model?")
 
     return parser.parse_args()
 
@@ -168,15 +152,16 @@ def create_ort_runtime(device_id=0):
 
 
 def create_paddle_inference_runtime(
-        use_trt=False,
-        dynamic_shape=None,
-        use_fp16=False,
-        use_bf16=False,
-        device_id=0,
-        disable_paddle_trt_ops=[],
-        disable_paddle_pass=[],
-        paddle_stream=None,
-        workspace=None, ):
+    use_trt=False,
+    dynamic_shape=None,
+    use_fp16=False,
+    use_bf16=False,
+    device_id=0,
+    disable_paddle_trt_ops=[],
+    disable_paddle_pass=[],
+    paddle_stream=None,
+    workspace=None,
+):
     assert not use_fp16 or not use_bf16, "use_fp16 and use_bf16 are mutually exclusive"
     option = fd.RuntimeOption()
     option.use_paddle_backend()
@@ -213,9 +198,12 @@ def create_paddle_inference_runtime(
         if dynamic_shape is not None:
             option.paddle_infer_option.collect_trt_shape = True
             for key, shape_dict in dynamic_shape.items():
-                option.trt_option.set_shape(key, shape_dict["min_shape"],
-                                            shape_dict.get("opt_shape", None),
-                                            shape_dict.get("max_shape", None))
+                option.trt_option.set_shape(
+                    key,
+                    shape_dict["min_shape"],
+                    shape_dict.get("opt_shape", None),
+                    shape_dict.get("max_shape", None),
+                )
     return option
 
 
@@ -226,8 +214,10 @@ def create_paddle_lite_runtime(device="cpu", device_id=0, use_fp16=False):
         option.use_ascend()
         option.set_lite_device_names(["huawei_ascend_npu"])
         option.set_lite_context_properties(
-            "HUAWEI_ASCEND_NPU_SELECTED_DEVICE_IDS={};HUAWEI_ASCEND_NPU_PRECISION_MODE=allow_mix_precision".
-            format(device_id))
+            "HUAWEI_ASCEND_NPU_SELECTED_DEVICE_IDS={};HUAWEI_ASCEND_NPU_PRECISION_MODE=allow_mix_precision".format(
+                device_id
+            )
+        )
     elif device == "kunlunxin_xpu":
         # TODO(shentanyue): Add kunlunxin_xpu code
         # https://github.com/PaddlePaddle/FastDeploy/blob/4c3e7030e151528d304619901c794481bb2f6037/examples/multimodal/stable_diffusion/infer.py#L178-L195
@@ -239,7 +229,8 @@ def create_paddle_lite_runtime(device="cpu", device_id=0, use_fp16=False):
             autotune_file="",
             precision="int16",
             adaptive_seqlen=True,
-            enable_multi_stream=True, )
+            enable_multi_stream=True,
+        )
         if use_fp16:
             option.enable_lite_fp16()
     else:
@@ -247,10 +238,7 @@ def create_paddle_lite_runtime(device="cpu", device_id=0, use_fp16=False):
     return option
 
 
-def create_trt_runtime(workspace=(1 << 31),
-                       dynamic_shape=None,
-                       use_fp16=False,
-                       device_id=0):
+def create_trt_runtime(workspace=(1 << 31), dynamic_shape=None, use_fp16=False, device_id=0):
     option = fd.RuntimeOption()
     option.use_trt_backend()
     option.use_gpu(device_id)
@@ -264,7 +252,8 @@ def create_trt_runtime(workspace=(1 << 31),
                 key,
                 min_shape=shape_dict["min_shape"],
                 opt_shape=shape_dict.get("opt_shape", None),
-                max_shape=shape_dict.get("max_shape", None), )
+                max_shape=shape_dict.get("max_shape", None),
+            )
     return option
 
 
@@ -274,8 +263,7 @@ def main(args):
         paddle_stream = None
     else:
         paddle.set_device(f"gpu:{args.device_id}")
-        paddle_stream = paddle.device.cuda.current_stream(
-            args.device_id).cuda_stream
+        paddle_stream = paddle.device.cuda.current_stream(args.device_id).cuda_stream
 
     seed = 1024
     vae_in_channels = 4
@@ -311,23 +299,32 @@ def main(args):
 
     vae_decoder_dynamic_shape = {
         "latent_sample": {
-            "min_shape":
-            [1, vae_in_channels, min_image_size // 8, min_image_size // 8],
-            "max_shape":
-            [1, vae_in_channels, max_image_size // 8, max_image_size // 8],
-            "opt_shape":
-            [1, vae_in_channels, min_image_size // 8, min_image_size // 8],
+            "min_shape": [1, vae_in_channels, min_image_size // 8, min_image_size // 8],
+            "max_shape": [1, vae_in_channels, max_image_size // 8, max_image_size // 8],
+            "opt_shape": [1, vae_in_channels, min_image_size // 8, min_image_size // 8],
         }
     }
 
     unet_dynamic_shape = {
         "sample": {
-            "min_shape":
-            [1, unet_in_channels, min_image_size // 8, min_image_size // 8],
-            "max_shape":
-            [bs, unet_in_channels, max_image_size // 8, max_image_size // 8],
-            "opt_shape":
-            [2, unet_in_channels, min_image_size // 8, min_image_size // 8],
+            "min_shape": [
+                1,
+                unet_in_channels,
+                min_image_size // 8,
+                min_image_size // 8,
+            ],
+            "max_shape": [
+                bs,
+                unet_in_channels,
+                max_image_size // 8,
+                max_image_size // 8,
+            ],
+            "opt_shape": [
+                2,
+                unet_in_channels,
+                min_image_size // 8,
+                min_image_size // 8,
+            ],
         },
         "timestep": {
             "min_shape": [1],
@@ -346,37 +343,38 @@ def main(args):
             text_encoder=create_ort_runtime(device_id=args.device_id),
             vae_encoder=create_ort_runtime(device_id=args.device_id),
             vae_decoder=create_ort_runtime(device_id=args.device_id),
-            unet=create_ort_runtime(device_id=args.device_id), )
+            unet=create_ort_runtime(device_id=args.device_id),
+        )
     elif args.backend == "paddlelite":
         runtime_options = dict(
-            text_encoder=create_paddle_lite_runtime(
-                device=args.device, device_id=args.device_id, use_fp16=False),
-            vae_encoder=create_paddle_lite_runtime(
-                device=args.device, device_id=args.device_id, use_fp16=False),
-            vae_decoder=create_paddle_lite_runtime(
-                device=args.device, device_id=args.device_id, use_fp16=False),
-            unet=create_paddle_lite_runtime(
-                device=args.device,
-                device_id=args.device_id,
-                use_fp16=args.use_fp16), )
+            text_encoder=create_paddle_lite_runtime(device=args.device, device_id=args.device_id, use_fp16=False),
+            vae_encoder=create_paddle_lite_runtime(device=args.device, device_id=args.device_id, use_fp16=False),
+            vae_decoder=create_paddle_lite_runtime(device=args.device, device_id=args.device_id, use_fp16=False),
+            unet=create_paddle_lite_runtime(device=args.device, device_id=args.device_id, use_fp16=args.use_fp16),
+        )
     elif args.backend == "tensorrt":
         runtime_options = dict(
             text_encoder=create_trt_runtime(
                 dynamic_shape=text_encoder_dynamic_shape,
                 use_fp16=args.use_fp16,
-                device_id=args.device_id),
+                device_id=args.device_id,
+            ),
             vae_encoder=create_trt_runtime(
                 dynamic_shape=vae_encoder_dynamic_shape,
                 use_fp16=args.use_fp16,
-                device_id=args.device_id),
+                device_id=args.device_id,
+            ),
             vae_decoder=create_trt_runtime(
                 dynamic_shape=vae_decoder_dynamic_shape,
                 use_fp16=args.use_fp16,
-                device_id=args.device_id),
+                device_id=args.device_id,
+            ),
             unet=create_trt_runtime(
                 dynamic_shape=unet_dynamic_shape,
                 use_fp16=args.use_fp16,
-                device_id=args.device_id), )
+                device_id=args.device_id,
+            ),
+        )
     elif args.backend == "paddle" or args.backend == "paddle_tensorrt":
         args.use_trt = args.backend == "paddle_tensorrt"
         runtime_options = dict(
@@ -387,31 +385,37 @@ def main(args):
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
                 disable_paddle_trt_ops=["arg_max", "range", "lookup_table_v2"],
-                paddle_stream=paddle_stream, ),
+                paddle_stream=paddle_stream,
+            ),
             vae_encoder=create_paddle_inference_runtime(
                 use_trt=args.use_trt,
                 dynamic_shape=vae_encoder_dynamic_shape,
                 use_fp16=args.use_fp16,
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
-                paddle_stream=paddle_stream, ),
+                paddle_stream=paddle_stream,
+            ),
             vae_decoder=create_paddle_inference_runtime(
                 use_trt=args.use_trt,
                 dynamic_shape=vae_decoder_dynamic_shape,
                 use_fp16=args.use_fp16,
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
-                paddle_stream=paddle_stream, ),
+                paddle_stream=paddle_stream,
+            ),
             unet=create_paddle_inference_runtime(
                 use_trt=args.use_trt,
                 dynamic_shape=unet_dynamic_shape,
                 use_fp16=args.use_fp16,
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
-                paddle_stream=paddle_stream, ), )
+                paddle_stream=paddle_stream,
+            ),
+        )
     pipe = FastDeployStableDiffusionMegaPipeline.from_pretrained(
         args.model_dir,
-        runtime_options=runtime_options, )
+        runtime_options=runtime_options,
+    )
     pipe.set_progress_bar_config(disable=True)
     pipe.change_scheduler(args.scheduler)
     parse_prompt_type = args.parse_prompt_type
@@ -425,9 +429,7 @@ def main(args):
     else:
         infer_op_list = [args.infer_op]
     if args.device == "kunlunxin_xpu" or args.backend == "paddle":
-        print(
-            "When device is kunlunxin_xpu or backend is paddle, we will use `raw` infer op."
-        )
+        print("When device is kunlunxin_xpu or backend is paddle, we will use `raw` infer op.")
         infer_op_list = ["raw"]
 
     for infer_op in infer_op_list:
@@ -450,7 +452,8 @@ def main(args):
                 height=height,
                 width=width,
                 parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict, )
+                infer_op_dict=infer_op_dict,
+            )
             print("==> Test text2img performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -461,7 +464,8 @@ def main(args):
                     height=height,
                     width=width,
                     parse_prompt_type=parse_prompt_type,
-                    infer_op_dict=infer_op_dict, ).images
+                    infer_op_dict=infer_op_dict,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -485,7 +489,8 @@ def main(args):
                 height=height,
                 width=width,
                 parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict, )
+                infer_op_dict=infer_op_dict,
+            )
             print("==> Test img2img performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -497,7 +502,8 @@ def main(args):
                     height=height,
                     width=width,
                     parse_prompt_type=parse_prompt_type,
-                    infer_op_dict=infer_op_dict, ).images
+                    infer_op_dict=infer_op_dict,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -531,7 +537,8 @@ def main(args):
                 height=height,
                 width=width,
                 parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict, )
+                infer_op_dict=infer_op_dict,
+            )
             print(f"==> Test {task_name} performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -544,7 +551,8 @@ def main(args):
                     height=height,
                     width=width,
                     parse_prompt_type=parse_prompt_type,
-                    infer_op_dict=infer_op_dict, ).images
+                    infer_op_dict=infer_op_dict,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -586,7 +594,8 @@ def main(args):
                 hr_resize_height=hr_resize_height,
                 enable_hr=True,
                 parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict, )
+                infer_op_dict=infer_op_dict,
+            )
             print("==> Test hiresfix performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -600,7 +609,8 @@ def main(args):
                     hr_resize_width=hr_resize_width,
                     hr_resize_height=hr_resize_height,
                     enable_hr=True,
-                    infer_op_dict=infer_op_dict, ).images
+                    infer_op_dict=infer_op_dict,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -632,7 +642,8 @@ def main(args):
                 height=height,
                 width=width,
                 parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict, ).images[0]
+                infer_op_dict=infer_op_dict,
+            ).images[0]
             print("==> Test cycle diffusion performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
@@ -649,7 +660,8 @@ def main(args):
                     height=height,
                     width=width,
                     parse_prompt_type=parse_prompt_type,
-                    infer_op_dict=infer_op_dict, ).images
+                    infer_op_dict=infer_op_dict,
+                ).images
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")
@@ -680,11 +692,13 @@ def main(args):
             time_costs = []
             # warmup
             mixture_tiling_pipe(
-                prompt=[[
-                    "A charming house in the countryside, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-                    "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-                    "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-                ]],
+                prompt=[
+                    [
+                        "A charming house in the countryside, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                        "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                        "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                    ]
+                ],
                 tile_height=512,
                 tile_width=512,
                 tile_row_overlap=0,
@@ -692,16 +706,19 @@ def main(args):
                 guidance_scale=8,
                 seed=7178915308,
                 num_inference_steps=50,
-                infer_op_dict=None, )
+                infer_op_dict=None,
+            )
             print("==> Test mixture tiling.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
                 images = mixture_tiling_pipe(
-                    prompt=[[
-                        "A charming house in the countryside, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-                        # "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-                        # "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-                    ]],
+                    prompt=[
+                        [
+                            "A charming house in the countryside, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                            # "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                            # "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                        ]
+                    ],
                     tile_height=512,
                     tile_width=512,
                     tile_row_overlap=0,
@@ -709,7 +726,8 @@ def main(args):
                     guidance_scale=8,
                     seed=7178915308,
                     num_inference_steps=50,
-                    infer_op_dict=None, )["images"]
+                    infer_op_dict=None,
+                )["images"]
                 latency = time.time() - start
                 time_costs += [latency]
                 # print(f"No {step:3d} time cost: {latency:2f} s")

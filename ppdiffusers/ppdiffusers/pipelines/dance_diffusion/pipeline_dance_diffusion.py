@@ -40,13 +40,13 @@ class DanceDiffusionPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            batch_size: int=1,
-            num_inference_steps: int=100,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            audio_length_in_s: Optional[float]=None,
-            return_dict: bool=True, ) -> Union[AudioPipelineOutput, Tuple]:
+        self,
+        batch_size: int = 1,
+        num_inference_steps: int = 100,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        audio_length_in_s: Optional[float] = None,
+        return_dict: bool = True,
+    ) -> Union[AudioPipelineOutput, Tuple]:
         """
         Args:
             batch_size (`int`, *optional*, defaults to 1):
@@ -69,15 +69,16 @@ class DanceDiffusionPipeline(DiffusionPipeline):
         if audio_length_in_s is None:
             audio_length_in_s = self.unet.config.sample_size / self.unet.config.sample_rate
         sample_size = audio_length_in_s * self.unet.config.sample_rate
-        down_scale_factor = 2**len(self.unet.up_blocks)
+        down_scale_factor = 2 ** len(self.unet.up_blocks)
         if sample_size < 3 * down_scale_factor:
             raise ValueError(
                 f"{audio_length_in_s} is too small. Make sure it's bigger or equal to {3 * down_scale_factor / self.unet.config.sample_rate}."
             )
         original_sample_size = int(sample_size)
         if sample_size % down_scale_factor != 0:
-            sample_size = (audio_length_in_s * self.unet.config.sample_rate //
-                           down_scale_factor + 1) * down_scale_factor
+            sample_size = (
+                audio_length_in_s * self.unet.config.sample_rate // down_scale_factor + 1
+            ) * down_scale_factor
             logger.info(
                 f"{audio_length_in_s} is increased to {sample_size / self.unet.config.sample_rate} so that it can be handled by the model. It will be cut to {original_sample_size / self.unet.config.sample_rate} after the denoising process."
             )
@@ -104,5 +105,5 @@ class DanceDiffusionPipeline(DiffusionPipeline):
         audio = audio.clip(min=-1, max=1).astype(dtype="float32").cpu().numpy()
         audio = audio[:, :, :original_sample_size]
         if not return_dict:
-            return (audio, )
+            return (audio,)
         return AudioPipelineOutput(audios=audio)

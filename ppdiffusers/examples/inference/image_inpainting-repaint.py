@@ -22,10 +22,8 @@ mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/mask_2
 original_image = load_image(img_url).resize((256, 256))
 mask_image = load_image(mask_url).resize((256, 256))
 
-scheduler = RePaintScheduler.from_pretrained(
-    "google/ddpm-ema-celebahq-256", subfolder="scheduler")
-pipe = RePaintPipeline.from_pretrained(
-    "google/ddpm-ema-celebahq-256", scheduler=scheduler)
+scheduler = RePaintScheduler.from_pretrained("google/ddpm-ema-celebahq-256", subfolder="scheduler")
+pipe = RePaintPipeline.from_pretrained("google/ddpm-ema-celebahq-256", scheduler=scheduler)
 
 output = pipe(
     image=original_image,
@@ -33,7 +31,8 @@ output = pipe(
     num_inference_steps=250,
     eta=0.0,
     jump_length=10,
-    jump_n_sample=10, )
+    jump_n_sample=10,
+)
 inpainted_image = output.images[0]
 
 inpainted_image.save("image_inpainting-repaint-result.png")

@@ -21,12 +21,13 @@ from paddle import nn
 
 
 def get_timestep_embedding(
-        timesteps: paddle.Tensor,
-        embedding_dim: int,
-        flip_sin_to_cos: bool=False,
-        downscale_freq_shift: float=1,
-        scale: float=1,
-        max_period: int=10000, ):
+    timesteps: paddle.Tensor,
+    embedding_dim: int,
+    flip_sin_to_cos: bool = False,
+    downscale_freq_shift: float = 1,
+    scale: float = 1,
+    max_period: int = 10000,
+):
     """
     This matches the implementation in Denoising Diffusion Probabilistic Models: Create sinusoidal timestep embeddings.
 
@@ -38,8 +39,7 @@ def get_timestep_embedding(
     assert len(timesteps.shape) == 1, "Timesteps should be a 1d-array"
 
     half_dim = embedding_dim // 2
-    exponent = -math.log(max_period) * paddle.arange(
-        start=0, end=half_dim, dtype="float32")
+    exponent = -math.log(max_period) * paddle.arange(start=0, end=half_dim, dtype="float32")
 
     exponent = exponent / (half_dim - downscale_freq_shift)
 
@@ -62,10 +62,7 @@ def get_timestep_embedding(
     return emb
 
 
-def get_2d_sincos_pos_embed(embed_dim,
-                            grid_size,
-                            cls_token=False,
-                            extra_tokens=0):
+def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=0):
     """
     grid_size: int of the grid height and width return: pos_embed: [grid_size*grid_size, embed_dim] or
     [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
@@ -78,8 +75,7 @@ def get_2d_sincos_pos_embed(embed_dim,
     grid = grid.reshape([2, 1, grid_size, grid_size])
     pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
     if cls_token and extra_tokens > 0:
-        pos_embed = np.concatenate(
-            [np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
+        pos_embed = np.concatenate([np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
     return pos_embed
 
 
@@ -88,10 +84,8 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
         raise ValueError("embed_dim must be divisible by 2")
 
     # use half of dimensions to encode grid_h
-    emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2,
-                                              grid[0])  # (H*W, D/2)
-    emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2,
-                                              grid[1])  # (H*W, D/2)
+    emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
+    emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
 
     emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
     return emb
@@ -122,16 +116,17 @@ class PatchEmbed(nn.Layer):
     """2D Image to Patch Embedding"""
 
     def __init__(
-            self,
-            height=224,
-            width=224,
-            patch_size=16,
-            in_channels=3,
-            embed_dim=768,
-            layer_norm=False,
-            flatten=True,
-            bias=True,
-            add_pos_embed=True, ):
+        self,
+        height=224,
+        width=224,
+        patch_size=16,
+        in_channels=3,
+        embed_dim=768,
+        layer_norm=False,
+        flatten=True,
+        bias=True,
+        add_pos_embed=True,
+    ):
         super().__init__()
 
         num_patches = (height // patch_size) * (width // patch_size)
@@ -143,22 +138,22 @@ class PatchEmbed(nn.Layer):
             embed_dim,
             kernel_size=(patch_size, patch_size),
             stride=patch_size,
-            bias_attr=bias)
+            bias_attr=bias,
+        )
         if layer_norm:
             # elementwise_affine=False  -> weight_attr=False, bias_attr=False
-            self.norm = nn.LayerNorm(
-                embed_dim, epsilon=1e-6, weight_attr=False, bias_attr=False)
+            self.norm = nn.LayerNorm(embed_dim, epsilon=1e-6, weight_attr=False, bias_attr=False)
         else:
             self.norm = None
 
         self.add_pos_embed = add_pos_embed
         if add_pos_embed:
-            pos_embed = get_2d_sincos_pos_embed(embed_dim,
-                                                int(num_patches**0.5))
+            pos_embed = get_2d_sincos_pos_embed(embed_dim, int(num_patches**0.5))
             self.register_buffer(
                 "pos_embed",
                 paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0),
-                persistable=False)
+                persistable=False,
+            )
 
     def forward(self, latent):
         latent = self.proj(latent)
@@ -174,20 +169,20 @@ class PatchEmbed(nn.Layer):
 
 class TimestepEmbedding(nn.Layer):
     def __init__(
-            self,
-            in_channels: int,
-            time_embed_dim: int,
-            act_fn: str="silu",
-            out_dim: int=None,
-            post_act_fn: Optional[str]=None,
-            cond_proj_dim=None, ):
+        self,
+        in_channels: int,
+        time_embed_dim: int,
+        act_fn: str = "silu",
+        out_dim: int = None,
+        post_act_fn: Optional[str] = None,
+        cond_proj_dim=None,
+    ):
         super().__init__()
 
         self.linear_1 = nn.Linear(in_channels, time_embed_dim)
 
         if cond_proj_dim is not None:
-            self.cond_proj = nn.Linear(
-                cond_proj_dim, in_channels, bias_attr=False)
+            self.cond_proj = nn.Linear(cond_proj_dim, in_channels, bias_attr=False)
         else:
             self.cond_proj = None
 
@@ -198,9 +193,7 @@ class TimestepEmbedding(nn.Layer):
         elif act_fn == "gelu":
             self.act = nn.GELU()
         else:
-            raise ValueError(
-                f"{act_fn} does not exist. Make sure to define one of 'silu', 'mish', or 'gelu'"
-            )
+            raise ValueError(f"{act_fn} does not exist. Make sure to define one of 'silu', 'mish', or 'gelu'")
 
         if out_dim is not None:
             time_embed_dim_out = out_dim
@@ -217,9 +210,7 @@ class TimestepEmbedding(nn.Layer):
         elif post_act_fn == "gelu":
             self.post_act = nn.GELU()
         else:
-            raise ValueError(
-                f"{post_act_fn} does not exist. Make sure to define one of 'silu', 'mish', or 'gelu'"
-            )
+            raise ValueError(f"{post_act_fn} does not exist. Make sure to define one of 'silu', 'mish', or 'gelu'")
 
     def forward(self, sample, condition=None):
         if condition is not None:
@@ -237,10 +228,7 @@ class TimestepEmbedding(nn.Layer):
 
 
 class Timesteps(nn.Layer):
-    def __init__(self,
-                 num_channels: int,
-                 flip_sin_to_cos: bool,
-                 downscale_freq_shift: float):
+    def __init__(self, num_channels: int, flip_sin_to_cos: bool, downscale_freq_shift: float):
         super().__init__()
         self.num_channels = num_channels
         self.flip_sin_to_cos = flip_sin_to_cos
@@ -251,27 +239,30 @@ class Timesteps(nn.Layer):
             timesteps,
             self.num_channels,
             flip_sin_to_cos=self.flip_sin_to_cos,
-            downscale_freq_shift=self.downscale_freq_shift, )
+            downscale_freq_shift=self.downscale_freq_shift,
+        )
         return t_emb
 
 
 class GaussianFourierProjection(nn.Layer):
     """Gaussian Fourier embeddings for noise levels."""
 
-    def __init__(self,
-                 embedding_size: int=256,
-                 scale: float=1.0,
-                 set_W_to_weight=True,
-                 log=True,
-                 flip_sin_to_cos=False):
+    def __init__(
+        self,
+        embedding_size: int = 256,
+        scale: float = 1.0,
+        set_W_to_weight=True,
+        log=True,
+        flip_sin_to_cos=False,
+    ):
         super().__init__()
-        self.register_buffer("weight", paddle.randn((embedding_size, )) * scale)
+        self.register_buffer("weight", paddle.randn((embedding_size,)) * scale)
         self.log = log
         self.flip_sin_to_cos = flip_sin_to_cos
 
         if set_W_to_weight:
             # to delete later
-            self.register_buffer("W", paddle.randn((embedding_size, )) * scale)
+            self.register_buffer("W", paddle.randn((embedding_size,)) * scale)
 
             self.weight = self.W
 
@@ -284,11 +275,9 @@ class GaussianFourierProjection(nn.Layer):
         x_proj = x[:, None] * self.weight[None, :] * 2 * np.pi
 
         if self.flip_sin_to_cos:
-            out = paddle.concat(
-                [paddle.cos(x_proj), paddle.sin(x_proj)], axis=-1)
+            out = paddle.concat([paddle.cos(x_proj), paddle.sin(x_proj)], axis=-1)
         else:
-            out = paddle.concat(
-                [paddle.sin(x_proj), paddle.cos(x_proj)], axis=-1)
+            out = paddle.concat([paddle.sin(x_proj), paddle.cos(x_proj)], axis=-1)
         return out
 
 
@@ -317,11 +306,12 @@ class ImagePositionalEmbeddings(nn.Layer):
     """
 
     def __init__(
-            self,
-            num_embed: int,
-            height: int,
-            width: int,
-            embed_dim: int, ):
+        self,
+        num_embed: int,
+        height: int,
+        width: int,
+        embed_dim: int,
+    ):
         super().__init__()
 
         self.height = height
@@ -336,14 +326,12 @@ class ImagePositionalEmbeddings(nn.Layer):
     def forward(self, index):
         emb = self.emb(index)
 
-        height_emb = self.height_emb(
-            paddle.arange(self.height).reshape([1, self.height]))
+        height_emb = self.height_emb(paddle.arange(self.height).reshape([1, self.height]))
 
         # 1 x H x D -> 1 x H x 1 x D
         height_emb = height_emb.unsqueeze(2)
 
-        width_emb = self.width_emb(
-            paddle.arange(self.width).reshape([1, self.width]))
+        width_emb = self.width_emb(paddle.arange(self.width).reshape([1, self.width]))
 
         # 1 x W x D -> 1 x 1 x W x D
         width_emb = width_emb.unsqueeze(1)
@@ -353,7 +341,7 @@ class ImagePositionalEmbeddings(nn.Layer):
         # 1 x H x W x D -> 1 x L xD
         pos_emb = pos_emb.reshape([1, self.height * self.width, -1])
 
-        emb = emb + pos_emb[:, :emb.shape[1], :]
+        emb = emb + pos_emb[:, : emb.shape[1], :]
 
         return emb
 
@@ -371,8 +359,7 @@ class LabelEmbedding(nn.Layer):
     def __init__(self, num_classes, hidden_size, dropout_prob):
         super().__init__()
         use_cfg_embedding = dropout_prob > 0
-        self.embedding_table = nn.Embedding(num_classes + use_cfg_embedding,
-                                            hidden_size)
+        self.embedding_table = nn.Embedding(num_classes + use_cfg_embedding, hidden_size)
         self.num_classes = num_classes
         self.dropout_prob = dropout_prob
 
@@ -381,7 +368,12 @@ class LabelEmbedding(nn.Layer):
         Drops labels to enable classifier-free guidance.
         """
         if force_drop_ids is None:
-            drop_ids = (paddle.rand((labels.shape[0], ), ) < self.dropout_prob)
+            drop_ids = (
+                paddle.rand(
+                    (labels.shape[0],),
+                )
+                < self.dropout_prob
+            )
         else:
             drop_ids = paddle.to_tensor(force_drop_ids == 1)
         labels = paddle.where(drop_ids, self.num_classes, labels)
@@ -399,17 +391,13 @@ class CombinedTimestepLabelEmbeddings(nn.Layer):
     def __init__(self, num_classes, embedding_dim, class_dropout_prob=0.1):
         super().__init__()
 
-        self.time_proj = Timesteps(
-            num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=1)
-        self.timestep_embedder = TimestepEmbedding(
-            in_channels=256, time_embed_dim=embedding_dim)
-        self.class_embedder = LabelEmbedding(num_classes, embedding_dim,
-                                             class_dropout_prob)
+        self.time_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=1)
+        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
+        self.class_embedder = LabelEmbedding(num_classes, embedding_dim, class_dropout_prob)
 
     def forward(self, timestep, class_labels, hidden_dtype=None):
         timesteps_proj = self.time_proj(timestep)
-        timesteps_emb = self.timestep_embedder(
-            timesteps_proj.cast(hidden_dtype))  # (N, D)
+        timesteps_emb = self.timestep_embedder(timesteps_proj.cast(hidden_dtype))  # (N, D)
 
         class_labels = self.class_embedder(class_labels)  # (N, D)
 
@@ -419,8 +407,7 @@ class CombinedTimestepLabelEmbeddings(nn.Layer):
 
 
 class TextTimeEmbedding(nn.Layer):
-    def __init__(self, encoder_dim: int, time_embed_dim: int,
-                 num_heads: int=64):
+    def __init__(self, encoder_dim: int, time_embed_dim: int, num_heads: int = 64):
         super().__init__()
         self.norm1 = nn.LayerNorm(encoder_dim)
         self.pool = AttentionPooling(num_heads, encoder_dim)
@@ -442,8 +429,8 @@ class AttentionPooling(nn.Layer):
         super().__init__()
         self.positional_embedding = self.create_parameter(
             (1, embed_dim),
-            default_initializer=nn.initializer.Assign(
-                paddle.randn((1, embed_dim)) / embed_dim**0.5))
+            default_initializer=nn.initializer.Assign(paddle.randn((1, embed_dim)) / embed_dim**0.5),
+        )
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.q_proj = nn.Linear(embed_dim, embed_dim)
         self.v_proj = nn.Linear(embed_dim, embed_dim)
@@ -465,8 +452,7 @@ class AttentionPooling(nn.Layer):
             x = x.transpose([0, 2, 1])
             return x
 
-        class_token = x.mean(
-            axis=1, keepdim=True) + self.positional_embedding.cast(x.dtype)
+        class_token = x.mean(axis=1, keepdim=True) + self.positional_embedding.cast(x.dtype)
         x = paddle.concat([class_token, x], axis=1)  # (bs, length+1, width)
 
         # (bs*n_heads, class_token_length, dim_per_head)
@@ -477,10 +463,9 @@ class AttentionPooling(nn.Layer):
 
         # (bs*n_heads, class_token_length, length+class_token_length):
         weight = paddle.einsum(
-            "bct,bcs->bts", q * self.scale,
-            k * self.scale)  # More stable with f16 than dividing afterwards
-        weight = nn.functional.softmax(
-            weight.cast("float32"), axis=-1).cast(weight.dtype)
+            "bct,bcs->bts", q * self.scale, k * self.scale
+        )  # More stable with f16 than dividing afterwards
+        weight = nn.functional.softmax(weight.cast("float32"), axis=-1).cast(weight.dtype)
 
         # (bs*n_heads, dim_per_head, class_token_length)
         a = paddle.einsum("bts,bcs->bct", weight, v)

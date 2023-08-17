@@ -19,12 +19,13 @@ from typing import Callable, Dict, List, Optional, Union
 import paddle
 import paddle.nn.functional as F
 import PIL
-
 from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
+
 from ppdiffusers import DiffusionPipeline
 from ppdiffusers.pipelines.fastdeploy_utils import (
     FastDeployDiffusionPipelineMixin,
-    FastDeployRuntimeModel, )
+    FastDeployRuntimeModel,
+)
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
 from ppdiffusers.utils import logging, randn_tensor
@@ -32,8 +33,7 @@ from ppdiffusers.utils import logging, randn_tensor
 logger = logging.get_logger(__name__)
 
 
-class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
-                                          FastDeployDiffusionPipelineMixin):
+class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusionPipelineMixin):
     r"""
     Pipeline for text-to-image generation with high resolution fixing(hires.fix) based on Stable Diffusion.
 
@@ -63,21 +63,20 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
         feature_extractor ([`CLIPImageProcessor`]):
             Model that extracts features from generated images to be used as inputs for the `safety_checker`.
     """
-    _optional_components = [
-        "vae_encoder", "safety_checker", "feature_extractor"
-    ]
+    _optional_components = ["vae_encoder", "safety_checker", "feature_extractor"]
 
     def __init__(
-            self,
-            vae_encoder: FastDeployRuntimeModel,
-            vae_decoder: FastDeployRuntimeModel,
-            text_encoder: FastDeployRuntimeModel,
-            tokenizer: CLIPTokenizer,
-            unet: FastDeployRuntimeModel,
-            scheduler: KarrasDiffusionSchedulers,
-            safety_checker: FastDeployRuntimeModel,
-            feature_extractor: CLIPImageProcessor,
-            requires_safety_checker: bool=False, ):
+        self,
+        vae_encoder: FastDeployRuntimeModel,
+        vae_decoder: FastDeployRuntimeModel,
+        text_encoder: FastDeployRuntimeModel,
+        tokenizer: CLIPTokenizer,
+        unet: FastDeployRuntimeModel,
+        scheduler: KarrasDiffusionSchedulers,
+        safety_checker: FastDeployRuntimeModel,
+        feature_extractor: CLIPImageProcessor,
+        requires_safety_checker: bool = False,
+    ):
         super().__init__()
         if safety_checker is None and requires_safety_checker:
             logger.warning(
@@ -102,7 +101,8 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
             unet=unet,
             scheduler=scheduler,
             safety_checker=safety_checker,
-            feature_extractor=feature_extractor, )
+            feature_extractor=feature_extractor,
+        )
         self.register_to_config(requires_safety_checker=requires_safety_checker)
         self.post_init()
 
@@ -111,7 +111,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
         self.scheduler.set_timesteps(steps)
 
         t_start = max(steps - denoising_steps, 0)
-        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order:]
+        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order :]
 
         if hasattr(self.scheduler, "step_index_offset"):
             self.scheduler.step_index_offset = t_start * self.scheduler.order
@@ -119,48 +119,45 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
         return timesteps.cast("float32"), denoising_steps
 
     def check_inputs(
-            self,
-            prompt,
-            height,
-            width,
-            callback_steps,
-            hr_scale,
-            hr_resize_height,
-            hr_resize_width,
-            denoising_strength,
-            latent_scale_mode,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        height,
+        width,
+        callback_steps,
+        hr_scale,
+        hr_resize_height,
+        hr_resize_width,
+        denoising_strength,
+        latent_scale_mode,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two.")
+                " only forward one of the two."
+            )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if hr_scale < 0:
-            raise ValueError(
-                "hr_scale shoule be greater that 0, but acceived {hr_scale}")
+            raise ValueError("hr_scale shoule be greater that 0, but acceived {hr_scale}")
 
         if hr_resize_height % 8 != 0 or hr_resize_width % 8 != 0:
             raise ValueError(
@@ -168,9 +165,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
             )
 
         if denoising_strength > 1 or denoising_strength < 0:
-            raise ValueError(
-                f"denoising_strength should be set between 0 and 1., but acceived {denoising_strength}"
-            )
+            raise ValueError(f"denoising_strength should be set between 0 and 1., but acceived {denoising_strength}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -188,14 +183,10 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
                 raise ValueError(
                     "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}.")
+                    f" {negative_prompt_embeds.shape}."
+                )
 
-    def get_upscaled_width_and_height(self,
-                                      width,
-                                      height,
-                                      hr_scale=2,
-                                      hr_resize_width=0,
-                                      hr_resize_height=0):
+    def get_upscaled_width_and_height(self, width, height, hr_scale=2, hr_resize_width=0, hr_resize_height=0):
         if hr_resize_width == 0 and hr_resize_height == 0:
             hr_upscale_to_width = int(width * hr_scale)
             hr_upscale_to_height = int(height * hr_scale)
@@ -221,36 +212,36 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
 
     @paddle.no_grad()
     def __call__(
-            self,
-            prompt: Union[str, List[str]]=None,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=40,
-            hires_ratio: Optional[float]=0.5,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            parse_prompt_type: Optional[str]="lpw",
-            max_embeddings_multiples: Optional[int]=3,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            enable_hr: Optional[bool]=True,
-            hr_scale: Optional[float]=2.0,
-            hr_resize_width: Optional[int]=0,
-            hr_resize_height: Optional[int]=0,
-            denoising_strength: Optional[float]=0.7,
-            latent_scale_mode: Optional[str]="nearest",
-            controlnet_cond: Union[paddle.Tensor, PIL.Image.Image]=None,
-            controlnet_conditioning_scale: float=1.0,
-            infer_op_dict: Dict[str, str]=None, ):
+        self,
+        prompt: Union[str, List[str]] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 40,
+        hires_ratio: Optional[float] = 0.5,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        parse_prompt_type: Optional[str] = "lpw",
+        max_embeddings_multiples: Optional[int] = 3,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        enable_hr: Optional[bool] = True,
+        hr_scale: Optional[float] = 2.0,
+        hr_resize_width: Optional[int] = 0,
+        hr_resize_height: Optional[int] = 0,
+        denoising_strength: Optional[float] = 0.7,
+        latent_scale_mode: Optional[str] = "nearest",
+        controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
+        controlnet_conditioning_scale: float = 1.0,
+        infer_op_dict: Dict[str, str] = None,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -347,7 +338,8 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
             latent_scale_mode,
             negative_prompt,
             prompt_embeds,
-            negative_prompt_embeds, )
+            negative_prompt_embeds,
+        )
         infer_op_dict = self.prepare_infer_op_dict(infer_op_dict)
 
         # 2. Define call parameters
@@ -373,7 +365,8 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
                 height=height,
                 batch_size=batch_size,
                 num_images_per_prompt=num_images_per_prompt,
-                do_classifier_free_guidance=do_classifier_free_guidance, )
+                do_classifier_free_guidance=do_classifier_free_guidance,
+            )
 
         # 3. Encode input prompt
         prompt_embeds = self._encode_prompt(
@@ -385,7 +378,8 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
             negative_prompt_embeds=negative_prompt_embeds,
             parse_prompt_type=parse_prompt_type,
             max_embeddings_multiples=max_embeddings_multiples,
-            infer_op=infer_op_dict.get("text_encoder", None), )
+            infer_op=infer_op_dict.get("text_encoder", None),
+        )
 
         # 4. Prepare timesteps
         if enable_hr:
@@ -401,18 +395,17 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
         # 5. Prepare latent variables
         if generator is None:
             generator_state = paddle.get_cuda_rng_state()
-            paddle.Generator().states_["initial_generator"] = copy.deepcopy(
-                generator_state)
+            paddle.Generator().states_["initial_generator"] = copy.deepcopy(generator_state)
         else:
-            paddle.Generator().states_["initial_generator"] = copy.deepcopy(
-                paddle.Generator().states_[generator])
+            paddle.Generator().states_["initial_generator"] = copy.deepcopy(paddle.Generator().states_[generator])
 
         latents = self.prepare_latents(
             batch_size * num_images_per_prompt,
             height,
             width,
             generator,
-            latents, )
+            latents,
+        )
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
@@ -423,34 +416,29 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
         with self.progress_bar(total=sample_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
                 if is_scheduler_support_step_index:
-                    latent_model_input = self.scheduler.scale_model_input(
-                        latent_model_input, t, step_index=i)
+                    latent_model_input = self.scheduler.scale_model_input(latent_model_input, t, step_index=i)
                 else:
-                    latent_model_input = self.scheduler.scale_model_input(
-                        latent_model_input, t)
+                    latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 unet_inputs = dict(
                     sample=latent_model_input,
                     timestep=t,
                     encoder_hidden_states=prompt_embeds,
                     infer_op=infer_op_dict.get("unet", None),
-                    output_shape=latent_model_input.shape, )
+                    output_shape=latent_model_input.shape,
+                )
                 if do_controlnet:
                     unet_inputs["controlnet_cond"] = control_image
-                    unet_inputs[
-                        "controlnet_conditioning_scale"] = control_conditioning_scale
+                    unet_inputs["controlnet_conditioning_scale"] = control_conditioning_scale
                 # predict the noise residual
                 noise_pred_unet = self.unet(**unet_inputs)[0]
 
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred_unet.chunk(
-                        2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
+                    noise_pred_uncond, noise_pred_text = noise_pred_unet.chunk(2)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
                 else:
                     noise_pred = noise_pred_unet
 
@@ -462,15 +450,13 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
                         latents,
                         step_index=i,
                         return_pred_original_sample=False,
-                        **extra_step_kwargs)
+                        **extra_step_kwargs,
+                    )
                 else:
-                    scheduler_output = self.scheduler.step(
-                        noise_pred, t, latents, **extra_step_kwargs)
+                    scheduler_output = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)
                 latents = scheduler_output.prev_sample
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -483,17 +469,16 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
             # 8. determine the upscaled width and height for upscaled images
             truncate_width = 0
             truncate_height = 0
-            hr_upscale_to_width, hr_upscale_to_height = self.get_upscaled_width_and_height(
+            (hr_upscale_to_width, hr_upscale_to_height,) = self.get_upscaled_width_and_height(
                 width,
                 height,
                 hr_scale=hr_scale,
                 hr_resize_width=hr_resize_width,
-                hr_resize_height=hr_resize_height)
+                hr_resize_height=hr_resize_height,
+            )
             if hr_resize_width != 0 and hr_resize_height != 0:
-                truncate_width = (hr_upscale_to_width - hr_resize_width
-                                  ) // self.vae_scale_factor
-                truncate_height = (hr_upscale_to_height - hr_resize_height
-                                   ) // self.vae_scale_factor
+                truncate_width = (hr_upscale_to_width - hr_resize_width) // self.vae_scale_factor
+                truncate_height = (hr_upscale_to_height - hr_resize_height) // self.vae_scale_factor
 
             # 9. special case: do nothing if upscaling is not nesscessary
             if hr_upscale_to_width == width and hr_upscale_to_height == height:
@@ -502,74 +487,69 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
 
         if enable_hr:
             if do_controlnet:
-                control_image, control_conditioning_scale = self.prepare_controlnet_cond(
+                (control_image, control_conditioning_scale,) = self.prepare_controlnet_cond(
                     controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=controlnet_conditioning_scale,
                     width=hr_upscale_to_width,
                     height=hr_upscale_to_height,
                     batch_size=batch_size,
                     num_images_per_prompt=num_images_per_prompt,
-                    do_classifier_free_guidance=do_classifier_free_guidance, )
+                    do_classifier_free_guidance=do_classifier_free_guidance,
+                )
 
             # 10. prepare init latents
-            timesteps, hr_steps = self.get_timesteps(hr_steps,
-                                                     denoising_strength)
+            timesteps, hr_steps = self.get_timesteps(hr_steps, denoising_strength)
             init_timestep = timesteps[:1].tile([latents.shape[0]])
 
             latents = F.interpolate(
                 latents,
                 size=(
                     hr_upscale_to_height // self.vae_scale_factor,
-                    hr_upscale_to_width // self.vae_scale_factor, ),
-                mode=latent_scale_mode, )
-            latents = latents[:, :, truncate_height // 2:latents.shape[2] - (
-                truncate_height + 1) // 2, truncate_width // 2:latents.shape[3]
-                              - (truncate_width + 1) // 2, ]
+                    hr_upscale_to_width // self.vae_scale_factor,
+                ),
+                mode=latent_scale_mode,
+            )
+            latents = latents[
+                :,
+                :,
+                truncate_height // 2 : latents.shape[2] - (truncate_height + 1) // 2,
+                truncate_width // 2 : latents.shape[3] - (truncate_width + 1) // 2,
+            ]
 
-            noise = randn_tensor(
-                latents.shape,
-                dtype=latents.dtype,
-                generator="initial_generator")
+            noise = randn_tensor(latents.shape, dtype=latents.dtype, generator="initial_generator")
             latents = self.scheduler.add_noise(latents, noise, init_timestep)
 
             # 11. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
-            extra_step_kwargs = self.prepare_extra_step_kwargs(
-                "initial_generator", eta)
+            extra_step_kwargs = self.prepare_extra_step_kwargs("initial_generator", eta)
 
             # 12. denoising on hires.fix steps
             num_warmup_steps = len(timesteps) - hr_steps * self.scheduler.order
             with self.progress_bar(total=hr_steps) as progress_bar:
                 for i, t in enumerate(timesteps):
                     # expand the latents if we are doing classifier free guidance
-                    latent_model_input = paddle.concat(
-                        [latents] *
-                        2) if do_classifier_free_guidance else latents
+                    latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
                     if is_scheduler_support_step_index:
-                        latent_model_input = self.scheduler.scale_model_input(
-                            latent_model_input, t, step_index=i)
+                        latent_model_input = self.scheduler.scale_model_input(latent_model_input, t, step_index=i)
                     else:
-                        latent_model_input = self.scheduler.scale_model_input(
-                            latent_model_input, t)
+                        latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                     unet_inputs = dict(
                         sample=latent_model_input,
                         timestep=t,
                         encoder_hidden_states=prompt_embeds,
                         infer_op=infer_op_dict.get("unet", None),
-                        output_shape=latent_model_input.shape, )
+                        output_shape=latent_model_input.shape,
+                    )
                     if do_controlnet:
                         unet_inputs["controlnet_cond"] = control_image
-                        unet_inputs[
-                            "controlnet_conditioning_scale"] = control_conditioning_scale
+                        unet_inputs["controlnet_conditioning_scale"] = control_conditioning_scale
                     # predict the noise residual
                     noise_pred_unet = self.unet(**unet_inputs)[0]
 
                     # perform guidance
                     if do_classifier_free_guidance:
-                        noise_pred_uncond, noise_pred_text = noise_pred_unet.chunk(
-                            2)
-                        noise_pred = noise_pred_uncond + guidance_scale * (
-                            noise_pred_text - noise_pred_uncond)
+                        noise_pred_uncond, noise_pred_text = noise_pred_unet.chunk(2)
+                        noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
                     else:
                         noise_pred = noise_pred_unet
 
@@ -581,16 +561,14 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
                             latents,
                             step_index=i,
                             return_pred_original_sample=False,
-                            **extra_step_kwargs, )
+                            **extra_step_kwargs,
+                        )
                     else:
-                        scheduler_output = self.scheduler.step(
-                            noise_pred, t, latents, **extra_step_kwargs)
+                        scheduler_output = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)
                     latents = scheduler_output.prev_sample
 
                     # call the callback, if provided
-                    if i == len(timesteps) - 1 or (
-                        (i + 1) > num_warmup_steps and
-                        (i + 1) % self.scheduler.order == 0):
+                    if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                         progress_bar.update()
                         if callback is not None and i % callback_steps == 0:
                             callback(i, t, latents)
@@ -601,7 +579,8 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
         if not output_type == "latent":
             image = self._decode_vae_latents(
                 latents / self.vae_scaling_factor,
-                infer_op=infer_op_dict.get("vae_decoder", None))
+                infer_op=infer_op_dict.get("vae_decoder", None),
+            )
             image, has_nsfw_concept = self.run_safety_checker(image)
         else:
             image = latents
@@ -612,11 +591,9 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline,
         else:
             do_denormalize = [not has_nsfw for has_nsfw in has_nsfw_concept]
 
-        image = self.image_processor.postprocess(
-            image, output_type=output_type, do_denormalize=do_denormalize)
+        image = self.image_processor.postprocess(image, output_type=output_type, do_denormalize=do_denormalize)
 
         if not return_dict:
             return (image, has_nsfw_concept)
 
-        return StableDiffusionPipelineOutput(
-            images=image, nsfw_content_detected=has_nsfw_concept)
+        return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

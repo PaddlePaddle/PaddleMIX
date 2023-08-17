@@ -58,25 +58,27 @@ def set_seed(seed: int):
         paddle.seed(seed)
     # ^^ safe to call this function even if cuda is not available
 
-
     # Adapted from torch-ema https://github.com/fadel/pytorch_ema/blob/master/torch_ema/ema.py#L14
+
+
 class EMAModel:
     """
     Exponential Moving Average of models weights
     """
 
     def __init__(
-            self,
-            parameters,
-            decay: float=0.9999,
-            min_decay: float=0.0,
-            update_after_step: int=0,
-            use_ema_warmup: bool=False,
-            inv_gamma: Union[float, int]=1.0,
-            power: Union[float, int]=2 / 3,
-            model_cls: Optional[Any]=None,
-            model_config: Dict[str, Any]=None,
-            **kwargs, ):
+        self,
+        parameters,
+        decay: float = 0.9999,
+        min_decay: float = 0.0,
+        update_after_step: int = 0,
+        use_ema_warmup: bool = False,
+        inv_gamma: Union[float, int] = 1.0,
+        power: Union[float, int] = 2 / 3,
+        model_cls: Optional[Any] = None,
+        model_config: Dict[str, Any] = None,
+        **kwargs,
+    ):
         """
         Args:
             parameters (Iterable[nn.Parameter]): The parameters to track.
@@ -98,12 +100,14 @@ class EMAModel:
         if isinstance(parameters, nn.Layer):
             deprecation_message = (
                 "Passing a `nn.Layer` to `ExponentialMovingAverage` is deprecated. "
-                "Please pass the parameters of the module instead.")
+                "Please pass the parameters of the module instead."
+            )
             deprecate(
                 "passing a `nn.Layer` to `ExponentialMovingAverage`",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False, )
+                standard_warn=False,
+            )
             parameters = parameters.parameters()
 
             # set use_ema_warmup to True if a nn.Layer is passed for backwards compatibility
@@ -111,14 +115,12 @@ class EMAModel:
 
         if kwargs.get("max_value", None) is not None:
             deprecation_message = "The `max_value` argument is deprecated. Please use `decay` instead."
-            deprecate(
-                "max_value", "1.0.0", deprecation_message, standard_warn=False)
+            deprecate("max_value", "1.0.0", deprecation_message, standard_warn=False)
             decay = kwargs["max_value"]
 
         if kwargs.get("min_value", None) is not None:
             deprecation_message = "The `min_value` argument is deprecated. Please use `min_decay` instead."
-            deprecate(
-                "min_value", "1.0.0", deprecation_message, standard_warn=False)
+            deprecate("min_value", "1.0.0", deprecation_message, standard_warn=False)
             min_decay = kwargs["min_value"]
 
         parameters = list(parameters)
@@ -126,8 +128,7 @@ class EMAModel:
 
         if kwargs.get("device", None) is not None:
             deprecation_message = "The `device` argument is deprecated. Please use `to` instead."
-            deprecate(
-                "device", "1.0.0", deprecation_message, standard_warn=False)
+            deprecate("device", "1.0.0", deprecation_message, standard_warn=False)
             self.to(device=kwargs["device"])
 
         self.temp_stored_params = None
@@ -149,23 +150,17 @@ class EMAModel:
         _, ema_kwargs = model_cls.load_config(path, return_unused_kwargs=True)
         model = model_cls.from_pretrained(path)
 
-        ema_model = cls(model.parameters(),
-                        model_cls=model_cls,
-                        model_config=model.config)
+        ema_model = cls(model.parameters(), model_cls=model_cls, model_config=model.config)
 
         ema_model.load_state_dict(ema_kwargs)
         return ema_model
 
     def save_pretrained(self, path):
         if self.model_cls is None:
-            raise ValueError(
-                "`save_pretrained` can only be used if `model_cls` was defined at __init__."
-            )
+            raise ValueError("`save_pretrained` can only be used if `model_cls` was defined at __init__.")
 
         if self.model_config is None:
-            raise ValueError(
-                "`save_pretrained` can only be used if `model_config` was defined at __init__."
-            )
+            raise ValueError("`save_pretrained` can only be used if `model_config` was defined at __init__.")
 
         model = self.model_cls.from_config(self.model_config)
         state_dict = self.state_dict()
@@ -186,7 +181,7 @@ class EMAModel:
             return 0.0
 
         if self.use_ema_warmup:
-            cur_decay_value = 1 - (1 + step / self.inv_gamma)**-self.power
+            cur_decay_value = 1 - (1 + step / self.inv_gamma) ** -self.power
         else:
             cur_decay_value = (1 + step) / (10 + step)
 
@@ -200,12 +195,14 @@ class EMAModel:
         if isinstance(parameters, nn.Layer):
             deprecation_message = (
                 "Passing a `nn.Layer` to `ExponentialMovingAverage.step` is deprecated. "
-                "Please pass the parameters of the module instead.")
+                "Please pass the parameters of the module instead."
+            )
             deprecate(
                 "passing a `nn.Layer` to `ExponentialMovingAverage.step`",
                 "1.0.0",
                 deprecation_message,
-                standard_warn=False, )
+                standard_warn=False,
+            )
             parameters = parameters.parameters()
 
         parameters = list(parameters)
@@ -219,8 +216,7 @@ class EMAModel:
 
         for s_param, param in zip(self.shadow_params, parameters):
             if not param.stop_gradient:
-                s_param.copy_(s_param - one_minus_decay * (s_param - param),
-                              True)
+                s_param.copy_(s_param - one_minus_decay * (s_param - param), True)
             else:
                 s_param.copy_(param, True)
 
@@ -263,9 +259,7 @@ class EMAModel:
             parameters: Iterable of `nn.Parameter`; the parameters to be
                 temporarily stored.
         """
-        self.temp_stored_params = [
-            param.detach().cpu().clone() for param in parameters
-        ]
+        self.temp_stored_params = [param.detach().cpu().clone() for param in parameters]
 
     def restore(self, parameters) -> None:
         r"""
@@ -278,9 +272,7 @@ class EMAModel:
                 `ExponentialMovingAverage` was initialized will be used.
         """
         if self.temp_stored_params is None:
-            raise RuntimeError(
-                "This ExponentialMovingAverage has no `store()`ed weights "
-                "to `restore()`")
+            raise RuntimeError("This ExponentialMovingAverage has no `store()`ed weights " "to `restore()`")
         for c_param, param in zip(self.temp_stored_params, parameters):
             param.copy_(c_param, True)
 
@@ -306,18 +298,15 @@ class EMAModel:
         if not isinstance(self.min_decay, float):
             raise ValueError("Invalid min_decay")
 
-        self.optimization_step = state_dict.get("optimization_step",
-                                                self.optimization_step)
+        self.optimization_step = state_dict.get("optimization_step", self.optimization_step)
         if not isinstance(self.optimization_step, int):
             raise ValueError("Invalid optimization_step")
 
-        self.update_after_step = state_dict.get("update_after_step",
-                                                self.update_after_step)
+        self.update_after_step = state_dict.get("update_after_step", self.update_after_step)
         if not isinstance(self.update_after_step, int):
             raise ValueError("Invalid update_after_step")
 
-        self.use_ema_warmup = state_dict.get("use_ema_warmup",
-                                             self.use_ema_warmup)
+        self.use_ema_warmup = state_dict.get("use_ema_warmup", self.use_ema_warmup)
         if not isinstance(self.use_ema_warmup, bool):
             raise ValueError("Invalid use_ema_warmup")
 
@@ -334,8 +323,7 @@ class EMAModel:
             self.shadow_params = shadow_params
             if not isinstance(self.shadow_params, list):
                 raise ValueError("shadow_params must be a list")
-            if not all(
-                    isinstance(p, paddle.Tensor) for p in self.shadow_params):
+            if not all(isinstance(p, paddle.Tensor) for p in self.shadow_params):
                 raise ValueError("shadow_params must all be Tensors")
 
 
@@ -349,17 +337,13 @@ def main_process_first(desc="work"):
         try:
             if not is_main_process:
                 # tell all replicas to wait
-                logger.debug(
-                    f"{rank}: waiting for the {main_process_desc} to perform {desc}"
-                )
+                logger.debug(f"{rank}: waiting for the {main_process_desc} to perform {desc}")
                 paddle.distributed.barrier()
             yield
         finally:
             if is_main_process:
                 # the wait is over
-                logger.debug(
-                    f"{rank}: {main_process_desc} completed {desc}, releasing all replicas"
-                )
+                logger.debug(f"{rank}: {main_process_desc} completed {desc}, releasing all replicas")
                 paddle.distributed.barrier()
     else:
         yield

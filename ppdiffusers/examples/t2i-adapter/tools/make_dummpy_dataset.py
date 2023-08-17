@@ -30,45 +30,48 @@ parser.add_argument(
     "--dataset_base_name",
     type=str,
     default="artv4_openpose_test13",
-    help="The dataset basename.", )
+    help="The dataset basename.",
+)
 parser.add_argument(
     "--ids_list_path",
     type=str,
     default="artv4_openpose_test13_ids.txt",
-    help="The ids list path.", )
+    help="The ids list path.",
+)
 parser.add_argument(
     "--ids_list_path",
     type=str,
     default="artv4_openpose_test13_ids.txt",
-    help="The ids list path.", )
+    help="The ids list path.",
+)
 parser.add_argument(
     "--source_prompt_list_one_path",
     type=str,
     default="prompts_artv4_openpose_test1_en_prompts.txt",
-    help="The first source prompt list path.", )
+    help="The first source prompt list path.",
+)
 parser.add_argument(
     "--source_prompt_list_two_path",
     type=str,
     default="prompts_artv4_openpose_test2_en_prompts.txt",
-    help="The second source prompt list path.", )
+    help="The second source prompt list path.",
+)
 parser.add_argument(
     "--source_prompt_list_three_path",
     type=str,
     default="prompts_artv4_openpose_test3_en_prompts.txt",
-    help="The third source prompt list path.", )
+    help="The third source prompt list path.",
+)
 parser.add_argument(
     "--dataset_prompt_json_name",
     type=str,
     default="prompt.json",
-    help="The dataset prompt json name.", )
+    help="The dataset prompt json name.",
+)
 args = parser.parse_args()
 
 
-def get_images_form_urls(ids_list,
-                         dir_path,
-                         dataset_base_name,
-                         type=None,
-                         is_resize=False):
+def get_images_form_urls(ids_list, dir_path, dataset_base_name, type=None, is_resize=False):
     for i, id in enumerate(tqdm(ids_list)):
         if dataset_base_name == "artv4_openpose_test13":
             if type == "原图":
@@ -89,9 +92,7 @@ def get_images_form_urls(ids_list,
 
 
 def get_prompt_json_file(ids_list, prompt_lists, dataset_base_name):
-    with open(
-            os.path.join(dataset_base_name, args.dataset_prompt_json_name),
-            "w") as wf:
+    with open(os.path.join(dataset_base_name, args.dataset_prompt_json_name), "w") as wf:
         for i, id in enumerate(ids_list):
             which_prompt_list = int(id.split("_")[1][-1]) - 1
             which_prompt = int(id.split("_")[-1])
@@ -108,41 +109,16 @@ def get_prompt_json_file(ids_list, prompt_lists, dataset_base_name):
 
 if __name__ == "__main__":
     dataset_base_name = args.dataset_base_name
-    ids_list = [
-        line.strip()
-        for line in open(
-            args.ids_list_path, "r", encoding="utf8").readlines()
-    ]
+    ids_list = [line.strip() for line in open(args.ids_list_path, "r", encoding="utf8").readlines()]
 
     source_prompt_lists = [
-        [
-            line.strip()
-            for line in open(
-                args.source_prompt_list_one_path, "r", encoding="utf8")
-            .readlines()
-        ],
-        [
-            line.strip()
-            for line in open(
-                args.source_prompt_list_two_path, "r", encoding="utf8")
-            .readlines()
-        ],
-        [
-            line.strip()
-            for line in open(
-                args.source_prompt_list_three_path, "r", encoding="utf8")
-            .readlines()
-        ],
+        [line.strip() for line in open(args.source_prompt_list_one_path, "r", encoding="utf8").readlines()],
+        [line.strip() for line in open(args.source_prompt_list_two_path, "r", encoding="utf8").readlines()],
+        [line.strip() for line in open(args.source_prompt_list_three_path, "r", encoding="utf8").readlines()],
     ]
 
     source_dir = os.path.join(dataset_base_name, "source")
     target_dir = os.path.join(dataset_base_name, "target")
-    get_images_form_urls(
-        ids_list,
-        source_dir,
-        dataset_base_name,
-        type="Openpose控制图",
-        is_resize=False)
-    get_images_form_urls(
-        ids_list, target_dir, dataset_base_name, type="原图", is_resize=False)
+    get_images_form_urls(ids_list, source_dir, dataset_base_name, type="Openpose控制图", is_resize=False)
+    get_images_form_urls(ids_list, target_dir, dataset_base_name, type="原图", is_resize=False)
     get_prompt_json_file(ids_list, source_prompt_lists, dataset_base_name)

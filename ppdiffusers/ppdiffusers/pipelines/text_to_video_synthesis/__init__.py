@@ -23,7 +23,8 @@ from ...utils import (
     BaseOutput,
     OptionalDependencyNotAvailable,
     is_paddle_available,
-    is_paddlenlp_available, )
+    is_paddlenlp_available,
+)
 
 
 @dataclass

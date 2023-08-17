@@ -23,7 +23,7 @@ from ppdiffusers import ScoreSdeVeScheduler
 
 class ScoreSdeVeSchedulerTest(unittest.TestCase):
     # TODO adapt with class SchedulerCommonTest (scheduler needs Numpy Integration)
-    scheduler_classes = (ScoreSdeVeScheduler, )
+    scheduler_classes = (ScoreSdeVeScheduler,)
     forward_default_kwargs = ()
 
     @property
@@ -85,34 +85,22 @@ class ScoreSdeVeSchedulerTest(unittest.TestCase):
                 new_scheduler = scheduler_class.from_pretrained(tmpdirname)
 
             output = scheduler.step_pred(
-                residual,
-                time_step,
-                sample,
-                generator=paddle.Generator().manual_seed(0),
-                **kwargs).prev_sample
+                residual, time_step, sample, generator=paddle.Generator().manual_seed(0), **kwargs
+            ).prev_sample
             new_output = new_scheduler.step_pred(
-                residual,
-                time_step,
-                sample,
-                generator=paddle.Generator().manual_seed(0),
-                **kwargs).prev_sample
+                residual, time_step, sample, generator=paddle.Generator().manual_seed(0), **kwargs
+            ).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert paddle.sum(paddle.abs(output - new_output)) < 1e-5, "Scheduler outputs are not identical"
 
             output = scheduler.step_correct(
-                residual,
-                sample,
-                generator=paddle.Generator().manual_seed(0),
-                **kwargs).prev_sample
+                residual, sample, generator=paddle.Generator().manual_seed(0), **kwargs
+            ).prev_sample
             new_output = new_scheduler.step_correct(
-                residual,
-                sample,
-                generator=paddle.Generator().manual_seed(0),
-                **kwargs).prev_sample
+                residual, sample, generator=paddle.Generator().manual_seed(0), **kwargs
+            ).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler correction are not identical"
+            assert paddle.sum(paddle.abs(output - new_output)) < 1e-5, "Scheduler correction are not identical"
 
     def check_over_forward(self, time_step=0, **forward_kwargs):
         kwargs = dict(self.forward_default_kwargs)
@@ -130,34 +118,22 @@ class ScoreSdeVeSchedulerTest(unittest.TestCase):
                 new_scheduler = scheduler_class.from_pretrained(tmpdirname)
 
             output = scheduler.step_pred(
-                residual,
-                time_step,
-                sample,
-                generator=paddle.Generator().manual_seed(0),
-                **kwargs).prev_sample
+                residual, time_step, sample, generator=paddle.Generator().manual_seed(0), **kwargs
+            ).prev_sample
             new_output = new_scheduler.step_pred(
-                residual,
-                time_step,
-                sample,
-                generator=paddle.Generator().manual_seed(0),
-                **kwargs).prev_sample
+                residual, time_step, sample, generator=paddle.Generator().manual_seed(0), **kwargs
+            ).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler outputs are not identical"
+            assert paddle.sum(paddle.abs(output - new_output)) < 1e-5, "Scheduler outputs are not identical"
 
             output = scheduler.step_correct(
-                residual,
-                sample,
-                generator=paddle.Generator().manual_seed(0),
-                **kwargs).prev_sample
+                residual, sample, generator=paddle.Generator().manual_seed(0), **kwargs
+            ).prev_sample
             new_output = new_scheduler.step_correct(
-                residual,
-                sample,
-                generator=paddle.Generator().manual_seed(0),
-                **kwargs).prev_sample
+                residual, sample, generator=paddle.Generator().manual_seed(0), **kwargs
+            ).prev_sample
 
-            assert paddle.sum(paddle.abs(output - new_output)
-                              ) < 1e-5, "Scheduler correction are not identical"
+            assert paddle.sum(paddle.abs(output - new_output)) < 1e-5, "Scheduler correction are not identical"
 
     def test_timesteps(self):
         for timesteps in [10, 100, 1000]:
@@ -193,15 +169,12 @@ class ScoreSdeVeSchedulerTest(unittest.TestCase):
             for _ in range(scheduler.config.correct_steps):
                 with paddle.no_grad():
                     model_output = model(sample, sigma_t)
-                sample = scheduler.step_correct(
-                    model_output, sample, generator=generator,
-                    **kwargs).prev_sample
+                sample = scheduler.step_correct(model_output, sample, generator=generator, **kwargs).prev_sample
 
             with paddle.no_grad():
                 model_output = model(sample, sigma_t)
 
-            output = scheduler.step_pred(
-                model_output, t, sample, generator=generator, **kwargs)
+            output = scheduler.step_pred(model_output, t, sample, generator=generator, **kwargs)
             sample, _ = output.prev_sample, output.prev_sample_mean
 
         result_sum = paddle.sum(paddle.abs(sample))
@@ -222,25 +195,17 @@ class ScoreSdeVeSchedulerTest(unittest.TestCase):
             sample = self.dummy_sample
             residual = 0.1 * sample
 
-            if num_inference_steps is not None and hasattr(scheduler,
-                                                           "set_timesteps"):
+            if num_inference_steps is not None and hasattr(scheduler, "set_timesteps"):
                 scheduler.set_timesteps(num_inference_steps)
-            elif num_inference_steps is not None and not hasattr(
-                    scheduler, "set_timesteps"):
+            elif num_inference_steps is not None and not hasattr(scheduler, "set_timesteps"):
                 kwargs["num_inference_steps"] = num_inference_steps
 
             output_0 = scheduler.step_pred(
-                residual,
-                0,
-                sample,
-                generator=paddle.Generator().manual_seed(0),
-                **kwargs).prev_sample
+                residual, 0, sample, generator=paddle.Generator().manual_seed(0), **kwargs
+            ).prev_sample
             output_1 = scheduler.step_pred(
-                residual,
-                1,
-                sample,
-                generator=paddle.Generator().manual_seed(0),
-                **kwargs).prev_sample
+                residual, 1, sample, generator=paddle.Generator().manual_seed(0), **kwargs
+            ).prev_sample
 
             self.assertEqual(output_0.shape, sample.shape)
             self.assertEqual(output_0.shape, output_1.shape)

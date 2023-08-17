@@ -17,7 +17,6 @@ from typing import Callable, Dict, List, Optional, Union
 
 import paddle
 import PIL
-
 from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
 
 from ...pipeline_utils import DiffusionPipeline
@@ -29,8 +28,7 @@ from . import StableDiffusionPipelineOutput
 logger = logging.get_logger(__name__)
 
 
-def posterior_sample(scheduler, latents, timestep, clean_latents, generator,
-                     eta):
+def posterior_sample(scheduler, latents, timestep, clean_latents, generator, eta):
     # 1. get previous step value (=t-1)
     prev_timestep = timestep - scheduler.config.num_train_timesteps // scheduler.num_inference_steps
 
@@ -39,19 +37,18 @@ def posterior_sample(scheduler, latents, timestep, clean_latents, generator,
 
     # 2. compute alphas, betas
     alpha_prod_t = scheduler.alphas_cumprod[timestep]
-    alpha_prod_t_prev = (scheduler.alphas_cumprod[prev_timestep] if
-                         prev_timestep >= 0 else scheduler.final_alpha_cumprod)
+    alpha_prod_t_prev = (
+        scheduler.alphas_cumprod[prev_timestep] if prev_timestep >= 0 else scheduler.final_alpha_cumprod
+    )
 
     variance = scheduler._get_variance(timestep, prev_timestep)
-    std_dev_t = eta * variance**(0.5)
+    std_dev_t = eta * variance ** (0.5)
 
     # direction pointing to x_t
-    e_t = (latents - alpha_prod_t**
-           (0.5) * clean_latents) / (1 - alpha_prod_t)**(0.5)
-    dir_xt = (1.0 - alpha_prod_t_prev - std_dev_t**2)**(0.5) * e_t
-    noise = std_dev_t * randn_tensor(
-        clean_latents.shape, dtype=clean_latents.dtype, generator=generator)
-    prev_latents = alpha_prod_t_prev**(0.5) * clean_latents + dir_xt + noise
+    e_t = (latents - alpha_prod_t ** (0.5) * clean_latents) / (1 - alpha_prod_t) ** (0.5)
+    dir_xt = (1.0 - alpha_prod_t_prev - std_dev_t**2) ** (0.5) * e_t
+    noise = std_dev_t * randn_tensor(clean_latents.shape, dtype=clean_latents.dtype, generator=generator)
+    prev_latents = alpha_prod_t_prev ** (0.5) * clean_latents + dir_xt + noise
 
     return prev_latents
 
@@ -62,15 +59,15 @@ def compute_noise(scheduler, prev_latents, latents, timestep, noise_pred, eta):
 
     # 2. compute alphas, betas
     alpha_prod_t = scheduler.alphas_cumprod[timestep]
-    alpha_prod_t_prev = (scheduler.alphas_cumprod[prev_timestep] if
-                         prev_timestep >= 0 else scheduler.final_alpha_cumprod)
+    alpha_prod_t_prev = (
+        scheduler.alphas_cumprod[prev_timestep] if prev_timestep >= 0 else scheduler.final_alpha_cumprod
+    )
 
     beta_prod_t = 1 - alpha_prod_t
 
     # 3. compute predicted original sample from predicted noise also called
     # "predicted x_0" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
-    pred_original_sample = (latents - beta_prod_t**
-                            (0.5) * noise_pred) / alpha_prod_t**(0.5)
+    pred_original_sample = (latents - beta_prod_t ** (0.5) * noise_pred) / alpha_prod_t ** (0.5)
 
     # 4. Clip "predicted x_0"
     if scheduler.config.clip_sample:
@@ -79,21 +76,18 @@ def compute_noise(scheduler, prev_latents, latents, timestep, noise_pred, eta):
     # 5. compute variance: "sigma_t(η)" -> see formula (16)
     # σ_t = sqrt((1 − α_t−1)/(1 − α_t)) * sqrt(1 − α_t/α_t−1)
     variance = scheduler._get_variance(timestep, prev_timestep)
-    std_dev_t = eta * variance**(0.5)
+    std_dev_t = eta * variance ** (0.5)
 
     # 6. compute "direction pointing to x_t" of formula (12) from https://arxiv.org/pdf/2010.02502.pdf
-    pred_sample_direction = (1 - alpha_prod_t_prev - std_dev_t**2)**(
-        0.5) * noise_pred
+    pred_sample_direction = (1 - alpha_prod_t_prev - std_dev_t**2) ** (0.5) * noise_pred
 
-    noise = (prev_latents -
-             (alpha_prod_t_prev**
-              (0.5) * pred_original_sample + pred_sample_direction)) / (
-                  variance**(0.5) * eta)
+    noise = (prev_latents - (alpha_prod_t_prev ** (0.5) * pred_original_sample + pred_sample_direction)) / (
+        variance ** (0.5) * eta
+    )
     return noise
 
 
-class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
-                                       FastDeployDiffusionPipelineMixin):
+class FastDeployCycleDiffusionPipeline(DiffusionPipeline, FastDeployDiffusionPipelineMixin):
     r"""
     Pipeline for text-guided image to image generation using Stable Diffusion.
 
@@ -123,16 +117,17 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
     _optional_components = ["safety_checker", "feature_extractor"]
 
     def __init__(
-            self,
-            vae_encoder: FastDeployRuntimeModel,
-            vae_decoder: FastDeployRuntimeModel,
-            text_encoder: FastDeployRuntimeModel,
-            tokenizer: CLIPTokenizer,
-            unet: FastDeployRuntimeModel,
-            scheduler: DDIMScheduler,
-            safety_checker: FastDeployRuntimeModel,
-            feature_extractor: CLIPImageProcessor,
-            requires_safety_checker: bool=False, ):
+        self,
+        vae_encoder: FastDeployRuntimeModel,
+        vae_decoder: FastDeployRuntimeModel,
+        text_encoder: FastDeployRuntimeModel,
+        tokenizer: CLIPTokenizer,
+        unet: FastDeployRuntimeModel,
+        scheduler: DDIMScheduler,
+        safety_checker: FastDeployRuntimeModel,
+        feature_extractor: CLIPImageProcessor,
+        requires_safety_checker: bool = False,
+    ):
         super().__init__()
         if safety_checker is None and requires_safety_checker:
             logger.warning(
@@ -157,37 +152,38 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
             unet=unet,
             scheduler=scheduler,
             safety_checker=safety_checker,
-            feature_extractor=feature_extractor, )
+            feature_extractor=feature_extractor,
+        )
         self.register_to_config(requires_safety_checker=requires_safety_checker)
         self.post_init()
         self.change_scheduler("ddim")
 
     def __call__(
-            self,
-            prompt: Union[str, List[str]],
-            source_prompt: Union[str, List[str]],
-            image: Union[paddle.Tensor, PIL.Image.Image]=None,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            strength: float=0.8,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            negative_prompt: Optional[paddle.Tensor]=None,
-            source_guidance_scale: Optional[float]=1,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[float]=0.1,
-            latents: Optional[paddle.Tensor]=None,
-            parse_prompt_type: Optional[str]="lpw",
-            max_embeddings_multiples: Optional[int]=3,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            infer_op_dict: Dict[str, str]=None, ):
+        self,
+        prompt: Union[str, List[str]],
+        source_prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, PIL.Image.Image] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        strength: float = 0.8,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        negative_prompt: Optional[paddle.Tensor] = None,
+        source_guidance_scale: Optional[float] = 1,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[float] = 0.1,
+        latents: Optional[paddle.Tensor] = None,
+        parse_prompt_type: Optional[str] = "lpw",
+        max_embeddings_multiples: Optional[int] = 3,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        infer_op_dict: Dict[str, str] = None,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -264,8 +260,7 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
             (nsfw) content, according to the `safety_checker`.
         """
         # 0. Preprocess image
-        init_image = self.image_processor.preprocess(
-            image, height=height, width=width)
+        init_image = self.image_processor.preprocess(image, height=height, width=width)
         height, width = init_image.shape[-2:]
 
         # 1. Check inputs
@@ -277,7 +272,8 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
             negative_prompt,
             prompt_embeds,
             negative_prompt_embeds,
-            strength, )
+            strength,
+        )
         infer_op_dict = self.prepare_infer_op_dict(infer_op_dict)
 
         # 2. Define call parameters
@@ -303,23 +299,23 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
             negative_prompt_embeds=negative_prompt_embeds,
             parse_prompt_type=parse_prompt_type,
             max_embeddings_multiples=max_embeddings_multiples,
-            infer_op=infer_op_dict.get("text_encoder", None), )
+            infer_op=infer_op_dict.get("text_encoder", None),
+        )
         source_prompt_embeds = self._encode_prompt(
             source_prompt,
             num_images_per_prompt,
             do_classifier_free_guidance,
             parse_prompt_type=parse_prompt_type,
             max_embeddings_multiples=max_embeddings_multiples,
-            infer_op=infer_op_dict.get("text_encoder", None), )
+            infer_op=infer_op_dict.get("text_encoder", None),
+        )
 
         # 5. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
-        timesteps, num_inference_steps = self.get_timesteps(num_inference_steps,
-                                                            strength)
+        timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength)
         # 6. Prepare latent variables
         # at which timestep to set the initial noise (n.b. 50% if strength is 0.5)
-        latent_timestep = timesteps[:1].tile(
-            [batch_size * num_images_per_prompt])
+        latent_timestep = timesteps[:1].tile([batch_size * num_images_per_prompt])
         is_strength_max = strength == 1.0
         latents, clean_latents = self.prepare_latents(
             batch_size * num_images_per_prompt,
@@ -331,7 +327,8 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
             timestep=latent_timestep,
             is_strength_max=is_strength_max,
             return_image_latents=True,
-            infer_op=infer_op_dict.get("vae_encoder", None), )
+            infer_op=infer_op_dict.get("vae_encoder", None),
+        )
         source_latents = latents
 
         # 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
@@ -339,18 +336,15 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
         generator = extra_step_kwargs.pop("generator", None)
 
         # 8. Denoising loop
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
 
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
                 latent_model_input = paddle.concat([latents] * 2)
                 source_latent_model_input = paddle.concat([source_latents] * 2)
-                latent_model_input = self.scheduler.scale_model_input(
-                    latent_model_input, t)
-                source_latent_model_input = self.scheduler.scale_model_input(
-                    source_latent_model_input, t)
+                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+                source_latent_model_input = self.scheduler.scale_model_input(source_latent_model_input, t)
 
                 # predict the noise residual
                 concat_latent_model_input = paddle.stack(
@@ -360,7 +354,8 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
                         source_latent_model_input[1],
                         latent_model_input[1],
                     ],
-                    axis=0, )
+                    axis=0,
+                )
                 concat_prompt_embeds = paddle.stack(
                     [
                         source_prompt_embeds[0],
@@ -368,14 +363,16 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
                         source_prompt_embeds[1],
                         prompt_embeds[1],
                     ],
-                    axis=0, )
+                    axis=0,
+                )
 
                 unet_inputs = dict(
                     sample=concat_latent_model_input,
                     timestep=t,
                     encoder_hidden_states=concat_prompt_embeds,
                     infer_op=infer_op_dict.get("unet", None),
-                    output_shape=concat_latent_model_input.shape, )
+                    output_shape=concat_latent_model_input.shape,
+                )
                 # predict the noise residual
                 concat_noise_pred = self.unet(**unet_inputs)[0]
 
@@ -384,12 +381,12 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
                     source_noise_pred_uncond,
                     noise_pred_uncond,
                     source_noise_pred_text,
-                    noise_pred_text, ) = concat_noise_pred.chunk(
-                        4, axis=0)
-                noise_pred = noise_pred_uncond + guidance_scale * (
-                    noise_pred_text - noise_pred_uncond)
+                    noise_pred_text,
+                ) = concat_noise_pred.chunk(4, axis=0)
+                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
                 source_noise_pred = source_noise_pred_uncond + source_guidance_scale * (
-                    source_noise_pred_text - source_noise_pred_uncond)
+                    source_noise_pred_text - source_noise_pred_uncond
+                )
 
                 # Sample source_latents from the posterior distribution.
                 prev_source_latents = posterior_sample(
@@ -398,24 +395,25 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
                     t,
                     clean_latents,
                     generator=generator,
-                    **extra_step_kwargs)
+                    **extra_step_kwargs,
+                )
                 # Compute noise.
-                noise = compute_noise(self.scheduler, prev_source_latents,
-                                      source_latents, t, source_noise_pred,
-                                      **extra_step_kwargs)
+                noise = compute_noise(
+                    self.scheduler,
+                    prev_source_latents,
+                    source_latents,
+                    t,
+                    source_noise_pred,
+                    **extra_step_kwargs,
+                )
                 source_latents = prev_source_latents
 
                 # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(
-                    noise_pred,
-                    t,
-                    latents,
-                    variance_noise=noise,
-                    **extra_step_kwargs).prev_sample
+                    noise_pred, t, latents, variance_noise=noise, **extra_step_kwargs
+                ).prev_sample
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -426,7 +424,8 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
         if not output_type == "latent":
             image = self._decode_vae_latents(
                 latents / self.vae_scaling_factor,
-                infer_op=infer_op_dict.get("vae_decoder", None))
+                infer_op=infer_op_dict.get("vae_decoder", None),
+            )
             image, has_nsfw_concept = self.run_safety_checker(image)
         else:
             image = latents
@@ -437,11 +436,9 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline,
         else:
             do_denormalize = [not has_nsfw for has_nsfw in has_nsfw_concept]
 
-        image = self.image_processor.postprocess(
-            image, output_type=output_type, do_denormalize=do_denormalize)
+        image = self.image_processor.postprocess(image, output_type=output_type, do_denormalize=do_denormalize)
 
         if not return_dict:
             return (image, has_nsfw_concept)
 
-        return StableDiffusionPipelineOutput(
-            images=image, nsfw_content_detected=has_nsfw_concept)
+        return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

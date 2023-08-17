@@ -21,4 +21,5 @@ if is_paddlenlp_available():
     from .pipeline_latent_diffusion import (
         LDMBertConfig,
         LDMBertModel,
-        LDMTextToImagePipeline, )
+        LDMTextToImagePipeline,
+    )

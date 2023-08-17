@@ -33,7 +33,8 @@ class PNDMPipelineFastTests(unittest.TestCase):
             in_channels=3,
             out_channels=3,
             down_block_types=("DownBlock2D", "AttnDownBlock2D"),
-            up_block_types=("AttnUpBlock2D", "UpBlock2D"), )
+            up_block_types=("AttnUpBlock2D", "UpBlock2D"),
+        )
         return model
 
     def test_inference(self):
@@ -42,22 +43,20 @@ class PNDMPipelineFastTests(unittest.TestCase):
         pndm = PNDMPipeline(unet=unet, scheduler=scheduler)
         pndm.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(0)
-        image = pndm(
-            generator=generator, num_inference_steps=20,
-            output_type="numpy").images
+        image = pndm(generator=generator, num_inference_steps=20, output_type="numpy").images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = pndm(
             generator=generator,
             num_inference_steps=20,
             output_type="numpy",
-            return_dict=False)[0]
+            return_dict=False,
+        )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
         expected_slice = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
 
 @slow
@@ -73,15 +72,17 @@ class PNDMPipelineIntegrationTests(unittest.TestCase):
         image = pndm(generator=generator, output_type="numpy").images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        expected_slice = np.array([
-            0.15949559211730957,
-            0.17172572016716003,
-            0.17315810918807983,
-            0.1836635172367096,
-            0.1823960244655609,
-            0.1799020767211914,
-            0.21776044368743896,
-            0.22992581129074097,
-            0.21678516268730164,
-        ])
+        expected_slice = np.array(
+            [
+                0.15949559211730957,
+                0.17172572016716003,
+                0.17315810918807983,
+                0.1836635172367096,
+                0.1823960244655609,
+                0.1799020767211914,
+                0.21776044368743896,
+                0.22992581129074097,
+                0.21678516268730164,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01

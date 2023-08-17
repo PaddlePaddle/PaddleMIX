@@ -23,7 +23,8 @@ from ...utils import (
     OptionalDependencyNotAvailable,
     is_einops_available,
     is_paddle_available,
-    is_paddlenlp_available, )
+    is_paddlenlp_available,
+)
 
 
 @dataclass
@@ -43,12 +44,12 @@ class ImageTextPipelineOutput(BaseOutput):
 
 
 try:
-    if not (is_paddlenlp_available() and is_paddle_available() and
-            is_einops_available()):
+    if not (is_paddlenlp_available() and is_paddle_available() and is_einops_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
     from ...utils.dummy_paddle_and_paddlenlp_and_einops_objects import (
-        UniDiffuserPipeline, )
+        UniDiffuserPipeline,
+    )
     from ...utils.dummy_paddle_and_paddlenlp_objects import CaptionDecoder
 else:
     from .caption_decoder import CaptionDecoder

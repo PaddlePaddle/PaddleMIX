@@ -20,7 +20,7 @@ from .test_schedulers import SchedulerCommonTest
 
 
 class EulerAncestralDiscreteSchedulerTest(SchedulerCommonTest):
-    scheduler_classes = (EulerAncestralDiscreteScheduler, )
+    scheduler_classes = (EulerAncestralDiscreteScheduler,)
     num_inference_steps = 10
 
     def get_scheduler_config(self, **kwargs):
@@ -39,8 +39,7 @@ class EulerAncestralDiscreteSchedulerTest(SchedulerCommonTest):
             self.check_over_configs(num_train_timesteps=timesteps)
 
     def test_betas(self):
-        for beta_start, beta_end in zip([0.00001, 0.0001, 0.001],
-                                        [0.0002, 0.002, 0.02]):
+        for beta_start, beta_end in zip([0.00001, 0.0001, 0.001], [0.0002, 0.002, 0.02]):
             self.check_over_configs(beta_start=beta_start, beta_end=beta_end)
 
     def test_schedules(self):
@@ -68,8 +67,7 @@ class EulerAncestralDiscreteSchedulerTest(SchedulerCommonTest):
 
             model_output = model(sample, t)
 
-            output = scheduler.step(
-                model_output, t, sample, generator=generator)
+            output = scheduler.step(model_output, t, sample, generator=generator)
             sample = output.prev_sample
 
         result_sum = paddle.sum(paddle.abs(sample))
@@ -80,8 +78,7 @@ class EulerAncestralDiscreteSchedulerTest(SchedulerCommonTest):
 
     def test_full_loop_with_v_prediction(self):
         scheduler_class = self.scheduler_classes[0]
-        scheduler_config = self.get_scheduler_config(
-            prediction_type="v_prediction")
+        scheduler_config = self.get_scheduler_config(prediction_type="v_prediction")
         scheduler = scheduler_class(**scheduler_config)
 
         scheduler.set_timesteps(self.num_inference_steps)
@@ -96,8 +93,7 @@ class EulerAncestralDiscreteSchedulerTest(SchedulerCommonTest):
 
             model_output = model(sample, t)
 
-            output = scheduler.step(
-                model_output, t, sample, generator=generator)
+            output = scheduler.step(model_output, t, sample, generator=generator)
             sample = output.prev_sample
 
         result_sum = paddle.sum(paddle.abs(sample))
@@ -122,8 +118,7 @@ class EulerAncestralDiscreteSchedulerTest(SchedulerCommonTest):
 
             model_output = model(sample, t)
 
-            output = scheduler.step(
-                model_output, t, sample, generator=generator)
+            output = scheduler.step(model_output, t, sample, generator=generator)
             sample = output.prev_sample
 
         result_sum = paddle.sum(paddle.abs(sample))

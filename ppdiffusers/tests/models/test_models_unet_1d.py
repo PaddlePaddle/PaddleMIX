@@ -75,10 +75,13 @@ class UNet1DModelTests(ModelTesterMixin, unittest.TestCase):
             "freq_shift": 1.0,
             "out_block_type": "OutConv1DBlock",
             "mid_block_type": "MidResTemporalBlock1D",
-            "down_block_types": ("DownResnetBlock1D", "DownResnetBlock1D",
-                                 "DownResnetBlock1D", "DownResnetBlock1D"),
-            "up_block_types":
-            ("UpResnetBlock1D", "UpResnetBlock1D", "UpResnetBlock1D"),
+            "down_block_types": (
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
+            ),
+            "up_block_types": ("UpResnetBlock1D", "UpResnetBlock1D", "UpResnetBlock1D"),
             "act_fn": "mish",
         }
         inputs_dict = self.dummy_input
@@ -88,38 +91,37 @@ class UNet1DModelTests(ModelTesterMixin, unittest.TestCase):
         model, loading_info = UNet1DModel.from_pretrained(
             "bglick13/hopper-medium-v2-value-function-hor32",
             output_loading_info=True,
-            subfolder="unet")
+            subfolder="unet",
+        )
         self.assertIsNotNone(model)
         self.assertEqual(len(loading_info["missing_keys"]), 0)
         image = model(**self.dummy_input)
         assert image is not None, "Make sure output is not None"
 
     def test_output_pretrained(self):
-        model = UNet1DModel.from_pretrained(
-            "bglick13/hopper-medium-v2-value-function-hor32", subfolder="unet")
+        model = UNet1DModel.from_pretrained("bglick13/hopper-medium-v2-value-function-hor32", subfolder="unet")
         paddle.seed(0)
         num_features = model.config.in_channels
         seq_len = 16
-        noise = paddle.randn(shape=(1, seq_len, num_features)).transpose(
-            perm=[0, 2, 1])
-        time_step = paddle.full(shape=(num_features, ), fill_value=0)
+        noise = paddle.randn(shape=(1, seq_len, num_features)).transpose(perm=[0, 2, 1])
+        time_step = paddle.full(shape=(num_features,), fill_value=0)
         with paddle.no_grad():
             output = model(noise, time_step).sample.permute(0, 2, 1)
         output_slice = output[0, -3:, -3:].flatten()
-        expected_output_slice = paddle.to_tensor([
-            -0.2857576608657837,
-            -0.9908187389373779,
-            0.2976357340812683,
-            -0.8677187561988831,
-            -0.21778395771980286,
-            0.08095654845237732,
-            -0.5871752500534058,
-            0.3299727439880371,
-            -0.17421625554561615,
-        ])
-        self.assertTrue(
-            paddle.allclose(
-                output_slice, expected_output_slice, rtol=0.001))
+        expected_output_slice = paddle.to_tensor(
+            [
+                -0.2857576608657837,
+                -0.9908187389373779,
+                0.2976357340812683,
+                -0.8677187561988831,
+                -0.21778395771980286,
+                0.08095654845237732,
+                -0.5871752500534058,
+                0.3299727439880371,
+                -0.17421625554561615,
+            ]
+        )
+        self.assertTrue(paddle.allclose(output_slice, expected_output_slice, rtol=0.001))
 
     def test_forward_with_norm_groups(self):
         pass
@@ -130,9 +132,9 @@ class UNet1DModelTests(ModelTesterMixin, unittest.TestCase):
         model_id = "harmonai/maestro-150k"
         model = UNet1DModel.from_pretrained(model_id, subfolder="unet")
         sample_size = 65536
-        noise = paddle.sin(x=paddle.arange(
-            start=sample_size,
-            dtype=paddle.float32)[None, None, :].tile(repeat_times=[1, 2, 1]))
+        noise = paddle.sin(
+            x=paddle.arange(start=sample_size, dtype=paddle.float32)[None, None, :].tile(repeat_times=[1, 2, 1])
+        )
         timestep = paddle.to_tensor([1.0])  # must cast float32
         with paddle.no_grad():
             output = model(noise, timestep).sample
@@ -184,8 +186,7 @@ class UNetRLModelTests(ModelTesterMixin, unittest.TestCase):
                 output = output.sample
         self.assertIsNotNone(output)
         expected_shape = [inputs_dict["sample"].shape[0], 1]
-        self.assertEqual(output.shape, expected_shape,
-                         "Input and output shapes do not match")
+        self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
 
     def test_ema_training(self):
         pass
@@ -198,8 +199,10 @@ class UNetRLModelTests(ModelTesterMixin, unittest.TestCase):
             "in_channels": 14,
             "out_channels": 14,
             "down_block_types": [
-                "DownResnetBlock1D", "DownResnetBlock1D", "DownResnetBlock1D",
-                "DownResnetBlock1D"
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
+                "DownResnetBlock1D",
             ],
             "up_block_types": [],
             "out_block_type": "ValueFunction",
@@ -220,7 +223,8 @@ class UNetRLModelTests(ModelTesterMixin, unittest.TestCase):
         value_function, vf_loading_info = UNet1DModel.from_pretrained(
             "bglick13/hopper-medium-v2-value-function-hor32",
             output_loading_info=True,
-            subfolder="value_function")
+            subfolder="value_function",
+        )
         self.assertIsNotNone(value_function)
         self.assertEqual(len(vf_loading_info["missing_keys"]), 0)
         image = value_function(**self.dummy_input)
@@ -230,19 +234,17 @@ class UNetRLModelTests(ModelTesterMixin, unittest.TestCase):
         value_function, vf_loading_info = UNet1DModel.from_pretrained(
             "bglick13/hopper-medium-v2-value-function-hor32",
             output_loading_info=True,
-            subfolder="value_function")
+            subfolder="value_function",
+        )
         paddle.seed(0)
         num_features = value_function.config.in_channels
         seq_len = 14
-        noise = paddle.randn(shape=(1, seq_len, num_features)).transpose(
-            perm=[0, 2, 1])
-        time_step = paddle.full(shape=(num_features, ), fill_value=0)
+        noise = paddle.randn(shape=(1, seq_len, num_features)).transpose(perm=[0, 2, 1])
+        time_step = paddle.full(shape=(num_features,), fill_value=0)
         with paddle.no_grad():
             output = value_function(noise, time_step).sample
         expected_output_slice = paddle.to_tensor([291.51135254] * seq_len)
-        self.assertTrue(
-            paddle.allclose(
-                output.squeeze(-1), expected_output_slice, rtol=0.001))
+        self.assertTrue(paddle.allclose(output.squeeze(-1), expected_output_slice, rtol=0.001))
 
     def test_forward_with_norm_groups(self):
         pass

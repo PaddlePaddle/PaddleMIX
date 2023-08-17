@@ -20,9 +20,9 @@ import numpy as np
 import paddle
 import PIL
 from packaging import version
+from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.models.cross_attention import CrossAttention
@@ -30,11 +30,13 @@ from ppdiffusers.models.transformer_2d import Transformer2DModelOutput
 from ppdiffusers.models.unet_2d_blocks import (
     ResnetBlock2D,
     Transformer2DModel,
-    Upsample2D, )
+    Upsample2D,
+)
 from ppdiffusers.pipeline_utils import DiffusionPipeline
 from ppdiffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
 from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
-    StableDiffusionSafetyChecker, )
+    StableDiffusionSafetyChecker,
+)
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
 from ppdiffusers.utils import (
     PIL_INTERPOLATION,
@@ -42,7 +44,8 @@ from ppdiffusers.utils import (
     deprecate,
     logging,
     randn_tensor,
-    replace_example_docstring, )
+    replace_example_docstring,
+)
 
 check_min_version("0.14.1")
 
@@ -75,18 +78,14 @@ EXAMPLE_DOC_STRING = """
 def stable_var(x, axis=None, unbiased=True, keepdim=False, name=None):
     dtype = x.dtype
     u = paddle.mean(x, axis=axis, keepdim=True, name=name)
-    n = paddle.cast(paddle.numel(x), paddle.int64) / paddle.cast(
-        paddle.numel(u), paddle.int64)
+    n = paddle.cast(paddle.numel(x), paddle.int64) / paddle.cast(paddle.numel(u), paddle.int64)
     n = n.astype(dtype)
     if unbiased:
         one_const = paddle.ones([], x.dtype)
         n = paddle.where(n > one_const, n - 1.0, one_const)
     n = n**0.5
     n.stop_gradient = True
-    out = paddle.sum(paddle.pow((x - u) / n, 2),
-                     axis=axis,
-                     keepdim=keepdim,
-                     name=name)
+    out = paddle.sum(paddle.pow((x - u) / n, 2), axis=axis, keepdim=keepdim, name=name)
     return out
 
 
@@ -98,11 +97,13 @@ def var_mean(x, axis=-1, keepdim=True, unbiased=True, correction=None):
     return var, mean
 
 
-def self_attn_forward(self,
-                      hidden_states,
-                      encoder_hidden_states=None,
-                      attention_mask=None,
-                      **cross_attention_kwargs):
+def self_attn_forward(
+    self,
+    hidden_states,
+    encoder_hidden_states=None,
+    attention_mask=None,
+    **cross_attention_kwargs,
+):
     attn_output = None
 
     if getattr(self, "enable_attn", False):
@@ -118,31 +119,34 @@ def self_attn_forward(self,
                 hidden_states=image_hidden_states,
                 encoder_hidden_states=image_hidden_states,
                 attention_mask=attention_mask,
-                **cross_attention_kwargs, )
+                **cross_attention_kwargs,
+            )
 
             latent_self_attn1_uc = self.processor(
                 self,
                 latent_hidden_states,
                 encoder_hidden_states=paddle.concat(
-                    [latent_hidden_states] + image_hidden_states.split(
-                        [chunk_num] *
-                        (image_hidden_states.shape[0] // chunk_num)),
-                    axis=1, ),
+                    [latent_hidden_states]
+                    + image_hidden_states.split([chunk_num] * (image_hidden_states.shape[0] // chunk_num)),
+                    axis=1,
+                ),
                 attention_mask=attention_mask,
-                **cross_attention_kwargs, )
+                **cross_attention_kwargs,
+            )
 
             if do_classifier_free_guidance and self.current_style_fidelity > 1e-5:
                 latent_self_attn1_c = latent_self_attn1_uc.clone()
                 latent_self_attn1_c[self.current_uc_indices] = self.processor(
                     self,
                     hidden_states=latent_hidden_states[self.current_uc_indices],
-                    encoder_hidden_states=latent_hidden_states[
-                        self.current_uc_indices],
+                    encoder_hidden_states=latent_hidden_states[self.current_uc_indices],
                     attention_mask=attention_mask,
-                    **cross_attention_kwargs, )
+                    **cross_attention_kwargs,
+                )
                 latent_self_attn1 = (
-                    self.current_style_fidelity * latent_self_attn1_c +
-                    (1.0 - self.current_style_fidelity) * latent_self_attn1_uc)
+                    self.current_style_fidelity * latent_self_attn1_c
+                    + (1.0 - self.current_style_fidelity) * latent_self_attn1_uc
+                )
             else:
                 latent_self_attn1 = latent_self_attn1_uc
 
@@ -154,25 +158,28 @@ def self_attn_forward(self,
             hidden_states=hidden_states,
             encoder_hidden_states=encoder_hidden_states,
             attention_mask=attention_mask,
-            **cross_attention_kwargs, )
+            **cross_attention_kwargs,
+        )
     return attn_output
 
 
 def transformer_2d_model_forward(
-        self,
-        hidden_states,
-        encoder_hidden_states=None,
-        timestep=None,
-        class_labels=None,
-        cross_attention_kwargs=None,
-        return_dict: bool=True, ):
+    self,
+    hidden_states,
+    encoder_hidden_states=None,
+    timestep=None,
+    class_labels=None,
+    cross_attention_kwargs=None,
+    return_dict: bool = True,
+):
     x = self.original_forward(
         hidden_states,
         encoder_hidden_states=encoder_hidden_states,
         timestep=timestep,
         class_labels=class_labels,
         cross_attention_kwargs=cross_attention_kwargs,
-        return_dict=return_dict, )[0]
+        return_dict=return_dict,
+    )[0]
     output = None
     if getattr(self, "enable_gn", False):
         if self.gn_auto_machine_weight > self.gn_weight:
@@ -181,25 +188,20 @@ def transformer_2d_model_forward(
 
             latent_hidden_states = x[:chunk_num]  # uc, c
             image_hidden_states = x[chunk_num:]  # uc, c
-            image_var, image_mean = var_mean(
-                image_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
-            var, mean = var_mean(
-                latent_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
-            std = paddle.maximum(var, paddle.zeros_like(var) + EPS)**0.5
+            image_var, image_mean = var_mean(image_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
+            var, mean = var_mean(latent_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
+            std = paddle.maximum(var, paddle.zeros_like(var) + EPS) ** 0.5
 
             div_num = image_hidden_states.shape[0] // chunk_num
             mean_acc = sum(image_mean.split([chunk_num] * div_num)) / div_num
             var_acc = sum(image_var.split([chunk_num] * div_num)) / div_num
 
-            std_acc = paddle.maximum(var_acc,
-                                     paddle.zeros_like(var_acc) + EPS)**0.5
+            std_acc = paddle.maximum(var_acc, paddle.zeros_like(var_acc) + EPS) ** 0.5
             y_uc = (((latent_hidden_states - mean) / std) * std_acc) + mean_acc
             if do_classifier_free_guidance and self.current_style_fidelity > 1e-5:
                 y_c = y_uc.clone()
-                y_c[self.current_uc_indices] = latent_hidden_states[
-                    self.current_uc_indices]
-                latent_hidden_states = self.current_style_fidelity * y_c + (
-                    1.0 - self.current_style_fidelity) * y_uc
+                y_c[self.current_uc_indices] = latent_hidden_states[self.current_uc_indices]
+                latent_hidden_states = self.current_style_fidelity * y_c + (1.0 - self.current_style_fidelity) * y_uc
             else:
                 latent_hidden_states = y_uc
             output = paddle.concat([latent_hidden_states, image_hidden_states])
@@ -207,7 +209,7 @@ def transformer_2d_model_forward(
     if output is None:
         output = x
     if not return_dict:
-        return (output, )
+        return (output,)
 
     return Transformer2DModelOutput(sample=output)
 
@@ -222,25 +224,20 @@ def resnet_block_2d_forward(self, input_tensor, temb):
 
             latent_hidden_states = x[:chunk_num]  # uc, c
             image_hidden_states = x[chunk_num:]  # uc, c
-            image_var, image_mean = var_mean(
-                image_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
-            var, mean = var_mean(
-                latent_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
-            std = paddle.maximum(var, paddle.zeros_like(var) + EPS)**0.5
+            image_var, image_mean = var_mean(image_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
+            var, mean = var_mean(latent_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
+            std = paddle.maximum(var, paddle.zeros_like(var) + EPS) ** 0.5
 
             div_num = image_hidden_states.shape[0] // chunk_num
             mean_acc = sum(image_mean.split([chunk_num] * div_num)) / div_num
             var_acc = sum(image_var.split([chunk_num] * div_num)) / div_num
 
-            std_acc = paddle.maximum(var_acc,
-                                     paddle.zeros_like(var_acc) + EPS)**0.5
+            std_acc = paddle.maximum(var_acc, paddle.zeros_like(var_acc) + EPS) ** 0.5
             y_uc = (((latent_hidden_states - mean) / std) * std_acc) + mean_acc
             if do_classifier_free_guidance and self.current_style_fidelity > 1e-5:
                 y_c = y_uc.clone()
-                y_c[self.current_uc_indices] = latent_hidden_states[
-                    self.current_uc_indices]
-                latent_hidden_states = self.current_style_fidelity * y_c + (
-                    1.0 - self.current_style_fidelity) * y_uc
+                y_c[self.current_uc_indices] = latent_hidden_states[self.current_uc_indices]
+                latent_hidden_states = self.current_style_fidelity * y_c + (1.0 - self.current_style_fidelity) * y_uc
             else:
                 latent_hidden_states = y_uc
             output = paddle.concat([latent_hidden_states, image_hidden_states])
@@ -261,25 +258,20 @@ def upsample_2d_forward(self, hidden_states, output_size=None):
 
             latent_hidden_states = x[:chunk_num]  # uc, c
             image_hidden_states = x[chunk_num:]  # uc, c
-            image_var, image_mean = var_mean(
-                image_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
-            var, mean = var_mean(
-                latent_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
-            std = paddle.maximum(var, paddle.zeros_like(var) + EPS)**0.5
+            image_var, image_mean = var_mean(image_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
+            var, mean = var_mean(latent_hidden_states, axis=(2, 3), keepdim=True, unbiased=False)
+            std = paddle.maximum(var, paddle.zeros_like(var) + EPS) ** 0.5
 
             div_num = image_hidden_states.shape[0] // chunk_num
             mean_acc = sum(image_mean.split([chunk_num] * div_num)) / div_num
             var_acc = sum(image_var.split([chunk_num] * div_num)) / div_num
 
-            std_acc = paddle.maximum(var_acc,
-                                     paddle.zeros_like(var_acc) + EPS)**0.5
+            std_acc = paddle.maximum(var_acc, paddle.zeros_like(var_acc) + EPS) ** 0.5
             y_uc = (((latent_hidden_states - mean) / std) * std_acc) + mean_acc
             if do_classifier_free_guidance and self.current_style_fidelity > 1e-5:
                 y_c = y_uc.clone()
-                y_c[self.current_uc_indices] = latent_hidden_states[
-                    self.current_uc_indices]
-                latent_hidden_states = self.current_style_fidelity * y_c + (
-                    1.0 - self.current_style_fidelity) * y_uc
+                y_c[self.current_uc_indices] = latent_hidden_states[self.current_uc_indices]
+                latent_hidden_states = self.current_style_fidelity * y_c + (1.0 - self.current_style_fidelity) * y_uc
             else:
                 latent_hidden_states = y_uc
             output = paddle.concat([latent_hidden_states, image_hidden_states])
@@ -317,26 +309,16 @@ def preprocess(image, resize_mode, width, height):
     if isinstance(image, paddle.Tensor):
         return image
     elif isinstance(image, PIL.Image.Image):
-        image = resize_image(
-            resize_mode=resize_mode, im=image, width=width, height=height)
+        image = resize_image(resize_mode=resize_mode, im=image, width=width, height=height)
         image = [image]
 
     if isinstance(image[0], PIL.Image.Image):
-        image = [
-            resize_image(
-                resize_mode=resize_mode, im=im, width=width, height=height)
-            for im in image
-        ]
+        image = [resize_image(resize_mode=resize_mode, im=im, width=width, height=height) for im in image]
 
         w, h = image[0].size
-        w, h = map(lambda x: x - x % 8,
-                   (w, h))  # resize to integer multiple of 8
+        w, h = map(lambda x: x - x % 8, (w, h))  # resize to integer multiple of 8
 
-        image = [
-            np.array(i.resize(
-                (w, h), resample=PIL_INTERPOLATION["lanczos"]))[None, :]
-            for i in image
-        ]
+        image = [np.array(i.resize((w, h), resample=PIL_INTERPOLATION["lanczos"]))[None, :] for i in image]
         image = np.concatenate(image, axis=0)
         image = np.array(image).astype(np.float32) / 255.0
         image = image.transpose(0, 3, 1, 2)
@@ -383,8 +365,7 @@ def resize_image(resize_mode, im, width, height, upscaler_name=None):
 
         resized = resize(im, src_w, src_h)
         res = Image.new("RGB", (width, height))
-        res.paste(
-            resized, box=(width // 2 - src_w // 2, height // 2 - src_h // 2))
+        res.paste(resized, box=(width // 2 - src_w // 2, height // 2 - src_h // 2))
 
     else:
         ratio = width / height
@@ -395,31 +376,22 @@ def resize_image(resize_mode, im, width, height, upscaler_name=None):
 
         resized = resize(im, src_w, src_h)
         res = Image.new("RGB", (width, height))
-        res.paste(
-            resized, box=(width // 2 - src_w // 2, height // 2 - src_h // 2))
+        res.paste(resized, box=(width // 2 - src_w // 2, height // 2 - src_h // 2))
 
         if ratio < src_ratio:
             fill_height = height // 2 - src_h // 2
+            res.paste(resized.resize((width, fill_height), box=(0, 0, width, 0)), box=(0, 0))
             res.paste(
-                resized.resize(
-                    (width, fill_height), box=(0, 0, width, 0)),
-                box=(0, 0))
-            res.paste(
-                resized.resize(
-                    (width, fill_height),
-                    box=(0, resized.height, width, resized.height)),
-                box=(0, fill_height + src_h), )
+                resized.resize((width, fill_height), box=(0, resized.height, width, resized.height)),
+                box=(0, fill_height + src_h),
+            )
         elif ratio > src_ratio:
             fill_width = width // 2 - src_w // 2
+            res.paste(resized.resize((fill_width, height), box=(0, 0, 0, height)), box=(0, 0))
             res.paste(
-                resized.resize(
-                    (fill_width, height), box=(0, 0, 0, height)),
-                box=(0, 0))
-            res.paste(
-                resized.resize(
-                    (fill_width, height),
-                    box=(resized.width, 0, resized.width, height)),
-                box=(fill_width + src_w, 0), )
+                resized.resize((fill_width, height), box=(resized.width, 0, resized.width, height)),
+                box=(fill_width + src_w, 0),
+            )
 
     return res
 
@@ -455,37 +427,33 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
     _optional_components = ["safety_checker", "feature_extractor"]
 
     def __init__(
-            self,
-            vae: AutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: UNet2DConditionModel,
-            scheduler: KarrasDiffusionSchedulers,
-            safety_checker: StableDiffusionSafetyChecker,
-            feature_extractor: CLIPImageProcessor,
-            requires_safety_checker: bool=True, ):
+        self,
+        vae: AutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: UNet2DConditionModel,
+        scheduler: KarrasDiffusionSchedulers,
+        safety_checker: StableDiffusionSafetyChecker,
+        feature_extractor: CLIPImageProcessor,
+        requires_safety_checker: bool = True,
+    ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if hasattr(scheduler.config, "steps_offset") and scheduler.config.steps_offset != 1:
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
                 "to update the config accordingly as leaving `steps_offset` might led to incorrect results"
                 " in future versions. If you have downloaded this checkpoint from the Hugging Face Hub,"
                 " it would be very nice if you could open a Pull request for the `scheduler/scheduler_config.json`"
-                " file")
-            deprecate(
-                "steps_offset!=1",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False)
+                " file"
+            )
+            deprecate("steps_offset!=1", "1.0.0", deprecation_message, standard_warn=False)
             new_config = dict(scheduler.config)
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if hasattr(scheduler.config, "clip_sample") and scheduler.config.clip_sample is True:
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -493,11 +461,7 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                 " future versions. If you have downloaded this checkpoint from the Hugging Face Hub, it would be very"
                 " nice if you could open a Pull request for the `scheduler/scheduler_config.json` file"
             )
-            deprecate(
-                "clip_sample not set",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False)
+            deprecate("clip_sample not set", "1.0.0", deprecation_message, standard_warn=False)
             new_config = dict(scheduler.config)
             new_config["clip_sample"] = False
             scheduler._internal_dict = FrozenDict(new_config)
@@ -518,12 +482,10 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                 " checker. If you do not want to use the safety checker, you can pass `'safety_checker=None'` instead."
             )
 
-        is_unet_version_less_0_9_0 = hasattr(
-            unet.config, "_ppdiffusers_version") and version.parse(
-                version.parse(unet.config._ppdiffusers_version)
-                .base_version) < version.parse("0.9.0.dev0")
-        is_unet_sample_size_less_64 = hasattr(
-            unet.config, "sample_size") and unet.config.sample_size < 64
+        is_unet_version_less_0_9_0 = hasattr(unet.config, "_ppdiffusers_version") and version.parse(
+            version.parse(unet.config._ppdiffusers_version).base_version
+        ) < version.parse("0.9.0.dev0")
+        is_unet_sample_size_less_64 = hasattr(unet.config, "sample_size") and unet.config.sample_size < 64
         if is_unet_version_less_0_9_0 and is_unet_sample_size_less_64:
             deprecation_message = (
                 "The configuration file of the unet has set the default `sample_size` to smaller than"
@@ -534,12 +496,9 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                 " configuration file. Please make sure to update the config accordingly as leaving `sample_size=32`"
                 " in the config might lead to incorrect results in future versions. If you have downloaded this"
                 " checkpoint from the Hugging Face Hub, it would be very nice if you could open a Pull request for"
-                " the `unet/config.json` file")
-            deprecate(
-                "sample_size<64",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False)
+                " the `unet/config.json` file"
+            )
+            deprecate("sample_size<64", "1.0.0", deprecation_message, standard_warn=False)
             new_config = dict(unet.config)
             new_config["sample_size"] = 64
             unet._internal_dict = FrozenDict(new_config)
@@ -551,21 +510,23 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             unet=unet,
             scheduler=scheduler,
             safety_checker=safety_checker,
-            feature_extractor=feature_extractor, )
-        self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels) - 1)
+            feature_extractor=feature_extractor,
+        )
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
         self.attn_modules = None
         self.gn_modules = None
 
     def set_reference_only(
-            self,
-            attention_auto_machine_weight=1.0,
-            gn_auto_machine_weight=1.0,
-            current_style_fidelity=0.5,
-            enable_attn=True,
-            enable_gn=True,
-            do_classifier_free_guidance=True, ):
+        self,
+        attention_auto_machine_weight=1.0,
+        gn_auto_machine_weight=1.0,
+        current_style_fidelity=0.5,
+        enable_attn=True,
+        enable_gn=True,
+        do_classifier_free_guidance=True,
+    ):
         assert 0.0 <= attention_auto_machine_weight <= 1.0
         assert 0.0 <= gn_auto_machine_weight <= 2.0
         assert 0.0 <= current_style_fidelity <= 1.0
@@ -575,18 +536,14 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                 module.enable_attn = enable_attn
                 module.attention_auto_machine_weight = attention_auto_machine_weight
                 module.current_style_fidelity = current_style_fidelity
-                module.current_uc_indices = [
-                    0
-                ] if do_classifier_free_guidance else []
+                module.current_uc_indices = [0] if do_classifier_free_guidance else []
 
         if self.gn_modules is not None:
             for module in self.gn_modules:
                 module.enable_gn = enable_gn
                 module.gn_auto_machine_weight = gn_auto_machine_weight
                 module.current_style_fidelity = current_style_fidelity
-                module.current_uc_indices = [
-                    0
-                ] if do_classifier_free_guidance else []
+                module.current_uc_indices = [0] if do_classifier_free_guidance else []
 
         # init attn_modules
         if self.attn_modules is None:
@@ -600,75 +557,54 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                     hidden_size = self.unet.config.block_out_channels[-1]
                 elif name.startswith("up_blocks"):
                     block_id = int(name[len("up_blocks.")])
-                    hidden_size = list(
-                        reversed(self.unet.config.block_out_channels))[block_id]
+                    hidden_size = list(reversed(self.unet.config.block_out_channels))[block_id]
                 elif name.startswith("down_blocks"):
                     block_id = int(name[len("down_blocks.")])
                     hidden_size = self.unet.config.block_out_channels[block_id]
                 self_attn_processors_keys.append([name, hidden_size])
 
             # sorted by (-hidden_size, name)，down -> mid -> up.
-            for i, (name, _) in enumerate(
-                    sorted(
-                        self_attn_processors_keys,
-                        key=lambda x: (-x[1], x[0]))):
+            for i, (name, _) in enumerate(sorted(self_attn_processors_keys, key=lambda x: (-x[1], x[0]))):
                 module = self.unet.get_sublayer(name)
-                module.attn_weight = float(i) / float(
-                    len(self_attn_processors_keys))
+                module.attn_weight = float(i) / float(len(self_attn_processors_keys))
 
                 module.enable_attn = enable_attn
                 module.attention_auto_machine_weight = attention_auto_machine_weight
                 module.current_style_fidelity = current_style_fidelity
-                module.current_uc_indices = [
-                    0
-                ] if do_classifier_free_guidance else []
+                module.current_uc_indices = [0] if do_classifier_free_guidance else []
 
                 attn_modules.append(module)
             self.attn_modules = attn_modules
 
         # init gn_modules
         if self.gn_modules is None:
-            gn_modules = [self.unet.mid_block.attentions[-1], ]
-            self.unet.mid_block.attentions[
-                -1].gn_weight = 0.0  # mid             0.0
+            gn_modules = [
+                self.unet.mid_block.attentions[-1],
+            ]
+            self.unet.mid_block.attentions[-1].gn_weight = 0.0  # mid             0.0
 
             input_block_names = [
-                ("down_blocks.1.resnets.0",
-                 "down_blocks.1.attentions.0"),  # 4   2.0
-                ("down_blocks.1.resnets.1",
-                 "down_blocks.1.attentions.1"),  # 5   1.66
-                ("down_blocks.2.resnets.0",
-                 "down_blocks.2.attentions.0"),  # 7   1.33
-                ("down_blocks.2.resnets.1",
-                 "down_blocks.2.attentions.1"),  # 8   1.0
-                ("down_blocks.3.resnets.0",
-                 ),  # 10                               0.66
-                ("down_blocks.3.resnets.1",
-                 ),  # 11                               0.33
+                ("down_blocks.1.resnets.0", "down_blocks.1.attentions.0"),  # 4   2.0
+                ("down_blocks.1.resnets.1", "down_blocks.1.attentions.1"),  # 5   1.66
+                ("down_blocks.2.resnets.0", "down_blocks.2.attentions.0"),  # 7   1.33
+                ("down_blocks.2.resnets.1", "down_blocks.2.attentions.1"),  # 8   1.0
+                ("down_blocks.3.resnets.0",),  # 10                               0.66
+                ("down_blocks.3.resnets.1",),  # 11                               0.33
             ]
             for w, block_names in enumerate(input_block_names):
                 module = self.unet.get_sublayer(block_names[-1])
-                module.gn_weight = 1.0 - float(w) / float(
-                    len(input_block_names))
+                module.gn_weight = 1.0 - float(w) / float(len(input_block_names))
                 gn_modules.append(module)
 
             output_block_names = [
-                ("up_blocks.0.resnets.0",
-                 ),  # 0                                 0.0
-                ("up_blocks.0.resnets.1",
-                 ),  # 1                                 0.25
-                ("up_blocks.0.resnets.2",
-                 "up_blocks.0.upsamplers.0"),  # 2      0.5
-                ("up_blocks.1.resnets.0",
-                 "up_blocks.1.attentions.0"),  # 3      0.75
-                ("up_blocks.1.resnets.1",
-                 "up_blocks.1.attentions.1"),  # 4      1.0
-                ("up_blocks.1.resnets.2",
-                 "up_blocks.1.attentions.2"),  # 5      1.25
-                ("up_blocks.2.resnets.0",
-                 "up_blocks.2.attentions.0"),  # 6      1.5
-                ("up_blocks.2.resnets.1",
-                 "up_blocks.2.attentions.1"),  # 7      1.75
+                ("up_blocks.0.resnets.0",),  # 0                                 0.0
+                ("up_blocks.0.resnets.1",),  # 1                                 0.25
+                ("up_blocks.0.resnets.2", "up_blocks.0.upsamplers.0"),  # 2      0.5
+                ("up_blocks.1.resnets.0", "up_blocks.1.attentions.0"),  # 3      0.75
+                ("up_blocks.1.resnets.1", "up_blocks.1.attentions.1"),  # 4      1.0
+                ("up_blocks.1.resnets.2", "up_blocks.1.attentions.2"),  # 5      1.25
+                ("up_blocks.2.resnets.0", "up_blocks.2.attentions.0"),  # 6      1.5
+                ("up_blocks.2.resnets.1", "up_blocks.2.attentions.1"),  # 7      1.75
             ]
             for w, block_names in enumerate(output_block_names):
                 module = self.unet.get_sublayer(block_names[-1])
@@ -680,20 +616,19 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                 module.enable_gn = enable_gn
                 module.gn_auto_machine_weight = gn_auto_machine_weight
                 module.current_style_fidelity = current_style_fidelity
-                module.current_uc_indices = [
-                    0
-                ] if do_classifier_free_guidance else []
+                module.current_uc_indices = [0] if do_classifier_free_guidance else []
 
             self.gn_modules = gn_modules
 
     def _encode_prompt(
-            self,
-            prompt,
-            num_images_per_prompt,
-            do_classifier_free_guidance,
-            negative_prompt=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None, ):
+        self,
+        prompt,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt=None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+    ):
         r"""
         Encodes the prompt into text encoder hidden states.
 
@@ -729,29 +664,31 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                 padding="max_length",
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_input_ids = text_inputs.input_ids
-            untruncated_ids = self.tokenizer(
-                prompt, padding="longest", return_tensors="pd").input_ids
+            untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                    -1] and not paddle.equal_all(text_input_ids,
-                                                 untruncated_ids):
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+                text_input_ids, untruncated_ids
+            ):
                 removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
+                    untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1]
+                )
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
-                    f" {self.tokenizer.model_max_length} tokens: {removed_text}")
+                    f" {self.tokenizer.model_max_length} tokens: {removed_text}"
+                )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
 
             prompt_embeds = self.text_encoder(
                 text_input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             prompt_embeds = prompt_embeds[0]
 
         prompt_embeds = prompt_embeds.cast(self.text_encoder.dtype)
@@ -759,8 +696,7 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile([1, num_images_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape(
-            [bs_embed * num_images_per_prompt, seq_len, -1])
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
@@ -770,14 +706,16 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             elif type(prompt) is not type(negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}.")
+                    f" {type(prompt)}."
+                )
             elif isinstance(negative_prompt, str):
                 uncond_tokens = [negative_prompt]
             elif batch_size != len(negative_prompt):
                 raise ValueError(
                     f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                     f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`.")
+                    " the batch size of `prompt`."
+                )
             else:
                 uncond_tokens = negative_prompt
 
@@ -787,46 +725,42 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
 
             negative_prompt_embeds = self.text_encoder(
                 uncond_input.input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             negative_prompt_embeds = negative_prompt_embeds[0]
 
         if do_classifier_free_guidance:
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds.cast(
-                self.text_encoder.dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(self.text_encoder.dtype)
 
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                [1, num_images_per_prompt, 1])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                [batch_size * num_images_per_prompt, seq_len, -1])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
+            negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            prompt_embeds = paddle.concat(
-                [negative_prompt_embeds, prompt_embeds])
+            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
 
         return prompt_embeds
 
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is not None:
-            safety_checker_input = self.feature_extractor(
-                self.numpy_to_pil(image), return_tensors="pd")
+            safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image,
-                clip_input=safety_checker_input.pixel_values.cast(dtype))
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype)
+            )
         else:
             has_nsfw_concept = None
         return image, has_nsfw_concept
@@ -845,53 +779,49 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     def check_inputs(
-            self,
-            prompt,
-            height,
-            width,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        height,
+        width,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two.")
+                " only forward one of the two."
+            )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -904,19 +834,24 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                 raise ValueError(
                     "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}.")
+                    f" {negative_prompt_embeds.shape}."
+                )
 
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
+    def prepare_latents(
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
         shape = [
-            batch_size, num_channels_latents, height // self.vae_scale_factor,
-            width // self.vae_scale_factor
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
         ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
@@ -931,12 +866,14 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    def prepare_image_latents(self,
-                              image,
-                              batch_size,
-                              dtype,
-                              generator=None,
-                              do_classifier_free_guidance=False):
+    def prepare_image_latents(
+        self,
+        image,
+        batch_size,
+        dtype,
+        generator=None,
+        do_classifier_free_guidance=False,
+    ):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
                 f"`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}"
@@ -945,8 +882,7 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
 
         if isinstance(generator, list):
             init_latents = [
-                self.vae.encode(image[i:i + 1]).latent_dist.sample(generator[i])
-                for i in range(batch_size)
+                self.vae.encode(image[i : i + 1]).latent_dist.sample(generator[i]) for i in range(batch_size)
             ]
             init_latents = paddle.concat(init_latents, axis=0)
         else:
@@ -962,33 +898,32 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
-            self,
-            prompt: Union[str, List[str]]=None,
-            image: Union[PIL.Image.Image, List[PIL.Image.Image],
-                         paddle.Tensor]=None,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None,
-            # reference
-            control_name: str="reference_only",  # "none", "reference_only", "reference_adain", "reference_adain+attn"
-            attention_auto_machine_weight: float=1.0,
-            gn_auto_machine_weight: float=1.0,
-            current_style_fidelity: float=0.5,
-            resize_mode: int=-1, ):
+        self,
+        prompt: Union[str, List[str]] = None,
+        image: Union[PIL.Image.Image, List[PIL.Image.Image], paddle.Tensor] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        # reference
+        control_name: str = "reference_only",  # "none", "reference_only", "reference_adain", "reference_adain+attn"
+        attention_auto_machine_weight: float = 1.0,
+        gn_auto_machine_weight: float = 1.0,
+        current_style_fidelity: float = 0.5,
+        resize_mode: int = -1,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -1058,7 +993,10 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             (nsfw) content, according to the `safety_checker`.
         """
         assert control_name in [
-            "none", "reference_only", "reference_adain", "reference_adain+attn"
+            "none",
+            "reference_only",
+            "reference_adain",
+            "reference_adain+attn",
         ]
         assert num_images_per_prompt == 1
         # 0. Default height and width to unet
@@ -1066,9 +1004,15 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
         width = width or self.unet.config.sample_size * self.vae_scale_factor
 
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, height, width, callback_steps,
-                          negative_prompt, prompt_embeds,
-                          negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            height,
+            width,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds,
+        )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -1090,7 +1034,8 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds, )
+            negative_prompt_embeds=negative_prompt_embeds,
+        )
 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
@@ -1107,14 +1052,19 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             width,
             dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 7. reference_only
-        enable_attn = ("only" in control_name or "attn" in control_name and
-                       image is not None and attention_auto_machine_weight > 0)
+        enable_attn = (
+            "only" in control_name
+            or "attn" in control_name
+            and image is not None
+            and attention_auto_machine_weight > 0
+        )
         enable_gn = "adain" in control_name and image is not None and gn_auto_machine_weight > 0
         self.set_reference_only(
             attention_auto_machine_weight,
@@ -1122,38 +1072,37 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             current_style_fidelity,
             enable_attn,
             enable_gn,
-            do_classifier_free_guidance, )
+            do_classifier_free_guidance,
+        )
 
         if enable_attn or enable_gn:
             image = preprocess(image, resize_mode, width, height)
             image_latents = self.prepare_image_latents(
-                image, batch_size, dtype, generator,
-                do_classifier_free_guidance)
+                image, batch_size, dtype, generator, do_classifier_free_guidance
+            )
             prompt_embeds = prompt_embeds.tile([1 + image.shape[0], 1, 1])
 
         # 8. Denoising loop
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
-                latent_model_input = self.scheduler.scale_model_input(
-                    latent_model_input, t)
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 if enable_attn or enable_gn:
-                    image_noise = randn_tensor(
-                        image_latents.shape, generator=generator, dtype=dtype)
+                    image_noise = randn_tensor(image_latents.shape, generator=generator, dtype=dtype)
                     image_latent_model_input = self.scheduler.scale_model_input(
-                        self.scheduler.add_noise(image_latents, image_noise, t),
-                        t)
+                        self.scheduler.add_noise(image_latents, image_noise, t), t
+                    )
                     chunk_num = 2 if do_classifier_free_guidance else 1
                     noise_pred = self.unet(
-                        paddle.concat([
-                            latent_model_input, image_latent_model_input.cast(
-                                latent_model_input.dtype)
-                        ]),
+                        paddle.concat(
+                            [
+                                latent_model_input,
+                                image_latent_model_input.cast(latent_model_input.dtype),
+                            ]
+                        ),
                         t,
                         encoder_hidden_states=prompt_embeds,
                         cross_attention_kwargs=cross_attention_kwargs,
@@ -1163,22 +1112,19 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                         latent_model_input,
                         t,
                         encoder_hidden_states=prompt_embeds,
-                        cross_attention_kwargs=cross_attention_kwargs, ).sample
+                        cross_attention_kwargs=cross_attention_kwargs,
+                    ).sample
 
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
+                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -1191,8 +1137,7 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             image = self.decode_latents(latents)
 
             # 10. Run safety checker
-            image, has_nsfw_concept = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
 
             # 11. Convert to PIL
             image = self.numpy_to_pil(image)
@@ -1201,11 +1146,9 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             image = self.decode_latents(latents)
 
             # 10. Run safety checker
-            image, has_nsfw_concept = self.run_safety_checker(
-                image, prompt_embeds.dtype)
+            image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
 
         if not return_dict:
             return (image, has_nsfw_concept)
 
-        return StableDiffusionPipelineOutput(
-            images=image, nsfw_content_detected=has_nsfw_concept)
+        return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

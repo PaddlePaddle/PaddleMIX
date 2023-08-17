@@ -17,19 +17,22 @@ from collections import OrderedDict
 
 import paddle
 import torch
-from diffusers import (StableDiffusionDepth2ImgPipeline as
-                       DiffusersStableDiffusionDepth2ImgPipeline, )
-
+from diffusers import (
+    StableDiffusionDepth2ImgPipeline as DiffusersStableDiffusionDepth2ImgPipeline,
+)
 from paddlenlp.transformers import (
     CLIPTextConfig,
     CLIPTextModel,
     CLIPTokenizer,
     DPTConfig,
     DPTForDepthEstimation,
-    DPTImageProcessor, )
+    DPTImageProcessor,
+)
+
 from ppdiffusers import AutoencoderKL, PNDMScheduler
-from ppdiffusers import (StableDiffusionDepth2ImgPipeline as
-                         PPDiffusersStableDiffusionDepth2ImgPipeline, )
+from ppdiffusers import (
+    StableDiffusionDepth2ImgPipeline as PPDiffusersStableDiffusionDepth2ImgPipeline,
+)
 from ppdiffusers import UNet2DConditionModel
 
 paddle.set_device("cpu")
@@ -68,9 +71,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32"):
         ".vision_model.": ".",
     }
     ignore_value = ["position_ids"]
-    donot_transpose = [
-        "embeddings", "norm", "concept_embeds", "special_care_embeds"
-    ]
+    donot_transpose = ["embeddings", "norm", "concept_embeds", "special_care_embeds"]
 
     for name, value in clip.state_dict().items():
         # step1: ignore position_ids
@@ -84,7 +85,7 @@ def convert_hf_clip_to_ppnlp_clip(clip, dtype="float32"):
             name = name.replace(hf_name, ppnlp_name)
         # step4: 0d tensor -> 1d tensor
         if name == "logit_scale":
-            value = value.reshape((1, ))
+            value = value.reshape((1,))
 
         new_model_state[name] = value.cpu().numpy().astype(dtype)
 
@@ -119,17 +120,15 @@ def check_keys(model, state_dict):
         print(f"{cls_name} Found mismatched_keys {mismatched_keys_str}!")
 
 
-def convert_diffusers_stable_diffusion2_0_depth_to_ppdiffusers(
-        pretrained_model_name_or_path, output_path=None):
+def convert_diffusers_stable_diffusion2_0_depth_to_ppdiffusers(pretrained_model_name_or_path, output_path=None):
     # 0. load diffusers pipe and convert to ppdiffusers weights format
     diffusers_pipe = DiffusersStableDiffusionDepth2ImgPipeline.from_pretrained(
-        pretrained_model_name_or_path, use_auth_token=True)
+        pretrained_model_name_or_path, use_auth_token=True
+    )
     vae_state_dict = convert_to_ppdiffusers(diffusers_pipe.vae)
     unet_state_dict = convert_to_ppdiffusers(diffusers_pipe.unet)
-    depth_estimator_state_dict = convert_to_ppdiffusers(
-        diffusers_pipe.depth_estimator)
-    text_encoder_state_dict, text_encoder_config = convert_hf_clip_to_ppnlp_clip(
-        diffusers_pipe.text_encoder)
+    depth_estimator_state_dict = convert_to_ppdiffusers(diffusers_pipe.depth_estimator)
+    text_encoder_state_dict, text_encoder_config = convert_hf_clip_to_ppnlp_clip(diffusers_pipe.text_encoder)
 
     # 1. vae
     pp_vae = AutoencoderKL.from_config(diffusers_pipe.vae.config)
@@ -140,8 +139,7 @@ def convert_diffusers_stable_diffusion2_0_depth_to_ppdiffusers(
     pp_unet.set_dict(unet_state_dict)
     check_keys(pp_unet, unet_state_dict)
     # 3. text_encoder
-    pp_text_encoder = CLIPTextModel(
-        CLIPTextConfig.from_dict(text_encoder_config))
+    pp_text_encoder = CLIPTextModel(CLIPTextConfig.from_dict(text_encoder_config))
     pp_text_encoder.set_dict(text_encoder_state_dict)
     check_keys(pp_text_encoder, text_encoder_state_dict)
     # 4. scheduler
@@ -170,7 +168,8 @@ def convert_diffusers_stable_diffusion2_0_depth_to_ppdiffusers(
             unet=pp_unet,
             feature_extractor=pp_feature_extractor,
             depth_estimator=pp_depth_estimator,
-            scheduler=pp_scheduler, )
+            scheduler=pp_scheduler,
+        )
 
         # 9. save_pretrained
         paddle_pipe.save_pretrained(output_path)
@@ -178,8 +177,7 @@ def convert_diffusers_stable_diffusion2_0_depth_to_ppdiffusers(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Pytorch model weights to Paddle model weights.")
+    parser = argparse.ArgumentParser(description="Pytorch model weights to Paddle model weights.")
     parser.add_argument(
         "--pretrained_model_name_or_path",
         type=str,
@@ -190,7 +188,9 @@ if __name__ == "__main__":
         "--output_path",
         type=str,
         default="stable-diffusion-2-depth",
-        help="The model output path.", )
+        help="The model output path.",
+    )
     args = parser.parse_args()
     ppdiffusers_pipe = convert_diffusers_stable_diffusion2_0_depth_to_ppdiffusers(
-        args.pretrained_model_name_or_path, args.output_path)
+        args.pretrained_model_name_or_path, args.output_path
+    )

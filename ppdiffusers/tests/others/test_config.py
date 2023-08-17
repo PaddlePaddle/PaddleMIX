@@ -23,7 +23,8 @@ from ppdiffusers import (
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
     PNDMScheduler,
-    logging, )
+    logging,
+)
 from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
 from ppdiffusers.utils.testing_utils import CaptureLogger
 
@@ -48,13 +49,7 @@ class SampleObject3(ConfigMixin):
     config_name = "config.json"
 
     @register_to_config
-    def __init__(self,
-                 a=2,
-                 b=5,
-                 c=(2, 5),
-                 d="for diffusion",
-                 e=[1, 3],
-                 f=[1, 3]):
+    def __init__(self, a=2, b=5, c=(2, 5), d="for diffusion", e=[1, 3], f=[1, 3]):
         pass
 
 
@@ -103,8 +98,7 @@ class ConfigTester(unittest.TestCase):
         assert config["e"] == [1, 3]
         with tempfile.TemporaryDirectory() as tmpdirname:
             obj.save_config(tmpdirname)
-            new_obj = SampleObject.from_config(
-                SampleObject.load_config(tmpdirname))
+            new_obj = SampleObject.from_config(SampleObject.load_config(tmpdirname))
             new_config = new_obj.config
         config = dict(config)
         new_config = dict(new_config)
@@ -118,8 +112,8 @@ class ConfigTester(unittest.TestCase):
         logger.setLevel(30)
         with CaptureLogger(logger) as cap_logger:
             ddim = DDIMScheduler.from_pretrained(
-                "hf-internal-testing/tiny-stable-diffusion-torch",
-                subfolder="scheduler")
+                "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler"
+            )
         assert ddim.__class__ == DDIMScheduler
         assert cap_logger.out == ""
 
@@ -129,8 +123,8 @@ class ConfigTester(unittest.TestCase):
         logger.setLevel(30)
         with CaptureLogger(logger) as cap_logger:
             euler = EulerDiscreteScheduler.from_pretrained(
-                "hf-internal-testing/tiny-stable-diffusion-torch",
-                subfolder="scheduler")
+                "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler"
+            )
         assert euler.__class__ == EulerDiscreteScheduler
         assert cap_logger.out == ""
 
@@ -140,8 +134,8 @@ class ConfigTester(unittest.TestCase):
         logger.setLevel(30)
         with CaptureLogger(logger) as cap_logger:
             euler = EulerAncestralDiscreteScheduler.from_pretrained(
-                "hf-internal-testing/tiny-stable-diffusion-torch",
-                subfolder="scheduler")
+                "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler"
+            )
         assert euler.__class__ == EulerAncestralDiscreteScheduler
         assert cap_logger.out == ""
 
@@ -151,8 +145,8 @@ class ConfigTester(unittest.TestCase):
         logger.setLevel(30)
         with CaptureLogger(logger) as cap_logger:
             pndm = PNDMScheduler.from_pretrained(
-                "hf-internal-testing/tiny-stable-diffusion-torch",
-                subfolder="scheduler")
+                "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler"
+            )
         assert pndm.__class__ == PNDMScheduler
         assert cap_logger.out == ""
 
@@ -165,10 +159,10 @@ class ConfigTester(unittest.TestCase):
                 "hf-internal-testing/tiny-stable-diffusion-torch",
                 subfolder="scheduler",
                 prediction_type="sample",
-                beta_end=8, )
+                beta_end=8,
+            )
         with CaptureLogger(logger) as cap_logger_2:
-            ddpm_2 = DDPMScheduler.from_pretrained(
-                "google/ddpm-celebahq-256", beta_start=88)
+            ddpm_2 = DDPMScheduler.from_pretrained("google/ddpm-celebahq-256", beta_start=88)
         assert ddpm.__class__ == DDPMScheduler
         assert ddpm.config.prediction_type == "sample"
         assert ddpm.config.beta_end == 8
@@ -182,7 +176,7 @@ class ConfigTester(unittest.TestCase):
         logger.setLevel(30)
         with CaptureLogger(logger) as cap_logger:
             dpm = DPMSolverMultistepScheduler.from_pretrained(
-                "hf-internal-testing/tiny-stable-diffusion-torch",
-                subfolder="scheduler")
+                "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler"
+            )
         assert dpm.__class__ == DPMSolverMultistepScheduler
         assert cap_logger.out == ""

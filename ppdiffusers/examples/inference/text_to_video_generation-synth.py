@@ -24,4 +24,5 @@ video_frames = pipe(prompt, num_inference_steps=25).frames
 imageio.mimsave(
     "text_to_video_generation-synth-result-astronaut_riding_a_horse.mp4",
     video_frames,
-    fps=8)
+    fps=8,
+)

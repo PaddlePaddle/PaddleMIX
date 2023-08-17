@@ -13,13 +13,12 @@
 # limitations under the License.
 
 import inspect
-from typing import Any, Callable, Dict, List, Optional, Union
 import os
+from typing import Any, Callable, Dict, List, Optional, Union
+
 import numpy as np
-from einops import rearrange
-
 import paddle
-
+from einops import rearrange
 from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 
 from ...configuration_utils import FrozenDict
@@ -43,12 +42,12 @@ EXAMPLE_DOC_STRING = """
                     prompt="cutting in kitchen",
                     num_frames=16,
                     height=256,
-                    width=256, 
-                    num_inference_steps=50, 
-                    generator=generator, 
+                    width=256,
+                    num_inference_steps=50,
+                    generator=generator,
                     guidance_scale=15,
-                    eta=1, 
-                    save_dir='.', 
+                    eta=1,
+                    save_dir='.',
                     save_name='ddim_lvdm_text_to_video_ucf',
                     encoder_type='2d',
                     scale_factor=0.18215,
@@ -64,18 +63,16 @@ def split_video_to_clips(video, clip_length, drop_left=True):
     video_length = video.shape[2]
     shape = video.shape
     if video_length % clip_length != 0 and drop_left:
-        video = video[:, :, :video_length // clip_length * clip_length, :, :]
-        print(
-            f'[split_video_to_clips] Drop frames from {shape} to {video.shape}')
+        video = video[:, :, : video_length // clip_length * clip_length, :, :]
+        print(f"[split_video_to_clips] Drop frames from {shape} to {video.shape}")
     nclips = video_length // clip_length
-    clips = rearrange(
-        video, 'b c (nc cl) h w -> (b nc) c cl h w', cl=clip_length, nc=nclips)
+    clips = rearrange(video, "b c (nc cl) h w -> (b nc) c cl h w", cl=clip_length, nc=nclips)
     return clips
 
 
 def merge_clips_to_videos(clips, bs):
     nclips = clips.shape[0] // bs
-    video = rearrange(clips, '(b nc) c t h w -> b c (nc t) h w', nc=nclips)
+    video = rearrange(clips, "(b nc) c t h w -> b c (nc t) h w", nc=nclips)
     return video
 
 
@@ -104,34 +101,30 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
     """
 
     def __init__(
-            self,
-            vae: LVDMAutoencoderKL,
-            text_encoder: CLIPTextModel,
-            tokenizer: CLIPTokenizer,
-            unet: LVDMUNet3DModel,
-            scheduler: KarrasDiffusionSchedulers, ):
+        self,
+        vae: LVDMAutoencoderKL,
+        text_encoder: CLIPTextModel,
+        tokenizer: CLIPTokenizer,
+        unet: LVDMUNet3DModel,
+        scheduler: KarrasDiffusionSchedulers,
+    ):
         super().__init__()
 
-        if hasattr(scheduler.config,
-                   "steps_offset") and scheduler.config.steps_offset != 1:
+        if hasattr(scheduler.config, "steps_offset") and scheduler.config.steps_offset != 1:
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} is outdated. `steps_offset`"
                 f" should be set to 1 instead of {scheduler.config.steps_offset}. Please make sure "
                 "to update the config accordingly as leaving `steps_offset` might led to incorrect results"
                 " in future versions. If you have downloaded this checkpoint from the Hugging Face Hub,"
                 " it would be very nice if you could open a Pull request for the `scheduler/scheduler_config.json`"
-                " file")
-            deprecate(
-                "steps_offset!=1",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False)
+                " file"
+            )
+            deprecate("steps_offset!=1", "1.0.0", deprecation_message, standard_warn=False)
             new_config = dict(scheduler.config)
             new_config["steps_offset"] = 1
             scheduler._internal_dict = FrozenDict(new_config)
 
-        if hasattr(scheduler.config,
-                   "clip_sample") and scheduler.config.clip_sample is True:
+        if hasattr(scheduler.config, "clip_sample") and scheduler.config.clip_sample is True:
             deprecation_message = (
                 f"The configuration file of this scheduler: {scheduler} has not set the configuration `clip_sample`."
                 " `clip_sample` should be set to False in the configuration file. Please make sure to update the"
@@ -139,11 +132,7 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                 " future versions. If you have downloaded this checkpoint from the Hugging Face Hub, it would be very"
                 " nice if you could open a Pull request for the `scheduler/scheduler_config.json` file"
             )
-            deprecate(
-                "clip_sample not set",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False)
+            deprecate("clip_sample not set", "1.0.0", deprecation_message, standard_warn=False)
             new_config = dict(scheduler.config)
             new_config["clip_sample"] = False
             scheduler._internal_dict = FrozenDict(new_config)
@@ -153,7 +142,8 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
             text_encoder=text_encoder,
             tokenizer=tokenizer,
             unet=unet,
-            scheduler=scheduler, )
+            scheduler=scheduler,
+        )
 
         # self.encoder_type = '2d'
         # self.scale_factor = 0.18215
@@ -161,17 +151,12 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def decode(self, z, **kwargs):
-        z = 1.0 / kwargs['scale_factor'] * z - kwargs['shift_factor']
+        z = 1.0 / kwargs["scale_factor"] * z - kwargs["shift_factor"]
         results = self.vae.decode(z).sample
         return results
 
     @paddle.no_grad()
-    def overlapped_decode(self,
-                          z,
-                          max_z_t=None,
-                          overlap_t=2,
-                          predict_cids=False,
-                          force_not_quantize=False):
+    def overlapped_decode(self, z, max_z_t=None, overlap_t=2, predict_cids=False, force_not_quantize=False):
         if max_z_t is None:
             max_z_t = z.shape[2]
         assert max_z_t > overlap_t
@@ -190,68 +175,56 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         reses = []
         for i, z_ in enumerate(zs):
             if i == 0:
-                res = self.decode(
-                    z_, predict_cids,
-                    force_not_quantize).cpu()[:, :, :max_x_t - drop_r_x, :, :]
+                res = self.decode(z_, predict_cids, force_not_quantize).cpu()[:, :, : max_x_t - drop_r_x, :, :]
             elif i == len(zs) - 1:
-                res = self.decode(
-                    z_, predict_cids,
-                    force_not_quantize).cpu()[:, :, drop_l_x:, :, :]
+                res = self.decode(z_, predict_cids, force_not_quantize).cpu()[:, :, drop_l_x:, :, :]
             else:
-                res = self.decode(z_, predict_cids, force_not_quantize).cpu(
-                )[:, :, drop_l_x:max_x_t - drop_r_x, :, :]
+                res = self.decode(z_, predict_cids, force_not_quantize).cpu()[
+                    :, :, drop_l_x : max_x_t - drop_r_x, :, :
+                ]
             reses.append(res)
         results = paddle.concat(x=reses, axis=2)
         return results
 
     @paddle.no_grad()
-    def decode_first_stage_2DAE_video(self,
-                                      z,
-                                      decode_bs=16,
-                                      return_cpu=True,
-                                      **kwargs):
+    def decode_first_stage_2DAE_video(self, z, decode_bs=16, return_cpu=True, **kwargs):
         b, _, t, _, _ = z.shape
-        z = rearrange(z, 'b c t h w -> (b t) c h w')
+        z = rearrange(z, "b c t h w -> (b t) c h w")
         if decode_bs is None:
             results = self.decode(z, **kwargs)
         else:
-            z = paddle.split(
-                x=z, num_or_sections=z.shape[0] // decode_bs, axis=0)
+            z = paddle.split(x=z, num_or_sections=z.shape[0] // decode_bs, axis=0)
             if return_cpu:
-                results = paddle.concat(
-                    x=[self.decode(z_, **kwargs).cpu() for z_ in z], axis=0)
+                results = paddle.concat(x=[self.decode(z_, **kwargs).cpu() for z_ in z], axis=0)
             else:
-                results = paddle.concat(
-                    x=[self.decode(z_, **kwargs) for z_ in z], axis=0)
-        results = rearrange(
-            results, '(b t) c h w -> b c t h w', b=b, t=t).contiguous()
+                results = paddle.concat(x=[self.decode(z_, **kwargs) for z_ in z], axis=0)
+        results = rearrange(results, "(b t) c h w -> b c t h w", b=b, t=t).contiguous()
         return results
 
     @paddle.no_grad()
-    def decode_latents(self,
-                       z,
-                       decode_bs=16,
-                       return_cpu=True,
-                       bs=None,
-                       decode_single_video_allframes=False,
-                       max_z_t=None,
-                       overlapped_length=0,
-                       **kwargs):
+    def decode_latents(
+        self,
+        z,
+        decode_bs=16,
+        return_cpu=True,
+        bs=None,
+        decode_single_video_allframes=False,
+        max_z_t=None,
+        overlapped_length=0,
+        **kwargs,
+    ):
         b, _, t, _, _ = z.shape
-        if kwargs['encoder_type'] == '2d' and z.dim() == 5:
-            return self.decode_first_stage_2DAE_video(
-                z, decode_bs=decode_bs, return_cpu=return_cpu, **kwargs)
+        if kwargs["encoder_type"] == "2d" and z.dim() == 5:
+            return self.decode_first_stage_2DAE_video(z, decode_bs=decode_bs, return_cpu=return_cpu, **kwargs)
         if decode_single_video_allframes:
             z = paddle.split(x=z, num_or_sections=z.shape[0] // 1, axis=0)
             cat_dim = 0
         elif max_z_t is not None:
-            if kwargs['encoder_type'] == '3d':
-                z = paddle.split(
-                    x=z, num_or_sections=z.shape[2] // max_z_t, axis=2)
+            if kwargs["encoder_type"] == "3d":
+                z = paddle.split(x=z, num_or_sections=z.shape[2] // max_z_t, axis=2)
                 cat_dim = 2
-            if kwargs['encoder_type'] == '2d':
-                z = paddle.split(
-                    x=z, num_or_sections=z.shape[0] // max_z_t, axis=0)
+            if kwargs["encoder_type"] == "2d":
+                z = paddle.split(x=z, num_or_sections=z.shape[0] // max_z_t, axis=0)
                 cat_dim = 0
         # elif self.split_clips and self.downfactor_t is not None or self.clip_length is not None and self.downfactor_t is not None and z.shape[
         #     2
@@ -283,13 +256,12 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         else:
             sample = sample.transpose(perm=[0, 2, 3, 1])
 
-        if isinstance('uint8', paddle.dtype):
-            dtype = 'uint8'
-        elif isinstance('uint8',
-                        str) and 'uint8' not in ['cpu', 'cuda', 'ipu', 'xpu']:
-            dtype = 'uint8'
-        elif isinstance('uint8', paddle.Tensor):
-            dtype = 'uint8'.dtype
+        if isinstance("uint8", paddle.dtype):
+            dtype = "uint8"
+        elif isinstance("uint8", str) and "uint8" not in ["cpu", "cuda", "ipu", "xpu"]:
+            dtype = "uint8"
+        elif isinstance("uint8", paddle.Tensor):
+            dtype = "uint8".dtype
         else:
             dtype = ((sample + 1) * 127.5).clip(min=0, max=255).dtype
         sample = ((sample + 1) * 127.5).clip(min=0, max=255).cast(dtype)
@@ -298,13 +270,14 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         return sample
 
     def _encode_prompt(
-            self,
-            prompt,
-            num_videos_per_prompt,
-            do_classifier_free_guidance,
-            negative_prompt=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None, ):
+        self,
+        prompt,
+        num_videos_per_prompt,
+        do_classifier_free_guidance,
+        negative_prompt=None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+    ):
         r"""
         Encodes the prompt into text encoder hidden states.
 
@@ -340,28 +313,30 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                 padding="max_length",
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
             text_input_ids = text_inputs.input_ids
-            untruncated_ids = self.tokenizer(
-                prompt, padding="longest", return_tensors="pd").input_ids
+            untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
-            if untruncated_ids.shape[-1] >= text_input_ids.shape[
-                    -1] and not paddle.equal_all(text_input_ids,
-                                                 untruncated_ids):
+            if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
+                text_input_ids, untruncated_ids
+            ):
                 removed_text = self.tokenizer.batch_decode(
-                    untruncated_ids[:, self.tokenizer.model_max_length - 1:-1])
+                    untruncated_ids[:, self.tokenizer.model_max_length - 1 : -1]
+                )
                 logger.warning(
                     "The following part of your input was truncated because CLIP can only handle sequences up to"
-                    f" {self.tokenizer.model_max_length} tokens: {removed_text}")
+                    f" {self.tokenizer.model_max_length} tokens: {removed_text}"
+                )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = text_inputs.attention_mask
             else:
                 attention_mask = None
             prompt_embeds = self.text_encoder(
                 text_input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             prompt_embeds = prompt_embeds[0]
 
         prompt_embeds = prompt_embeds.cast(self.text_encoder.dtype)
@@ -369,8 +344,7 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile([1, num_videos_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape(
-            [bs_embed * num_videos_per_prompt, seq_len, -1])
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_videos_per_prompt, seq_len, -1])
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:
@@ -380,14 +354,16 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
             elif type(prompt) is not type(negative_prompt):
                 raise TypeError(
                     f"`negative_prompt` should be the same type to `prompt`, but got {type(negative_prompt)} !="
-                    f" {type(prompt)}.")
+                    f" {type(prompt)}."
+                )
             elif isinstance(negative_prompt, str):
                 uncond_tokens = [negative_prompt]
             elif batch_size != len(negative_prompt):
                 raise ValueError(
                     f"`negative_prompt`: {negative_prompt} has batch size {len(negative_prompt)}, but `prompt`:"
                     f" {prompt} has batch size {batch_size}. Please make sure that passed `negative_prompt` matches"
-                    " the batch size of `prompt`.")
+                    " the batch size of `prompt`."
+                )
             else:
                 uncond_tokens = negative_prompt
 
@@ -397,36 +373,33 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                 padding="max_length",
                 max_length=max_length,
                 truncation=True,
-                return_tensors="pd", )
+                return_tensors="pd",
+            )
 
-            if hasattr(self.text_encoder.config, "use_attention_mask"
-                       ) and self.text_encoder.config.use_attention_mask:
+            if hasattr(self.text_encoder.config, "use_attention_mask") and self.text_encoder.config.use_attention_mask:
                 attention_mask = uncond_input.attention_mask
             else:
                 attention_mask = None
 
             negative_prompt_embeds = self.text_encoder(
                 uncond_input.input_ids,
-                attention_mask=attention_mask, )
+                attention_mask=attention_mask,
+            )
             negative_prompt_embeds = negative_prompt_embeds[0]
 
         if do_classifier_free_guidance:
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds.cast(
-                self.text_encoder.dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(self.text_encoder.dtype)
 
-            negative_prompt_embeds = negative_prompt_embeds.tile(
-                [1, num_videos_per_prompt, 1])
-            negative_prompt_embeds = negative_prompt_embeds.reshape(
-                [batch_size * num_videos_per_prompt, seq_len, -1])
+            negative_prompt_embeds = negative_prompt_embeds.tile([1, num_videos_per_prompt, 1])
+            negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_videos_per_prompt, seq_len, -1])
 
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            prompt_embeds = paddle.concat(
-                [negative_prompt_embeds, prompt_embeds])
+            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
 
         return prompt_embeds
 
@@ -436,53 +409,49 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         # eta corresponds to η in DDIM paper: https://arxiv.org/abs/2010.02502
         # and should be between [0, 1]
 
-        accepts_eta = "eta" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
         extra_step_kwargs = {}
         if accepts_eta:
             extra_step_kwargs["eta"] = eta
 
         # check if the scheduler accepts generator
-        accepts_generator = "generator" in set(
-            inspect.signature(self.scheduler.step).parameters.keys())
+        accepts_generator = "generator" in set(inspect.signature(self.scheduler.step).parameters.keys())
         if accepts_generator:
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
     def check_inputs(
-            self,
-            prompt,
-            height,
-            width,
-            callback_steps,
-            negative_prompt=None,
-            prompt_embeds=None,
-            negative_prompt_embeds=None, ):
+        self,
+        prompt,
+        height,
+        width,
+        callback_steps,
+        negative_prompt=None,
+        prompt_embeds=None,
+        negative_prompt_embeds=None,
+    ):
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         if (callback_steps is None) or (
-                callback_steps is not None and
-            (not isinstance(callback_steps, int) or callback_steps <= 0)):
+            callback_steps is not None and (not isinstance(callback_steps, int) or callback_steps <= 0)
+        ):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type"
-                f" {type(callback_steps)}.")
+                f" {type(callback_steps)}."
+            )
 
         if prompt is not None and prompt_embeds is not None:
             raise ValueError(
                 f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two.")
+                " only forward one of the two."
+            )
         elif prompt is None and prompt_embeds is None:
             raise ValueError(
                 "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
             )
-        elif prompt is not None and (not isinstance(prompt, str) and
-                                     not isinstance(prompt, list)):
-            raise ValueError(
-                f"`prompt` has to be of type `str` or `list` but is {type(prompt)}"
-            )
+        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
         if negative_prompt is not None and negative_prompt_embeds is not None:
             raise ValueError(
@@ -495,21 +464,21 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                 raise ValueError(
                     "`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but"
                     f" got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds`"
-                    f" {negative_prompt_embeds.shape}.")
+                    f" {negative_prompt_embeds.shape}."
+                )
 
-    def prepare_latents(self,
-                        batch_size,
-                        num_channels_latents,
-                        num_frames,
-                        height,
-                        width,
-                        dtype,
-                        generator,
-                        latents=None):
-        shape = [
-            batch_size, num_channels_latents, num_frames, height // 8,
-            width // 8
-        ]
+    def prepare_latents(
+        self,
+        batch_size,
+        num_channels_latents,
+        num_frames,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
+        shape = [batch_size, num_channels_latents, num_frames, height // 8, width // 8]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -526,31 +495,31 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
-            self,
-            prompt: Union[str, List[str]]=None,
-            height: Optional[int]=256,
-            width: Optional[int]=256,
-            num_inference_steps: int=50,
-            guidance_scale: float=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_videos_per_prompt: Optional[int]=1,
-            eta: float=0.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            latents: Optional[paddle.Tensor]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            cross_attention_kwargs: Optional[Dict[str, Any]]=None,
-            save_dir=None,
-            save_name=None,
-            num_frames: Optional[int]=16,
-            encoder_type='2d',
-            scale_factor=0.18215,
-            shift_factor=0, ):
+        self,
+        prompt: Union[str, List[str]] = None,
+        height: Optional[int] = 256,
+        width: Optional[int] = 256,
+        num_inference_steps: int = 50,
+        guidance_scale: float = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_videos_per_prompt: Optional[int] = 1,
+        eta: float = 0.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        latents: Optional[paddle.Tensor] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        cross_attention_kwargs: Optional[Dict[str, Any]] = None,
+        save_dir=None,
+        save_name=None,
+        num_frames: Optional[int] = 16,
+        encoder_type="2d",
+        scale_factor=0.18215,
+        shift_factor=0,
+    ):
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -609,10 +578,10 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                 `self.processor` in ppdiffusers.cross_attention.
             save_dir (`str` or `List[str]`, *optional*):
                 If provided, will save videos generated to *save_dir*. Otherwise will save them to the current path.
-            save_name (`str` or `List[str]`, *optional*): 
+            save_name (`str` or `List[str]`, *optional*):
                 If provided, will save videos generated to *save_name*.
             num_frames (`int`, *optional*, defaults to 16):
-                Number of frames of the video. If None, will generate 16 frames per video.    
+                Number of frames of the video. If None, will generate 16 frames per video.
             encoder_type (`str`, *optional*, defaults to `"2d"`):
                 If provided, will use the specified encoder to generate the video, chosen from [`2d`, `3d`].
             scale_factor (`float`, *optional*, defaults to 0.18215):
@@ -626,14 +595,18 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         """
         # 0. Default height and width to unet
         if height % 8 != 0 or width % 8 != 0:
-            raise ValueError(
-                f"`height` and `width` have to be divisible by 8 but are {height} and {width}."
-            )
+            raise ValueError(f"`height` and `width` have to be divisible by 8 but are {height} and {width}.")
 
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(prompt, height, width, callback_steps,
-                          negative_prompt, prompt_embeds,
-                          negative_prompt_embeds)
+        self.check_inputs(
+            prompt,
+            height,
+            width,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds,
+        )
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -655,7 +628,8 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
             do_classifier_free_guidance,
             negative_prompt,
             prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds, )
+            negative_prompt_embeds=negative_prompt_embeds,
+        )
 
         # 4. Prepare timesteps
         self.scheduler.set_timesteps(num_inference_steps)
@@ -671,54 +645,48 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
             width,
             prompt_embeds.dtype,
             generator,
-            latents, )
+            latents,
+        )
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
         # 7. Denoising loop
-        num_warmup_steps = len(
-            timesteps) - num_inference_steps * self.scheduler.order
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(
-                    [latents] * 2) if do_classifier_free_guidance else latents
-                latent_model_input = self.scheduler.scale_model_input(
-                    latent_model_input, t)
+                latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
                     timesteps=t,
                     context=prompt_embeds,
-                    cross_attention_kwargs=cross_attention_kwargs, ).sample
+                    cross_attention_kwargs=cross_attention_kwargs,
+                ).sample
 
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (
-                        noise_pred_text - noise_pred_uncond)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
-                latents = self.scheduler.step(noise_pred, t, latents,
-                                              **extra_step_kwargs).prev_sample
+                latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or (
-                    (i + 1) > num_warmup_steps and
-                    (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
         all_videos = []
         extra_decode_kwargs = {
-            'encoder_type': encoder_type,
-            'scale_factor': scale_factor,
-            'shift_factor': shift_factor,
+            "encoder_type": encoder_type,
+            "scale_factor": scale_factor,
+            "shift_factor": shift_factor,
         }
-        sampled_videos = self.decode_latents(
-            latents, decode_bs=1, return_cpu=False, **extra_decode_kwargs)
+        sampled_videos = self.decode_latents(latents, decode_bs=1, return_cpu=False, **extra_decode_kwargs)
         all_videos.append(self.paddle_to_np(sampled_videos))
         all_videos = np.concatenate(all_videos, axis=0)
 
@@ -737,10 +705,9 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
             videos_frames.append(video_frames)
 
         if not save_name:
-            save_name = f'defaul_video'
+            save_name = "defaul_video"
         if not save_dir:
-            save_dir = '.'
+            save_dir = "."
         os.makedirs(save_dir, exist_ok=True)
-        save_results(
-            all_videos, save_dir=save_dir, save_name=save_name, save_fps=8)
+        save_results(all_videos, save_dir=save_dir, save_name=save_name, save_fps=8)
         return VideoPipelineOutput(frames=videos_frames, samples=sampled_videos)

@@ -20,16 +20,18 @@ import unittest
 
 import numpy as np
 import paddle
-
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+
 from ppdiffusers import (
     AutoencoderKL,
     DDIMScheduler,
     LMSDiscreteScheduler,
     PNDMScheduler,
-    UNet2DConditionModel, )
+    UNet2DConditionModel,
+)
 from ppdiffusers.pipelines.semantic_stable_diffusion import (
-    SemanticStableDiffusionPipeline as StableDiffusionPipeline, )
+    SemanticStableDiffusionPipeline as StableDiffusionPipeline,
+)
 from ppdiffusers.utils import floats_tensor, nightly
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
@@ -45,8 +47,7 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
         batch_size = 1
         num_channels = 3
         sizes = 32, 32
-        image = floats_tensor(
-            (batch_size, num_channels) + sizes, rng=random.Random(0))
+        image = floats_tensor((batch_size, num_channels) + sizes, rng=random.Random(0))
         return image
 
     @property
@@ -60,7 +61,8 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             out_channels=4,
             down_block_types=("DownBlock2D", "CrossAttnDownBlock2D"),
             up_block_types=("CrossAttnUpBlock2D", "UpBlock2D"),
-            cross_attention_dim=32, )
+            cross_attention_dim=32,
+        )
         return model
 
     @property
@@ -72,7 +74,8 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             out_channels=3,
             down_block_types=["DownEncoderBlock2D", "DownEncoderBlock2D"],
             up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D"],
-            latent_channels=4, )
+            latent_channels=4,
+        )
         return model
 
     @property
@@ -87,7 +90,8 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             num_attention_heads=4,
             num_hidden_layers=5,
             pad_token_id=1,
-            vocab_size=1000, )
+            vocab_size=1000,
+        )
         return CLIPTextModel(config).eval()
 
     @property
@@ -112,11 +116,11 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             beta_end=0.012,
             beta_schedule="scaled_linear",
             clip_sample=False,
-            set_alpha_to_one=False, )
+            set_alpha_to_one=False,
+        )
         vae = self.dummy_vae
         bert = self.dummy_text_encoder
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         sd_pipe = StableDiffusionPipeline(
             unet=unet,
             scheduler=scheduler,
@@ -124,7 +128,8 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             text_encoder=bert,
             tokenizer=tokenizer,
             safety_checker=None,
-            feature_extractor=self.dummy_extractor, )
+            feature_extractor=self.dummy_extractor,
+        )
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
@@ -133,7 +138,8 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             generator=generator,
             guidance_scale=6.0,
             num_inference_steps=2,
-            output_type="np")
+            output_type="np",
+        )
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = sd_pipe(
@@ -142,22 +148,31 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             guidance_scale=6.0,
             num_inference_steps=2,
             output_type="np",
-            return_dict=False, )[0]
+            return_dict=False,
+        )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([
-            0.28401083, 0.23724163, 0.38141036, 0.2201719, 0.26111937,
-            0.5176592, 0.25668317, 0.25036532, 0.47986418
-        ])
+        expected_slice = np.array(
+            [
+                0.28401083,
+                0.23724163,
+                0.38141036,
+                0.2201719,
+                0.26111937,
+                0.5176592,
+                0.25668317,
+                0.25036532,
+                0.47986418,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.01
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 
     def test_semantic_diffusion_no_safety_checker(self):
         pipe = StableDiffusionPipeline.from_pretrained(
-            "hf-internal-testing/tiny-stable-diffusion-lms-pipe",
-            safety_checker=None)
+            "hf-internal-testing/tiny-stable-diffusion-lms-pipe", safety_checker=None
+        )
         assert isinstance(pipe, StableDiffusionPipeline)
         assert isinstance(pipe.scheduler, LMSDiscreteScheduler)
         assert pipe.safety_checker is None
@@ -165,8 +180,7 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
         assert image is not None
         with tempfile.TemporaryDirectory() as tmpdirname:
             pipe.save_pretrained(tmpdirname)
-            pipe = StableDiffusionPipeline.from_pretrained(
-                tmpdirname, from_diffusers=False)
+            pipe = StableDiffusionPipeline.from_pretrained(tmpdirname, from_diffusers=False)
         assert pipe.safety_checker is None
         image = pipe("example prompt", num_inference_steps=2).images[0]
         assert image is not None
@@ -176,8 +190,7 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
         scheduler = PNDMScheduler(skip_prk_steps=True)
         vae = self.dummy_vae
         bert = self.dummy_text_encoder
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         sd_pipe = StableDiffusionPipeline(
             unet=unet,
             scheduler=scheduler,
@@ -185,7 +198,8 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             text_encoder=bert,
             tokenizer=tokenizer,
             safety_checker=None,
-            feature_extractor=self.dummy_extractor, )
+            feature_extractor=self.dummy_extractor,
+        )
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
@@ -194,7 +208,8 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             generator=generator,
             guidance_scale=6.0,
             num_inference_steps=2,
-            output_type="np")
+            output_type="np",
+        )
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = sd_pipe(
@@ -203,17 +218,26 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             guidance_scale=6.0,
             num_inference_steps=2,
             output_type="np",
-            return_dict=False, )[0]
+            return_dict=False,
+        )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([
-            0.18612236, 0.24176982, 0.36099488, 0.21807766, 0.27262795,
-            0.51991826, 0.22258872, 0.22143877, 0.4452843
-        ])
+        expected_slice = np.array(
+            [
+                0.18612236,
+                0.24176982,
+                0.36099488,
+                0.21807766,
+                0.27262795,
+                0.51991826,
+                0.22258872,
+                0.22143877,
+                0.4452843,
+            ]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.02
-        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max(
-        ) < 0.02
+        assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.02
 
     def test_semantic_diffusion_fp16(self):
         """Test that stable diffusion works with fp16"""
@@ -221,8 +245,7 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
         scheduler = PNDMScheduler(skip_prk_steps=True)
         vae = self.dummy_vae
         bert = self.dummy_text_encoder
-        tokenizer = CLIPTokenizer.from_pretrained(
-            "hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
         unet = unet.to(dtype=paddle.float16)
         vae = vae.to(dtype=paddle.float16)
         bert = bert.to(dtype=paddle.float16)
@@ -233,11 +256,11 @@ class SafeDiffusionPipelineFastTests(unittest.TestCase):
             text_encoder=bert,
             tokenizer=tokenizer,
             safety_checker=None,
-            feature_extractor=self.dummy_extractor, )
+            feature_extractor=self.dummy_extractor,
+        )
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
-        image = sd_pipe(
-            [prompt], num_inference_steps=2, output_type="np").images
+        image = sd_pipe([prompt], num_inference_steps=2, output_type="np").images
         assert image.shape == (1, 64, 64, 3)
 
 
@@ -250,8 +273,7 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
         # paddle.device.cuda.empty_cache()
 
     def test_positive_guidance(self):
-        pipe = StableDiffusionPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5")
+        pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5")
         pipe.set_progress_bar_config(disable=None)
         prompt = "a photo of a cat"
         edit = {
@@ -273,7 +295,8 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
             num_inference_steps=50,
             output_type="np",
             width=512,
-            height=512, )
+            height=512,
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         expected_slice = [
@@ -298,7 +321,8 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
             output_type="np",
             width=512,
             height=512,
-            **edit, )
+            **edit,
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         expected_slice = [
@@ -316,8 +340,7 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_negative_guidance(self):
-        pipe = StableDiffusionPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5")
+        pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5")
         pipe.set_progress_bar_config(disable=None)
         prompt = "an image of a crowded boulevard, realistic, 4k"
         edit = {
@@ -339,7 +362,8 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
             num_inference_steps=50,
             output_type="np",
             width=512,
-            height=512, )
+            height=512,
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         expected_slice = [
@@ -364,7 +388,8 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
             output_type="np",
             width=512,
             height=512,
-            **edit, )
+            **edit,
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         expected_slice = [
@@ -382,13 +407,11 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_multi_cond_guidance(self):
-        pipe = StableDiffusionPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5")
+        pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5")
         pipe.set_progress_bar_config(disable=None)
         prompt = "a castle next to a river"
         edit = {
-            "editing_prompt":
-            ["boat on a river, boat", "monet, impression, sunrise"],
+            "editing_prompt": ["boat on a river, boat", "monet, impression, sunrise"],
             "reverse_editing_direction": False,
             "edit_warmup_steps": [15, 18],
             "edit_guidance_scale": 6,
@@ -406,7 +429,8 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
             num_inference_steps=50,
             output_type="np",
             width=512,
-            height=512, )
+            height=512,
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         expected_slice = [
@@ -431,7 +455,8 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
             output_type="np",
             width=512,
             height=512,
-            **edit, )
+            **edit,
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         expected_slice = [
@@ -449,8 +474,7 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.02
 
     def test_guidance_fp16(self):
-        pipe = StableDiffusionPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5", paddle_dtype=paddle.float16)
+        pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5", paddle_dtype=paddle.float16)
         pipe.set_progress_bar_config(disable=None)
         prompt = "a photo of a cat"
         edit = {
@@ -472,7 +496,8 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
             num_inference_steps=50,
             output_type="np",
             width=512,
-            height=512, )
+            height=512,
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         expected_slice = [
@@ -497,7 +522,8 @@ class SemanticDiffusionPipelineIntegrationTests(unittest.TestCase):
             output_type="np",
             width=512,
             height=512,
-            **edit, )
+            **edit,
+        )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         expected_slice = [

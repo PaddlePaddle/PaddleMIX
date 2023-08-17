@@ -22,11 +22,14 @@ from ...utils import logging
 from .pipeline_fastdeploy_cycle_diffusion import FastDeployCycleDiffusionPipeline
 from .pipeline_fastdeploy_stable_diffusion import FastDeployStableDiffusionPipeline
 from .pipeline_fastdeploy_stable_diffusion_img2img import (
-    FastDeployStableDiffusionImg2ImgPipeline, )
+    FastDeployStableDiffusionImg2ImgPipeline,
+)
 from .pipeline_fastdeploy_stable_diffusion_inpaint import (
-    FastDeployStableDiffusionInpaintPipeline, )
+    FastDeployStableDiffusionInpaintPipeline,
+)
 from .pipeline_fastdeploy_stable_diffusion_inpaint_legacy import (
-    FastDeployStableDiffusionInpaintPipelineLegacy, )
+    FastDeployStableDiffusionInpaintPipelineLegacy,
+)
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -61,45 +64,39 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
         feature_extractor ([`CLIPFeatureExtractor`]):
             Model that extracts features from generated images to be used as inputs for the `safety_checker`.
     """
-    _optional_components = [
-        "vae_encoder", "safety_checker", "feature_extractor"
-    ]
+    _optional_components = ["vae_encoder", "safety_checker", "feature_extractor"]
 
     def __call__(self, *args, **kwargs):
         return self.text2img(*args, **kwargs)
 
     def text2img(
-            self,
-            prompt: Union[str, List[str]],
-            height: Optional[int]=512,
-            width: Optional[int]=512,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[float]=0.0,
-            generator: Optional[paddle.Generator]=None,
-            latents: Optional[paddle.Tensor]=None,
-            parse_prompt_type: Optional[str]="lpw",
-            max_embeddings_multiples: Optional[int]=3,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            controlnet_cond: Union[paddle.Tensor, PIL.Image.Image]=None,
-            controlnet_conditioning_scale: float=1.0,
-            infer_op_dict: Dict[str, str]=None, ):
+        self,
+        prompt: Union[str, List[str]],
+        height: Optional[int] = 512,
+        width: Optional[int] = 512,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[float] = 0.0,
+        generator: Optional[paddle.Generator] = None,
+        latents: Optional[paddle.Tensor] = None,
+        parse_prompt_type: Optional[str] = "lpw",
+        max_embeddings_multiples: Optional[int] = 3,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
+        controlnet_conditioning_scale: float = 1.0,
+        infer_op_dict: Dict[str, str] = None,
+    ):
 
-        expected_components = inspect.signature(
-            FastDeployStableDiffusionPipeline.__init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+        expected_components = inspect.signature(FastDeployStableDiffusionPipeline.__init__).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         temp_pipeline = FastDeployStableDiffusionPipeline(
-            **components,
-            requires_safety_checker=self.config.requires_safety_checker)
+            **components, requires_safety_checker=self.config.requires_safety_checker
+        )
         temp_pipeline._progress_bar_config = self._progress_bar_config
         output = temp_pipeline(
             prompt=prompt,
@@ -120,42 +117,39 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
             callback_steps=callback_steps,
             controlnet_cond=controlnet_cond,
             controlnet_conditioning_scale=controlnet_conditioning_scale,
-            infer_op_dict=infer_op_dict, )
+            infer_op_dict=infer_op_dict,
+        )
         return output
 
     def img2img(
-            self,
-            prompt: Union[str, List[str]],
-            image: Union[paddle.Tensor, PIL.Image.Image],
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            strength: float=0.8,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[float]=0.0,
-            generator: Optional[paddle.Generator]=None,
-            latents: Optional[paddle.Tensor]=None,
-            parse_prompt_type: Optional[str]="lpw",
-            max_embeddings_multiples: Optional[int]=3,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            controlnet_cond: Union[paddle.Tensor, PIL.Image.Image]=None,
-            controlnet_conditioning_scale: float=1.0,
-            infer_op_dict: Dict[str, str]=None, ):
-        expected_components = inspect.signature(
-            FastDeployStableDiffusionImg2ImgPipeline.__init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+        self,
+        prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, PIL.Image.Image],
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        strength: float = 0.8,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[float] = 0.0,
+        generator: Optional[paddle.Generator] = None,
+        latents: Optional[paddle.Tensor] = None,
+        parse_prompt_type: Optional[str] = "lpw",
+        max_embeddings_multiples: Optional[int] = 3,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
+        controlnet_conditioning_scale: float = 1.0,
+        infer_op_dict: Dict[str, str] = None,
+    ):
+        expected_components = inspect.signature(FastDeployStableDiffusionImg2ImgPipeline.__init__).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         temp_pipeline = FastDeployStableDiffusionImg2ImgPipeline(
-            **components,
-            requires_safety_checker=self.config.requires_safety_checker)
+            **components, requires_safety_checker=self.config.requires_safety_checker
+        )
         temp_pipeline._progress_bar_config = self._progress_bar_config
         output = temp_pipeline(
             prompt=prompt,
@@ -178,48 +172,46 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
             callback_steps=callback_steps,
             controlnet_cond=controlnet_cond,
             controlnet_conditioning_scale=controlnet_conditioning_scale,
-            infer_op_dict=infer_op_dict, )
+            infer_op_dict=infer_op_dict,
+        )
 
         return output
 
     def inpaint_legacy(
-            self,
-            prompt: Union[str, List[str]],
-            image: Union[paddle.Tensor, PIL.Image.Image],
-            mask_image: Union[paddle.Tensor, PIL.Image.Image],
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            strength: float=0.8,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[float]=0.0,
-            generator: Optional[paddle.Generator]=None,
-            latents: Optional[paddle.Tensor]=None,
-            parse_prompt_type: Optional[str]="lpw",
-            max_embeddings_multiples: Optional[int]=3,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            controlnet_cond: Union[paddle.Tensor, PIL.Image.Image]=None,
-            controlnet_conditioning_scale: float=1.0,
-            infer_op_dict: Dict[str, str]=None, ):
+        self,
+        prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, PIL.Image.Image],
+        mask_image: Union[paddle.Tensor, PIL.Image.Image],
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        strength: float = 0.8,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[float] = 0.0,
+        generator: Optional[paddle.Generator] = None,
+        latents: Optional[paddle.Tensor] = None,
+        parse_prompt_type: Optional[str] = "lpw",
+        max_embeddings_multiples: Optional[int] = 3,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
+        controlnet_conditioning_scale: float = 1.0,
+        infer_op_dict: Dict[str, str] = None,
+    ):
         assert (
             self.unet_num_latent_channels == 4
         ), f"Detected `unet_num_latent_channels` is {self.unet_num_latent_channels}, Plese use `inpaint` method."
         expected_components = inspect.signature(
-            FastDeployStableDiffusionInpaintPipelineLegacy.
-            __init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+            FastDeployStableDiffusionInpaintPipelineLegacy.__init__
+        ).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         temp_pipeline = FastDeployStableDiffusionInpaintPipelineLegacy(
-            **components,
-            requires_safety_checker=self.config.requires_safety_checker)
+            **components, requires_safety_checker=self.config.requires_safety_checker
+        )
         temp_pipeline._progress_bar_config = self._progress_bar_config
         output = temp_pipeline(
             prompt=prompt,
@@ -243,45 +235,42 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
             callback_steps=callback_steps,
             controlnet_cond=controlnet_cond,
             controlnet_conditioning_scale=controlnet_conditioning_scale,
-            infer_op_dict=infer_op_dict, )
+            infer_op_dict=infer_op_dict,
+        )
 
         return output
 
     def inpaint(
-            self,
-            prompt: Union[str, List[str]],
-            image: Union[paddle.Tensor, PIL.Image.Image],
-            mask_image: Union[paddle.Tensor, PIL.Image.Image],
-            height=None,
-            width=None,
-            strength: float=0.8,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            negative_prompt: Optional[Union[str, List[str]]]=None,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[float]=0.0,
-            generator: Optional[paddle.Generator]=None,
-            latents: Optional[paddle.Tensor]=None,
-            parse_prompt_type: Optional[str]="lpw",
-            max_embeddings_multiples: Optional[int]=3,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            controlnet_cond: Union[paddle.Tensor, PIL.Image.Image]=None,
-            controlnet_conditioning_scale: float=1.0,
-            infer_op_dict: Dict[str, str]=None, ):
+        self,
+        prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, PIL.Image.Image],
+        mask_image: Union[paddle.Tensor, PIL.Image.Image],
+        height=None,
+        width=None,
+        strength: float = 0.8,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        negative_prompt: Optional[Union[str, List[str]]] = None,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[float] = 0.0,
+        generator: Optional[paddle.Generator] = None,
+        latents: Optional[paddle.Tensor] = None,
+        parse_prompt_type: Optional[str] = "lpw",
+        max_embeddings_multiples: Optional[int] = 3,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
+        controlnet_conditioning_scale: float = 1.0,
+        infer_op_dict: Dict[str, str] = None,
+    ):
         assert self.unet_num_latent_channels in [4, 9]
-        expected_components = inspect.signature(
-            FastDeployStableDiffusionInpaintPipeline.__init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+        expected_components = inspect.signature(FastDeployStableDiffusionInpaintPipeline.__init__).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         temp_pipeline = FastDeployStableDiffusionInpaintPipeline(
-            **components,
-            requires_safety_checker=self.config.requires_safety_checker)
+            **components, requires_safety_checker=self.config.requires_safety_checker
+        )
         temp_pipeline._progress_bar_config = self._progress_bar_config
         output = temp_pipeline(
             prompt=prompt,
@@ -305,46 +294,42 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
             callback_steps=callback_steps,
             controlnet_cond=controlnet_cond,
             controlnet_conditioning_scale=controlnet_conditioning_scale,
-            infer_op_dict=infer_op_dict, )
+            infer_op_dict=infer_op_dict,
+        )
 
         return output
 
     def cycle_diffusion(
-            self,
-            prompt: Union[str, List[str]],
-            source_prompt: Union[str, List[str]],
-            image: Union[paddle.Tensor, PIL.Image.Image]=None,
-            height: Optional[int]=None,
-            width: Optional[int]=None,
-            strength: float=0.8,
-            num_inference_steps: Optional[int]=50,
-            guidance_scale: Optional[float]=7.5,
-            negative_prompt: Optional[paddle.Tensor]=None,
-            source_guidance_scale: Optional[float]=1,
-            num_images_per_prompt: Optional[int]=1,
-            eta: Optional[float]=0.1,
-            latents: Optional[paddle.Tensor]=None,
-            parse_prompt_type: Optional[str]="lpw",
-            max_embeddings_multiples: Optional[int]=3,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            prompt_embeds: Optional[paddle.Tensor]=None,
-            negative_prompt_embeds: Optional[paddle.Tensor]=None,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True,
-            callback: Optional[Callable[[int, int, paddle.Tensor], None]]=None,
-            callback_steps: Optional[int]=1,
-            infer_op_dict: Dict[str, str]=None, ):
-        expected_components = inspect.signature(
-            FastDeployCycleDiffusionPipeline.__init__).parameters.keys()
-        components = {
-            name: component
-            for name, component in self.components.items()
-            if name in expected_components
-        }
+        self,
+        prompt: Union[str, List[str]],
+        source_prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, PIL.Image.Image] = None,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        strength: float = 0.8,
+        num_inference_steps: Optional[int] = 50,
+        guidance_scale: Optional[float] = 7.5,
+        negative_prompt: Optional[paddle.Tensor] = None,
+        source_guidance_scale: Optional[float] = 1,
+        num_images_per_prompt: Optional[int] = 1,
+        eta: Optional[float] = 0.1,
+        latents: Optional[paddle.Tensor] = None,
+        parse_prompt_type: Optional[str] = "lpw",
+        max_embeddings_multiples: Optional[int] = 3,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        prompt_embeds: Optional[paddle.Tensor] = None,
+        negative_prompt_embeds: Optional[paddle.Tensor] = None,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: Optional[int] = 1,
+        infer_op_dict: Dict[str, str] = None,
+    ):
+        expected_components = inspect.signature(FastDeployCycleDiffusionPipeline.__init__).parameters.keys()
+        components = {name: component for name, component in self.components.items() if name in expected_components}
         temp_pipeline = FastDeployCycleDiffusionPipeline(
-            **components,
-            requires_safety_checker=self.config.requires_safety_checker)
+            **components, requires_safety_checker=self.config.requires_safety_checker
+        )
         temp_pipeline._progress_bar_config = self._progress_bar_config
         output = temp_pipeline(
             prompt=prompt,
@@ -369,6 +354,7 @@ class FastDeployStableDiffusionMegaPipeline(FastDeployStableDiffusionPipeline):
             return_dict=return_dict,
             callback=callback,
             callback_steps=callback_steps,
-            infer_op_dict=infer_op_dict, )
+            infer_op_dict=infer_op_dict,
+        )
 
         return output

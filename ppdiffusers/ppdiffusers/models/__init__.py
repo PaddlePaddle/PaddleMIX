@@ -17,7 +17,8 @@
 from ..utils.import_utils import (
     OptionalDependencyNotAvailable,
     is_einops_available,
-    is_paddle_available, )
+    is_paddle_available,
+)
 
 if is_paddle_available():
     from .adapter import MultiAdapter, T2IAdapter
@@ -25,8 +26,8 @@ if is_paddle_available():
     from .controlnet import ControlNetModel
     from .dual_transformer_2d import DualTransformer2DModel
     from .ema import LitEma
-    from .lvdm_vae import LVDMAutoencoderKL
     from .lvdm_unet_3d import LVDMUNet3DModel
+    from .lvdm_vae import LVDMAutoencoderKL
     from .modeling_utils import ModelMixin
     from .prior_transformer import PriorTransformer
     from .t5_film_transformer import T5FilmDecoder

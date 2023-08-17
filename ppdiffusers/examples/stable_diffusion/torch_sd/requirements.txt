@@ -1,9 +1,0 @@
-accelerate==0.20.3
-transformers==4.30.2
-pandas
-numpy
-scipy
-datasets
-diffusers==0.17.1
-safetensors
-ftfy

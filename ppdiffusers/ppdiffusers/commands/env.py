@@ -57,9 +57,7 @@ class EnvironmentCommand(BasePPDiffusersCLICommand):
             "Using distributed or parallel set-up in script?": "<fill in>",
         }
 
-        print(
-            "\nCopy-and-paste the text below in your GitHub issue and FILL OUT the two last points.\n"
-        )
+        print("\nCopy-and-paste the text below in your GitHub issue and FILL OUT the two last points.\n")
         print(self.format_dict(info))
 
         return info

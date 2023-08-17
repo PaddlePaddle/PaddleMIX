@@ -17,7 +17,8 @@
 from ...utils import (
     OptionalDependencyNotAvailable,
     is_paddle_available,
-    is_scipy_available, )
+    is_scipy_available,
+)
 
 try:
     if not is_paddle_available():
@@ -26,7 +27,8 @@ except OptionalDependencyNotAvailable:
     from ...utils.dummy_paddle_objects import *  # noqa F403
 else:
     from .preconfig_scheduling_euler_ancestral_discrete import (
-        PreconfigEulerAncestralDiscreteScheduler, )
+        PreconfigEulerAncestralDiscreteScheduler,
+    )
 try:
     if not (is_paddle_available() and is_scipy_available()):
         raise OptionalDependencyNotAvailable()

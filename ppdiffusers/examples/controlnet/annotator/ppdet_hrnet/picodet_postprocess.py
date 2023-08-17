@@ -41,8 +41,8 @@ def hard_nms(box_scores, iou_threshold, top_k=-1, candidate_size=200):
         rest_boxes = boxes[indexes, :]
         iou = iou_of(
             rest_boxes,
-            np.expand_dims(
-                current_box, axis=0), )
+            np.expand_dims(current_box, axis=0),
+        )
         indexes = indexes[iou <= iou_threshold]
 
     return box_scores[picked, :]
@@ -88,15 +88,16 @@ class PicoDetPostProcess(object):
     """
 
     def __init__(
-            self,
-            input_shape,
-            ori_shape,
-            scale_factor,
-            strides=[8, 16, 32, 64],
-            score_threshold=0.4,
-            nms_threshold=0.5,
-            nms_top_k=1000,
-            keep_top_k=100, ):
+        self,
+        input_shape,
+        ori_shape,
+        scale_factor,
+        strides=[8, 16, 32, 64],
+        score_threshold=0.4,
+        nms_threshold=0.5,
+        nms_top_k=1000,
+        keep_top_k=100,
+    ):
         self.ori_shape = ori_shape
         self.input_shape = input_shape
         self.scale_factor = scale_factor
@@ -113,15 +114,13 @@ class PicoDetPostProcess(object):
         if n:
             # warp points
             xy = np.ones((n * 4, 3))
-            xy[:, :2] = boxes[:, [0, 1, 2, 3, 0, 3, 2, 1]].reshape(
-                n * 4, 2)  # x1y1, x2y2, x1y2, x2y1
+            xy[:, :2] = boxes[:, [0, 1, 2, 3, 0, 3, 2, 1]].reshape(n * 4, 2)  # x1y1, x2y2, x1y2, x2y1
             # xy = xy @ M.T  # transform
             xy = (xy[:, :2] / xy[:, 2:3]).reshape(n, 8)  # rescale
             # create new boxes
             x = xy[:, [0, 2, 4, 6]]
             y = xy[:, [1, 3, 5, 7]]
-            xy = np.concatenate(
-                (x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
+            xy = np.concatenate((x.min(1), y.min(1), x.max(1), y.max(1))).reshape(4, n).T
             # clip boxes
             xy[:, [0, 2]] = xy[:, [0, 2]].clip(0, width)
             xy[:, [1, 3]] = xy[:, [1, 3]].clip(0, height)
@@ -138,8 +137,7 @@ class PicoDetPostProcess(object):
             # generate centers
             decode_boxes = []
             select_scores = []
-            for stride, box_distribute, score in zip(self.strides, raw_boxes,
-                                                     scores):
+            for stride, box_distribute, score in zip(self.strides, raw_boxes, scores):
                 box_distribute = box_distribute[batch_id]
                 score = score[batch_id]
                 # centers
@@ -162,7 +160,7 @@ class PicoDetPostProcess(object):
 
                 # top K candidate
                 topk_idx = np.argsort(score.max(axis=1))[::-1]
-                topk_idx = topk_idx[:self.nms_top_k]
+                topk_idx = topk_idx[: self.nms_top_k]
                 center = center[topk_idx]
                 score = score[topk_idx]
                 box_distance = box_distance[topk_idx]
@@ -185,12 +183,12 @@ class PicoDetPostProcess(object):
                 if probs.shape[0] == 0:
                     continue
                 subset_boxes = bboxes[mask, :]
-                box_probs = np.concatenate(
-                    [subset_boxes, probs.reshape(-1, 1)], axis=1)
+                box_probs = np.concatenate([subset_boxes, probs.reshape(-1, 1)], axis=1)
                 box_probs = hard_nms(
                     box_probs,
                     iou_threshold=self.nms_threshold,
-                    top_k=self.keep_top_k, )
+                    top_k=self.keep_top_k,
+                )
                 picked_box_probs.append(box_probs)
                 picked_labels.extend([class_index] * box_probs.shape[0])
 
@@ -202,24 +200,25 @@ class PicoDetPostProcess(object):
                 picked_box_probs = np.concatenate(picked_box_probs)
 
                 # resize output boxes
-                picked_box_probs[:, :4] = self.warp_boxes(
-                    picked_box_probs[:, :4], self.ori_shape[batch_id])
-                im_scale = np.concatenate([
-                    self.scale_factor[batch_id][::-1],
-                    self.scale_factor[batch_id][::-1]
-                ])
+                picked_box_probs[:, :4] = self.warp_boxes(picked_box_probs[:, :4], self.ori_shape[batch_id])
+                im_scale = np.concatenate(
+                    [
+                        self.scale_factor[batch_id][::-1],
+                        self.scale_factor[batch_id][::-1],
+                    ]
+                )
                 picked_box_probs[:, :4] /= im_scale
                 # clas score box
                 out_boxes_list.append(
                     np.concatenate(
                         [
-                            np.expand_dims(
-                                np.array(picked_labels), axis=-1),
-                            np.expand_dims(
-                                picked_box_probs[:, 4], axis=-1),
+                            np.expand_dims(np.array(picked_labels), axis=-1),
+                            np.expand_dims(picked_box_probs[:, 4], axis=-1),
                             picked_box_probs[:, :4],
                         ],
-                        axis=1, ))
+                        axis=1,
+                    )
+                )
                 out_boxes_num.append(len(picked_labels))
 
         out_boxes_list = np.concatenate(out_boxes_list, axis=0)

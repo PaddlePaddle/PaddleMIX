@@ -44,14 +44,14 @@ class DiTPipeline(DiffusionPipeline):
     """
 
     def __init__(
-            self,
-            transformer: Transformer2DModel,
-            vae: AutoencoderKL,
-            scheduler: KarrasDiffusionSchedulers,
-            id2label: Optional[Dict[int, str]]=None, ):
+        self,
+        transformer: Transformer2DModel,
+        vae: AutoencoderKL,
+        scheduler: KarrasDiffusionSchedulers,
+        id2label: Optional[Dict[int, str]] = None,
+    ):
         super().__init__()
-        self.register_modules(
-            transformer=transformer, vae=vae, scheduler=scheduler)
+        self.register_modules(transformer=transformer, vae=vae, scheduler=scheduler)
 
         # create a imagenet -> id dictionary for easier use
         self.labels = {}
@@ -88,14 +88,14 @@ class DiTPipeline(DiffusionPipeline):
 
     @paddle.no_grad()
     def __call__(
-            self,
-            class_labels: List[int],
-            guidance_scale: float=4.0,
-            generator: Optional[Union[paddle.Generator, List[
-                paddle.Generator]]]=None,
-            num_inference_steps: int=50,
-            output_type: Optional[str]="pil",
-            return_dict: bool=True, ) -> Union[ImagePipelineOutput, Tuple]:
+        self,
+        class_labels: List[int],
+        guidance_scale: float = 4.0,
+        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        num_inference_steps: int = 50,
+        output_type: Optional[str] = "pil",
+        return_dict: bool = True,
+    ) -> Union[ImagePipelineOutput, Tuple]:
         r"""
         Function invoked when calling the pipeline for generation.
 
@@ -123,25 +123,22 @@ class DiTPipeline(DiffusionPipeline):
         latents = randn_tensor(
             shape=(batch_size, latent_channels, latent_size, latent_size),
             generator=generator,
-            dtype=self.transformer.dtype, )
-        latent_model_input = paddle.concat([latents] *
-                                           2) if guidance_scale > 1 else latents
+            dtype=self.transformer.dtype,
+        )
+        latent_model_input = paddle.concat([latents] * 2) if guidance_scale > 1 else latents
 
         class_labels = paddle.to_tensor(class_labels).flatten()
         class_null = paddle.to_tensor([1000] * batch_size)
-        class_labels_input = paddle.concat(
-            [class_labels, class_null],
-            0) if guidance_scale > 1 else class_labels
+        class_labels_input = paddle.concat([class_labels, class_null], 0) if guidance_scale > 1 else class_labels
 
         # set step values
         self.scheduler.set_timesteps(num_inference_steps)
 
         for t in self.progress_bar(self.scheduler.timesteps):
             if guidance_scale > 1:
-                half = latent_model_input[:len(latent_model_input) // 2]
+                half = latent_model_input[: len(latent_model_input) // 2]
                 latent_model_input = paddle.concat([half, half], axis=0)
-            latent_model_input = self.scheduler.scale_model_input(
-                latent_model_input, t)
+            latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
             timesteps = t
             if not paddle.is_tensor(timesteps):
@@ -155,22 +152,25 @@ class DiTPipeline(DiffusionPipeline):
             elif len(timesteps.shape) == 0:
                 timesteps = timesteps[None]
             # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
-            timesteps = timesteps.expand([latent_model_input.shape[0], ])
+            timesteps = timesteps.expand(
+                [
+                    latent_model_input.shape[0],
+                ]
+            )
             # predict noise model_output
             noise_pred = self.transformer(
-                latent_model_input,
-                timestep=timesteps,
-                class_labels=class_labels_input).sample
+                latent_model_input, timestep=timesteps, class_labels=class_labels_input
+            ).sample
 
             # perform guidance
             if guidance_scale > 1:
-                eps, rest = noise_pred[:, :
-                                       latent_channels], noise_pred[:,
-                                                                    latent_channels:]
+                eps, rest = (
+                    noise_pred[:, :latent_channels],
+                    noise_pred[:, latent_channels:],
+                )
                 bs = eps.shape[0]
                 # TODO torch.split vs paddle.split
-                cond_eps, uncond_eps = paddle.split(
-                    eps, [bs // 2, bs - bs // 2], axis=0)
+                cond_eps, uncond_eps = paddle.split(eps, [bs // 2, bs - bs // 2], axis=0)
 
                 half_eps = uncond_eps + guidance_scale * (cond_eps - uncond_eps)
                 eps = paddle.concat([half_eps, half_eps], axis=0)
@@ -183,13 +183,13 @@ class DiTPipeline(DiffusionPipeline):
                 model_output, _ = paddle.split(
                     noise_pred,
                     [latent_channels, noise_pred.shape[1] - latent_channels],
-                    axis=1)
+                    axis=1,
+                )
             else:
                 model_output = noise_pred
 
             # compute previous image: x_t -> x_t-1
-            latent_model_input = self.scheduler.step(
-                model_output, t, latent_model_input).prev_sample
+            latent_model_input = self.scheduler.step(model_output, t, latent_model_input).prev_sample
 
         if guidance_scale > 1:
             latents, _ = latent_model_input.chunk(2, axis=0)
@@ -208,6 +208,6 @@ class DiTPipeline(DiffusionPipeline):
             samples = self.numpy_to_pil(samples)
 
         if not return_dict:
-            return (samples, )
+            return (samples,)
 
         return ImagePipelineOutput(images=samples)
