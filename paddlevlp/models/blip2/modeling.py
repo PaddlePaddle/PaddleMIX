@@ -323,6 +323,7 @@ class Blip2PretrainedModel(PretrainedModel):
                     state_dict = cls.convert_tensor_parallel(
                         resolved_archive_file, config)
                 else:
+                    # print("resolved_archive_file", resolved_archive_file)
                     state_dict = load_state_dict(resolved_archive_file)
 
                 logger.info(
@@ -347,12 +348,14 @@ class Blip2PretrainedModel(PretrainedModel):
                     with device_guard():
                         state_dict[k] = paddle.Tensor(
                             state_dict.pop(k), zero_copy=True)
-
+        print("type(cls)222")
         # 3. init the model
         init_args = config["init_args"] or ()
         with ContextManagers(init_contexts):
             model = cls(config, *init_args, **model_kwargs)
         from paddlevlp.models.blip2.eva_vit import interpolate_pos_embed
+        print(type(model))
+        print("type(cls)11")
         interpolate_pos_embed(model, state_dict)
         if use_keep_in_fp32_modules:
             # low_cpu_mem_usage = True
@@ -564,7 +567,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         labels.stop_gradient = True
         with paddle.amp.auto_cast(level='O2'):
             outputs = self.language_model(
-                inputs_embeds=inputs_embeds,
+                inputs_embeds=inputs_embeds.astype("float32"),
                 attention_mask=attention_mask,
                 return_dict=True,
                 labels=labels, )
@@ -830,9 +833,17 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             [language_attention_mask, attention_mask], axis=1)
         # concatenate query embeddings with prompt embeddings
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
+        language_model_inputs = paddle.cast(language_model_inputs,dtype=paddle.get_default_dtype())
+        inputs_embeds = paddle.cast(inputs_embeds,dtype=paddle.get_default_dtype())
         inputs_embeds = paddle.concat(
             [language_model_inputs, inputs_embeds], axis=1)
 
+        import datetime
+        import time
+        starttime = datetime.datetime.now()
+        print(type(self.language_model))
+        print("inputs_embeds")
+        print(inputs_embeds.dtype)
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
@@ -847,6 +858,11 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             repetition_penalty=1,
             length_penalty=1,
             num_return_sequences=1, )
+
+        endtime = datetime.datetime.now()
+        duringtime = endtime - starttime
+        ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+        print ("self.language_model.generate:", ms)# 单位是毫秒
 
         return outputs
 

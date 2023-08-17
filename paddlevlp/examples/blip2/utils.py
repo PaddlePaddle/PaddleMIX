@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
-from pycocoevalcap.eval import COCOEvalCap
+#from pycocoevalcap.eval import COCOEvalCap
 from pycocotools.coco import COCO
 from paddlevlp.utils.downloader import get_weights_path_from_url
 from paddlevlp.utils.downloader import is_url
@@ -167,6 +167,8 @@ def load_model(args, model, optimizer=None, ckpt_dir="", load_language_model=Tru
             return model_dict[mp_rank * subbatch:(mp_rank + 1) * subbatch]
 
         model_dict = paddle.load(ckpt_dir)
+        print("ckpt_dir")
+        print(ckpt_dir)
         for whole_key in model_dict.keys():
             if not '.' in whole_key:
                 continue

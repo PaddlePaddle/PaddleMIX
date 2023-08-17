@@ -13,6 +13,7 @@
 # limitations under the License.
 import sys
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import paddle.distributed as dist
 from paddle.distributed import fleet
 from dataclasses import dataclass, field
@@ -145,6 +146,9 @@ class PreTrainingArguments(TrainingArguments):
 
 
 def create_model(config):
+    #breakpoint()
+    print("大狗")
+    print(config.model_name_or_path)
     model = Blip2ForConditionalGeneration.from_pretrained(
         pretrained_model_name_or_path=config.model_name_or_path)
     paddle.device.cuda.empty_cache()
@@ -182,6 +186,12 @@ def main():
         return_attention_mask=True,
         mode="test", )
     model = create_model(model_args)
+
+    decorated = paddle.amp.decorate(
+                    models=[model.language_model], optimizers=None, level="O2"
+                )
+    [model.language_model] = decorated
+
     model.eval()
     if training_args.model_path is not None:
         checkpoint = training_args.model_path
@@ -198,6 +208,30 @@ def main():
     generated_text = processor.batch_decode(
         generated_ids, skip_special_tokens=True)[0].strip()
     logger.info("Generate text: {}".format(generated_text))
+
+    warm_up = 5
+    repeate = 10
+    for i in range(warm_up):
+        # 其实4个输入
+        generated_ids, scores = model.generate(**inputs)
+        generated_text = processor.batch_decode(
+            generated_ids, skip_special_tokens=True)[0].strip()
+        logger.info("Generate text: {}".format(generated_text))
+
+    import datetime
+    import time
+    starttime = datetime.datetime.now()
+    for i in range(repeate):
+        generated_ids, scores = model.generate(**inputs)
+        generated_text = processor.batch_decode(
+            generated_ids, skip_special_tokens=True)[0].strip()
+        logger.info("Generate text: {}".format(generated_text))
+
+    endtime = datetime.datetime.now()
+    duringtime = endtime - starttime
+    ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+    print (ms / repeate)# 单位是毫秒
+
     return model
 
 
