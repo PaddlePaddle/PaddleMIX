@@ -51,8 +51,6 @@ python run_predict.py \
 - `temperature`: 'sampling'策略中，用于对下一个token概率进行建模的值。默认为1.0, 表示没有效果.  
 
 
-## 4. 效果展示
-
 下图这个示例展示了在使用MiniGPT-7b时的效果：
 
 输入图片：<center><img src="https://github.com/PaddlePaddle/Paddle/assets/35913314/d8070644-4713-465d-9c7e-9585024c1819" /></center>
