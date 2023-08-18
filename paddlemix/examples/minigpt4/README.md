@@ -27,31 +27,9 @@ MiniGPT4 是一个具有图像理解能力的开源模型，其基于 Vicuna 大
 
 ```
 python run_predict.py \
-    -- pretrained_name_or_path "your minigpt4 path" \
-    -- image_path "you image path" \
-    -- decode_strategy "greedy_search" \
-    -- max_length 300 \
-    -- num_beams 1 \
-    -- top_p 1.0 \
-    -- top_k 0 \
-    -- repetition_penalty 1.0 \
-    -- length_penalty 0.0 \
-    -- temperature 1.0 
+    -- pretrained_name_or_path "your minigpt4 path"
+
 ```
-
-你可以通过调整一些生成策略，来控制生成内容，例如一些常用的生成策略参数如下：
-`pretrained_name_or_path`: 默认为MiniGPT4模型的存放目录.
-`image_path`: 图片路径，支持传入URL或本地路径.
-`decode_strategy`: 文本生成时的解码策略，目前支持'gready_search', 'sampling', 'beam_search'三种方式.
-`max_length`: 生成序列的最大长度.
-`num_beams`: 'beam_search'策略的束宽.
-`top_p`: 'sampling'策略中top-p过滤的累积概率， 默认在区间[0,1)之间. 默认为1.0, 表示没有效果.
-`top_k`: 'sampling'策略中，top-k过滤保留的最高概率token的数量， 默认为0， 表示没有效果.
-`repetition_penalty`: 重复惩罚的参数，默认值为1，表示没有惩罚.
-`temperature`: 'sampling'策略中，用于对下一个token概率进行建模的值。默认为1.0, 表示没有效果.
-
-
-## 4. 效果展示
 
 下图这个示例展示了在使用MiniGPT-7b时的效果：
 
