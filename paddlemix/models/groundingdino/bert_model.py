@@ -492,7 +492,7 @@ class BertModel(nn.Layer):
         attention_mask: paddle.Tensor,
         input_shape: Tuple[int],
         device: str = None,
-        dtype: np.float = None,
+        dtype: np.float32 = None,
     ) -> paddle.Tensor:
         if dtype is None:
             dtype = np.float32
