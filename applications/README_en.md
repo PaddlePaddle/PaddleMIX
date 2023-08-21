@@ -35,24 +35,24 @@ from paddlemix import Appflow
 
 paddle.seed(1024)
 task = Appflow(app="text2image_generation",
-               models=["stabilityai/stable-diffusion-2"]
+               models=["stabilityai/stable-diffusion-v1-5"]
                )
 prompt = "a photo of an astronaut riding a horse on mars."
 result = task(prompt=prompt)['result']
 ```
 
 ### Multi Modal And Scenario
-| name                           | models                         | static mode   |
+| name                           | models                         | static mode    |
 | :--------------------------------- | -------------------------------- | ----------|
 | [开放世界检测分割（Openset-Det-Sam）](./CVinW/README.md/#开放世界检测分割grounded-sam-detect-and-segment-everything-with-text-prompt)              | `grounded sam`  |     ✅      |
 | [自动标注（AutoLabel）](./Automatic_label/README.md/#自动标注autolabel)              | `blip2 grounded sam`        |      ✅       |
 | [检测框引导的图像编辑（Det-Guided-Inpainting）](./Inpainting/README.md/#检测框引导的图像编辑det-guided-inpainting)      | `chatglm-6b stable-diffusion-2-inpainting grounded sam`                 |     ✅     |
-| [文图生成（Text-to-Image Generation）](./text2image/README.md/#文图生成text-to-image-generation)      | `stable-diffusion-2`  |         |
-| [文本引导的图像放大（Text-Guided Image Upscaling）](./image2image/README.md/#文本引导的图像放大text-guided-image-upscaling)           | `ldm-super-resolution-4x-openimages`|         |
-| [文本引导的图像编辑（Text-Guided Image Inpainting）](./Inpainting/README.md/#文本引导的图像编辑text-guided-image-inpainting) | `stable-diffusion-2-inpainting`     |         |
-| [文本引导的图像变换（Image-to-Image Text-Guided Generation）](./image2image/README.md/#文本引导的图像变换image-to-image-text-guided-generation)              | `stable-diffusion-v1-5`    |        |
-| [文本图像双引导图像生成（Dual Text and Image Guided Generation）](./image2image/README.md/#文本图像双引导图像生成dual-text-and-image-guided-generation)          | `versatile-diffusion`    |         |
-| [文本条件的视频生成（Text-to-Video Generation）](./text2video/README.md/#文本条件的视频生成text-to-video-generation)      | `text-to-video-ms-1.7b`  |         |
+| [文图生成（Text-to-Image Generation）](./text2image/README.md/#文图生成text-to-image-generation)      | `runwayml/stable-diffusion-v1-5`   |    [fastdeploy](../ppdiffusers/deploy/README.md/#文图生成text-to-image-generation)     |
+| [文本引导的图像放大（Text-Guided Image Upscaling）](./image2image/README.md/#文本引导的图像放大text-guided-image-upscaling)           | `ldm-super-resolution-4x-openimages`|    ❌     |
+| [文本引导的图像编辑（Text-Guided Image Inpainting）](./Inpainting/README.md/#文本引导的图像编辑text-guided-image-inpainting) | `stable-diffusion-2-inpainting`     |   [fastdeploy](../ppdiffusers/deploy/README.md/#文本引导的图像编辑text-guided-image-inpainting)     |
+| [文本引导的图像变换（Image-to-Image Text-Guided Generation）](./image2image/README.md/#文本引导的图像变换image-to-image-text-guided-generation)              | `stable-diffusion-v1-5`    |    [fastdeploy](../ppdiffusers/deploy/README.md/#文本引导的图像变换image-to-image-text-guided-generation)    |
+| [文本图像双引导图像生成（Dual Text and Image Guided Generation）](./image2image/README.md/#文本图像双引导图像生成dual-text-and-image-guided-generation)          | `versatile-diffusion`    |    ❌      |
+| [文本条件的视频生成（Text-to-Video Generation）](./text2video/README.md/#文本条件的视频生成text-to-video-generation)      | `text-to-video-ms-1.7b`  |     ❌     |
 
 More applications under continuous development......
 

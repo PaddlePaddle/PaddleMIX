@@ -15,7 +15,7 @@ To appear at CVPR 2023 (*Highlighted paper*)
 
 example: Extract and compare features across modalities (e.g. Image, Text and Audio).
 ```bash
-cd paddlemix/imagebind/
+cd paddlemix/examples/imagebind/
 
 python run_predict.py \
 --model_name_or_path The dir name of imagebind checkpoint. \

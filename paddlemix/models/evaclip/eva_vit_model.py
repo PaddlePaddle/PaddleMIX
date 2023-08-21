@@ -61,7 +61,7 @@ def drop_path(x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: 
         paddle.empty(shape=shape, dtype=x.dtype),
     )
     if keep_prob > 0.0 and scale_by_keep:
-        random_tensor = random_tensor.divide(keep_prob)
+        random_tensor = random_tensor.divide(paddle.to_tensor(keep_prob))
     return x * random_tensor
 
 

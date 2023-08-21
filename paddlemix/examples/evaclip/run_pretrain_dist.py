@@ -17,6 +17,8 @@
 import os
 import sys
 
+import numpy as np
+
 parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 4)))
 sys.path.insert(0, parent_path)
 import pprint
@@ -24,11 +26,11 @@ import socket
 from dataclasses import dataclass, field
 
 import paddle
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments
-from paddlenlp.transformers import AutoTokenizer
 
 from paddlemix.checkpoint import load_model
 from paddlemix.datasets import load_dataset
+from paddlemix.datasets.dataset import ImageFolder
+from paddlemix.metrics.clip_zero_shot import ClipZeroShot
 from paddlemix.models.evaclip.eva_clip_model import EVACLIP, EVACLIPConfig
 from paddlemix.optimization import create_optimizer
 from paddlemix.processors.clip_processing import (
@@ -38,6 +40,8 @@ from paddlemix.processors.clip_processing import (
 )
 from paddlemix.trainer import CLIPTrainer
 from paddlemix.utils.env import setdistenv
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
+from paddlenlp.transformers import AutoTokenizer
 
 
 @dataclass
@@ -54,6 +58,11 @@ class DataArguments:
         metadata={"help": "The name of the task to use (via the datasets library)."},
     )
 
+    classification_eval: str = field(
+        default="",
+        metadata={"help": "Path to IN1K data."},
+    )
+
 
 @dataclass
 class ModelArguments:
@@ -64,18 +73,6 @@ class ModelArguments:
     model: str = field(
         default="paddlemix/EVA/EVA02-CLIP-L-14",
         metadata={"help": "model name to create, for example [EVA02-CLIP-B-16/coca_EVA02-B-16]"},
-    )
-    model_name_or_path: str = field(
-        default="clip",
-        metadata={"help": "Path to pretrained model or model identifier"},
-    )
-    coca_caption_loss_weight: float = field(
-        default=2.0,
-        metadata={"help": "coca_caption_loss_weight set, default: 2.0"},
-    )
-    coca_contrastive_loss_weight: float = field(
-        default=1.0,
-        metadata={"help": "coca_contrastive_loss_weight set, default: 1.0"},
     )
 
 
@@ -118,6 +115,7 @@ class PreTrainingArguments(TrainingArguments):
         default=False,
         metadata={"help": "Whether to use tensorboard to record loss."},
     )
+    pretrained_text_model: str = field(default="openclip", metadata={"help": "the model to pre-extract text feats"})
 
 
 class SelfTrainer(CLIPTrainer):
@@ -158,17 +156,33 @@ class Collator:
         self.processor = processor
 
     def __call__(self, data_list):
-        images = [sample["image"] for sample in data_list]
-        text = [sample["text"] for sample in data_list]
-        batch = self.processor(
-            images=images,
-            text=text,
-            max_length=77,
-            return_tensors="pd",
-            return_attention_mask=False,
-            mode="train",
-        )
-        return batch
+        if isinstance(data_list[0], dict):
+            images = [sample["image"] for sample in data_list]
+            text = [sample["text"] for sample in data_list]
+            batch = self.processor(
+                images=images,
+                text=text,
+                max_length=77,
+                return_tensors="pd",
+                return_attention_mask=False,
+                mode="train",
+            )
+            return batch
+        else:
+            images = [sample[0] for sample in data_list]
+            labels = [sample[1] for sample in data_list]
+            batch = self.processor(
+                images=images,
+                text=None,
+                max_length=77,
+                return_tensors="pd",
+                return_attention_mask=False,
+                mode="eval",
+                do_resize=True,
+                do_crop=True,
+            )
+            batch["labels"] = paddle.to_tensor(np.array(labels))
+            return batch
 
 
 def main_worker(training_args, model_args, data_args):
@@ -196,17 +210,22 @@ def main_worker(training_args, model_args, data_args):
         paddle.set_default_dtype("float32")
 
     train_dataset = load_dataset(data_args.task_name, splits="train")
-    image_processor = CLIPImageProcessor.from_pretrained(model_args.model_name_or_path)
-    text_processor = CLIPTextProcessor.from_pretrained(model_args.model_name_or_path)
-    tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)
+    image_processor = CLIPImageProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
+    text_processor = CLIPTextProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
+    tokenizer = AutoTokenizer.from_pretrained(os.path.join(model_args.model, "processor"))
     processor = CLIPProcessor(image_processor, text_processor, tokenizer)
     collator = Collator(processor)
+
+    eval_dataset = ImageFolder(f"{data_args.classification_eval}/images")
+    zeroshot = ClipZeroShot(model, training_args)
 
     trainer = SelfTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
         data_collator=collator,
+        compute_metrics=zeroshot.zero_shot_eval,
     )
 
     # Training
@@ -231,4 +250,5 @@ if __name__ == "__main__":
     setdistenv(training_args)
     model_args.data_world_rank = training_args.data_world_rank
     model_args.data_world_size = training_args.data_world_size
+    training_args.classification_eval = data_args.classification_eval
     main_worker(training_args, model_args, data_args)

@@ -536,6 +536,10 @@ class ImageBindModel(ImageBindPretrainedModel):
                 modality_value = self.modality_trunks[modality_key](**trunk_inputs)
                 modality_value = self.modality_heads[modality_key](modality_value, **head_inputs)
                 modality_value = self.modality_postprocessors[modality_key](modality_value)
+                if modality_key=='audio' or modality_key=='depth' or modality_key=='thermal':
+                    modality_value = self.modality_postprocessors[modality_key](
+                        modality_value
+                    )
                 if reduce_list:
                     modality_value = modality_value.reshape(B, S, -1)
                     modality_value = modality_value.mean(axis=1)
