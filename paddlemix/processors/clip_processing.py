@@ -14,6 +14,7 @@
 """
 Processor class for CLIP/EVA-CLIP.
 """
+import numbers
 import re
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -117,41 +118,43 @@ class CLIPProcessor(ProcessorMixin):
               `None`).
             - **pixel_values** -- Pixel values to be fed to a model. Returned when `images` is not `None`.
         """
-        if images is None or text is None:
-            raise ValueError("You have to specify either images or text.")
+        if images is None:
+            raise ValueError("You have to specify images")
 
         # images PIL list
         encoding_image_processor = self.image_processor(images, return_tensors=return_tensors, mode=mode)
 
-        text_encoding = self.text_processor(text, mode=mode)  # text preprocessor before tokenizer
-        text_encoding = self.tokenizer(
-            text=text_encoding,
-            return_tensors=return_tensors,
-            return_token_type_ids=False,
-            max_length=max_length,
-            padding=True,
-            **kwargs,
-        )
+        if text is not None:
+            text_encoding = self.text_processor(text, mode=mode)  # text preprocessor before tokenizer
+            text_encoding = self.tokenizer(
+                text=text_encoding,
+                return_tensors=return_tensors,
+                return_token_type_ids=False,
+                max_length=max_length,
+                padding=True,
+                **kwargs,
+            )
 
-        for key, value in text_encoding.items():
-            shape = value.shape
-            if shape[-1] > max_length:
-                text_encoding[key] = value[..., :max_length]
-            elif shape[-1] < max_length:
-                if key == "input_ids":
-                    fill_value = value.numpy()[..., -1][-1]
-                else:
-                    fill_value = 0
-                newshape = shape
-                newshape[-1] = max_length - shape[-1]
-                padtensor = paddle.full(shape=newshape, fill_value=fill_value, dtype=value.dtype)
-                newvalue = paddle.concat([value, padtensor], axis=-1)
-                text_encoding[key] = newvalue
+            for key, value in text_encoding.items():
+                shape = value.shape
+                if shape[-1] > max_length:
+                    text_encoding[key] = value[..., :max_length]
+                elif shape[-1] < max_length:
+                    if key == "input_ids":
+                        fill_value = value.numpy()[..., -1][-1]
+                    else:
+                        fill_value = 0
+                    newshape = shape
+                    newshape[-1] = max_length - shape[-1]
+                    padtensor = paddle.full(shape=newshape, fill_value=fill_value, dtype=value.dtype)
+                    newvalue = paddle.concat([value, padtensor], axis=-1)
+                    text_encoding[key] = newvalue
+            encoding_image_processor.update(text_encoding)
 
         if "text_emb" in kwargs:
-            text_encoding["text_emb"] = paddle.to_tensor(kwargs["text_emb"])
-
-        encoding_image_processor.update(text_encoding)
+            text_emb_encoding = {}
+            text_emb_encoding["text_emb"] = paddle.to_tensor(kwargs["text_emb"])
+            encoding_image_processor.update(text_emb_encoding)
 
         return encoding_image_processor
 
@@ -218,8 +221,6 @@ class CLIPTextProcessor(BaseTextProcessor):
         if not isinstance(text, (list, tuple)):
             text = [text]
         results = [self.prompt + self.pre_caption(t) for t in text]
-        if mode == "train":
-            results = [res + "\n" for res in results]
         return results
 
     def pre_caption(self, caption: str) -> str:
@@ -296,8 +297,11 @@ class CLIPImageProcessor(BaseImageProcessor):
         self,
         do_resize: bool = True,
         size: Dict[str, int] = None,
+        default_to_square: bool = False,
+        do_crop: bool = False,
+        crop_size: int = None,
         resample: PILImageResampling = PILImageResampling.BICUBIC,
-        do_rescale: bool = True,
+        do_rescale: bool = False,
         rescale_factor: Union[int, float] = 1 / 255,
         do_normalize: bool = True,
         image_mean: Optional[Union[float, List[float]]] = None,
@@ -312,11 +316,14 @@ class CLIPImageProcessor(BaseImageProcessor):
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
-        size = size if size is not None else {"height": 384, "width": 384}
-        size = get_size_dict(size, default_to_square=True)
+        size = size if size is not None else {"height": 224, "width": 224}
+        size = get_size_dict(size, default_to_square=default_to_square)
 
         self.do_resize = do_resize
         self.size = size
+        self.default_to_square = default_to_square
+        self.do_crop = do_crop
+        self.crop_size = crop_size if crop_size is not None else min(size.values())
         self.resample = resample
         self.do_rescale = do_rescale
         self.rescale_factor = rescale_factor
@@ -334,8 +341,7 @@ class CLIPImageProcessor(BaseImageProcessor):
         self,
         image: np.ndarray,
         size: Dict[str, int],
-        resample: PILImageResampling = PILImageResampling.BICUBIC,
-        data_format: Optional[Union[str, ChannelDimension]] = None,
+        default_to_square: bool = False,
         **kwargs,
     ) -> np.ndarray:
         """
@@ -355,15 +361,25 @@ class CLIPImageProcessor(BaseImageProcessor):
             data_format (`str` or `ChannelDimension`, *optional*):
                 The channel dimension format of the image. If not provided, it will be the same as the input image.
         """
-        size = get_size_dict(size, default_to_square=True)
-        output_size = (size["width"], size["height"])
+        size = get_size_dict(size, default_to_square=default_to_square)
+        if "shortest_edge" in size:
+            output_size = size["shortest_edge"]
+        else:
+            output_size = (size["width"], size["height"])
         return F.resize(
             image,
             size=output_size,
-            resample=resample,
-            data_format=data_format,
+            interpolation=self.interpolation,
             **kwargs,
         )
+
+    def crop(
+        self,
+        image: np.ndarray,
+        size: Dict[str, int],
+        **kwargs,
+    ):
+        return F.center_crop(image, size, **kwargs)
 
     def rescale(
         self,
@@ -440,6 +456,8 @@ class CLIPImageProcessor(BaseImageProcessor):
         images: ImageInput,
         do_resize: Optional[bool] = None,
         size: Optional[Dict[str, int]] = None,
+        do_crop: Optional[bool] = None,
+        crop_size: Optional[List[int]] = None,
         resample: PILImageResampling = None,
         do_rescale: Optional[bool] = None,
         rescale_factor: Optional[float] = None,
@@ -501,6 +519,7 @@ class CLIPImageProcessor(BaseImageProcessor):
                 The mode of ("train", "val", "test")
         """
         do_resize = do_resize if do_resize is not None else self.do_resize
+        do_crop = do_crop if do_crop is not None else self.do_crop
         resample = resample if resample is not None else self.resample
         do_rescale = do_rescale if do_rescale is not None else self.do_rescale
         rescale_factor = rescale_factor if rescale_factor is not None else self.rescale_factor
@@ -514,7 +533,11 @@ class CLIPImageProcessor(BaseImageProcessor):
         do_rand_resize_crop = do_rand_resize_crop if do_rand_resize_crop is not None else self.do_rand_resize_crop
 
         size = size if size is not None else self.size
-        size = get_size_dict(size, default_to_square=False)
+        crop_size = crop_size if crop_size is not None else self.crop_size
+        size = get_size_dict(size, default_to_square=self.default_to_square)
+        if mode != "train":
+            do_resize = True
+            do_crop = True
 
         if not isinstance(images, (list, tuple)):
             images = [images]
@@ -527,6 +550,9 @@ class CLIPImageProcessor(BaseImageProcessor):
 
         if do_resize and size is None or resample is None:
             raise ValueError("Size and resample must be specified if do_resize is True.")
+
+        if do_crop and crop_size is None:
+            raise ValueError("Crop_size must be specified if do_crop is True.")
 
         if do_rescale and rescale_factor is None:
             raise ValueError("Rescale factor must be specified if do_rescale is True.")
@@ -544,25 +570,31 @@ class CLIPImageProcessor(BaseImageProcessor):
                 self.random_resized_crop(image=image, size=size, scale=scale, resample=resample) for image in images
             ]
         elif do_resize and mode != "train":
-            images = [self.resize(image=image, size=size, resample=resample) for image in images]
+            images = [
+                self.resize(image=image, size=size, default_to_square=self.default_to_square) for image in images
+            ]
+
+        if do_crop and crop_size is not None:
+            images = [self.crop(image, size=crop_size) for image in images]
 
         if do_flip and mode == "train":
             images = [self.random_horizontal_flip(image=image, flip_prob=flip_prob) for image in images]
 
         if do_rescale:
             images = [self.rescale(image=image, scale=rescale_factor) for image in images]
-        if do_normalize:
+        if do_convert_rgb:
             images = [convert_to_rgb(image) for image in images]
-            images = [np.array(image, "float32") for image in images]
 
+        images = [np.array(image, "float32") for image in images]
         batch_images = BatchEncoding(data={"image": images}, tensor_type="pd")
         batch_images["image"] = batch_images["image"].transpose([0, 3, 1, 2])
-        image = self.normalize(
-            batch_images["image"] / 255.0,
-            mean=image_mean,
-            std=image_std,
-            data_format="CHW",
-        )
+        if do_normalize:
+            image = self.normalize(
+                batch_images["image"] / 255.0,
+                mean=image_mean,
+                std=image_std,
+                data_format="CHW",
+            )
         return {"image": image}
 
     def preprocess_fixed(self, images: ImageInput, size: Optional[Dict[str, int]] = None) -> PIL.Image.Image:

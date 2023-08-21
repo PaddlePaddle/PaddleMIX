@@ -390,11 +390,7 @@ class PatchDropout(paddle.nn.Layer):
         if self.exclude_first_token:
             cls_tokens, x = x[:, :1], x[:, 1:]
         else:
-            import pdb
-
-            pdb.set_trace()
-            # never used
-            # cls_tokens = torch.jit.annotate(paddle.Tensor, x[:, :1])
+            cls_tokens = x[:, :1]
         batch = x.shape[0]
         num_tokens = x.shape[1]
         batch_indices = paddle.arange(end=batch)
@@ -402,11 +398,11 @@ class PatchDropout(paddle.nn.Layer):
         keep_prob = 1 - self.prob
         num_patches_keep = max(1, int(num_tokens * keep_prob))
         rand = paddle.randn(shape=[batch, num_tokens])
-        patch_indices_keep = rand.topk(k=num_patches_keep, axis=-1).indices
+        _, patch_indices_keep = rand.topk(k=num_patches_keep, axis=-1)
         x = x[batch_indices, patch_indices_keep]
         if self.exclude_first_token:
             x = paddle.concat(x=(cls_tokens, x), axis=1)
-        if self.training and os.getenv("RoPE") == "1":
+        if self.training and os.getenv('RoPE') == '1':
             return x, patch_indices_keep
         return x
 

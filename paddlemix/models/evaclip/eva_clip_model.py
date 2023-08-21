@@ -215,12 +215,16 @@ class EVACLIP(EVACLIPPretrainedModel):
         features = self.text(text)
         return paddle.nn.functional.normalize(x=features, axis=-1) if normalize else features
 
-    def forward(self, image, input_ids, text_emb=None, skiploss=False):
+    def forward(self, image, input_ids=None, text_emb=None, skiploss=False, **kwargs):
         self.clip_scale()
         text = input_ids
         text_features = text_emb
         image_features = self.encode_image(image, normalize=True)
-        text_features = self.encode_text(text, text_features=text_features, normalize=True)
+        if text is not None or text_features is not None:
+            text_features = self.encode_text(text, text_features=text_features, normalize=True)
+        else:
+            return paddle.to_tensor(0), image_features
+
         if skiploss:
             return image_features, text_features, self.logit_scale.exp()
 

@@ -23,14 +23,22 @@ import pprint
 import socket
 from dataclasses import dataclass, field
 
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments
+import paddle
 
 from paddlemix.checkpoint import load_model
-from paddlemix.datasets.laion_clip import get_data
-from paddlemix.metrics.clip_zero_shot import zero_shot_eval
+from paddlemix.datasets.dataset import ImageFolder
+from paddlemix.examples.evaclip.run_pretrain_dist import Collator
+from paddlemix.metrics.clip_zero_shot import ClipZeroShot
 from paddlemix.models.evaclip.eva_clip_model import EVACLIP
-from paddlemix.processors.clip_processing import image_transform
+from paddlemix.processors.clip_processing import (
+    CLIPImageProcessor,
+    CLIPProcessor,
+    CLIPTextProcessor,
+)
+from paddlemix.trainer import CLIPTrainer
 from paddlemix.utils.env import setdistenv
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
+from paddlenlp.transformers import AutoTokenizer
 
 
 @dataclass
@@ -58,10 +66,6 @@ class ModelArguments:
         default="paddlemix/EVA/EVA02-CLIP-L-14",
         metadata={"help": "model name to create, for example paddlemix/EVA/EVA02-CLIP-L-14"},
     )
-    model_name_or_path: str = field(
-        default="clip",
-        metadata={"help": "Path to pretrained model or model identifier"},
-    )
 
 
 @dataclass
@@ -75,17 +79,30 @@ class PreTrainingArguments(TrainingArguments):
         metadata={"help": "The path to pre-trained model that we will use for pretraining."},
     )
     pretrained_text_model: str = field(default="openclip", metadata={"help": "the model to pre-extract text feats"})
+    tensorboard: bool = field(
+        default=False,
+        metadata={"help": "Whether to use tensorboard to record loss."},
+    )
 
 
-def evaluate(model, dataloader_dict, args):
-    model.eval()
-    ret = zero_shot_eval(model, dataloader_dict, args)
-    model.train()
-    return ret
+class SelfTrainer(CLIPTrainer):
+    def create_optimizer_and_scheduler(self, num_training_steps: int):
+        """
+        Setup the optimizer and the learning rate scheduler.
+
+        We provide a reasonable default that works well. If you want to use something else, you can pass a tuple in the
+        Trainer's init through `optimizers`, or subclass and override this method (or `create_optimizer` and/or
+        `create_scheduler`) in a subclass.
+        """
+        self.lr_scheduler = None
+        self.optimizer = None
 
 
 def main_worker(training_args, model_args, data_args):
+    if training_args.bf16 and training_args.fp16_opt_level == "O2":
+        paddle.set_default_dtype("bfloat16")
     model = EVACLIP.from_pretrained(model_args.model, ignore_mismatched_sizes=False)
+    model.eval()
 
     training_args.model = model_args.model
     if (
@@ -94,12 +111,22 @@ def main_worker(training_args, model_args, data_args):
         and training_args.resume_from_checkpoint is None
     ):
         load_model(training_args, model, ckpt_dir=training_args.pretrained_model_path)
+    if training_args.bf16 and training_args.fp16_opt_level == "O2":
+        paddle.set_default_dtype("float32")
 
-    preprocess_train = image_transform(model.visual.image_size, is_train=True)
-    preprocess_val = image_transform(model.visual.image_size, is_train=False)
-    dataloader_dict = get_data(data_args, (preprocess_train, preprocess_val))
+    eval_dataset = ImageFolder(f"{data_args.classification_eval}/images")
+    image_processor = CLIPImageProcessor.from_pretrained(os.path.join(model_args.model, "processor", "eval"))
+    text_processor = CLIPTextProcessor.from_pretrained(os.path.join(model_args.model, "processor", "eval"))
+    tokenizer = AutoTokenizer.from_pretrained(os.path.join(model_args.model, "processor"))
+    processor = CLIPProcessor(image_processor, text_processor, tokenizer)
+    collator = Collator(processor)
 
-    evaluate(model, dataloader_dict, training_args)
+    zeroshot = ClipZeroShot(model, training_args)
+
+    trainer = SelfTrainer(
+        model=model, args=training_args, data_collator=collator, compute_metrics=zeroshot.zero_shot_eval
+    )
+    trainer.evaluate(eval_dataset=eval_dataset)
 
 
 if __name__ == "__main__":
@@ -111,6 +138,7 @@ if __name__ == "__main__":
     pprint.pprint(training_args)
     data_args.per_device_eval_batch_size = training_args.per_device_eval_batch_size
     data_args.dataloader_num_workers = training_args.dataloader_num_workers
+    training_args.classification_eval = data_args.classification_eval
 
     setdistenv(training_args)
     main_worker(training_args, model_args, data_args)

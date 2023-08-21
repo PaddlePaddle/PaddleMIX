@@ -125,7 +125,7 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         emb_list = []
 
         mp_rank = args.mp_rank
-        mp_size = args.tensor_parallel_degree
+        mp_size = max(args.tensor_parallel_degree, 1)
 
         def renamebias(model_dict, whole_key):
             if "q_bias" in whole_key:

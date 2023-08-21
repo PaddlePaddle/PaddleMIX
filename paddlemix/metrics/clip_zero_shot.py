@@ -27,20 +27,15 @@ def zero_shot_classifier(model, classnames_filename, templates_filename, args, t
 
     if text_tower is None:
         if hasattr(model, "_layers"):
-            text_tower = (
-                model._layers.module.encode_text
-                if not hasattr(model._layers, "encode_text")
-                else model._layers.encode_text
-            )
+            text_tower = model._layers.encode_text
         else:
-            text_tower = model.module.encode_text if not hasattr(model, "encode_text") else model.encode_text
+            text_tower = model.encode_text
     tokenizer = tokenize
     with paddle.no_grad():
         zeroshot_weights = []
         for classname in tqdm(classnames):
             texts = [template.format(classname) for template in templates]  # format with class
             texts = tokenizer(texts)  # tokenize
-
             class_embeddings = text_tower(texts)
             class_embedding = F.normalize(class_embeddings, axis=-1).mean(0)
             class_embedding /= class_embedding.norm()
@@ -84,70 +79,63 @@ def get_cast_dtype(args):
     return cast_dtype
 
 
-def run(model, classifier, dataloader, args):
-    cast_dtype = get_cast_dtype(args)
-    autocast = get_autocast(cast_dtype)
-    with paddle.no_grad():
-        top1, top5, n = 0.0, 0.0, 0.0
-        for images, target in tqdm(dataloader, unit_scale=args.per_device_eval_batch_size):
-            if cast_dtype is not None:
-                images = images.cast(cast_dtype)
-            target = target
+class ClipZeroShot:
+    def __init__(self, model, args):
+        data_path = args.classification_eval.strip()
+        classname_filename = f"{data_path}/labels.txt"
+        template_filename = f"{data_path}/templates.txt"
 
-            with autocast():
-                if hasattr(model, "_layers"):
-                    image_features = model._layers.encode_image(images)
+        self.data_name = os.path.basename(args.classification_eval)
+        classifier_filename = (
+            f"{os.path.dirname(classname_filename)}/{args.pretrained_text_model}_{self.data_name}_classifier.pt"
+        )
+        if os.path.exists(classifier_filename):
+            print("load classifier from disk")
+            classifier = paddle.load(classifier_filename)
+        else:
+            print("constructing classifier: {}.".format(classifier_filename))
+            classifier = zero_shot_classifier(model, classname_filename, template_filename, args)
+            paddle.save(classifier, classifier_filename)
+        print(f"zero-shot evaluating classification task: {self.data_name}")
+        if args.bf16:
+            self.classifier = classifier.astype(paddle.bfloat16)
+        elif args.fp16:
+            self.classifier = classifier.astype(paddle.float16)
+        else:
+            self.classifier = classifier
+        self.batch_size = args.per_device_eval_batch_size
+        self.cast_dtype = get_cast_dtype(args)
+
+    def zero_shot_eval(self, evalres):
+        results = {}
+        print("Extract features done, starting zero-shot classification evaluation.")
+        predictions, labels = evalres.predictions, evalres.label_ids
+        n = predictions.shape[0]
+        top1, top5 = 0.0, 0.0
+
+        autocast = get_autocast(self.cast_dtype)
+        with paddle.no_grad():
+            for step in tqdm(range((predictions.shape[0] + self.batch_size - 1) // self.batch_size)):
+                with autocast():
+                    image_features = paddle.to_tensor(
+                        predictions[step * self.batch_size : (step + 1) * self.batch_size]
+                    )
+                    target = paddle.to_tensor(labels[step * self.batch_size : (step + 1) * self.batch_size])
+                    logits = 100.0 * image_features @ self.classifier
+                if logits.shape[-1] < 5:
+                    (acc1,) = accuracy(logits, target, topk=(1,))
+                    acc5 = -1
                 else:
-                    image_features = model.encode_image(images)
-                image_features = F.normalize(image_features, axis=-1)
-                logits = 100.0 * image_features @ classifier
+                    acc1, acc5 = accuracy(logits, target, topk=(1, 5))
+                top1 += acc1
+                top5 += acc5
+        top1 = top1 / n
+        top5 = top5 / n
+        results["val/imagenet-zeroshot-val-top1"] = top1
+        results["val/imagenet-zeroshot-val-top5"] = top5
 
-            # measure accuracy
-            if logits.shape[-1] < 5:
-                (acc1,) = accuracy(logits, target, topk=(1,))
-                acc5 = -1
-            else:
-                acc1, acc5 = accuracy(logits, target, topk=(1, 5))
-            top1 += acc1
-            top5 += acc5
-            n += images.shape[0]
+        results[f"top1"] = top1
+        print(f"zero-shot classification task: {self.data_name}: top1: {top1}, top5: {top5}")
+        print("Finished zero-shot evaluation.")
 
-    top1 = top1 / n
-    top5 = top5 / n
-    return top1, top5
-
-
-def zero_shot_eval(model, data, args):
-    results = {}
-    print("Starting zero-shot classification evaluation.")
-    print(f"Starting data: {data.keys()}.")
-    for k, v in data.items():
-        if "eval/classification" in k:
-            data_name = os.path.basename(k)
-            classifier_filename = (
-                f"{os.path.dirname(v.classname_filename)}/{args.pretrained_text_model}_{data_name}_classifier.pt"
-            )
-            if os.path.exists(classifier_filename):
-                print("load classifier from disk")
-                classifier = paddle.load(classifier_filename)
-            else:
-                print("constructing classifier.")
-                classifier = zero_shot_classifier(model, v.classname_filename, v.template_filename, args)
-                paddle.save(classifier, classifier_filename)
-            print(f"zero-shot evaluating classification task: {data_name}")
-            if args.bf16:
-                classifier = classifier.astype(paddle.bfloat16)
-            elif args.fp16:
-                classifier = classifier.astype(paddle.float16)
-
-            top1, top5 = run(model, classifier, v.dataloader, args)
-            results["val/imagenet-zeroshot-val-top1"] = top1
-            results["val/imagenet-zeroshot-val-top5"] = top5
-
-            # FIXME: DEBUG ONLY
-            results[f"{k}-top1"] = top1
-            print(f"zero-shot classification task: {data_name}: top1: {top1}, top5: {top5}")
-
-    print("Finished zero-shot evaluation.")
-
-    return results
+        return results
