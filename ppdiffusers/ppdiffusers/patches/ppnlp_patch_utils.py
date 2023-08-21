@@ -312,7 +312,7 @@ if is_paddle_available():
         from paddle.fluid.dygraph.layers import HookRemoveHelper
 
     def register_load_state_dict_pre_hook(self, hook, with_module=False):
-        if not hasattr(self, "load_state_dict_pre_hooks"):
+        if not getattr(self, "load_state_dict_pre_hooks", None):
             self.load_state_dict_pre_hooks = OrderedDict()
         handle = HookRemoveHelper(self.load_state_dict_pre_hooks)
         self.load_state_dict_pre_hooks[handle._hook_id] = _WrappedHook(hook, self if with_module else None)
@@ -323,7 +323,7 @@ if is_paddle_available():
     raw_set_state_dict = nn.Layer.set_state_dict
 
     def set_state_dict(self, state_dict, use_structured_name: bool = True):
-        if hasattr(self, "load_state_dict_pre_hooks"):
+        if getattr(self, "load_state_dict_pre_hooks", None):
             for hook in self.load_state_dict_pre_hooks.values():
                 hook(state_dict)
         # POP is_torch_weight
