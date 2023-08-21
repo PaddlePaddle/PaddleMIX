@@ -9,7 +9,7 @@ CLIP：语言-图像预训练对比学习，在很多语言、图像应用场景
 EVA-CLIP：针对CLIP训练过程进行优化，使得训练效率和效果都得到明显提升。
 
 <p align="center">
-  <img src="https://github.com/baaivision/EVA/blob/master/EVA-CLIP/assets/teaser.png?raw=true" align="middle" width = "600" />
+  <img src="https://github.com/baaivision/EVA/blob/master/EVA-CLIP/assets/teaser.png?raw=true" align="middle" width = "800" />
 </p>
 
 注：图片引用自[EVA-CLIP](https://github.com/baaivision/EVA/tree/master/EVA-CLIP).
@@ -17,13 +17,13 @@ EVA-CLIP：针对CLIP训练过程进行优化，使得训练效率和效果都�
 
 <div align="center">
 
-| model name | image enc. init. ckpt | text enc. init. ckpt | total #params | model state precision | IN-1K zero-shot top-1 |
+| model name | image enc. init. ckpt | text enc. init. ckpt | total #params | IN-1K zero-shot top-1 | weight(bf16) |
 |:-----|:-----|:-----------|:------:|:------:|:------:|
-| `EVA02-CLIP-B-16` | [EVA02_B_psz14to16](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-B-16/VIS/model_state.pdparams) | [openai/clip-vit-base-patch16](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-B-16/TEXT/model_state.pdparams) | 149M | `bf16` | **74.6** |
-| `EVA02-CLIP-L-14` | [EVA02_L_psz14](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-L-14/VIS/model_state.pdparams) | [openai/clip-vit-large-patch14](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-L-14/TEXT/model_state.pdparams) | 428M | `bf16` | **79.6** |
-| `EVA02-CLIP-L-14-336` | [EVA02_CLIP_L_psz14_224to336](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-L-14-336/VIS/model_state.pdparams) | [EVA02_CLIP_L_psz14_224to336](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-L-14-336/TEXT/model_state.pdparams) | 428M | `bf16` | **80.4** |
-| `EVA02-CLIP-E-14` | [EVA02_E_psz14](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-E-14/VIS/model_state.pdparams) | [laion/CLIP-ViT-H-14-laion2B-s32B-b79K](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-E-14/TEXT/model_state.pdparams) | 4.7B | `fp16` | **82.0** |
-| `EVA02-CLIP-E-14-plus` | [EVA02_E_psz14](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-E-14-plus/VIS/model_state.pdparams) | [laion/CLIP-ViT-bigG-14-laion2B-39B-b160k](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-E-14-plus/TEXT/model_state.pdparams) | 5.0B | `bf16` | **82.0** |
+| `EVA02-CLIP-B-16` | `EVA02_B_psz14to16` | `openai/clip-vit-base-patch16` | 149M | **74.6** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-B-16/model_state.pdparams) |
+| `EVA02-CLIP-L-14` | `EVA02_L_psz14` | `openai/clip-vit-large-patch14` | 428M | **79.6** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-L-14/model_state.pdparams) |
+| `EVA02-CLIP-L-14-336` | `EVA02_CLIP_L_psz14_224to336` | `EVA02_CLIP_L_psz14_224to336` | 428M | **80.3** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-L-14-336/model_state.pdparams) |
+| `EVA02-CLIP-bigE-14` | `EVA02_E_psz14` | `laion/CLIP-ViT-H-14-laion2B-s32B-b79K` | 4.7B | **82.0** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-bigE-14/model_state.pdparams) |
+| `EVA02-CLIP-bigE-14-plus` | `EVA02_E_psz14` | `laion/CLIP-ViT-bigG-14-laion2B-39B-b160k` | 5.0B | **82.0** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02-CLIP-bigE-14-plus/model_state.pdparams) |
 
 </div>
 
@@ -89,10 +89,12 @@ python setup.py install
 
 ```
 MODEL_NAME="paddlemix/EVA/EVA02-CLIP-L-14"
+IN_1K_DIR=[YOUR ImageNet1K val data path]
 
-python -m paddle.distributed.launch --master '127.0.0.1' --nnodes 1 --nproc_per_node 8 --ips '127.0.0.1:8080' run_pretrain_dist.py \
+python -m paddle.distributed.launch --nproc_per_node 8 run_pretrain_dist.py \
     --dataloader_num_workers=2 \
-    --per_device_train_batch_size 256 \
+    --per_device_train_batch_size 16 \
+    --per_device_eval_batch_size 8 \
     --model ${MODEL_NAME}  \
     --optimizer 'lamb' \
     --warmup_steps 2000 \
@@ -112,7 +114,7 @@ python -m paddle.distributed.launch --master '127.0.0.1' --nnodes 1 --nproc_per_
     --num_train_epochs 200 \
     --tensor_parallel_degree 1 \
     --sharding_parallel_degree 8 \
-    --sharding "stage1" \
+    --sharding "stage2" \
     --bf16 False \
     --output_dir "./output" \
     --logging_steps 1 \
@@ -121,6 +123,8 @@ python -m paddle.distributed.launch --master '127.0.0.1' --nnodes 1 --nproc_per_
     --save_steps 50000 \
     --local_loss true \
     --gather_with_grad true \
+    --pretrained_text_model ${MODEL_NAME} \
+    --classification_eval ${IN_1K_DIR} \
 
 ```
 
@@ -183,6 +187,10 @@ python -m paddle.distributed.launch --master '127.0.0.1' --nnodes 1 --nproc_per_
 --local_loss true #loss中是否开启local loss
 
 --gather_with_grad true #loss中是否打开gather_with_grad
+
+--pretrained_text_model EVA02-CLIP-L-14 #预提取text features的模型
+
+--classification_eval ${IN_1K_DIR} #IN_1K测试数据路径
 ```
 
 ### 4.2 评估
