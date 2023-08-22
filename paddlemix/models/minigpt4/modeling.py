@@ -1452,13 +1452,16 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
             axis=1,
         )
 
+        position_ids = paddle.arange(attention_mask.shape[-1]).expand(shape=[pixel_values.shape[0], attention_mask.shape[-1]])
         outputs = self.language_model(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
+            position_ids = position_ids,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
+
         logits = outputs.logits if return_dict else outputs[0]
         loss = None
         # we compute the loss here since we need to take into account the sequence length of the query embeds
@@ -1577,9 +1580,11 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
             axis=1,
         )
 
+        position_ids = paddle.arange(attention_mask.shape[-1]).expand(shape=[pixel_values.shape[0], attention_mask.shape[-1]])
         outputs = self.language_model(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
+            position_ids = position_ids,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
@@ -1697,9 +1702,11 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
             axis=1,
         )
 
+        position_ids = paddle.arange(attention_mask.shape[-1]).expand(shape=[pixel_values.shape[0], attention_mask.shape[-1]])
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
+            position_ids = position_ids,
             **generate_kwargs,
         )
 
@@ -1817,9 +1824,11 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
 
         attention_mask = paddle.concat([first_attention_mask, image_attention_mask, second_attention_mask], axis=1)
 
+        position_ids = paddle.arange(attention_mask.shape[-1]).expand(shape=[image_features.shape[0], attention_mask.shape[-1]])
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
+            position_ids = position_ids,
             **generate_kwargs,
         )
 
