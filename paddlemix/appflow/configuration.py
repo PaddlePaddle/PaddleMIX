@@ -16,7 +16,7 @@ from .image2image_text_guided_generation import (
     StableDiffusionImg2ImgTask,
     StableDiffusionUpscaleTask,
 )
-from .image2text_generation import Blip2CaptionTask
+from .image2text_generation import Blip2CaptionTask, MiniGPT4Task
 from .openset_det_sam import OpenSetDetTask, OpenSetSegTask
 from .text2image_generation import StableDiffusionTask, VersatileDiffusionDualGuidedTask
 from .text2image_inpaiting import StableDiffusionInpaintTask
@@ -135,6 +135,21 @@ APPLICATIONS = {
         },
         "default": {
             "model": "damo-vilab/text-to-video-ms-1.7b",
+        },
+    },
+    "image2text_generation": {
+        "models": {
+            "paddlemix/blip2-caption-opt2.7b": {
+                "task_class": Blip2CaptionTask,
+                "task_flag": "autolabel_blip2-caption-opt2.7b",
+            },
+            "miniGPT4/MiniGPT4-7B": {
+                "task_class": MiniGPT4Task,
+                "task_flag": "image2text_generation-MiniGPT4-7B",
+            },
+        },
+        "default": {
+            "model": "paddlemix/blip2-caption-opt2.7b",
         },
     },
 }
