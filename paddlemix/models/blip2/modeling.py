@@ -22,7 +22,6 @@ import paddle.nn as nn
 from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
 from paddlenlp.transformers.model_outputs import ModelOutput
-from paddlenlp.transformers.model_utils import PretrainedModel
 from paddlenlp.transformers.opt.modeling import OPTForCausalLM
 from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 
@@ -33,6 +32,7 @@ from paddlemix.models.blip2.modeling_utils import (
     masked_fill,
 )
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
+from paddlemix.models.model_utils import MixPretrainedModel
 from paddlemix.utils.log import logger
 
 from .configuration import Blip2Config
@@ -99,7 +99,7 @@ class Blip2ForStage1ModelOutput(Blip2ForConditionalGenerationModelOutput):
     loss_lm: Optional[Tuple[paddle.Tensor]] = None
 
 
-class Blip2PretrainedModel(PretrainedModel):
+class Blip2PretrainedModel(MixPretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
