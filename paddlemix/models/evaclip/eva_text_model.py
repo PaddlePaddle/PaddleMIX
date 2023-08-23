@@ -402,7 +402,7 @@ class PatchDropout(paddle.nn.Layer):
         x = x[batch_indices, patch_indices_keep]
         if self.exclude_first_token:
             x = paddle.concat(x=(cls_tokens, x), axis=1)
-        if self.training and os.getenv('RoPE') == '1':
+        if self.training and os.getenv("RoPE") == "1":
             return x, patch_indices_keep
         return x
 
@@ -1034,6 +1034,7 @@ class EVATextTransformerConfig(PretrainedConfig):
         attn_mask: bool = True,
         pad_id: int = 0,
         quick_gelu: bool = False,
+        fusedLN: bool = False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -1052,6 +1053,7 @@ class EVATextTransformerConfig(PretrainedConfig):
         self.attn_mask = attn_mask
         self.pad_id = pad_id
         self.quick_gelu = quick_gelu
+        self.fusedLN = fusedLN
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":

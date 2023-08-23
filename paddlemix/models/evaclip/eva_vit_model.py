@@ -217,30 +217,11 @@ class Attention(paddle.nn.Layer):
         else:
             if dist.get_world_size() > 1:
                 self.qkv = fleet.meta_parallel.ColumnParallelLinear(
-                    dim,
-                    all_head_dim * 3,
-                    weight_attr=None,
-                    has_bias=False,
-                    gather_output=True,
+                    dim, all_head_dim * 3, weight_attr=None, has_bias=config.qkv_bias, gather_output=True
                 )
             else:
-                self.qkv = paddle.nn.Linear(dim, all_head_dim * 3, bias_attr=False)
-            if config.qkv_bias:
-                mpsize = 1
-                if dist.get_world_size() > 1:
-                    mpsize = fleet.get_hybrid_communicate_group().get_model_parallel_world_size()
-                init_data = paddle.zeros(shape=[all_head_dim // mpsize])
-                self.q_bias = self.create_parameter(
-                    shape=[all_head_dim // mpsize],
-                    default_initializer=paddle.nn.initializer.Assign(init_data),
-                )
-                self.v_bias = self.create_parameter(
-                    shape=[all_head_dim // mpsize],
-                    default_initializer=paddle.nn.initializer.Assign(init_data),
-                )
-            else:
-                self.q_bias = None
-                self.v_bias = None
+                self.qkv = paddle.nn.Linear(dim, all_head_dim * 3, bias_attr=config.qkv_bias)
+
         if window_size:
             self.window_size = window_size
             self.num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3
@@ -295,19 +276,7 @@ class Attention(paddle.nn.Layer):
             k = k.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
             v = v.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
         else:
-            qkv_bias = None
-            if self.q_bias is not None:
-                out_0 = paddle.zeros_like(x=self.v_bias)
-                out_0.stop_gradient = not False
-                qkv_bias = paddle.concat(x=(self.q_bias, out_0, self.v_bias))
-            qkv = paddle.nn.functional.linear(x=x, weight=self.qkv.weight, bias=qkv_bias)
-
-            if dist.get_world_size() > 1:
-                hcg = fleet.get_hybrid_communicate_group()
-                if hcg.get_model_parallel_world_size() > 1:
-                    model_parallel_group = hcg.get_model_parallel_group()
-                    qkv = paddle.distributed.collective._c_concat(qkv, group=model_parallel_group)
-
+            qkv = self.qkv(x)
             qkv = qkv.reshape((B, N, 3, self.num_heads, -1)).transpose(perm=[2, 0, 3, 1, 4])
             q, k, v = qkv[0], qkv[1], qkv[2]
         if self.rope:
@@ -522,8 +491,8 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         rope=False,
         use_mean_pooling=True,
         attentional_pool=False,
-        n_queries: int = 256,
-        attn_pooler_heads: int = 8,
+        n_queries=256,
+        attn_pooler_heads=8,
         init_scale=0.001,
         enable_recompute=False,
         xattn=False,
@@ -533,8 +502,9 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         naiveswiglu=False,
         subln=False,
         output_tokens=False,
+        token_feats=False,  # whether tokens send to self.head
         fusedLN=False,
-        inner_attn_ln=True,
+        inner_attn_ln=True,  # false in eva-01 clip
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -571,6 +541,7 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         self.naiveswiglu = naiveswiglu
         self.subln = subln
         self.output_tokens = output_tokens
+        self.token_feats = token_feats
         self.fusedLN = fusedLN
         self.inner_attn_ln = inner_attn_ln
 
@@ -609,6 +580,8 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
         self.image_size = config.img_size
         self.enable_recompute = config.enable_recompute
         self.output_tokens = config.output_tokens
+        self.token_feats = config.token_feats
+
         self.num_classes = num_classes = config.num_classes
         self.embed_dim = embed_dim = config.embed_dim
         self.naiveswiglu = config.naiveswiglu
@@ -818,6 +791,8 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
             return self.forward_features(x, return_all_features)
         if self.output_tokens:
             x, tokens = self.forward_features(x)
+            if self.token_feats:
+                return self.head(tokens)
             x = self.head(x)
             return x, tokens
         else:

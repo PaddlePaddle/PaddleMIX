@@ -16,6 +16,7 @@ import os
 import shutil
 
 import paddle
+import paddle.nn.functional as F
 
 
 def save(args, model, optimizer, epoch=0, step=0, output_dir="", is_best=False):
@@ -111,14 +112,22 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
             "q_proj",
             "k_proj",
             "v_proj",
-            "out_proj",
             "qkv",
             "c_fc",
             "c_proj",
+            "lm_head",
+            "fc1",
+            "fc2",
+            "fc3",
         ]
-        rowlinear_list = []
+        rowlinear_list = ["out_proj"]  # in eva_text_model.py, but evaclip do not use text model
         all_list = collinear_list + rowlinear_list + embedding_list
-        skip_list = ["visual.patch_embed.proj.weight", "visual.patch_embed.proj.bias"]
+        skip_list = [
+            "visual.patch_embed.proj.weight",
+            "visual.patch_embed.proj.bias",
+            "patch_embed.proj.weight",
+            "patch_embed.proj.bias",
+        ]
 
         col_list = []
         row_list = []
@@ -156,7 +165,7 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
             return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
 
         model_dict = paddle.load(ckpt_dir)
-        modelkeys = list(model_dict.keys())
+        modelkeys = model_dict.keys()
         for whole_key in modelkeys:
             if "." not in whole_key:
                 continue
@@ -178,8 +187,34 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
                     emb_list.append((key, model_dict[whole_key].shape))
                     model_dict[whole_key] = emb_split_modeldict(model_dict[whole_key])
 
-        if args.context_length != 77:
+        if hasattr(args, "context_length") and args.context_length != 77:
             model_dict["text.positional_embedding"] = model_dict["text.positional_embedding"][: args.context_length, :]
+
+        # interpolate position embedding, only in eva02 finetune large size training
+        if "pos_embed" in model_dict and hasattr(model, "patch_embed"):
+            pos_embed_checkpoint = model_dict["pos_embed"]  #
+            embedding_size = pos_embed_checkpoint.shape[-1]
+            num_patches = model.patch_embed.num_patches
+            num_extra_tokens = model.pos_embed.shape[-2] - num_patches
+            # height (== width) for the checkpoint position embedding
+            orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens) ** 0.5)
+            # height (== width) for the new position embedding
+            new_size = int(num_patches**0.5)
+            # class_token and dist_token are kept unchanged
+            if orig_size != new_size:
+                print("Position interpolate from %dx%d to %dx%d" % (orig_size, orig_size, new_size, new_size))
+                extra_tokens = pos_embed_checkpoint[:, :num_extra_tokens]
+                # only the position tokens are interpolated
+                pos_tokens = pos_embed_checkpoint[:, num_extra_tokens:]
+                pos_tokens = pos_tokens.reshape([-1, orig_size, orig_size, embedding_size]).transpose(
+                    perm=[0, 3, 1, 2]
+                )
+                pos_tokens = F.interpolate(
+                    pos_tokens.astype(dtype="float32"), size=(new_size, new_size), mode="bicubic", align_corners=False
+                )
+                pos_tokens = pos_tokens.transpose(perm=[0, 2, 3, 1]).flatten(start_axis=1, stop_axis=2)
+                new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
+                model_dict["pos_embed"] = new_pos_embed
 
         print("cast state_dict to default dtype:{}".format(paddle.get_default_dtype()))
         for key, value in model_dict.items():
