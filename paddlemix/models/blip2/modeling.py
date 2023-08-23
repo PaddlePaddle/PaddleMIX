@@ -23,9 +23,9 @@ from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
 from paddlenlp.transformers.model_outputs import ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
+from paddlenlp.transformers.opt.modeling import OPTForCausalLM
 from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 
-from paddlemix.models.blip2.modeling_opt import OPTForCausalLM
 from paddlemix.models.blip2.modeling_utils import (
     all_gather_with_grad,
     concat_all_gather,
@@ -414,7 +414,6 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                     language_model = OPTForCausalLM.from_pretrained(
                         config.text_config,
                         load_state_as_np=True,
-                        mp_degree=config.mp_degree,
                         ignore_mismatched_sizes=True,
                     )
                 elif "llama" in config.text_config:
