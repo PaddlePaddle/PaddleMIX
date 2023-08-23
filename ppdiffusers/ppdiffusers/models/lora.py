@@ -48,14 +48,20 @@ class LoRALinearLayer(nn.Layer):
         self.network_alpha = network_alpha
         self.rank = rank
 
-        normal_(self.down.weight, std=1 / rank)
+        try:
+            normal_(self.down.weight, std=1 / rank)
+        except:
+            breakpoint()
         zeros_(self.up.weight)
 
     def forward(self, hidden_states):
         orig_dtype = hidden_states.dtype
         dtype = self.down.weight.dtype
+        try:
+            down_hidden_states = self.down(hidden_states.cast(dtype))
+        except:
+            breakpoint()
 
-        down_hidden_states = self.down(hidden_states.cast(dtype))
         up_hidden_states = self.up(down_hidden_states)
 
         if self.network_alpha is not None:

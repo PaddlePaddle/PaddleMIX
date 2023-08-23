@@ -490,7 +490,7 @@ class GEGLU(nn.Layer):
 
     def __init__(self, dim_in: int, dim_out: int):
         super().__init__()
-        self.proj = nn.Linear(dim_in, dim_out * 2)
+        self.proj = LoRACompatibleLinear(dim_in, dim_out * 2)
 
     def forward(self, hidden_states):
         hidden_states, gate = self.proj(hidden_states).chunk(2, axis=-1)

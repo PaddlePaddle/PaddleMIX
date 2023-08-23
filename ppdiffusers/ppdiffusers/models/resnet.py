@@ -129,7 +129,7 @@ class Upsample2D(nn.Layer):
         if use_conv_transpose:
             conv = nn.Conv2DTranspose(channels, self.out_channels, 4, 2, 1)
         elif use_conv:
-            conv = nn.Conv2D(self.channels, self.out_channels, 3, padding=1)
+            conv = LoRACompatibleConv(self.channels, self.out_channels, 3, padding=1)
 
         # TODO(Suraj, Patrick) - clean up after weight dicts are correctly renamed
         if name == "conv":

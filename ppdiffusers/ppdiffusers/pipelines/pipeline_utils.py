@@ -92,6 +92,7 @@ PADDLE_INDEX_FILE = "model_state.pdparams"
 CUSTOM_PIPELINE_FILE_NAME = "pipeline.py"
 DUMMY_MODULES_FOLDER = "ppdiffusers.utils"
 PADDLENLP_DUMMY_MODULES_FOLDER = "paddlenlp.transformers.utils"
+CONNECTED_PIPES_KEYS = ["prior"]
 
 logger = logging.get_logger(__name__)
 

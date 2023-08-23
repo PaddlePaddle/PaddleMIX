@@ -447,6 +447,7 @@ class UNet2DConditionLoadersMixin:
                             mapped_network_alphas.get(key),
                         )
                     else:
+                        breakpoint()
                         raise ValueError(f"Module {key} is not a LoRACompatibleConv or LoRACompatibleLinear module.")
 
                     value_dict = {k.replace("lora.", ""): v for k, v in value_dict.items()}
@@ -466,10 +467,10 @@ class UNet2DConditionLoadersMixin:
                     if isinstance(
                         attn_processor, (AttnAddedKVProcessor, SlicedAttnAddedKVProcessor, AttnAddedKVProcessor2_5)
                     ):
-                        cross_attention_dim = value_dict["add_k_proj_lora.down.weight"].shape[1]
+                        cross_attention_dim = value_dict["add_k_proj_lora.down.weight"].shape[0]
                         attn_processor_class = LoRAAttnAddedKVProcessor
                     else:
-                        cross_attention_dim = value_dict["to_k_lora.down.weight"].shape[1]
+                        cross_attention_dim = value_dict["to_k_lora.down.weight"].shape[0]
                         if isinstance(attn_processor, (XFormersAttnProcessor, LoRAXFormersAttnProcessor)):
                             attn_processor_class = LoRAXFormersAttnProcessor
                         else:
