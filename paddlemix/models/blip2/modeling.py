@@ -20,6 +20,7 @@ import paddle
 import paddle.distributed as dist
 import paddle.nn as nn
 from paddlenlp.transformers import AutoTokenizer
+from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
 from paddlenlp.transformers.model_outputs import ModelOutput
 from paddlenlp.transformers.model_utils import PretrainedModel
 from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
@@ -372,7 +373,9 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         from paddlemix.models.blip2.eva_vit import VisionTransformer
 
         self.visual_encoder = VisionTransformer.from_pretrained(
-            pretrained_model_name_or_path=config.vision_config, mp_degree=config.mp_degree
+            pretrained_model_name_or_path=config.vision_config,
+            mp_degree=config.mp_degree,
+            ignore_mismatched_sizes=True,
         )
         self.freeze_vit = config.freeze_vit
         self.train_stage1 = False
@@ -392,6 +395,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 train_in_satge1=True,
                 tokenizer_length=len(self.tokenizer),
                 mp_degree=config.mp_degree,
+                ignore_mismatched_sizes=True,
             )
 
             state_dict = self.Qformer.state_dict()
@@ -408,8 +412,31 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             if config.use_decoder_only_language_model:
                 if "opt" in config.text_config:
                     language_model = OPTForCausalLM.from_pretrained(
-                        config.text_config, load_state_as_np=True, mp_degree=config.mp_degree
+                        config.text_config,
+                        load_state_as_np=True,
+                        mp_degree=config.mp_degree,
+                        ignore_mismatched_sizes=True,
                     )
+                elif "llama" in config.text_config:
+                    from paddlenlp.transformers.llama.configuration import LlamaConfig
+
+                    if config.mp_degree > 1:
+                        import paddle.distributed.fleet as fleet
+
+                        hcg = fleet.get_hybrid_communicate_group()
+                        language_model = LlamaForCausalLM.from_pretrained(
+                            config.text_config,
+                            tensor_parallel_degree=config.mp_degree,
+                            tensor_parallel_rank=hcg.get_model_parallel_rank(),
+                            tensor_parallel_output=False,
+                        )
+                    else:
+                        language_model = LlamaForCausalLM.from_pretrained(
+                            config.text_config,
+                            tensor_parallel_output=False,
+                        )
+                    language_model.hidden_size = LlamaConfig.from_pretrained(config.text_config).hidden_size
+                    language_model.pad_token_id = LlamaConfig.from_pretrained(config.text_config).pad_token_id
                 else:
                     raise NotImplementedError
             else:
@@ -418,8 +445,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 t5_config = T5Config(config.text_config)
                 for key, value in config.text_config.items():
                     t5_config[key] = config.text_config[key]
-                language_model = T5ForConditionalGeneration(t5_config)
-                language_model.hidden_size = config.text_config["d_model"]
+                language_model = T5ForConditionalGeneration.from_pretrained(config.text_config, load_state_as_np=True)
+                language_model.hidden_size = t5_config["d_model"]
 
             self.language_model = language_model
             for name, param in self.language_model.named_parameters():
@@ -428,11 +455,11 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
 
             self.Qformer = BertLMHeadModel.from_pretrained(
                 pretrained_model_name_or_path=config.qformer_config,
+                mp_degree=config.mp_degree,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=False,
                 text_hidden_size=self.language_model.hidden_size,
                 ignore_mismatched_sizes=True,
-                mp_degree=config.mp_degree,
             )
             self.Qformer.cls = None
             self.Qformer.bert.embeddings.word_embeddings = None

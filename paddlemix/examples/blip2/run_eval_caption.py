@@ -25,7 +25,6 @@ import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
-from paddlenlp.transformers import AutoTokenizer
 
 from paddlemix.datasets import load_dataset
 from paddlemix.examples.blip2.utils import BlipCollator, create_tokenizer
@@ -217,7 +216,6 @@ def setdistenv(args):
     args.data_parallel_degree = args.dp_degree
     logger.info("args.dp_degree:{}".format(args.dp_degree))
     logger.info("args.sharding_parallel_degree):{}".format(args.sharding_parallel_degree))
-    # breakpoint()
     strategy.hybrid_configs = {
         "dp_degree": args.dp_degree,
         "mp_degree": args.tensor_parallel_degree,
