@@ -44,8 +44,9 @@ except:
     print("Warning: import memory_efficient_attention error")
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.model_utils import PretrainedModel
-from paddlenlp.utils.log import logger
+
+from paddlemix.models.model_utils import MixPretrainedModel
+from paddlemix.utils.log import logger
 
 
 def _convert_attention_mask(attn_mask, dtype):
@@ -1071,9 +1072,9 @@ class EVATextTransformerConfig(PretrainedConfig):
         return cls.from_dict(config_dict, **kwargs)
 
 
-class EVATextTransformerPretrainedModel(PretrainedModel):
+class EVATextTransformerPretrainedModel(MixPretrainedModel):
     """
-    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    See :class:`paddlemix.models.model_utils.MixPretrainedModel` for more details.
     """
 
     model_config_file = "config.json"

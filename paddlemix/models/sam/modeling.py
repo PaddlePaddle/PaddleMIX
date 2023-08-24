@@ -17,7 +17,9 @@ from typing import Any, Dict, List
 
 import numpy as np
 import paddle
-from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
+from paddlenlp.transformers.model_utils import register_base_model
+
+from paddlemix.models.model_utils import MixPretrainedModel
 
 from .configuration import SamConfig
 from .image_encoder import ImageEncoderViT
@@ -31,7 +33,7 @@ __all__ = [
 ]
 
 
-class SamPretrainedModel(PretrainedModel):
+class SamPretrainedModel(MixPretrainedModel):
     """
     See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
     """

@@ -244,8 +244,6 @@ def setdistenv(args):
     args.data_parallel_degree = args.dp_degree
     logger.info("args.dp_degree:{}".format(args.dp_degree))
     logger.info("args.sharding_parallel_degree):{}".format(args.sharding_parallel_degree))
-    if args.sharding_parallel_degree > 1:
-        args.sharding = "stage1"
     strategy.hybrid_configs = {
         "dp_degree": args.dp_degree,
         "mp_degree": args.tensor_parallel_degree,

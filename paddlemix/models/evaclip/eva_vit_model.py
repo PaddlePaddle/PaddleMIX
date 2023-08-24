@@ -33,8 +33,9 @@ from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.model_utils import PretrainedModel
-from paddlenlp.utils.log import logger
+
+from paddlemix.models.model_utils import MixPretrainedModel
+from paddlemix.utils.log import logger
 
 from .utils import to_2tuple, trunc_normal_
 
@@ -552,9 +553,9 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         return cls.from_dict(config_dict, **kwargs)
 
 
-class EVAVisionTransformerPretrainedModel(PretrainedModel):
+class EVAVisionTransformerPretrainedModel(MixPretrainedModel):
     """
-    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    See :class:`paddlemix.models.model_utils.MixPretrainedModel` for more details.
     """
 
     model_config_file = "config.json"
