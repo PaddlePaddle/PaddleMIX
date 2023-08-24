@@ -16,7 +16,9 @@ from functools import partial
 from types import SimpleNamespace
 
 import paddle
-from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
+from paddlenlp.transformers.model_utils import register_base_model
+
+from paddlemix.models.model_utils import MixPretrainedModel
 
 from .configuration import ImageBindConfig
 from .helpers import (
@@ -52,9 +54,9 @@ __all__ = [
 ]
 
 
-class ImageBindPretrainedModel(PretrainedModel):
+class ImageBindPretrainedModel(MixPretrainedModel):
     """
-    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    See :class:`~paddlenlp.transformers.model_utils.MixPretrainedModel` for more details.
     """
 
     model_config_file = "config.json"
@@ -536,10 +538,8 @@ class ImageBindModel(ImageBindPretrainedModel):
                 modality_value = self.modality_trunks[modality_key](**trunk_inputs)
                 modality_value = self.modality_heads[modality_key](modality_value, **head_inputs)
                 modality_value = self.modality_postprocessors[modality_key](modality_value)
-                if modality_key=='audio' or modality_key=='depth' or modality_key=='thermal':
-                    modality_value = self.modality_postprocessors[modality_key](
-                        modality_value
-                    )
+                if modality_key == "audio" or modality_key == "depth" or modality_key == "thermal":
+                    modality_value = self.modality_postprocessors[modality_key](modality_value)
                 if reduce_list:
                     modality_value = modality_value.reshape(B, S, -1)
                     modality_value = modality_value.mean(axis=1)
