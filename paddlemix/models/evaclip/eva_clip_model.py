@@ -24,8 +24,9 @@ from typing import Union
 
 import numpy as np
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.model_utils import PretrainedModel
-from paddlenlp.utils.log import logger
+
+from paddlemix.models.model_utils import MixPretrainedModel
+from paddlemix.utils.log import logger
 
 from .eva_text_model import EVATextTransformer, EVATextTransformerConfig
 from .eva_vit_model import EVAVisionTransformer, EVAVisionTransformerConfig
@@ -98,9 +99,9 @@ class EVACLIPConfig(PretrainedConfig):
         return cls.from_dict(config_dict, **kwargs)
 
 
-class EVACLIPPretrainedModel(PretrainedModel):
+class EVACLIPPretrainedModel(MixPretrainedModel):
     """
-    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    See :class:`paddlemix.models.model_utils.MixPretrainedModel` for more details.
     """
 
     model_config_file = "config.json"

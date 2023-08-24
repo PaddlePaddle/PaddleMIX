@@ -32,7 +32,8 @@ from paddlenlp.transformers.model_outputs import (
     CausalLMOutputWithCrossAttentions,
     MaskedLMOutput,
 )
-from paddlenlp.transformers.model_utils import PretrainedModel
+
+from paddlemix.models.model_utils import MixPretrainedModel
 
 
 class CrossEntropyLoss(nn.Layer):
@@ -727,7 +728,7 @@ class BertOnlyMLMHead(nn.Layer):
         return prediction_scores
 
 
-class BertPreTrainedModel(PretrainedModel):
+class BertPreTrainedModel(MixPretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.

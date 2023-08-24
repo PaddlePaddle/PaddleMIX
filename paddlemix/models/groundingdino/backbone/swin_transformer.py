@@ -28,7 +28,9 @@ from ..layers import DropPath, to_2tuple
 trunc_normal_ = nn.initializer.TruncatedNormal(std=0.02)
 
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
+from paddlenlp.transformers.model_utils import register_base_model
+
+from paddlemix.models.model_utils import MixPretrainedModel
 
 """ swin_transformer model configuration"""
 __all__ = ["SwinTransformerConfig"]
@@ -99,9 +101,9 @@ class SwinTransformerConfig(PretrainedConfig):
         return cls.from_dict(config_dict, **kwargs)
 
 
-class SwinTransformerPretrainedModel(PretrainedModel):
+class SwinTransformerPretrainedModel(MixPretrainedModel):
     """
-    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    See :class:`paddlemix.models.model_utils.MixPretrainedModel` for more details.
     """
 
     model_config_file = "config.json"

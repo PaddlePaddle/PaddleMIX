@@ -19,8 +19,10 @@ import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddlenlp.transformers import BertModel, RobertaModel
-from paddlenlp.transformers.model_utils import PretrainedModel, register_base_model
+from paddlenlp.transformers.model_utils import register_base_model
 from paddlenlp.utils.initializer import constant_, xavier_uniform_
+
+from paddlemix.models.model_utils import MixPretrainedModel
 
 from .backbone import build_backbone
 from .bertwarper import BertModelWarper
@@ -34,9 +36,9 @@ __all__ = [
 ]
 
 
-class GroundingDinoPretrainedModel(PretrainedModel):
+class GroundingDinoPretrainedModel(MixPretrainedModel):
     """
-    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    See :class:`paddlemix.models.model_utils.MixPretrainedModel` for more details.
     """
 
     model_config_file = "config.json"

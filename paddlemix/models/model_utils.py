@@ -27,6 +27,8 @@ from paddlemix.utils import device_guard, paddlemix_load
 from paddlemix.utils.env import MODEL_HOME
 from paddlemix.utils.log import logger
 
+__all__ = ["MixPretrainedModel"]
+
 
 def resolve_cache_dir(pretrained_model_name_or_path: str, cache_dir: Optional[str] = None) -> str:
     """resolve cache dir for PretrainedModel and PretrainedConfig
@@ -164,7 +166,8 @@ class MixPretrainedModel(PretrainedModel):
 
     The most difference between `PretrainedModel` and `MixPretrainedModel` is that
     `MixPretrainedModel` increaces `load_pretrained` method to support loading pretrained weights
-    in differenet stages after construction.
+    in differenet stages after construction. The other methods are the same as class
+    `paddlenlp.transformers.model_utils.PretrainedModel`.
     """
 
     def __init__(self, *args, **kwargs):
