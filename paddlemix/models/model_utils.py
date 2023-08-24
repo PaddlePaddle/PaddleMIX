@@ -157,6 +157,16 @@ def _load_state_dict_into_meta_model(
 
 
 class MixPretrainedModel(PretrainedModel):
+    """
+    The base class for all pretrained models used in PaddleMIX. It mainly provides common methods
+    for loading (construction and loading) and saving pretrained models. Loading can be
+    customized in loaded_pretrained when the pretrained model is used for different stages.
+
+    The most difference between `PretrainedModel` and `MixPretrainedModel` is that
+    `MixPretrainedModel` increaces `load_pretrained` method to support loading pretrained weights
+    in differenet stages after construction.
+    """
+
     def __init__(self, *args, **kwargs):
         super(MixPretrainedModel, self).__init__(*args, **kwargs)
 
@@ -183,13 +193,20 @@ class MixPretrainedModel(PretrainedModel):
     ) -> Tuple[List[str]]:
         """load the state_dict into model, and do the following things:
 
-            * check the
+            * resolve the pretrained model name or path by checking if they exist in the cache and then
+            download them.
+            * load the pretrained model and refine the state dict if necessary.
+            * filter the weight keys and set the state_dict to the model.
 
         Args:
-            model (PretrainedModel): the pretrained model instance
-            state_dict (Dict[str, Tensor]): the model state dict data
+            pretrained_model_name_or_path (str): the pretrained model name or path.
+            state_dict (Dict[str, Tensor]): the model state dict data.
             ignore_mismatched_sizes (bool, optional): whether ignore error when tensor size mismatched. Defaults to False.
+            low_cpu_mem_usage (bool, optional): whether use low cpu memory usage for loading pretrained model。 Defautls to False.
             dtype (_type_, optional): the dtype of model state dict. Defaults to None.
+            cahce_cache_dir (str, optional): the cache directory for loading pretrained model. Defaults to None.
+            sufolder (str, optional): the subfolder of pretrained model name. Defaults "".
+            variant (str, optional): the pretrained model variant. Defaults to None.
 
         Returns:
             Tuple[List[str]]: _description_
@@ -211,7 +228,6 @@ class MixPretrainedModel(PretrainedModel):
             variant=variant,
         )
 
-        # load pt weights early so that we know which dtype to init the model under
         if not is_sharded and state_dict is None:
             # Time to load the checkpoint
             # loading non-sharded ckpt from the state dict
