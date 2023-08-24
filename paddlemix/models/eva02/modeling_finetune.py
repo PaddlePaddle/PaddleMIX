@@ -167,28 +167,22 @@ class Attention(paddle.nn.Layer):
             head_dim = config.attn_head_dim
         all_head_dim = head_dim * self.num_heads
         self.scale = config.qk_scale or head_dim**-0.5
-        if self.deepnorm or self.subln:
-            if dist.get_world_size() > 1:
-                self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
-                    dim, all_head_dim, weight_attr=None, has_bias=config.qkv_bias, gather_output=True
-                )
-                self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
-                    dim, all_head_dim, weight_attr=None, has_bias=False, gather_output=True
-                )
-                self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
-                    dim, all_head_dim, weight_attr=None, has_bias=config.qkv_bias, gather_output=True
-                )
-            else:
-                self.q_proj = paddle.nn.Linear(dim, all_head_dim)
-                self.k_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=False)
-                self.v_proj = paddle.nn.Linear(dim, all_head_dim)
+
+        # NOTE: only support separate qkv for paddle tensor parallel distributed
+        if dist.get_world_size() > 1:
+            self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
+                dim, all_head_dim, weight_attr=None, has_bias=config.qkv_bias, gather_output=True
+            )
+            self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
+                dim, all_head_dim, weight_attr=None, has_bias=False, gather_output=True
+            )
+            self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
+                dim, all_head_dim, weight_attr=None, has_bias=config.qkv_bias, gather_output=True
+            )
         else:
-            if dist.get_world_size() > 1:
-                self.qkv = fleet.meta_parallel.ColumnParallelLinear(
-                    dim, all_head_dim * 3, weight_attr=None, has_bias=config.qkv_bias, gather_output=True
-                )
-            else:
-                self.qkv = paddle.nn.Linear(dim, all_head_dim * 3, bias_attr=config.qkv_bias)
+            self.q_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=config.qkv_bias)
+            self.k_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=False)
+            self.v_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=config.qkv_bias)
 
         self.rel_pos_bias = None
         self.qk_float = True
@@ -238,18 +232,15 @@ class Attention(paddle.nn.Layer):
 
     def forward(self, x, rel_pos_bias=None, attn_mask=None):
         B, N, C = x.shape
-        if self.deepnorm or self.subln:
-            q = self.q_proj(x)
-            k = self.k_proj(x)
-            v = self.v_proj(x)
 
-            q = q.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
-            k = k.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
-            v = v.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
-        else:
-            qkv = self.qkv(x)
-            qkv = qkv.reshape((B, N, 3, self.num_heads, -1)).transpose(perm=[2, 0, 3, 1, 4])
-            q, k, v = qkv[0], qkv[1], qkv[2]
+        # NOTE: only support separate qkv for paddle tensor parallel distributed
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+
+        q = q.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
+        k = k.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
+        v = v.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
 
         if self.rope:
             q_t = q[:, :, 1:, :]

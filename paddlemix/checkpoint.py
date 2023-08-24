@@ -136,15 +136,6 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         mp_rank = args.mp_rank
         mp_size = max(args.tensor_parallel_degree, 1)
 
-        def renamebias(model_dict, whole_key):
-            if "q_bias" in whole_key:
-                key = whole_key.replace("q_bias", "q_proj.bias")
-            elif "v_bias" in whole_key:
-                key = whole_key.replace("v_bias", "v_proj.bias")
-            model_dict[key] = model_dict[whole_key]
-            del model_dict[whole_key]
-            return model_dict
-
         def col_split_modeldict(model_dict):
             if len(model_dict.shape) == 2:
                 subbatch = model_dict.shape[1] // mp_size
@@ -168,9 +159,6 @@ def load_model(args, model, optimizer=None, ckpt_dir=""):
         modelkeys = model_dict.keys()
         for whole_key in modelkeys:
             if "." not in whole_key:
-                continue
-            if "q_bias" in whole_key or "v_bias" in whole_key:
-                model_dict = renamebias(model_dict, whole_key)
                 continue
 
             key = whole_key.split(".")[-2]
