@@ -75,6 +75,11 @@ function _train(){
     # use fused linear in amp o2 level
     export FLAG_FUSED_LINEAR=${FUSED}
 
+    # add some flags
+    export FLAGS_eager_delete_tensor_gb=0.0
+    export FLAGS_fraction_of_gpu_memory_to_use=0.98
+    export FLAGS_conv_workspace_size_limit=4096
+
     train_cmd="../ppdiffusers/examples/stable_diffusion/train_txt2img_laion400m_trainer.py \
             --do_train \
             --output_dir ./outputs \
