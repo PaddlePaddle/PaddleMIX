@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-model_item=stable_diffusion-098b_pretrain
+model_item=stable_diffusion-098b_lora
 model=stable_diffusion
-bs_item=144
+bs_item=104
 fp_item=bf16O1
 run_mode=DP
 device_num=N1C1

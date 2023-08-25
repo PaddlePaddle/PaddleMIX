@@ -14,8 +14,8 @@
 
 model_item=stable_diffusion-098b_lora
 model=stable_diffusion
-bs_item=16
-fp_item=fp32
+bs_item=104
+fp_item=bf16O2
 run_mode=DP
 device_num=N1C8
 max_epochs=200

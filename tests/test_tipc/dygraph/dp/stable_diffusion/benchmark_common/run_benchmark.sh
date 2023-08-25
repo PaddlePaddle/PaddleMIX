@@ -74,11 +74,14 @@ function _train(){
         FUSED=False
         if [ ${fp_item} = "fp16O2" ]; then
             use_fp16_cmd="--mixed_precision fp16 --fp16_opt_level O2"
-            FUSED=True
+            # FUSED=True
+            # [operator < fused_gemm_epilogue_grad > error]
+
         fi
         if [ ${fp_item} = "bf16O2" ]; then
             use_fp16_cmd="--mixed_precision bf16 --fp16_opt_level O2"
-            FUSED=True
+            # FUSED=True
+            # [operator < fused_gemm_epilogue_grad > error]
         fi
         rm -rf ./outputs
 
@@ -88,14 +91,15 @@ function _train(){
                 --output_dir ./outputs \
                 --train_batch_size=${batch_size} \
                 --gradient_accumulation_steps=1 \
-                --logging_steps=2 \
+                --logging_steps=5 \
                 --max_train_steps=${max_iter} \
                 --pretrained_model_name_or_path=./CompVis-stable-diffusion-v1-4-paddle-init \
                 --resolution=512 --random_flip \
-                --checkpointing_steps 99999 \
+                --checkpointing_steps=99999 \
                 --learning_rate=1e-04 --lr_scheduler="constant" --lr_warmup_steps=0 \
                 --seed=42 \
                 --gradient_checkpointing \
+                --dataloader_num_workers 8 \
                 --enable_xformers_memory_efficient_attention \
                 ${use_fp16_cmd}
                 "
@@ -150,7 +154,7 @@ function _train(){
                 --overwrite_output_dir \
                 ${use_fp16_cmd}
             "
-
+    fi
 
     # 以下为通用执行命令，无特殊可不用修改
     case ${run_mode} in

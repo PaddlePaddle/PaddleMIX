@@ -946,6 +946,14 @@ def main():
     sample_per_cards = args.train_batch_size * args.gradient_accumulation_steps
 
     train_loss = 0.0
+
+    batch_size_chunks = []
+    if args.resolution == 512:
+        if args.train_batch_size == 104:
+            batch_size_chunks = [56, 48]
+        elif args.train_batch_size == 96:
+            batch_size_chunks = [56, 40]
+
     for epoch in range(args.num_train_epochs):
         unet.train()
         epoch_start = time.time()
@@ -953,7 +961,13 @@ def main():
         for step, batch in enumerate(train_dataloader):
             train_reader_cost = time.time() - batch_start
             # Convert images to latent space
-            latents = vae.encode(batch["pixel_values"]).latent_dist.sample()
+            if len(batch_size_chunks) > 1:
+                latents_list = []
+                for mini_pixel_values in batch["pixel_values"].split(batch_size_chunks, axis=0):
+                    latents_list.append(vae.encode(mini_pixel_values).latent_dist.sample())
+                latents = paddle.concat(latents_list, axis=0)
+            else:
+                latents = vae.encode(batch["pixel_values"]).latent_dist.sample()
             latents = latents * vae.config.scaling_factor
 
             # Sample noise that we'll add to the latents
