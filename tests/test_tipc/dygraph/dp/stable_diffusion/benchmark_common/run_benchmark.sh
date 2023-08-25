@@ -63,56 +63,93 @@ function _train(){
     export FLAGS_fraction_of_gpu_memory_to_use=0.98
     export FLAGS_conv_workspace_size_limit=4096
 
-    if [ ${fp_item} = "fp16O1" ]; then
-        use_fp16_cmd="--fp16 True --fp16_opt_level O1"
-    fi
-    if [ ${fp_item} = "bf16O1" ]; then
-        use_fp16_cmd="--bf16 True --fp16_opt_level O1"
-    fi
+    if [ ${model_item} = "stable_diffusion-098b_lora" ];then
+        if [ ${fp_item} = "fp16O1" ]; then
+            use_fp16_cmd="--mixed_precision fp16 --fp16_opt_level O1"
+        fi
+        if [ ${fp_item} = "bf16O1" ]; then
+            use_fp16_cmd="--mixed_precision bf16 --fp16_opt_level O1"
+        fi
 
-    FUSED=False
-    if [ ${fp_item} = "fp16O2" ]; then
-        use_fp16_cmd="--fp16 True --fp16_opt_level O2"
-        FUSED=True
-    fi
-    if [ ${fp_item} = "bf16O2" ]; then
-        use_fp16_cmd="--bf16 True --fp16_opt_level O2"
-        FUSED=True
-    fi
-    rm -rf ./outputs
+        FUSED=False
+        if [ ${fp_item} = "fp16O2" ]; then
+            use_fp16_cmd="--mixed_precision fp16 --fp16_opt_level O2"
+            FUSED=True
+        fi
+        if [ ${fp_item} = "bf16O2" ]; then
+            use_fp16_cmd="--mixed_precision bf16 --fp16_opt_level O2"
+            FUSED=True
+        fi
+        rm -rf ./outputs
 
-    export FLAG_USE_EMA=0
-    export FLAG_BENCHMARK=1
-    export FLAG_RECOMPUTE=1
-    export FLAG_XFORMERS=1
-    # use fused linear in amp o2 level
-    export FLAG_FUSED_LINEAR=${FUSED}
+        # use fused linear in amp o2 level
+        export FLAG_FUSED_LINEAR=${FUSED}
+        train_cmd="../ppdiffusers/examples/text_to_image/train_text_to_image_lora_benchmark.py \
+                --output_dir ./outputs \
+                --train_batch_size=${batch_size} \
+                --gradient_accumulation_steps=1 \
+                --logging_steps=2 \
+                --max_train_steps=${max_iter} \
+                --pretrained_model_name_or_path=./CompVis-stable-diffusion-v1-4-paddle-init \
+                --resolution=512 --random_flip \
+                --checkpointing_steps 99999 \
+                --learning_rate=1e-04 --lr_scheduler="constant" --lr_warmup_steps=0 \
+                --seed=42 \
+                --gradient_checkpointing \
+                --enable_xformers_memory_efficient_attention \
+                ${use_fp16_cmd}
+                "
+    else
+        if [ ${fp_item} = "fp16O1" ]; then
+            use_fp16_cmd="--fp16 True --fp16_opt_level O1"
+        fi
+        if [ ${fp_item} = "bf16O1" ]; then
+            use_fp16_cmd="--bf16 True --fp16_opt_level O1"
+        fi
 
-    train_cmd="../ppdiffusers/examples/stable_diffusion/train_txt2img_laion400m_trainer.py \
-            --do_train \
-            --output_dir ./outputs \
-            --per_device_train_batch_size ${batch_size} \
-            --gradient_accumulation_steps 1 \
-            --learning_rate 1e-4 \
-            --weight_decay 0.01 \
-            --max_steps ${max_iter} \
-            --lr_scheduler_type "constant" \
-            --warmup_steps 0 \
-            --image_logging_steps 1000 \
-            --logging_steps 5 \
-            --resolution 256 \
-            --save_steps 10000 \
-            --save_total_limit 20 \
-            --seed 23 \
-            --dataloader_num_workers 8 \
-            --pretrained_model_name_or_path ./CompVis-stable-diffusion-v1-4-paddle-init \
-            --file_list ./data/filelist/train.filelist.list \
-            --model_max_length 77 \
-            --max_grad_norm -1 \
-            --disable_tqdm True \
-            --overwrite_output_dir \
-            ${use_fp16_cmd}
-        "
+        FUSED=False
+        if [ ${fp_item} = "fp16O2" ]; then
+            use_fp16_cmd="--fp16 True --fp16_opt_level O2"
+            FUSED=True
+        fi
+        if [ ${fp_item} = "bf16O2" ]; then
+            use_fp16_cmd="--bf16 True --fp16_opt_level O2"
+            FUSED=True
+        fi
+        rm -rf ./outputs
+
+        export FLAG_USE_EMA=0
+        export FLAG_BENCHMARK=1
+        export FLAG_RECOMPUTE=1
+        export FLAG_XFORMERS=1
+        # use fused linear in amp o2 level
+        export FLAG_FUSED_LINEAR=${FUSED}
+
+        train_cmd="../ppdiffusers/examples/stable_diffusion/train_txt2img_laion400m_trainer.py \
+                --do_train \
+                --output_dir ./outputs \
+                --per_device_train_batch_size ${batch_size} \
+                --gradient_accumulation_steps 1 \
+                --learning_rate 1e-4 \
+                --weight_decay 0.01 \
+                --max_steps ${max_iter} \
+                --lr_scheduler_type "constant" \
+                --warmup_steps 0 \
+                --image_logging_steps 1000 \
+                --logging_steps 5 \
+                --resolution 256 \
+                --save_steps 10000 \
+                --save_total_limit 20 \
+                --seed 23 \
+                --dataloader_num_workers 8 \
+                --pretrained_model_name_or_path ./CompVis-stable-diffusion-v1-4-paddle-init \
+                --file_list ./data/filelist/train.filelist.list \
+                --model_max_length 77 \
+                --max_grad_norm -1 \
+                --disable_tqdm True \
+                --overwrite_output_dir \
+                ${use_fp16_cmd}
+            "
 
 
     # 以下为通用执行命令，无特殊可不用修改
