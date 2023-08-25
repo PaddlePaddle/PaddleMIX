@@ -57,12 +57,25 @@ function _train(){
             add_options=""
             log_file=${train_log_file}
     fi
-    if [ ${fp_item} = "fp16" ]; then
-        use_fp16_cmd="--fp16 True"
+
+    # add some flags
+    export FLAGS_eager_delete_tensor_gb=0.0
+    export FLAGS_fraction_of_gpu_memory_to_use=0.98
+    export FLAGS_conv_workspace_size_limit=4096
+
+    if [ ${fp_item} = "fp16O1" ]; then
+        use_fp16_cmd="--fp16 True --fp16_opt_level O1"
+    fi
+    if [ ${fp_item} = "bf16O1" ]; then
+        use_fp16_cmd="--bf16 True --fp16_opt_level O1"
     fi
 
     FUSED=False
-    if [ ${fp_item} = "bf16" ]; then
+    if [ ${fp_item} = "fp16O2" ]; then
+        use_fp16_cmd="--fp16 True --fp16_opt_level O2"
+        FUSED=True
+    fi
+    if [ ${fp_item} = "bf16O2" ]; then
         use_fp16_cmd="--bf16 True --fp16_opt_level O2"
         FUSED=True
     fi
