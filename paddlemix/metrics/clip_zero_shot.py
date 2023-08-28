@@ -87,7 +87,7 @@ class ClipZeroShot:
 
         self.data_name = os.path.basename(args.classification_eval)
         classifier_filename = (
-            f"{os.path.dirname(classname_filename)}/{args.pretrained_text_model}_{self.data_name}_classifier.pt"
+            f"{os.path.dirname(classname_filename)}/{args.pretrained_text_model}_{self.data_name}_classifier.pdparams"
         )
         if os.path.exists(classifier_filename):
             print("load classifier from disk")
@@ -134,7 +134,7 @@ class ClipZeroShot:
         results["val/imagenet-zeroshot-val-top1"] = top1
         results["val/imagenet-zeroshot-val-top5"] = top5
 
-        results[f"top1"] = top1
+        results["top1"] = top1
         print(f"zero-shot classification task: {self.data_name}: top1: {top1}, top5: {top5}")
         print("Finished zero-shot evaluation.")
 
