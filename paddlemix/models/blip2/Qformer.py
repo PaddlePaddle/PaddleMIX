@@ -1072,7 +1072,7 @@ class BertLMHeadModel(BertPreTrainedModel):
     def __init__(self, config, encoder_width=None, train_in_satge1=False, **kwargs):
         super().__init__(config)
 
-        config.mp_degree = kwargs.get("mp_degree")
+        config.mp_degree = config.get("mp_degree",-1)
         config.encoder_width = encoder_width
         config.gradient_checkpointing = False
         self.ln_vision = paddle.nn.LayerNorm(config.encoder_width)

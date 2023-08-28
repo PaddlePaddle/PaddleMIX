@@ -69,7 +69,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="paddlemix/blip2-stage2",
+        default="blip2-stage2",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
 
@@ -131,8 +131,11 @@ class PreTrainingArguments(TrainingArguments):
 def create_model(config):
     blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
     blip2_config.mp_degree = config.mp_degree
+    #  blip2_config.vit_path=
+     
     blip2_config.gradient_checkpointing = config.gradient_checkpointing
     model = Blip2ForConditionalGeneration(blip2_config)
+    model.load_pretrained(blip2_config)
     paddle.device.cuda.empty_cache()
     return model
 

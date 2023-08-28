@@ -106,15 +106,6 @@ class Blip2PretrainedModel(MixPretrainedModel):
     """
 
     config_class = Blip2Config
-    base_model_prefix = "blip"
-    supports_gradient_checkpointing = True
-    _keys_to_ignore_on_load_missing = [
-        r"position_ids",
-        r"language_model.encoder.embed_tokens.weight",
-        r"language_model.decoder.embed_tokens.weight",
-    ]
-    _no_split_modules = ["Blip2Attention", "T5Block", "OPTDecoderLayer"]
-    _keep_in_fp32_modules = ["wo"]
 
     def _init_weights(self, module):
         """Initialize the weights"""
@@ -125,245 +116,17 @@ class Blip2PretrainedModel(MixPretrainedModel):
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         tokenizer.add_special_tokens({"bos_token": "[DEC]"})
         return tokenizer
-
-    @classmethod
-    def from_pretrained(
-        cls, pretrained_model_name_or_path, from_hf_hub: bool = False, subfolder: str = None, *args, **kwargs
-    ):
-        """
-        Creates an instance of `PretrainedModel`. Model weights are loaded
-        by specifying name of a built-in pretrained model, a pretrained model from HF Hub, a community contributed model,
-        or a local file directory path.
-
-        Args:
-            pretrained_model_name_or_path (str): Name of pretrained model or dir path
-                to load from. The string can be:
-
-                - Name of a built-in pretrained model
-                - Name of a pretrained model from HF Hub
-                - Name of a community-contributed pretrained model.
-                - Local directory path which contains model weights file("model_state.pdparams")
-                  and model config file ("model_config.json").
-            from_hf_hub (bool): load model from huggingface hub. Default to `False`.
-            subfolder (str, optional) An optional value corresponding to a folder inside the repo.
-                Only works when loading from Huggingface Hub.
-            *args (tuple): Position arguments for model `__init__`. If provided,
-                use these as position argument values for model initialization.
-            **kwargs (dict): Keyword arguments for model `__init__`. If provided,
-                use these to update pre-defined keyword argument values for model
-                initialization. If the keyword is in `__init__` argument names of
-                base model, update argument values of the base model; else update
-                argument values of derived model.
-            load_state_as_np (bool, optional): The weights read in can be choosed
-                to place on CPU or GPU though the model is on the default device.
-                If `True`, load the model weights as `numpy.ndarray` on CPU.
-                Otherwise, weights would be loaded as tensors on the default
-                device. Note that if on GPU, the latter would creates extra
-                temporary tensors in addition to the model weights, which
-                doubles the memory usage . Thus it is suggested to use `True`
-                for big models on GPU. Default to `False`.
-
-        Returns:
-            PretrainedModel: An instance of `PretrainedModel`.
-
-        Example:
-            .. code-block::
-
-                from paddlenlp.transformers import BertForSequenceClassification
-
-                # Name of built-in pretrained model
-                model = BertForSequenceClassification.from_pretrained('bert-base-uncased')
-
-                # Name of pretrained model from PaddleHub
-                model = BertForSequenceClassification.from_pretrained('bert-base-uncased')
-
-                # Name of community-contributed pretrained model
-                model = BertForSequenceClassification.from_pretrained('yingyibiao/bert-base-uncased-sst-2-finetuned', num_labels=3)
-
-                # Load from local directory path
-                model = BertForSequenceClassification.from_pretrained('./my_bert/'
-        """
-        import os
-
-        from paddlenlp.transformers.configuration_utils import PretrainedConfig
-        from paddlenlp.transformers.model_utils import load_state_dict, no_init_weights
-        from paddlenlp.transformers.utils import (
-            ContextManagers,
-            device_guard,
-            is_paddle_support_lazy_init,
-            is_safetensors_available,
-            resolve_cache_dir,
-        )
-        from paddlenlp.utils.env import (
-            CONFIG_NAME,
-            PADDLE_WEIGHTS_NAME,
-            PYTORCH_WEIGHTS_NAME,
-        )
-
-        config = kwargs.pop("config", None)
-        state_dict = kwargs.pop("state_dict", None)
-        cache_dir = kwargs.pop("cache_dir", None)
-        force_download = kwargs.pop("force_download", False)
-        ignore_mismatched_sizes = kwargs.pop("ignore_mismatched_sizes", False)
-        dtype = kwargs.pop("dtype", None)
-        subfolder = kwargs.pop("subfolder", "")
-        variant = kwargs.pop("variant", None)
-        use_safetensors = kwargs.pop("use_safetensors", None if is_safetensors_available() else False)
-
-        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", False)
-        convert_from_torch = kwargs.pop("convert_from_torch", None)
-        load_state_as_np = kwargs.pop("load_state_as_np", None)
-        mp_degree = kwargs.pop("mp_degree", 1)
-        if load_state_as_np is not None:
-            logger.warning("`load_state_as_np` is deprecated,  please delete it!")
-
-        model_kwargs = kwargs
-
-        # from_hf_hub defalut enable convert_from_torch
-        if from_hf_hub and convert_from_torch is None:
-            logger.warning(
-                "If you are attempting to load weights from Hugging Face Hub and want to disable the default behavior of considering torch weights,"
-                " you can set ·convert_from_torch=False·. By default, `convert_from_torch` is set to `True`. "
-            )
-            convert_from_torch = True
-        # convert_from_torch defalut is False
-        if convert_from_torch is None:
-            convert_from_torch = False
-
-        cache_dir = resolve_cache_dir(pretrained_model_name_or_path, from_hf_hub, cache_dir)
-        # 1. get the PretrainedConfig to init model
-        if not isinstance(config, PretrainedConfig):
-            config_path = config if config is not None else pretrained_model_name_or_path
-            config, model_kwargs = cls.config_class.from_pretrained(
-                config_path,
-                cache_dir=cache_dir,
-                return_unused_kwargs=True,
-                force_download=force_download,
-                from_hf_hub=from_hf_hub,
-                subfolder=subfolder,
-                **kwargs,
-            )
-        if not os.path.exists(os.path.join(cache_dir, CONFIG_NAME)):
-            config.save_pretrained(cache_dir)
-
-        # refine options for config
-        config.mp_degree = mp_degree
-        convert_from_torch = cls.support_conversion(config) and convert_from_torch
-
-        if dtype is None:
-            dtype = config.dtype
-        else:
-            config.dtype = dtype
-
-        init_contexts = []
-        if low_cpu_mem_usage:
-            # Instantiate model.
-            init_contexts.append(no_init_weights(_enable=True))
-            if is_paddle_support_lazy_init():
-                init_contexts.append(paddle.LazyGuard())
-
-        if dtype:
-            init_contexts.append(dtype_guard(dtype))
-
-        # Keep in fp32 modules
-        keep_in_fp32_modules = None
-        use_keep_in_fp32_modules = False
-
-        # resolve model_weight file
-        resolved_archive_file, sharded_metadata, is_sharded = cls._resolve_model_file_path(
-            pretrained_model_name_or_path,
-            cache_dir=cache_dir,
-            subfolder=subfolder,
-            from_hf_hub=from_hf_hub,
-            config=config,
-            convert_from_torch=convert_from_torch,
-            use_safetensors=use_safetensors,
-            variant=variant,
-        )
-
-        # load pt weights early so that we know which dtype to init the model under
-        if not is_sharded and state_dict is None:
-            # Time to load the checkpoint
-            if resolved_archive_file.endswith(PYTORCH_WEIGHTS_NAME):
-                if convert_from_torch:
-                    # try to get the name-mapping info
-                    logger.info(
-                        f"Starting to convert pytorch weight file<{resolved_archive_file}> to "
-                        f"paddle weight file<{os.path.join(cache_dir, PADDLE_WEIGHTS_NAME)}> ..."
-                    )
-                    state_dict = cls.convert(resolved_archive_file, config, cache_dir)
-                else:
-                    raise ValueError(
-                        f"download the {PYTORCH_WEIGHTS_NAME} weight file, but model<{cls}> "
-                        "don't support conversion from pytorch weight file to paddle weight file "
-                    )
-            else:
-                # 4. loading non-sharded ckpt from the state dict
-                if config.tensor_parallel_degree > 1 and resolved_archive_file.endswith("model_state.pdparams"):
-                    state_dict = cls.convert_tensor_parallel(resolved_archive_file, config)
-                else:
-                    state_dict = load_state_dict(resolved_archive_file)
-
-                logger.info("Loaded weights file from disk, setting weights to model.")
-
-        # Check if `_keep_in_fp32_modules` is not None
-        use_keep_in_fp32_modules = (cls._keep_in_fp32_modules is not None) and dtype == "float16"
-
-        if is_sharded:
-            loaded_state_dict_keys = sharded_metadata["all_checkpoint_keys"]
-        else:
-            loaded_state_dict_keys = [k for k in state_dict.keys()]
-
-        if low_cpu_mem_usage:  # or use_keep_in_fp32_modules:
-            state_dict = None
-
-        # will only support load paddle.Tensor to model.
-        if state_dict is not None:
-            for k in list(state_dict.keys()):
-                if not isinstance(state_dict[k], paddle.Tensor):
-                    with device_guard():
-                        state_dict[k] = paddle.Tensor(state_dict.pop(k), zero_copy=True)
-
-        # 3. init the model
-        init_args = config["init_args"] or ()
-        with ContextManagers(init_contexts):
-            model = cls(config, *init_args, **model_kwargs)
-        from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
-
-        interpolate_pos_embed(model, state_dict)
-        if use_keep_in_fp32_modules:
-            # low_cpu_mem_usage = True
-            keep_in_fp32_modules = model._keep_in_fp32_modules
-        else:
-            keep_in_fp32_modules = []
-
-        model, missing_keys, unexpected_keys, mismatched_keys = cls._load_pretrained_model(
-            model=model,
-            state_dict=state_dict,
-            loaded_keys=loaded_state_dict_keys,
-            resolved_archive_file=resolved_archive_file,
-            pretrained_model_name_or_path=pretrained_model_name_or_path,
-            config=config,
-            ignore_mismatched_sizes=ignore_mismatched_sizes,
-            low_cpu_mem_usage=low_cpu_mem_usage,
-            dtype=dtype,
-            keep_in_fp32_modules=keep_in_fp32_modules,
-        )
-
-        if paddle.in_dynamic_mode():
-            return model
-
-        return model, state_dict
-
-
+    
+    
+    
+    
+    
+    
+    
+    
 class Blip2ForConditionalGeneration(Blip2PretrainedModel):
     config_class = Blip2Config
     main_input_name = "pixel_values"
-    _keys_to_ignore_on_load_missing = [
-        r"position_ids",
-        r"language_model.encoder.embed_tokens.weight",
-        r"language_model.decoder.embed_tokens.weight",
-    ]
 
     def __init__(
         self,
@@ -371,11 +134,10 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
     ):
         super().__init__(config)
         from paddlemix.models.blip2.eva_vit import VisionTransformer
-
-        self.visual_encoder = VisionTransformer.from_pretrained(
-            pretrained_model_name_or_path=config.vision_config,
-            mp_degree=config.mp_degree,
-            ignore_mismatched_sizes=True,
+        config.vision_config.update({"mp_degree":config.mp_degree})
+        config.qformer_config.update({"mp_degree":config.mp_degree})
+        self.visual_encoder = VisionTransformer(
+            config=config.vision_config
         )
         self.freeze_vit = config.freeze_vit
         self.train_stage1 = False
@@ -389,13 +151,11 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         if config.get("train_mode", None) == "stage1":
             self.train_stage1 = True
             self.tokenizer = self.init_tokenizer()
-            self.Qformer = BertLMHeadModel.from_pretrained(
-                pretrained_model_name_or_path=config.qformer_config,
+            self.Qformer = BertLMHeadModel(
+                config=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=True,
                 tokenizer_length=len(self.tokenizer),
-                mp_degree=config.mp_degree,
-                ignore_mismatched_sizes=True,
             )
 
             state_dict = self.Qformer.state_dict()
@@ -452,13 +212,11 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 param.stop_gradient = True
             self.pad_token_id = self.language_model.pad_token_id
 
-            self.Qformer = BertLMHeadModel.from_pretrained(
-                pretrained_model_name_or_path=config.qformer_config,
-                mp_degree=config.mp_degree,
+            self.Qformer = BertLMHeadModel(
+                config=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=False,
                 text_hidden_size=self.language_model.hidden_size,
-                ignore_mismatched_sizes=True,
             )
             self.Qformer.cls = None
             self.Qformer.bert.embeddings.word_embeddings = None

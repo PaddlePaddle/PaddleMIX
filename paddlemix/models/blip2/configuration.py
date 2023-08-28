@@ -242,7 +242,6 @@ class Blip2QFormerConfig(PretrainedConfig):
 
         return cls.from_dict(config_dict, **kwargs)
 
-
 class Blip2Config(PretrainedConfig):
     r"""
     [`Blip2Config`] is the configuration class to store the configuration of a [`Blip2ForConditionalGeneration`]. It is
@@ -300,27 +299,32 @@ class Blip2Config(PretrainedConfig):
 
         if vision_config is None:
             vision_config = {}
-            logger.info("vision_config is None. initializing the Blip2VisionConfig with default values.")
+            logger.info(
+                "vision_config is None. initializing the Blip2VisionConfig with default values."
+            )
 
         if qformer_config is None:
             qformer_config = {}
-            logger.info("qformer_config is None. Initializing the Blip2QFormerConfig with default values.")
+            logger.info(
+                "qformer_config is None. Initializing the Blip2QFormerConfig with default values."
+            )
 
         if text_config is None:
             text_config = {}
-            logger.info("text_config is None. Initializing the text config with default values (`OPTConfig`).")
-        self.vision_config = vision_config
-        self.qformer_config = qformer_config
-        self.text_config = text_config
-
-        # self.use_decoder_only_language_model = (
-        #     self.text_config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
-        # )
+            logger.info(
+                "text_config is None. Initializing the text config with default values (`OPTConfig`)."
+            )
+        self.vision_config = Blip2VisionConfig(**vision_config)
+        self.qformer_config = Blip2QFormerConfig(**qformer_config)
+        text_model_type = (
+            text_config["model_type"] if "model_type" in text_config else "opt"
+        )
+        self.text_config=text_config
         # CONFIGURATION_MODEL_MAPPING = get_init_configurations()
         # self.use_decoder_only_language_model = self.text_config.model_type in CONFIGURATION_MODEL_MAPPING
         self.initializer_factor = 1.0
         self.initializer_range = 0.02
-        self.freeze_vit = kwargs.get("freeze_vit", True)
+        self.freeze_vit = True
 
     @classmethod
     def from_vision_qformer_text_configs(
@@ -338,9 +342,9 @@ class Blip2Config(PretrainedConfig):
         """
 
         return cls(
-            vision_config=vision_config,
-            qformer_config=qformer_config,
-            text_config=text_config,
+            vision_config=vision_config.to_dict(),
+            qformer_config=qformer_config.to_dict(),
+            text_config=text_config.to_dict(),
             **kwargs,
         )
 
@@ -351,8 +355,8 @@ class Blip2Config(PretrainedConfig):
             `Dict[str, any]`: Dictionary of all the attributes that make up this configuration instance,
         """
         output = copy.deepcopy(self.__dict__)
-        output["vision_config"] = self.vision_config
-        output["qformer_config"] = self.qformer_config
+        output["vision_config"] = self.vision_config.to_dict()
+        output["qformer_config"] = self.qformer_config.to_dict()
         output["text_config"] = self.text_config
         output["model_type"] = self.__class__.model_type
         return output

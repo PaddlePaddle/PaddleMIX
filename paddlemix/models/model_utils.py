@@ -26,6 +26,37 @@ from tqdm.auto import tqdm
 from paddlemix.utils import device_guard, paddlemix_load
 from paddlemix.utils.env import MODEL_HOME
 from paddlemix.utils.log import logger
+from typing import Type
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
+from paddlenlp.transformers.model_utils import PretrainedModel,resolve_weight_file_from_hf_hub,_add_variant,weight_name_suffix
+from paddlenlp.utils.env import (
+    CONFIG_NAME,
+    LEGACY_CONFIG_NAME,
+    PADDLE_WEIGHTS_INDEX_NAME,
+    PADDLE_WEIGHTS_NAME,
+    PYTORCH_WEIGHTS_NAME,
+    SAFE_WEIGHTS_INDEX_NAME,
+    SAFE_WEIGHTS_NAME,
+)
+VISION_WEIGHTS={"eva_vit_g":"blip2-stage2/eva_vit_g/model_state.pdparams"}
+BRIDGE_WEIGHTS={"qformer-stage2":"blip2-stage2/Qformer/model_state.pdparams"}
+from paddlenlp.transformers.utils import     (ContextManagers,
+                                                InitTrackerMeta,
+                                                adapt_stale_fwd_patch,
+                                                cached_file,
+                                                cached_file_for_hf_hub,
+                                                convert_file_size_to_int,
+                                                dtype_byte_size,
+                                                fn_args_to_dict,
+                                                get_checkpoint_shard_files,
+                                                is_paddle_support_lazy_init,
+                                                is_safetensors_available,
+                                                paddlenlp_load,
+                                                resolve_cache_dir,
+                                                weight_name_suffix,
+                                            )
+from paddle.utils.download import is_url as is_remote_url
+from paddlenlp.utils.downloader import get_path_from_url_with_filelock, hf_file_exists
 
 __all__ = ["MixPretrainedModel"]
 
@@ -173,9 +204,27 @@ class MixPretrainedModel(PretrainedModel):
     def __init__(self, *args, **kwargs):
         super(MixPretrainedModel, self).__init__(*args, **kwargs)
 
-    def get_expected_keys(self, model_state_dict):
-        # override when model needs to load different pretrain model at different stages, such as BLIP-2
-        return list(model_state_dict.keys())
+    def get_expected_keys(self, model_state_dict,name=None):
+        model_list=[]
+        if name=="bridge":
+            self._keys_to_ignore_on_load_unexpected=["visual_encoder","language_model"]
+            for key in model_state_dict.keys():
+                if "visual_encoder" not in key and "language_model" not in key:
+                    model_list.append(key)
+                    
+        elif name=="vision":
+            self._keys_to_ignore_on_load_unexpected=["Qformer","language_model"]
+            for key in model_state_dict.keys():
+                if "visual_encoder" in key:
+                    model_list.append(key)
+        else:
+            self._keys_to_ignore_on_load_unexpected=["language_model"]
+            for key in model_state_dict.keys():
+                if "language_model" not in key:
+                    model_list.append(key)
+                
+            
+        return model_list
 
     def refine_state_dict(self, state_dict):
         # preprocess the weight loaded here, such as interpolatation
@@ -183,7 +232,7 @@ class MixPretrainedModel(PretrainedModel):
 
     def load_pretrained(
         self,
-        pretrained_model_name_or_path=None,
+        config,
         state_dict=None,
         ignore_mismatched_sizes=False,
         low_cpu_mem_usage=False,
@@ -214,193 +263,152 @@ class MixPretrainedModel(PretrainedModel):
         Returns:
             Tuple[List[str]]: _description_
         """
-        if pretrained_model_name_or_path is None and state_dict is None:
-            ValueError("Either pretrained_model_name_or_path or state_dict should be set.")
+        qformer_model_name_or_path =  config.get("bridge_name_or_path",None)
+        vision_model_name_or_path = config.get("vision_name_or_path",None)
+        model_name_or_path = config.get("model_name_or_path",None)
+        if qformer_model_name_or_path and  vision_model_name_or_path and model_name_or_path is None:
+            ValueError("either model_name_or_path or (bridge_model_name_or_path and vision_model_name_or_path) should be set.")
+        def load_blip2_model_state(model_name_or_path=None,name=None,
+            state_dict=None,
+            ignore_mismatched_sizes=False,                    
+            low_cpu_mem_usage=False,
+            dtype=None,
+            cache_dir=None,
+            subfolder="",
+            variant=None,):
+            cache_dir = resolve_cache_dir(model_name_or_path, cache_dir)
 
-        cache_dir = resolve_cache_dir(pretrained_model_name_or_path, cache_dir)
+            # Keep in fp32 modules
+            keep_in_fp32_modules = None
+            use_keep_in_fp32_modules = False
 
-        # Keep in fp32 modules
-        keep_in_fp32_modules = None
-        use_keep_in_fp32_modules = False
+            # resolve model_weight file
+            resolved_archive_file, sharded_metadata, is_sharded = self._resolve_model_file_path(
+                model_name_or_path,
+                cache_dir=cache_dir,
+                subfolder=subfolder,
+                variant=variant,
+                name=name
+            )
 
-        # resolve model_weight file
-        resolved_archive_file, sharded_metadata, is_sharded = self._resolve_model_file_path(
-            pretrained_model_name_or_path,
-            cache_dir=cache_dir,
-            subfolder=subfolder,
-            variant=variant,
-        )
+            # Check if `_keep_in_fp32_modules` is not None
+            use_keep_in_fp32_modules = (self._keep_in_fp32_modules is not None) and dtype == "float16"
+            
+            loaded_state_dict_keys=self.state_dict()
 
-        if not is_sharded and state_dict is None:
-            # Time to load the checkpoint
-            # loading non-sharded ckpt from the state dict
-            if self.config.tensor_parallel_degree > 1 and resolved_archive_file.endswith("model_state.pdparams"):
-                state_dict = self.convert_tensor_parallel(resolved_archive_file, self.config)
+
+            if use_keep_in_fp32_modules:
+                # low_cpu_mem_usage = True
+                keep_in_fp32_modules = self._keep_in_fp32_modules
             else:
-                state_dict = paddlemix_load(resolved_archive_file)
+                keep_in_fp32_modules = []
 
-            self.refine_state_dict(state_dict)
+            # load_pretrained_model
+            is_safetensors = False
 
-            logger.info("Loaded weights file from disk, setting weights to model.")
+            model_state_dict = self.state_dict()
 
-        # Check if `_keep_in_fp32_modules` is not None
-        use_keep_in_fp32_modules = (self._keep_in_fp32_modules is not None) and dtype == "float16"
+            expected_keys = self.get_expected_keys(model_state_dict,name)
 
-        if is_sharded:
-            loaded_state_dict_keys = sharded_metadata["all_checkpoint_keys"]
-        else:
-            loaded_state_dict_keys = [k for k in state_dict.keys()]
+            prefix = self.base_model_prefix
 
-        if low_cpu_mem_usage:  # or use_keep_in_fp32_modules:
-            state_dict = None
+            if len(prefix) > 0:
+                has_prefix_module = any(s.startswith(prefix) for s in loaded_state_dict_keys)
+                expects_prefix_module = any(s.startswith(prefix) for s in expected_keys)
+            else:
+                has_prefix_module = False
+                expects_prefix_module = False
 
-        # will only support load paddle.Tensor to model.
-        if state_dict is not None:
-            for k in list(state_dict.keys()):
-                if not isinstance(state_dict[k], paddle.Tensor):
-                    with device_guard():
-                        state_dict[k] = paddle.Tensor(state_dict.pop(k), zero_copy=True)
+            # key re-naming operations are never done on the keys
+            # that are loaded, but always on the keys of the newly initialized model
+            remove_prefix_from_model = not has_prefix_module and expects_prefix_module
+            add_prefix_to_model = has_prefix_module and not expects_prefix_module
 
-        if use_keep_in_fp32_modules:
-            # low_cpu_mem_usage = True
-            keep_in_fp32_modules = self._keep_in_fp32_modules
-        else:
-            keep_in_fp32_modules = []
+            if remove_prefix_from_model:
+                _prefix = f"{prefix}."
+                expected_keys_not_prefixed = [s for s in expected_keys if not s.startswith(_prefix)]
+                expected_keys = [s[len(_prefix) :] if s.startswith(_prefix) else s for s in expected_keys]
+            elif add_prefix_to_model:
+                expected_keys = [".".join([prefix, s]) for s in expected_keys]
 
-        # load_pretrained_model
-        is_safetensors = False
+            missing_keys = list(set(expected_keys) - set(loaded_state_dict_keys))
+            unexpected_keys = list(set(loaded_state_dict_keys) - set(expected_keys))
 
-        model_state_dict = self.state_dict()
+            # Some models may have keys that are not in the state by design, removing them before needlessly warning
+            # the user.
+            if self._keys_to_ignore_on_load_missing is not None:
+                for pat in self._keys_to_ignore_on_load_missing:
+                    missing_keys = [k for k in missing_keys if re.search(pat, k) is None]
+            
+            if self._keys_to_ignore_on_load_unexpected is not None:
+                for pat in self._keys_to_ignore_on_load_unexpected:
+                    unexpected_keys = [k for k in unexpected_keys if re.search(pat, k) is None]
 
-        expected_keys = self.get_expected_keys(model_state_dict)
+            # Set some modules to fp32 if any
+            if keep_in_fp32_modules is not None:
+                for name, param in self.named_parameters():
+                    if any(module_to_keep_in_fp32 in name for module_to_keep_in_fp32 in keep_in_fp32_modules):
+                        param = param.to(dtype=paddle.float32)
 
-        prefix = self.base_model_prefix
+            # Make sure we are able to load base models as well as derived models (with heads)
+            start_prefix = ""
+            model_to_load = self
+            if len(self.base_model_prefix) > 0 and not hasattr(self, self.base_model_prefix) and has_prefix_module:
+                start_prefix = self.base_model_prefix + "."
+            if len(self.base_model_prefix) > 0 and hasattr(self, self.base_model_prefix) and not has_prefix_module:
+                model_to_load = getattr(self, self.base_model_prefix)
+                base_model_expected_keys = list(model_to_load.state_dict().keys())
+                if any(
+                    key in expected_keys_not_prefixed and key not in base_model_expected_keys
+                    for key in loaded_state_dict_keys
+                ):
+                    raise ValueError(
+                        "The state dictionary of the model you are trying to load is corrupted. Are you sure it was "
+                        "properly saved?"
+                    )
 
-        if len(prefix) > 0:
-            has_prefix_module = any(s.startswith(prefix) for s in loaded_state_dict_keys)
-            expects_prefix_module = any(s.startswith(prefix) for s in expected_keys)
-        else:
-            has_prefix_module = False
-            expects_prefix_module = False
-
-        # key re-naming operations are never done on the keys
-        # that are loaded, but always on the keys of the newly initialized model
-        remove_prefix_from_model = not has_prefix_module and expects_prefix_module
-        add_prefix_to_model = has_prefix_module and not expects_prefix_module
-
-        if remove_prefix_from_model:
-            _prefix = f"{prefix}."
-            expected_keys_not_prefixed = [s for s in expected_keys if not s.startswith(_prefix)]
-            expected_keys = [s[len(_prefix) :] if s.startswith(_prefix) else s for s in expected_keys]
-        elif add_prefix_to_model:
-            expected_keys = [".".join([prefix, s]) for s in expected_keys]
-
-        missing_keys = list(set(expected_keys) - set(loaded_state_dict_keys))
-        unexpected_keys = list(set(loaded_state_dict_keys) - set(expected_keys))
-
-        # Some models may have keys that are not in the state by design, removing them before needlessly warning
-        # the user.
-        if self._keys_to_ignore_on_load_missing is not None:
-            for pat in self._keys_to_ignore_on_load_missing:
-                missing_keys = [k for k in missing_keys if re.search(pat, k) is None]
-
-        if self._keys_to_ignore_on_load_unexpected is not None:
-            for pat in self._keys_to_ignore_on_load_unexpected:
-                unexpected_keys = [k for k in unexpected_keys if re.search(pat, k) is None]
-
-        # Set some modules to fp32 if any
-        if keep_in_fp32_modules is not None:
-            for name, param in self.named_parameters():
-                if any(module_to_keep_in_fp32 in name for module_to_keep_in_fp32 in keep_in_fp32_modules):
-                    param = param.to(dtype=paddle.float32)
-
-        # Make sure we are able to load base models as well as derived models (with heads)
-        start_prefix = ""
-        model_to_load = self
-        if len(self.base_model_prefix) > 0 and not hasattr(self, self.base_model_prefix) and has_prefix_module:
-            start_prefix = self.base_model_prefix + "."
-        if len(self.base_model_prefix) > 0 and hasattr(self, self.base_model_prefix) and not has_prefix_module:
-            model_to_load = getattr(self, self.base_model_prefix)
-            base_model_expected_keys = list(model_to_load.state_dict().keys())
-            if any(
-                key in expected_keys_not_prefixed and key not in base_model_expected_keys
-                for key in loaded_state_dict_keys
-            ):
-                raise ValueError(
-                    "The state dictionary of the model you are trying to load is corrupted. Are you sure it was "
-                    "properly saved?"
-                )
-
-        def _find_mismatched_keys(
-            state_dict,
-            model_state_dict,
-            loaded_keys,
-            add_prefix_to_model,
-            remove_prefix_from_model,
-            ignore_mismatched_sizes,
-        ):
-            mismatched_keys = []
-            if ignore_mismatched_sizes:
-                for checkpoint_key in loaded_keys:
-                    # If the checkpoint is sharded, we may not have the key here.
-                    if checkpoint_key not in state_dict:
-                        continue
-                    model_key = checkpoint_key
-                    if remove_prefix_from_model:
-                        # The model key starts with `prefix` but `checkpoint_key` doesn't so we add it.
-                        model_key = f"{prefix}.{checkpoint_key}"
-                    elif add_prefix_to_model:
-                        # The model key doesn't start with `prefix` but `checkpoint_key` does so we remove it.
-                        model_key = ".".join(checkpoint_key.split(".")[1:])
-
-                    if (
-                        model_key in model_state_dict
-                        and state_dict[checkpoint_key].shape != model_state_dict[model_key].shape
-                    ):
-                        mismatched_keys.append(
-                            (checkpoint_key, state_dict[checkpoint_key].shape, model_state_dict[model_key].shape)
-                        )
-                        del state_dict[checkpoint_key]
-            return mismatched_keys
-
-        if state_dict is not None:
-            # DONT Hold tensor parallel here, only hold afer load state dict.
-            # Whole checkpoint
-            # For model parallel if FastGeneration
-            # To avoid recursive import temporarily.
-            import paddlenlp.ops.fast_transformer.transformer.decoding as ft_decoding
-
-            state_dict = ft_decoding.get_ft_para_conf().fit_partial_model(model_to_load, state_dict)
-
-            mismatched_keys = _find_mismatched_keys(
+            def _find_mismatched_keys(
                 state_dict,
                 model_state_dict,
-                loaded_state_dict_keys,
+                loaded_keys,
                 add_prefix_to_model,
                 remove_prefix_from_model,
                 ignore_mismatched_sizes,
-            )
-            error_msgs = _load_state_dict_into_model(model_to_load, state_dict, start_prefix)
-        else:
-            # Sharded checkpoint or whole but low_cpu_mem_usage==True
+            ):
+                mismatched_keys = []
+                if ignore_mismatched_sizes:
+                    for checkpoint_key in loaded_keys:
+                        # If the checkpoint is sharded, we may not have the key here.
+                        if checkpoint_key not in state_dict:
+                            continue
+                        model_key = checkpoint_key
+                        if remove_prefix_from_model:
+                            # The model key starts with `prefix` but `checkpoint_key` doesn't so we add it.
+                            model_key = f"{prefix}.{checkpoint_key}"
+                        elif add_prefix_to_model:
+                            # The model key doesn't start with `prefix` but `checkpoint_key` does so we remove it.
+                            model_key = ".".join(checkpoint_key.split(".")[1:])
 
-            # This should always be a list but, just to be sure.
-            if not isinstance(resolved_archive_file, list):
-                resolved_archive_file = [resolved_archive_file]
+                        if (
+                            model_key in model_state_dict
+                            and state_dict[checkpoint_key].shape != model_state_dict[model_key].shape
+                        ):
+                            mismatched_keys.append(
+                                (checkpoint_key, state_dict[checkpoint_key].shape, model_state_dict[model_key].shape)
+                            )
+                            del state_dict[checkpoint_key]
+                return mismatched_keys
 
-            error_msgs = []
-            mismatched_keys = []
+            if state_dict is not None:
+                # DONT Hold tensor parallel here, only hold afer load state dict.
+                # Whole checkpoint
+                # For model parallel if FastGeneration
+                # To avoid recursive import temporarily.
+                import paddlenlp.ops.fast_transformer.transformer.decoding as ft_decoding
 
-            if len(resolved_archive_file) > 1:
-                resolved_archive_file = tqdm(resolved_archive_file, desc="Loading checkpoint shards")
+                state_dict = ft_decoding.get_ft_para_conf().fit_partial_model(model_to_load, state_dict)
 
-            for shard_file in resolved_archive_file:
-                pre_tensor_parallel_split = False
-                state_dict = paddlemix_load(shard_file)
-
-                # Mistmatched keys contains tuples key/shape1/shape2 of weights in the checkpoint that have a shape not
-                # matching the weights in the model.
-                mismatched_keys += _find_mismatched_keys(
+                mismatched_keys = _find_mismatched_keys(
                     state_dict,
                     model_state_dict,
                     loaded_state_dict_keys,
@@ -408,84 +416,165 @@ class MixPretrainedModel(PretrainedModel):
                     remove_prefix_from_model,
                     ignore_mismatched_sizes,
                 )
+                error_msgs = _load_state_dict_into_model(model_to_load, state_dict, start_prefix)
+            else:
+                # Sharded checkpoint or whole but low_cpu_mem_usage==True
 
-                if (
-                    self.config.tensor_parallel_degree > 1
-                    and ".tp" not in shard_file
-                    and not pre_tensor_parallel_split
-                ):
-                    logger.info("Converting state_dict to Tensor Parallel Format")
-                    # ignore error for multi shard, since only parts of data
-                    state_dict = self.convert_tensor_parallel(
-                        None, self.config, state_dict=state_dict, ignore_error=len(resolved_archive_file) > 1
-                    )
-                    logger.info("Converted state_dict to Tensor Parallel Format")
+                # This should always be a list but, just to be sure.
+                if not isinstance(resolved_archive_file, list):
+                    resolved_archive_file = [resolved_archive_file]
 
-                if low_cpu_mem_usage:
-                    new_error_msgs = _load_state_dict_into_meta_model(
-                        model_to_load,
+                error_msgs = []
+                mismatched_keys = []
+
+                if len(resolved_archive_file) > 1:
+                    resolved_archive_file = tqdm(resolved_archive_file, desc="Loading checkpoint shards")
+
+                for shard_file in resolved_archive_file:
+                    pre_tensor_parallel_split = False
+                    state_dict = paddlemix_load(shard_file,map_location="numpy")
+
+                    # Mistmatched keys contains tuples key/shape1/shape2 of weights in the checkpoint that have a shape not
+                    # matching the weights in the model.
+                    mismatched_keys += _find_mismatched_keys(
                         state_dict,
+                        model_state_dict,
                         loaded_state_dict_keys,
-                        start_prefix,
-                        expected_keys,
-                        dtype=dtype,
-                        is_safetensors=is_safetensors,
-                        keep_in_fp32_modules=keep_in_fp32_modules,
+                        add_prefix_to_model,
+                        remove_prefix_from_model,
+                        ignore_mismatched_sizes,
                     )
-                    error_msgs += new_error_msgs
-                else:
-                    error_msgs += _load_state_dict_into_model(model_to_load, state_dict, start_prefix)
 
-                # force memory release
-                del state_dict
-                gc.collect()
+                    # force memory release
+                    del state_dict
+                    gc.collect()
 
-        if len(error_msgs) > 0:
-            error_msg = "\n\t".join(error_msgs)
-            if " but the expected shape is" in error_msg:
-                error_msg += (
-                    "\n\tYou may consider adding `ignore_mismatched_sizes=True` in the model `from_pretrained` method."
+            if len(unexpected_keys) > 0:
+                logger.warning(
+                    f"Some weights of the model checkpoint at {model_name_or_path} were not used when"
+                    f" initializing {self.__class__.__name__}: {unexpected_keys}\n- This IS expected if you are"
+                    f" initializing {self.__class__.__name__} from the checkpoint of a model trained on another task or"
+                    " with another architecture (e.g. initializing a BertForSequenceClassification model from a"
+                    " BertForPreTraining model).\n- This IS NOT expected if you are initializing"
+                    f" {self.__class__.__name__} from the checkpoint of a model that you expect to be exactly identical"
+                    " (initializing a BertForSequenceClassification model from a BertForSequenceClassification model)."
                 )
-            raise RuntimeError(f"Error(s) in loading state_dict for {self.__class__.__name__}:\n\t{error_msg}")
+            else:
+                logger.info(f"All model checkpoint weights were used when initializing {self.__class__.__name__}.\n")
 
-        if len(unexpected_keys) > 0:
-            logger.warning(
-                f"Some weights of the model checkpoint at {pretrained_model_name_or_path} were not used when"
-                f" initializing {self.__class__.__name__}: {unexpected_keys}\n- This IS expected if you are"
-                f" initializing {self.__class__.__name__} from the checkpoint of a model trained on another task or"
-                " with another architecture (e.g. initializing a BertForSequenceClassification model from a"
-                " BertForPreTraining model).\n- This IS NOT expected if you are initializing"
-                f" {self.__class__.__name__} from the checkpoint of a model that you expect to be exactly identical"
-                " (initializing a BertForSequenceClassification model from a BertForSequenceClassification model)."
-            )
+            if len(missing_keys) > 0:
+                logger.warning(
+                    f"Some weights of {self.__class__.__name__} were not initialized from the model checkpoint at"
+                    f" {model_name_or_path} and are newly initialized: {missing_keys}\nYou should probably"
+                    " TRAIN this model on a down-stream task to be able to use it for predictions and inference."
+                )
+            elif len(mismatched_keys) == 0:
+                logger.info(
+                    f"All the weights of {self.__class__.__name__} were initialized from the model checkpoint at"
+                    f" {model_name_or_path}.\nIf your task is similar to the task the model of the checkpoint"
+                    f" was trained on, you can already use {self.__class__.__name__} for predictions without further"
+                    " training."
+                )
+            if len(mismatched_keys) > 0:
+                mismatched_warning = "\n".join(
+                    [
+                        f"- {key}: found shape {shape1} in the checkpoint and {shape2} in the model instantiated"
+                        for key, shape1, shape2 in mismatched_keys
+                    ]
+                )
+                logger.warning(
+                    f"Some weights of {self.__class__.__name__} were not initialized from the model checkpoint at"
+                    f" {model_name_or_path} and are newly initialized because the shapes did not"
+                    f" match:\n{mismatched_warning}\nYou should probably TRAIN this model on a down-stream task to be able"
+                    " to use it for predictions and inference."
+                )
+
+            return missing_keys, unexpected_keys, mismatched_keys
+        if  model_name_or_path is not None:  
+            load_blip2_model_state(model_name_or_path,'model')
         else:
-            logger.info(f"All model checkpoint weights were used when initializing {self.__class__.__name__}.\n")
+            load_blip2_model_state(vision_model_name_or_path,'vision') 
+            load_blip2_model_state(qformer_model_name_or_path,'bridge')
+      
+    @classmethod
+    def _resolve_model_file_path(
+        cls: Type[PretrainedModel],
+        pretrained_model_name_or_path: str,
+        name=None,
+        from_hf_hub: bool = False,
+        cache_dir = None,
+        subfolder: str = "",
+        config: PretrainedConfig = None,
+        convert_from_torch: bool = False,
+        use_safetensors = None,
+        variant=None,
+    ) -> str:
 
-        if len(missing_keys) > 0:
-            logger.warning(
-                f"Some weights of {self.__class__.__name__} were not initialized from the model checkpoint at"
-                f" {pretrained_model_name_or_path} and are newly initialized: {missing_keys}\nYou should probably"
-                " TRAIN this model on a down-stream task to be able to use it for predictions and inference."
-            )
-        elif len(mismatched_keys) == 0:
-            logger.info(
-                f"All the weights of {self.__class__.__name__} were initialized from the model checkpoint at"
-                f" {pretrained_model_name_or_path}.\nIf your task is similar to the task the model of the checkpoint"
-                f" was trained on, you can already use {self.__class__.__name__} for predictions without further"
-                " training."
-            )
-        if len(mismatched_keys) > 0:
-            mismatched_warning = "\n".join(
-                [
-                    f"- {key}: found shape {shape1} in the checkpoint and {shape2} in the model instantiated"
-                    for key, shape1, shape2 in mismatched_keys
-                ]
-            )
-            logger.warning(
-                f"Some weights of {self.__class__.__name__} were not initialized from the model checkpoint at"
-                f" {pretrained_model_name_or_path} and are newly initialized because the shapes did not"
-                f" match:\n{mismatched_warning}\nYou should probably TRAIN this model on a down-stream task to be able"
-                " to use it for predictions and inference."
-            )
+        """resolve model target file path from `` and `cache_dir`
 
-        return missing_keys, unexpected_keys, mismatched_keys
+        1. when it is file path:
+            return the weight file
+
+        2. when it is model-name:
+            2.1 check default `MODEL_HOME` + `model-mame` + model_state.pdparams
+            2.2 get the url from `pretrained_resource_files_map`, and set it to `pretrained_model_name_or_path`
+
+        3. when it is local dir:
+            check whether the file<local_dir + weight_file> exist
+
+        Args:
+            cls (Type[PretrainedModel]): the inherited PretrainedModel class
+            pretrained_model_name_or_path (str): the model-name/url/local_dir/local_dir
+            cache_dir (Optional[str], optional): cache_dir is used when name_or_path is model-name/url. Defaults to None.
+            convert_from_torch (bool, optional): whether support convert pytorch model to paddle model
+
+        Returns:
+            str: the model weight file path
+        """
+        is_sharded = False
+        sharded_metadata = None
+
+
+        if pretrained_model_name_or_path is not None:
+            
+            
+            pretrained_model_name_or_path = str(pretrained_model_name_or_path)
+            if name == "vision":
+                if pretrained_model_name_or_path in VISION_WEIGHTS:
+                   is_local_file = os.path.isfile(VISION_WEIGHTS[pretrained_model_name_or_path])
+                   pretrained_model_name_or_path=VISION_WEIGHTS[pretrained_model_name_or_path]
+                else:
+                    is_local_file = os.path.isfile(pretrained_model_name_or_path)
+                    pretrained_model_name_or_path=pretrained_model_name_or_path
+            elif name == "bridge":
+                if pretrained_model_name_or_path in BRIDGE_WEIGHTS:
+                   is_local_file = os.path.isfile(BRIDGE_WEIGHTS[pretrained_model_name_or_path])
+                   pretrained_model_name_or_path=BRIDGE_WEIGHTS[pretrained_model_name_or_path]
+                else:
+                    is_local_file = os.path.isfile(pretrained_model_name_or_path)
+                    pretrained_model_name_or_path=pretrained_model_name_or_path
+
+            def get_file_path(pretrained_model_name_or_path):
+                return os.path.join(pretrained_model_name_or_path)
+
+            # pretrained_model_name_or_path is dir
+            if is_local_file:
+                if os.path.isfile(
+                    get_file_path(pretrained_model_name_or_path)
+                ):
+                    # Load from a PaddlePaddle checkpoint
+                    resolved_archive_file = get_file_path(
+                        pretrained_model_name_or_path
+                    )
+            elif is_remote_url(pretrained_model_name_or_path):
+                resolved_archive_file = get_path_from_url_with_filelock(pretrained_model_name_or_path)
+            else:
+                raise EnvironmentError(
+                    f"Can't load the model for '{pretrained_model_name_or_path}'. If you were trying to load it"
+                    " from 'https://paddlenlp.bj.bcebos.com'"
+                )
+
+        else:
+            resolved_archive_file = None
+
+        return resolved_archive_file, sharded_metadata, is_sharded
