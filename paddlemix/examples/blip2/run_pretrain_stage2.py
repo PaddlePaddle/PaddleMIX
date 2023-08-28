@@ -127,6 +127,12 @@ class PreTrainingArguments(TrainingArguments):
         metadata={"help": "The path to model if you want to load weights from the specified path"},
     )
 
+    @property
+    def dataset_world_size(self):
+        if self.sharding_parallel_degree!=1 or self.data_parallel_degree!=1:
+            return max(self.sharding_parallel_degree, 1) * max(self.data_parallel_degree, 1)
+        else:
+            return paddle.distributed.get_world_size()
 
 def create_model(config):
     blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
