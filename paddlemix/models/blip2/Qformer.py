@@ -24,6 +24,8 @@ from paddle import Tensor, device, nn
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.distributed.fleet.utils import recompute
+
+from paddlemix.models.model_utils import MixPretrainedModel
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.bert.configuration import BertConfig
 from paddlenlp.transformers.model_outputs import (
@@ -32,8 +34,6 @@ from paddlenlp.transformers.model_outputs import (
     CausalLMOutputWithCrossAttentions,
     MaskedLMOutput,
 )
-
-from paddlemix.models.model_utils import MixPretrainedModel
 
 
 class CrossEntropyLoss(nn.Layer):
@@ -1069,10 +1069,10 @@ class BertLMHeadModel(BertPreTrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
     _keys_to_ignore_on_load_missing = [r"position_ids", r"predictions.decoder.bias"]
 
-    def __init__(self, config, encoder_width=None, train_in_satge1=False, **kwargs):
+    def __init__(self, config, encoder_width=1408, train_in_satge1=False, **kwargs):
         super().__init__(config)
 
-        config.mp_degree = config.get("mp_degree",-1)
+        config.mp_degree = getattr(config, "mp_degree", -1)
         config.encoder_width = encoder_width
         config.gradient_checkpointing = False
         self.ln_vision = paddle.nn.LayerNorm(config.encoder_width)
@@ -1092,7 +1092,7 @@ class BertLMHeadModel(BertPreTrainedModel):
             self.itm_head = paddle.nn.Linear(in_features=config.hidden_size, out_features=2)
             self.resize_token_embeddings(kwargs.get("tokenizer_length"))
         else:
-            text_hidden_size = kwargs.get("text_hidden_size")
+            text_hidden_size = kwargs.get("text_hidden_size", 2560)
             self.language_projection = paddle.nn.Linear(in_features=config.hidden_size, out_features=text_hidden_size)
 
         # self.init_weights()

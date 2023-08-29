@@ -19,11 +19,6 @@ from typing import Any, Optional, Tuple, Union
 import paddle
 import paddle.distributed as dist
 import paddle.nn as nn
-from paddlenlp.transformers import AutoTokenizer
-from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
-from paddlenlp.transformers.model_outputs import ModelOutput
-from paddlenlp.transformers.opt.modeling import OPTForCausalLM
-from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 
 from paddlemix.models.blip2.modeling_utils import (
     all_gather_with_grad,
@@ -34,6 +29,11 @@ from paddlemix.models.blip2.modeling_utils import (
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
 from paddlemix.models.model_utils import MixPretrainedModel
 from paddlemix.utils.log import logger
+from paddlenlp.transformers import AutoTokenizer
+from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
+from paddlenlp.transformers.model_outputs import ModelOutput
+from paddlenlp.transformers.opt.modeling import OPTForCausalLM
+from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 
 from .configuration import Blip2Config
 
@@ -116,14 +116,8 @@ class Blip2PretrainedModel(MixPretrainedModel):
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         tokenizer.add_special_tokens({"bos_token": "[DEC]"})
         return tokenizer
-    
-    
-    
-    
-    
-    
-    
-    
+
+
 class Blip2ForConditionalGeneration(Blip2PretrainedModel):
     config_class = Blip2Config
     main_input_name = "pixel_values"
@@ -134,11 +128,10 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
     ):
         super().__init__(config)
         from paddlemix.models.blip2.eva_vit import VisionTransformer
-        config.vision_config.update({"mp_degree":config.mp_degree})
-        config.qformer_config.update({"mp_degree":config.mp_degree})
-        self.visual_encoder = VisionTransformer(
-            config=config.vision_config
-        )
+
+        config.vision_config.update({"mp_degree": config.mp_degree})
+        config.qformer_config.update({"mp_degree": config.mp_degree})
+        self.visual_encoder = VisionTransformer(config=config.vision_config)
         self.freeze_vit = config.freeze_vit
         self.train_stage1 = False
         if self.freeze_vit:
@@ -299,6 +292,10 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         >>> print(generated_text)
         two
         ```"""
+        # import numpy as np
+        # pixel_values=paddle.to_tensor(np.load("pixel_values_llama.npy"))
+        # input_ids=paddle.to_tensor(np.load("input_ids_llama.npy"))
+        # attention_mask=paddle.to_tensor(np.load("attention_mask_llama.npy"))
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         with paddle.amp.auto_cast(level="O2"):
             image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))

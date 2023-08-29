@@ -24,7 +24,6 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 
 from paddlemix.datasets import load_dataset
 from paddlemix.examples.blip2.utils import (
@@ -42,6 +41,7 @@ from paddlemix.processors.blip_processing import (
 )
 from paddlemix.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlemix.utils.log import logger
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 
 
 @dataclass
@@ -126,13 +126,14 @@ class PreTrainingArguments(TrainingArguments):
         default=None,
         metadata={"help": "The path to model if you want to load weights from the specified path"},
     )
+    sharding: str = field(default="stage2", metadata={"help": "Set the stage of sharding"})
 
 
 def create_model(config):
     blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
     blip2_config.mp_degree = config.mp_degree
     #  blip2_config.vit_path=
-     
+
     blip2_config.gradient_checkpointing = config.gradient_checkpointing
     model = Blip2ForConditionalGeneration(blip2_config)
     model.load_pretrained(blip2_config)

@@ -16,47 +16,32 @@ import gc
 import os
 import re
 import warnings
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Type
 
 import numpy as np
 import paddle
-from paddlenlp.transformers import PretrainedModel
 from tqdm.auto import tqdm
 
-from paddlemix.utils import device_guard, paddlemix_load
+from paddlemix.utils import paddlemix_load
 from paddlemix.utils.env import MODEL_HOME
 from paddlemix.utils.log import logger
-from typing import Type
+from paddlenlp.transformers import PretrainedModel
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.model_utils import PretrainedModel,resolve_weight_file_from_hf_hub,_add_variant,weight_name_suffix
+from paddlenlp.transformers.model_utils import _add_variant, weight_name_suffix
 from paddlenlp.utils.env import (
-    CONFIG_NAME,
-    LEGACY_CONFIG_NAME,
     PADDLE_WEIGHTS_INDEX_NAME,
     PADDLE_WEIGHTS_NAME,
     PYTORCH_WEIGHTS_NAME,
     SAFE_WEIGHTS_INDEX_NAME,
     SAFE_WEIGHTS_NAME,
 )
-VISION_WEIGHTS={"eva_vit_g":"blip2-stage2/eva_vit_g/model_state.pdparams"}
-BRIDGE_WEIGHTS={"qformer-stage2":"blip2-stage2/Qformer/model_state.pdparams"}
-from paddlenlp.transformers.utils import     (ContextManagers,
-                                                InitTrackerMeta,
-                                                adapt_stale_fwd_patch,
-                                                cached_file,
-                                                cached_file_for_hf_hub,
-                                                convert_file_size_to_int,
-                                                dtype_byte_size,
-                                                fn_args_to_dict,
-                                                get_checkpoint_shard_files,
-                                                is_paddle_support_lazy_init,
-                                                is_safetensors_available,
-                                                paddlenlp_load,
-                                                resolve_cache_dir,
-                                                weight_name_suffix,
-                                            )
+
+VISION_WEIGHTS = {"eva_vit_g": "blip2-stage2/eva_vit_g/model_state.pdparams"}
+BRIDGE_WEIGHTS = {"qformer-stage2": "blip2-stage2/Qformer/model_state.pdparams"}
 from paddle.utils.download import is_url as is_remote_url
-from paddlenlp.utils.downloader import get_path_from_url_with_filelock, hf_file_exists
+
+from paddlenlp.transformers.utils import cached_file
+from paddlenlp.utils.downloader import get_path_from_url_with_filelock
 
 __all__ = ["MixPretrainedModel"]
 
@@ -204,26 +189,25 @@ class MixPretrainedModel(PretrainedModel):
     def __init__(self, *args, **kwargs):
         super(MixPretrainedModel, self).__init__(*args, **kwargs)
 
-    def get_expected_keys(self, model_state_dict,name=None):
-        model_list=[]
-        if name=="bridge":
-            self._keys_to_ignore_on_load_unexpected=["visual_encoder","language_model"]
-            for key in model_state_dict.keys():
+    def get_expected_keys(self, model_state_dict, name=None):
+        model_list = []
+        if name == "bridge":
+            self._keys_to_ignore_on_load_unexpected = ["visual_encoder", "language_model"]
+            for key in model_state_dict:
                 if "visual_encoder" not in key and "language_model" not in key:
                     model_list.append(key)
-                    
-        elif name=="vision":
-            self._keys_to_ignore_on_load_unexpected=["Qformer","language_model"]
-            for key in model_state_dict.keys():
+
+        elif name == "vision":
+            self._keys_to_ignore_on_load_unexpected = ["Qformer", "language_model"]
+            for key in model_state_dict:
                 if "visual_encoder" in key:
                     model_list.append(key)
         else:
-            self._keys_to_ignore_on_load_unexpected=["language_model"]
-            for key in model_state_dict.keys():
+            self._keys_to_ignore_on_load_unexpected = ["language_model"]
+            for key in model_state_dict:
                 if "language_model" not in key:
                     model_list.append(key)
-                
-            
+
         return model_list
 
     def refine_state_dict(self, state_dict):
@@ -263,19 +247,25 @@ class MixPretrainedModel(PretrainedModel):
         Returns:
             Tuple[List[str]]: _description_
         """
-        qformer_model_name_or_path =  config.get("bridge_name_or_path",None)
-        vision_model_name_or_path = config.get("vision_name_or_path",None)
-        model_name_or_path = config.get("model_name_or_path",None)
-        if qformer_model_name_or_path and  vision_model_name_or_path and model_name_or_path is None:
-            ValueError("either model_name_or_path or (bridge_model_name_or_path and vision_model_name_or_path) should be set.")
-        def load_blip2_model_state(model_name_or_path=None,name=None,
+        qformer_model_name_or_path = config.get("bridge_name_or_path", None)
+        vision_model_name_or_path = config.get("vision_name_or_path", None)
+        model_name_or_path = config.get("model_name_or_path", None)
+        if (not qformer_model_name_or_path or not vision_model_name_or_path) and model_name_or_path is None:
+            ValueError(
+                "either model_name_or_path or (bridge_model_name_or_path and vision_model_name_or_path) should be set."
+            )
+
+        def load_blip2_model_state(
+            model_name_or_path=None,
+            name=None,
             state_dict=None,
-            ignore_mismatched_sizes=False,                    
+            ignore_mismatched_sizes=False,
             low_cpu_mem_usage=False,
             dtype=None,
             cache_dir=None,
             subfolder="",
-            variant=None,):
+            variant=None,
+        ):
             cache_dir = resolve_cache_dir(model_name_or_path, cache_dir)
 
             # Keep in fp32 modules
@@ -283,19 +273,14 @@ class MixPretrainedModel(PretrainedModel):
             use_keep_in_fp32_modules = False
 
             # resolve model_weight file
-            resolved_archive_file, sharded_metadata, is_sharded = self._resolve_model_file_path(
-                model_name_or_path,
-                cache_dir=cache_dir,
-                subfolder=subfolder,
-                variant=variant,
-                name=name
+            resolved_archive_file, sharded_metadata, is_sharded = self._resolve_model_file_path_mix(
+                model_name_or_path, cache_dir=cache_dir, subfolder=subfolder, variant=variant, name=name
             )
 
             # Check if `_keep_in_fp32_modules` is not None
             use_keep_in_fp32_modules = (self._keep_in_fp32_modules is not None) and dtype == "float16"
-            
-            loaded_state_dict_keys=self.state_dict()
 
+            loaded_state_dict_keys = self.state_dict()
 
             if use_keep_in_fp32_modules:
                 # low_cpu_mem_usage = True
@@ -304,11 +289,9 @@ class MixPretrainedModel(PretrainedModel):
                 keep_in_fp32_modules = []
 
             # load_pretrained_model
-            is_safetensors = False
-
             model_state_dict = self.state_dict()
 
-            expected_keys = self.get_expected_keys(model_state_dict,name)
+            expected_keys = self.get_expected_keys(model_state_dict, name)
 
             prefix = self.base_model_prefix
 
@@ -339,7 +322,7 @@ class MixPretrainedModel(PretrainedModel):
             if self._keys_to_ignore_on_load_missing is not None:
                 for pat in self._keys_to_ignore_on_load_missing:
                     missing_keys = [k for k in missing_keys if re.search(pat, k) is None]
-            
+
             if self._keys_to_ignore_on_load_unexpected is not None:
                 for pat in self._keys_to_ignore_on_load_unexpected:
                     unexpected_keys = [k for k in unexpected_keys if re.search(pat, k) is None]
@@ -351,10 +334,7 @@ class MixPretrainedModel(PretrainedModel):
                         param = param.to(dtype=paddle.float32)
 
             # Make sure we are able to load base models as well as derived models (with heads)
-            start_prefix = ""
             model_to_load = self
-            if len(self.base_model_prefix) > 0 and not hasattr(self, self.base_model_prefix) and has_prefix_module:
-                start_prefix = self.base_model_prefix + "."
             if len(self.base_model_prefix) > 0 and hasattr(self, self.base_model_prefix) and not has_prefix_module:
                 model_to_load = getattr(self, self.base_model_prefix)
                 base_model_expected_keys = list(model_to_load.state_dict().keys())
@@ -416,7 +396,6 @@ class MixPretrainedModel(PretrainedModel):
                     remove_prefix_from_model,
                     ignore_mismatched_sizes,
                 )
-                error_msgs = _load_state_dict_into_model(model_to_load, state_dict, start_prefix)
             else:
                 # Sharded checkpoint or whole but low_cpu_mem_usage==True
 
@@ -424,15 +403,13 @@ class MixPretrainedModel(PretrainedModel):
                 if not isinstance(resolved_archive_file, list):
                     resolved_archive_file = [resolved_archive_file]
 
-                error_msgs = []
                 mismatched_keys = []
 
                 if len(resolved_archive_file) > 1:
                     resolved_archive_file = tqdm(resolved_archive_file, desc="Loading checkpoint shards")
 
                 for shard_file in resolved_archive_file:
-                    pre_tensor_parallel_split = False
-                    state_dict = paddlemix_load(shard_file,map_location="cpu")
+                    state_dict = paddlemix_load(shard_file, map_location="cpu")
 
                     # Mistmatched keys contains tuples key/shape1/shape2 of weights in the checkpoint that have a shape not
                     # matching the weights in the model.
@@ -490,23 +467,24 @@ class MixPretrainedModel(PretrainedModel):
                 )
 
             return missing_keys, unexpected_keys, mismatched_keys
-        if  model_name_or_path is not None:  
-            load_blip2_model_state(model_name_or_path,'model')
+
+        if model_name_or_path is not None:
+            load_blip2_model_state(model_name_or_path, "model")
         else:
-            load_blip2_model_state(vision_model_name_or_path,'vision') 
-            load_blip2_model_state(qformer_model_name_or_path,'bridge')
-      
+            load_blip2_model_state(vision_model_name_or_path, "vision")
+            load_blip2_model_state(qformer_model_name_or_path, "bridge")
+
     @classmethod
-    def _resolve_model_file_path(
+    def _resolve_model_file_path_mix(
         cls: Type[PretrainedModel],
         pretrained_model_name_or_path: str,
         name=None,
         from_hf_hub: bool = False,
-        cache_dir = None,
+        cache_dir=None,
         subfolder: str = "",
         config: PretrainedConfig = None,
         convert_from_torch: bool = False,
-        use_safetensors = None,
+        use_safetensors=None,
         variant=None,
     ) -> str:
 
@@ -534,25 +512,25 @@ class MixPretrainedModel(PretrainedModel):
         is_sharded = False
         sharded_metadata = None
 
-
+        is_local_file = False
+        is_local = False
         if pretrained_model_name_or_path is not None:
-            
-            
+
             pretrained_model_name_or_path = str(pretrained_model_name_or_path)
             if name == "vision":
                 if pretrained_model_name_or_path in VISION_WEIGHTS:
-                   is_local_file = os.path.isfile(VISION_WEIGHTS[pretrained_model_name_or_path])
-                   pretrained_model_name_or_path=VISION_WEIGHTS[pretrained_model_name_or_path]
+                    is_local_file = os.path.isfile(VISION_WEIGHTS[pretrained_model_name_or_path])
+                    pretrained_model_name_or_path = VISION_WEIGHTS[pretrained_model_name_or_path]
                 else:
                     is_local = os.path.isdir(pretrained_model_name_or_path)
-                    pretrained_model_name_or_path=pretrained_model_name_or_path
+                    pretrained_model_name_or_path = pretrained_model_name_or_path
             elif name == "bridge":
                 if pretrained_model_name_or_path in BRIDGE_WEIGHTS:
-                   is_local_file = os.path.isfile(BRIDGE_WEIGHTS[pretrained_model_name_or_path])
-                   pretrained_model_name_or_path=BRIDGE_WEIGHTS[pretrained_model_name_or_path]
+                    is_local_file = os.path.isfile(BRIDGE_WEIGHTS[pretrained_model_name_or_path])
+                    pretrained_model_name_or_path = BRIDGE_WEIGHTS[pretrained_model_name_or_path]
                 else:
                     is_local = os.path.isdir(pretrained_model_name_or_path)
-                    pretrained_model_name_or_path=pretrained_model_name_or_path
+                    pretrained_model_name_or_path = pretrained_model_name_or_path
 
             def get_file_path(pretrained_model_name_or_path, subfolder, SAFE_WEIGHTS_NAME, variant):
                 return os.path.join(pretrained_model_name_or_path, subfolder, _add_variant(SAFE_WEIGHTS_NAME, variant))
@@ -733,18 +711,15 @@ class MixPretrainedModel(PretrainedModel):
                 logger.info(f"Loading weights file {filename} from cache at {resolved_archive_file}")
         else:
             resolved_archive_file = None
+
             def get_file_path(pretrained_model_name_or_path):
                 return os.path.join(pretrained_model_name_or_path)
 
             # pretrained_model_name_or_path is dir
             if is_local_file:
-                if os.path.isfile(
-                    get_file_path(pretrained_model_name_or_path)
-                ):
+                if os.path.isfile(get_file_path(pretrained_model_name_or_path)):
                     # Load from a PaddlePaddle checkpoint
-                    resolved_archive_file = get_file_path(
-                        pretrained_model_name_or_path
-                    )
+                    resolved_archive_file = get_file_path(pretrained_model_name_or_path)
             elif is_remote_url(pretrained_model_name_or_path):
                 resolved_archive_file = get_path_from_url_with_filelock(pretrained_model_name_or_path)
             else:

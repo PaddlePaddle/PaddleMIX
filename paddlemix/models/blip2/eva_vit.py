@@ -360,7 +360,7 @@ class VisionTransformer(Blip2PretrainedModel):
 
     def __init__(self, config: Blip2VisionConfig, **kwargs):
         super().__init__(config)
-        mp_degree = config.mp_degree
+        mp_degree = getattr(config, "mp_degree", 1)
         use_flash_attn = getattr(config, "use_flash_attn", False)
         use_fusedlinear = getattr(config, "use_fusedlinear", False)
         self.class_num = config.class_num
@@ -450,8 +450,8 @@ class VisionTransformer(Blip2PretrainedModel):
         # x = self.norm(x)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward(self, pixel_values):
+        x = self.forward_features(pixel_values)
         return x
 
 
