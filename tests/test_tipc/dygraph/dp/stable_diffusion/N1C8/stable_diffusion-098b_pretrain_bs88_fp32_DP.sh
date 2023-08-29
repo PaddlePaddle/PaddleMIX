@@ -14,8 +14,8 @@
 
 model_item=stable_diffusion-098b_pretrain
 model=stable_diffusion
-bs_item=144
-fp_item=bf16O1
+bs_item=88
+fp_item=fp32
 run_mode=DP
 device_num=N1C8
 max_epochs=200
