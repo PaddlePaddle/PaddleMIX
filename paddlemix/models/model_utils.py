@@ -217,6 +217,8 @@ class MixPretrainedModel(PretrainedModel):
     def load_pretrained(
         self,
         config,
+        model,
+        training_args,
         state_dict=None,
         ignore_mismatched_sizes=False,
         low_cpu_mem_usage=False,
@@ -257,6 +259,8 @@ class MixPretrainedModel(PretrainedModel):
 
         def load_blip2_model_state(
             model_name_or_path=None,
+            model=None,
+            training_args=None,
             name=None,
             state_dict=None,
             ignore_mismatched_sizes=False,
@@ -265,6 +269,7 @@ class MixPretrainedModel(PretrainedModel):
             cache_dir=None,
             subfolder="",
             variant=None,
+            
         ):
             cache_dir = resolve_cache_dir(model_name_or_path, cache_dir)
 
@@ -409,7 +414,7 @@ class MixPretrainedModel(PretrainedModel):
                     resolved_archive_file = tqdm(resolved_archive_file, desc="Loading checkpoint shards")
 
                 for shard_file in resolved_archive_file:
-                    state_dict = paddlemix_load(shard_file, map_location="cpu")
+                    state_dict = paddlemix_load(shard_file,model,training_args, map_location="cpu")
 
                     # Mistmatched keys contains tuples key/shape1/shape2 of weights in the checkpoint that have a shape not
                     # matching the weights in the model.
@@ -469,10 +474,10 @@ class MixPretrainedModel(PretrainedModel):
             return missing_keys, unexpected_keys, mismatched_keys
 
         if model_name_or_path is not None:
-            load_blip2_model_state(model_name_or_path, "model")
+            load_blip2_model_state(model_name_or_path,model,training_args, "model")
         else:
-            load_blip2_model_state(vision_model_name_or_path, "vision")
-            load_blip2_model_state(qformer_model_name_or_path, "bridge")
+            load_blip2_model_state(vision_model_name_or_path,model,training_args, "vision")
+            load_blip2_model_state(qformer_model_name_or_path,model,training_args, "bridge")
 
     @classmethod
     def _resolve_model_file_path_mix(
@@ -729,3 +734,4 @@ class MixPretrainedModel(PretrainedModel):
                 )
 
         return resolved_archive_file, sharded_metadata, is_sharded
+    

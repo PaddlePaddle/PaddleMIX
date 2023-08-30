@@ -129,14 +129,14 @@ class PreTrainingArguments(TrainingArguments):
     sharding: str = field(default="stage2", metadata={"help": "Set the stage of sharding"})
 
 
-def create_model(config):
+def create_model(config,training_args):
     blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
     blip2_config.mp_degree = config.mp_degree
     #  blip2_config.vit_path=
 
     blip2_config.gradient_checkpointing = config.gradient_checkpointing
     model = Blip2ForConditionalGeneration(blip2_config)
-    model.load_pretrained(blip2_config)
+    model.load_pretrained(blip2_config,model,training_args)
     paddle.device.cuda.empty_cache()
     return model
 
@@ -195,7 +195,7 @@ def main():
     blip_eval_collator = BlipCollator(eval_processor, mode="test")
     model_args.mp_degree = training_args.tensor_parallel_degree
     model_args.gradient_checkpointing = training_args.gradient_checkpointing
-    model = create_model(model_args)
+    model = create_model(model_args,training_args)
 
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     trainer = Trainer(
