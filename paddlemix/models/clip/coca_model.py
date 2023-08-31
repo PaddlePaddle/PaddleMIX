@@ -142,12 +142,16 @@ class CoCa(CoCaPretrainedModel):
         text_latent, _ = self._encode_text(text, normalize=normalize, embed_cls=embed_cls)
         return text_latent
 
-    def forward(self, image, input_ids, embed_cls=True, image_latent=None, image_embs=None, type_ids=None, **kwargs):
+    def forward(
+        self, image, input_ids=None, embed_cls=True, image_latent=None, image_embs=None, type_ids=None, **kwargs
+    ):
         text = input_ids
-        text_latent, token_embs = self._encode_text(text, embed_cls=embed_cls)
         if image_latent is None or image_embs is None:
             image_latent, image_embs = self._encode_image(image)
-
+        if text is not None:
+            text_latent, token_embs = self._encode_text(text, embed_cls=embed_cls)
+        else:
+            return paddle.to_tensor(0), image_latent
         # TODO: add assertion to avoid bugs?
         labels = text[:, -token_embs.shape[1] :]
 

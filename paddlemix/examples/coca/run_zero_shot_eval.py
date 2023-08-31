@@ -25,7 +25,6 @@ from dataclasses import dataclass, field
 
 import paddle
 
-from paddlemix.checkpoint import load_model
 from paddlemix.datasets.dataset import ImageFolder
 from paddlemix.examples.coca.run_pretrain_dist import Collator
 from paddlemix.metrics.clip_zero_shot import ClipZeroShot
@@ -104,13 +103,6 @@ def main_worker(training_args, model_args, data_args):
     model = CoCa.from_pretrained(model_args.model, ignore_mismatched_sizes=False)
     model.eval()
 
-    training_args.model = model_args.model
-    if (
-        training_args.pretrained_model_path
-        and training_args.pretrained_model_path != "None"
-        and training_args.resume_from_checkpoint is None
-    ):
-        load_model(training_args, model, ckpt_dir=training_args.pretrained_model_path)
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("float32")
 

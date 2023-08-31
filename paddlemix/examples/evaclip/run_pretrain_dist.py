@@ -81,9 +81,9 @@ class PreTrainingArguments(TrainingArguments):
     Arguments pertaining to what training options we are going to use during pretraining.
     """
 
-    pretrained_model_path: str = field(
-        default=None,
-        metadata={"help": "The path to pre-trained model that we will use for pretraining."},
+    pretrained: bool = field(
+        default=False,
+        metadata={"help": "Whether to use pretrained model."},
     )
     text_wd: float = field(default=0.05, metadata={"help": "Weight decay for text tower"})
     visual_wd: float = field(default=0.05, metadata={"help": "Weight decay for visual tower"})
@@ -197,7 +197,8 @@ def main_worker(training_args, model_args, data_args):
         data_world_rank=training_args.data_world_rank,
         data_world_size=training_args.data_world_size,
     )
-    model.load_pretrained(model_args.model)
+    if training_args.pretrained:
+        model.load_pretrained(model_args.model)
 
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("float32")
