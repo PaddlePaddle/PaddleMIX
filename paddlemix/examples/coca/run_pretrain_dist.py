@@ -30,8 +30,8 @@ import paddle
 from paddlemix.datasets import load_dataset
 from paddlemix.datasets.dataset import ImageFolder
 from paddlemix.metrics.clip_zero_shot import ClipZeroShot
-from paddlemix.models.clip.eva_clip_model import EVACLIP, EVACLIPConfig
-from paddlemix.optimization import create_optimizer
+from paddlemix.models.clip.coca_model import CoCa, CoCaConfig
+from paddlemix.optimization import create_optimizer_simple
 from paddlemix.processors.clip_processing import (
     CLIPImageProcessor,
     CLIPProcessor,
@@ -115,6 +115,14 @@ class PreTrainingArguments(TrainingArguments):
         metadata={"help": "Whether to use tensorboard to record loss."},
     )
     pretrained_text_model: str = field(default="openclip", metadata={"help": "the model to pre-extract text feats"})
+    coca_caption_loss_weight: float = field(
+        default=1.0,
+        metadata={"help": "coca_caption_loss_weight set, default: 2.0"},
+    )
+    coca_contrastive_loss_weight: float = field(
+        default=1.0,
+        metadata={"help": "coca_contrastive_loss_weight set, default: 1.0"},
+    )
 
 
 class SelfTrainer(CLIPTrainer):
@@ -127,7 +135,7 @@ class SelfTrainer(CLIPTrainer):
         `create_scheduler`) in a subclass.
         """
         self.lr_scheduler = paddle.optimizer.lr.CosineAnnealingDecay(
-            1.0,
+            self.args.learning_rate,
             num_training_steps - self.args.warmup_steps,
             last_epoch=self.args.last_epoch,
         )
@@ -139,7 +147,7 @@ class SelfTrainer(CLIPTrainer):
                 1.0,
                 last_epoch=self.args.last_epoch,
             )
-        self.optimizer = create_optimizer(self.args, self.model, self.lr_scheduler)
+        self.optimizer = create_optimizer_simple(self.args, self.model, self.lr_scheduler)
 
 
 class Collator:
@@ -165,6 +173,7 @@ class Collator:
                 return_tensors="pd",
                 return_attention_mask=False,
                 mode="train",
+                padding_zero=True,
             )
             return batch
         else:
@@ -179,6 +188,7 @@ class Collator:
                 mode="eval",
                 do_resize=True,
                 do_crop=True,
+                padding_zero=True,
             )
             batch["labels"] = paddle.to_tensor(np.array(labels))
             return batch
@@ -188,11 +198,12 @@ def main_worker(training_args, model_args, data_args):
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("bfloat16")
 
-    config = EVACLIPConfig.from_pretrained(model_args.model)
-    model = EVACLIP(
+    config = CoCaConfig.from_pretrained(model_args.model)
+    model = CoCa(
         config,
-        disable_text=False,
         local_loss=training_args.local_loss,
+        coca_caption_loss_weight=training_args.coca_caption_loss_weight,
+        coca_contrastive_loss_weight=training_args.coca_contrastive_loss_weight,
         gather_with_grad=training_args.gather_with_grad,
         data_world_rank=training_args.data_world_rank,
         data_world_size=training_args.data_world_size,
@@ -203,6 +214,7 @@ def main_worker(training_args, model_args, data_args):
         paddle.set_default_dtype("float32")
 
     train_dataset = load_dataset(data_args.task_name, splits="train")
+
     image_processor = CLIPImageProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
     text_processor = CLIPTextProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
     tokenizer = SimpleTokenizer()

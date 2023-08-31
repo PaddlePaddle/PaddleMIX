@@ -43,10 +43,9 @@ try:
 except:
     print("Warning: import memory_efficient_attention error")
 
-from paddlenlp.transformers.configuration_utils import PretrainedConfig
-
 from paddlemix.models.model_utils import MixPretrainedModel
 from paddlemix.utils.log import logger
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 
 def _convert_attention_mask(attn_mask, dtype):
@@ -925,12 +924,11 @@ class ResidualAttentionBlock(paddle.nn.Layer):
         if self.xattn:
             return self.attn(q_x, attn_mask=attn_mask)
 
-        attn_mask = attn_mask.unsqueeze(0).unsqueeze(0) if attn_mask is not None else None
-        q_x = q_x.transpose((1, 0, 2))
+        attn_mask = attn_mask if attn_mask is not None else None
         k_x = k_x if k_x is not None else q_x
         v_x = v_x if v_x is not None else q_x
         out = self.attn(q_x, k_x, v_x, attn_mask=attn_mask)
-        return out.transpose((1, 0, 2))
+        return out
 
     def forward(
         self,
@@ -964,7 +962,7 @@ class Transformer(paddle.nn.Layer):
                 ResidualAttentionBlock(
                     config.width,
                     config.heads,
-                    mlp_ratio=4.0,
+                    mlp_ratio=config.mlp_ratio,
                     ls_init_value=config.ls_init_value,
                     act_layer=act_layer,
                     norm_layer=norm_layer,
@@ -978,42 +976,14 @@ class Transformer(paddle.nn.Layer):
         return self.resblocks[0].mlp.c_fc.weight.dtype
 
     def forward(self, x: paddle.Tensor, attn_mask: Optional[paddle.Tensor] = None):
+        cnt = 0
         for r in self.resblocks:
             if self.enable_recompute:
                 x = paddle.distributed.fleet.utils.recompute(r, x, attn_mask, use_reentrant=False)
             else:
                 x = r(x, attn_mask=attn_mask)
+                cnt += 1
         return x
-
-
-class AttentionalPooler(paddle.nn.Layer):
-    def __init__(self, config, norm_layer: Callable = LayerNorm):
-        super().__init__()
-        d_model = config.num_classes
-        context_dim = config.embed_dim
-        origin_dtype = paddle.get_default_dtype()
-        paddle.set_default_dtype("float32")
-        init_data = paddle.randn(shape=[config.n_queries, d_model])
-        if origin_dtype != "float32":
-            init_data.astype(origin_dtype)
-        paddle.set_default_dtype(origin_dtype)
-        self.query = self.create_parameter(
-            shape=[config.n_queries, d_model],
-            default_initializer=paddle.nn.initializer.Assign(init_data),
-        )
-        self.attn = MultiHeadAttention(d_model, config.attn_pooler_heads, kdim=context_dim, vdim=context_dim)
-        self.ln_q = norm_layer(d_model)
-        self.ln_k = norm_layer(context_dim)
-
-    def forward(self, x):
-        x = self.ln_k(x)
-        N = x.shape[0]
-        q = self.ln_q(self.query)
-        out = self.attn(self._repeat(q, N), x, x)
-        return out
-
-    def _repeat(self, query, N: int):
-        return query.unsqueeze(0).repeat_interleave(N, 0)
 
 
 class EVATextTransformerConfig(PretrainedConfig):
@@ -1028,13 +998,16 @@ class EVATextTransformerConfig(PretrainedConfig):
         heads: int = 8,
         layers: int = 12,
         ls_init_value: float = None,
-        output_dim: int = 512,
+        embed_dim: int = 512,
         act_layer: Callable = paddle.nn.GELU,
         norm_layer: Callable = LayerNorm,
         xattn: bool = False,
         attn_mask: bool = True,
         pad_id: int = 0,
+        embed_cls: bool = False,
+        output_tokens: bool = False,
         quick_gelu: bool = False,
+        mlp_ratio: float = 4.0,
         fusedLN: bool = False,
         **kwargs,
     ):
@@ -1047,13 +1020,17 @@ class EVATextTransformerConfig(PretrainedConfig):
         self.heads = heads
         self.layers = layers
         self.ls_init_value = ls_init_value
-        self.output_dim = output_dim
+        self.output_dim = embed_dim
         self.act_layer = act_layer
         self.norm_layer = norm_layer
         self.xattn = xattn
         self.attn_mask = attn_mask
         self.pad_id = pad_id
+        self.embed_cls = embed_cls
+        self.output_tokens = output_tokens
+
         self.quick_gelu = quick_gelu
+        self.mlp_ratio = mlp_ratio
         self.fusedLN = fusedLN
 
     @classmethod
@@ -1106,6 +1083,12 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
             shape=[width, self.output_dim],
             default_initializer=paddle.nn.initializer.Assign(init_data),
         )
+        self.output_tokens = config.output_tokens
+        if config.embed_cls:
+            self.cls_emb = self.create_parameter(shape=[width])
+            self.num_pos += 1
+        else:
+            self.cls_emb = None
         init_data = paddle.empty(shape=[self.num_pos, width])
         self.positional_embedding = self.create_parameter(
             shape=[self.num_pos, width],
@@ -1120,6 +1103,8 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
     def init_parameters(self):
         self.token_embedding.weight = params_normal_(self.token_embedding.weight, std=0.02)
         self.positional_embedding = params_normal_(self.positional_embedding, std=0.01)
+        if self.cls_emb is not None:
+            self.cls_emb = params_normal_(self.cls_emb, std=0.01)
 
         proj_std = self.transformer.width**-0.5 * (2 * self.transformer.layers) ** -0.5
         attn_std = self.transformer.width**-0.5
@@ -1149,11 +1134,25 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         mask = paddle.triu(mask, 1)
         return mask
 
+    def build_cls_mask(self, text, cast_dtype):
+        cls_mask = (text != self.pad_id).unsqueeze(1).astype(text.dtype)
+        cls_mask = paddle.nn.functional.pad(
+            cls_mask,
+            (0, 0, cls_mask.shape[2], 0, 1, 0),
+            value=1.0,
+        )
+        additive_mask = paddle.zeros(cls_mask.shape, dtype=cast_dtype)
+        additive_mask = masked_fill(additive_mask, (1.0 - cls_mask).astype("bool"), float("-inf"))
+        additive_mask = additive_mask.unsqueeze(1)
+        additive_mask = paddle.repeat_interleave(additive_mask, self.heads, 1)
+        return additive_mask
+
     def _repeat(self, t, N: int):
         return t.reshape((1, 1, -1)).repeat_interleave(N, 0)
 
     def forward(self, text):
         cast_dtype = self.transformer.get_cast_dtype()
+        seq_len = text.shape[1]
         if isinstance(cast_dtype, paddle.dtype):
             dtype = cast_dtype
         elif isinstance(cast_dtype, str) and cast_dtype not in [
@@ -1170,6 +1169,12 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         x = self.token_embedding(text).cast(dtype)
         attn_mask = self.attn_mask
 
+        if self.cls_emb is not None:
+            seq_len += 1
+            x = paddle.concat([x, self._repeat(self.cls_emb, x.shape[0])], axis=1)
+            cls_mask = self.build_cls_mask(text, cast_dtype)
+            attn_mask = attn_mask[:seq_len, :seq_len].unsqueeze(0) + cls_mask[:, :seq_len, :seq_len]
+
         if isinstance(cast_dtype, paddle.dtype):
             dtype = cast_dtype
         elif isinstance(cast_dtype, str) and cast_dtype not in [
@@ -1184,13 +1189,18 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         else:
             dtype = self.positional_embedding.dtype
         x = x + self.positional_embedding.cast(dtype)
-        x = x.transpose(perm=[1, 0, 2])
         x = self.transformer(x, attn_mask=attn_mask)
-        x = x.transpose(perm=[1, 0, 2])
-        x = self.ln_final(x)
-        pooled = x[paddle.arange(x.shape[0]), text.argmax(axis=-1)]
+
+        if self.cls_emb is not None:
+            pooled, tokens = x[:, -1], x[:, :-1]
+            pooled = self.ln_final(pooled)
+        else:
+            x = self.ln_final(x)
+            pooled, tokens = x[paddle.arange(x.shape[0]), text.argmax(axis=-1)], x
 
         if self.text_projection is not None:
             pooled = pooled @ self.text_projection
 
+        if self.output_tokens:
+            return pooled, tokens
         return pooled
