@@ -14,6 +14,7 @@
 
 import os
 import sys
+import warnings
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 import random
@@ -153,11 +154,12 @@ class PreTrainingArguments(TrainingArguments):
     )
 
 
-def create_model(config):
+def create_model(config, training_args):
     blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
     blip2_config.mp_degree = config.mp_degree
     blip2_config.gradient_checkpointing = config.gradient_checkpointing
     model = Blip2ForConditionalGeneration(blip2_config)
+    model.load_pretrained(blip2_config, model, training_args)
     paddle.device.cuda.empty_cache()
     return model
 
@@ -201,13 +203,26 @@ def main():
     )
     processor = Blip2Processor(image_processor, text_processor_class, tokenizer_class)
 
-    train_dataset = load_dataset(data_args.task_name, splits="train")
-    eval_dataset = {"test": load_dataset(data_args.task_name, splits="test")}
+    # load dataset
+    if isinstance(data_args.task_name, list):
+        from paddlemix.datasets.dataset import ConcatDataset
+
+        train_dataset = []
+        for i in range(len(data_args.task_name)):
+            train_dataset.append(load_dataset(data_args.task_name[i], splits="train"))
+            train_dataset = ConcatDataset(train_dataset)
+        warnings.warn("Do not support multiple {} and {} datasets.".format("test", "eval"))
+        eval_dataset = {"test": load_dataset(data_args.task_name[0], splits="test")}
+    else:
+        train_dataset.append(load_dataset(data_args.task_name, splits="train"))
+        eval_dataset = {"test": load_dataset(data_args.task_name, splits="test")}
+    # train_dataset = load_dataset(data_args.task_name,data_files=[['/root/.paddlemix/datasets/coco/images/','/root/.paddlemix/datasets/coco/annotations/coco_karpathy_train.json',"train"]])
+
     # create model
     blip_collator = BlipCollator(processor)
     model_args.mp_degree = training_args.tensor_parallel_degree
     model_args.gradient_checkpointing = training_args.gradient_checkpointing
-    model = create_model(model_args)
+    model = create_model(model_args, training_args)
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     # create trainer
     trainer = Trainer(

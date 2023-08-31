@@ -225,6 +225,7 @@ class Blip2QFormerConfig(PretrainedConfig):
         self.classifier_dropout = classifier_dropout
         self.cross_attention_frequency = cross_attention_frequency
         self.encoder_hidden_size = encoder_hidden_size
+        self.dropout = kwargs.pop("dropout", None)
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
@@ -309,18 +310,15 @@ class Blip2Config(PretrainedConfig):
         if text_config is None:
             text_config = {}
             logger.info("text_config is None. Initializing the text config with default values (`OPTConfig`).")
-        self.vision_config = vision_config
-        self.qformer_config = qformer_config
+        self.vision_config = Blip2VisionConfig(**vision_config)
+        self.qformer_config = Blip2QFormerConfig(**qformer_config)
         self.text_config = text_config
-
-        # self.use_decoder_only_language_model = (
-        #     self.text_config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
-        # )
         # CONFIGURATION_MODEL_MAPPING = get_init_configurations()
         # self.use_decoder_only_language_model = self.text_config.model_type in CONFIGURATION_MODEL_MAPPING
         self.initializer_factor = 1.0
         self.initializer_range = 0.02
         self.freeze_vit = kwargs.get("freeze_vit", True)
+        self.mp_degree = kwargs.get("mp_gree", 1)
 
     @classmethod
     def from_vision_qformer_text_configs(
@@ -338,9 +336,9 @@ class Blip2Config(PretrainedConfig):
         """
 
         return cls(
-            vision_config=vision_config,
-            qformer_config=qformer_config,
-            text_config=text_config,
+            vision_config=vision_config.to_dict(),
+            qformer_config=qformer_config.to_dict(),
+            text_config=text_config.to_dict(),
             **kwargs,
         )
 
@@ -351,8 +349,8 @@ class Blip2Config(PretrainedConfig):
             `Dict[str, any]`: Dictionary of all the attributes that make up this configuration instance,
         """
         output = copy.deepcopy(self.__dict__)
-        output["vision_config"] = self.vision_config
-        output["qformer_config"] = self.qformer_config
+        output["vision_config"] = self.vision_config.to_dict()
+        output["qformer_config"] = self.qformer_config.to_dict()
         output["text_config"] = self.text_config
         output["model_type"] = self.__class__.model_type
         return output

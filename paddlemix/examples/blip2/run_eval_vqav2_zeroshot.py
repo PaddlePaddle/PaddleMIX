@@ -28,6 +28,7 @@ from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_chec
 
 from paddlemix.datasets import load_dataset
 from paddlemix.examples.blip2.utils import BlipCollator, create_tokenizer
+from paddlemix.models.blip2.configuration import Blip2Config
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
@@ -146,9 +147,10 @@ class PreTrainingArguments(TrainingArguments):
     )
 
 
-def create_model(config):
-    # blip2_config = Blip2ForConditionalGeneration(onfig.model_name_or_path)
+def create_model(config, training_args):
     model = Blip2ForConditionalGeneration.from_pretrained(pretrained_model_name_or_path=config.model_name_or_path)
+    blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
+    model.load_pretrained(blip2_config, model, training_args)  # try to load vision encoder in zeroshot eval
     paddle.device.cuda.empty_cache()
     return model
 
@@ -205,7 +207,7 @@ def main():
     blip_eval_collator = BlipCollator_VQA(eval_processor, mode="test")
     model_args.mp_degree = training_args.tensor_parallel_degree
     model_args.gradient_checkpointing = training_args.gradient_checkpointing
-    model = create_model(model_args)
+    model = create_model(model_args, training_args)
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     # create trainer
     trainer = Trainer(

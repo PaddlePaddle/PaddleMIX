@@ -13,18 +13,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Paddle BLIP2 model."""
+import gc
+import os
+import re
 from dataclasses import dataclass
-from typing import Any, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Type, Union
 
 import paddle
 import paddle.distributed as dist
 import paddle.nn as nn
-from paddlenlp.transformers import AutoTokenizer
+from paddlenlp.transformers import AutoTokenizer, PretrainedModel
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
 from paddlenlp.transformers.model_outputs import ModelOutput
+from paddlenlp.transformers.model_utils import _add_variant, weight_name_suffix
 from paddlenlp.transformers.opt.modeling import OPTForCausalLM
 from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
+from paddlenlp.utils.env import (
+    PADDLE_WEIGHTS_INDEX_NAME,
+    PADDLE_WEIGHTS_NAME,
+    PYTORCH_WEIGHTS_NAME,
+    SAFE_WEIGHTS_INDEX_NAME,
+    SAFE_WEIGHTS_NAME,
+)
+from tqdm.auto import tqdm
 
+from paddlemix.examples.blip2.utils import blip2_load
 from paddlemix.models.blip2.modeling_utils import (
     all_gather_with_grad,
     concat_all_gather,
@@ -37,10 +51,16 @@ from paddlemix.utils.log import logger
 
 from .configuration import Blip2Config
 
-BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST = [
-    "Salesforce/blip2-flan-t5-xl",
-    "Salesforce/blip2-opt-2.7b",
-]
+VISION_WEIGHTS = {
+    "eva_vit_g": "https://bj.bcebos.com/paddlenlp/models/community/paddlemix/blip2-stage2/eva_vit_g/model_state.pdparams"
+}
+BRIDGE_WEIGHTS = {
+    "qformer-stage2": "https://bj.bcebos.com/paddlenlp/models/community/paddlemix/blip2-stage2/Qformer/model_state.pdparams",
+    "qformer-stage1": "https://bj.bcebos.com/paddlenlp/models/community/paddlemix/blip2-stage1/Qformer/model_state.pdparams",
+}
+from paddle.utils.download import is_url as is_remote_url
+from paddlenlp.transformers.utils import cached_file, resolve_cache_dir
+from paddlenlp.utils.downloader import get_path_from_url_with_filelock
 
 __all__ = [
     "Blip2ForConditionalGeneration",
@@ -106,15 +126,6 @@ class Blip2PretrainedModel(MixPretrainedModel):
     """
 
     config_class = Blip2Config
-    base_model_prefix = "blip"
-    supports_gradient_checkpointing = True
-    _keys_to_ignore_on_load_missing = [
-        r"position_ids",
-        r"language_model.encoder.embed_tokens.weight",
-        r"language_model.decoder.embed_tokens.weight",
-    ]
-    _no_split_modules = ["Blip2Attention", "T5Block", "OPTDecoderLayer"]
-    _keep_in_fp32_modules = ["wo"]
 
     def _init_weights(self, module):
         """Initialize the weights"""
@@ -125,6 +136,33 @@ class Blip2PretrainedModel(MixPretrainedModel):
         tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         tokenizer.add_special_tokens({"bos_token": "[DEC]"})
         return tokenizer
+
+    @classmethod
+    def refine_state_dict(self, model, state_dict):
+        from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
+
+        interpolate_pos_embed(model, state_dict)
+
+    def get_expected_keys(self, model_state_dict, name=None):
+        model_list = []
+        if name == "Qformer":
+            self._keys_to_ignore_on_load_unexpected = ["visual_encoder", "language_model"]
+            for key in model_state_dict.keys():
+                if "visual_encoder" not in key and "language_model" not in key:
+                    model_list.append(key)
+
+        elif name == "visual_encoder":
+            self._keys_to_ignore_on_load_unexpected = ["Qformer", "language_model"]
+            for key in model_state_dict.keys():
+                if "visual_encoder" in key:
+                    model_list.append(key)
+        else:
+            self._keys_to_ignore_on_load_unexpected = ["language_model"]
+            for key in model_state_dict.keys():
+                if "language_model" not in key:
+                    model_list.append(key)
+
+        return model_list
 
     @classmethod
     def from_pretrained(
@@ -328,9 +366,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
         init_args = config["init_args"] or ()
         with ContextManagers(init_contexts):
             model = cls(config, *init_args, **model_kwargs)
-        from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
-
-        interpolate_pos_embed(model, state_dict)
+        cls.refine_state_dict(model, state_dict)
         if use_keep_in_fp32_modules:
             # low_cpu_mem_usage = True
             keep_in_fp32_modules = model._keep_in_fp32_modules
@@ -355,15 +391,535 @@ class Blip2PretrainedModel(MixPretrainedModel):
 
         return model, state_dict
 
+    def load_pretrained(
+        self,
+        config,
+        model,
+        training_args,
+        state_dict=None,
+        ignore_mismatched_sizes=False,
+        low_cpu_mem_usage=False,
+        dtype=None,
+        cache_dir=None,
+        subfolder="",
+        variant=None,
+        *args,
+        **kwargs,
+    ) -> Tuple[List[str]]:
+        """load the state_dict into model, and do the following things:
+
+            * resolve the pretrained model name or path by checking if they exist in the cache and then
+            download them.
+            * load the pretrained model and refine the state dict if necessary.
+            * filter the weight keys and set the state_dict to the model.
+
+        Args:
+            pretrained_model_name_or_path (str): the pretrained model name or path.
+            state_dict (Dict[str, Tensor]): the model state dict data.
+            ignore_mismatched_sizes (bool, optional): whether ignore error when tensor size mismatched. Defaults to False.
+            low_cpu_mem_usage (bool, optional): whether use low cpu memory usage for loading pretrained model。 Defautls to False.
+            dtype (_type_, optional): the dtype of model state dict. Defaults to None.
+            cahce_cache_dir (str, optional): the cache directory for loading pretrained model. Defaults to None.
+            sufolder (str, optional): the subfolder of pretrained model name. Defaults "".
+            variant (str, optional): the pretrained model variant. Defaults to None.
+
+        Returns:
+            Tuple[List[str]]: _description_
+        """
+        qformer_model_name_or_path = config.get("bridge_name_or_path", None)
+        vision_model_name_or_path = config.get("vision_name_or_path", None)
+        model_name_or_path = config.get("model_name_or_path", None)
+        if (not qformer_model_name_or_path and not vision_model_name_or_path) and model_name_or_path is None:
+            ValueError(
+                "either model_name_or_path or (bridge_model_name_or_path and vision_model_name_or_path) should be set."
+            )
+
+        def load_blip2_model_state(
+            model_name_or_path=None,
+            model=None,
+            training_args=None,
+            weight_name=None,
+            state_dict=None,
+            ignore_mismatched_sizes=False,
+            low_cpu_mem_usage=False,
+            dtype=None,
+            cache_dir=None,
+            subfolder="",
+            variant=None,
+        ):
+            cache_dir = resolve_cache_dir(model_name_or_path, cache_dir)
+
+            # Keep in fp32 modules
+            keep_in_fp32_modules = None
+            use_keep_in_fp32_modules = False
+
+            # resolve model_weight file
+            resolved_archive_file, sharded_metadata, is_sharded = self._resolve_model_file_path_mix(
+                model_name_or_path, cache_dir=cache_dir, subfolder=subfolder, variant=variant, weight_name=weight_name
+            )
+
+            # Check if `_keep_in_fp32_modules` is not None
+            use_keep_in_fp32_modules = (self._keep_in_fp32_modules is not None) and dtype == "float16"
+
+            loaded_state_dict_keys = self.state_dict()
+
+            if use_keep_in_fp32_modules:
+                # low_cpu_mem_usage = True
+                keep_in_fp32_modules = self._keep_in_fp32_modules
+            else:
+                keep_in_fp32_modules = []
+
+            # load_pretrained_model
+            model_state_dict = self.state_dict()
+
+            expected_keys = self.get_expected_keys(model_state_dict, weight_name)
+
+            prefix = self.base_model_prefix
+
+            if len(prefix) > 0:
+                has_prefix_module = any(s.startswith(prefix) for s in loaded_state_dict_keys)
+                expects_prefix_module = any(s.startswith(prefix) for s in expected_keys)
+            else:
+                has_prefix_module = False
+                expects_prefix_module = False
+
+            # key re-naming operations are never done on the keys
+            # that are loaded, but always on the keys of the newly initialized model
+            remove_prefix_from_model = not has_prefix_module and expects_prefix_module
+            add_prefix_to_model = has_prefix_module and not expects_prefix_module
+
+            if remove_prefix_from_model:
+                _prefix = f"{prefix}."
+                expected_keys_not_prefixed = [s for s in expected_keys if not s.startswith(_prefix)]
+                expected_keys = [s[len(_prefix) :] if s.startswith(_prefix) else s for s in expected_keys]
+            elif add_prefix_to_model:
+                expected_keys = [".".join([prefix, s]) for s in expected_keys]
+
+            missing_keys = list(set(expected_keys) - set(loaded_state_dict_keys))
+            unexpected_keys = list(set(loaded_state_dict_keys) - set(expected_keys))
+
+            # Some models may have keys that are not in the state by design, removing them before needlessly warning
+            # the user.
+            if self._keys_to_ignore_on_load_missing is not None:
+                for pat in self._keys_to_ignore_on_load_missing:
+                    missing_keys = [k for k in missing_keys if re.search(pat, k) is None]
+
+            if self._keys_to_ignore_on_load_unexpected is not None:
+                for pat in self._keys_to_ignore_on_load_unexpected:
+                    unexpected_keys = [k for k in unexpected_keys if re.search(pat, k) is None]
+
+            # Set some modules to fp32 if any
+            if keep_in_fp32_modules is not None:
+                for name, param in self.named_parameters():
+                    if any(module_to_keep_in_fp32 in name for module_to_keep_in_fp32 in keep_in_fp32_modules):
+                        param = param.to(dtype=paddle.float32)
+
+            # Make sure we are able to load base models as well as derived models (with heads)
+            model_to_load = self
+            if len(self.base_model_prefix) > 0 and hasattr(self, self.base_model_prefix) and not has_prefix_module:
+                model_to_load = getattr(self, self.base_model_prefix)
+                base_model_expected_keys = list(model_to_load.state_dict().keys())
+                if any(
+                    key in expected_keys_not_prefixed and key not in base_model_expected_keys
+                    for key in loaded_state_dict_keys
+                ):
+                    raise ValueError(
+                        "The state dictionary of the model you are trying to load is corrupted. Are you sure it was "
+                        "properly saved?"
+                    )
+
+            def _find_mismatched_keys(
+                state_dict,
+                model_state_dict,
+                loaded_keys,
+                add_prefix_to_model,
+                remove_prefix_from_model,
+                ignore_mismatched_sizes,
+            ):
+                mismatched_keys = []
+                if ignore_mismatched_sizes:
+                    for checkpoint_key in loaded_keys:
+                        # If the checkpoint is sharded, we may not have the key here.
+                        if checkpoint_key not in state_dict:
+                            continue
+                        model_key = checkpoint_key
+                        if remove_prefix_from_model:
+                            # The model key starts with `prefix` but `checkpoint_key` doesn't so we add it.
+                            model_key = f"{prefix}.{checkpoint_key}"
+                        elif add_prefix_to_model:
+                            # The model key doesn't start with `prefix` but `checkpoint_key` does so we remove it.
+                            model_key = ".".join(checkpoint_key.split(".")[1:])
+
+                        if (
+                            model_key in model_state_dict
+                            and state_dict[checkpoint_key].shape != model_state_dict[model_key].shape
+                        ):
+                            mismatched_keys.append(
+                                (checkpoint_key, state_dict[checkpoint_key].shape, model_state_dict[model_key].shape)
+                            )
+                            del state_dict[checkpoint_key]
+                return mismatched_keys
+
+            if state_dict is not None:
+                # DONT Hold tensor parallel here, only hold afer load state dict.
+                # Whole checkpoint
+                # For model parallel if FastGeneration
+                # To avoid recursive import temporarily.
+                import paddlenlp.ops.fast_transformer.transformer.decoding as ft_decoding
+
+                state_dict = ft_decoding.get_ft_para_conf().fit_partial_model(model_to_load, state_dict)
+
+                mismatched_keys = _find_mismatched_keys(
+                    state_dict,
+                    model_state_dict,
+                    loaded_state_dict_keys,
+                    add_prefix_to_model,
+                    remove_prefix_from_model,
+                    ignore_mismatched_sizes,
+                )
+            else:
+                # Sharded checkpoint or whole but low_cpu_mem_usage==True
+
+                # This should always be a list but, just to be sure.
+                if not isinstance(resolved_archive_file, list):
+                    resolved_archive_file = [resolved_archive_file]
+
+                mismatched_keys = []
+
+                if len(resolved_archive_file) > 1:
+                    resolved_archive_file = tqdm(resolved_archive_file, desc="Loading checkpoint shards")
+
+                for shard_file in resolved_archive_file:
+                    state_dict = blip2_load(
+                        shard_file, model, training_args, map_location="cpu", weight_name=weight_name
+                    )
+
+                    # Mistmatched keys contains tuples key/shape1/shape2 of weights in the checkpoint that have a shape not
+                    # matching the weights in the model.
+                    mismatched_keys += _find_mismatched_keys(
+                        state_dict,
+                        model_state_dict,
+                        loaded_state_dict_keys,
+                        add_prefix_to_model,
+                        remove_prefix_from_model,
+                        ignore_mismatched_sizes,
+                    )
+
+                    # force memory release
+                    del state_dict
+                    gc.collect()
+
+            if len(unexpected_keys) > 0:
+                logger.warning(
+                    f"Some weights of the model checkpoint at {model_name_or_path} were not used when"
+                    f" initializing {self.__class__.__name__}: {unexpected_keys}\n- This IS expected if you are"
+                    f" initializing {self.__class__.__name__} from the checkpoint of a model trained on another task or"
+                    " with another architecture (e.g. initializing a BertForSequenceClassification model from a"
+                    " BertForPreTraining model).\n- This IS NOT expected if you are initializing"
+                    f" {self.__class__.__name__} from the checkpoint of a model that you expect to be exactly identical"
+                    " (initializing a BertForSequenceClassification model from a BertForSequenceClassification model)."
+                )
+            else:
+                logger.info(f"All model checkpoint weights were used when initializing {self.__class__.__name__}.\n")
+
+            if len(missing_keys) > 0:
+                logger.warning(
+                    f"Some weights of {self.__class__.__name__} were not initialized from the model checkpoint at"
+                    f" {model_name_or_path} and are newly initialized: {missing_keys}\nYou should probably"
+                    " TRAIN this model on a down-stream task to be able to use it for predictions and inference."
+                )
+            elif len(mismatched_keys) == 0:
+                logger.info(
+                    f"All the weights of {self.__class__.__name__} were initialized from the model checkpoint at"
+                    f" {model_name_or_path}.\nIf your task is similar to the task the model of the checkpoint"
+                    f" was trained on, you can already use {self.__class__.__name__} for predictions without further"
+                    " training."
+                )
+            if len(mismatched_keys) > 0:
+                mismatched_warning = "\n".join(
+                    [
+                        f"- {key}: found shape {shape1} in the checkpoint and {shape2} in the model instantiated"
+                        for key, shape1, shape2 in mismatched_keys
+                    ]
+                )
+                logger.warning(
+                    f"Some weights of {self.__class__.__name__} were not initialized from the model checkpoint at"
+                    f" {model_name_or_path} and are newly initialized because the shapes did not"
+                    f" match:\n{mismatched_warning}\nYou should probably TRAIN this model on a down-stream task to be able"
+                    " to use it for predictions and inference."
+                )
+
+            return missing_keys, unexpected_keys, mismatched_keys
+
+        if vision_model_name_or_path is not None:
+            logger.info("loading a vision model from path{}".format(vision_model_name_or_path))
+            load_blip2_model_state(vision_model_name_or_path, model, training_args, "visual_encoder")
+        if qformer_model_name_or_path is not None:
+            logger.info("loading a bridge model from path{}".format(qformer_model_name_or_path))
+            load_blip2_model_state(qformer_model_name_or_path, model, training_args, "Qformer")
+        if model_name_or_path is not None:
+            logger.info("loading vision and bridge model from path{}".format(model_name_or_path))
+            load_blip2_model_state(model_name_or_path, model, training_args, "model")
+
+    @classmethod
+    def _resolve_model_file_path_mix(
+        cls: Type[PretrainedModel],
+        pretrained_model_name_or_path: str,
+        weight_name=None,
+        from_hf_hub: bool = False,
+        cache_dir=None,
+        subfolder: str = "",
+        config: PretrainedConfig = None,
+        convert_from_torch: bool = False,
+        use_safetensors=None,
+        variant=None,
+    ) -> str:
+
+        """resolve model target file path from `` and `cache_dir`
+
+        1. when it is file path:
+            return the weight file
+
+        2. when it is model-name:
+            2.1 check default `MODEL_HOME` + `model-mame` + model_state.pdparams
+            2.2 get the url from `pretrained_resource_files_map`, and set it to `pretrained_model_name_or_path`
+
+        3. when it is local dir:
+            check whether the file<local_dir + weight_file> exist
+
+        Args:
+            cls (Type[PretrainedModel]): the inherited PretrainedModel class
+            pretrained_model_name_or_path (str): the model-name/url/local_dir/local_dir
+            cache_dir (Optional[str], optional): cache_dir is used when name_or_path is model-name/url. Defaults to None.
+            convert_from_torch (bool, optional): whether support convert pytorch model to paddle model
+
+        Returns:
+            str: the model weight file path
+        """
+        is_sharded = False
+        sharded_metadata = None
+
+        is_local_file = False
+        if pretrained_model_name_or_path is not None:
+
+            pretrained_model_name_or_path = str(pretrained_model_name_or_path)
+            if weight_name == "visual_encoder":
+                if pretrained_model_name_or_path in VISION_WEIGHTS:
+                    is_local_file = os.path.isfile(VISION_WEIGHTS[pretrained_model_name_or_path])
+                    pretrained_model_name_or_path = VISION_WEIGHTS[pretrained_model_name_or_path]
+                else:
+                    is_local = os.path.isdir(pretrained_model_name_or_path)
+                    pretrained_model_name_or_path = pretrained_model_name_or_path
+            elif weight_name == "Qformer":
+                if pretrained_model_name_or_path in BRIDGE_WEIGHTS:
+                    is_local_file = os.path.isfile(BRIDGE_WEIGHTS[pretrained_model_name_or_path])
+                    pretrained_model_name_or_path = BRIDGE_WEIGHTS[pretrained_model_name_or_path]
+                else:
+                    is_local = os.path.isdir(pretrained_model_name_or_path)
+                    pretrained_model_name_or_path = pretrained_model_name_or_path
+
+            def get_file_path(pretrained_model_name_or_path, subfolder, SAFE_WEIGHTS_NAME, variant):
+                return os.path.join(pretrained_model_name_or_path, subfolder, _add_variant(SAFE_WEIGHTS_NAME, variant))
+
+            # pretrained_model_name_or_path is dir
+            if is_local:
+                if use_safetensors is not False and os.path.isfile(
+                    get_file_path(pretrained_model_name_or_path, subfolder, SAFE_WEIGHTS_NAME, variant)
+                ):
+                    # Load from a safetensors checkpoint
+                    archive_file = get_file_path(pretrained_model_name_or_path, subfolder, SAFE_WEIGHTS_NAME, variant)
+                elif use_safetensors is not False and os.path.isfile(
+                    get_file_path(pretrained_model_name_or_path, subfolder, SAFE_WEIGHTS_NAME, weight_name_suffix())
+                ):
+                    # Load from a safetensors checkpoint
+                    archive_file = get_file_path(
+                        pretrained_model_name_or_path, subfolder, SAFE_WEIGHTS_NAME, weight_name_suffix()
+                    )
+                elif use_safetensors is not False and os.path.isfile(
+                    get_file_path(pretrained_model_name_or_path, subfolder, SAFE_WEIGHTS_INDEX_NAME, variant)
+                ):
+                    # Load from a sharded safetensors checkpoint
+                    archive_file = get_file_path(
+                        pretrained_model_name_or_path, subfolder, SAFE_WEIGHTS_INDEX_NAME, variant
+                    )
+                    is_sharded = True
+                elif use_safetensors is not False and os.path.isfile(
+                    get_file_path(
+                        pretrained_model_name_or_path, subfolder, SAFE_WEIGHTS_INDEX_NAME, weight_name_suffix()
+                    )
+                ):
+                    # Load from a sharded safetensors checkpoint
+                    archive_file = get_file_path(
+                        pretrained_model_name_or_path, subfolder, SAFE_WEIGHTS_INDEX_NAME, weight_name_suffix()
+                    )
+                    is_sharded = True
+                elif os.path.isfile(
+                    get_file_path(pretrained_model_name_or_path, subfolder, PADDLE_WEIGHTS_NAME, variant)
+                ):
+                    # Load from a PaddlePaddle checkpoint
+                    archive_file = get_file_path(
+                        pretrained_model_name_or_path, subfolder, PADDLE_WEIGHTS_NAME, variant
+                    )
+                elif os.path.isfile(
+                    get_file_path(pretrained_model_name_or_path, subfolder, PADDLE_WEIGHTS_INDEX_NAME, variant)
+                ):
+                    # Load from a sharded PaddlePaddle checkpoint
+                    archive_file = get_file_path(
+                        pretrained_model_name_or_path, subfolder, PADDLE_WEIGHTS_INDEX_NAME, variant
+                    )
+                    is_sharded = True
+                elif os.path.isfile(
+                    get_file_path(
+                        pretrained_model_name_or_path, subfolder, PADDLE_WEIGHTS_INDEX_NAME, weight_name_suffix()
+                    )
+                ):
+                    # Load from a sharded PaddlePaddle checkpoint for hybrid parallel model
+                    archive_file = get_file_path(
+                        pretrained_model_name_or_path, subfolder, PADDLE_WEIGHTS_INDEX_NAME, weight_name_suffix()
+                    )
+                    is_sharded = True
+                elif os.path.isfile(
+                    get_file_path(
+                        pretrained_model_name_or_path,
+                        subfolder,
+                        PADDLE_WEIGHTS_NAME,
+                        weight_name_suffix(),
+                    )
+                ):
+                    # Load from a PaddlePaddle checkpoint for hybrid parallel model
+                    archive_file = get_file_path(
+                        pretrained_model_name_or_path,
+                        subfolder,
+                        PADDLE_WEIGHTS_NAME,
+                        weight_name_suffix(),
+                    )
+                # At this stage we don't have a weight file so we will raise an error.
+                elif os.path.isfile(
+                    os.path.join(pretrained_model_name_or_path, subfolder, _add_variant(PYTORCH_WEIGHTS_NAME, variant))
+                ):
+                    raise ValueError(
+                        f"Found {_add_variant(PYTORCH_WEIGHTS_NAME, variant)} in directory"
+                        f" {pretrained_model_name_or_path}. Please set convert_from_torch=True in from_pretrained. eg, Model.from_pretrained(model_name, convert_from_torch=True) "
+                    )
+                else:
+                    raise EnvironmentError(
+                        f"Error no file named {_add_variant(PADDLE_WEIGHTS_NAME, variant)}, found in directory"
+                        f" {pretrained_model_name_or_path}."
+                    )
+            # pretrained_model_name_or_path is file
+            elif os.path.isfile(os.path.join(subfolder, pretrained_model_name_or_path)) or is_local_file:
+                archive_file = pretrained_model_name_or_path
+                is_local = True
+            elif is_remote_url(pretrained_model_name_or_path):
+                filename = pretrained_model_name_or_path
+                resolved_archive_file = get_path_from_url_with_filelock(pretrained_model_name_or_path)
+            else:
+                # set correct filename
+                if use_safetensors is not False:
+                    filename = _add_variant(SAFE_WEIGHTS_NAME, variant)
+                else:
+                    filename = _add_variant(PADDLE_WEIGHTS_NAME, variant)
+
+                try:
+                    # Load from URL or cache if already cached
+                    cached_file_kwargs = dict(
+                        cache_dir=cache_dir,
+                        subfolder=subfolder,
+                        _raise_exceptions_for_missing_entries=False,
+                    )
+                    resolved_archive_file = None
+                    if pretrained_model_name_or_path in cls.pretrained_init_configuration:
+                        # fetch the weight url from the `pretrained_resource_files_map`
+                        resource_file_url = cls.pretrained_resource_files_map["model_state"][
+                            pretrained_model_name_or_path
+                        ]
+                        resolved_archive_file = cached_file(
+                            resource_file_url, _add_variant(PADDLE_WEIGHTS_NAME, variant), **cached_file_kwargs
+                        )
+
+                    if resolved_archive_file is None:
+                        resolved_archive_file = cached_file(
+                            pretrained_model_name_or_path, filename, **cached_file_kwargs
+                        )
+                    else:
+                        # xxx.pdparams in pretrained_resource_files_map renamed model_state.pdparams
+                        filename = _add_variant(PADDLE_WEIGHTS_NAME, variant)
+
+                    # Since we set _raise_exceptions_for_missing_entries=False, we don't get an exception but a None
+                    # result when internet is up, the repo and revision exist, but the file does not.
+                    if resolved_archive_file is None and filename == _add_variant(SAFE_WEIGHTS_NAME, variant):
+                        # Maybe the checkpoint is sharded, we try to grab the index name in this case.
+                        resolved_archive_file = cached_file(
+                            pretrained_model_name_or_path,
+                            _add_variant(SAFE_WEIGHTS_INDEX_NAME, variant),
+                            **cached_file_kwargs,
+                        )
+                        if resolved_archive_file is not None:
+                            is_sharded = True
+                        elif use_safetensors:
+                            raise EnvironmentError(
+                                f" {_add_variant(SAFE_WEIGHTS_NAME, variant)} or {_add_variant(SAFE_WEIGHTS_INDEX_NAME, variant)} and thus cannot be loaded with `safetensors`. Please make sure that the model has been saved with `safe_serialization=True` or do not set `use_safetensors=True`."
+                            )
+                        else:
+                            # This repo has no safetensors file of any kind, we switch to PyTorch.
+                            filename = _add_variant(PADDLE_WEIGHTS_NAME, variant)
+                            resolved_archive_file = cached_file(
+                                pretrained_model_name_or_path, filename, **cached_file_kwargs
+                            )
+                    if resolved_archive_file is None and filename == _add_variant(PADDLE_WEIGHTS_NAME, variant):
+                        # Maybe the checkpoint is sharded, we try to grab the index name in this case.
+                        resolved_archive_file = cached_file(
+                            pretrained_model_name_or_path,
+                            _add_variant(PADDLE_WEIGHTS_INDEX_NAME, variant),
+                            **cached_file_kwargs,
+                        )
+                        # raise ValueError(resolved_archive_file)
+                        if resolved_archive_file is not None:
+                            is_sharded = True
+                    if resolved_archive_file is None:
+                        # Otherwise, maybe there is a TF or Flax model file.  We try those to give a helpful error
+                        # message.
+                        raise EnvironmentError(
+                            f"{pretrained_model_name_or_path} does not appear to have a file named"
+                            f" {_add_variant(PADDLE_WEIGHTS_NAME, variant)}."
+                        )
+                except Exception:
+                    # For any other exception, we throw a generic error.
+                    raise EnvironmentError(
+                        f"Can't load the model for '{pretrained_model_name_or_path}'. If you were trying to load it"
+                        " from 'https://paddlenlp.bj.bcebos.com'"
+                    )
+
+            if is_local:
+                logger.info(f"Loading weights file {archive_file}")
+                resolved_archive_file = archive_file
+            else:
+                logger.info(f"Loading weights file {filename} from cache at {resolved_archive_file}")
+        else:
+            resolved_archive_file = None
+
+            def get_file_path(pretrained_model_name_or_path):
+                return os.path.join(pretrained_model_name_or_path)
+
+            # pretrained_model_name_or_path is dir
+            if is_local_file:
+                if os.path.isfile(get_file_path(pretrained_model_name_or_path)):
+                    # Load from a PaddlePaddle checkpoint
+                    resolved_archive_file = get_file_path(pretrained_model_name_or_path)
+            elif is_remote_url(pretrained_model_name_or_path):
+                resolved_archive_file = get_path_from_url_with_filelock(pretrained_model_name_or_path)
+            else:
+                raise EnvironmentError(
+                    f"Can't load the model for '{pretrained_model_name_or_path}'. If you were trying to load it"
+                    " from 'https://paddlenlp.bj.bcebos.com'"
+                )
+
+        return resolved_archive_file, sharded_metadata, is_sharded
+
 
 class Blip2ForConditionalGeneration(Blip2PretrainedModel):
     config_class = Blip2Config
     main_input_name = "pixel_values"
-    _keys_to_ignore_on_load_missing = [
-        r"position_ids",
-        r"language_model.encoder.embed_tokens.weight",
-        r"language_model.decoder.embed_tokens.weight",
-    ]
 
     def __init__(
         self,
@@ -372,11 +928,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         super().__init__(config)
         from paddlemix.models.blip2.eva_vit import VisionTransformer
 
-        self.visual_encoder = VisionTransformer.from_pretrained(
-            pretrained_model_name_or_path=config.vision_config,
-            mp_degree=config.mp_degree,
-            ignore_mismatched_sizes=True,
-        )
+        config.vision_config.update({"mp_degree": config.mp_degree})
+        self.visual_encoder = VisionTransformer(config=config.vision_config)
         self.freeze_vit = config.freeze_vit
         self.train_stage1 = False
         if self.freeze_vit:
@@ -389,13 +942,11 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         if config.get("train_mode", None) == "stage1":
             self.train_stage1 = True
             self.tokenizer = self.init_tokenizer()
-            self.Qformer = BertLMHeadModel.from_pretrained(
-                pretrained_model_name_or_path=config.qformer_config,
+            self.Qformer = BertLMHeadModel(
+                config=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=True,
                 tokenizer_length=len(self.tokenizer),
-                mp_degree=config.mp_degree,
-                ignore_mismatched_sizes=True,
             )
 
             state_dict = self.Qformer.state_dict()
@@ -452,13 +1003,11 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 param.stop_gradient = True
             self.pad_token_id = self.language_model.pad_token_id
 
-            self.Qformer = BertLMHeadModel.from_pretrained(
-                pretrained_model_name_or_path=config.qformer_config,
-                mp_degree=config.mp_degree,
+            self.Qformer = BertLMHeadModel(
+                config=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=False,
                 text_hidden_size=self.language_model.hidden_size,
-                ignore_mismatched_sizes=True,
             )
             self.Qformer.cls = None
             self.Qformer.bert.embeddings.word_embeddings = None

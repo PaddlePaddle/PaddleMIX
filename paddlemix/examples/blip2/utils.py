@@ -24,9 +24,8 @@ from paddlenlp.transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 from pycocoevalcap.eval import COCOEvalCap
 from pycocotools.coco import COCO
 
-from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
-from paddlemix.utils.downloader import WEIGHTS_HOME, get_path_from_url, is_url
-from paddlemix.utils.log import logger
+from paddlemix.utils import device_guard
+from paddlemix.utils.downloader import WEIGHTS_HOME, get_path_from_url
 
 LLM_LIST = {
     "facebook/opt-2.7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-2.7b/model_state.pdparams",
@@ -136,10 +135,17 @@ def coco_caption_eval(coco_gt_root, results_file, split):
     return coco_eval
 
 
-def load_model(args, model, optimizer=None, ckpt_dir="", load_language_model=True):
+def blip2_load(path, model, training_args, map_location="cpu", weight_name=None):
+    assert map_location in ["cpu", "gpu", "xpu", "npu", "numpy", "np"]
+    return load_model(training_args, model, ckpt_dir=path, map_location="cpu", prefix=weight_name)
+
+
+def load_model(args, model, ckpt_dir="", map_location="cpu", prefix=None):
     """
-    load the saved checkpoint file and update the state dicts of model and optimizer.
+    load the saved checkpoint file and update the state dicts of model.
     """
+    from paddlemix.utils.downloader import is_url
+
     if ckpt_dir is None:
         return
 
@@ -154,99 +160,103 @@ def load_model(args, model, optimizer=None, ckpt_dir="", load_language_model=Tru
         assert os.path.exists(ckpt_dir), f"{ckpt_dir} not exist"
 
     ckpt_dir = path
-    if ckpt_dir and os.path.isfile(ckpt_dir):
-        print("Try to load a whole checkpoint from %s " % ckpt_dir)
-        embedding_list = []
-        collinear_list = ["fc1", "qkv"]
-        rowlinear_list = []
-        all_list = collinear_list + rowlinear_list + embedding_list
-        skip_list = ["visual_encoder.patch_embed.proj.weight", "visual_encoder.patch_embed.proj.bias"]
 
-        col_list = []
-        row_list = []
-        emb_list = []
+    print("Try to load a whole checkpoint from %s " % ckpt_dir)
+    embedding_list = []
+    collinear_list = []
+    rowlinear_list = []
+    skip_list = ["visual_encoder.patch_embed.proj.weight", "visual_encoder.patch_embed.proj.bias"]
 
-        mp_rank = args.mp_rank
-        mp_size = args.tensor_parallel_degree
+    col_list = []
+    row_list = []
+    emb_list = []
 
-        def renamebias(model_dict, whole_key):
-            if "q_bias" in whole_key:
-                key = whole_key.replace("q_bias", "q_proj.bias")
-            elif "v_bias" in whole_key:
-                key = whole_key.replace("v_bias", "v_proj.bias")
-            model_dict[key] = model_dict[whole_key]
-            del model_dict[whole_key]
-            return model_dict
+    mp_rank = args.mp_rank
+    mp_size = args.tensor_parallel_degree
 
-        def col_split_modeldict(model_dict):
-            if len(model_dict.shape) == 2:
-                subbatch = model_dict.shape[1] // mp_size
-                return model_dict[:, mp_rank * subbatch : (mp_rank + 1) * subbatch]
-            elif len(model_dict.shape) == 1:
-                subbatch = model_dict.shape[0] // mp_size
-                return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
+    def renamebias(model_dict, whole_key):
+        if "q_bias" in whole_key:
+            key = whole_key.replace("q_bias", "q_proj.bias")
+        elif "v_bias" in whole_key:
+            key = whole_key.replace("v_bias", "v_proj.bias")
+        model_dict[key] = model_dict[whole_key]
+        del model_dict[whole_key]
+        return model_dict
 
-        def row_split_modeldict(model_dict):
-            if len(model_dict.shape) == 2:
-                subbatch = model_dict.shape[0] // mp_size
-                return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
-            else:
-                return model_dict
-
-        def emb_split_modeldict(model_dict):
+    def col_split_modeldict(model_dict):
+        if len(model_dict.shape) == 2:
+            subbatch = model_dict.shape[1] // mp_size
+            return model_dict[:, mp_rank * subbatch : (mp_rank + 1) * subbatch]
+        elif len(model_dict.shape) == 1:
             subbatch = model_dict.shape[0] // mp_size
             return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
 
-        model_dict = paddle.load(ckpt_dir)
-        for whole_key in model_dict.keys():
-            if "." not in whole_key:
-                continue
+    def row_split_modeldict(model_dict):
+        if len(model_dict.shape) == 2:
+            subbatch = model_dict.shape[0] // mp_size
+            return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
+        else:
+            return model_dict
 
-            key = whole_key.split(".")[-2]
-            if whole_key in skip_list:
-                continue
-            if key in all_list:
-                if key in collinear_list:
-                    col_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = col_split_modeldict(model_dict[whole_key])
-                elif key in rowlinear_list:
-                    row_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = row_split_modeldict(model_dict[whole_key])
-                else:
-                    emb_list.append((key, model_dict[whole_key].shape))
-                    model_dict[whole_key] = emb_split_modeldict(model_dict[whole_key])
+    def emb_split_modeldict(model_dict):
+        subbatch = model_dict.shape[0] // mp_size
+        return model_dict[mp_rank * subbatch : (mp_rank + 1) * subbatch]
 
-        param_state_dict = model_dict
-        import numpy as np
-
-        model_dict = model.state_dict()
-        model_weight = {}
-        incorrect_keys = 0
-        for key, value in model_dict.items():
-            if key in param_state_dict.keys():
-
-                if isinstance(param_state_dict[key], np.ndarray):
-                    param_state_dict[key] = paddle.to_tensor(param_state_dict[key])
-                if value.dtype == param_state_dict[key].dtype:
-                    model_weight[key] = param_state_dict[key]
-                else:
-                    model_weight[key] = param_state_dict[key].astype(value.dtype)
-                if value.shape != param_state_dict[key].shape:
-                    logger.info("Unmatched key: {}".format(key))
-                    print(value.shape, param_state_dict[key].shape, key)
-
-            else:
-                if load_language_model is False and "language_model" in key:
-                    continue
-                logger.info("Unmatched key: {}".format(key))
-                incorrect_keys += 1
-        interpolate_pos_embed(model, model_weight)
-        model.set_state_dict(model_weight)
-
-        del model_dict
+    if map_location in ["numpy", "np"]:
+        model_dict = paddle.load(path, return_numpy=True)
     else:
-        print("`load` requires a valid value of `ckpt_dir`.")
-        raise TypeError("`load` requires a valid value of `ckpt_dir`.")
+        with device_guard(map_location):
+            model_dict = paddle.load(path)
+    # if prefix:
+    #     keys = model_dict.keys()
+    #     if prefix in list(keys)[0]:
+    #         pass
+    #     else:
+    #         new_dict={}
+    #         for key in keys:
+    #             new_dict[prefix+"."+key]=model_dict[key]
+    #         model_dict=new_dict
+
+    from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
+
+    interpolate_pos_embed(model, model_dict)
+    from paddle.distributed import fleet
+
+    for name, p in model.named_sublayers():
+        if isinstance(name, fleet.meta_parallel.ColumnParallelLinear):
+            collinear_list.append(name)
+        if isinstance(name, fleet.meta_parallel.RowParallelLinear):
+            rowlinear_list.append(name)
+    all_list = collinear_list + rowlinear_list + embedding_list
+
+    for whole_key in model_dict.keys():
+        if "." not in whole_key:
+            continue
+
+        key = whole_key.split(".")[-2]
+        if whole_key in skip_list:
+            continue
+        if key in all_list:
+            if key in collinear_list:
+                col_list.append((key, model_dict[whole_key].shape))
+                model_dict[whole_key] = col_split_modeldict(model_dict[whole_key])
+            elif key in rowlinear_list:
+                row_list.append((key, model_dict[whole_key].shape))
+                model_dict[whole_key] = row_split_modeldict(model_dict[whole_key])
+            else:
+                emb_list.append((key, model_dict[whole_key].shape))
+                model_dict[whole_key] = emb_split_modeldict(model_dict[whole_key])
+    if prefix:
+        keys = model_dict.keys()
+        if prefix in list(keys)[0]:
+            model.set_state_dict(model_dict)
+        else:
+            if prefix == "Qformer":
+                model.Qformer.set_state_dict(model_dict)
+            elif prefix == "visual_encoder":
+                model.visual_encoder.set_state_dict(model_dict)
+
+    return model_dict
 
 
 def save_result(result, result_dir, filename, remove_duplicate="", world_size=1):

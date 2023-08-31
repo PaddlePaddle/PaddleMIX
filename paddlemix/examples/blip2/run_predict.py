@@ -143,6 +143,7 @@ def main():
     text_processor_class = BlipTextProcessor.from_pretrained(
         os.path.join(model_args.model_name_or_path, "processor", "eval")
     )
+    text_processor_class.prompt = ""
     processor = Blip2Processor(image_processor, text_processor_class, tokenizer_class)
     inputs = processor(
         images=image,
