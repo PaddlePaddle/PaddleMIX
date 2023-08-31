@@ -48,10 +48,7 @@ class LoRALinearLayer(nn.Layer):
         self.network_alpha = network_alpha
         self.rank = rank
 
-        try:
-            normal_(self.down.weight, std=1 / rank)
-        except:
-            breakpoint()
+        normal_(self.down.weight, std=1 / rank)
         zeros_(self.up.weight)
 
     def forward(self, hidden_states):

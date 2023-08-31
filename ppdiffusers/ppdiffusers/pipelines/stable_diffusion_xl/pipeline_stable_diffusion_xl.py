@@ -415,7 +415,6 @@ class StableDiffusionXLPipeline(DiffusionPipeline, FromSingleFileMixin, LoraLoad
                 LoRAXFormersAttnProcessor,
             ),
         )
-        breakpoint()
         if use_xformers:
             self.vae.post_quant_conv.to(dtype=dtype)
             self.vae.decoder.conv_in.to(dtype=dtype)
