@@ -16,6 +16,7 @@
 Paddle utilities: Utilities related to Paddle
 """
 import contextlib
+import threading
 import time
 from contextlib import contextmanager
 from typing import List, Optional, Tuple, Union
@@ -37,37 +38,42 @@ if is_paddle_available():
     class RNGStatesTracker:
         def __init__(self):
             self.states_ = {}
+            self.mutex = threading.Lock()
 
         def reset(self):
-            self.states_ = {}
+            with self.mutex:
+                self.states_ = {}
 
         def remove(self, generator_name=None):
-            if generator_name is not None:
-                del self.states_[generator_name]
+            with self.mutex:
+                if generator_name is not None:
+                    del self.states_[generator_name]
 
         def manual_seed(self, seed, generator_name=None):
-            if generator_name is None:
-                generator_name = str(time.time())
-            if generator_name in self.states_:
-                raise ValueError("state {} already exists".format(generator_name))
-            orig_rng_state = paddle.get_cuda_rng_state()
-            paddle.seed(seed)
-            self.states_[generator_name] = paddle.get_cuda_rng_state()
-            paddle.set_cuda_rng_state(orig_rng_state)
-            return generator_name
+            with self.mutex:
+                if generator_name is None:
+                    generator_name = str(time.time())
+                if generator_name in self.states_:
+                    raise ValueError("state {} already exists".format(generator_name))
+                orig_rng_state = paddle.get_cuda_rng_state()
+                paddle.seed(seed)
+                self.states_[generator_name] = paddle.get_cuda_rng_state()
+                paddle.set_cuda_rng_state(orig_rng_state)
+                return generator_name
 
         @contextlib.contextmanager
         def rng_state(self, generator_name=None):
             if generator_name is not None:
                 if generator_name not in self.states_:
                     raise ValueError("state {} does not exist".format(generator_name))
-                orig_cuda_rng_state = paddle.get_cuda_rng_state()
-                paddle.set_cuda_rng_state(self.states_[generator_name])
-                try:
-                    yield
-                finally:
-                    self.states_[generator_name] = paddle.get_cuda_rng_state()
-                    paddle.set_cuda_rng_state(orig_cuda_rng_state)
+                with self.mutex:
+                    orig_cuda_rng_state = paddle.get_cuda_rng_state()
+                    paddle.set_cuda_rng_state(self.states_[generator_name])
+                    try:
+                        yield
+                    finally:
+                        self.states_[generator_name] = paddle.get_cuda_rng_state()
+                        paddle.set_cuda_rng_state(orig_cuda_rng_state)
             else:
                 yield
 
