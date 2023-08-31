@@ -1015,7 +1015,9 @@ def main():
                     enable=args.mixed_precision in ["bf16", "fp16"] and args.train_text_encoder,
                     level=args.fp16_opt_level,
                     custom_black_list=["reduce_sum", "c_softmax_with_cross_entropy"],
-                    custom_white_list=["lookup_table", "lookup_table_v2"] if args.fp16_opt_level == "O2" else None,
+                    custom_white_list=["lookup_table", "lookup_table_v2"]
+                    if args.fp16_opt_level == "O2"
+                    else ["layer_norm"],
                     dtype="bfloat16" if args.mixed_precision == "bf16" else "float16",
                 ):
                     encoder_hidden_states = text_encoder(batch["input_ids"], attention_mask=attention_mask)[0]
@@ -1032,7 +1034,9 @@ def main():
                     enable=args.mixed_precision in ["bf16", "fp16"],
                     level=args.fp16_opt_level,
                     custom_black_list=["reduce_sum", "c_softmax_with_cross_entropy"],
-                    custom_white_list=["lookup_table", "lookup_table_v2"] if args.fp16_opt_level == "O2" else None,
+                    custom_white_list=["lookup_table", "lookup_table_v2"]
+                    if args.fp16_opt_level == "O2"
+                    else ["layer_norm"],
                     dtype="bfloat16" if args.mixed_precision == "bf16" else "float16",
                 ):
                     # Predict the noise residual and compute loss
