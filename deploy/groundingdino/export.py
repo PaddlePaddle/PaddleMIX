@@ -77,7 +77,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    output_dir = args.output_dir
+    output_dir = os.path.join(args.output_dir, args.dino_type)
     # load model
     model = GroundingDinoModel.from_pretrained(args.dino_type)
     model.eval()
