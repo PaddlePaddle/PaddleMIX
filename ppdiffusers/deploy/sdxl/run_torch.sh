@@ -13,41 +13,28 @@
 # limitations under the License.
 
 set -uex
-# export PYTHONPATH=$PYTHONPATH:/root/project/paddlemix/paconvert/20230815/PaConvert/indir/diffusers
-
-# export PYTHONPATH="${PYTHONPATH}:/root/project/paddlemix/paconvert/20230815/PaConvert/indir/diffusers"
-
-# export PYTHONPATH=/root/project/paddlemix/paconvert/20230815/PaConvert/indir/diffusers:$PYTHONPATH
-# export PYTHONPATH=/root/project/paddle/paddlenlp/ppd11/PaddleNLP:/root/project/paddle/paddlenlp/ppd11/PaddleNLP/ppdiffusers:$PYTHONPATH
-# echo ${PYTHONPATH}
 
 
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task img2img --benchmark_steps 1 
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task text2img --benchmark_steps 1
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task text2img_with_refiner --benchmark_steps 1 
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task inpainting --benchmark_steps 1
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task instruct_pix2pix --benchmark_steps 1
-
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task text2img
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task img2img
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task text2img_with_refiner
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task inpainting
+python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task text2img
+python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task img2img
+python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task text2img_with_refiner
+python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task inpainting
 python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type raw --task instruct_pix2pix
 
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type sdp --task text2img
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type sdp --task img2img
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type sdp --task text2img_with_refiner
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type sdp --task inpainting
+python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type sdp --task text2img
+python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type sdp --task img2img
+python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type sdp --task text2img_with_refiner
+python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type sdp --task inpainting
 python infer_dygraph_torch.py --device_id 5 --use_fp16 True --attention_type sdp --task instruct_pix2pix
 
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type raw --task text2img
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type raw --task img2img
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type raw --task text2img_with_refiner
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type raw --task inpainting
+python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type raw --task text2img
+python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type raw --task img2img
+python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type raw --task text2img_with_refiner
+python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type raw --task inpainting
 python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type raw --task instruct_pix2pix
 
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type sdp --task text2img
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type sdp --task img2img
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type sdp --task text2img_with_refiner
-# python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type sdp --task inpainting
+python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type sdp --task text2img
+python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type sdp --task img2img
+python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type sdp --task text2img_with_refiner
+python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type sdp --task inpainting
 python infer_dygraph_torch.py --device_id 5 --use_fp16 False --attention_type sdp --task instruct_pix2pix

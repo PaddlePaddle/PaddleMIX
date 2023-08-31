@@ -13,83 +13,28 @@
 # limitations under the License.
 
 set -uex
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type flash
-
-function proxyoff(){
-    unset http_proxy
-    unset https_proxy
-    echo -e "proxy off"
-}
-
-function proxyon() {
-    export https_proxy=http://10.162.37.16:8128
-    export http_proxy=http://10.162.37.16:8128
-    echo -e "proxy on"
-}
 
 # speed test
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task text2img
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task text2img_with_refiner
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task img2img
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task inpainting --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/stabilityai/stable-diffusion-xl-base-1.0
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task instruct_pix2pix --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/sayakpaul/sdxl-instructpix2pix
+python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task text2img
+python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task text2img_with_refiner
+python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task img2img
+python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task inpainting 
+python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task instruct_pix2pix
 
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task text2img
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task text2img_with_refiner
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task img2img
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task inpainting --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/stabilityai/stable-diffusion-xl-base-1.0
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task instruct_pix2pix --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/sayakpaul/sdxl-instructpix2pix
+python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task text2img
+python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task text2img_with_refiner
+python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task img2img
+python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task inpainting 
+python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task instruct_pix2pix
 
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task text2img
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task text2img_with_refiner
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task img2img
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task inpainting --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/stabilityai/stable-diffusion-xl-base-1.0
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task instruct_pix2pix --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/sayakpaul/sdxl-instructpix2pix
+python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task text2img
+python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task text2img_with_refiner
+python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task img2img
+python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task inpainting 
+python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task instruct_pix2pix
 
-# proxyoff
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task text2img
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task text2img_with_refiner
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task img2img
-# proxyon
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task inpainting --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/stabilityai/stable-diffusion-xl-base-1.0
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task instruct_pix2pix --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/sayakpaul/sdxl-instructpix2pix
-
-
-
-
-# memory test
-# proxyoff
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task text2img --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task text2img_with_refiner --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task img2img --benchmark_steps 1
-# proxyon
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task inpainting --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/stabilityai/stable-diffusion-xl-base-1.0 --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type raw --task instruct_pix2pix --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/sayakpaul/sdxl-instructpix2pix --benchmark_steps 1
-
-proxyoff
-python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task text2img --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task text2img_with_refiner --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task img2img --benchmark_steps 1
-# proxyon
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task inpainting --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/stabilityai/stable-diffusion-xl-base-1.0 --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 True --attention_type cutlass --task instruct_pix2pix --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/sayakpaul/sdxl-instructpix2pix --benchmark_steps 1
-
-
-# proxyoff
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task text2img --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task text2img_with_refiner --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task img2img --benchmark_steps 1
-# proxyon
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task inpainting --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/stabilityai/stable-diffusion-xl-base-1.0 --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type raw --task instruct_pix2pix --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/sayakpaul/sdxl-instructpix2pix --benchmark_steps 1
-
-
-# proxyoff
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task text2img --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task text2img_with_refiner --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task img2img --benchmark_steps 1
-# proxyon
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task inpainting --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/stabilityai/stable-diffusion-xl-base-1.0 --benchmark_steps 1
-# python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task instruct_pix2pix --pretrained_model_name_or_path /root/.cache/paddlenlp/ppdiffusers/sayakpaul/sdxl-instructpix2pix --benchmark_steps 1
+python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task text2img
+python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task text2img_with_refiner
+python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task img2img
+python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task inpainting
+python infer_dygraph.py --device_id 4 --use_fp16 False --attention_type cutlass --task instruct_pix2pix
