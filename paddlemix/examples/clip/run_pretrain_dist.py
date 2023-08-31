@@ -30,8 +30,8 @@ import paddle
 from paddlemix.datasets import load_dataset
 from paddlemix.datasets.dataset import ImageFolder
 from paddlemix.metrics.clip_zero_shot import ClipZeroShot
-from paddlemix.models.clip.eva_clip_model import EVACLIP, EVACLIPConfig
-from paddlemix.optimization import create_optimizer
+from paddlemix.models.clip.clip_model import CLIP, CLIPConfig
+from paddlemix.optimization import create_optimizer_simple
 from paddlemix.processors.clip_processing import (
     CLIPImageProcessor,
     CLIPProcessor,
@@ -127,7 +127,7 @@ class SelfTrainer(CLIPTrainer):
         `create_scheduler`) in a subclass.
         """
         self.lr_scheduler = paddle.optimizer.lr.CosineAnnealingDecay(
-            1.0,
+            self.args.learning_rate,
             num_training_steps - self.args.warmup_steps,
             last_epoch=self.args.last_epoch,
         )
@@ -139,7 +139,7 @@ class SelfTrainer(CLIPTrainer):
                 1.0,
                 last_epoch=self.args.last_epoch,
             )
-        self.optimizer = create_optimizer(self.args, self.model, self.lr_scheduler)
+        self.optimizer = create_optimizer_simple(self.args, self.model, self.lr_scheduler)
 
 
 class Collator:
@@ -165,6 +165,7 @@ class Collator:
                 return_tensors="pd",
                 return_attention_mask=False,
                 mode="train",
+                padding_zero=True,
             )
             return batch
         else:
@@ -179,6 +180,7 @@ class Collator:
                 mode="eval",
                 do_resize=True,
                 do_crop=True,
+                padding_zero=True,
             )
             batch["labels"] = paddle.to_tensor(np.array(labels))
             return batch
@@ -188,8 +190,8 @@ def main_worker(training_args, model_args, data_args):
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("bfloat16")
 
-    config = EVACLIPConfig.from_pretrained(model_args.model)
-    model = EVACLIP(
+    config = CLIPConfig.from_pretrained(model_args.model)
+    model = CLIP(
         config,
         disable_text=False,
         local_loss=training_args.local_loss,

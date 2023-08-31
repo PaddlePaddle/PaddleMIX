@@ -81,6 +81,8 @@ python setup.py install
 
 数据部分，默认使用`coco_karpathy`数据，使用该数据不需另外配置，会自动下载。解析部分参考`coco_clip.py`文件。
 
+如果想手动下载，请点击[DownLoadCoCo](https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco.tar)
+
 2) 自定义数据
 
 如果需要自定义数据，推荐沿用`coco_karpathy`数据格式处理自己的数据。其中每条数据标注格式示例为:

@@ -23,14 +23,14 @@ import os
 from typing import Union
 
 import numpy as np
-from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 from paddlemix.models.model_utils import MixPretrainedModel
 from paddlemix.utils.log import logger
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
-from .eva_text_model import EVATextTransformer, EVATextTransformerConfig
-from .eva_vit_model import EVAVisionTransformer, EVAVisionTransformerConfig
 from .loss import ClipLoss
+from .text_model import EVATextTransformer, EVATextTransformerConfig
+from .vit_model import EVAVisionTransformer, EVAVisionTransformerConfig
 
 
 class EVACLIPConfig(PretrainedConfig):
@@ -39,6 +39,7 @@ class EVACLIPConfig(PretrainedConfig):
 
     def __init__(
         self,
+        embed_dim=None,
         vision_cfg={},
         text_cfg={},
         **kwargs,
@@ -48,6 +49,9 @@ class EVACLIPConfig(PretrainedConfig):
 
         self.vision_config = vision_cfg
         self.text_config = text_cfg
+        if embed_dim is not None:
+            self.vision_config["embed_dim"] = embed_dim
+            self.text_config["embed_dim"] = embed_dim
 
     @classmethod
     def from_pretrained(
