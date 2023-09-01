@@ -13,71 +13,66 @@
 # limitations under the License.
 
 from paddlenlp import Taskflow
-
+from paddlespeech.cli.whisper import WhisperExecutor
 from .apptask import AppTask
+from paddlemix.utils.log import logger
 
 
-class ChatGlmTask(AppTask):
+class AudioASRTask(AppTask):
     def __init__(self, task, model, **kwargs):
         super().__init__(task=task, model=model, **kwargs)
 
+
+        
         # Default to static mode
         self._static_mode = False
 
-        self._construct_model(model)
+        self._construct_model()
 
-    def _construct_model(self, model):
+    def _construct_model(self):
         """
         Construct the inference model for the predictor.
         """
 
         # bulid model
-        model_instance = Taskflow("text2text_generation", model=model)
+        whisper_executor = WhisperExecutor()
 
-        self._model = model_instance
+        self._model = whisper_executor
 
     def _preprocess(self, inputs):
         """ """
-        #e.g.
-        # prompt = (
-        #     "Given caption,extract the main object to be replaced and marked it as 'main_object', "
-        #     + "Extract the remaining part as 'other prompt', "
-        #     + "Return main_object, other prompt in English"
-        #     + "Given caption: {}.".format(prompt)
-        # )
-        
+        audio = inputs.get("audio", None)
+        assert audio is not None, "The image is None"
         prompt = inputs.get("prompt")
         assert prompt is not None, "The prompt is None"
-
-        inputs["prompt"] = prompt
-
         return inputs
-
     def _run_model(self, inputs):
         """
         Run the task model from the outputs of the `_preprocess` function.
         """
-
-        result = self._model(inputs["prompt"])["result"][0]
-
-        inputs.pop("prompt", None)
-        inputs["result"] = result
+        
+        _model = inputs.get("model", "whisper")
+        _task = inputs.get("task", "transcribe")
+        _sample_rate = inputs.get("sample_rate", 16000)
+        _config = inputs.get("config", None)
+        _ckpt_path = inputs.get("ckpt_path", None)
+        
+        result = self._model(
+            model=_model,
+            task=_task,
+            sample_rate=_sample_rate,
+            config=_config,  # Set `_config` and `_ckpt_path` to None to use pretrained model.
+            ckpt_path=_ckpt_path,
+            audio_file=inputs['audio'],
+            )
+        logger.info("Audio File ASR Result: {}".format(result['text']))
+        
+        inputs["prompt"] = inputs["prompt"].format(result['text'])
 
         return inputs
-
     def _postprocess(self, inputs):
         """
         The model output is tag ids, this function will convert the model output to raw text.
         """
-
-        prompt, inpaint_prompt = (
-            inputs["result"].split("\n")[0].split(":")[-1].strip(),
-            inputs["result"].split("\n")[-1].split(":")[-1].strip(),
-        )
-
-        inputs.pop("result", None)
-
-        inputs["prompt"] = prompt
-        inputs["inpaint_prompt"] = inpaint_prompt
 
         return inputs

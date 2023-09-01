@@ -22,6 +22,9 @@ from .text2image_generation import StableDiffusionTask, VersatileDiffusionDualGu
 from .text2image_inpaiting import StableDiffusionInpaintTask
 from .text2text_generation import ChatGlmTask
 from .text2video_generation import TextToVideoSDTask
+from .audio_asr import AudioASRTask
+from .text2audio_generation import AudioLDMPipelineTask
+from .text2speech_synthesize import AudioTTSTask
 
 APPLICATIONS = {
     "openset_det_sam": {
@@ -152,4 +155,57 @@ APPLICATIONS = {
             "model": "paddlemix/blip2-caption-opt2.7b",
         },
     },
+    "audio2caption": {
+        "models": {
+            "whisper": {
+                "task_class": AudioASRTask,
+                "task_flag": "audio2caption-whisper-asr"
+            },
+            "THUDM/chatglm-6b": {
+                "task_class": ChatGlmTask,
+                "task_flag": "audio2caption-chatglm-6b",
+            },
+        
+        }
+    },
+
+    "music_generation": {
+        "models": {
+            "miniGPT4/MiniGPT4-7B": {
+                "task_class": MiniGPT4Task,
+                "task_flag": "music_generation-MiniGPT4-7B",
+            },
+             "THUDM/chatglm-6b": {
+                "task_class": ChatGlmClsTask,
+                "task_flag": "music_generation-chatglm-6b",
+            },
+            "whisper": { 
+                "task_class": AudioASRTask, 
+                "task_flag": "music_generation-whisper-asr"
+            },
+            "cvssp/audioldm": {
+                "task_class": AudioLDMPipelineTask,
+                "task_flag": "music_generation-audioldm",
+            },
+        }
+    },
+
+    "audio_chat": {
+        "models": {
+            "whisper": {
+                "task_class": AudioASRTask,
+                "task_flag": "audio_chat-whisper-asr"
+            },
+            "speech": {
+                "task_class": AudioTTSTask,
+                "task_flag": "audio_chat-text-to-speech",
+            },
+            "THUDM/chatglm-6b": {
+                "task_class": ChatGlmTask,
+                "task_flag": "audio_chat-chatglm-6b",
+            },
+        
+        }
+    },
+
 }
