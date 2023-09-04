@@ -176,7 +176,7 @@ APPLICATIONS = {
                 "task_flag": "music_generation-MiniGPT4-7B",
             },
              "THUDM/chatglm-6b": {
-                "task_class": ChatGlmClsTask,
+                "task_class": ChatGlmTask,
                 "task_flag": "music_generation-chatglm-6b",
             },
             "whisper": { 
