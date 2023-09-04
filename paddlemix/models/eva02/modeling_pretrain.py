@@ -20,9 +20,9 @@ from typing import Dict, Union
 import paddle
 import paddle.nn as nn
 
-from ..evaclip.eva_clip_model import EVACLIP, EVACLIPConfig
-from ..evaclip.modules.rope import VisionRotaryEmbeddingFast
-from ..evaclip.utils import trunc_normal_
+from ..clip.eva_clip_model import EVACLIP, EVACLIPConfig
+from ..clip.modules.rope import VisionRotaryEmbeddingFast
+from ..clip.utils import trunc_normal_
 from .modeling_finetune import (
     Block,
     DecoupledRelativePositionBias,
@@ -31,7 +31,7 @@ from .modeling_finetune import (
 )
 
 try:
-    from ..evaclip.modules.fusedln import FusedLayerNorm
+    from ..clip.modules.fusedln import FusedLayerNorm
 except:
     from paddle.nn import LayerNorm as FusedLayerNorm
 
