@@ -25,12 +25,10 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
-from paddlenlp.transformers import AutoTokenizer
 
 from paddlemix.datasets import load_dataset
+from paddlemix.examples.blip2.utils import load_model
 from paddlemix.models.blip2.configuration import Blip2Config
-from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
@@ -39,6 +37,8 @@ from paddlemix.processors.blip_processing import (
 )
 from paddlemix.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlemix.utils.log import logger
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
+from paddlenlp.transformers import AutoTokenizer
 
 
 class BlipCollator:
@@ -84,7 +84,7 @@ class DataArguments:
     the command line.
     """
 
-    task_name: str = field(
+    task_name: list or str = field(
         default="coco_caption",
         metadata={"help": "The name of the task to use (via the datasets library)."},
     )
@@ -147,14 +147,17 @@ class PreTrainingArguments(TrainingArguments):
         default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"}
     )
     pipeline_parallel_degree: int = field(default=1, metadata={"help": "Enable pipeline parallel"})
-    checkpoint_steps: int = field(default=1000, metadata={"help": "save checkpoint with x steps"})
-    model_path: str = field(
+    save_strategy: str = field(
+        default="epoch",
+        metadata={"help": "The checkpoint save strategy to use."},
+    )
+    load_model_path: str = field(
         default=None,
         metadata={"help": "The path to model if you want to load weights from the specified path"},
     )
 
 
-def create_model(config, training_args):
+def create_model(config, training_args=None):
     blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
     blip2_config.mp_degree = config.mp_degree
     blip2_config.gradient_checkpointing = config.gradient_checkpointing
@@ -236,11 +239,10 @@ def main():
     )
     # Training
     checkpoint = None
-    if training_args.resume_from_checkpoint is not None:
+    if training_args.load_model_path is not None:
+        load_model(training_args, model, ckpt_dir=os.path.join(training_args.load_model_path, "model_state.pdparams"))
+    elif training_args.resume_from_checkpoint is not None:
         checkpoint = training_args.resume_from_checkpoint
-        state_dict = paddle.load("blip2_pretrained.pdparams")
-        interpolate_pos_embed(model, state_dict)
-        model.set_state_dict(state_dict)
     if training_args.do_train:
         trainer.train(resume_from_checkpoint=checkpoint)
         trainer.save_model()

@@ -20,12 +20,12 @@ import sys
 import time
 
 import paddle
-from paddlenlp.transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 from pycocoevalcap.eval import COCOEvalCap
 from pycocotools.coco import COCO
 
 from paddlemix.utils import device_guard
 from paddlemix.utils.downloader import WEIGHTS_HOME, get_path_from_url
+from paddlenlp.transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 
 LLM_LIST = {
     "facebook/opt-2.7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-2.7b/model_state.pdparams",
@@ -137,7 +137,7 @@ def coco_caption_eval(coco_gt_root, results_file, split):
 
 def blip2_load(path, model, training_args, map_location="cpu", weight_name=None):
     assert map_location in ["cpu", "gpu", "xpu", "npu", "numpy", "np"]
-    return load_model(training_args, model, ckpt_dir=path, map_location="cpu", prefix=weight_name)
+    return load_model(training_args, model, ckpt_dir=path, map_location=map_location, prefix=weight_name)
 
 
 def load_model(args, model, ckpt_dir="", map_location="cpu", prefix=None):
@@ -170,9 +170,12 @@ def load_model(args, model, ckpt_dir="", map_location="cpu", prefix=None):
     col_list = []
     row_list = []
     emb_list = []
-
-    mp_rank = args.mp_rank
-    mp_size = args.tensor_parallel_degree
+    if args:
+        mp_rank = args.mp_rank
+        mp_size = args.tensor_parallel_degree
+    else:
+        mp_rank = 1
+        mp_size = 1
 
     def renamebias(model_dict, whole_key):
         if "q_bias" in whole_key:
@@ -207,15 +210,6 @@ def load_model(args, model, ckpt_dir="", map_location="cpu", prefix=None):
     else:
         with device_guard(map_location):
             model_dict = paddle.load(path)
-    # if prefix:
-    #     keys = model_dict.keys()
-    #     if prefix in list(keys)[0]:
-    #         pass
-    #     else:
-    #         new_dict={}
-    #         for key in keys:
-    #             new_dict[prefix+"."+key]=model_dict[key]
-    #         model_dict=new_dict
 
     from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
 
@@ -223,9 +217,9 @@ def load_model(args, model, ckpt_dir="", map_location="cpu", prefix=None):
     from paddle.distributed import fleet
 
     for name, p in model.named_sublayers():
-        if isinstance(name, fleet.meta_parallel.ColumnParallelLinear):
+        if isinstance(p, fleet.meta_parallel.ColumnParallelLinear):
             collinear_list.append(name)
-        if isinstance(name, fleet.meta_parallel.RowParallelLinear):
+        if isinstance(p, fleet.meta_parallel.RowParallelLinear):
             rowlinear_list.append(name)
     all_list = collinear_list + rowlinear_list + embedding_list
 
@@ -246,17 +240,22 @@ def load_model(args, model, ckpt_dir="", map_location="cpu", prefix=None):
             else:
                 emb_list.append((key, model_dict[whole_key].shape))
                 model_dict[whole_key] = emb_split_modeldict(model_dict[whole_key])
+    keys = model_dict.keys()
+    loaded_state_dict_keys = keys
     if prefix:
-        keys = model_dict.keys()
         if prefix in list(keys)[0]:
             model.set_state_dict(model_dict)
         else:
+            loaded_state_dict_keys = []
             if prefix == "Qformer":
                 model.Qformer.set_state_dict(model_dict)
             elif prefix == "visual_encoder":
                 model.visual_encoder.set_state_dict(model_dict)
-
-    return model_dict
+            for key in keys:
+                loaded_state_dict_keys.append(".".join([prefix, key]))
+    else:
+        model.set_state_dict(model_dict)
+    return loaded_state_dict_keys
 
 
 def save_result(result, result_dir, filename, remove_duplicate="", world_size=1):

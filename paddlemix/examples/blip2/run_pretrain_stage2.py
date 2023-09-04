@@ -25,15 +25,9 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 
 from paddlemix.datasets import load_dataset
-from paddlemix.examples.blip2.utils import (
-    LLM_LIST,
-    BlipCollator,
-    create_tokenizer,
-    load_model,
-)
+from paddlemix.examples.blip2.utils import BlipCollator, create_tokenizer, load_model
 from paddlemix.models.blip2.configuration import Blip2Config
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
@@ -43,6 +37,7 @@ from paddlemix.processors.blip_processing import (
 )
 from paddlemix.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlemix.utils.log import logger
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 
 
 @dataclass
@@ -123,14 +118,17 @@ class PreTrainingArguments(TrainingArguments):
         default=None,
         metadata={"help": "The path to a folder with a valid checkpoint for your model."},
     )
-    model_path: str = field(
+    save_strategy: str = field(
+        default="epoch",
+        metadata={"help": "The checkpoint save strategy to use."},
+    )
+    load_model_path: str = field(
         default=None,
         metadata={"help": "The path to model if you want to load weights from the specified path"},
     )
-    sharding: str = field(default="stage2", metadata={"help": "Set the stage of sharding"})
 
 
-def create_model(config, training_args):
+def create_model(config, training_args=None):
     blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
     blip2_config.mp_degree = config.mp_degree
     blip2_config.gradient_checkpointing = config.gradient_checkpointing
@@ -198,7 +196,7 @@ def main():
         warnings.warn("Do not support multiple {} and {} datasets.".format("test", "eval"))
         eval_dataset = {"test": load_dataset(data_args.task_name[0], splits="test")}
     else:
-        train_dataset.append(load_dataset(data_args.task_name, splits="train"))
+        train_dataset = load_dataset(data_args.task_name, splits="train")
         eval_dataset = {"test": load_dataset(data_args.task_name, splits="test")}
     # train_dataset = load_dataset(data_args.task_name,data_files=[['/root/.paddlemix/datasets/coco/images/','/root/.paddlemix/datasets/coco/annotations/coco_karpathy_train.json',"train"]])
 
@@ -223,14 +221,10 @@ def main():
     )
     # Training
     checkpoint = None
-    if training_args.model_path is not None:
-        checkpoint = training_args.model_path
-        load_model(training_args, model, ckpt_dir=model_args.model_path, load_language_model=False)
-        load_model(training_args, model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
-    if training_args.resume_from_checkpoint is not None:
-        checkpoint = os.path.join(training_args.resume_from_checkpoint, "model_state.pdparams")
-        load_model(training_args, model, ckpt_dir=checkpoint, load_language_model=False)
-        load_model(training_args, model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
+    if training_args.load_model_path is not None:
+        load_model(training_args, model, ckpt_dir=os.path.join(training_args.load_model_path, "model_state.pdparams"))
+    elif training_args.resume_from_checkpoint is not None:
+        checkpoint = training_args.resume_from_checkpoint
     if training_args.do_eval:
         eval_metrics = trainer.evaluate(eval_dataset)
         trainer.log_metrics("eval", eval_metrics)

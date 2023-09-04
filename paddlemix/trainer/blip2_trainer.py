@@ -24,6 +24,10 @@ import paddle.amp.auto_cast as autocast
 import paddle.nn as nn
 from paddle.distributed import fleet
 from paddle.io import DataLoader, Dataset
+
+import paddlemix
+from paddlemix.examples.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
+from paddlemix.optimization import FilterParamsName
 from paddlenlp.trainer.trainer import Trainer
 from paddlenlp.trainer.trainer_callback import DefaultFlowCallback, ProgressCallback
 from paddlenlp.trainer.trainer_utils import (  # set_hyrbid_parallel_seed,
@@ -37,10 +41,6 @@ from paddlenlp.transformers.model_utils import unwrap_model
 from paddlenlp.utils import device_guard
 from paddlenlp.utils.import_utils import is_datasets_available
 from paddlenlp.utils.log import logger
-
-import paddlemix
-from paddlemix.examples.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
-from paddlemix.optimization import FilterParamsName
 
 DEFAULT_CALLBACKS = [DefaultFlowCallback]
 DEFAULT_PROGRESS_CALLBACK = ProgressCallback
@@ -582,3 +582,27 @@ class BLIP2Trainer(Trainer):
             f.write(json.dumps(metrics) + "\n")
 
         return metrics
+
+    def _save(self, output_dir: Optional[str] = None, state_dict=None, merge_tensor_parallel=False):
+        # If we are executing this function, we are the process zero, so we don't check for that.
+        output_dir = output_dir if output_dir is not None else self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        logger.info(f"Saving model checkpoint to {output_dir}")
+        # Save a trained model and configuration using `save_pretrained()`.
+        # They can then be reloaded using `from_pretrained()`
+
+        merge_tensor_parallel = merge_tensor_parallel and self.args.use_hybrid_parallel
+
+        self.model.save_pretrained(
+            output_dir,
+            merge_tensor_parallel=merge_tensor_parallel,
+            variant=self.args.weight_name_suffix,
+            is_main_process=self.args.should_save,
+        )
+
+        if self.args.should_save:
+            if self.tokenizer is not None:
+                self.tokenizer.save_pretrained(output_dir)
+
+            # Good practice: save your training arguments together with the trained model
+            paddle.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))
