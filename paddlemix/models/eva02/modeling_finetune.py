@@ -21,11 +21,11 @@ import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 
-from ..evaclip.modules.rope import VisionRotaryEmbeddingFast
-from ..evaclip.utils import to_2tuple, trunc_normal_
+from ..clip.modules.rope import VisionRotaryEmbeddingFast
+from ..clip.utils import to_2tuple, trunc_normal_
 
 try:
-    from ..evaclip.modules.fusedln import FusedLayerNorm
+    from ..clip.modules.fusedln import FusedLayerNorm
 except:
     from paddle.nn import LayerNorm as FusedLayerNorm
 
