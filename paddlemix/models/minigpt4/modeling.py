@@ -1392,17 +1392,18 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
         output_hidden_states: Optional[bool] = None,
         labels: Optional[paddle.Tensor] = None,
         return_dict: Optional[bool] = None,
+        masked_labels: Optional[paddle.Tensor] = None,
+        label_attention_mask: Optional[paddle.Tensor] = None,
     ) -> Union[Tuple, MiniGPT4ForConditionalGenerationModelOutput]:
         r"""
-        Returns:
         Examples:
         ```python
         >>> from PIL import Image
         >>> import requests
         >>> import paddle
-        >>> from paddlenlp.transformers import MiniGPT4Processor, MiniGPT4Model
+        >>> from paddlenlp.transformers import MiniGPT4Processor, MiniGPT4ForConditionalGeneration
         >>> processor = MiniGPT4Processor.from_pretrained("model_name")
-        >>> model = MiniGPT4Model.from_pretrained("model_name")
+        >>> model = MiniGPT4ForConditionalGeneration.from_pretrained("model_name")
         >>> url = "http://images.cocodataset.org/val2017/000000039769.jpg"
         >>> image = Image.open(requests.get(url, stream=True).raw)
         >>> text = "describe this image"
@@ -1453,6 +1454,16 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
             axis=1,
         )
 
+        if labels is not None:
+            # added bos in processor
+            empty_labels = paddle.full(shape=[attention_mask.shape[0], attention_mask.shape[1]], fill_value=-100, dtype=masked_labels.dtype)
+            masked_labels = paddle.concat([empty_labels, masked_labels], axis=1)
+            label_embeds = self.language_model.llama.embed_tokens(labels)
+            inputs_embeds = paddle.concat([inputs_embeds, label_embeds], axis=1)
+            if label_attention_mask is None:
+                label_attention_mask = paddle.ones(shape=labels.shape, dtype=attention_mask.dtype)
+            attention_mask = paddle.concat([attention_mask, label_attention_mask], axis=1)
+
         position_ids = paddle.arange(attention_mask.shape[-1]).expand(shape=[pixel_values.shape[0], attention_mask.shape[-1]])
         outputs = self.language_model(
             inputs_embeds=inputs_embeds,
@@ -1460,33 +1471,18 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
             position_ids = position_ids,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
+            labels=masked_labels,
             return_dict=return_dict,
         )
 
-        logits = outputs.logits if return_dict else outputs[0]
-        loss = None
-        # we compute the loss here since we need to take into account the sequence length of the query embeds
-        if labels is not None:
-            logits = logits[:, -labels.shape[1] :, :]
-            # Shift so that tokens < n predict n
-            shift_logits = logits[..., :-1, :]
-            shift_labels = labels[..., 1:]
-
-            # Flatten the tokens
-            loss_fct = CrossEntropyLoss(reduction="mean")
-
-            loss = loss_fct(
-                shift_logits.reshape([-1, self.config.text_config.vocab_size]),
-                shift_labels.reshape([-1]),
-            )
-
         if not return_dict:
-            output = (logits, vision_outputs, query_outputs, outputs)
-            return ((loss,) + output) if loss is not None else output
+            pre_idx = 1 if masked_labels is None else 2
+            output = outputs[:perfix] + (vision_outputs, query_outputs, outputs)
+            return output
 
         return MiniGPT4ForConditionalGenerationModelOutput(
-            loss=loss,
-            logits=logits,
+            loss=outputs.loss,
+            logits=outputs.logits,
             vision_outputs=vision_outputs,
             qformer_outputs=query_outputs,
             language_model_outputs=outputs,
@@ -1520,6 +1516,8 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
         output_attentions: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         labels: Optional[paddle.Tensor] = None,
+        masked_labels: Optional[paddle.Tensor] = None,
+        label_attention_mask: Optional[paddle.Tensor] = None,
         return_dict: Optional[bool] = None,
     ) -> Union[Tuple, MiniGPT4ForConditionalGenerationModelOutput]:
         r"""
@@ -1581,6 +1579,16 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
             axis=1,
         )
 
+        if labels is not None:
+            # added bos in processor
+            empty_labels = paddle.full(shape=[attention_mask.shape[0], attention_mask.shape[1]], fill_value=-100, dtype=masked_labels.dtype)
+            masked_labels = paddle.concat([empty_labels, masked_labels], axis=1)
+            label_embeds = self.language_model.llama.embed_tokens(labels)
+            inputs_embeds = paddle.concat([inputs_embeds, label_embeds], axis=1)
+            if label_attention_mask is None:
+                label_attention_mask = paddle.ones(shape=labels.shape, dtype=attention_mask.dtype)
+            attention_mask = paddle.concat([attention_mask, label_attention_mask], axis=1)
+
         position_ids = paddle.arange(attention_mask.shape[-1]).expand(shape=[pixel_values.shape[0], attention_mask.shape[-1]])
         outputs = self.language_model(
             inputs_embeds=inputs_embeds,
@@ -1588,33 +1596,18 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
             position_ids = position_ids,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
+            labels=masked_labels,
             return_dict=return_dict,
         )
 
-        logits = outputs.logits if return_dict else outputs[0]
-        loss = None
-        # we compute the loss here since we need to take into account the sequence length of the query embeds
-        if labels is not None:
-            logits = logits[:, -labels.shape[1] :, :]
-            # Shift so that tokens < n predict n
-            shift_logits = logits[..., :-1, :]
-            shift_labels = labels[..., 1:]
-
-            # Flatten the tokens
-            loss_fct = CrossEntropyLoss(reduction="mean")
-
-            loss = loss_fct(
-                shift_logits.reshape([-1, self.config.text_config.vocab_size]),
-                shift_labels.reshape([-1]),
-            )
-
         if not return_dict:
-            output = (logits, vision_outputs, query_outputs, outputs)
-            return ((loss,) + output) if loss is not None else output
+            pre_idx = 1 if masked_labels is None else 2
+            output = outputs[:perfix] + (vision_outputs, query_outputs, outputs)
+            return output
 
         return MiniGPT4ForConditionalGenerationModelOutput(
-            loss=loss,
-            logits=logits,
+            loss=outputs.loss,
+            logits=outputs.logits,
             vision_outputs=vision_outputs,
             qformer_outputs=query_outputs,
             language_model_outputs=outputs,
