@@ -14,7 +14,7 @@
 
 model_item=stable_diffusion-098b_lora
 model=stable_diffusion
-bs_item=104
+bs_item=96
 fp_item=bf16O1
 run_mode=DP
 device_num=N1C1

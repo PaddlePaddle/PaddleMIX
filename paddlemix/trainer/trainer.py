@@ -14,10 +14,10 @@
 
 import paddle
 from paddle.io import DataLoader
-from paddlenlp.trainer.trainer import Trainer
 from tensorboardX import SummaryWriter
 
-from paddlemix.models.evaclip.utils import clip_grad_norm
+from paddlemix.models.clip.utils import clip_grad_norm
+from paddlenlp.trainer.trainer import Trainer
 
 
 class CLIPTrainer(Trainer):
@@ -78,10 +78,11 @@ class CLIPTrainer(Trainer):
         if self.args.max_grad_norm > 0.0:
             grad_norms = clip_grad_norm(model, self.args.max_grad_norm)
         if self.rank == 0 and self.args.tensorboard:
-            self.logstep += 1
             self.writer.add_scalar("train/loss", loss.item(), self.logstep)
+            self.writer.add_scalar("train/lr", self.optimizer.get_lr(), self.logstep)
             self.writer.add_scalar("train/grad_norm", grad_norms.item(), self.logstep)
             self.writer.add_scalar("train/logit_scale", logit_scale.item(), self.logstep)
+            self.logstep += 1
 
         return loss.detach()
 

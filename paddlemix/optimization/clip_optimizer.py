@@ -14,7 +14,6 @@
 
 import json
 import logging
-import math
 import re
 
 import paddle
@@ -306,10 +305,34 @@ def create_optimizer(args, model, lr_scheduler=None, return_params=False):
     #     optimizer_args['grad_clip'] = grad_clip
     parameters = get_all_parameters(args, model)
     optimizer = base_optimizer(parameters=parameters, **optimizer_args)
-    print(optimizer_args)
     if is_master(args):
         print(f"Optimizer: {args.optimizer}")
         print(f"Optimizer config: {optimizer_args}")
     if return_params:
         return optimizer, parameters
+    return optimizer
+
+
+def create_optimizer_simple(args, model, lr_scheduler=None):
+    if lr_scheduler is not None:
+        learning_rate = lr_scheduler
+    else:
+        learning_rate = args.learning_rate
+
+    exclude = lambda n, p: p.rank() < 2 or "bn" in n or "ln" in n or "bias" in n or "logit_scale" in n
+    include = lambda n, p: not exclude(n, p)
+
+    named_parameters = list(model.named_parameters())
+    gain_or_bias_params = [p for n, p in named_parameters if exclude(n, p) and p.stop_gradient is False]
+    rest_params = [p for n, p in named_parameters if include(n, p) and p.stop_gradient is False]
+    optimizer = paddle.optimizer.AdamW(
+        parameters=[
+            {"params": gain_or_bias_params, "weight_decay": 0.0},
+            {"params": rest_params, "weight_decay": args.weight_decay},
+        ],
+        learning_rate=learning_rate,
+        beta1=args.adam_beta1,
+        beta2=args.adam_beta2,
+        epsilon=args.adam_epsilon,
+    )
     return optimizer

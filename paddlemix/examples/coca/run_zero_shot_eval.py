@@ -26,9 +26,9 @@ from dataclasses import dataclass, field
 import paddle
 
 from paddlemix.datasets.dataset import ImageFolder
-from paddlemix.examples.evaclip.run_pretrain_dist import Collator
+from paddlemix.examples.coca.run_pretrain_dist import Collator
 from paddlemix.metrics.clip_zero_shot import ClipZeroShot
-from paddlemix.models.clip.eva_clip_model import EVACLIP
+from paddlemix.models.clip.coca_model import CoCa
 from paddlemix.processors.clip_processing import (
     CLIPImageProcessor,
     CLIPProcessor,
@@ -100,7 +100,7 @@ class SelfTrainer(CLIPTrainer):
 def main_worker(training_args, model_args, data_args):
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("bfloat16")
-    model = EVACLIP.from_pretrained(model_args.model, ignore_mismatched_sizes=False)
+    model = CoCa.from_pretrained(model_args.model, ignore_mismatched_sizes=False)
     model.eval()
 
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
