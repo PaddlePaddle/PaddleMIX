@@ -100,8 +100,7 @@ class Blip2ForStage1ModelOutput(Blip2ForConditionalGenerationModelOutput):
 
 class Blip2PretrainedModel(MixPretrainedModel):
     """
-    An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
-    models.
+    The class for pretrained model used in BLIP2.
     """
 
     config_class = Blip2Config
@@ -171,34 +170,13 @@ class Blip2PretrainedModel(MixPretrainedModel):
                 initialization. If the keyword is in `__init__` argument names of
                 base model, update argument values of the base model; else update
                 argument values of derived model.
-            load_state_as_np (bool, optional): The weights read in can be choosed
-                to place on CPU or GPU though the model is on the default device.
-                If `True`, load the model weights as `numpy.ndarray` on CPU.
-                Otherwise, weights would be loaded as tensors on the default
-                device. Note that if on GPU, the latter would creates extra
-                temporary tensors in addition to the model weights, which
-                doubles the memory usage . Thus it is suggested to use `True`
-                for big models on GPU. Default to `False`.
-
         Returns:
             PretrainedModel: An instance of `PretrainedModel`.
 
         Example:
             .. code-block::
-
-                from paddlenlp.transformers import BertForSequenceClassification
-
-                # Name of built-in pretrained model
-                model = BertForSequenceClassification.from_pretrained('bert-base-uncased')
-
-                # Name of pretrained model from PaddleHub
-                model = BertForSequenceClassification.from_pretrained('bert-base-uncased')
-
-                # Name of community-contributed pretrained model
-                model = BertForSequenceClassification.from_pretrained('yingyibiao/bert-base-uncased-sst-2-finetuned', num_labels=3)
-
-                # Load from local directory path
-                model = BertForSequenceClassification.from_pretrained('./my_bert/'
+                from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
+                model = Blip2ForConditionalGeneration.from_pretrained(config.model_name_or_path)
         """
         import os
 
@@ -372,17 +350,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
 
     def load_pretrained(
         self,
-        config,
-        model,
         training_args=None,
-        state_dict=None,
-        ignore_mismatched_sizes=False,
-        low_cpu_mem_usage=False,
-        dtype=None,
-        cache_dir=None,
-        subfolder="",
-        variant=None,
-        *args,
         **kwargs,
     ) -> Tuple[List[str]]:
         """load the state_dict into model, and do the following things:
@@ -393,24 +361,29 @@ class Blip2PretrainedModel(MixPretrainedModel):
             * filter the weight keys and set the state_dict to the model.
 
         Args:
-            pretrained_model_name_or_path (str): the pretrained model name or path.
-            state_dict (Dict[str, Tensor]): the model state dict data.
-            ignore_mismatched_sizes (bool, optional): whether ignore error when tensor size mismatched. Defaults to False.
-            low_cpu_mem_usage (bool, optional): whether use low cpu memory usage for loading pretrained model。 Defautls to False.
-            dtype (_type_, optional): the dtype of model state dict. Defaults to None.
-            cahce_cache_dir (str, optional): the cache directory for loading pretrained model. Defaults to None.
-            sufolder (str, optional): the subfolder of pretrained model name. Defaults "".
-            variant (str, optional): the pretrained model variant. Defaults to None.
-
+            training_args (bool, optional): whether ignore error when tensor size mismatched. Defaults to False.
         Returns:
             Tuple[List[str]]: _description_
         """
-        qformer_model_name_or_path = config.get("bridge_name_or_path", None)
-        vision_model_name_or_path = config.get("vision_name_or_path", None)
-        model_name_or_path = config.get("model_name_or_path", None)
+        qformer_model_name_or_path = (
+            kwargs.get("bridge_name_or_path", None)
+            if kwargs.get("bridge_name_or_path", None)
+            else self.config.get("bridge_name_or_path", None)
+        )
+        vision_model_name_or_path = (
+            kwargs.get("vision_name_or_path", None)
+            if kwargs.get("vision_name_or_path", None)
+            else self.config.get("vision_name_or_path", None)
+        )
+        model_name_or_path = (
+            kwargs.get("vision_and_bridge_name_or_path", None)
+            if kwargs.get("vision_and_bridge_name_or_path", None)
+            else self.config.get("vision_and_bridge_name_or_path", None)
+        )
+
         if (not qformer_model_name_or_path and not vision_model_name_or_path) and model_name_or_path is None:
             ValueError(
-                "either model_name_or_path or (bridge_model_name_or_path and vision_model_name_or_path) should be set."
+                "either vision_and_bridge_name_or_path or (bridge_name_or_path and vision_name_or_path) should be set."
             )
 
         def load_blip2_model_state(
@@ -570,13 +543,13 @@ class Blip2PretrainedModel(MixPretrainedModel):
 
         if vision_model_name_or_path is not None:
             logger.info("loading a vision model from path{}".format(vision_model_name_or_path))
-            load_blip2_model_state(vision_model_name_or_path, model, training_args, "visual_encoder")
+            load_blip2_model_state(vision_model_name_or_path, self, training_args, "visual_encoder")
         if qformer_model_name_or_path is not None:
             logger.info("loading a bridge model from path{}".format(qformer_model_name_or_path))
-            load_blip2_model_state(qformer_model_name_or_path, model, training_args, "Qformer")
+            load_blip2_model_state(qformer_model_name_or_path, self, training_args, "Qformer")
         if model_name_or_path is not None:
             logger.info("loading vision and bridge model from path{}".format(model_name_or_path))
-            load_blip2_model_state(model_name_or_path, model, training_args)
+            load_blip2_model_state(model_name_or_path, self, training_args)
 
     def save_pretrained(
         self,

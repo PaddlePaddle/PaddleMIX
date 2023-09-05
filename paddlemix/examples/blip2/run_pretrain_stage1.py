@@ -48,6 +48,8 @@ class BlipCollator:
     Args:
         processor (`paddlemix.processors.ProcessorMixin`):
             The processor used for pre-process the data.
+        mode(`str`, *optional*, defaults to `train`):
+                The mode of ("train", "val", "test")
     """
 
     def __init__(self, processor, mode="train"):
@@ -162,7 +164,12 @@ def create_model(config, training_args=None):
     blip2_config.mp_degree = config.mp_degree
     blip2_config.gradient_checkpointing = config.gradient_checkpointing
     model = Blip2ForConditionalGeneration(blip2_config)
-    model.load_pretrained(blip2_config, model, training_args)
+    model.load_pretrained(
+        vision_and_bridge_name_or_path=getattr(config, "vision_and_bridge_name_or_path", None),
+        vision_name_or_path=getattr(config, "vision_name_or_path", None),
+        bridge_name_or_path=getattr(config, "bridge_name_or_path", None),
+        training_args=training_args,
+    )
     paddle.device.cuda.empty_cache()
     return model
 

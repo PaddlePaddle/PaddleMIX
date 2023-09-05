@@ -28,7 +28,6 @@ import requests
 from PIL import Image
 
 from paddlemix.examples.blip2.utils import create_tokenizer, load_model
-from paddlemix.models.blip2.configuration import Blip2Config
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
@@ -118,10 +117,7 @@ class PreTrainingArguments(TrainingArguments):
 
 
 def create_model(config, training_args=None):
-    blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
-    model = Blip2ForConditionalGeneration(blip2_config)
-    model.load_pretrained(blip2_config, model, training_args)
-    paddle.device.cuda.empty_cache()
+    model = Blip2ForConditionalGeneration.from_pretrained(config.model_name_or_path)
     return model
 
 

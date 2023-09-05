@@ -54,6 +54,16 @@ def Parameter(tensor):
 class Blip2ForConditionalGeneration(Blip2PretrainedModel):
     config_class = Blip2Config
     main_input_name = "pixel_values"
+    """
+    Initialize the function to create an instance of Blip2.
+
+    Args:
+        config (`Blip2Config`): Configuration information for Blip2.
+
+    Returns:
+        Blip2(`Blip2PretrainedModel`): Returns an instance of Blip2PretrainedModel.
+
+    """
 
     def __init__(
         self,
@@ -162,6 +172,13 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         text_input_stage1: Optional[paddle.Tensor] = None,
         **kwargs
     ):
+        """
+        pixel_values (Tensor): image pixels of shape `(batch_size, 3, H, W)`):
+        input_ids (Tensor): Indices of input sequence tokens in the vocabulary.
+        attention_mask Tensor: Tensor of integers valued 0 or 1, where 0 specifies paddings and should not be attended to by the model.
+        return_dict (dict{Tensor}): whether to return dict
+        text_input_stage1: text input for stage1
+        """
 
         if self.train_stage1:
             return self.forward_stage1(pixel_values, text_input_stage1)
@@ -184,46 +201,15 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         decoder_input_ids: Optional[paddle.Tensor] = None,
         decoder_attention_mask: Optional[paddle.Tensor] = None,
     ) -> Union[Tuple, Blip2ForConditionalGenerationModelOutput]:
-        r"""
-        Returns:
-        Examples:
-        Image captioning (without providing a text prompt):
-        ```python
-        >>> from PIL import Image
-        >>> import requests
-        >>> from paddlenlp.transformers import Blip2Processor, Blip2ForConditionalGeneration
-        >>> import paddle
-        >>> processor = Blip2Processor.from_pretrained("Salesforce/blip2-flan-t5-xl")
-        >>> model = Blip2ForConditionalGeneration.from_pretrained(
-        ...     "Salesforce/blip2-flan-t5-xl"
-        ... )
-        >>> url = "http://images.cocodataset.org/val2017/000000039769.jpg"
-        >>> image = Image.open(requests.get(url, stream=True).raw)
-        >>> inputs = processor(images=image, return_tensors="pd")
-        >>> generated_ids, scores = model.generate(**inputs)
-        >>> generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-        >>> print(generated_text)
-        two cats laying on a couch
-        ```
-        Visual question answering (prompt = question):
-        ```python
-        >>> from PIL import Image
-        >>> import requests
-        >>> from paddlenlp.transformers import Blip2Processor, Blip2ForConditionalGeneration
-        >>> import paddle
-        >>> processor = Blip2Processor.from_pretrained("Salesforce/blip2-flan-t5-xl")
-        >>> model = Blip2ForConditionalGeneration.from_pretrained(
-        ...     "Salesforce/blip2-flan-t5-xl"
-        ... )
-        >>> url = "http://images.cocodataset.org/val2017/000000039769.jpg"
-        >>> image = Image.open(requests.get(url, stream=True).raw)
-        >>> prompt = "Question: how many cats are there? Answer:"
-        >>> inputs = processor(images=image, text=prompt, return_tensors="pd")
-        >>> generated_ids, scores= model.generate(**inputs)
-        >>> generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-        >>> print(generated_text)
-        two
-        ```"""
+        """
+        pixel_values (Tensor): image pixels of shape `(batch_size, 3, H, W)`):
+        input_ids (Tensor): Indices of input sequence tokens in the vocabulary.
+        attention_mask Tensor: Tensor of integers valued 0 or 1, where 0 specifies paddings and should not be attended to by the model.
+        return_dict (dict{Tensor}): whether to return dict
+        text_input_stage1: text input for stage1
+        decoder_input_ids: Indices of input sequence tokens in the vocabulary for encoder-decoder generation
+        decoder_attention_mask: Tensor of integers valued 0 or 1 for encoder-decoder generation
+        """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         with paddle.amp.auto_cast(level="O2"):
             image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
@@ -430,9 +416,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             min_length (int): The minimum length of the sequence to be generated.
             top_p (float): The cumulative probability for nucleus sampling.
             repetition_penalty (float): The parameter for repetition penalty. 1.0 means no penalty.
-            num_captions (int): Number of captions to be generated for each image.
         Returns:
-            captions (list): A list of strings of length batch_size * num_captions.
+            captions (list): A list of ids of length batch_size * num_captions.
         """
         image = samples["image"]
         image_embeds = self.ln_vision(self.visual_encoder(image))
@@ -477,7 +462,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             attention_mask (`paddle.Tensor` of shape (batch_size, sequence_length), *optional*):
                 Mask to avoid performing attention on padding token indices
         Returns:
-            captions (list): A list of strings of length batch_size * num_captions.
+            captions (list): A list of ids of length batch_size * num_captions.
         """
         batch_size = pixel_values.shape[0]
         image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
@@ -552,6 +537,19 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         min_len=1,
         **kwargs
     ):
+        """
+        Args:
+            pixel_values (`paddle.Tensor` of shape (batch_size, num_channels, height, width)):
+                Input images to be processed.
+            input_ids (`paddle.Tensor` of shape (batch_size, sequence_length), *optional*):
+                The sequence used as a prompt for the generation.
+            attention_mask (`paddle.Tensor` of shape (batch_size, sequence_length), *optional*):
+                Mask to avoid performing attention on padding token indices
+            max_length (int): The maximum length of the sequence to be generated.
+            min_length (int): The minimum length of the sequence to be generated.
+        Returns:
+            captions (list): A list of ids of length batch_size * num_captions.
+        """
         # batch_size = pixel_values.shape[0]
         image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
         image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")

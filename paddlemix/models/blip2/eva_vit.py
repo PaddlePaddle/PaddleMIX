@@ -292,9 +292,7 @@ class RelativePositionBias(nn.Layer):
         self.relative_position_bias_table = self.create_parameter(
             [self.num_relative_distance, num_heads], default_initializer=zeros_
         )  # 2*Wh-1 * 2*Ww-1, nH
-        # cls to token & token 2 cls & cls to cls
 
-        # get pair-wise relative position index for each token inside the window
         coords_h = paddle.arange(window_size[0])
         coords_w = paddle.arange(window_size[1])
         coords = paddle.stack(paddle.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww

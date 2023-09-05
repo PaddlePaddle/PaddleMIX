@@ -22,6 +22,8 @@ import paddle
 import paddle.nn.functional as F
 from paddle import Tensor, device, nn
 from paddle.distributed.fleet.utils import recompute
+
+from paddlemix.models.model_utils import MixPretrainedModel
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.bert.configuration import BertConfig
 from paddlenlp.transformers.model_outputs import (
@@ -30,8 +32,6 @@ from paddlenlp.transformers.model_outputs import (
     CausalLMOutputWithCrossAttentions,
     MaskedLMOutput,
 )
-
-from paddlemix.models.model_utils import MixPretrainedModel
 
 
 class CrossEntropyLoss(nn.Layer):
@@ -127,6 +127,8 @@ class BertEmbeddings(nn.Layer):
 
 
 class BertSelfAttention(nn.Layer):
+    """Multi-headed attention from 'Attention Is All You Need' paper"""
+
     def __init__(self, config, is_cross_attention):
         super().__init__()
         self.config = config
@@ -355,6 +357,15 @@ class BertOutput(nn.Layer):
 
 
 class BertLayer(nn.Layer):
+    """
+    Transformer encoder consisting of `config.num_hidden_layers` self attention layers. Each layer is a
+    [`BertLayer`].
+    Args:
+        config (`Blip2Config`):
+            The corresponding vision configuration for the `Blip2Encoder`.
+        layer_num: num layers
+    """
+
     def __init__(self, config, layer_num):
         super().__init__()
         self.config = config
@@ -516,9 +527,6 @@ class BertEncoder(nn.Layer):
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
 
         next_decoder_cache = () if use_cache else None
-        # cuda_state = paddle.get_cuda_rng_state()
-        # paddle.set_cuda_rng_state(cuda_state)
-        # print("qformergradient_checkpointing:{}".format(self.gradient_checkpointing))
         for i in range(self.config.num_hidden_layers):  # add recompute
             layer_module = self.layer[i]
             if output_hidden_states:

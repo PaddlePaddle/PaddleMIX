@@ -21,7 +21,7 @@ from paddlemix.datasets.caption_dataset import CaptionDataset
 
 class VGCaption(CaptionDataset):
     """
-    Caption dataset.
+    VG Caption dataset.
     """
 
     URL = "https://bj.bcebos.com/paddlemix/datasets/vg.tar.gz"
@@ -32,6 +32,6 @@ class VGCaption(CaptionDataset):
             os.path.join("coco", "images"),
             os.path.join("coco", "annotations/vg_caption.json"),
             "",
-            "aa31ac474cf6250ebb81d18348a07ed8",
+            "",
         ),
     }
