@@ -1,5 +1,4 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import random
 import unittest
 
 import numpy as np
@@ -22,26 +22,33 @@ from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 from ppdiffusers import (
     AutoencoderKL,
     DDIMScheduler,
-    DPMSolverMultistepScheduler,
-    TextToVideoSDPipeline,
     UNet3DConditionModel,
+    VideoToVideoSDPipeline,
 )
-from ppdiffusers.utils import is_ppxformers_available, load_numpy, slow
+from ppdiffusers.utils import floats_tensor, is_ppxformers_available
+from ppdiffusers.utils.testing_utils import enable_full_determinism, slow
 
-from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
+from ..pipeline_params import (
+    TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
+    TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
+)
 from ..test_pipelines_common import PipelineTesterMixin
 
+enable_full_determinism()
 
-class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
-    pipeline_class = TextToVideoSDPipeline
-    params = TEXT_TO_IMAGE_PARAMS
-    batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
+
+class VideoToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+    pipeline_class = VideoToVideoSDPipeline
+    params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS.union({"video"}) - {"image", "width", "height"}
+    batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS.union({"video"}) - {"image"}
+    required_optional_params = PipelineTesterMixin.required_optional_params - {"latents"}
+    test_attention_slicing = False
     required_optional_params = frozenset(
         ["num_inference_steps", "generator", "latents", "return_dict", "callback", "callback_steps"]
     )
 
     def get_dummy_components(self):
-        paddle.seed(0)
+        paddle.seed(seed=0)
         unet = UNet3DConditionModel(
             block_out_channels=(32, 64, 64, 64),
             layers_per_block=2,
@@ -60,7 +67,7 @@ class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             clip_sample=False,
             set_alpha_to_one=False,
         )
-        paddle.seed(0)
+        paddle.seed(seed=0)
         vae = AutoencoderKL(
             block_out_channels=[32, 64],
             in_channels=3,
@@ -70,7 +77,7 @@ class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             latent_channels=4,
             sample_size=128,
         )
-        paddle.seed(0)
+        paddle.seed(seed=0)
         text_encoder_config = CLIPTextConfig(
             bos_token_id=0,
             eos_token_id=2,
@@ -96,40 +103,35 @@ class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         return components
 
     def get_dummy_inputs(self, seed=0):
-        generator = paddle.Generator().manual_seed(0)
-        # "output_type": "pd" is problematic
+        video = floats_tensor((1, 3, 3, 32, 32), rng=random.Random(seed))
+        generator = paddle.Generator().manual_seed(seed)
         inputs = {
             "prompt": "A painting of a squirrel eating a burger",
+            "video": video,
             "generator": generator,
             "num_inference_steps": 2,
             "guidance_scale": 6.0,
-            "output_type": "pd",
+            "output_type": "pt",
         }
         return inputs
 
     def test_text_to_video_default_case(self):
         components = self.get_dummy_components()
-        sd_pipe = TextToVideoSDPipeline(**components)
-        sd_pipe = sd_pipe
+        sd_pipe = VideoToVideoSDPipeline(**components)
         sd_pipe.set_progress_bar_config(disable=None)
         inputs = self.get_dummy_inputs()
         inputs["output_type"] = "np"
         frames = sd_pipe(**inputs).frames
         image_slice = frames[0][-3:, -3:, (-1)]
-        assert frames[0].shape == (64, 64, 3)
-        expected_slice = np.array([51, 148, 141, 100, 238, 122, 141, 181, 79])
-
+        assert frames[0].shape == (32, 32, 3)
+        expected_slice = np.array([106, 117, 113, 174, 137, 112, 148, 151, 131])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
-    def test_attention_slicing_forward_pass(self):
-        self._test_attention_slicing_forward_pass(test_mean_pixel_difference=False, expected_max_diff=3e-3)
-
     @unittest.skipIf(
-        not is_ppxformers_available(),
-        reason="XFormers attention is only available with CUDA and `xformers` installed",
+        not is_ppxformers_available(), reason="XFormers attention is only available with CUDA and `xformers` installed"
     )
     def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(test_mean_pixel_difference=False, expected_max_diff=1e-2)
+        self._test_xformers_attention_forwardGenerator_pass(test_mean_pixel_difference=False, expected_max_diff=0.005)
 
     @unittest.skip(reason="Batching needs to be properly figured out first for this pipeline.")
     def test_inference_batch_consistent(self):
@@ -143,32 +145,18 @@ class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     def test_num_images_per_prompt(self):
         pass
 
+    def test_progress_bar(self):
+        return super().test_progress_bar()
+
 
 @slow
-class TextToVideoSDPipelineSlowTests(unittest.TestCase):
-    def test_full_model(self):
-        expected_video = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/text_to_video/video.npy"
-        )
-        pipe = TextToVideoSDPipeline.from_pretrained(
-            "damo-vilab/text-to-video-ms-1.7b", from_hf_hub=True, from_diffusers=True
-        )
-        pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-        pipe = pipe
-        prompt = "Spiderman is surfing"
-        generator = paddle.Generator().manual_seed(0)
-        video_frames = pipe(prompt, generator=generator, num_inference_steps=25, output_type="pd").frames
-        video = video_frames.cpu().numpy()
-        assert np.abs(expected_video - video).mean() < 0.8
-
+class VideoToVideoSDPipelineSlowTests(unittest.TestCase):
     def test_two_step_model(self):
-        expected_video = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/text_to_video/video_2step.npy"
-        )
-        pipe = TextToVideoSDPipeline.from_pretrained("damo-vilab/text-to-video-ms-1.7b")
-        pipe = pipe
+        pipe = VideoToVideoSDPipeline.from_pretrained("cerspense/zeroscope_v2_XL", torch_dtype="float16")
+        pipe.enable_model_cpu_offload()
+        generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
+        video = paddle.randn(shape=(1, 10, 3, 1024, 576), generator=generator)
         prompt = "Spiderman is surfing"
-        generator = paddle.Generator().manual_seed(0)
-        video_frames = pipe(prompt, generator=generator, num_inference_steps=2, output_type="pd").frames
-        video = video_frames.cpu().numpy()
-        assert np.abs(expected_video - video).mean() < 0.8
+        video_frames = pipe(prompt, video=video, generator=generator, num_inference_steps=3, output_type="pt").frames
+        expected_array = np.array([-1.0458984, -1.1279297, -0.9663086, -0.91503906, -0.75097656])
+        assert np.abs(video_frames.cpu().numpy()[(0), (0), (0), (0), -5:] - expected_array).sum() < 0.01
