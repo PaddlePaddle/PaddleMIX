@@ -80,9 +80,7 @@ class Mlp(nn.Layer):
             self.fc1 = fleet.meta_parallel.ColumnParallelLinear(
                 in_features, hidden_features, weight_attr=None, has_bias=True, gather_output=True
             )
-            self.fc2 = fleet.meta_parallel.ColumnParallelLinear(
-                hidden_features, out_features, weight_attr=None, has_bias=True, gather_output=True
-            )
+            self.fc2 = nn.Linear(hidden_features, out_features)
         else:
             if use_fusedlinear:
                 self.use_fusedlinear = True
@@ -147,15 +145,10 @@ class Attention(nn.Layer):
             else:
                 self.qkv = nn.Linear(dim, dim * 3, bias_attr=qkv_bias)
         self.attn_drop = nn.Dropout(attn_drop)
-        if mp_degree > 1:
-            self.proj = fleet.meta_parallel.ColumnParallelLinear(
-                dim, dim, weight_attr=None, has_bias=True, gather_output=True
-            )
+        if use_fusedlinear:
+            self.proj = paddle.incubate.nn.FusedLinear(dim, dim)
         else:
-            if use_fusedlinear:
-                self.proj = paddle.incubate.nn.FusedLinear(dim, dim)
-            else:
-                self.proj = nn.Linear(dim, dim)
+            self.proj = nn.Linear(dim, dim)
         self.mp_degree = mp_degree
         self.proj_drop = nn.Dropout(proj_drop)
 
@@ -299,9 +292,7 @@ class RelativePositionBias(nn.Layer):
         self.relative_position_bias_table = self.create_parameter(
             [self.num_relative_distance, num_heads], default_initializer=zeros_
         )  # 2*Wh-1 * 2*Ww-1, nH
-        # cls to token & token 2 cls & cls to cls
 
-        # get pair-wise relative position index for each token inside the window
         coords_h = paddle.arange(window_size[0])
         coords_w = paddle.arange(window_size[1])
         coords = paddle.stack(paddle.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
@@ -360,7 +351,7 @@ class VisionTransformer(Blip2PretrainedModel):
 
     def __init__(self, config: Blip2VisionConfig, **kwargs):
         super().__init__(config)
-        mp_degree = config.mp_degree
+        mp_degree = getattr(config, "mp_degree", 1)
         use_flash_attn = getattr(config, "use_flash_attn", False)
         use_fusedlinear = getattr(config, "use_fusedlinear", False)
         self.class_num = config.class_num
@@ -450,8 +441,8 @@ class VisionTransformer(Blip2PretrainedModel):
         # x = self.norm(x)
         return x
 
-    def forward(self, x):
-        x = self.forward_features(x)
+    def forward(self, pixel_values):
+        x = self.forward_features(pixel_values)
         return x
 
 
@@ -481,8 +472,16 @@ def interpolate_pos_embed(model, checkpoint_model):
     elif "pos_embed" in checkpoint_model:
         pos_embed_checkpoint = checkpoint_model["pos_embed"]
         embedding_size = pos_embed_checkpoint.shape[-1]
-        num_patches = model.patch_embed.num_patches
-        num_extra_tokens = model.pos_embed.shape[-2] - num_patches
+        num_patches = (
+            model.visual_encoder.patch_embed.num_patches
+            if hasattr(model, "visual_encoder")
+            else model.visual_encoder.patch_embed.num_patches
+        )
+        num_extra_tokens = (
+            model.visual_encoder.pos_embed.shape[-2] - num_patches
+            if hasattr(model, "visual_encoder")
+            else model.pos_embed.shape[-2] - num_patches
+        )
         # height (== width) for the checkpoint position embedding
         orig_size = int((pos_embed_checkpoint.shape[-2] - num_extra_tokens) ** 0.5)
         # height (== width) for the new position embedding
