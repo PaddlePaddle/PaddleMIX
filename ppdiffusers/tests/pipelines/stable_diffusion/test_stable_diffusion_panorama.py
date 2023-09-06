@@ -30,16 +30,24 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
-from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
-from ..test_pipelines_common import PipelineTesterMixin
+from ..pipeline_params import (
+    TEXT_TO_IMAGE_BATCH_PARAMS,
+    TEXT_TO_IMAGE_IMAGE_PARAMS,
+    TEXT_TO_IMAGE_PARAMS,
+)
+from ..test_pipelines_common import PipelineLatentTesterMixin, PipelineTesterMixin
+
+enable_full_determinism()
 
 
-class StableDiffusionPanoramaPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusionPanoramaPipelineFastTests(PipelineLatentTesterMixin, PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionPanoramaPipeline
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
+    image_params = TEXT_TO_IMAGE_IMAGE_PARAMS
+    image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -114,6 +122,17 @@ class StableDiffusionPanoramaPipelineFastTests(PipelineTesterMixin, unittest.Tes
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
+    def test_stable_diffusion_panorama_circular_padding_case(self):
+        components = self.get_dummy_components()
+        sd_pipe = StableDiffusionPanoramaPipeline(**components)
+        sd_pipe.set_progress_bar_config(disable=None)
+        inputs = self.get_dummy_inputs()
+        image = sd_pipe(**inputs, circular_padding=True).images
+        image_slice = image[(0), -3:, -3:, (-1)]
+        assert image.shape == (1, 64, 64, 3)
+        expected_slice = np.array([0.6127, 0.6299, 0.4595, 0.4051, 0.4543, 0.3925, 0.551, 0.5693, 0.5031])
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
+
     # override to speed the overall test timing up.
     def test_inference_batch_consistent(self):
         super().test_inference_batch_consistent(batch_sizes=[1, 2])
@@ -135,6 +154,30 @@ class StableDiffusionPanoramaPipelineFastTests(PipelineTesterMixin, unittest.Tes
         expected_slice = np.array(
             [0.28995812, 0.24463832, 0.2682391, 0.33033937, 0.2868188, 0.46267676, 0.25425047, 0.3066897, 0.47881347]
         )
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
+
+    def test_stable_diffusion_panorama_views_batch(self):
+        components = self.get_dummy_components()
+        sd_pipe = StableDiffusionPanoramaPipeline(**components)
+        sd_pipe.set_progress_bar_config(disable=None)
+        inputs = self.get_dummy_inputs()
+        output = sd_pipe(**inputs, view_batch_size=2)
+        image = output.images
+        image_slice = image[(0), -3:, -3:, (-1)]
+        assert image.shape == (1, 64, 64, 3)
+        expected_slice = np.array([0.6187, 0.5375, 0.4915, 0.4136, 0.4114, 0.4563, 0.5128, 0.4976, 0.4757])
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
+
+    def test_stable_diffusion_panorama_views_batch_circular_padding(self):
+        components = self.get_dummy_components()
+        sd_pipe = StableDiffusionPanoramaPipeline(**components)
+        sd_pipe.set_progress_bar_config(disable=None)
+        inputs = self.get_dummy_inputs()
+        output = sd_pipe(**inputs, circular_padding=True, view_batch_size=2)
+        image = output.images
+        image_slice = image[(0), -3:, -3:, (-1)]
+        assert image.shape == (1, 64, 64, 3)
+        expected_slice = np.array([0.6127, 0.6299, 0.4595, 0.4051, 0.4543, 0.3925, 0.551, 0.5693, 0.5031])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_panorama_euler(self):
@@ -159,8 +202,11 @@ class StableDiffusionPanoramaPipelineFastTests(PipelineTesterMixin, unittest.Tes
         sd_pipe = StableDiffusionPanoramaPipeline(**components)
         sd_pipe.set_progress_bar_config(disable=None)
         inputs = self.get_dummy_inputs()
-        with self.assertRaises(ValueError):
-            _ = sd_pipe(**inputs).images
+        image = sd_pipe(**inputs).images
+        image_slice = image[(0), -3:, -3:, (-1)]
+        assert image.shape == (1, 64, 64, 3)
+        expected_slice = np.array([0.6391, 0.6291, 0.4861, 0.5134, 0.5552, 0.4578, 0.5032, 0.5023, 0.4539])
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
 
 @slow
@@ -267,3 +313,16 @@ class StableDiffusionPanoramaSlowTests(unittest.TestCase):
         pipe(**inputs, callback=callback_fn, callback_steps=1)
         assert callback_fn.has_been_called
         assert number_of_steps == 3
+
+    def test_stable_diffusion_panorama_pipeline_with_sequential_cpu_offloading(self):
+        paddle.device.cuda.empty_cache()
+        model_ckpt = "stabilityai/stable-diffusion-2-base"
+        scheduler = DDIMScheduler.from_pretrained(model_ckpt, subfolder="scheduler")
+        pipe = StableDiffusionPanoramaPipeline.from_pretrained(model_ckpt, scheduler=scheduler, safety_checker=None)
+        pipe.set_progress_bar_config(disable=None)
+        pipe.enable_attention_slicing(1)
+        pipe.enable_sequential_cpu_offload()
+        inputs = self.get_inputs()
+        _ = pipe(**inputs)
+        mem_bytes = paddle.device.cuda.max_memory_allocated()
+        assert mem_bytes < 5.5 * 10**9

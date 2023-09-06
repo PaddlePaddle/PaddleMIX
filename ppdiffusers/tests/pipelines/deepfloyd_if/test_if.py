@@ -65,7 +65,7 @@ class IFPipelineFastTests(PipelineTesterMixin, IFPipelineTesterMixin, unittest.T
 
     def test_save_load_float16(self):
         # Due to non-determinism in save load of the hf-internal-testing/tiny-random-t5 text encoder
-        pass
+        super().test_save_load_float16(expected_max_diff=1e-1)
 
     def test_attention_slicing_forward_pass(self):
         self._test_attention_slicing_forward_pass(expected_max_diff=1e-2)

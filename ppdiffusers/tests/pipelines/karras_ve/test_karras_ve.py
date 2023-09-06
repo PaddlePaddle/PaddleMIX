@@ -19,7 +19,13 @@ import numpy as np
 import paddle
 
 from ppdiffusers import KarrasVePipeline, KarrasVeScheduler, UNet2DModel
-from ppdiffusers.utils.testing_utils import require_paddle, slow
+from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
+    require_paddle,
+    slow,
+)
+
+enable_full_determinism()
 
 
 class KarrasVePipelineFastTests(unittest.TestCase):

@@ -19,7 +19,13 @@ import numpy as np
 import paddle
 
 from ppdiffusers import DDPMPipeline, DDPMScheduler, UNet2DModel
-from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
+from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
+    require_paddle_gpu,
+    slow,
+)
+
+enable_full_determinism()
 
 
 class DDPMPipelineFastTests(unittest.TestCase):

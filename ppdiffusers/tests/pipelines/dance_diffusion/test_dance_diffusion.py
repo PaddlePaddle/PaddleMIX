@@ -21,7 +21,7 @@ import paddle
 
 from ppdiffusers import DanceDiffusionPipeline, IPNDMScheduler, UNet1DModel
 from ppdiffusers.utils import slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..pipeline_params import (
     UNCONDITIONAL_AUDIO_GENERATION_BATCH_PARAMS,
@@ -29,11 +29,13 @@ from ..pipeline_params import (
 )
 from ..test_pipelines_common import PipelineTesterMixin
 
+enable_full_determinism()
+
 
 class DanceDiffusionPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = DanceDiffusionPipeline
     test_attention_slicing = False
-    test_cpu_offload = False
+
     params = UNCONDITIONAL_AUDIO_GENERATION_PARAMS
     required_optional_params = PipelineTesterMixin.required_optional_params - {
         "callback",

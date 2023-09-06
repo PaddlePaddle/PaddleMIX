@@ -31,20 +31,36 @@ from ppdiffusers import (
     StableDiffusionInstructPix2PixPipeline,
     UNet2DConditionModel,
 )
+from ppdiffusers.image_processor import VaeImageProcessor
 from ppdiffusers.utils import floats_tensor, load_image, slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
+    paddle_device,
+    require_paddle_gpu,
+)
 
 from ..pipeline_params import (
+    IMAGE_TO_IMAGE_IMAGE_PARAMS,
     TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
 )
-from ..test_pipelines_common import PipelineTesterMixin
+from ..test_pipelines_common import (
+    PipelineKarrasSchedulerTesterMixin,
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+)
+
+enable_full_determinism()
 
 
-class StableDiffusionInstructPix2PixPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusionInstructPix2PixPipelineFastTests(
+    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
+):
     pipeline_class = StableDiffusionInstructPix2PixPipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS - {"height", "width", "cross_attention_kwargs"}
     batch_params = TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS
+    image_params = IMAGE_TO_IMAGE_IMAGE_PARAMS
+    image_latents_params = IMAGE_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -146,6 +162,7 @@ class StableDiffusionInstructPix2PixPipelineFastTests(PipelineTesterMixin, unitt
         inputs["prompt"] = [inputs["prompt"]] * 2
         image = np.array(inputs["image"]).astype(np.float32) / 255.0
         image = paddle.to_tensor(data=image).unsqueeze(axis=0)
+        image = image / 2 + 0.5
         image = image.transpose(perm=[0, 3, 1, 2])
         inputs["image"] = image.tile(repeat_times=[2, 1, 1, 1])
         image = sd_pipe(**inputs).images
@@ -174,6 +191,30 @@ class StableDiffusionInstructPix2PixPipelineFastTests(PipelineTesterMixin, unitt
             [0.26694882, 0.4288544, 0.21950376, 0.74369204, 0.6756442, 0.54577595, 0.5941435, 0.5603916, 0.51743454]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
+
+    def test_inference_batch_single_identical(self):
+        super().test_inference_batch_single_identical()
+
+    # Overwrite the default test_latents_inputs because pix2pix encode the image differently
+    def test_latents_input(self):
+        components = self.get_dummy_components()
+        pipe = StableDiffusionInstructPix2PixPipeline(**components)
+        pipe.image_processor = VaeImageProcessor(do_resize=False, do_normalize=False)
+        pipe.set_progress_bar_config(disable=None)
+
+        out = pipe(**self.get_dummy_inputs_by_type(paddle_device, input_image_type="pt"))[0]
+
+        vae = components["vae"]
+        inputs = self.get_dummy_inputs_by_type(paddle_device, input_image_type="pt")
+
+        for image_param in self.image_latents_params:
+            if image_param in inputs.keys():
+                inputs[image_param] = vae.encode(inputs[image_param]).latent_dist.mode()
+
+        out_latents_inputs = pipe(**inputs)[0]
+
+        max_diff = np.abs(out - out_latents_inputs).max()
+        self.assertLess(max_diff, 1e-4, "passing latents as image input generate different result from passing image")
 
 
 @slow

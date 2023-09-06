@@ -27,7 +27,7 @@ from ppdiffusers import (
     Transformer2DModel,
 )
 from ppdiffusers.utils import slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..pipeline_params import (
     CLASS_CONDITIONED_IMAGE_GENERATION_BATCH_PARAMS,
@@ -35,10 +35,12 @@ from ..pipeline_params import (
 )
 from ..test_pipelines_common import PipelineTesterMixin
 
+enable_full_determinism()
+
 
 class DiTPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = DiTPipeline
-    test_cpu_offload = False
+
     params = CLASS_CONDITIONED_IMAGE_GENERATION_PARAMS
     required_optional_params = PipelineTesterMixin.required_optional_params - {
         "latents",
