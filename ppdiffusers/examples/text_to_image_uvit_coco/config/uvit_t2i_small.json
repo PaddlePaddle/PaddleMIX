@@ -1,0 +1,12 @@
+{
+  "img_size": 32,
+  "in_channels": 4,
+  "patch_size": 2,
+  "embed_dim": 512,
+  "depth": 12,
+  "num_heads": 8,
+  "mlp_ratio": 4,
+  "qkv_bias": false,
+  "clip_dim": 768,
+  "num_text_tokens": 77
+}

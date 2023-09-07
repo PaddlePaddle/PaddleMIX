@@ -156,7 +156,7 @@ if __name__ == "__main__":
             if "clip_score" not in results:
                 results["clip_score"] = []
             _clip_score = clip_score.mean().item()
-            results["clip_score"].append()
+            results["clip_score"].append(_clip_score)
             if image_num == "30k":
                 clip_score_1k = clip_score[:1000].mean().item()
                 clip_score_10k = clip_score[:10000].mean().item()
