@@ -38,17 +38,16 @@ class ChatGlmTask(AppTask):
 
     def _preprocess(self, inputs):
         """ """
-        image = inputs.get("image", None)
-        assert image is not None, "The image is None"
-        prompt = inputs.get("prompt", None)
+        #e.g.
+        # prompt = (
+        #     "Given caption,extract the main object to be replaced and marked it as 'main_object', "
+        #     + "Extract the remaining part as 'other prompt', "
+        #     + "Return main_object, other prompt in English"
+        #     + "Given caption: {}.".format(prompt)
+        # )
+        
+        prompt = inputs.get("prompt")
         assert prompt is not None, "The prompt is None"
-
-        prompt = (
-            "Given caption,extract the main object to be replaced and marked it as 'main_object', "
-            + "Extract the remaining part as 'other prompt', "
-            + "Return main_object, other prompt in English"
-            + "Given caption: {}.".format(prompt)
-        )
 
         inputs["prompt"] = prompt
 

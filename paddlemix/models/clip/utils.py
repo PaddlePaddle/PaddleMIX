@@ -18,6 +18,17 @@ from itertools import repeat
 import paddle
 
 
+def is_model_parrallel():
+    if paddle.distributed.get_world_size() > 1:
+        hcg = paddle.distributed.fleet.get_hybrid_communicate_group()
+        if hcg.get_model_parallel_world_size() > 1:
+            return True
+        else:
+            return False
+    else:
+        return False
+
+
 def params_normal_(tensor, mean=0.0, std=1.0):
     origin_dtype = paddle.get_default_dtype()
     paddle.set_default_dtype("float32")
@@ -83,13 +94,24 @@ def clip_grad_norm_(parameters, max_norm, norm_type, error_if_nonfinite: bool = 
     grads = [p.grad for p in parameters if p.grad is not None]
     max_norm = float(max_norm)
     norm_type = float(norm_type)
+    paddle_dtype = paddle.get_default_dtype()
     if len(grads) == 0:
         return paddle.to_tensor([0.0])
     if norm_type == float("inf"):
         norms = [g.detach().abs().max() for g in grads]
         total_norm = norms[0] if len(norms) == 1 else paddle.max(paddle.stack(norms))
     else:
-        total_norm = paddle.norm(paddle.stack([paddle.norm(g.detach(), norm_type) for g in grads]), norm_type)
+        total_norm = paddle.norm(
+            paddle.stack(
+                [
+                    paddle.norm(g.detach(), norm_type)
+                    if g.dtype == paddle_dtype
+                    else paddle.norm(g.detach().cast(paddle_dtype), norm_type)
+                    for g in grads
+                ]
+            ),
+            norm_type,
+        )
     if error_if_nonfinite and paddle.logical_or(total_norm.isnan(), total_norm.isinf()):
         raise RuntimeError(
             f"The total norm of order {norm_type} for gradients from "
@@ -103,9 +125,22 @@ def clip_grad_norm_(parameters, max_norm, norm_type, error_if_nonfinite: bool = 
     # when the gradients do not reside in CPU memory.
     clip_coef_clamped = paddle.clip(clip_coef, max=1.0)
     for g in grads:
-        clipg = paddle.multiply(g, clip_coef_clamped)
+        if g.dtype == paddle_dtype:
+            clipg = paddle.multiply(g, clip_coef_clamped)
+        else:
+            clipg = paddle.multiply(g, clip_coef_clamped.cast(g.dtype))
         g.set_value(clipg)
-    total_norm_clip = paddle.norm(paddle.stack([paddle.norm(g.detach(), norm_type) for g in grads]), norm_type)
+    total_norm_clip = paddle.norm(
+        paddle.stack(
+            [
+                paddle.norm(g.detach(), norm_type)
+                if g.dtype == paddle_dtype
+                else paddle.norm(g.detach().cast(paddle_dtype), norm_type)
+                for g in grads
+            ]
+        ),
+        norm_type,
+    )
     return total_norm_clip
 
 

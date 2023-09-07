@@ -138,7 +138,7 @@ class ClipLoss(nn.Layer):
         gather_with_grad=False,
         cache_labels=False,
         visual_loss=True,
-        text_loss=False,
+        text_loss=True,
         rank=0,
         world_size=1,
     ):
@@ -186,7 +186,57 @@ class ClipLoss(nn.Layer):
             total_loss += F.cross_entropy(logits_per_image, labels)
         if self.text_loss:
             total_loss += F.cross_entropy(logits_per_text, labels)
+        if self.visual_loss and self.text_loss:
+            total_loss /= 2.0
+
         return total_loss, logits_per_image, logits_per_text, labels
+
+
+class CoCaLoss(ClipLoss):
+    def __init__(
+        self,
+        caption_loss_weight,
+        clip_loss_weight,
+        pad_id=0,  # pad_token for open_clip custom tokenizer
+        local_loss=False,
+        gather_with_grad=False,
+        cache_labels=False,
+        text_loss=True,
+        rank=0,
+        world_size=1,
+    ):
+        super().__init__(
+            local_loss=local_loss,
+            gather_with_grad=gather_with_grad,
+            cache_labels=cache_labels,
+            text_loss=text_loss,
+            rank=rank,
+            world_size=world_size,
+        )
+
+        self.clip_loss_weight = clip_loss_weight
+        self.caption_loss_weight = caption_loss_weight
+        self.caption_loss = paddle.nn.CrossEntropyLoss(ignore_index=pad_id)
+
+    def forward(self, preds, output_dict=False):
+        image_features, text_features, logit_scale, logits, pred_labels = preds
+
+        caption_loss = self.caption_loss(
+            logits,
+            pred_labels,
+        )
+        caption_loss = caption_loss * self.caption_loss_weight
+
+        clip_loss = 0
+        clip_loss, logits_per_image, logits_per_text, labels = super().forward(
+            [image_features, text_features, logit_scale]
+        )
+        clip_loss = self.clip_loss_weight * clip_loss
+
+        if output_dict:  # output_dict:
+            return {"contrastive_loss": clip_loss, "caption_loss": caption_loss}
+
+        return clip_loss + caption_loss, logits_per_image, logits_per_text, labels
 
 
 if __name__ == "__main__":

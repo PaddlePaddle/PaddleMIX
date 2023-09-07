@@ -15,12 +15,14 @@
 import math
 import os
 from functools import partial
-from typing import Dict, Union
+from typing import Callable, Dict, Sequence, Union
 
 import paddle
+from paddle.incubate.nn import FusedLinear
+from paddle.nn.functional.flash_attention import flash_attention
 
-from .eva_text_model import AttentionalPooler, LayerNorm, PatchDropout
 from .modules.rope import VisionRotaryEmbeddingFast
+from .text_model import LayerNorm, MultiHeadAttention, PatchDropout, Transformer
 
 try:
     from .modules.fusedln import FusedLayerNorm
@@ -28,15 +30,15 @@ except:
     from paddle.nn import LayerNorm as FusedLayerNorm
 
     print("Warning, FusedLn module is not available, use LayerNorm instead.")
-import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
-from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.model_utils import PretrainedModel
-from paddlenlp.utils.log import logger
 
-from .utils import to_2tuple, trunc_normal_
+from paddlemix.models.model_utils import MixPretrainedModel
+from paddlemix.utils.log import logger
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
+
+from .utils import is_model_parrallel, to_2tuple, trunc_normal_
 
 
 def drop_path(x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: bool = True):
@@ -84,11 +86,11 @@ class DropPath(paddle.nn.Layer):
 class Mlp(paddle.nn.Layer):
     def __init__(self, config, act_layer=paddle.nn.GELU, norm_layer=paddle.nn.LayerNorm):
         super().__init__()
-        in_features = config.embed_dim
-        hidden_features = int(config.embed_dim * config.mlp_ratio)
+        in_features = config.width
+        hidden_features = int(config.width * config.mlp_ratio)
         out_features = in_features
         hidden_features = hidden_features or in_features
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.fc1 = fleet.meta_parallel.ColumnParallelLinear(
                 in_features,
                 hidden_features,
@@ -103,6 +105,9 @@ class Mlp(paddle.nn.Layer):
                 has_bias=True,
                 gather_output=True,
             )
+        elif config.fusedlinear:
+            self.fc1 = FusedLinear(in_features, hidden_features)
+            self.fc2 = FusedLinear(hidden_features, out_features)
         else:
             self.fc1 = paddle.nn.Linear(in_features, hidden_features)
             self.fc2 = paddle.nn.Linear(hidden_features, out_features)
@@ -129,10 +134,10 @@ class SwiGLU(paddle.nn.Layer):
         norm_layer=paddle.nn.LayerNorm,
     ):
         super().__init__()
-        in_features = config.embed_dim
-        hidden_features = int(config.embed_dim * config.mlp_ratio)
+        in_features = config.width
+        hidden_features = int(config.width * config.mlp_ratio)
         out_features = in_features
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.w1 = fleet.meta_parallel.ColumnParallelLinear(
                 in_features,
                 hidden_features,
@@ -154,6 +159,10 @@ class SwiGLU(paddle.nn.Layer):
                 has_bias=True,
                 gather_output=True,
             )
+        elif config.fusedlinear:
+            self.w1 = FusedLinear(in_features, hidden_features)
+            self.w2 = FusedLinear(in_features, hidden_features)
+            self.w3 = FusedLinear(hidden_features, out_features)
         else:
             self.w1 = paddle.nn.Linear(in_features, hidden_features)
             self.w2 = paddle.nn.Linear(in_features, hidden_features)
@@ -176,71 +185,48 @@ class SwiGLU(paddle.nn.Layer):
 class Attention(paddle.nn.Layer):
     def __init__(self, config, window_size=None, rope=None, norm_layer=paddle.nn.LayerNorm):
         super().__init__()
-        dim = config.embed_dim
+        dim = config.width
         self.xattn_drop = config.attn_drop_rate
         self.xattn = config.xattn
         self.subln = config.subln
 
-        self.num_heads = config.embed_dim // config.head_width
+        self.num_heads = config.width // config.head_width
         head_dim = dim // self.num_heads
         if hasattr(config, "attn_head_dim") and config.attn_head_dim is not None:
             head_dim = config.attn_head_dim
         all_head_dim = head_dim * self.num_heads
         self.scale = config.qk_scale or head_dim**-0.5
-        if self.subln:
-            if dist.get_world_size() > 1:
-                self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
-                    dim,
-                    all_head_dim,
-                    weight_attr=None,
-                    has_bias=config.qkv_bias,
-                    gather_output=True,
-                )
-                self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
-                    dim,
-                    all_head_dim,
-                    weight_attr=None,
-                    has_bias=False,
-                    gather_output=True,
-                )
-                self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
-                    dim,
-                    all_head_dim,
-                    weight_attr=None,
-                    has_bias=config.qkv_bias,
-                    gather_output=True,
-                )
-            else:
-                self.q_proj = paddle.nn.Linear(dim, all_head_dim)
-                self.k_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=False)
-                self.v_proj = paddle.nn.Linear(dim, all_head_dim)
+        if is_model_parrallel():
+            self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
+                dim,
+                all_head_dim,
+                weight_attr=None,
+                has_bias=config.qkv_bias,
+                gather_output=True,
+            )
+            self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
+                dim,
+                all_head_dim,
+                weight_attr=None,
+                has_bias=False,
+                gather_output=True,
+            )
+            self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
+                dim,
+                all_head_dim,
+                weight_attr=None,
+                has_bias=config.qkv_bias,
+                gather_output=True,
+            )
+        elif config.fusedlinear:
+            self.q_proj = FusedLinear(dim, all_head_dim, bias_attr=config.qkv_bias)
+            self.k_proj = FusedLinear(dim, all_head_dim, bias_attr=False)
+            self.v_proj = FusedLinear(dim, all_head_dim, bias_attr=config.qkv_bias)
         else:
-            if dist.get_world_size() > 1:
-                self.qkv = fleet.meta_parallel.ColumnParallelLinear(
-                    dim,
-                    all_head_dim * 3,
-                    weight_attr=None,
-                    has_bias=False,
-                    gather_output=True,
-                )
-            else:
-                self.qkv = paddle.nn.Linear(dim, all_head_dim * 3, bias_attr=False)
-            if config.qkv_bias:
-                mpsize = 1
-                if dist.get_world_size() > 1:
-                    mpsize = fleet.get_hybrid_communicate_group().get_model_parallel_world_size()
-                init_data = paddle.zeros(shape=[all_head_dim // mpsize])
-                self.q_bias = self.create_parameter(
-                    shape=[all_head_dim // mpsize],
-                    default_initializer=paddle.nn.initializer.Assign(init_data),
-                )
-                self.v_bias = self.create_parameter(
-                    shape=[all_head_dim // mpsize],
-                    default_initializer=paddle.nn.initializer.Assign(init_data),
-                )
-            else:
-                self.q_bias = None
-                self.v_bias = None
+            self.q_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=config.qkv_bias)
+            self.k_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=False)
+            self.v_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=config.qkv_bias)
+
         if window_size:
             self.window_size = window_size
             self.num_relative_distance = (2 * window_size[0] - 1) * (2 * window_size[1] - 1) + 3
@@ -275,41 +261,27 @@ class Attention(paddle.nn.Layer):
         self.inner_attn_ln = (
             norm_layer(all_head_dim) if (config.subln and config.inner_attn_ln) else paddle.nn.Identity()
         )
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.proj = fleet.meta_parallel.ColumnParallelLinear(
                 all_head_dim, dim, weight_attr=None, has_bias=True, gather_output=True
             )
+        elif config.fusedlinear:
+            self.proj = FusedLinear(all_head_dim, dim)
         else:
             self.proj = paddle.nn.Linear(all_head_dim, dim)
         self.proj_drop = paddle.nn.Dropout(p=config.drop_rate)
         self.rope = rope
+        self.flash_attn = config.flash_attn
 
     def forward(self, x, rel_pos_bias=None, attn_mask=None):
         B, N, C = x.shape
-        if self.subln:
-            q = self.q_proj(x)
-            k = self.k_proj(x)
-            v = self.v_proj(x)
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+        q = q.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
+        k = k.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
+        v = v.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
 
-            q = q.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
-            k = k.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
-            v = v.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
-        else:
-            qkv_bias = None
-            if self.q_bias is not None:
-                out_0 = paddle.zeros_like(x=self.v_bias)
-                out_0.stop_gradient = not False
-                qkv_bias = paddle.concat(x=(self.q_bias, out_0, self.v_bias))
-            qkv = paddle.nn.functional.linear(x=x, weight=self.qkv.weight, bias=qkv_bias)
-
-            if dist.get_world_size() > 1:
-                hcg = fleet.get_hybrid_communicate_group()
-                if hcg.get_model_parallel_world_size() > 1:
-                    model_parallel_group = hcg.get_model_parallel_group()
-                    qkv = paddle.distributed.collective._c_concat(qkv, group=model_parallel_group)
-
-            qkv = qkv.reshape((B, N, 3, self.num_heads, -1)).transpose(perm=[2, 0, 3, 1, 4])
-            q, k, v = qkv[0], qkv[1], qkv[2]
         if self.rope:
             q_t = q[:, :, 1:, :]
             ro_q_t = self.rope(q_t)
@@ -323,10 +295,17 @@ class Attention(paddle.nn.Layer):
             v = v.transpose(perm=[0, 2, 1, 3])
             x = memory_efficient_attention(q, k, v, p=self.xattn_drop, scale=self.scale)
             x = x.reshape((B, N, -1))
-            x = self.inner_attn_ln(x)
-            x = self.proj(x)
-            with get_rng_state_tracker().rng_state("global_seed"):
-                x = self.proj_drop(x)
+        elif (
+            self.flash_attn
+            and self.relative_position_bias_table is None
+            and rel_pos_bias is None
+            and attn_mask is None
+        ):
+            q = q.transpose(perm=[0, 2, 1, 3])
+            k = k.transpose(perm=[0, 2, 1, 3])
+            v = v.transpose(perm=[0, 2, 1, 3])
+            x, _ = flash_attention(q, k, v, dropout=self.proj_drop.p, causal=False, return_softmax=False)
+            x = x.reshape((B, N, -1))
         else:
             q = q * self.scale
             x = k
@@ -359,10 +338,10 @@ class Attention(paddle.nn.Layer):
             perm_1[1] = 2
             perm_1[2] = 1
             x = x.transpose(perm=perm_1).reshape((B, N, -1))
-            x = self.inner_attn_ln(x)
-            x = self.proj(x)
-            with get_rng_state_tracker().rng_state("global_seed"):
-                x = self.proj_drop(x)
+        x = self.inner_attn_ln(x)
+        x = self.proj(x)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            x = self.proj_drop(x)
         return x
 
 
@@ -377,7 +356,7 @@ class Block(paddle.nn.Layer):
         norm_layer=paddle.nn.LayerNorm,
     ):
         super().__init__()
-        dim = config.embed_dim
+        dim = config.width
         init_values = config.init_values
         self.postnorm = config.postnorm
 
@@ -427,16 +406,16 @@ class PatchEmbed(paddle.nn.Layer):
 
     def __init__(self, config):
         super().__init__()
-        img_size = to_2tuple(config.img_size)
+        image_size = to_2tuple(config.image_size)
         patch_size = to_2tuple(config.patch_size)
-        num_patches = img_size[1] // patch_size[1] * (img_size[0] // patch_size[0])
-        self.patch_shape = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
-        self.img_size = img_size
+        num_patches = image_size[1] // patch_size[1] * (image_size[0] // patch_size[0])
+        self.patch_shape = image_size[0] // patch_size[0], image_size[1] // patch_size[1]
+        self.image_size = image_size
         self.patch_size = patch_size
         self.num_patches = num_patches
         self.proj = paddle.nn.Conv2D(
             in_channels=config.in_chans,
-            out_channels=config.embed_dim,
+            out_channels=config.width,
             kernel_size=patch_size,
             stride=patch_size,
         )
@@ -444,8 +423,8 @@ class PatchEmbed(paddle.nn.Layer):
     def forward(self, x, **kwargs):
         B, C, H, W = x.shape
         assert (
-            H == self.img_size[0] and W == self.img_size[1]
-        ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+            H == self.image_size[0] and W == self.image_size[1]
+        ), f"Input image size ({H}*{W}) doesn't match model ({self.image_size[0]}*{self.image_size[1]})."
         x = self.proj(x).flatten(start_axis=2)
         perm_2 = list(range(x.ndim))
         perm_2[1] = 2
@@ -501,13 +480,13 @@ class EVAVisionTransformerConfig(PretrainedConfig):
 
     def __init__(
         self,
-        img_size=224,
+        image_size=224,
         patch_size=16,
         in_chans=3,
-        num_classes=1000,
-        embed_dim=768,
-        depth=12,
-        num_heads=8,
+        embed_dim=1000,
+        width=768,
+        layers=12,
+        head_width: int = 64,
         mlp_ratio=4.0,
         qkv_bias=False,
         qk_scale=None,
@@ -522,8 +501,8 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         rope=False,
         use_mean_pooling=True,
         attentional_pool=False,
-        n_queries: int = 256,
-        attn_pooler_heads: int = 8,
+        n_queries=256,
+        attn_pooler_heads=8,
         init_scale=0.001,
         enable_recompute=False,
         xattn=False,
@@ -533,19 +512,22 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         naiveswiglu=False,
         subln=False,
         output_tokens=False,
+        token_feats=False,  # whether tokens send to self.head
         fusedLN=False,
-        inner_attn_ln=True,
+        inner_attn_ln=True,  # false in eva-01 clip
+        fusedlinear=False,
+        flash_attn=False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
-        self.img_size = img_size
+        self.image_size = image_size
         self.patch_size = patch_size
         self.in_chans = in_chans
-        self.num_classes = num_classes
-        self.embed_dim = embed_dim
-        self.depth = depth
-        self.num_heads = num_heads
+        self.output_dim = embed_dim
+        self.width = width
+        self.layers = layers
+        self.head_width = head_width
         self.mlp_ratio = mlp_ratio
         self.qkv_bias = qkv_bias
         self.qk_scale = qk_scale
@@ -571,8 +553,11 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         self.naiveswiglu = naiveswiglu
         self.subln = subln
         self.output_tokens = output_tokens
+        self.token_feats = token_feats
         self.fusedLN = fusedLN
         self.inner_attn_ln = inner_attn_ln
+        self.fusedlinear = fusedlinear
+        self.flash_attn = flash_attn
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
@@ -590,9 +575,9 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         return cls.from_dict(config_dict, **kwargs)
 
 
-class EVAVisionTransformerPretrainedModel(PretrainedModel):
+class EVAVisionTransformerPretrainedModel(MixPretrainedModel):
     """
-    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    See :class:`paddlemix.models.model_utils.MixPretrainedModel` for more details.
     """
 
     model_config_file = "config.json"
@@ -606,27 +591,30 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
 
     def __init__(self, config: EVAVisionTransformerConfig):
         super(EVAVisionTransformer, self).__init__(config)
-        self.image_size = config.img_size
+        self.image_size = config.image_size
         self.enable_recompute = config.enable_recompute
         self.output_tokens = config.output_tokens
-        self.num_classes = num_classes = config.num_classes
-        self.embed_dim = embed_dim = config.embed_dim
+        self.token_feats = config.token_feats
+        self.fusedlinear = config.fusedlinear
+
+        self.output_dim = output_dim = config.output_dim
+        self.width = width = config.width
         self.naiveswiglu = config.naiveswiglu
         use_mean_pooling = config.use_mean_pooling
         norm_layer = partial(FusedLayerNorm, epsilon=1e-6) if config.fusedLN else partial(LayerNorm, epsilon=1e-6)
-        num_heads = config.embed_dim // config.head_width
+        num_heads = config.width // config.head_width
 
         self.patch_embed = PatchEmbed(config)
         num_patches = self.patch_embed.num_patches
-        init_data = paddle.zeros(shape=[1, 1, embed_dim])
+        init_data = paddle.zeros(shape=[1, 1, width])
         self.cls_token = self.create_parameter(
-            shape=[1, 1, embed_dim],
+            shape=[1, 1, width],
             default_initializer=paddle.nn.initializer.Assign(init_data),
         )
         if config.use_abs_pos_emb:
-            init_data = paddle.zeros(shape=[1, num_patches + 1, embed_dim])
+            init_data = paddle.zeros(shape=[1, num_patches + 1, width])
             self.pos_embed = self.create_parameter(
-                shape=[1, num_patches + 1, embed_dim],
+                shape=[1, num_patches + 1, width],
                 default_initializer=paddle.nn.initializer.Assign(init_data),
             )
         else:
@@ -637,8 +625,8 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
         else:
             self.rel_pos_bias = None
         if config.rope:
-            half_head_dim = embed_dim // num_heads // 2
-            hw_seq_len = config.img_size // config.patch_size
+            half_head_dim = width // num_heads // 2
+            hw_seq_len = config.image_size // config.patch_size
             self.rope = VisionRotaryEmbeddingFast(
                 dim=half_head_dim,
                 pt_seq_len=config.pt_hw_seq_len,
@@ -646,7 +634,7 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
             )
         else:
             self.rope = None
-        dpr = [x.item() for x in paddle.linspace(start=0, stop=config.drop_path_rate, num=config.depth)]
+        dpr = [x.item() for x in paddle.linspace(start=0, stop=config.drop_path_rate, num=config.layers)]
         self.blocks = paddle.nn.LayerList(
             sublayers=[
                 Block(
@@ -656,45 +644,49 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
                     window_size=self.patch_embed.patch_shape if config.use_rel_pos_bias else None,
                     rope=self.rope,
                 )
-                for i in range(config.depth)
+                for i in range(config.layers)
             ]
         )
         if config.attentional_pool:
             self.attn_pool = AttentionalPooler(config)
-            self.norm = paddle.nn.Identity() if use_mean_pooling else norm_layer(num_classes)
-            self.fc_norm = norm_layer(num_classes) if use_mean_pooling else None
-            if dist.get_world_size() > 1:
+            self.norm = paddle.nn.Identity() if use_mean_pooling else norm_layer(output_dim)
+            self.fc_norm = norm_layer(output_dim) if use_mean_pooling else None
+            if is_model_parrallel():
                 self.head = (
                     fleet.meta_parallel.ColumnParallelLinear(
-                        num_classes,
-                        num_classes,
+                        output_dim,
+                        output_dim,
                         weight_attr=None,
                         has_bias=True,
                         gather_output=True,
                     )
-                    if num_classes > 0
+                    if output_dim > 0
                     else paddle.nn.Identity()
                 )
+            elif config.fusedlinear:
+                self.head = FusedLinear(output_dim, output_dim) if output_dim > 0 else paddle.nn.Identity()
             else:
-                self.head = paddle.nn.Linear(num_classes, num_classes) if num_classes > 0 else paddle.nn.Identity()
+                self.head = paddle.nn.Linear(output_dim, output_dim) if output_dim > 0 else paddle.nn.Identity()
         else:
             self.attn_pool = None
-            self.norm = paddle.nn.Identity() if use_mean_pooling else norm_layer(embed_dim)
-            self.fc_norm = norm_layer(embed_dim) if use_mean_pooling else None
-            if dist.get_world_size() > 1:
+            self.norm = paddle.nn.Identity() if use_mean_pooling else norm_layer(width)
+            self.fc_norm = norm_layer(width) if use_mean_pooling else None
+            if is_model_parrallel():
                 self.head = (
                     fleet.meta_parallel.ColumnParallelLinear(
-                        embed_dim,
-                        num_classes,
+                        width,
+                        output_dim,
                         weight_attr=None,
                         has_bias=True,
                         gather_output=True,
                     )
-                    if num_classes > 0
+                    if output_dim > 0
                     else paddle.nn.Identity()
                 )
+            elif config.fusedlinear:
+                self.head = FusedLinear(width, output_dim) if output_dim > 0 else paddle.nn.Identity()
             else:
-                self.head = paddle.nn.Linear(embed_dim, num_classes) if num_classes > 0 else paddle.nn.Identity()
+                self.head = paddle.nn.Linear(width, output_dim) if output_dim > 0 else paddle.nn.Identity()
         if self.pos_embed is not None:
             trunc_normal_(self.pos_embed, std=0.02)
         trunc_normal_(self.cls_token, std=0.02)
@@ -730,7 +722,7 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
     def _init_weights(self, m):
         zeros_params = paddle.nn.initializer.Constant(0.0)
         ones_params = paddle.nn.initializer.Constant(1.0)
-        if isinstance(m, (paddle.nn.Linear, fleet.meta_parallel.ColumnParallelLinear)):
+        if isinstance(m, (FusedLinear, paddle.nn.Linear, fleet.meta_parallel.ColumnParallelLinear)):
             trunc_normal_(m.weight, std=0.02)
             if m.bias is not None:
                 zeros_params(m.bias)
@@ -755,22 +747,24 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=""):
-        self.num_classes = num_classes
-        if dist.get_world_size() > 1:
+    def reset_classifier(self, output_dim, global_pool=""):
+        self.output_dim = output_dim
+        if is_model_parrallel():
             self.head = (
                 fleet.meta_parallel.ColumnParallelLinear(
-                    self.embed_dim,
-                    num_classes,
+                    self.width,
+                    output_dim,
                     weight_attr=None,
                     has_bias=True,
                     gather_output=True,
                 )
-                if num_classes > 0
+                if output_dim > 0
                 else paddle.nn.Identity()
             )
+        elif self.fusedlinear:
+            self.head = FusedLinear(self.width, output_dim) if output_dim > 0 else paddle.nn.Identity()
         else:
-            self.head = paddle.nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else paddle.nn.Identity()
+            self.head = paddle.nn.Linear(self.width, output_dim) if output_dim > 0 else paddle.nn.Identity()
 
     def forward_features(self, x, return_all_features=False):
         x = self.patch_embed(x)
@@ -818,9 +812,230 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
             return self.forward_features(x, return_all_features)
         if self.output_tokens:
             x, tokens = self.forward_features(x)
+            if self.token_feats:
+                return self.head(tokens)
             x = self.head(x)
             return x, tokens
         else:
             x = self.forward_features(x)
             x = self.head(x)
             return x
+
+
+class AttentionalPooler(paddle.nn.Layer):
+    def __init__(self, config, norm_layer: Callable = LayerNorm):
+        super().__init__()
+        d_model = config.output_dim
+        context_dim = config.width
+        origin_dtype = paddle.get_default_dtype()
+        paddle.set_default_dtype("float32")
+        init_data = paddle.randn(shape=[config.n_queries, d_model])
+        if origin_dtype != "float32":
+            init_data.astype(origin_dtype)
+        paddle.set_default_dtype(origin_dtype)
+        self.query = self.create_parameter(
+            shape=[config.n_queries, d_model],
+            default_initializer=paddle.nn.initializer.Assign(init_data),
+        )
+        self.attn = MultiHeadAttention(
+            d_model, config.attn_pooler_heads, kdim=context_dim, vdim=context_dim, fusedlinear=config.fusedlinear
+        )
+        self.ln_q = norm_layer(d_model)
+        self.ln_k = norm_layer(context_dim)
+
+    def forward(self, x):
+        x = self.ln_k(x)
+        N = x.shape[0]
+        q = self.ln_q(self.query)
+        out = self.attn(self._repeat(q, N), x, x)
+        return out
+
+    def _repeat(self, query, N: int):
+        return query.unsqueeze(0).repeat_interleave(N, 0)
+
+
+class VisionTransformerConfig(PretrainedConfig):
+
+    model_type = "vision_transformer"
+    attribute_map: Dict[str, str] = {}
+
+    def __init__(
+        self,
+        image_size: int,
+        patch_size: int,
+        width: int = 768,
+        layers: int = 12,
+        head_width: int = 64,
+        mlp_ratio: float = 4.0,
+        ls_init_value: float = None,
+        patch_dropout: float = 0.0,
+        global_average_pool: bool = False,
+        attentional_pool: bool = False,
+        n_queries: int = 256,
+        attn_pooler_heads: int = 8,
+        embed_dim: int = 512,
+        xattn: bool = False,
+        output_tokens: bool = False,
+        fusedlinear: bool = False,
+        flash_attn: bool = False,
+        **kwargs,
+    ):
+        kwargs["return_dict"] = kwargs.pop("return_dict", True)
+        super().__init__(**kwargs)
+        self.image_size = image_size
+        self.patch_size = patch_size
+        self.width = width
+        self.layers = layers
+        self.head_width = head_width
+        self.mlp_ratio = mlp_ratio
+        self.ls_init_value = ls_init_value
+        self.patch_dropout = patch_dropout
+        self.global_average_pool = global_average_pool
+        self.attentional_pool = attentional_pool
+        self.n_queries = n_queries
+        self.attn_pooler_heads = attn_pooler_heads
+        self.output_dim = embed_dim
+        self.xattn = xattn
+        self.output_tokens = output_tokens
+        self.fusedlinear = fusedlinear
+        self.flash_attn = flash_attn
+
+    @classmethod
+    def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
+        config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
+
+        if "model_type" in config_dict and hasattr(cls, "model_type") and config_dict["model_type"] != cls.model_type:
+            logger.warning(
+                f"You are using a model of type {config_dict['model_type']} to instantiate a model of type "
+                f"{cls.model_type}. This is not supported for all configurations of models and can yield errors."
+            )
+
+        if "vision_cfg" in config_dict:
+            config_dict = config_dict["vision_cfg"]
+
+        return cls.from_dict(config_dict, **kwargs)
+
+
+class VisionTransformerPretrainedModel(MixPretrainedModel):
+    """
+    See :class:`~paddlemix.models.model_utils.MixPretrainedModel` for more details.
+    """
+
+    model_config_file = "config.json"
+    config_class = VisionTransformerConfig
+    resource_files_names = {"model_state": "model_state_vision.pdparams"}
+    base_model_prefix = "vision_transformer"
+
+
+class VisionTransformer(VisionTransformerPretrainedModel):
+    def __init__(
+        self, config: VisionTransformerConfig, act_layer: Callable = paddle.nn.GELU, norm_layer: Callable = LayerNorm
+    ):
+        super().__init__(config)
+        config.heads = config.width // config.head_width
+        output_dim = config.output_dim
+        width = config.width
+        self.output_tokens = config.output_tokens
+        self.image_size = to_2tuple(config.image_size)
+        self.patch_size = to_2tuple(config.patch_size)
+        self.grid_size = self.image_size[0] // self.patch_size[0], self.image_size[1] // self.patch_size[1]
+        self.output_dim = output_dim
+        self.conv1 = paddle.nn.Conv2D(
+            in_channels=3, out_channels=width, kernel_size=config.patch_size, stride=config.patch_size, bias_attr=False
+        )
+        scale = width**-0.5
+        init_data = scale * paddle.randn(shape=[width])
+        self.class_embedding = self.create_parameter(
+            shape=[width], default_initializer=paddle.nn.initializer.Assign(init_data)
+        )
+        init_data = scale * paddle.randn(shape=[self.grid_size[0] * self.grid_size[1] + 1, width])
+        self.positional_embedding = self.create_parameter(
+            shape=[self.grid_size[0] * self.grid_size[1] + 1, width],
+            default_initializer=paddle.nn.initializer.Assign(init_data),
+        )
+        self.patch_dropout = PatchDropout(config.patch_dropout) if config.patch_dropout > 0.0 else paddle.nn.Identity()
+        self.ln_pre = norm_layer(width)
+        self.transformer = Transformer(config, act_layer=act_layer, norm_layer=norm_layer)
+        self.global_average_pool = config.global_average_pool
+
+        if config.attentional_pool:
+            self.attn_pool = AttentionalPooler(config)
+            self.ln_post = norm_layer(output_dim)
+            init_data = scale * paddle.randn(shape=[output_dim, output_dim])
+            self.proj = self.create_parameter(
+                shape=[output_dim, output_dim], default_initializer=paddle.nn.initializer.Assign(init_data)
+            )
+        else:
+            self.attn_pool = None
+            self.ln_post = norm_layer(width)
+            init_data = scale * paddle.randn(shape=[width, output_dim])
+            self.proj = self.create_parameter(
+                shape=[width, output_dim], default_initializer=paddle.nn.initializer.Assign(init_data)
+            )
+
+    def lock(self, unlocked_groups=0, freeze_bn_stats=False):
+        for param in self.parameters():
+            param.stop_gradient = not False
+        if unlocked_groups != 0:
+            groups = [
+                [self.conv1, self.class_embedding, self.positional_embedding, self.ln_pre],
+                *self.transformer.resblocks[:-1],
+                [self.transformer.resblocks[-1], self.ln_post],
+                self.proj,
+            ]
+
+            def _unlock(x):
+                if isinstance(x, Sequence):
+                    for g in x:
+                        _unlock(g)
+                elif isinstance(x, paddle.Tensor):
+                    x.stop_gradient = not True
+                else:
+                    for p in x.parameters():
+                        p.stop_gradient = not True
+
+            _unlock(groups[-unlocked_groups:])
+
+    def get_num_layers(self):
+        return self.transformer.layers
+
+    def set_grad_checkpointing(self, enable=True):
+        self.transformer.enable_recompute = enable
+
+    def no_weight_decay(self):
+        return {"positional_embedding", "class_embedding"}
+
+    def _global_pool(self, x):
+        if self.global_average_pool:
+            return x.mean(axis=1), x
+        else:
+            return x[:, 0], x[:, 1:]
+
+    def forward(self, x: paddle.Tensor):
+        x = self.conv1(x)
+        x = x.reshape((x.shape[0], x.shape[1], -1))
+        x = x.transpose(perm=[0, 2, 1])
+        dtype = x.dtype
+        x = paddle.concat(
+            x=[self.class_embedding.cast(dtype) + paddle.zeros(shape=[x.shape[0], 1, x.shape[-1]], dtype=x.dtype), x],
+            axis=1,
+        )
+        x = x + self.positional_embedding.cast(dtype)
+        x = self.patch_dropout(x)
+        x = self.ln_pre(x)
+        x = self.transformer(x)
+
+        if self.attn_pool is not None:
+            x = self.attn_pool(x)
+            x = self.ln_post(x)
+            pooled, tokens = self._global_pool(x)
+        else:
+            pooled, tokens = self._global_pool(x)
+            pooled = self.ln_post(pooled)
+
+        if self.proj is not None:
+            pooled = pooled @ self.proj
+
+        if self.output_tokens:
+            return pooled, tokens
+        return pooled

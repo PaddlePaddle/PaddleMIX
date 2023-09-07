@@ -13,18 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ Paddle BLIP2 model."""
-from dataclasses import dataclass
-from typing import Any, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import paddle
 import paddle.distributed as dist
 import paddle.nn as nn
-from paddlenlp.transformers import AutoTokenizer
-from paddlenlp.transformers.model_outputs import ModelOutput
-from paddlenlp.transformers.model_utils import PretrainedModel
-from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 
-from paddlemix.models.blip2.modeling_opt import OPTForCausalLM
+from paddlemix.models.blip2.base_model import (
+    Blip2ForConditionalGenerationModelOutput,
+    Blip2ForStage1ModelOutput,
+    Blip2PretrainedModel,
+)
 from paddlemix.models.blip2.modeling_utils import (
     all_gather_with_grad,
     concat_all_gather,
@@ -33,13 +32,11 @@ from paddlemix.models.blip2.modeling_utils import (
 )
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
 from paddlemix.utils.log import logger
+from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
+from paddlenlp.transformers.opt.modeling import OPTForCausalLM
+from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 
 from .configuration import Blip2Config
-
-BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST = [
-    "Salesforce/blip2-flan-t5-xl",
-    "Salesforce/blip2-opt-2.7b",
-]
 
 __all__ = [
     "Blip2ForConditionalGeneration",
@@ -54,315 +51,19 @@ def Parameter(tensor):
     )
 
 
-@dataclass
-class Blip2ForConditionalGenerationModelOutput(ModelOutput):
-    """
-    Class defining the outputs of [`Blip2ForConditionalGeneration`].
-    Args:
-        loss (`paddle.Tensor`, *optional*, returned when `labels` is provided, `paddle.Tensor` of shape `(1,)`):
-            Language modeling loss from the language model.
-        logits (`paddle.Tensor` of shape `(batch_size, sequence_length, config.vocab_size)`):
-            Prediction scores of the language modeling head of the language model.
-        vision_outputs (`BaseModelOutputWithPooling`):
-            Outputs of the vision encoder.
-        qformer_outputs (`BaseModelOutputWithPoolingAndCrossAttentions`):
-            Outputs of the Q-Former (Querying Transformer).
-        language_model_outputs (`CausalLMOutputWithPast` or `Seq2SeqLMOutput`):
-            Outputs of the language model.
-    """
-
-    loss: Optional[Tuple[paddle.Tensor]] = None
-    logits: Optional[Tuple[paddle.Tensor]] = None
-    vision_outputs: Optional[paddle.Tensor] = None
-    qformer_outputs: Optional[Tuple[paddle.Tensor]] = None
-    language_model_outputs: Optional[Tuple[paddle.Tensor]] = None
-
-    def to_tuple(self) -> Tuple[Any]:
-        return tuple(
-            self[k]
-            if k not in ["vision_outputs", "qformer_outputs", "language_model_outputs"]
-            else getattr(self, k).to_tuple()
-            for k in self.keys()
-        )
-
-
-@dataclass
-class Blip2ForStage1ModelOutput(Blip2ForConditionalGenerationModelOutput):
-    """
-    Class defining the outputs of [`Blip2ForStage1ModelOutput`].
-    """
-
-    loss: Optional[Tuple[paddle.Tensor]] = None
-    loss_itc: Optional[Tuple[paddle.Tensor]] = None
-    loss_itm: Optional[paddle.Tensor] = None
-    loss_lm: Optional[Tuple[paddle.Tensor]] = None
-
-
-class Blip2PretrainedModel(PretrainedModel):
-    """
-    An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
-    models.
-    """
-
-    config_class = Blip2Config
-    base_model_prefix = "blip"
-    supports_gradient_checkpointing = True
-    _keys_to_ignore_on_load_missing = [
-        r"position_ids",
-        r"language_model.encoder.embed_tokens.weight",
-        r"language_model.decoder.embed_tokens.weight",
-    ]
-    _no_split_modules = ["Blip2Attention", "T5Block", "OPTDecoderLayer"]
-    _keep_in_fp32_modules = ["wo"]
-
-    def _init_weights(self, module):
-        """Initialize the weights"""
-        pass
-
-    @classmethod
-    def init_tokenizer(cls, tokenizer_name="bert-base-uncased"):
-        tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-        tokenizer.add_special_tokens({"bos_token": "[DEC]"})
-        return tokenizer
-
-    @classmethod
-    def from_pretrained(
-        cls, pretrained_model_name_or_path, from_hf_hub: bool = False, subfolder: str = None, *args, **kwargs
-    ):
-        """
-        Creates an instance of `PretrainedModel`. Model weights are loaded
-        by specifying name of a built-in pretrained model, a pretrained model from HF Hub, a community contributed model,
-        or a local file directory path.
-
-        Args:
-            pretrained_model_name_or_path (str): Name of pretrained model or dir path
-                to load from. The string can be:
-
-                - Name of a built-in pretrained model
-                - Name of a pretrained model from HF Hub
-                - Name of a community-contributed pretrained model.
-                - Local directory path which contains model weights file("model_state.pdparams")
-                  and model config file ("model_config.json").
-            from_hf_hub (bool): load model from huggingface hub. Default to `False`.
-            subfolder (str, optional) An optional value corresponding to a folder inside the repo.
-                Only works when loading from Huggingface Hub.
-            *args (tuple): Position arguments for model `__init__`. If provided,
-                use these as position argument values for model initialization.
-            **kwargs (dict): Keyword arguments for model `__init__`. If provided,
-                use these to update pre-defined keyword argument values for model
-                initialization. If the keyword is in `__init__` argument names of
-                base model, update argument values of the base model; else update
-                argument values of derived model.
-            load_state_as_np (bool, optional): The weights read in can be choosed
-                to place on CPU or GPU though the model is on the default device.
-                If `True`, load the model weights as `numpy.ndarray` on CPU.
-                Otherwise, weights would be loaded as tensors on the default
-                device. Note that if on GPU, the latter would creates extra
-                temporary tensors in addition to the model weights, which
-                doubles the memory usage . Thus it is suggested to use `True`
-                for big models on GPU. Default to `False`.
-
-        Returns:
-            PretrainedModel: An instance of `PretrainedModel`.
-
-        Example:
-            .. code-block::
-
-                from paddlenlp.transformers import BertForSequenceClassification
-
-                # Name of built-in pretrained model
-                model = BertForSequenceClassification.from_pretrained('bert-base-uncased')
-
-                # Name of pretrained model from PaddleHub
-                model = BertForSequenceClassification.from_pretrained('bert-base-uncased')
-
-                # Name of community-contributed pretrained model
-                model = BertForSequenceClassification.from_pretrained('yingyibiao/bert-base-uncased-sst-2-finetuned', num_labels=3)
-
-                # Load from local directory path
-                model = BertForSequenceClassification.from_pretrained('./my_bert/'
-        """
-        import os
-
-        from paddlenlp.transformers.configuration_utils import PretrainedConfig
-        from paddlenlp.transformers.model_utils import load_state_dict, no_init_weights
-        from paddlenlp.transformers.utils import (
-            ContextManagers,
-            device_guard,
-            is_paddle_support_lazy_init,
-            is_safetensors_available,
-            resolve_cache_dir,
-        )
-        from paddlenlp.utils.env import (
-            CONFIG_NAME,
-            PADDLE_WEIGHTS_NAME,
-            PYTORCH_WEIGHTS_NAME,
-        )
-
-        config = kwargs.pop("config", None)
-        state_dict = kwargs.pop("state_dict", None)
-        cache_dir = kwargs.pop("cache_dir", None)
-        force_download = kwargs.pop("force_download", False)
-        ignore_mismatched_sizes = kwargs.pop("ignore_mismatched_sizes", False)
-        dtype = kwargs.pop("dtype", None)
-        subfolder = kwargs.pop("subfolder", "")
-        variant = kwargs.pop("variant", None)
-        use_safetensors = kwargs.pop("use_safetensors", None if is_safetensors_available() else False)
-
-        low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", False)
-        convert_from_torch = kwargs.pop("convert_from_torch", None)
-        load_state_as_np = kwargs.pop("load_state_as_np", None)
-        mp_degree = kwargs.pop("mp_degree", 1)
-        if load_state_as_np is not None:
-            logger.warning("`load_state_as_np` is deprecated,  please delete it!")
-
-        model_kwargs = kwargs
-
-        # from_hf_hub defalut enable convert_from_torch
-        if from_hf_hub and convert_from_torch is None:
-            logger.warning(
-                "If you are attempting to load weights from Hugging Face Hub and want to disable the default behavior of considering torch weights,"
-                " you can set ·convert_from_torch=False·. By default, `convert_from_torch` is set to `True`. "
-            )
-            convert_from_torch = True
-        # convert_from_torch defalut is False
-        if convert_from_torch is None:
-            convert_from_torch = False
-
-        cache_dir = resolve_cache_dir(pretrained_model_name_or_path, from_hf_hub, cache_dir)
-        # 1. get the PretrainedConfig to init model
-        if not isinstance(config, PretrainedConfig):
-            config_path = config if config is not None else pretrained_model_name_or_path
-            config, model_kwargs = cls.config_class.from_pretrained(
-                config_path,
-                cache_dir=cache_dir,
-                return_unused_kwargs=True,
-                force_download=force_download,
-                from_hf_hub=from_hf_hub,
-                subfolder=subfolder,
-                **kwargs,
-            )
-        if not os.path.exists(os.path.join(cache_dir, CONFIG_NAME)):
-            config.save_pretrained(cache_dir)
-
-        # refine options for config
-        config.mp_degree = mp_degree
-        convert_from_torch = cls.support_conversion(config) and convert_from_torch
-
-        if dtype is None:
-            dtype = config.dtype
-        else:
-            config.dtype = dtype
-
-        init_contexts = []
-        if low_cpu_mem_usage:
-            # Instantiate model.
-            init_contexts.append(no_init_weights(_enable=True))
-            if is_paddle_support_lazy_init():
-                init_contexts.append(paddle.LazyGuard())
-
-        if dtype:
-            init_contexts.append(dtype_guard(dtype))
-
-        # Keep in fp32 modules
-        keep_in_fp32_modules = None
-        use_keep_in_fp32_modules = False
-
-        # resolve model_weight file
-        resolved_archive_file, sharded_metadata, is_sharded = cls._resolve_model_file_path(
-            pretrained_model_name_or_path,
-            cache_dir=cache_dir,
-            subfolder=subfolder,
-            from_hf_hub=from_hf_hub,
-            config=config,
-            convert_from_torch=convert_from_torch,
-            use_safetensors=use_safetensors,
-            variant=variant,
-        )
-
-        # load pt weights early so that we know which dtype to init the model under
-        if not is_sharded and state_dict is None:
-            # Time to load the checkpoint
-            if resolved_archive_file.endswith(PYTORCH_WEIGHTS_NAME):
-                if convert_from_torch:
-                    # try to get the name-mapping info
-                    logger.info(
-                        f"Starting to convert pytorch weight file<{resolved_archive_file}> to "
-                        f"paddle weight file<{os.path.join(cache_dir, PADDLE_WEIGHTS_NAME)}> ..."
-                    )
-                    state_dict = cls.convert(resolved_archive_file, config, cache_dir)
-                else:
-                    raise ValueError(
-                        f"download the {PYTORCH_WEIGHTS_NAME} weight file, but model<{cls}> "
-                        "don't support conversion from pytorch weight file to paddle weight file "
-                    )
-            else:
-                # 4. loading non-sharded ckpt from the state dict
-                if config.tensor_parallel_degree > 1 and resolved_archive_file.endswith("model_state.pdparams"):
-                    state_dict = cls.convert_tensor_parallel(resolved_archive_file, config)
-                else:
-                    state_dict = load_state_dict(resolved_archive_file)
-
-                logger.info("Loaded weights file from disk, setting weights to model.")
-
-        # Check if `_keep_in_fp32_modules` is not None
-        use_keep_in_fp32_modules = (cls._keep_in_fp32_modules is not None) and dtype == "float16"
-
-        if is_sharded:
-            loaded_state_dict_keys = sharded_metadata["all_checkpoint_keys"]
-        else:
-            loaded_state_dict_keys = [k for k in state_dict.keys()]
-
-        if low_cpu_mem_usage:  # or use_keep_in_fp32_modules:
-            state_dict = None
-
-        # will only support load paddle.Tensor to model.
-        if state_dict is not None:
-            for k in list(state_dict.keys()):
-                if not isinstance(state_dict[k], paddle.Tensor):
-                    with device_guard():
-                        state_dict[k] = paddle.Tensor(state_dict.pop(k), zero_copy=True)
-
-        # 3. init the model
-        init_args = config["init_args"] or ()
-        with ContextManagers(init_contexts):
-            model = cls(config, *init_args, **model_kwargs)
-        from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
-
-        interpolate_pos_embed(model, state_dict)
-        if use_keep_in_fp32_modules:
-            # low_cpu_mem_usage = True
-            keep_in_fp32_modules = model._keep_in_fp32_modules
-        else:
-            keep_in_fp32_modules = []
-
-        model, missing_keys, unexpected_keys, mismatched_keys = cls._load_pretrained_model(
-            model=model,
-            state_dict=state_dict,
-            loaded_keys=loaded_state_dict_keys,
-            resolved_archive_file=resolved_archive_file,
-            pretrained_model_name_or_path=pretrained_model_name_or_path,
-            config=config,
-            ignore_mismatched_sizes=ignore_mismatched_sizes,
-            low_cpu_mem_usage=low_cpu_mem_usage,
-            dtype=dtype,
-            keep_in_fp32_modules=keep_in_fp32_modules,
-        )
-
-        if paddle.in_dynamic_mode():
-            return model
-
-        return model, state_dict
-
-
 class Blip2ForConditionalGeneration(Blip2PretrainedModel):
     config_class = Blip2Config
     main_input_name = "pixel_values"
-    _keys_to_ignore_on_load_missing = [
-        r"position_ids",
-        r"language_model.encoder.embed_tokens.weight",
-        r"language_model.decoder.embed_tokens.weight",
-    ]
+    """
+    Initialize the function to create an instance of Blip2.
+
+    Args:
+        config (`Blip2Config`): Configuration information for Blip2.
+
+    Returns:
+        Blip2(`Blip2PretrainedModel`): Returns an instance of Blip2PretrainedModel.
+
+    """
 
     def __init__(
         self,
@@ -371,9 +72,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         super().__init__(config)
         from paddlemix.models.blip2.eva_vit import VisionTransformer
 
-        self.visual_encoder = VisionTransformer.from_pretrained(
-            pretrained_model_name_or_path=config.vision_config, mp_degree=config.mp_degree
-        )
+        config.vision_config.update({"mp_degree": config.mp_degree})
+        self.visual_encoder = VisionTransformer(config=config.vision_config)
         self.freeze_vit = config.freeze_vit
         self.train_stage1 = False
         if self.freeze_vit:
@@ -386,12 +86,11 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         if config.get("train_mode", None) == "stage1":
             self.train_stage1 = True
             self.tokenizer = self.init_tokenizer()
-            self.Qformer = BertLMHeadModel.from_pretrained(
-                pretrained_model_name_or_path=config.qformer_config,
+            self.Qformer = BertLMHeadModel(
+                config=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=True,
                 tokenizer_length=len(self.tokenizer),
-                mp_degree=config.mp_degree,
             )
 
             state_dict = self.Qformer.state_dict()
@@ -408,8 +107,30 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             if config.use_decoder_only_language_model:
                 if "opt" in config.text_config:
                     language_model = OPTForCausalLM.from_pretrained(
-                        config.text_config, load_state_as_np=True, mp_degree=config.mp_degree
+                        config.text_config,
+                        load_state_as_np=True,
+                        ignore_mismatched_sizes=True,
                     )
+                elif "llama" in config.text_config:
+                    from paddlenlp.transformers.llama.configuration import LlamaConfig
+
+                    if config.mp_degree > 1:
+                        import paddle.distributed.fleet as fleet
+
+                        hcg = fleet.get_hybrid_communicate_group()
+                        language_model = LlamaForCausalLM.from_pretrained(
+                            config.text_config,
+                            tensor_parallel_degree=config.mp_degree,
+                            tensor_parallel_rank=hcg.get_model_parallel_rank(),
+                            tensor_parallel_output=False,
+                        )
+                    else:
+                        language_model = LlamaForCausalLM.from_pretrained(
+                            config.text_config,
+                            tensor_parallel_output=False,
+                        )
+                    language_model.hidden_size = LlamaConfig.from_pretrained(config.text_config).hidden_size
+                    language_model.pad_token_id = LlamaConfig.from_pretrained(config.text_config).pad_token_id
                 else:
                     raise NotImplementedError
             else:
@@ -418,21 +139,19 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                 t5_config = T5Config(config.text_config)
                 for key, value in config.text_config.items():
                     t5_config[key] = config.text_config[key]
-                language_model = T5ForConditionalGeneration(t5_config)
-                language_model.hidden_size = config.text_config["d_model"]
+                language_model = T5ForConditionalGeneration.from_pretrained(config.text_config, load_state_as_np=True)
+                language_model.hidden_size = t5_config["d_model"]
 
             self.language_model = language_model
             for name, param in self.language_model.named_parameters():
                 param.stop_gradient = True
             self.pad_token_id = self.language_model.pad_token_id
 
-            self.Qformer = BertLMHeadModel.from_pretrained(
-                pretrained_model_name_or_path=config.qformer_config,
+            self.Qformer = BertLMHeadModel(
+                config=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,
                 train_in_satge1=False,
                 text_hidden_size=self.language_model.hidden_size,
-                ignore_mismatched_sizes=True,
-                mp_degree=config.mp_degree,
             )
             self.Qformer.cls = None
             self.Qformer.bert.embeddings.word_embeddings = None
@@ -453,6 +172,13 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         text_input_stage1: Optional[paddle.Tensor] = None,
         **kwargs
     ):
+        """
+        pixel_values (Tensor): image pixels of shape `(batch_size, 3, H, W)`):
+        input_ids (Tensor): Indices of input sequence tokens in the vocabulary.
+        attention_mask Tensor: Tensor of integers valued 0 or 1, where 0 specifies paddings and should not be attended to by the model.
+        return_dict (dict{Tensor}): whether to return dict
+        text_input_stage1: text input for stage1
+        """
 
         if self.train_stage1:
             return self.forward_stage1(pixel_values, text_input_stage1)
@@ -475,46 +201,15 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         decoder_input_ids: Optional[paddle.Tensor] = None,
         decoder_attention_mask: Optional[paddle.Tensor] = None,
     ) -> Union[Tuple, Blip2ForConditionalGenerationModelOutput]:
-        r"""
-        Returns:
-        Examples:
-        Image captioning (without providing a text prompt):
-        ```python
-        >>> from PIL import Image
-        >>> import requests
-        >>> from paddlenlp.transformers import Blip2Processor, Blip2ForConditionalGeneration
-        >>> import paddle
-        >>> processor = Blip2Processor.from_pretrained("Salesforce/blip2-flan-t5-xl")
-        >>> model = Blip2ForConditionalGeneration.from_pretrained(
-        ...     "Salesforce/blip2-flan-t5-xl"
-        ... )
-        >>> url = "http://images.cocodataset.org/val2017/000000039769.jpg"
-        >>> image = Image.open(requests.get(url, stream=True).raw)
-        >>> inputs = processor(images=image, return_tensors="pd")
-        >>> generated_ids, scores = model.generate(**inputs)
-        >>> generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-        >>> print(generated_text)
-        two cats laying on a couch
-        ```
-        Visual question answering (prompt = question):
-        ```python
-        >>> from PIL import Image
-        >>> import requests
-        >>> from paddlenlp.transformers import Blip2Processor, Blip2ForConditionalGeneration
-        >>> import paddle
-        >>> processor = Blip2Processor.from_pretrained("Salesforce/blip2-flan-t5-xl")
-        >>> model = Blip2ForConditionalGeneration.from_pretrained(
-        ...     "Salesforce/blip2-flan-t5-xl"
-        ... )
-        >>> url = "http://images.cocodataset.org/val2017/000000039769.jpg"
-        >>> image = Image.open(requests.get(url, stream=True).raw)
-        >>> prompt = "Question: how many cats are there? Answer:"
-        >>> inputs = processor(images=image, text=prompt, return_tensors="pd")
-        >>> generated_ids, scores= model.generate(**inputs)
-        >>> generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-        >>> print(generated_text)
-        two
-        ```"""
+        """
+        pixel_values (Tensor): image pixels of shape `(batch_size, 3, H, W)`):
+        input_ids (Tensor): Indices of input sequence tokens in the vocabulary.
+        attention_mask Tensor: Tensor of integers valued 0 or 1, where 0 specifies paddings and should not be attended to by the model.
+        return_dict (dict{Tensor}): whether to return dict
+        text_input_stage1: text input for stage1
+        decoder_input_ids: Indices of input sequence tokens in the vocabulary for encoder-decoder generation
+        decoder_attention_mask: Tensor of integers valued 0 or 1 for encoder-decoder generation
+        """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
         with paddle.amp.auto_cast(level="O2"):
             image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
@@ -721,9 +416,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             min_length (int): The minimum length of the sequence to be generated.
             top_p (float): The cumulative probability for nucleus sampling.
             repetition_penalty (float): The parameter for repetition penalty. 1.0 means no penalty.
-            num_captions (int): Number of captions to be generated for each image.
         Returns:
-            captions (list): A list of strings of length batch_size * num_captions.
+            captions (list): A list of ids of length batch_size * num_captions.
         """
         image = samples["image"]
         image_embeds = self.ln_vision(self.visual_encoder(image))
@@ -768,7 +462,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             attention_mask (`paddle.Tensor` of shape (batch_size, sequence_length), *optional*):
                 Mask to avoid performing attention on padding token indices
         Returns:
-            captions (list): A list of strings of length batch_size * num_captions.
+            captions (list): A list of ids of length batch_size * num_captions.
         """
         batch_size = pixel_values.shape[0]
         image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
@@ -843,6 +537,19 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         min_len=1,
         **kwargs
     ):
+        """
+        Args:
+            pixel_values (`paddle.Tensor` of shape (batch_size, num_channels, height, width)):
+                Input images to be processed.
+            input_ids (`paddle.Tensor` of shape (batch_size, sequence_length), *optional*):
+                The sequence used as a prompt for the generation.
+            attention_mask (`paddle.Tensor` of shape (batch_size, sequence_length), *optional*):
+                Mask to avoid performing attention on padding token indices
+            max_length (int): The maximum length of the sequence to be generated.
+            min_length (int): The minimum length of the sequence to be generated.
+        Returns:
+            captions (list): A list of ids of length batch_size * num_captions.
+        """
         # batch_size = pixel_values.shape[0]
         image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
         image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
@@ -879,16 +586,3 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         )
 
         return outputs
-
-
-from contextlib import contextmanager
-
-
-@contextmanager
-def dtype_guard(dtype="float32"):
-    origin_dtype = paddle.get_default_dtype()
-    paddle.set_default_dtype(dtype)
-    try:
-        yield
-    finally:
-        paddle.set_default_dtype(origin_dtype)

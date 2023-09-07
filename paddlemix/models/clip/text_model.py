@@ -19,15 +19,16 @@ import os
 from typing import Callable, Optional, Union
 
 import paddle
-import paddle.distributed as dist
 import paddle.nn.functional as F
 import paddle.tensor as tensor
 from paddle import nn
 from paddle.common_ops_import import convert_dtype
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+from paddle.incubate.nn import FusedLinear
+from paddle.nn.functional.flash_attention import flash_attention
 
-from .utils import params_normal_
+from .utils import is_model_parrallel, params_normal_
 
 try:
     from .modules.fusedln import FusedLayerNorm
@@ -43,9 +44,9 @@ try:
 except:
     print("Warning: import memory_efficient_attention error")
 
+from paddlemix.models.model_utils import MixPretrainedModel
+from paddlemix.utils.log import logger
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.model_utils import PretrainedModel
-from paddlenlp.utils.log import logger
 
 
 def _convert_attention_mask(attn_mask, dtype):
@@ -100,6 +101,8 @@ class MultiHeadAttention(paddle.nn.Layer):
         bias_attr=None,
         fuse_attention_qkv=False,
         num_partitions=1,
+        fusedlinear: bool = False,
+        flash_attn: bool = False,
     ):
         super(MultiHeadAttention, self).__init__()
         self.embed_dim = embed_dim
@@ -109,6 +112,7 @@ class MultiHeadAttention(paddle.nn.Layer):
         self.dropout = dropout
         self.need_weights = need_weights
         self.fuse_attention_qkv = fuse_attention_qkv
+        self.flash_attn = flash_attn
 
         self.head_dim = embed_dim // num_heads
         assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
@@ -120,13 +124,19 @@ class MultiHeadAttention(paddle.nn.Layer):
             assert self.kdim == embed_dim, "embed_dim should be equal to kdim"
             assert self.vdim == embed_dim, "embed_dim should be equal to vidm"
 
-            if dist.get_world_size() > 1:
+            if is_model_parrallel():
                 self.qkv_proj = fleet.meta_parallel.ColumnParallelLinear(
                     embed_dim,
                     3 * embed_dim,
                     weight_attr=weight_attr,
                     has_bias=True,
                     gather_output=False,
+                )
+            elif fusedlinear:
+                self.qkv_proj = FusedLinear(
+                    embed_dim,
+                    3 * embed_dim,
+                    weight_attr=weight_attr,
                 )
             else:
                 self.qkv_proj = paddle.nn.Linear(
@@ -135,7 +145,7 @@ class MultiHeadAttention(paddle.nn.Layer):
                     weight_attr=weight_attr,
                 )
         else:
-            if dist.get_world_size() > 1:
+            if is_model_parrallel():
                 self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
                     embed_dim,
                     embed_dim,
@@ -159,6 +169,22 @@ class MultiHeadAttention(paddle.nn.Layer):
                     has_bias=True,
                     gather_output=False,
                 )
+            elif fusedlinear:
+                self.q_proj = FusedLinear(
+                    embed_dim,
+                    embed_dim,
+                    weight_attr=weight_attr,
+                )
+                self.k_proj = FusedLinear(
+                    self.kdim,
+                    embed_dim,
+                    weight_attr=weight_attr,
+                )
+                self.v_proj = FusedLinear(
+                    self.vdim,
+                    embed_dim,
+                    weight_attr=weight_attr,
+                )
             else:
                 self.q_proj = paddle.nn.Linear(
                     embed_dim,
@@ -176,13 +202,19 @@ class MultiHeadAttention(paddle.nn.Layer):
                     weight_attr=weight_attr,
                 )
 
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.out_proj = fleet.meta_parallel.RowParallelLinear(
                 embed_dim,
                 embed_dim,
                 weight_attr=weight_attr,
                 has_bias=True,
                 input_is_parallel=True,
+            )
+        elif fusedlinear:
+            self.out_proj = FusedLinear(
+                embed_dim,
+                embed_dim,
+                weight_attr=weight_attr,
             )
         else:
             self.out_proj = paddle.nn.Linear(
@@ -278,29 +310,36 @@ class MultiHeadAttention(paddle.nn.Layer):
         else:
             q, k, v, cache = self._prepare_qkv(query, key, value, use_cache, cache)
         # scale dot product attention
-        product = paddle.matmul(x=q * (self.head_dim**-0.5), y=k, transpose_y=True)
 
-        if attn_mask is not None:
-            # Support bool or int mask
-            attn_mask = _convert_attention_mask(attn_mask, product.dtype)
-            product = product + attn_mask
-        weights = F.softmax(product)
+        if self.flash_attn and attn_mask is None:
+            # attn_mask is not None, and flash_attention is not support for mask now
+            q = q.transpose(perm=[0, 2, 1, 3])
+            k = k.transpose(perm=[0, 2, 1, 3])
+            v = v.transpose(perm=[0, 2, 1, 3])
+            out, _ = flash_attention(q, k, v, dropout=self.dropout, causal=False, return_softmax=False)
+        else:
+            product = paddle.matmul(x=q * (self.head_dim**-0.5), y=k, transpose_y=True)
+            if attn_mask is not None:
+                # Support bool or int mask
+                attn_mask = _convert_attention_mask(attn_mask, product.dtype)
+                product = product + attn_mask
+            weights = F.softmax(product)
 
-        if self.dropout:
-            with get_rng_state_tracker().rng_state("local_seed"):
-                weights = F.dropout(
-                    weights,
-                    self.dropout,
-                    training=self.training,
-                    mode="upscale_in_train",
-                )
+            if self.dropout:
+                with get_rng_state_tracker().rng_state("local_seed"):
+                    weights = F.dropout(
+                        weights,
+                        self.dropout,
+                        training=self.training,
+                        mode="upscale_in_train",
+                    )
 
-        out = tensor.matmul(weights, v)
+            out = tensor.matmul(weights, v)
 
-        # combine heads
-        out = tensor.transpose(out, perm=[0, 2, 1, 3])
-        out = tensor.reshape(x=out, shape=[0, 0, out.shape[2] * out.shape[3]])
+            # combine heads
+            out = tensor.transpose(out, perm=[0, 2, 1, 3])
 
+        out = tensor.reshape(x=out, shape=[0, 0, -1])
         # project to output
         out = self.out_proj(out)
 
@@ -402,7 +441,7 @@ class PatchDropout(paddle.nn.Layer):
         x = x[batch_indices, patch_indices_keep]
         if self.exclude_first_token:
             x = paddle.concat(x=(cls_tokens, x), axis=1)
-        if self.training and os.getenv('RoPE') == '1':
+        if self.training and os.getenv("RoPE") == "1":
             return x, patch_indices_keep
         return x
 
@@ -461,6 +500,9 @@ class Attention(paddle.nn.Layer):
         proj_drop=0.0,
         xattn=False,
         rope=False,
+        fusedlinear: bool = False,
+        flash_attn: bool = False,
+        fused_weights: bool = False,
     ):
         super().__init__()
         self.scaled_cosine = scaled_cosine
@@ -471,23 +513,74 @@ class Attention(paddle.nn.Layer):
         self.scale = self.head_dim**-0.5
         self.logit_scale_max = logit_scale_max
         origin_dtype = paddle.get_default_dtype()
-        paddle.set_default_dtype("float32")
-        init_data = paddle.randn(shape=[dim, dim * 3]) * self.scale
-        if origin_dtype != "float32":
-            init_data.astype(origin_dtype)
-        paddle.set_default_dtype(origin_dtype)
-        self.in_proj_weight = self.create_parameter(
-            shape=[dim, dim * 3],
-            default_initializer=paddle.nn.initializer.Assign(init_data),
-        )
-        if qkv_bias:
-            init_data = paddle.zeros(shape=[dim * 3])
-            self.in_proj_bias = self.create_parameter(
-                shape=[dim * 3],
+
+        self.fused_weights = fused_weights
+        if fused_weights:
+            paddle.set_default_dtype("float32")
+            init_data = paddle.randn(shape=[dim, dim * 3]) * self.scale
+            if origin_dtype != "float32":
+                init_data.astype(origin_dtype)
+            paddle.set_default_dtype(origin_dtype)
+            self.in_proj_weight = self.create_parameter(
+                shape=[dim, dim * 3],
                 default_initializer=paddle.nn.initializer.Assign(init_data),
             )
+            if qkv_bias:
+                init_data = paddle.zeros(shape=[dim * 3])
+                self.in_proj_bias = self.create_parameter(
+                    shape=[dim * 3],
+                    default_initializer=paddle.nn.initializer.Assign(init_data),
+                )
+            else:
+                self.in_proj_bias = None
         else:
-            self.in_proj_bias = None
+            mpsize = 1
+            if is_model_parrallel():
+                mpsize = int(fleet.get_hybrid_communicate_group().get_model_parallel_world_size())
+            paddle.set_default_dtype("float32")
+            q_proj_init_data = paddle.randn(shape=[dim, dim // mpsize]) * self.scale
+            k_proj_init_data = paddle.randn(shape=[dim, dim // mpsize]) * self.scale
+            v_proj_init_data = paddle.randn(shape=[dim, dim // mpsize]) * self.scale
+            if origin_dtype != "float32":
+                q_proj_init_data.astype(origin_dtype)
+                k_proj_init_data.astype(origin_dtype)
+                v_proj_init_data.astype(origin_dtype)
+            paddle.set_default_dtype(origin_dtype)
+            q_proj_weight_attr = paddle.ParamAttr(initializer=paddle.nn.initializer.Assign(q_proj_init_data))
+            k_proj_weight_attr = paddle.ParamAttr(initializer=paddle.nn.initializer.Assign(q_proj_init_data))
+            v_proj_weight_attr = paddle.ParamAttr(initializer=paddle.nn.initializer.Assign(q_proj_init_data))
+
+            if is_model_parrallel():
+                self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
+                    dim,
+                    dim,
+                    weight_attr=q_proj_weight_attr,
+                    has_bias=qkv_bias,
+                    gather_output=True,
+                )
+                self.k_proj = fleet.meta_parallel.ColumnParallelLinear(
+                    dim,
+                    dim,
+                    weight_attr=k_proj_weight_attr,
+                    has_bias=qkv_bias,
+                    gather_output=True,
+                )
+                self.v_proj = fleet.meta_parallel.ColumnParallelLinear(
+                    dim,
+                    dim,
+                    weight_attr=v_proj_weight_attr,
+                    has_bias=qkv_bias,
+                    gather_output=True,
+                )
+            elif fusedlinear:
+                self.q_proj = FusedLinear(dim, dim, weight_attr=q_proj_weight_attr, bias_attr=qkv_bias)
+                self.k_proj = FusedLinear(dim, dim, weight_attr=k_proj_weight_attr, bias_attr=qkv_bias)
+                self.v_proj = FusedLinear(dim, dim, weight_attr=v_proj_weight_attr, bias_attr=qkv_bias)
+            else:
+                self.q_proj = paddle.nn.Linear(dim, dim, weight_attr=q_proj_weight_attr, bias_attr=qkv_bias)
+                self.k_proj = paddle.nn.Linear(dim, dim, weight_attr=k_proj_weight_attr, bias_attr=qkv_bias)
+                self.v_proj = paddle.nn.Linear(dim, dim, weight_attr=v_proj_weight_attr, bias_attr=qkv_bias)
+
         if self.scaled_cosine:
             init_data = paddle.log(x=10 * paddle.ones(shape=[num_heads, 1, 1]))
             self.logit_scale = self.create_parameter(
@@ -505,38 +598,33 @@ class Attention(paddle.nn.Layer):
             )
         else:
             self.head_scale = None
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.out_proj = fleet.meta_parallel.ColumnParallelLinear(
                 dim, dim, weight_attr=None, has_bias=True, gather_output=True
             )
+        elif fusedlinear:
+            self.out_proj = FusedLinear(dim, dim)
         else:
             self.out_proj = paddle.nn.Linear(dim, dim)
         self.out_drop = paddle.nn.Dropout(p=proj_drop)
         self.xattn = xattn
         self.xattn_drop = attn_drop
         self.rope = rope
+        self.flash_attn = flash_attn
 
     def forward(self, x, attn_mask: Optional[paddle.Tensor] = None):
-        L, N, C = x.shape
-        q, k, v = paddle.nn.functional.linear(x=x, weight=self.in_proj_weight, bias=self.in_proj_bias).chunk(
-            chunks=3, axis=-1
-        )
+        N, L, C = x.shape
+        if self.fused_weights:
+            q, k, v = paddle.nn.functional.linear(x=x, weight=self.in_proj_weight, bias=self.in_proj_bias).chunk(
+                chunks=3, axis=-1
+            )
+        else:
+            q, k, v = self.q_proj(x), self.k_proj(x), self.v_proj(x)
+
         if self.xattn:
-            x = q.reshape((L, N, self.num_heads, -1))
-            perm_3 = list(range(x.ndim))
-            perm_3[0] = 1
-            perm_3[1] = 0
-            q = x.transpose(perm=perm_3)
-            x = k.reshape((L, N, self.num_heads, -1))
-            perm_4 = list(range(x.ndim))
-            perm_4[0] = 1
-            perm_4[1] = 0
-            k = x.transpose(perm=perm_4)
-            x = v.reshape((L, N, self.num_heads, -1))
-            perm_5 = list(range(x.ndim))
-            perm_5[0] = 1
-            perm_5[1] = 0
-            v = x.transpose(perm=perm_5)
+            q = q.reshape((N, L, self.num_heads, -1))
+            k = k.reshape((N, L, self.num_heads, -1))
+            v = v.reshape((N, L, self.num_heads, -1))
             x = memory_efficient_attention(
                 q,
                 k,
@@ -545,22 +633,16 @@ class Attention(paddle.nn.Layer):
                 scale=self.scale if self.logit_scale is None else None,
                 attn_bias=LowerTriangularMask() if attn_mask is not None else None,
             )
+        elif self.flash_attn and self.logit_scale is None and attn_mask is None:
+            # attn_mask is not None, and flash_attention is not support for mask now
+            q = q.reshape((N, L, self.num_heads, -1))
+            k = k.reshape((N, L, self.num_heads, -1))
+            v = v.reshape((N, L, self.num_heads, -1))
+            x, _ = flash_attention(q, k, v, dropout=self.attn_drop.p, causal=False, return_softmax=False)
         else:
-            x = q.reshape((L, N * self.num_heads, -1))
-            perm_6 = list(range(x.ndim))
-            perm_6[0] = 1
-            perm_6[1] = 0
-            q = x.transpose(perm=perm_6)
-            x = k.reshape((L, N * self.num_heads, -1))
-            perm_7 = list(range(x.ndim))
-            perm_7[0] = 1
-            perm_7[1] = 0
-            k = x.transpose(perm=perm_7)
-            x = v.reshape((L, N * self.num_heads, -1))
-            perm_8 = list(range(x.ndim))
-            perm_8[0] = 1
-            perm_8[1] = 0
-            v = x.transpose(perm=perm_8)
+            q = q.reshape((N, L, self.num_heads, -1)).transpose((0, 2, 1, 3)).reshape((N * self.num_heads, L, -1))
+            k = k.reshape((N, L, self.num_heads, -1)).transpose((0, 2, 1, 3)).reshape((N * self.num_heads, L, -1))
+            v = v.reshape((N, L, self.num_heads, -1)).transpose((0, 2, 1, 3)).reshape((N * self.num_heads, L, -1))
             if self.logit_scale is not None:
                 x = paddle.nn.functional.normalize(x=k, axis=-1)
                 perm_9 = list(range(x.ndim))
@@ -591,14 +673,10 @@ class Attention(paddle.nn.Layer):
             with get_rng_state_tracker().rng_state("global_seed"):
                 attn = self.attn_drop(attn)
             x = paddle.bmm(x=attn, y=v)
+            x = x.reshape((N, self.num_heads, L, -1)).transpose((0, 2, 1, 3))
         if self.head_scale is not None:
-            x = x.reshape((N, self.num_heads, L, C)) * self.head_scale
-            x = x.reshape((-1, L, C))
-        x = x
-        perm_11 = list(range(x.ndim))
-        perm_11[0] = 1
-        perm_11[1] = 0
-        x = x.transpose(perm=perm_11).reshape((L, N, C))
+            x = x * self.head_scale
+        x = x.reshape((N, L, C))
         x = self.out_proj(x)
         with get_rng_state_tracker().rng_state("global_seed"):
             x = self.out_drop(x)
@@ -617,6 +695,7 @@ class CustomAttention(paddle.nn.Layer):
         attn_drop=0.0,
         proj_drop=0.0,
         xattn=False,
+        fusedlinear: bool = False,
     ):
         super().__init__()
         self.scaled_cosine = scaled_cosine
@@ -660,10 +739,12 @@ class CustomAttention(paddle.nn.Layer):
             )
         else:
             self.head_scale = None
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.out_proj = fleet.meta_parallel.ColumnParallelLinear(
                 dim, dim, weight_attr=None, has_bias=True, gather_output=True
             )
+        elif fusedlinear:
+            self.out_proj = FusedLinear(dim, dim)
         else:
             self.out_proj = paddle.nn.Linear(dim, dim)
         self.out_drop = paddle.nn.Dropout(p=proj_drop)
@@ -768,6 +849,7 @@ class CustomResidualAttentionBlock(paddle.nn.Layer):
         scale_fc: bool = False,
         cross_attn: bool = False,
         xattn: bool = False,
+        fusedlinear: bool = False,
     ):
         super().__init__()
         self.ln_1 = norm_layer(d_model)
@@ -782,12 +864,13 @@ class CustomResidualAttentionBlock(paddle.nn.Layer):
             scaled_cosine=scale_cosine_attn,
             scale_heads=scale_heads,
             xattn=xattn,
+            fusedlinear=fusedlinear,
         )
         self.ln_attn = norm_layer(d_model) if scale_attn else paddle.nn.Identity()
         self.ls_1 = LayerScale(d_model, ls_init_value) if ls_init_value is not None else paddle.nn.Identity()
         self.ln_2 = norm_layer(d_model)
         mlp_width = int(d_model * mlp_ratio)
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.mlp = paddle.nn.Sequential(
                 *[
                     (
@@ -812,6 +895,15 @@ class CustomResidualAttentionBlock(paddle.nn.Layer):
                             gather_output=True,
                         ),
                     ),
+                ]
+            )
+        elif fusedlinear:
+            self.mlp = paddle.nn.Sequential(
+                *[
+                    ("c_fc", FusedLinear(d_model, mlp_width)),
+                    ("ln", norm_layer(mlp_width) if scale_fc else paddle.nn.Identity()),
+                    ("gelu", act_layer()),
+                    ("c_proj", FusedLinear(mlp_width, d_model)),
                 ]
             )
         else:
@@ -848,21 +940,23 @@ class ResidualAttentionBlock(paddle.nn.Layer):
         norm_layer: Callable = LayerNorm,
         xattn: bool = False,
         is_cross_attention: bool = False,
+        fusedlinear: bool = False,
+        flash_attn: bool = False,
     ):
         super().__init__()
 
         self.ln_1 = norm_layer(d_model)
         if xattn:
-            self.attn = Attention(d_model, n_head, xattn=True)
+            self.attn = Attention(d_model, n_head, xattn=True, fusedlinear=fusedlinear, flash_attn=flash_attn)
         else:
-            self.attn = MultiHeadAttention(d_model, n_head)
+            self.attn = MultiHeadAttention(d_model, n_head, fusedlinear=fusedlinear, flash_attn=flash_attn)
         self.ls_1 = LayerScale(d_model, ls_init_value) if ls_init_value is not None else nn.Identity()
         if is_cross_attention:
             self.ln_1_kv = norm_layer(d_model)
 
         self.ln_2 = norm_layer(d_model)
         mlp_width = int(d_model * mlp_ratio)
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.mlp = paddle.nn.Sequential(
                 *[
                     (
@@ -886,6 +980,14 @@ class ResidualAttentionBlock(paddle.nn.Layer):
                             gather_output=True,
                         ),
                     ),
+                ]
+            )
+        elif fusedlinear:
+            self.mlp = paddle.nn.Sequential(
+                *[
+                    ("c_fc", FusedLinear(d_model, mlp_width)),
+                    ("gelu", act_layer()),
+                    ("c_proj", FusedLinear(mlp_width, d_model)),
                 ]
             )
         else:
@@ -924,12 +1026,11 @@ class ResidualAttentionBlock(paddle.nn.Layer):
         if self.xattn:
             return self.attn(q_x, attn_mask=attn_mask)
 
-        attn_mask = attn_mask.unsqueeze(0).unsqueeze(0) if attn_mask is not None else None
-        q_x = q_x.transpose((1, 0, 2))
+        attn_mask = attn_mask if attn_mask is not None else None
         k_x = k_x if k_x is not None else q_x
         v_x = v_x if v_x is not None else q_x
         out = self.attn(q_x, k_x, v_x, attn_mask=attn_mask)
-        return out.transpose((1, 0, 2))
+        return out
 
     def forward(
         self,
@@ -963,11 +1064,13 @@ class Transformer(paddle.nn.Layer):
                 ResidualAttentionBlock(
                     config.width,
                     config.heads,
-                    mlp_ratio=4.0,
+                    mlp_ratio=config.mlp_ratio,
                     ls_init_value=config.ls_init_value,
                     act_layer=act_layer,
                     norm_layer=norm_layer,
                     xattn=config.xattn,
+                    fusedlinear=config.fusedlinear,
+                    flash_attn=config.flash_attn,
                 )
                 for _ in range(config.layers)
             ]
@@ -977,47 +1080,19 @@ class Transformer(paddle.nn.Layer):
         return self.resblocks[0].mlp.c_fc.weight.dtype
 
     def forward(self, x: paddle.Tensor, attn_mask: Optional[paddle.Tensor] = None):
+        cnt = 0
         for r in self.resblocks:
             if self.enable_recompute:
                 x = paddle.distributed.fleet.utils.recompute(r, x, attn_mask, use_reentrant=False)
             else:
                 x = r(x, attn_mask=attn_mask)
+                cnt += 1
         return x
 
 
-class AttentionalPooler(paddle.nn.Layer):
-    def __init__(self, config, norm_layer: Callable = LayerNorm):
-        super().__init__()
-        d_model = config.num_classes
-        context_dim = config.embed_dim
-        origin_dtype = paddle.get_default_dtype()
-        paddle.set_default_dtype("float32")
-        init_data = paddle.randn(shape=[config.n_queries, d_model])
-        if origin_dtype != "float32":
-            init_data.astype(origin_dtype)
-        paddle.set_default_dtype(origin_dtype)
-        self.query = self.create_parameter(
-            shape=[config.n_queries, d_model],
-            default_initializer=paddle.nn.initializer.Assign(init_data),
-        )
-        self.attn = MultiHeadAttention(d_model, config.attn_pooler_heads, kdim=context_dim, vdim=context_dim)
-        self.ln_q = norm_layer(d_model)
-        self.ln_k = norm_layer(context_dim)
+class TextTransformerConfig(PretrainedConfig):
 
-    def forward(self, x):
-        x = self.ln_k(x)
-        N = x.shape[0]
-        q = self.ln_q(self.query)
-        out = self.attn(self._repeat(q, N), x, x)
-        return out
-
-    def _repeat(self, query, N: int):
-        return query.unsqueeze(0).repeat_interleave(N, 0)
-
-
-class EVATextTransformerConfig(PretrainedConfig):
-
-    model_type = "evatext_transformer"
+    model_type = "text_transformer"
 
     def __init__(
         self,
@@ -1027,13 +1102,19 @@ class EVATextTransformerConfig(PretrainedConfig):
         heads: int = 8,
         layers: int = 12,
         ls_init_value: float = None,
-        output_dim: int = 512,
+        embed_dim: int = 512,
         act_layer: Callable = paddle.nn.GELU,
         norm_layer: Callable = LayerNorm,
         xattn: bool = False,
         attn_mask: bool = True,
         pad_id: int = 0,
+        embed_cls: bool = False,
+        output_tokens: bool = False,
         quick_gelu: bool = False,
+        mlp_ratio: float = 4.0,
+        fusedLN: bool = False,
+        fusedlinear: bool = False,
+        flash_attn: bool = False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -1045,13 +1126,20 @@ class EVATextTransformerConfig(PretrainedConfig):
         self.heads = heads
         self.layers = layers
         self.ls_init_value = ls_init_value
-        self.output_dim = output_dim
+        self.output_dim = embed_dim
         self.act_layer = act_layer
         self.norm_layer = norm_layer
         self.xattn = xattn
         self.attn_mask = attn_mask
         self.pad_id = pad_id
+        self.embed_cls = embed_cls
+        self.output_tokens = output_tokens
+
         self.quick_gelu = quick_gelu
+        self.mlp_ratio = mlp_ratio
+        self.fusedLN = fusedLN
+        self.fusedlinear = fusedlinear
+        self.flash_attn = flash_attn
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
@@ -1069,19 +1157,19 @@ class EVATextTransformerConfig(PretrainedConfig):
         return cls.from_dict(config_dict, **kwargs)
 
 
-class EVATextTransformerPretrainedModel(PretrainedModel):
+class TextTransformerPretrainedModel(MixPretrainedModel):
     """
-    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    See :class:`paddlemix.models.model_utils.MixPretrainedModel` for more details.
     """
 
     model_config_file = "config.json"
-    config_class = EVATextTransformerConfig
+    config_class = TextTransformerConfig
     resource_files_names = {"model_state": "model_state_text.pdparams"}
-    base_model_prefix = "evatext_transformer"
+    base_model_prefix = "text_transformer"
 
 
-class EVATextTransformer(EVATextTransformerPretrainedModel):
-    def __init__(self, config: EVATextTransformerConfig):
+class TextTransformer(TextTransformerPretrainedModel):
+    def __init__(self, config: TextTransformerConfig):
         super().__init__(config)
 
         self.width = width = config.width
@@ -1092,7 +1180,7 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
 
         self.num_pos = config.context_length
         self.heads = config.heads
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.token_embedding = fleet.meta_parallel.VocabParallelEmbedding(config.vocab_size, width)
         else:
             self.token_embedding = paddle.nn.Embedding(config.vocab_size, width)
@@ -1103,6 +1191,12 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
             shape=[width, self.output_dim],
             default_initializer=paddle.nn.initializer.Assign(init_data),
         )
+        self.output_tokens = config.output_tokens
+        if config.embed_cls:
+            self.cls_emb = self.create_parameter(shape=[width])
+            self.num_pos += 1
+        else:
+            self.cls_emb = None
         init_data = paddle.empty(shape=[self.num_pos, width])
         self.positional_embedding = self.create_parameter(
             shape=[self.num_pos, width],
@@ -1117,6 +1211,8 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
     def init_parameters(self):
         self.token_embedding.weight = params_normal_(self.token_embedding.weight, std=0.02)
         self.positional_embedding = params_normal_(self.positional_embedding, std=0.01)
+        if self.cls_emb is not None:
+            self.cls_emb = params_normal_(self.cls_emb, std=0.01)
 
         proj_std = self.transformer.width**-0.5 * (2 * self.transformer.layers) ** -0.5
         attn_std = self.transformer.width**-0.5
@@ -1146,11 +1242,25 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         mask = paddle.triu(mask, 1)
         return mask
 
+    def build_cls_mask(self, text, cast_dtype):
+        cls_mask = (text != self.pad_id).unsqueeze(1).astype(text.dtype)
+        cls_mask = paddle.nn.functional.pad(
+            cls_mask,
+            (0, 0, cls_mask.shape[2], 0, 1, 0),
+            value=1.0,
+        )
+        additive_mask = paddle.zeros(cls_mask.shape, dtype=cast_dtype)
+        additive_mask = masked_fill(additive_mask, (1.0 - cls_mask).astype("bool"), float("-inf"))
+        additive_mask = additive_mask.unsqueeze(1)
+        additive_mask = paddle.repeat_interleave(additive_mask, self.heads, 1)
+        return additive_mask
+
     def _repeat(self, t, N: int):
         return t.reshape((1, 1, -1)).repeat_interleave(N, 0)
 
     def forward(self, text):
         cast_dtype = self.transformer.get_cast_dtype()
+        seq_len = text.shape[1]
         if isinstance(cast_dtype, paddle.dtype):
             dtype = cast_dtype
         elif isinstance(cast_dtype, str) and cast_dtype not in [
@@ -1167,6 +1277,12 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         x = self.token_embedding(text).cast(dtype)
         attn_mask = self.attn_mask
 
+        if self.cls_emb is not None:
+            seq_len += 1
+            x = paddle.concat([x, self._repeat(self.cls_emb, x.shape[0])], axis=1)
+            cls_mask = self.build_cls_mask(text, cast_dtype)
+            attn_mask = attn_mask[:seq_len, :seq_len].unsqueeze(0) + cls_mask[:, :seq_len, :seq_len]
+
         if isinstance(cast_dtype, paddle.dtype):
             dtype = cast_dtype
         elif isinstance(cast_dtype, str) and cast_dtype not in [
@@ -1181,13 +1297,18 @@ class EVATextTransformer(EVATextTransformerPretrainedModel):
         else:
             dtype = self.positional_embedding.dtype
         x = x + self.positional_embedding.cast(dtype)
-        x = x.transpose(perm=[1, 0, 2])
         x = self.transformer(x, attn_mask=attn_mask)
-        x = x.transpose(perm=[1, 0, 2])
-        x = self.ln_final(x)
-        pooled = x[paddle.arange(x.shape[0]), text.argmax(axis=-1)]
+
+        if self.cls_emb is not None:
+            pooled, tokens = x[:, -1], x[:, :-1]
+            pooled = self.ln_final(pooled)
+        else:
+            x = self.ln_final(x)
+            pooled, tokens = x[paddle.arange(x.shape[0]), text.argmax(axis=-1)], x
 
         if self.text_projection is not None:
             pooled = pooled @ self.text_projection
 
+        if self.output_tokens:
+            return pooled, tokens
         return pooled

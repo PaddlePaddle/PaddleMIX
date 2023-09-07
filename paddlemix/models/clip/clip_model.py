@@ -23,23 +23,28 @@ import os
 from typing import Union
 
 import numpy as np
+
+from paddlemix.models.model_utils import MixPretrainedModel
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.model_utils import PretrainedModel
 from paddlenlp.utils.log import logger
 
-from .eva_text_model import EVATextTransformer, EVATextTransformerConfig
-from .eva_vit_model import EVAVisionTransformer, EVAVisionTransformerConfig
 from .loss import ClipLoss
+from .text_model import TextTransformer, TextTransformerConfig
+from .vit_model import VisionTransformer, VisionTransformerConfig
 
 
-class EVACLIPConfig(PretrainedConfig):
+class CLIPConfig(PretrainedConfig):
 
-    model_type = "evaclip"
+    model_type = "clip"
 
     def __init__(
         self,
+        embed_dim=None,
         vision_cfg={},
         text_cfg={},
+        custom_text=False,
+        fusedlinear=False,
+        flash_attn=False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -47,6 +52,18 @@ class EVACLIPConfig(PretrainedConfig):
 
         self.vision_config = vision_cfg
         self.text_config = text_cfg
+        self.custom_text = custom_text
+        if embed_dim is not None:
+            self.vision_config["embed_dim"] = embed_dim
+            self.text_config["embed_dim"] = embed_dim
+
+        if fusedlinear:
+            self.vision_config["fusedlinear"] = True
+            self.text_config["fusedlinear"] = True
+
+        if flash_attn:
+            self.vision_config["flash_attn"] = True
+            self.text_config["flash_attn"] = True
 
     @classmethod
     def from_pretrained(
@@ -89,24 +106,24 @@ class EVACLIPConfig(PretrainedConfig):
             text_config_dict, kwargs = cls.get_config_dict(pretrained_textmodel_name_or_path, **kwargs)
             config_dict["text_cfg"] = text_config_dict
 
-            if "model_type" in text_config_dict and text_config_dict["model_type"] != "evatext_transformer":
+            if "model_type" in text_config_dict and text_config_dict["model_type"] != "text_transformer":
                 logger.warning(
                     f"You are using a model of type {text_config_dict['model_type']} to instantiate a model of type "
-                    f"evatext_transformer. This is not supported for all configurations of models and can yield errors."
+                    f"text_transformer. This is not supported for all configurations of models and can yield errors."
                 )
 
         return cls.from_dict(config_dict, **kwargs)
 
 
-class EVACLIPPretrainedModel(PretrainedModel):
+class CLIPPretrainedModel(MixPretrainedModel):
     """
-    See :class:`~paddlenlp.transformers.model_utils.PretrainedModel` for more details.
+    See :class:`~paddlemix.models.model_utils.MixPretrainedModel` for more details.
     """
 
     model_config_file = "config.json"
-    config_class = EVACLIPConfig
+    config_class = CLIPConfig
     resource_files_names = {"model_state": "model_state.pdparams"}
-    base_model_prefix = "evaclip"
+    base_model_prefix = "clip"
 
     @classmethod
     def from_pretrained(
@@ -140,11 +157,11 @@ class EVACLIPPretrainedModel(PretrainedModel):
                 "vision_cfg": pretrained_vismodel_name_or_path,
                 "text_cfg": pretrained_textmodel_name_or_path,
             }
-            config = EVACLIPConfig.from_dict(config_dict)
+            config = CLIPConfig.from_dict(config_dict)
             return cls(config, *args, **kwargs)
 
 
-class EVACLIP(EVACLIPPretrainedModel):
+class CLIP(CLIPPretrainedModel):
     def __init__(
         self,
         config,
@@ -158,24 +175,37 @@ class EVACLIP(EVACLIPPretrainedModel):
     ):
         super().__init__(config)
         if isinstance(config.vision_config, str):
-            self.visual = EVAVisionTransformer.from_pretrained(config.vision_config)
+            self.visual = VisionTransformer.from_pretrained(config.vision_config)
             if not disable_text:
-                self.text = EVATextTransformer.from_pretrained(config.text_config)
+                self.text = TextTransformer.from_pretrained(config.text_config)
         else:
-            vision_config = EVAVisionTransformerConfig(**config.vision_config)
-            text_config = EVATextTransformerConfig(**config.text_config)
-            self.visual = EVAVisionTransformer(vision_config)
+            vision_config = VisionTransformerConfig(**config.vision_config)
+            text_config = TextTransformerConfig(**config.text_config)
+            self.visual = VisionTransformer(vision_config)
             if not disable_text:
-                self.text = EVATextTransformer(text_config)
+                if config.custom_text:
+                    self.text = TextTransformer(text_config)
+                else:
+                    text = TextTransformer(text_config)
+                    self.transformer = text.transformer
+                    # self.context_length = text.context_length
+                    # self.vocab_size = text.vocab_size
+                    self.token_embedding = text.token_embedding
+                    self.positional_embedding = text.positional_embedding
+                    self.ln_final = text.ln_final
+                    self.text_projection = text.text_projection
+                    self.register_buffer("attn_mask", text.attn_mask, persistable=False)
         init_data = paddle.ones(shape=[1]) * np.log(1 / 0.07)
         self.logit_scale = self.create_parameter(
             shape=[1], default_initializer=paddle.nn.initializer.Assign(init_data)
         )
+        self.custom_text = config.custom_text
 
         self.loss = ClipLoss(
             local_loss=local_loss,
             gather_with_grad=gather_with_grad,
             cache_labels=cache_labels,
+            text_loss=True,
             rank=data_world_rank,
             world_size=data_world_size,
         )
@@ -183,7 +213,7 @@ class EVACLIP(EVACLIPPretrainedModel):
         if enable_recompute:
             self.visual.set_grad_checkpointing(True)
             if not disable_text:
-                self.text.set_grad_checkpointing(True)
+                self.transformer.enable_recompute = True
 
     def lock_image_tower(self, unlocked_groups=0, freeze_bn_stats=False):
         self.visual.lock(unlocked_groups=unlocked_groups, freeze_bn_stats=freeze_bn_stats)
@@ -193,7 +223,7 @@ class EVACLIP(EVACLIPPretrainedModel):
 
     def set_grad_checkpointing(self, enable=True):
         self.visual.set_grad_checkpointing(enable)
-        self.text.set_grad_checkpointing(enable)
+        self.transformer.enable_recompute = enable
 
     def no_weight_decay(self):
         return {"logit_scale"}
@@ -212,8 +242,20 @@ class EVACLIP(EVACLIPPretrainedModel):
         if text_features is not None:
             # directly use text_features if given
             return paddle.nn.functional.normalize(x=text_features, axis=-1) if normalize else text_features
-        features = self.text(text)
-        return paddle.nn.functional.normalize(x=features, axis=-1) if normalize else features
+        if self.custom_text:
+            features = self.text(text)
+            return paddle.nn.functional.normalize(x=features, axis=-1) if normalize else features
+        else:
+            cast_dtype = self.transformer.get_cast_dtype()
+
+            x = self.token_embedding(text).cast(cast_dtype)  # [batch_size, n_ctx, d_model]
+
+            x = x + self.positional_embedding.cast(cast_dtype)
+            x = self.transformer(x, attn_mask=self.attn_mask)
+            x = self.ln_final(x)  # [batch_size, n_ctx, transformer.width]
+            # take features from the eot embedding (eot_token is the highest number in each sequence)
+            x = x[paddle.arange(x.shape[0]), text.argmax(axis=-1)] @ self.text_projection
+            return paddle.nn.functional.normalize(x, axis=-1) if normalize else x
 
     def forward(self, image, input_ids=None, text_emb=None, skiploss=False, **kwargs):
         self.clip_scale()

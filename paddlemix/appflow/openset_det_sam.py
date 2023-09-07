@@ -67,6 +67,20 @@ class OpenSetDetTask(AppTask):
             paddle.static.InputSpec(shape=[None, None], name="position_ids", dtype="int64"),
         ]
 
+    def _create_inputs(self, inputs):
+        input_map = {}
+        input_map["x"] = inputs["image_tensor"].numpy()
+        input_map["m"] = np.array(inputs["mask"].numpy(), dtype="int64")
+
+        for key in inputs["tokenized_out"].keys():
+            input_map[key] = np.array(inputs["tokenized_out"][key].numpy(), dtype="int64")
+
+            input_map[key] = np.array(inputs["tokenized_out"][key].numpy(), dtype="int64")
+
+        for name in self.input_names:
+            input_tensor = self.predictor.get_input_handle(name)
+            input_tensor.copy_from_cpu(input_map[name])
+
     def _construct_processor(self, model):
         """
         Construct the tokenizer for the predictor.
@@ -108,21 +122,10 @@ class OpenSetDetTask(AppTask):
         """
 
         if self._static_mode:
-
-            inputs["mask"] = paddle.cast(inputs["mask"], dtype="int64")
-            inputs["tokenized_out"]["text_self_attention_masks"] = paddle.cast(
-                inputs["tokenized_out"]["text_self_attention_masks"], dtype="int64"
-            )
-            [pred_boxes, pred_logits] = self.predictor.run(
-                [
-                    inputs["image_tensor"],
-                    inputs["mask"],
-                    inputs["tokenized_out"]["input_ids"],
-                    inputs["tokenized_out"]["attention_mask"],
-                    inputs["tokenized_out"]["text_self_attention_masks"],
-                    inputs["tokenized_out"]["position_ids"],
-                ]
-            )
+            self._create_inputs(inputs)
+            self.predictor.run()
+            pred_boxes = self.output_handle[0].copy_to_cpu()
+            pred_logits = self.output_handle[1].copy_to_cpu()
             result = {"pred_logits": pred_logits, "pred_boxes": pred_boxes}
         else:
             result = self._model(
@@ -232,6 +235,15 @@ class OpenSetSegTask(AppTask):
             paddle.static.InputSpec(shape=shape2, dtype="int32"),
         ]
 
+    def _create_inputs(self, inputs):
+        input_map = {}
+        input_map["img"] = inputs["image_seg"].numpy()
+        input_map["prompt"] = np.array(inputs["prompt"].numpy())
+
+        for name in self.input_names:
+            input_tensor = self.predictor.get_input_handle(name)
+            input_tensor.copy_from_cpu(input_map[name])
+
     def _construct_processor(self, model):
         """
         Construct the tokenizer for the predictor.
@@ -286,8 +298,9 @@ class OpenSetSegTask(AppTask):
             if self._input_type == "boxs":
                 inputs["prompt"] = inputs["prompt"].reshape([-1, 4])
 
-            result = self.predictor.run([inputs["image_seg"], inputs["prompt"]])
-            result = result[0]
+            self._create_inputs(inputs)
+            self.predictor.run()
+            result = self.output_handle[0].copy_to_cpu()
 
         else:
             result = self._model(img=inputs["image_seg"], prompt=inputs["prompt"])

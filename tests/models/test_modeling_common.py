@@ -27,6 +27,7 @@ import paddle
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.transformers.model_utils import PretrainedModel
 
+from paddlemix.models.blip2.Qformer import BertLMHeadModel
 from paddlemix.utils.env import CONFIG_NAME, LEGACY_CONFIG_NAME, MODEL_HOME
 from tests.testing_utils import slow
 
@@ -114,6 +115,8 @@ class ModelTesterMixin:
 
         for model_class in self.all_model_classes:
             model = self._make_model_instance(config, model_class)
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             model.eval()
             with paddle.no_grad():
                 first = model(**self._prepare_for_class(inputs_dict, model_class))[0]
@@ -145,6 +148,8 @@ class ModelTesterMixin:
 
         for model_class in self.all_model_classes:
             model = self._make_model_instance(config, model_class)
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             model.eval()
             with paddle.no_grad():
                 first = model(**self._prepare_for_class(inputs_dict, model_class))[0]
@@ -161,6 +166,8 @@ class ModelTesterMixin:
 
         for model_class in self.all_model_classes:
             model = self._make_model_instance(config, model_class)
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             signature = inspect.signature(model.forward)
             # signature.parameters is an OrderedDict => so arg_names order is deterministic
             arg_names = [*signature.parameters.keys()]
@@ -198,6 +205,8 @@ class ModelTesterMixin:
             inputs_dict["output_hidden_states"] = False
             inputs_dict["return_dict"] = True
             model = self._make_model_instance(config, model_class)
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             model.eval()
             with paddle.no_grad():
                 outputs = model(**self._prepare_for_class(inputs_dict, model_class))
@@ -271,6 +280,8 @@ class ModelTesterMixin:
             inputs_dict["output_attentions"] = True
             inputs_dict["output_hidden_states"] = True
             model = self._make_model_instance(config, model_class)
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             model.eval()
             with paddle.no_grad():
                 outputs = model(**self._prepare_for_class(inputs_dict, model_class))
@@ -309,6 +320,8 @@ class ModelTesterMixin:
     def test_hidden_states_output(self):
         def check_hidden_states_output(inputs_dict, config, model_class):
             model = self._make_model_instance(config, model_class)
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             model.eval()
 
             with paddle.no_grad():
@@ -376,7 +389,8 @@ class ModelTesterMixin:
         for model_class in self.all_model_classes:
             config = copy.deepcopy(original_config)
             model = self._make_model_instance(config, model_class)
-
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             if self.model_tester.is_training is False:
                 model.eval()
 
@@ -477,6 +491,8 @@ class ModelTesterMixin:
         for model_class in self.all_model_classes:
             config = copy.deepcopy(original_config)
             model = self._make_model_instance(config, model_class)
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             if self.model_tester.is_training is False:
                 model.eval()
 
@@ -537,6 +553,8 @@ class ModelTesterMixin:
         # test all model classes
         for model_class in self.all_model_classes:
             model = self._make_model_instance(config, model_class)
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             model.eval()
 
             inputs = copy.deepcopy(self._prepare_for_class(inputs_dict, model_class))
@@ -622,7 +640,8 @@ class ModelTesterMixin:
                 continue
 
             model = self._make_model_instance(config, model_class)
-
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             all_maps: dict = copy.deepcopy(model_class.config_class.attribute_map)
 
             for old_attribute, new_attribute in all_maps.items():
@@ -646,7 +665,8 @@ class ModelTesterMixin:
                 continue
 
             model = self._make_model_instance(config, model_class)
-
+            if isinstance(model, BertLMHeadModel):
+                model = model.bert
             if not model.config.tie_word_embeddings:
                 continue
 

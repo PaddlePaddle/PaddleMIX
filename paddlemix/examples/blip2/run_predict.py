@@ -25,10 +25,9 @@ from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 
 import requests
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 from PIL import Image
 
-from paddlemix.examples.blip2.utils import LLM_LIST, create_tokenizer, load_model
+from paddlemix.examples.blip2.utils import create_tokenizer, load_model
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
@@ -36,6 +35,7 @@ from paddlemix.processors.blip_processing import (
     BlipTextProcessor,
 )
 from paddlemix.utils.log import logger
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 
 @dataclass
@@ -110,15 +110,14 @@ class PreTrainingArguments(TrainingArguments):
         default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"}
     )
     pipeline_parallel_degree: int = field(default=1, metadata={"help": "Enable pipeline parallel"})
-    model_path: str = field(
+    load_model_path: str = field(
         default=None,
         metadata={"help": "The path to model if you want to load weights from the specified path"},
     )
 
 
-def create_model(config):
-    model = Blip2ForConditionalGeneration.from_pretrained(pretrained_model_name_or_path=config.model_name_or_path)
-    paddle.device.cuda.empty_cache()
+def create_model(config, training_args=None):
+    model = Blip2ForConditionalGeneration.from_pretrained(config.model_name_or_path)
     return model
 
 
@@ -143,6 +142,7 @@ def main():
     text_processor_class = BlipTextProcessor.from_pretrained(
         os.path.join(model_args.model_name_or_path, "processor", "eval")
     )
+    text_processor_class.prompt = ""
     processor = Blip2Processor(image_processor, text_processor_class, tokenizer_class)
     inputs = processor(
         images=image,
@@ -151,12 +151,12 @@ def main():
         return_attention_mask=True,
         mode="test",
     )
+    model_args.mp_degree = training_args.tensor_parallel_degree
+    model_args.gradient_checkpointing = training_args.gradient_checkpointing
     model = create_model(model_args)
     model.eval()
-    if training_args.model_path is not None:
-        checkpoint = training_args.model_path
-        load_model(training_args, model, ckpt_dir=checkpoint, load_language_model=False)
-        load_model(training_args, model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
+    if training_args.load_model_path is not None:
+        load_model(training_args, model, ckpt_dir=os.path.join(training_args.load_model_path, "model_state.pdparams"))
     generated_ids, scores = model.generate(**inputs)
     generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
     logger.info("Generate text: {}".format(generated_text))
@@ -175,8 +175,6 @@ def setdistenv(args):
     args.data_parallel_degree = args.dp_degree
     logger.info("args.dp_degree:{}".format(args.dp_degree))
     logger.info("args.sharding_parallel_degree):{}".format(args.sharding_parallel_degree))
-    if args.sharding_parallel_degree > 1:
-        args.sharding = "stage1"
     strategy.hybrid_configs = {
         "dp_degree": args.dp_degree,
         "mp_degree": args.tensor_parallel_degree,

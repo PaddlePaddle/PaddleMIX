@@ -15,6 +15,22 @@ EVA-CLIP：针对CLIP训练过程进行优化，使得训练效率和效果都�
 注：图片引用自[EVA-CLIP](https://github.com/baaivision/EVA/tree/master/EVA-CLIP).
 
 
+### EVA-01-CLIP Series
+
+> Image encoder MIM teacher: ``OpenAI CLIP-Large``.
+
+| model name | image enc. init. ckpt | text enc. init. ckpt | total #params | IN-1K zero-shot top-1 | weight(bf16) |
+|:-----|:-----|:-----------|:------:|:------:|:------:|
+| `EVA01-CLIP-g-14` | `EVA01_g_psz14` | `openai/clip-vit-large-patch14` | 1.1B | **78.5** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA01-CLIP-B-14/model_state.pdparams) |
+| `EVA01-CLIP-g-14-plus` | `EVA01_g_psz14` | `laion/CLIP-ViT-H-14-laion2B-s32B-b79K` | 1.3B | **79.3** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA01-CLIP-B-14-plus/model_state.pdparams) |
+
+</div>
+
+
+### EVA-02-CLIP Series
+
+> Image encoder MIM teacher: ``EVA01_CLIP_g_14_psz14_s11B``.
+
 <div align="center">
 
 | model name | image enc. init. ckpt | text enc. init. ckpt | total #params | IN-1K zero-shot top-1 | weight(bf16) |
@@ -65,6 +81,8 @@ python setup.py install
 
 数据部分，默认使用`coco_karpathy`数据，使用该数据不需另外配置，会自动下载。解析部分参考`coco_clip.py`文件。
 
+如果想手动下载，请点击[DownLoadCoCo](https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco.tar)
+
 2) 自定义数据
 
 如果需要自定义数据，推荐沿用`coco_karpathy`数据格式处理自己的数据。其中每条数据标注格式示例为:
@@ -75,7 +93,7 @@ python setup.py install
 
 ## 4. 使用说明
 
-我们在Paddle中实现了`EVA-02-CLIP`系列模型，包括`EVA02-CLIP-B-16`、`EVA02-CLIP-L-14`、`EVA02-CLIP-L-14-336`、`EVA02-CLIP-bigE-14`、`EVA02-CLIP-bigE-14-plus`.
+我们在Paddle中实现了`EVA-CLIP`系列模型，包括`EVA01-CLIP-g-14`、`EVA01-CLIP-g-14-plus`、`EVA02-CLIP-B-16`、`EVA02-CLIP-L-14`、`EVA02-CLIP-L-14-336`、`EVA02-CLIP-bigE-14`、`EVA02-CLIP-bigE-14-plus`.
 
 ### 4.1 训练
 

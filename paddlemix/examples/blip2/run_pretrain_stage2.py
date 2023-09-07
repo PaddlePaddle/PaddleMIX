@@ -14,6 +14,7 @@
 
 import os
 import sys
+import warnings
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 import random
@@ -24,15 +25,9 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 
 from paddlemix.datasets import load_dataset
-from paddlemix.examples.blip2.utils import (
-    LLM_LIST,
-    BlipCollator,
-    create_tokenizer,
-    load_model,
-)
+from paddlemix.examples.blip2.utils import BlipCollator, create_tokenizer, load_model
 from paddlemix.models.blip2.configuration import Blip2Config
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
@@ -42,6 +37,7 @@ from paddlemix.processors.blip_processing import (
 )
 from paddlemix.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlemix.utils.log import logger
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 
 
 @dataclass
@@ -69,7 +65,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="paddlemix/blip2-stage2",
+        default="blip2-stage2",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
 
@@ -122,17 +118,27 @@ class PreTrainingArguments(TrainingArguments):
         default=None,
         metadata={"help": "The path to a folder with a valid checkpoint for your model."},
     )
-    model_path: str = field(
+    save_strategy: str = field(
+        default="epoch",
+        metadata={"help": "The checkpoint save strategy to use."},
+    )
+    load_model_path: str = field(
         default=None,
         metadata={"help": "The path to model if you want to load weights from the specified path"},
     )
 
 
-def create_model(config):
+def create_model(config, training_args=None):
     blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
     blip2_config.mp_degree = config.mp_degree
     blip2_config.gradient_checkpointing = config.gradient_checkpointing
     model = Blip2ForConditionalGeneration(blip2_config)
+    model.load_pretrained(
+        vision_and_bridge_name_or_path=getattr(config, "vision_and_bridge_name_or_path", None),
+        vision_name_or_path=getattr(config, "vision_name_or_path", None),
+        bridge_name_or_path=getattr(config, "bridge_name_or_path", None),
+        training_args=training_args,
+    )
     paddle.device.cuda.empty_cache()
     return model
 
@@ -184,14 +190,27 @@ def main():
     )
     eval_processor = Blip2Processor(image_processor_eval, text_processor_class_eval, tokenizer_class)
 
-    train_dataset = load_dataset(data_args.task_name, splits="train")
-    eval_dataset = {"test": load_dataset(data_args.task_name, splits="test")}
+    # load dataset
+    if isinstance(data_args.task_name, list):
+        from paddlemix.datasets.dataset import ConcatDataset
+
+        train_dataset = []
+        for i in range(len(data_args.task_name)):
+            train_dataset.append(load_dataset(data_args.task_name[i], splits="train"))
+            train_dataset = ConcatDataset(train_dataset)
+        warnings.warn("Do not support multiple {} and {} datasets.".format("test", "eval"))
+        eval_dataset = {"test": load_dataset(data_args.task_name[0], splits="test")}
+    else:
+        train_dataset = load_dataset(data_args.task_name, splits="train")
+        eval_dataset = {"test": load_dataset(data_args.task_name, splits="test")}
+    # train_dataset = load_dataset(data_args.task_name,data_files=[['/root/.paddlemix/datasets/coco/images/','/root/.paddlemix/datasets/coco/annotations/coco_karpathy_train.json',"train"]])
+
     # create model
     blip_collator = BlipCollator(processor)
     blip_eval_collator = BlipCollator(eval_processor, mode="test")
     model_args.mp_degree = training_args.tensor_parallel_degree
     model_args.gradient_checkpointing = training_args.gradient_checkpointing
-    model = create_model(model_args)
+    model = create_model(model_args, training_args)
 
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     trainer = Trainer(
@@ -207,14 +226,10 @@ def main():
     )
     # Training
     checkpoint = None
-    if training_args.model_path is not None:
-        checkpoint = training_args.model_path
-        load_model(training_args, model, ckpt_dir=model_args.model_path, load_language_model=False)
-        load_model(training_args, model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
-    if training_args.resume_from_checkpoint is not None:
-        checkpoint = os.path.join(training_args.resume_from_checkpoint, "model_state.pdparams")
-        load_model(training_args, model, ckpt_dir=checkpoint, load_language_model=False)
-        load_model(training_args, model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
+    if training_args.load_model_path is not None:
+        load_model(training_args, model, ckpt_dir=os.path.join(training_args.load_model_path, "model_state.pdparams"))
+    elif training_args.resume_from_checkpoint is not None:
+        checkpoint = training_args.resume_from_checkpoint
     if training_args.do_eval:
         eval_metrics = trainer.evaluate(eval_dataset)
         trainer.log_metrics("eval", eval_metrics)
@@ -236,8 +251,6 @@ def setdistenv(args):
     args.data_parallel_degree = args.dp_degree
     logger.info("args.dp_degree:{}".format(args.dp_degree))
     logger.info("args.sharding_parallel_degree):{}".format(args.sharding_parallel_degree))
-    if args.sharding_parallel_degree > 1:
-        args.sharding = "stage1"
     strategy.hybrid_configs = {
         "dp_degree": args.dp_degree,
         "mp_degree": args.tensor_parallel_degree,

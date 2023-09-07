@@ -27,21 +27,20 @@ from dataclasses import dataclass, field
 
 import paddle
 
-from paddlemix.checkpoint import load_model
 from paddlemix.datasets import load_dataset
 from paddlemix.datasets.dataset import ImageFolder
 from paddlemix.metrics.clip_zero_shot import ClipZeroShot
-from paddlemix.models.evaclip.eva_clip_model import EVACLIP, EVACLIPConfig
+from paddlemix.models.clip.eva_clip_model import EVACLIP, EVACLIPConfig
 from paddlemix.optimization import create_optimizer
 from paddlemix.processors.clip_processing import (
     CLIPImageProcessor,
     CLIPProcessor,
     CLIPTextProcessor,
 )
+from paddlemix.processors.tokenizer import SimpleTokenizer
 from paddlemix.trainer import CLIPTrainer
 from paddlemix.utils.env import setdistenv
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments
-from paddlenlp.transformers import AutoTokenizer
 
 
 @dataclass
@@ -82,9 +81,9 @@ class PreTrainingArguments(TrainingArguments):
     Arguments pertaining to what training options we are going to use during pretraining.
     """
 
-    pretrained_model_path: str = field(
-        default=None,
-        metadata={"help": "The path to pre-trained model that we will use for pretraining."},
+    pretrained: bool = field(
+        default=False,
+        metadata={"help": "Whether to use pretrained model."},
     )
     text_wd: float = field(default=0.05, metadata={"help": "Weight decay for text tower"})
     visual_wd: float = field(default=0.05, metadata={"help": "Weight decay for visual tower"})
@@ -198,21 +197,16 @@ def main_worker(training_args, model_args, data_args):
         data_world_rank=training_args.data_world_rank,
         data_world_size=training_args.data_world_size,
     )
+    if training_args.pretrained:
+        model.load_pretrained(model_args.model)
 
-    training_args.model = model_args.model
-    if (
-        training_args.pretrained_model_path
-        and training_args.pretrained_model_path != "None"
-        and training_args.resume_from_checkpoint is None
-    ):
-        load_model(training_args, model, ckpt_dir=training_args.pretrained_model_path)
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("float32")
 
     train_dataset = load_dataset(data_args.task_name, splits="train")
     image_processor = CLIPImageProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
     text_processor = CLIPTextProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
-    tokenizer = AutoTokenizer.from_pretrained(os.path.join(model_args.model, "processor"))
+    tokenizer = SimpleTokenizer()
     processor = CLIPProcessor(image_processor, text_processor, tokenizer)
     collator = Collator(processor)
 

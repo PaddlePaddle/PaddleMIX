@@ -12,7 +12,8 @@ task = Appflow(app="auto_label",
                )
 url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
 image_pil = load_image(url)
-result = task(image=image_pil)
+blip2_prompt = 'describe the image'
+result = task(image=image_pil,blip2_prompt = blip2_prompt)
 ```
 
 效果展示

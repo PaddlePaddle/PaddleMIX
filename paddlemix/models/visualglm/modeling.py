@@ -31,11 +31,12 @@ from paddlenlp.transformers.model_outputs import (
     ModelOutput,
 )
 from paddlenlp.transformers.model_utils import (
-    PretrainedModel,
     apply_chunking_to_forward,
     find_pruneable_heads_and_indices,
     prune_linear_layer,
 )
+
+from paddlemix.models.model_utils import MixPretrainedModel
 
 from ...activations import ACT2FN
 from ...utils.initializer import normal_, ones_, zeros_
@@ -98,7 +99,7 @@ class VisualGLMForConditionalGenerationModelOutput(ModelOutput):
         )
 
 
-class VisualGLMPretrainedModel(PretrainedModel):
+class VisualGLMPretrainedModel(MixPretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.

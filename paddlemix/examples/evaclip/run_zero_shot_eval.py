@@ -25,20 +25,19 @@ from dataclasses import dataclass, field
 
 import paddle
 
-from paddlemix.checkpoint import load_model
 from paddlemix.datasets.dataset import ImageFolder
 from paddlemix.examples.evaclip.run_pretrain_dist import Collator
 from paddlemix.metrics.clip_zero_shot import ClipZeroShot
-from paddlemix.models.evaclip.eva_clip_model import EVACLIP
+from paddlemix.models.clip.eva_clip_model import EVACLIP
 from paddlemix.processors.clip_processing import (
     CLIPImageProcessor,
     CLIPProcessor,
     CLIPTextProcessor,
 )
+from paddlemix.processors.tokenizer import SimpleTokenizer
 from paddlemix.trainer import CLIPTrainer
 from paddlemix.utils.env import setdistenv
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments
-from paddlenlp.transformers import AutoTokenizer
 
 
 @dataclass
@@ -104,20 +103,13 @@ def main_worker(training_args, model_args, data_args):
     model = EVACLIP.from_pretrained(model_args.model, ignore_mismatched_sizes=False)
     model.eval()
 
-    training_args.model = model_args.model
-    if (
-        training_args.pretrained_model_path
-        and training_args.pretrained_model_path != "None"
-        and training_args.resume_from_checkpoint is None
-    ):
-        load_model(training_args, model, ckpt_dir=training_args.pretrained_model_path)
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("float32")
 
     eval_dataset = ImageFolder(f"{data_args.classification_eval}/images")
     image_processor = CLIPImageProcessor.from_pretrained(os.path.join(model_args.model, "processor", "eval"))
     text_processor = CLIPTextProcessor.from_pretrained(os.path.join(model_args.model, "processor", "eval"))
-    tokenizer = AutoTokenizer.from_pretrained(os.path.join(model_args.model, "processor"))
+    tokenizer = SimpleTokenizer()
     processor = CLIPProcessor(image_processor, text_processor, tokenizer)
     collator = Collator(processor)
 
