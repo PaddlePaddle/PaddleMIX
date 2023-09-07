@@ -12,9 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .caption_dataset import *
-from .coco_caption import *
-from .coco_clip import *
-from .dataset import *
-from .imagenet import *
-from .vg_caption import *
+import collections
+import os
+
+__all__ = ["VGCaption"]
+from paddlemix.datasets.caption_dataset import CaptionDataset
+
+
+class VGCaption(CaptionDataset):
+    """
+    VG Caption dataset.
+    """
+
+    URL = "https://bj.bcebos.com/paddlemix/datasets/vg.tar.gz"
+    META_INFO = collections.namedtuple("META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
+    MD5 = ""
+    SPLITS = {
+        "train": META_INFO(
+            os.path.join("coco", "images"),
+            os.path.join("coco", "annotations/vg_caption.json"),
+            "",
+            "",
+        ),
+    }

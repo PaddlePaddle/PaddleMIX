@@ -42,6 +42,8 @@ class MultimodalTransformerConfig(PretrainedConfig):
         cast_dtype: Union[str, paddle.dtype] = None,
         vocab_size: int = 512,
         xattn: bool = False,
+        fusedlinear: bool = False,
+        flash_attn: bool = False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -57,6 +59,8 @@ class MultimodalTransformerConfig(PretrainedConfig):
         self.cast_dtype = cast_dtype
         self.output_dim = vocab_size
         self.xattn = xattn
+        self.fusedlinear = fusedlinear
+        self.flash_attn = flash_attn
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
@@ -105,6 +109,8 @@ class MultimodalTransformer(MultimodalTransformerPretrainedModel):
                     act_layer=act_layer,
                     norm_layer=norm_layer,
                     xattn=config.xattn,
+                    fusedlinear=config.fusedlinear,
+                    flash_attn=config.flash_attn,
                 )
                 for _ in range(config.layers)
             ]
@@ -120,6 +126,8 @@ class MultimodalTransformer(MultimodalTransformerPretrainedModel):
                     act_layer=act_layer,
                     norm_layer=norm_layer,
                     is_cross_attention=True,
+                    fusedlinear=config.fusedlinear,
+                    flash_attn=config.flash_attn,
                 )
                 for _ in range(config.layers)
             ]
