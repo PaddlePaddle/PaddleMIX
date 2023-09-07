@@ -14,10 +14,10 @@
 
 model_item=stable_diffusion-098b_lora
 model=stable_diffusion
-bs_item=96
-fp_item=bf16O1
-run_mode=DP
-device_num=N1C8
+bs_item=32
+fp_item=fp32
+run_mode=DP-recompute
+device_num=N1C1
 max_epochs=200
 num_workers=0
 

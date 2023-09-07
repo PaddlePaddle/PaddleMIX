@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-model_item=stable_diffusion-098b_lora
+model_item=stable_diffusion-098b_pretrain
 model=stable_diffusion
-bs_item=104
-fp_item=bf16O2
-run_mode=DP
+bs_item=88
+fp_item=fp32
+run_mode=DP-recompute
 device_num=N1C8
 max_epochs=200
 num_workers=0
