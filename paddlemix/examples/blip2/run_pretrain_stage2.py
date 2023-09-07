@@ -19,6 +19,7 @@ import warnings
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 import random
 from dataclasses import dataclass, field
+from typing import Optional
 
 import numpy as np
 import paddle
@@ -65,7 +66,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="blip2-stage2",
+        default="../blip2-stage2",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
 
@@ -125,6 +126,14 @@ class PreTrainingArguments(TrainingArguments):
     load_model_path: str = field(
         default=None,
         metadata={"help": "The path to model if you want to load weights from the specified path"},
+    )
+    benchmark: bool = field(
+        default=False,
+        metadata={"help": "Whether or not run benchmark."},
+    )
+    profiler_options: Optional[str] = field(
+        default=None,
+        metadata={"help": "profiler_options."},
     )
 
 
