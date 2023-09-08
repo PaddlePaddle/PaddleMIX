@@ -1477,7 +1477,7 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
 
         if not return_dict:
             pre_idx = 1 if masked_labels is None else 2
-            output = outputs[:perfix] + (vision_outputs, query_outputs, outputs)
+            output = outputs[:pre_idx] + (vision_outputs, query_outputs, outputs)
             return output
 
         return MiniGPT4ForConditionalGenerationModelOutput(
@@ -1602,7 +1602,7 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
 
         if not return_dict:
             pre_idx = 1 if masked_labels is None else 2
-            output = outputs[:perfix] + (vision_outputs, query_outputs, outputs)
+            output = outputs[:pre_idx] + (vision_outputs, query_outputs, outputs)
             return output
 
         return MiniGPT4ForConditionalGenerationModelOutput(

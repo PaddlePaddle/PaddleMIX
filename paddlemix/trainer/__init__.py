@@ -13,6 +13,6 @@
 # limitations under the License.
 
 from .trainer import *
-from .eva02_pretrain_trainer import *
+# from .eva02_pretrain_trainer import *
 from .eva02_finetune_trainer import *
 
