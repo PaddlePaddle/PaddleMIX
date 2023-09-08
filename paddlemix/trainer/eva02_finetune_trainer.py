@@ -24,7 +24,7 @@ from paddlemix.models.eva02.optim_factory import get_grad_norm_and_clip
 class EVA02FinetuneTrainer(Trainer):
     def __init__(self, **kwargs):
         """
-        Implementation of an `Trainer` suitable for EVA-CLIP
+        Implementation of an `Trainer` suitable for EVA-02 Finetune
         1、selfdefine optimizer for sharding which can't create by passing by args
         2、support for accum_freq
 
@@ -36,7 +36,7 @@ class EVA02FinetuneTrainer(Trainer):
         """
         super().__init__(**kwargs)
         if self.args.accum_freq > 1:
-            self.accum_images = []
+            self.accum_image = []
             self.accum_labels = []
             self.accu_step = 0
 
@@ -80,8 +80,6 @@ class EVA02FinetuneTrainer(Trainer):
                         param.optimize_attr["learning_rate"] = self.lr_schedule_values[it] * param_group["lr_scale"]
                 if self.wd_schedule_values is not None and param_group["weight_decay"] > 0:
                     param_group["weight_decay"] = self.wd_schedule_values[it]
-
-        inputs = {"x": inputs[0], "labels": inputs[-1]}
 
         if self.args.pipeline_parallel_degree > 1:
             return self.training_pipeline_step(model, inputs)
@@ -128,7 +126,7 @@ class EVA02FinetuneTrainer(Trainer):
     def training_step_accumfreq(self, model, inputs) -> paddle.Tensor:
         model.train()
 
-        self.accum_images.append(inputs["x"])
+        self.accum_image.append(inputs["image"])
         self.accum_labels.append(inputs["labels"])
         self.accu_step += 1
 
@@ -143,7 +141,7 @@ class EVA02FinetuneTrainer(Trainer):
         self.optimizer.clear_grad()
         for j in range(self.args.accum_freq):
             with self.autocast_smart_context_manager():
-                inputs_j = {"x": self.accum_images[j], "labels": self.accum_labels[j]}
+                inputs_j = {"image": self.accum_image[j], "labels": self.accum_labels[j]}
                 loss = self.compute_loss(model, inputs_j)
 
             if self.do_grad_scaling:
@@ -152,7 +150,7 @@ class EVA02FinetuneTrainer(Trainer):
                 (loss / self.args.accum_freq).backward()
 
         # clear for next accu batches
-        self.accum_images.clear()
+        self.accum_image.clear()
         self.accum_labels.clear()
         self.accu_step = 0
 
@@ -196,5 +194,24 @@ class EVA02FinetuneTrainer(Trainer):
             self.train_dataset,
             batch_sampler=sampler_train,
             num_workers=self.args.dataloader_num_workers,
+            collate_fn=self.data_collator,
+            use_shared_memory=True,
+        )
+
+    def get_eval_dataloader(self, eval_dataset):
+        eval_sampler = paddle.io.DistributedBatchSampler(
+            eval_dataset,
+            batch_size=self.args.per_device_eval_batch_size,
+            num_replicas=self.args.data_world_size,
+            rank=self.args.data_world_rank,
+            shuffle=False,
+            drop_last=False,
+        )
+
+        return DataLoader(
+            self.eval_dataset,
+            batch_sampler=eval_sampler,
+            num_workers=self.args.dataloader_num_workers,
+            collate_fn=self.data_collator,
             use_shared_memory=True,
         )

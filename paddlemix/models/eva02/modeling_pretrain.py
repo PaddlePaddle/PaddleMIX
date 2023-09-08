@@ -20,9 +20,9 @@ from typing import Dict, Union
 import paddle
 import paddle.nn as nn
 
-from ..evaclip.eva_clip_model import EVACLIP, EVACLIPConfig
-from ..evaclip.modules.rope import VisionRotaryEmbeddingFast
-from ..evaclip.utils import trunc_normal_
+from ..clip.eva_clip_model import EVACLIP, EVACLIPConfig
+from ..clip.modules.rope import VisionRotaryEmbeddingFast
+from ..clip.utils import trunc_normal_
 from .modeling_finetune import (
     Block,
     DecoupledRelativePositionBias,
@@ -31,7 +31,7 @@ from .modeling_finetune import (
 )
 
 try:
-    from ..evaclip.modules.fusedln import FusedLayerNorm
+    from ..clip.modules.fusedln import FusedLayerNorm
 except:
     from paddle.nn import LayerNorm as FusedLayerNorm
 
@@ -283,7 +283,6 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
 
     def fix_init_weight(self):
         def rescale(param, layer_id):
-            # param = param.divide(paddle.to_tensor(math.sqrt(2.0 * layer_id)))
             origin_dtype = paddle.get_default_dtype()
             paddle.set_default_dtype("float32")
             tmp = paddle.to_tensor(math.sqrt(2.0 * layer_id))
@@ -371,8 +370,8 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
 
         return self.norm(x)
 
-    def forward(self, x, bool_masked_pos=False):
-        x = self.forward_features(x, bool_masked_pos=bool_masked_pos)
+    def forward(self, image, bool_masked_pos=False):
+        x = self.forward_features(image, bool_masked_pos=bool_masked_pos)
         x = x[:, 1:]
         x = self.lm_head(x[bool_masked_pos])
         return x
@@ -530,15 +529,15 @@ class EVA02ForPretrain(EVA02ForPretrainModel):
         self.teacher.set_grad_checkpointing(enable)
         self.student.set_grad_checkpointing(enable)
 
-    def forward(self, samples, images, bool_masked_pos, **kwargs):
+    def forward(self, samples, image, bool_masked_pos, **kwargs):
         if self.beit_like:
             with paddle.no_grad(), paddle.amp.auto_cast():
-                clip_features = self.teacher.encode_image(images)  # [100, 256, 1024], not [100, 1024]
-                bool_masked_pos = bool_masked_pos.flatten(start_axis=1).cast("bool")  # [100, 256]
-                labels = clip_features[bool_masked_pos]  # [10458, 1024]
+                clip_features = self.teacher.encode_image(image)  # [bs, 256, 1024]
+                bool_masked_pos = bool_masked_pos.flatten(start_axis=1).cast("bool")  # [bs, 256]
+                labels = clip_features[bool_masked_pos]  # [N, 1024]
 
             with paddle.amp.auto_cast():
-                outputs = self.student(samples, bool_masked_pos=bool_masked_pos)  # [10458, 1024]
+                outputs = self.student(samples, bool_masked_pos=bool_masked_pos)
 
             loss = compute_loss(outputs, labels)
         else:
