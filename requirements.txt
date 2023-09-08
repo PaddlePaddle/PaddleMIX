@@ -4,3 +4,4 @@ tensorboardX
 opencv-python
 Pillow
 pycocoevalcap
+ftfy
