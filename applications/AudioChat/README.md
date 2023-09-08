@@ -1,16 +1,16 @@
-# Audio Chat
+### 音频对话（Audio-to-Chat Generation）
 
-## 1. 应用简介
+#### 1. Application introduction
 
 Enter audio and prompt words for question and answer.
 
 *****
 - No training is need.
-- Integration with the moedel of 🤗  [whisper](), [chatglm](). [fastspeech2]().
+- Integration with the moedel of [whisper](), [chatglm](). [fastspeech2]().
 
 ----
 
-## 2. Demo
+#### 2. Demo
 *****
 example:
 
@@ -31,6 +31,6 @@ result = task(audio=audio_file, prompt=prompt, output=output_path)
 
 ```
 
-|  输入音频 | 输入prompt | 输出文本 | 输出结果 |
+|  Input Audio | Input Prompt |Output Text| Output Audio|
 | --- | --- | ---  | --- | 
-|[zh.wav](https://github.com/luyao-cv/file_download/blob/main/assets/zh.wav) | "描述这段话." |"这段话表达了作者认为跑步最重要的好处之一是身体健康。作者认为,通过跑步,身体得到了良好的锻炼,身体健康得到了改善。作者还强调了跑步对身体健康的重要性,并认为这是最值得投资的运动之一。" |[audiochat-result.wav](https://github.com/luyao-cv/file_download/blob/main/assets/zh.wav)|
+|[zh.wav](https://github.com/luyao-cv/file_download/blob/main/assets/zh.wav) | "描述这段话." |"这段话表达了作者认为跑步最重要的好处之一是身体健康。作者认为,通过跑步,身体得到了良好的锻炼,身体健康得到了改善。作者还强调了跑步对身体健康的重要性,并认为这是最值得投资的运动之一。" |[audiochat-result.wav](https://github.com/luyao-cv/file_download/blob/main/assets/audiochat-result.wav)|
