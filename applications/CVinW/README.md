@@ -5,7 +5,7 @@
 `Grounded-SAM` 示例:
 
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 from PIL import Image
 task = Appflow(app="openset_det_sam",
                models=["GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024"]
