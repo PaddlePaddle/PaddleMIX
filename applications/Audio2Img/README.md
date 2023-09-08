@@ -1,6 +1,6 @@
-# Audio To Image
+### 音频生成图像（Audio-to-Image Generation）
 
-## 1. Application introduction
+#### 1. Application introduction
 
 *****
 
@@ -35,7 +35,7 @@ Generate image from audio(w/ prompt or image) with [ImageBind](https://facebookr
 - [v0.0]: Support fusing audio, text(prompt) and imnage in ImageBind latent space.
 
 
-## 2. Run
+#### 2. Run
 *****
 
 example: Use audio generate image across modalities (e.g. Image, Text and Audio) with the model of ImageBind and StableUnCLIPImg2ImgPipeline.
@@ -50,10 +50,10 @@ python audio2img_imagebind.py \
 ```
 
 ----
-## 3. Visualization
+#### 3. Visualization
 ----
 
-### Audio to Image
+#### Audio to Image
 #### 3.1.1 Instruction
 
 ```python
@@ -70,7 +70,7 @@ python audio2img_imagebind.py \
 |[bird_audio.wav](https://github.com/luyao-cv/file_download/blob/main/assets/bird_audio.wav)| ![audio2img_output_bird](https://github.com/luyao-cv/file_download/blob/main/vis_audio2img/audio2img_output_bird.jpg)  |
 
 
-### Audio+Text to Image
+#### Audio+Text to Image
 #### 3.2.1 Instruction
 ```python
 cd applications/Audio2Img
@@ -87,7 +87,7 @@ python audio2img_imagebind.py \
 |[bird_audio.wav](https://github.com/luyao-cv/file_download/blob/main/assets/bird_audio.wav) | 'A photo.' | ![audio_text_to_img_output_bird_a_photo](https://github.com/luyao-cv/file_download/blob/main/vis_audio2img/audio_text_to_img_output_bird_a_photo.jpg)
 
 
-### Audio+Image to Image
+#### Audio+Image to Image
 #### 3.3.1 Instruction
 ```python
 cd applications/Audio2Img
