@@ -26,7 +26,7 @@
 ```
 完成之后，可使用appflow 一键预测
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 import requests
 
 task = Appflow(app="image2text_generation",
@@ -49,7 +49,7 @@ result = task(image=image,minigpt4_text=minigpt4_text)
 ## blip2
 
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 from ppdiffusers.utils import load_image
 
 task = Appflow(app="image2text_generation",
@@ -64,4 +64,3 @@ result = task(image=image_pil,blip2_prompt=blip2_prompt)
 |:----:|:----:|:----:|
 |![mugs](https://github.com/LokeZhou/PaddleMIX/assets/13300429/b5a95002-bb30-4683-8e62-ed21879f24e1) | describe the image|of the two coffee mugs with cats on them|
 </div>
-

@@ -31,7 +31,7 @@
 
 Appflow提供丰富的开箱即用工具集，覆盖跨模态多场景应用，提供产业级的效果与极致的推理性能。
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 
 paddle.seed(1024)
 task = Appflow(app="text2image_generation",
@@ -71,7 +71,10 @@ pip install -r requirements.txt
 
 ```shell
 git clone https://github.com/PaddlePaddle/PaddleMIX
-python setup.py install
+pip install -e .
+
+#appflow 依赖包安装
+pip install -r paddlemix/appflow/requirements.txt
 ```
 ## 快速开始
 
@@ -82,7 +85,7 @@ python setup.py install
 PaddleMIX提供一键预测功能，无需训练，直接输入数据即可输出结果：
 
 ```python
->>> from paddlemix import Appflow
+>>> from paddlemix.appflow import Appflow
 >>> from ppdiffusers.utils import load_image
 
 >>> task = Appflow(task="openset_det_sam",

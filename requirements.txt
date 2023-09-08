@@ -1,5 +1,4 @@
 numpy
-nltk
 paddlenlp>=2.6.0rc0
 tensorboardX
 opencv-python
