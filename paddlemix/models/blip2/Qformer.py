@@ -21,9 +21,9 @@ import numpy as np
 import paddle
 import paddle.nn.functional as F
 from paddle import Tensor, device, nn
-from paddle.distributed import fleet
-from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.distributed.fleet.utils import recompute
+
+from paddlemix.models.model_utils import MixPretrainedModel
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.bert.configuration import BertConfig
 from paddlenlp.transformers.model_outputs import (
@@ -32,8 +32,6 @@ from paddlenlp.transformers.model_outputs import (
     CausalLMOutputWithCrossAttentions,
     MaskedLMOutput,
 )
-
-from paddlemix.models.model_utils import MixPretrainedModel
 
 
 class CrossEntropyLoss(nn.Layer):
@@ -96,7 +94,6 @@ class BertEmbeddings(nn.Layer):
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.register_buffer("position_ids", paddle.expand(paddle.arange(config.max_position_embeddings), [1, -1]))
         self.position_embedding_type = getattr(config, "position_embedding_type", "absolute")
-        self.mp_degree = config.mp_degree
 
     def forward(
         self,
@@ -124,15 +121,14 @@ class BertEmbeddings(nn.Layer):
         else:
             embeddings = query_embeds
         embeddings = self.LayerNorm(embeddings)
-        if self.mp_degree > 1:
-            with get_rng_state_tracker().rng_state("global_seed"):
-                embeddings = self.dropout(embeddings)
-        else:
-            embeddings = self.dropout(embeddings)
+
+        embeddings = self.dropout(embeddings)
         return embeddings
 
 
 class BertSelfAttention(nn.Layer):
+    """Multi-headed attention from 'Attention Is All You Need' paper"""
+
     def __init__(self, config, is_cross_attention):
         super().__init__()
         self.config = config
@@ -145,49 +141,26 @@ class BertSelfAttention(nn.Layer):
         self.num_attention_heads = config.num_attention_heads
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
-        if config.mp_degree > 1:
-            self.query = fleet.meta_parallel.ColumnParallelLinear(
-                config.hidden_size, self.all_head_size, weight_attr=None, has_bias=True, gather_output=True
-            )
+        if config.use_fusedlinear:
+            self.query = paddle.incubate.nn.FusedLinear(config.hidden_size, self.all_head_size)
         else:
-            if config.use_fusedlinear:
-                self.query = paddle.incubate.nn.FusedLinear(config.hidden_size, self.all_head_size)
-            else:
-                self.query = nn.Linear(config.hidden_size, self.all_head_size)
+            self.query = nn.Linear(config.hidden_size, self.all_head_size)
 
         if is_cross_attention:
-            if config.mp_degree > 1:
-                self.key = fleet.meta_parallel.ColumnParallelLinear(
-                    config.encoder_width, self.all_head_size, weight_attr=None, has_bias=True, gather_output=True
-                )
-                self.value = fleet.meta_parallel.ColumnParallelLinear(
-                    config.encoder_width, self.all_head_size, weight_attr=None, has_bias=True, gather_output=True
-                )
+            if config.use_fusedlinear:
+                self.key = paddle.incubate.nn.FusedLinear(config.encoder_width, self.all_head_size)
+                self.value = paddle.incubate.nn.FusedLinear(config.encoder_width, self.all_head_size)
             else:
-                if config.use_fusedlinear:
-                    self.key = paddle.incubate.nn.FusedLinear(config.encoder_width, self.all_head_size)
-                    self.value = paddle.incubate.nn.FusedLinear(config.encoder_width, self.all_head_size)
-                else:
-                    self.key = nn.Linear(config.encoder_width, self.all_head_size)
-                    self.value = nn.Linear(config.encoder_width, self.all_head_size)
+                self.key = nn.Linear(config.encoder_width, self.all_head_size)
+                self.value = nn.Linear(config.encoder_width, self.all_head_size)
 
         else:
-            if config.mp_degree > 1:
-                self.key = fleet.meta_parallel.ColumnParallelLinear(
-                    config.hidden_size, self.all_head_size, weight_attr=None, has_bias=True, gather_output=True
-                )
-                self.value = fleet.meta_parallel.ColumnParallelLinear(
-                    config.hidden_size, self.all_head_size, weight_attr=None, has_bias=True, gather_output=True
-                )
+            if config.use_fusedlinear:
+                self.key = paddle.incubate.nn.FusedLinear(config.hidden_size, self.all_head_size)
+                self.value = paddle.incubate.nn.FusedLinear(config.hidden_size, self.all_head_size)
             else:
-                if config.use_fusedlinear:
-                    self.key = paddle.incubate.nn.FusedLinear(config.hidden_size, self.all_head_size)
-                    self.value = paddle.incubate.nn.FusedLinear(config.hidden_size, self.all_head_size)
-                else:
-                    self.key = nn.Linear(config.hidden_size, self.all_head_size)
-                    self.value = nn.Linear(config.hidden_size, self.all_head_size)
-
-        self.mp_degree = config.mp_degree
+                self.key = nn.Linear(config.hidden_size, self.all_head_size)
+                self.value = nn.Linear(config.hidden_size, self.all_head_size)
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.position_embedding_type = getattr(config, "position_embedding_type", "absolute")
         if self.position_embedding_type == "relative_key" or self.position_embedding_type == "relative_key_query":
@@ -282,11 +255,7 @@ class BertSelfAttention(nn.Layer):
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
-        if self.mp_degree > 1:
-            with get_rng_state_tracker().rng_state("global_seed"):
-                attention_probs_dropped = self.dropout(attention_probs)
-        else:
-            attention_probs_dropped = self.dropout(attention_probs)
+        attention_probs_dropped = self.dropout(attention_probs)
 
         # Mask heads if we want to
         if head_mask is not None:
@@ -313,15 +282,10 @@ class BertSelfOutput(nn.Layer):
             self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.mp_degree = config.mp_degree
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        if self.mp_degree > 1:
-            with get_rng_state_tracker().rng_state("global_seed"):
-                hidden_states = self.dropout(hidden_states)
-        else:
-            hidden_states = self.dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
@@ -384,20 +348,24 @@ class BertOutput(nn.Layer):
             self.dense = nn.Linear(config.intermediate_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
-        self.mp_degree = config.mp_degree
 
     def forward(self, hidden_states, input_tensor):
         hidden_states = self.dense(hidden_states)
-        if self.mp_degree > 1:
-            with get_rng_state_tracker().rng_state("global_seed"):
-                hidden_states = self.dropout(hidden_states)
-        else:
-            hidden_states = self.dropout(hidden_states)
+        hidden_states = self.dropout(hidden_states)
         hidden_states = self.LayerNorm(hidden_states + input_tensor)
         return hidden_states
 
 
 class BertLayer(nn.Layer):
+    """
+    Transformer encoder consisting of `config.num_hidden_layers` self attention layers. Each layer is a
+    [`BertLayer`].
+    Args:
+        config (`Blip2Config`):
+            The corresponding vision configuration for the `Blip2Encoder`.
+        layer_num: num layers
+    """
+
     def __init__(self, config, layer_num):
         super().__init__()
         self.config = config
@@ -559,9 +527,6 @@ class BertEncoder(nn.Layer):
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
 
         next_decoder_cache = () if use_cache else None
-        # cuda_state = paddle.get_cuda_rng_state()
-        # paddle.set_cuda_rng_state(cuda_state)
-        # print("qformergradient_checkpointing:{}".format(self.gradient_checkpointing))
         for i in range(self.config.num_hidden_layers):  # add recompute
             layer_module = self.layer[i]
             if output_hidden_states:
@@ -1069,10 +1034,8 @@ class BertLMHeadModel(BertPreTrainedModel):
     _keys_to_ignore_on_load_unexpected = [r"pooler"]
     _keys_to_ignore_on_load_missing = [r"position_ids", r"predictions.decoder.bias"]
 
-    def __init__(self, config, encoder_width=None, train_in_satge1=False, **kwargs):
+    def __init__(self, config, encoder_width=1408, train_in_satge1=False, **kwargs):
         super().__init__(config)
-
-        config.mp_degree = kwargs.get("mp_degree")
         config.encoder_width = encoder_width
         config.gradient_checkpointing = False
         self.ln_vision = paddle.nn.LayerNorm(config.encoder_width)
@@ -1092,7 +1055,7 @@ class BertLMHeadModel(BertPreTrainedModel):
             self.itm_head = paddle.nn.Linear(in_features=config.hidden_size, out_features=2)
             self.resize_token_embeddings(kwargs.get("tokenizer_length"))
         else:
-            text_hidden_size = kwargs.get("text_hidden_size")
+            text_hidden_size = kwargs.get("text_hidden_size", 2560)
             self.language_projection = paddle.nn.Linear(in_features=config.hidden_size, out_features=text_hidden_size)
 
         # self.init_weights()

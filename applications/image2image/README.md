@@ -1,7 +1,7 @@
 ### 文本引导的图像放大（Text-Guided Image Upscaling)
 
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 from PIL import Image
 from ppdiffusers.utils import load_image
 
@@ -32,7 +32,7 @@ image.save("upscaled_white_cat.png")
 ### 文本图像双引导图像生成（Dual Text and Image Guided Generation）
 
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 from PIL import Image
 from ppdiffusers.utils import load_image
 

@@ -18,6 +18,8 @@ from functools import partial
 from typing import Callable, Dict, Sequence, Union
 
 import paddle
+from paddle.incubate.nn import FusedLinear
+from paddle.nn.functional.flash_attention import flash_attention
 
 from .modules.rope import VisionRotaryEmbeddingFast
 from .text_model import LayerNorm, MultiHeadAttention, PatchDropout, Transformer
@@ -28,7 +30,6 @@ except:
     from paddle.nn import LayerNorm as FusedLayerNorm
 
     print("Warning, FusedLn module is not available, use LayerNorm instead.")
-import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
@@ -37,7 +38,7 @@ from paddlemix.models.model_utils import MixPretrainedModel
 from paddlemix.utils.log import logger
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
-from .utils import to_2tuple, trunc_normal_
+from .utils import is_model_parrallel, to_2tuple, trunc_normal_
 
 
 def drop_path(x, drop_prob: float = 0.0, training: bool = False, scale_by_keep: bool = True):
@@ -89,7 +90,7 @@ class Mlp(paddle.nn.Layer):
         hidden_features = int(config.width * config.mlp_ratio)
         out_features = in_features
         hidden_features = hidden_features or in_features
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.fc1 = fleet.meta_parallel.ColumnParallelLinear(
                 in_features,
                 hidden_features,
@@ -104,6 +105,9 @@ class Mlp(paddle.nn.Layer):
                 has_bias=True,
                 gather_output=True,
             )
+        elif config.fusedlinear:
+            self.fc1 = FusedLinear(in_features, hidden_features)
+            self.fc2 = FusedLinear(hidden_features, out_features)
         else:
             self.fc1 = paddle.nn.Linear(in_features, hidden_features)
             self.fc2 = paddle.nn.Linear(hidden_features, out_features)
@@ -133,7 +137,7 @@ class SwiGLU(paddle.nn.Layer):
         in_features = config.width
         hidden_features = int(config.width * config.mlp_ratio)
         out_features = in_features
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.w1 = fleet.meta_parallel.ColumnParallelLinear(
                 in_features,
                 hidden_features,
@@ -155,6 +159,10 @@ class SwiGLU(paddle.nn.Layer):
                 has_bias=True,
                 gather_output=True,
             )
+        elif config.fusedlinear:
+            self.w1 = FusedLinear(in_features, hidden_features)
+            self.w2 = FusedLinear(in_features, hidden_features)
+            self.w3 = FusedLinear(hidden_features, out_features)
         else:
             self.w1 = paddle.nn.Linear(in_features, hidden_features)
             self.w2 = paddle.nn.Linear(in_features, hidden_features)
@@ -188,7 +196,7 @@ class Attention(paddle.nn.Layer):
             head_dim = config.attn_head_dim
         all_head_dim = head_dim * self.num_heads
         self.scale = config.qk_scale or head_dim**-0.5
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.q_proj = fleet.meta_parallel.ColumnParallelLinear(
                 dim,
                 all_head_dim,
@@ -210,6 +218,10 @@ class Attention(paddle.nn.Layer):
                 has_bias=config.qkv_bias,
                 gather_output=True,
             )
+        elif config.fusedlinear:
+            self.q_proj = FusedLinear(dim, all_head_dim, bias_attr=config.qkv_bias)
+            self.k_proj = FusedLinear(dim, all_head_dim, bias_attr=False)
+            self.v_proj = FusedLinear(dim, all_head_dim, bias_attr=config.qkv_bias)
         else:
             self.q_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=config.qkv_bias)
             self.k_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=False)
@@ -249,14 +261,17 @@ class Attention(paddle.nn.Layer):
         self.inner_attn_ln = (
             norm_layer(all_head_dim) if (config.subln and config.inner_attn_ln) else paddle.nn.Identity()
         )
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.proj = fleet.meta_parallel.ColumnParallelLinear(
                 all_head_dim, dim, weight_attr=None, has_bias=True, gather_output=True
             )
+        elif config.fusedlinear:
+            self.proj = FusedLinear(all_head_dim, dim)
         else:
             self.proj = paddle.nn.Linear(all_head_dim, dim)
         self.proj_drop = paddle.nn.Dropout(p=config.drop_rate)
         self.rope = rope
+        self.flash_attn = config.flash_attn
 
     def forward(self, x, rel_pos_bias=None, attn_mask=None):
         B, N, C = x.shape
@@ -280,10 +295,17 @@ class Attention(paddle.nn.Layer):
             v = v.transpose(perm=[0, 2, 1, 3])
             x = memory_efficient_attention(q, k, v, p=self.xattn_drop, scale=self.scale)
             x = x.reshape((B, N, -1))
-            x = self.inner_attn_ln(x)
-            x = self.proj(x)
-            with get_rng_state_tracker().rng_state("global_seed"):
-                x = self.proj_drop(x)
+        elif (
+            self.flash_attn
+            and self.relative_position_bias_table is None
+            and rel_pos_bias is None
+            and attn_mask is None
+        ):
+            q = q.transpose(perm=[0, 2, 1, 3])
+            k = k.transpose(perm=[0, 2, 1, 3])
+            v = v.transpose(perm=[0, 2, 1, 3])
+            x, _ = flash_attention(q, k, v, dropout=self.proj_drop.p, causal=False, return_softmax=False)
+            x = x.reshape((B, N, -1))
         else:
             q = q * self.scale
             x = k
@@ -316,10 +338,10 @@ class Attention(paddle.nn.Layer):
             perm_1[1] = 2
             perm_1[2] = 1
             x = x.transpose(perm=perm_1).reshape((B, N, -1))
-            x = self.inner_attn_ln(x)
-            x = self.proj(x)
-            with get_rng_state_tracker().rng_state("global_seed"):
-                x = self.proj_drop(x)
+        x = self.inner_attn_ln(x)
+        x = self.proj(x)
+        with get_rng_state_tracker().rng_state("global_seed"):
+            x = self.proj_drop(x)
         return x
 
 
@@ -493,6 +515,8 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         token_feats=False,  # whether tokens send to self.head
         fusedLN=False,
         inner_attn_ln=True,  # false in eva-01 clip
+        fusedlinear=False,
+        flash_attn=False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -532,6 +556,8 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         self.token_feats = token_feats
         self.fusedLN = fusedLN
         self.inner_attn_ln = inner_attn_ln
+        self.fusedlinear = fusedlinear
+        self.flash_attn = flash_attn
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
@@ -569,6 +595,7 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
         self.enable_recompute = config.enable_recompute
         self.output_tokens = config.output_tokens
         self.token_feats = config.token_feats
+        self.fusedlinear = config.fusedlinear
 
         self.output_dim = output_dim = config.output_dim
         self.width = width = config.width
@@ -624,7 +651,7 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
             self.attn_pool = AttentionalPooler(config)
             self.norm = paddle.nn.Identity() if use_mean_pooling else norm_layer(output_dim)
             self.fc_norm = norm_layer(output_dim) if use_mean_pooling else None
-            if dist.get_world_size() > 1:
+            if is_model_parrallel():
                 self.head = (
                     fleet.meta_parallel.ColumnParallelLinear(
                         output_dim,
@@ -636,13 +663,15 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
                     if output_dim > 0
                     else paddle.nn.Identity()
                 )
+            elif config.fusedlinear:
+                self.head = FusedLinear(output_dim, output_dim) if output_dim > 0 else paddle.nn.Identity()
             else:
                 self.head = paddle.nn.Linear(output_dim, output_dim) if output_dim > 0 else paddle.nn.Identity()
         else:
             self.attn_pool = None
             self.norm = paddle.nn.Identity() if use_mean_pooling else norm_layer(width)
             self.fc_norm = norm_layer(width) if use_mean_pooling else None
-            if dist.get_world_size() > 1:
+            if is_model_parrallel():
                 self.head = (
                     fleet.meta_parallel.ColumnParallelLinear(
                         width,
@@ -654,6 +683,8 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
                     if output_dim > 0
                     else paddle.nn.Identity()
                 )
+            elif config.fusedlinear:
+                self.head = FusedLinear(width, output_dim) if output_dim > 0 else paddle.nn.Identity()
             else:
                 self.head = paddle.nn.Linear(width, output_dim) if output_dim > 0 else paddle.nn.Identity()
         if self.pos_embed is not None:
@@ -691,7 +722,7 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
     def _init_weights(self, m):
         zeros_params = paddle.nn.initializer.Constant(0.0)
         ones_params = paddle.nn.initializer.Constant(1.0)
-        if isinstance(m, (paddle.nn.Linear, fleet.meta_parallel.ColumnParallelLinear)):
+        if isinstance(m, (FusedLinear, paddle.nn.Linear, fleet.meta_parallel.ColumnParallelLinear)):
             trunc_normal_(m.weight, std=0.02)
             if m.bias is not None:
                 zeros_params(m.bias)
@@ -718,7 +749,7 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
 
     def reset_classifier(self, output_dim, global_pool=""):
         self.output_dim = output_dim
-        if dist.get_world_size() > 1:
+        if is_model_parrallel():
             self.head = (
                 fleet.meta_parallel.ColumnParallelLinear(
                     self.width,
@@ -730,6 +761,8 @@ class EVAVisionTransformer(EVAVisionTransformerPretrainedModel):
                 if output_dim > 0
                 else paddle.nn.Identity()
             )
+        elif self.fusedlinear:
+            self.head = FusedLinear(self.width, output_dim) if output_dim > 0 else paddle.nn.Identity()
         else:
             self.head = paddle.nn.Linear(self.width, output_dim) if output_dim > 0 else paddle.nn.Identity()
 
@@ -804,7 +837,9 @@ class AttentionalPooler(paddle.nn.Layer):
             shape=[config.n_queries, d_model],
             default_initializer=paddle.nn.initializer.Assign(init_data),
         )
-        self.attn = MultiHeadAttention(d_model, config.attn_pooler_heads, kdim=context_dim, vdim=context_dim)
+        self.attn = MultiHeadAttention(
+            d_model, config.attn_pooler_heads, kdim=context_dim, vdim=context_dim, fusedlinear=config.fusedlinear
+        )
         self.ln_q = norm_layer(d_model)
         self.ln_k = norm_layer(context_dim)
 
@@ -841,6 +876,8 @@ class VisionTransformerConfig(PretrainedConfig):
         embed_dim: int = 512,
         xattn: bool = False,
         output_tokens: bool = False,
+        fusedlinear: bool = False,
+        flash_attn: bool = False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -860,6 +897,8 @@ class VisionTransformerConfig(PretrainedConfig):
         self.output_dim = embed_dim
         self.xattn = xattn
         self.output_tokens = output_tokens
+        self.fusedlinear = fusedlinear
+        self.flash_attn = flash_attn
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":

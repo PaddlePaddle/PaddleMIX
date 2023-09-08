@@ -14,10 +14,10 @@
 
 model_item=stable_diffusion-098b_pretrain
 model=stable_diffusion
-bs_item=144
-fp_item=bf16O2
-run_mode=DP
-device_num=N1C8
+bs_item=80
+fp_item=bf16O1
+run_mode=DP-recompute
+device_num=N1C1
 max_epochs=200
 num_workers=0
 

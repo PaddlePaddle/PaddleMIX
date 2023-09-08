@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from paddlenlp import Taskflow
+from ppdiffusers import AudioLDMPipeline
 
 from .apptask import AppTask
 
 
-class ChatGlmTask(AppTask):
+class AudioLDMPipelineTask(AppTask):
     def __init__(self, task, model, **kwargs):
         super().__init__(task=task, model=model, **kwargs)
 
         # Default to static mode
         self._static_mode = False
-
         self._construct_model(model)
 
     def _construct_model(self, model):
@@ -32,24 +31,14 @@ class ChatGlmTask(AppTask):
         """
 
         # bulid model
-        model_instance = Taskflow("text2text_generation", model=model)
+        model_instance = AudioLDMPipeline.from_pretrained(model)
 
         self._model = model_instance
 
     def _preprocess(self, inputs):
         """ """
-        #e.g.
-        # prompt = (
-        #     "Given caption,extract the main object to be replaced and marked it as 'main_object', "
-        #     + "Extract the remaining part as 'other prompt', "
-        #     + "Return main_object, other prompt in English"
-        #     + "Given caption: {}.".format(prompt)
-        # )
-        
-        prompt = inputs.get("prompt")
+        prompt = inputs.get("prompt", None) 
         assert prompt is not None, "The prompt is None"
-
-        inputs["prompt"] = prompt
 
         return inputs
 
@@ -57,10 +46,20 @@ class ChatGlmTask(AppTask):
         """
         Run the task model from the outputs of the `_preprocess` function.
         """
-
-        result = self._model(inputs["prompt"])["result"][0]
+        _num_inference_steps = inputs.get("num_inference_steps", 10)
+        _audio_length_in_s = inputs.get("audio_length_in_s", 5.0)
+        tmp = inputs["prompt"]
+        print(tmp)
+        result = self._model(
+            prompt=inputs["prompt"],
+            num_inference_steps=_num_inference_steps,
+            audio_length_in_s=_audio_length_in_s,
+        ).audios[0]
 
         inputs.pop("prompt", None)
+        inputs.pop("_num_inference_steps", None)
+        inputs.pop("_audio_length_in_s", None)
+
         inputs["result"] = result
 
         return inputs
@@ -69,15 +68,4 @@ class ChatGlmTask(AppTask):
         """
         The model output is tag ids, this function will convert the model output to raw text.
         """
-
-        prompt, inpaint_prompt = (
-            inputs["result"].split("\n")[0].split(":")[-1].strip(),
-            inputs["result"].split("\n")[-1].split(":")[-1].strip(),
-        )
-
-        inputs.pop("result", None)
-
-        inputs["prompt"] = prompt
-        inputs["inpaint_prompt"] = inpaint_prompt
-
         return inputs

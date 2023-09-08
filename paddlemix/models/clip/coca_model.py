@@ -29,7 +29,7 @@ from paddlenlp.utils.log import logger
 
 from .loss import CoCaLoss
 from .multi_modal_model import MultimodalTransformer, MultimodalTransformerConfig
-from .text_model import EVATextTransformer, EVATextTransformerConfig
+from .text_model import TextTransformer, TextTransformerConfig
 from .vit_model import VisionTransformer, VisionTransformerConfig
 
 
@@ -43,6 +43,8 @@ class CoCaConfig(PretrainedConfig):
         vision_cfg={},
         text_cfg={},
         multimodal_cfg={},
+        fusedlinear=False,
+        flash_attn=False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -54,6 +56,16 @@ class CoCaConfig(PretrainedConfig):
         if embed_dim is not None:
             self.vision_config["embed_dim"] = embed_dim
             self.text_config["embed_dim"] = embed_dim
+
+        if fusedlinear:
+            self.vision_config["fusedlinear"] = True
+            self.text_config["fusedlinear"] = True
+            self.multimodal_config["fusedlinear"] = True
+
+        if flash_attn:
+            self.vision_config["flash_attn"] = True
+            self.text_config["flash_attn"] = True
+            self.multimodal_config["flash_attn"] = True
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
@@ -94,11 +106,11 @@ class CoCa(CoCaPretrainedModel):
         super().__init__(config)
 
         vision_config = VisionTransformerConfig(**config.vision_config)
-        text_config = EVATextTransformerConfig(**config.text_config)
+        text_config = TextTransformerConfig(**config.text_config)
         multimodal_config = MultimodalTransformerConfig(**config.multimodal_config)
 
         self.visual = VisionTransformer(vision_config)
-        self.text = EVATextTransformer(text_config)
+        self.text = TextTransformer(text_config)
         self.text_decoder = MultimodalTransformer(multimodal_config)
 
         init_data = paddle.ones(shape=[1]) * np.log(1 / 0.07)

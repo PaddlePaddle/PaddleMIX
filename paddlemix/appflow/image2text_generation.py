@@ -103,7 +103,7 @@ class Blip2CaptionTask(AppTask):
 
         inputs["result"] = generated_text
         inputs["prompt"] = self._generate_tags(generated_text)
-
+        
         return inputs
 
     def _generate_tags(self, caption):

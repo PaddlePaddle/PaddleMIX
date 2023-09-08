@@ -29,7 +29,7 @@ from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.utils.log import logger
 
 from .loss import ClipLoss
-from .text_model import EVATextTransformer, EVATextTransformerConfig
+from .text_model import TextTransformer, TextTransformerConfig
 from .vit_model import VisionTransformer, VisionTransformerConfig
 
 
@@ -43,6 +43,8 @@ class CLIPConfig(PretrainedConfig):
         vision_cfg={},
         text_cfg={},
         custom_text=False,
+        fusedlinear=False,
+        flash_attn=False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -54,6 +56,14 @@ class CLIPConfig(PretrainedConfig):
         if embed_dim is not None:
             self.vision_config["embed_dim"] = embed_dim
             self.text_config["embed_dim"] = embed_dim
+
+        if fusedlinear:
+            self.vision_config["fusedlinear"] = True
+            self.text_config["fusedlinear"] = True
+
+        if flash_attn:
+            self.vision_config["flash_attn"] = True
+            self.text_config["flash_attn"] = True
 
     @classmethod
     def from_pretrained(
@@ -96,10 +106,10 @@ class CLIPConfig(PretrainedConfig):
             text_config_dict, kwargs = cls.get_config_dict(pretrained_textmodel_name_or_path, **kwargs)
             config_dict["text_cfg"] = text_config_dict
 
-            if "model_type" in text_config_dict and text_config_dict["model_type"] != "evatext_transformer":
+            if "model_type" in text_config_dict and text_config_dict["model_type"] != "text_transformer":
                 logger.warning(
                     f"You are using a model of type {text_config_dict['model_type']} to instantiate a model of type "
-                    f"evatext_transformer. This is not supported for all configurations of models and can yield errors."
+                    f"text_transformer. This is not supported for all configurations of models and can yield errors."
                 )
 
         return cls.from_dict(config_dict, **kwargs)
@@ -167,16 +177,16 @@ class CLIP(CLIPPretrainedModel):
         if isinstance(config.vision_config, str):
             self.visual = VisionTransformer.from_pretrained(config.vision_config)
             if not disable_text:
-                self.text = EVATextTransformer.from_pretrained(config.text_config)
+                self.text = TextTransformer.from_pretrained(config.text_config)
         else:
             vision_config = VisionTransformerConfig(**config.vision_config)
-            text_config = EVATextTransformerConfig(**config.text_config)
+            text_config = TextTransformerConfig(**config.text_config)
             self.visual = VisionTransformer(vision_config)
             if not disable_text:
                 if config.custom_text:
-                    self.text = EVATextTransformer(text_config)
+                    self.text = TextTransformer(text_config)
                 else:
-                    text = EVATextTransformer(text_config)
+                    text = TextTransformer(text_config)
                     self.transformer = text.transformer
                     # self.context_length = text.context_length
                     # self.vocab_size = text.vocab_size

@@ -31,7 +31,7 @@
 
 Appflow provides a rich set of out of the box tools that cover cross modal and multi scenario applications, providing industry level effects and ultimate reasoning performance.
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 
 paddle.seed(1024)
 task = Appflow(app="text2image_generation",
@@ -71,7 +71,10 @@ For more detailed tutorials on PaddlePaddle and PaddleNLP installation, please r
 
 ```shell
 git clone https://github.com/PaddlePaddle/PaddleMIX
-python setup.py install
+pip install -e .
+
+#appflow requirements
+pip install -r paddlemix/appflow/requirements.txt
 ```
 ## Quick Start
 
@@ -82,7 +85,7 @@ Taking open world detection segmentation as an example:
 PaddleMIX provides Appflow without training, and can directly input data to output results:
 
 ```python
->>> from paddlemix import Appflow
+>>> from paddlemix.appflow import Appflow
 >>> from ppdiffusers.utils import load_image
 
 >>> task = Appflow(task="openset_det_sam",

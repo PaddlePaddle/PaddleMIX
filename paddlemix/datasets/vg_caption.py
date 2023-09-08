@@ -11,6 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from .base_model import *
-from .configuration import *
-from .modeling import *
+
+import collections
+import os
+
+__all__ = ["VGCaption"]
+from paddlemix.datasets.caption_dataset import CaptionDataset
+
+
+class VGCaption(CaptionDataset):
+    """
+    VG Caption dataset.
+    """
+
+    URL = "https://bj.bcebos.com/paddlemix/datasets/vg.tar.gz"
+    META_INFO = collections.namedtuple("META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
+    MD5 = ""
+    SPLITS = {
+        "train": META_INFO(
+            os.path.join("coco", "images"),
+            os.path.join("coco", "annotations/vg_caption.json"),
+            "",
+            "",
+        ),
+    }
