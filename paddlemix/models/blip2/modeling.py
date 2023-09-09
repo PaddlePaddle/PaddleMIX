@@ -18,6 +18,9 @@ from typing import Optional, Tuple, Union
 import paddle
 import paddle.distributed as dist
 import paddle.nn as nn
+from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
+from paddlenlp.transformers.opt.modeling import OPTForCausalLM
+from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 
 from paddlemix.models.blip2.base_model import (
     Blip2ForConditionalGenerationModelOutput,
@@ -32,14 +35,16 @@ from paddlemix.models.blip2.modeling_utils import (
 )
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
 from paddlemix.utils.log import logger
-from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
-from paddlenlp.transformers.opt.modeling import OPTForCausalLM
-from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 
 from .configuration import Blip2Config
 
 __all__ = [
     "Blip2ForConditionalGeneration",
+]
+
+BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST = [
+    "Salesforce/blip2-flan-t5-xl",
+    "Salesforce/blip2-opt-2.7b",
 ]
 
 
