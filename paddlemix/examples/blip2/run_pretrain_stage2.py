@@ -66,7 +66,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="../blip2-stage2",
+        default="paddlemix/blip2-stage2",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
 
@@ -129,12 +129,19 @@ class PreTrainingArguments(TrainingArguments):
     )
     benchmark: bool = field(
         default=False,
-        metadata={"help": "Whether or not run benchmark."},
+        metadata={"help": "Whether or not run benchmark (True/False)."},
     )
     profiler_options: Optional[str] = field(
         default=None,
-        metadata={"help": "profiler_options."},
+        metadata={"help": "profiler_options (batch_range=[10,20])."},
     )
+
+    @property
+    def dataset_world_size(self):
+        if self.sharding_parallel_degree != 1 or self.data_parallel_degree != 1:
+            return max(self.sharding_parallel_degree, 1) * max(self.data_parallel_degree, 1)
+        else:
+            return paddle.distributed.get_world_size()
 
 
 def create_model(config, training_args=None):
