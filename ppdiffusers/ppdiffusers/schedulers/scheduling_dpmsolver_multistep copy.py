@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 TSAIL Team and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,18 +18,14 @@ import math
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
-import paddle
+import torch
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import logging
+from ..utils import randn_tensor
 from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, SchedulerOutput
 
-logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
-# from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
-quantile = paddle.quantile
 
-
-# Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
+# Copied from diffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
 def betas_for_alpha_bar(
     num_diffusion_timesteps,
     max_beta=0.999,
@@ -72,10 +67,10 @@ def betas_for_alpha_bar(
         t1 = i / num_diffusion_timesteps
         t2 = (i + 1) / num_diffusion_timesteps
         betas.append(min(1 - alpha_bar_fn(t2) / alpha_bar_fn(t1), max_beta))
-    return paddle.to_tensor(betas, dtype=paddle.float32)
+    return torch.tensor(betas, dtype=torch.float32)
 
 
-class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
+class DPMSolverMultistepScheduler(SchedulerMixin, ConfigMixin):
     """
     DPM-Solver (and the improved version DPM-Solver++) is a fast dedicated high-order solver for diffusion ODEs with
     the convergence order guarantee. Empirically, sampling by DPM-Solver with only 20 steps can generate high-quality
@@ -83,13 +78,17 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
 
     For more details, see the original paper: https://arxiv.org/abs/2206.00927 and https://arxiv.org/abs/2211.01095
 
-    Currently, we support the singlestep DPM-Solver for both noise prediction models and data prediction models. We
+    Currently, we support the multistep DPM-Solver for both noise prediction models and data prediction models. We
     recommend to use `solver_order=2` for guided sampling, and `solver_order=3` for unconditional sampling.
 
     We also support the "dynamic thresholding" method in Imagen (https://arxiv.org/abs/2205.11487). For pixel-space
     diffusion models, you can set both `algorithm_type="dpmsolver++"` and `thresholding=True` to use the dynamic
     thresholding. Note that the thresholding method is unsuitable for latent-space diffusion models (such as
     stable-diffusion).
+
+    We also support the SDE variant of DPM-Solver and DPM-Solver++, which is a fast SDE solver for the reverse
+    diffusion SDE. Currently we only support the first-order and second-order solvers. We recommend using the
+    second-order `sde-dpmsolver++`.
 
     [`~ConfigMixin`] takes care of storing all config attributes that are passed in the scheduler's `__init__`
     function, such as `num_train_timesteps`. They can be accessed via `scheduler.config.num_train_timesteps`.
@@ -108,9 +107,10 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         solver_order (`int`, default `2`):
             the order of DPM-Solver; can be `1` or `2` or `3`. We recommend to use `solver_order=2` for guided
             sampling, and `solver_order=3` for unconditional sampling.
-        prediction_type (`str`, default `epsilon`):
-            indicates whether the model predicts the noise (epsilon), or the data / `x0`. One of `epsilon`, `sample`,
-            or `v-prediction`.
+        prediction_type (`str`, default `epsilon`, optional):
+            prediction type of the scheduler function, one of `epsilon` (predicting the noise of the diffusion
+            process), `sample` (directly predicting the noisy sample`) or `v_prediction` (see section 2.4
+            https://imagen.research.google/video/paper.pdf)
         thresholding (`bool`, default `False`):
             whether to use the "dynamic thresholding" method (introduced by Imagen, https://arxiv.org/abs/2205.11487).
             For pixel-space diffusion models, you can set both `algorithm_type=dpmsolver++` and `thresholding=True` to
@@ -123,17 +123,17 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
             the threshold value for dynamic thresholding. Valid only when `thresholding=True` and
             `algorithm_type="dpmsolver++`.
         algorithm_type (`str`, default `dpmsolver++`):
-            the algorithm type for the solver. Either `dpmsolver` or `dpmsolver++`. The `dpmsolver` type implements the
-            algorithms in https://arxiv.org/abs/2206.00927, and the `dpmsolver++` type implements the algorithms in
-            https://arxiv.org/abs/2211.01095. We recommend to use `dpmsolver++` with `solver_order=2` for guided
-            sampling (e.g. stable-diffusion).
+            the algorithm type for the solver. Either `dpmsolver` or `dpmsolver++` or `sde-dpmsolver` or
+            `sde-dpmsolver++`. The `dpmsolver` type implements the algorithms in https://arxiv.org/abs/2206.00927, and
+            the `dpmsolver++` type implements the algorithms in https://arxiv.org/abs/2211.01095. We recommend to use
+            `dpmsolver++` or `sde-dpmsolver++` with `solver_order=2` for guided sampling (e.g. stable-diffusion).
         solver_type (`str`, default `midpoint`):
             the solver type for the second-order solver. Either `midpoint` or `heun`. The solver type slightly affects
             the sample quality, especially for small number of steps. We empirically find that `midpoint` solvers are
             slightly better, so we recommend to use the `midpoint` type.
         lower_order_final (`bool`, default `True`):
-            whether to use lower-order solvers in the final steps. For singlestep schedulers, we recommend to enable
-            this to use up all the function evaluations.
+            whether to use lower-order solvers in the final steps. Only valid for < 15 inference steps. We empirically
+            find this trick can stabilize the sampling of DPM-Solver for steps < 15, especially for steps <= 10.
         use_karras_sigmas (`bool`, *optional*, defaults to `False`):
              This parameter controls whether to use Karras sigmas (Karras et al. (2022) scheme) for step sizes in the
              noise schedule during the sampling process. If True, the sigmas will be determined according to a sequence
@@ -149,7 +149,13 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
             guided-diffusion (https://github.com/openai/guided-diffusion) predicts both mean and variance of the
             Gaussian distribution in the model's output. DPM-Solver only needs the "mean" output because it is based on
             diffusion ODEs.
-
+        timestep_spacing (`str`, default `"linspace"`):
+            The way the timesteps should be scaled. Refer to Table 2. of [Common Diffusion Noise Schedules and Sample
+            Steps are Flawed](https://arxiv.org/abs/2305.08891) for more information.
+        steps_offset (`int`, default `0`):
+            an offset added to the inference steps. You can use a combination of `offset=1` and
+            `set_alpha_to_one=False`, to make the last step use step 0 for the previous alpha product, as done in
+            stable diffusion.
     """
 
     _compatibles = [e.name for e in KarrasDiffusionSchedulers]
@@ -162,7 +168,7 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         beta_start: float = 0.0001,
         beta_end: float = 0.02,
         beta_schedule: str = "linear",
-        trained_betas: Optional[np.ndarray] = None,
+        trained_betas: Optional[Union[np.ndarray, List[float]]] = None,
         solver_order: int = 2,
         prediction_type: str = "epsilon",
         thresholding: bool = False,
@@ -174,15 +180,17 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         use_karras_sigmas: Optional[bool] = False,
         lambda_min_clipped: float = -float("inf"),
         variance_type: Optional[str] = None,
+        timestep_spacing: str = "linspace",
+        steps_offset: int = 0,
     ):
         if trained_betas is not None:
-            self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
+            self.betas = torch.tensor(trained_betas, dtype=torch.float32)
         elif beta_schedule == "linear":
-            self.betas = paddle.linspace(beta_start, beta_end, num_train_timesteps, dtype=paddle.float32)
+            self.betas = torch.linspace(beta_start, beta_end, num_train_timesteps, dtype=torch.float32)
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
             self.betas = (
-                paddle.linspace(beta_start**0.5, beta_end**0.5, num_train_timesteps, dtype=paddle.float32) ** 2
+                torch.linspace(beta_start**0.5, beta_end**0.5, num_train_timesteps, dtype=torch.float32) ** 2
             )
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
@@ -191,21 +199,22 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
             raise NotImplementedError(f"{beta_schedule} does is not implemented for {self.__class__}")
 
         self.alphas = 1.0 - self.betas
-        self.alphas_cumprod = paddle.cumprod(self.alphas, 0)
+        self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
         # Currently we only support VP-type noise schedule
-        self.alpha_t = paddle.sqrt(self.alphas_cumprod)
-        self.sigma_t = paddle.sqrt(1 - self.alphas_cumprod)
-        self.lambda_t = paddle.log(self.alpha_t) - paddle.log(self.sigma_t)
+        self.alpha_t = torch.sqrt(self.alphas_cumprod)
+        self.sigma_t = torch.sqrt(1 - self.alphas_cumprod)
+        self.lambda_t = torch.log(self.alpha_t) - torch.log(self.sigma_t)
 
         # standard deviation of the initial noise distribution
         self.init_noise_sigma = 1.0
 
         # settings for DPM-Solver
-        if algorithm_type not in ["dpmsolver", "dpmsolver++"]:
+        if algorithm_type not in ["dpmsolver", "dpmsolver++", "sde-dpmsolver", "sde-dpmsolver++"]:
             if algorithm_type == "deis":
                 self.register_to_config(algorithm_type="dpmsolver++")
             else:
                 raise NotImplementedError(f"{algorithm_type} does is not implemented for {self.__class__}")
+
         if solver_type not in ["midpoint", "heun"]:
             if solver_type in ["logrho", "bh1", "bh2"]:
                 self.register_to_config(solver_type="midpoint")
@@ -215,72 +224,46 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         # setable values
         self.num_inference_steps = None
         timesteps = np.linspace(0, num_train_timesteps - 1, num_train_timesteps, dtype=np.float32)[::-1].copy()
-        self.timesteps = paddle.to_tensor(timesteps)
+        self.timesteps = torch.from_numpy(timesteps)
         self.model_outputs = [None] * solver_order
-        self.sample = None
-        self.order_list = self.get_order_list(num_train_timesteps)
+        self.lower_order_nums = 0
 
-    def get_order_list(self, num_inference_steps: int) -> List[int]:
-        """
-        Computes the solver order at each time step.
-
-        Args:
-            num_inference_steps (`int`):
-                the number of diffusion steps used when generating samples with a pre-trained model.
-        """
-        steps = num_inference_steps
-        order = self.config.solver_order
-        if self.config.lower_order_final:
-            if order == 3:
-                if steps % 3 == 0:
-                    orders = [1, 2, 3] * (steps // 3 - 1) + [1, 2] + [1]
-                elif steps % 3 == 1:
-                    orders = [1, 2, 3] * (steps // 3) + [1]
-                else:
-                    orders = [1, 2, 3] * (steps // 3) + [1, 2]
-            elif order == 2:
-                if steps % 2 == 0:
-                    orders = [1, 2] * (steps // 2)
-                else:
-                    orders = [1, 2] * (steps // 2) + [1]
-            elif order == 1:
-                orders = [1] * steps
-        else:
-            if order == 3:
-                orders = [1, 2, 3] * (steps // 3)
-            elif order == 2:
-                orders = [1, 2] * (steps // 2)
-            elif order == 1:
-                orders = [1] * steps
-        return orders
-
-    def set_timesteps(
-        self,
-        num_inference_steps: int,
-    ):
+    def set_timesteps(self, num_inference_steps: int = None, device: Union[str, torch.device] = None):
         """
         Sets the timesteps used for the diffusion chain. Supporting function to be run before inference.
 
         Args:
             num_inference_steps (`int`):
                 the number of diffusion steps used when generating samples with a pre-trained model.
-
+            device (`str` or `torch.device`, optional):
+                the device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
         """
-        self.num_inference_steps = num_inference_steps
         # Clipping the minimum of all lambda(t) for numerical stability.
         # This is critical for cosine (squaredcos_cap_v2) noise schedule.
-        t = paddle.flip(self.lambda_t, [0])
-        c = paddle.to_tensor(self.config.lambda_min_clipped)
-        clipped_idx = paddle.searchsorted(t, c)
-        if paddle.isinf(c):
-            clipped_idx = paddle.to_tensor(0)
+        clipped_idx = torch.searchsorted(torch.flip(self.lambda_t, [0]), self.config.lambda_min_clipped)
+        last_timestep = ((self.config.num_train_timesteps - clipped_idx).numpy()).item()
 
-        timesteps = (
-            np.linspace(0, self.config.num_train_timesteps - 1 - clipped_idx, num_inference_steps + 1)
-            .round()[::-1][:-1]
-            .copy()
-            .astype(np.int64)
-        )
+        # "linspace", "leading", "trailing" corresponds to annotation of Table 2. of https://arxiv.org/abs/2305.08891
+        if self.config.timestep_spacing == "linspace":
+            timesteps = (
+                np.linspace(0, last_timestep - 1, num_inference_steps + 1).round()[::-1][:-1].copy().astype(np.int64)
+            )
+        elif self.config.timestep_spacing == "leading":
+            step_ratio = last_timestep // (num_inference_steps + 1)
+            # creates integer timesteps by multiplying by ratio
+            # casting to int to avoid issues when num_inference_step is power of 3
+            timesteps = (np.arange(0, num_inference_steps + 1) * step_ratio).round()[::-1][:-1].copy().astype(np.int64)
+            timesteps += self.config.steps_offset
+        elif self.config.timestep_spacing == "trailing":
+            step_ratio = self.config.num_train_timesteps / num_inference_steps
+            # creates integer timesteps by multiplying by ratio
+            # casting to int to avoid issues when num_inference_step is power of 3
+            timesteps = np.arange(last_timestep, 0, -step_ratio).round().copy().astype(np.int64)
+            timesteps -= 1
+        else:
+            raise ValueError(
+                f"{self.config.timestep_spacing} is not supported. Please make sure to choose one of 'linspace', 'leading' or 'trailing'."
+            )
 
         sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod) ** 0.5)
         if self.config.use_karras_sigmas:
@@ -289,60 +272,58 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
             timesteps = np.array([self._sigma_to_t(sigma, log_sigmas) for sigma in sigmas]).round()
             timesteps = np.flip(timesteps).copy().astype(np.int64)
 
-        self.sigmas = paddle.to_tensor(sigmas)
+        self.sigmas = torch.from_numpy(sigmas)
 
-        self.timesteps = paddle.to_tensor(timesteps)
-        self.model_outputs = [None] * self.config.solver_order
-        self.sample = None
+        # when num_inference_steps == num_train_timesteps, we can end up with
+        # duplicates in timesteps.
+        _, unique_indices = np.unique(timesteps, return_index=True)
+        timesteps = timesteps[np.sort(unique_indices)]
 
-        if not self.config.lower_order_final and num_inference_steps % self.config.solver_order != 0:
-            logger.warn(
-                "Changing scheduler {self.config} to have `lower_order_final` set to True to handle uneven amount of inference steps. Please make sure to always use an even number of `num_inference steps when using `lower_order_final=True`."
-            )
-            self.register_to_config(lower_order_final=True)
+        self.timesteps = torch.from_numpy(timesteps).to(device)
 
-        self.order_list = self.get_order_list(num_inference_steps)
-        
-    # Copied from ppdiffusers.schedulers.scheduling_ddpm.DDPMScheduler._threshold_sample
-    def _threshold_sample(self, sample: paddle.Tensor) -> paddle.Tensor:
+        self.num_inference_steps = len(timesteps)
+
+        self.model_outputs = [
+            None,
+        ] * self.config.solver_order
+        self.lower_order_nums = 0
+
+    # Copied from diffusers.schedulers.scheduling_ddpm.DDPMScheduler._threshold_sample
+    def _threshold_sample(self, sample: torch.FloatTensor) -> torch.FloatTensor:
         """
         "Dynamic thresholding: At each sampling step we set s to a certain percentile absolute pixel value in xt0 (the
         prediction of x_0 at timestep t), and if s > 1, then we threshold xt0 to the range [-s, s] and then divide by
         s. Dynamic thresholding pushes saturated pixels (those near -1 and 1) inwards, thereby actively preventing
         pixels from saturation at each step. We find that dynamic thresholding results in significantly better
         photorealism as well as better image-text alignment, especially when using very large guidance weights."
+
         https://arxiv.org/abs/2205.11487
         """
         dtype = sample.dtype
         batch_size, channels, height, width = sample.shape
 
-        if dtype not in (paddle.float32, paddle.float64):
-            sample = paddle.cast(
-                sample, "float32"
-            )  # upcast for quantile calculation, and clamp not implemented for cpu half
+        if dtype not in (torch.float32, torch.float64):
+            sample = sample.float()  # upcast for quantile calculation, and clamp not implemented for cpu half
 
         # Flatten sample for doing quantile calculation along each image
-        sample = paddle.reshape(sample, [batch_size, channels * height * width])
+        sample = sample.reshape(batch_size, channels * height * width)
 
         abs_sample = sample.abs()  # "a certain percentile absolute pixel value"
 
-        s = quantile(abs_sample, self.config.dynamic_thresholding_ratio, axis=1)
-        # paddle.clip donot support min > max
-        if self.config.sample_max_value < 1:
-            s = paddle.ones_like(s) * self.config.sample_max_value
-        else:
-            s = paddle.clip(
-                s, min=1, max=self.config.sample_max_value
-            )  # When clip to min=1, equivalent to standard clipping to [-1, 1]
-        s = s.unsqueeze(1)  # (batch_size, 1) because clip will broadcast along axis=0
-        sample = paddle.clip(sample, -s, s) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
+        s = torch.quantile(abs_sample, self.config.dynamic_thresholding_ratio, dim=1)
+        s = torch.clamp(
+            s, min=1, max=self.config.sample_max_value
+        )  # When clamped to min=1, equivalent to standard clipping to [-1, 1]
 
-        sample = paddle.reshape(sample, [batch_size, channels, height, width])
-        sample = paddle.cast(sample, dtype)
+        s = s.unsqueeze(1)  # (batch_size, 1) because clamp will broadcast along dim=0
+        sample = torch.clamp(sample, -s, s) / s  # "we threshold xt0 to the range [-s, s] and then divide by s"
+
+        sample = sample.reshape(batch_size, channels, height, width)
+        sample = sample.to(dtype)
 
         return sample
 
-    # Copied from ppdiffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._sigma_to_t
+    # Copied from diffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._sigma_to_t
     def _sigma_to_t(self, sigma, log_sigmas):
         # get log sigma
         log_sigma = np.log(sigma)
@@ -366,8 +347,8 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         t = t.reshape(sigma.shape)
         return t
 
-    # Copied from ppdiffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._convert_to_karras
-    def _convert_to_karras(self, in_sigmas: paddle.Tensor, num_inference_steps) -> paddle.Tensor:
+    # Copied from diffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._convert_to_karras
+    def _convert_to_karras(self, in_sigmas: torch.FloatTensor, num_inference_steps) -> torch.FloatTensor:
         """Constructs the noise schedule of Karras et al. (2022)."""
 
         sigma_min: float = in_sigmas[-1].item()
@@ -380,7 +361,9 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho)) ** rho
         return sigmas
 
-    def convert_model_output(self, model_output: paddle.Tensor, timestep: int, sample: paddle.Tensor) -> paddle.Tensor:
+    def convert_model_output(
+        self, model_output: torch.FloatTensor, timestep: int, sample: torch.FloatTensor
+    ) -> torch.FloatTensor:
         """
         Convert the model output to the corresponding type that the algorithm (DPM-Solver / DPM-Solver++) needs.
 
@@ -392,19 +375,20 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         DPM-Solver++ for both noise prediction model and data prediction model.
 
         Args:
-            model_output (`paddle.Tensor`): direct output from learned diffusion model.
+            model_output (`torch.FloatTensor`): direct output from learned diffusion model.
             timestep (`int`): current discrete timestep in the diffusion chain.
-            sample (`paddle.Tensor`):
+            sample (`torch.FloatTensor`):
                 current instance of sample being created by diffusion process.
 
         Returns:
-            `paddle.Tensor`: the converted model output.
+            `torch.FloatTensor`: the converted model output.
         """
+
         # DPM-Solver++ needs to solve an integral of the data prediction model.
-        if self.config.algorithm_type == "dpmsolver++":
+        if self.config.algorithm_type in ["dpmsolver++", "sde-dpmsolver++"]:
             if self.config.prediction_type == "epsilon":
                 # DPM-Solver and DPM-Solver++ only need the "mean" output.
-                if self.config.variance_type in ["learned_range"]:
+                if self.config.variance_type in ["learned", "learned_range"]:
                     model_output = model_output[:, :3]
                 alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[timestep]
                 x0_pred = (sample - sigma_t * model_output) / alpha_t
@@ -416,149 +400,201 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
             else:
                 raise ValueError(
                     f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, `sample`, or"
-                    " `v_prediction` for the DPMSolverSinglestepScheduler."
+                    " `v_prediction` for the DPMSolverMultistepScheduler."
                 )
 
             if self.config.thresholding:
                 x0_pred = self._threshold_sample(x0_pred)
 
             return x0_pred
+
         # DPM-Solver needs to solve an integral of the noise prediction model.
-        elif self.config.algorithm_type == "dpmsolver":
+        elif self.config.algorithm_type in ["dpmsolver", "sde-dpmsolver"]:
             if self.config.prediction_type == "epsilon":
                 # DPM-Solver and DPM-Solver++ only need the "mean" output.
-                if self.config.variance_type in ["learned_range"]:
-                    model_output = model_output[:, :3]
-                return model_output
+                if self.config.variance_type in ["learned", "learned_range"]:
+                    epsilon = model_output[:, :3]
+                else:
+                    epsilon = model_output
             elif self.config.prediction_type == "sample":
                 alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[timestep]
                 epsilon = (sample - alpha_t * model_output) / sigma_t
-                return epsilon
             elif self.config.prediction_type == "v_prediction":
                 alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[timestep]
                 epsilon = alpha_t * model_output + sigma_t * sample
-                return epsilon
             else:
                 raise ValueError(
                     f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, `sample`, or"
-                    " `v_prediction` for the DPMSolverSinglestepScheduler."
+                    " `v_prediction` for the DPMSolverMultistepScheduler."
                 )
+
+            if self.config.thresholding:
+                alpha_t, sigma_t = self.alpha_t[timestep], self.sigma_t[timestep]
+                x0_pred = (sample - sigma_t * epsilon) / alpha_t
+                x0_pred = self._threshold_sample(x0_pred)
+                epsilon = (sample - alpha_t * x0_pred) / sigma_t
+
+            return epsilon
 
     def dpm_solver_first_order_update(
         self,
-        model_output: paddle.Tensor,
+        model_output: torch.FloatTensor,
         timestep: int,
         prev_timestep: int,
-        sample: paddle.Tensor,
-    ) -> paddle.Tensor:
+        sample: torch.FloatTensor,
+        noise: Optional[torch.FloatTensor] = None,
+    ) -> torch.FloatTensor:
         """
         One step for the first-order DPM-Solver (equivalent to DDIM).
 
         See https://arxiv.org/abs/2206.00927 for the detailed derivation.
 
         Args:
-            model_output (`paddle.Tensor`): direct output from learned diffusion model.
+            model_output (`torch.FloatTensor`): direct output from learned diffusion model.
             timestep (`int`): current discrete timestep in the diffusion chain.
             prev_timestep (`int`): previous discrete timestep in the diffusion chain.
-            sample (`paddle.Tensor`):
+            sample (`torch.FloatTensor`):
                 current instance of sample being created by diffusion process.
 
         Returns:
-            `paddle.Tensor`: the sample tensor at the previous timestep.
+            `torch.FloatTensor`: the sample tensor at the previous timestep.
         """
         lambda_t, lambda_s = self.lambda_t[prev_timestep], self.lambda_t[timestep]
         alpha_t, alpha_s = self.alpha_t[prev_timestep], self.alpha_t[timestep]
         sigma_t, sigma_s = self.sigma_t[prev_timestep], self.sigma_t[timestep]
         h = lambda_t - lambda_s
         if self.config.algorithm_type == "dpmsolver++":
-            x_t = (sigma_t / sigma_s) * sample - (alpha_t * (paddle.exp(-h) - 1.0)) * model_output
+            x_t = (sigma_t / sigma_s) * sample - (alpha_t * (torch.exp(-h) - 1.0)) * model_output
         elif self.config.algorithm_type == "dpmsolver":
-            x_t = (alpha_t / alpha_s) * sample - (sigma_t * (paddle.exp(h) - 1.0)) * model_output
+            x_t = (alpha_t / alpha_s) * sample - (sigma_t * (torch.exp(h) - 1.0)) * model_output
+        elif self.config.algorithm_type == "sde-dpmsolver++":
+            assert noise is not None
+            x_t = (
+                (sigma_t / sigma_s * torch.exp(-h)) * sample
+                + (alpha_t * (1 - torch.exp(-2.0 * h))) * model_output
+                + sigma_t * torch.sqrt(1.0 - torch.exp(-2 * h)) * noise
+            )
+        elif self.config.algorithm_type == "sde-dpmsolver":
+            assert noise is not None
+            x_t = (
+                (alpha_t / alpha_s) * sample
+                - 2.0 * (sigma_t * (torch.exp(h) - 1.0)) * model_output
+                + sigma_t * torch.sqrt(torch.exp(2 * h) - 1.0) * noise
+            )
         return x_t
 
-    def singlestep_dpm_solver_second_order_update(
+    def multistep_dpm_solver_second_order_update(
         self,
-        model_output_list: List[paddle.Tensor],
+        model_output_list: List[torch.FloatTensor],
         timestep_list: List[int],
         prev_timestep: int,
-        sample: paddle.Tensor,
-    ) -> paddle.Tensor:
+        sample: torch.FloatTensor,
+        noise: Optional[torch.FloatTensor] = None,
+    ) -> torch.FloatTensor:
         """
-        One step for the second-order singlestep DPM-Solver.
-
-        It computes the solution at time `prev_timestep` from the time `timestep_list[-2]`.
+        One step for the second-order multistep DPM-Solver.
 
         Args:
-            model_output_list (`List[paddle.Tensor]`):
+            model_output_list (`List[torch.FloatTensor]`):
                 direct outputs from learned diffusion model at current and latter timesteps.
             timestep (`int`): current and latter discrete timestep in the diffusion chain.
             prev_timestep (`int`): previous discrete timestep in the diffusion chain.
-            sample (`paddle.Tensor`):
+            sample (`torch.FloatTensor`):
                 current instance of sample being created by diffusion process.
 
         Returns:
-            `paddle.Tensor`: the sample tensor at the previous timestep.
+            `torch.FloatTensor`: the sample tensor at the previous timestep.
         """
         t, s0, s1 = prev_timestep, timestep_list[-1], timestep_list[-2]
         m0, m1 = model_output_list[-1], model_output_list[-2]
         lambda_t, lambda_s0, lambda_s1 = self.lambda_t[t], self.lambda_t[s0], self.lambda_t[s1]
-        alpha_t, alpha_s1 = self.alpha_t[t], self.alpha_t[s1]
-        sigma_t, sigma_s1 = self.sigma_t[t], self.sigma_t[s1]
-        h, h_0 = lambda_t - lambda_s1, lambda_s0 - lambda_s1
+        alpha_t, alpha_s0 = self.alpha_t[t], self.alpha_t[s0]
+        sigma_t, sigma_s0 = self.sigma_t[t], self.sigma_t[s0]
+        h, h_0 = lambda_t - lambda_s0, lambda_s0 - lambda_s1
         r0 = h_0 / h
-        D0, D1 = m1, (1.0 / r0) * (m0 - m1)
+        D0, D1 = m0, (1.0 / r0) * (m0 - m1)
         if self.config.algorithm_type == "dpmsolver++":
             # See https://arxiv.org/abs/2211.01095 for detailed derivations
             if self.config.solver_type == "midpoint":
                 x_t = (
-                    (sigma_t / sigma_s1) * sample
-                    - (alpha_t * (paddle.exp(-h) - 1.0)) * D0
-                    - 0.5 * (alpha_t * (paddle.exp(-h) - 1.0)) * D1
+                    (sigma_t / sigma_s0) * sample
+                    - (alpha_t * (torch.exp(-h) - 1.0)) * D0
+                    - 0.5 * (alpha_t * (torch.exp(-h) - 1.0)) * D1
                 )
             elif self.config.solver_type == "heun":
                 x_t = (
-                    (sigma_t / sigma_s1) * sample
-                    - (alpha_t * (paddle.exp(-h) - 1.0)) * D0
-                    + (alpha_t * ((paddle.exp(-h) - 1.0) / h + 1.0)) * D1
+                    (sigma_t / sigma_s0) * sample
+                    - (alpha_t * (torch.exp(-h) - 1.0)) * D0
+                    + (alpha_t * ((torch.exp(-h) - 1.0) / h + 1.0)) * D1
                 )
         elif self.config.algorithm_type == "dpmsolver":
             # See https://arxiv.org/abs/2206.00927 for detailed derivations
             if self.config.solver_type == "midpoint":
                 x_t = (
-                    (alpha_t / alpha_s1) * sample
-                    - (sigma_t * (paddle.exp(h) - 1.0)) * D0
-                    - 0.5 * (sigma_t * (paddle.exp(h) - 1.0)) * D1
+                    (alpha_t / alpha_s0) * sample
+                    - (sigma_t * (torch.exp(h) - 1.0)) * D0
+                    - 0.5 * (sigma_t * (torch.exp(h) - 1.0)) * D1
                 )
             elif self.config.solver_type == "heun":
                 x_t = (
-                    (alpha_t / alpha_s1) * sample
-                    - (sigma_t * (paddle.exp(h) - 1.0)) * D0
-                    - (sigma_t * ((paddle.exp(h) - 1.0) / h - 1.0)) * D1
+                    (alpha_t / alpha_s0) * sample
+                    - (sigma_t * (torch.exp(h) - 1.0)) * D0
+                    - (sigma_t * ((torch.exp(h) - 1.0) / h - 1.0)) * D1
+                )
+        elif self.config.algorithm_type == "sde-dpmsolver++":
+            assert noise is not None
+            if self.config.solver_type == "midpoint":
+                x_t = (
+                    (sigma_t / sigma_s0 * torch.exp(-h)) * sample
+                    + (alpha_t * (1 - torch.exp(-2.0 * h))) * D0
+                    + 0.5 * (alpha_t * (1 - torch.exp(-2.0 * h))) * D1
+                    + sigma_t * torch.sqrt(1.0 - torch.exp(-2 * h)) * noise
+                )
+            elif self.config.solver_type == "heun":
+                x_t = (
+                    (sigma_t / sigma_s0 * torch.exp(-h)) * sample
+                    + (alpha_t * (1 - torch.exp(-2.0 * h))) * D0
+                    + (alpha_t * ((1.0 - torch.exp(-2.0 * h)) / (-2.0 * h) + 1.0)) * D1
+                    + sigma_t * torch.sqrt(1.0 - torch.exp(-2 * h)) * noise
+                )
+        elif self.config.algorithm_type == "sde-dpmsolver":
+            assert noise is not None
+            if self.config.solver_type == "midpoint":
+                x_t = (
+                    (alpha_t / alpha_s0) * sample
+                    - 2.0 * (sigma_t * (torch.exp(h) - 1.0)) * D0
+                    - (sigma_t * (torch.exp(h) - 1.0)) * D1
+                    + sigma_t * torch.sqrt(torch.exp(2 * h) - 1.0) * noise
+                )
+            elif self.config.solver_type == "heun":
+                x_t = (
+                    (alpha_t / alpha_s0) * sample
+                    - 2.0 * (sigma_t * (torch.exp(h) - 1.0)) * D0
+                    - 2.0 * (sigma_t * ((torch.exp(h) - 1.0) / h - 1.0)) * D1
+                    + sigma_t * torch.sqrt(torch.exp(2 * h) - 1.0) * noise
                 )
         return x_t
 
-    def singlestep_dpm_solver_third_order_update(
+    def multistep_dpm_solver_third_order_update(
         self,
-        model_output_list: List[paddle.Tensor],
+        model_output_list: List[torch.FloatTensor],
         timestep_list: List[int],
         prev_timestep: int,
-        sample: paddle.Tensor,
-    ) -> paddle.Tensor:
+        sample: torch.FloatTensor,
+    ) -> torch.FloatTensor:
         """
-        One step for the third-order singlestep DPM-Solver.
-
-        It computes the solution at time `prev_timestep` from the time `timestep_list[-3]`.
+        One step for the third-order multistep DPM-Solver.
 
         Args:
-            model_output_list (`List[paddle.Tensor]`):
+            model_output_list (`List[torch.FloatTensor]`):
                 direct outputs from learned diffusion model at current and latter timesteps.
             timestep (`int`): current and latter discrete timestep in the diffusion chain.
             prev_timestep (`int`): previous discrete timestep in the diffusion chain.
-            sample (`paddle.Tensor`):
+            sample (`torch.FloatTensor`):
                 current instance of sample being created by diffusion process.
 
         Returns:
-            `paddle.Tensor`: the sample tensor at the previous timestep.
+            `torch.FloatTensor`: the sample tensor at the previous timestep.
         """
         t, s0, s1, s2 = prev_timestep, timestep_list[-1], timestep_list[-2], timestep_list[-3]
         m0, m1, m2 = model_output_list[-1], model_output_list[-2], model_output_list[-3]
@@ -568,97 +604,47 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
             self.lambda_t[s1],
             self.lambda_t[s2],
         )
-        alpha_t, alpha_s2 = self.alpha_t[t], self.alpha_t[s2]
-        sigma_t, sigma_s2 = self.sigma_t[t], self.sigma_t[s2]
-        h, h_0, h_1 = lambda_t - lambda_s2, lambda_s0 - lambda_s2, lambda_s1 - lambda_s2
+        alpha_t, alpha_s0 = self.alpha_t[t], self.alpha_t[s0]
+        sigma_t, sigma_s0 = self.sigma_t[t], self.sigma_t[s0]
+        h, h_0, h_1 = lambda_t - lambda_s0, lambda_s0 - lambda_s1, lambda_s1 - lambda_s2
         r0, r1 = h_0 / h, h_1 / h
-        D0 = m2
-        D1_0, D1_1 = (1.0 / r1) * (m1 - m2), (1.0 / r0) * (m0 - m2)
-        D1 = (r0 * D1_0 - r1 * D1_1) / (r0 - r1)
-        D2 = 2.0 * (D1_1 - D1_0) / (r0 - r1)
+        D0 = m0
+        D1_0, D1_1 = (1.0 / r0) * (m0 - m1), (1.0 / r1) * (m1 - m2)
+        D1 = D1_0 + (r0 / (r0 + r1)) * (D1_0 - D1_1)
+        D2 = (1.0 / (r0 + r1)) * (D1_0 - D1_1)
         if self.config.algorithm_type == "dpmsolver++":
             # See https://arxiv.org/abs/2206.00927 for detailed derivations
-            if self.config.solver_type == "midpoint":
-                x_t = (
-                    (sigma_t / sigma_s2) * sample
-                    - (alpha_t * (paddle.exp(-h) - 1.0)) * D0
-                    + (alpha_t * ((paddle.exp(-h) - 1.0) / h + 1.0)) * D1_1
-                )
-            elif self.config.solver_type == "heun":
-                x_t = (
-                    (sigma_t / sigma_s2) * sample
-                    - (alpha_t * (paddle.exp(-h) - 1.0)) * D0
-                    + (alpha_t * ((paddle.exp(-h) - 1.0) / h + 1.0)) * D1
-                    - (alpha_t * ((paddle.exp(-h) - 1.0 + h) / h**2 - 0.5)) * D2
-                )
+            x_t = (
+                (sigma_t / sigma_s0) * sample
+                - (alpha_t * (torch.exp(-h) - 1.0)) * D0
+                + (alpha_t * ((torch.exp(-h) - 1.0) / h + 1.0)) * D1
+                - (alpha_t * ((torch.exp(-h) - 1.0 + h) / h**2 - 0.5)) * D2
+            )
         elif self.config.algorithm_type == "dpmsolver":
             # See https://arxiv.org/abs/2206.00927 for detailed derivations
-            if self.config.solver_type == "midpoint":
-                x_t = (
-                    (alpha_t / alpha_s2) * sample
-                    - (sigma_t * (paddle.exp(h) - 1.0)) * D0
-                    - (sigma_t * ((paddle.exp(h) - 1.0) / h - 1.0)) * D1_1
-                )
-            elif self.config.solver_type == "heun":
-                x_t = (
-                    (alpha_t / alpha_s2) * sample
-                    - (sigma_t * (paddle.exp(h) - 1.0)) * D0
-                    - (sigma_t * ((paddle.exp(h) - 1.0) / h - 1.0)) * D1
-                    - (sigma_t * ((paddle.exp(h) - 1.0 - h) / h**2 - 0.5)) * D2
-                )
+            x_t = (
+                (alpha_t / alpha_s0) * sample
+                - (sigma_t * (torch.exp(h) - 1.0)) * D0
+                - (sigma_t * ((torch.exp(h) - 1.0) / h - 1.0)) * D1
+                - (sigma_t * ((torch.exp(h) - 1.0 - h) / h**2 - 0.5)) * D2
+            )
         return x_t
-
-    def singlestep_dpm_solver_update(
-        self,
-        model_output_list: List[paddle.Tensor],
-        timestep_list: List[int],
-        prev_timestep: int,
-        sample: paddle.Tensor,
-        order: int,
-    ) -> paddle.Tensor:
-        """
-        One step for the singlestep DPM-Solver.
-
-        Args:
-            model_output_list (`List[paddle.Tensor]`):
-                direct outputs from learned diffusion model at current and latter timesteps.
-            timestep (`int`): current and latter discrete timestep in the diffusion chain.
-            prev_timestep (`int`): previous discrete timestep in the diffusion chain.
-            sample (`paddle.Tensor`):
-                current instance of sample being created by diffusion process.
-            order (`int`):
-                the solver order at this step.
-
-        Returns:
-            `paddle.Tensor`: the sample tensor at the previous timestep.
-        """
-        if order == 1:
-            return self.dpm_solver_first_order_update(model_output_list[-1], timestep_list[-1], prev_timestep, sample)
-        elif order == 2:
-            return self.singlestep_dpm_solver_second_order_update(
-                model_output_list, timestep_list, prev_timestep, sample
-            )
-        elif order == 3:
-            return self.singlestep_dpm_solver_third_order_update(
-                model_output_list, timestep_list, prev_timestep, sample
-            )
-        else:
-            raise ValueError(f"Order must be 1, 2, 3, got {order}")
 
     def step(
         self,
-        model_output: paddle.Tensor,
+        model_output: torch.FloatTensor,
         timestep: int,
-        sample: paddle.Tensor,
+        sample: torch.FloatTensor,
+        generator=None,
         return_dict: bool = True,
     ) -> Union[SchedulerOutput, Tuple]:
         """
-        Step function propagating the sample with the singlestep DPM-Solver.
+        Step function propagating the sample with the multistep DPM-Solver.
 
         Args:
-            model_output (`paddle.Tensor`): direct output from learned diffusion model.
+            model_output (`torch.FloatTensor`): direct output from learned diffusion model.
             timestep (`int`): current discrete timestep in the diffusion chain.
-            sample (`paddle.Tensor`):
+            sample (`torch.FloatTensor`):
                 current instance of sample being created by diffusion process.
             return_dict (`bool`): option for returning tuple rather than SchedulerOutput class
 
@@ -672,61 +658,79 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
                 "Number of inference steps is 'None', you need to run 'set_timesteps' after creating the scheduler"
             )
 
+        if isinstance(timestep, torch.Tensor):
+            timestep = timestep.to(self.timesteps.device)
         step_index = (self.timesteps == timestep).nonzero()
         if len(step_index) == 0:
             step_index = len(self.timesteps) - 1
         else:
             step_index = step_index.item()
         prev_timestep = 0 if step_index == len(self.timesteps) - 1 else self.timesteps[step_index + 1]
+        lower_order_final = (
+            (step_index == len(self.timesteps) - 1) and self.config.lower_order_final and len(self.timesteps) < 15
+        )
+        lower_order_second = (
+            (step_index == len(self.timesteps) - 2) and self.config.lower_order_final and len(self.timesteps) < 15
+        )
 
         model_output = self.convert_model_output(model_output, timestep, sample)
         for i in range(self.config.solver_order - 1):
             self.model_outputs[i] = self.model_outputs[i + 1]
         self.model_outputs[-1] = model_output
 
-        order = self.order_list[step_index]
+        if self.config.algorithm_type in ["sde-dpmsolver", "sde-dpmsolver++"]:
+            noise = randn_tensor(
+                model_output.shape, generator=generator, device=model_output.device, dtype=model_output.dtype
+            )
+        else:
+            noise = None
 
-        #  For img2img denoising might start with order>1 which is not possible
-        #  In this case make sure that the first two steps are both order=1
-        while self.model_outputs[-order] is None:
-            order -= 1
+        if self.config.solver_order == 1 or self.lower_order_nums < 1 or lower_order_final:
+            prev_sample = self.dpm_solver_first_order_update(
+                model_output, timestep, prev_timestep, sample, noise=noise
+            )
+        elif self.config.solver_order == 2 or self.lower_order_nums < 2 or lower_order_second:
+            timestep_list = [self.timesteps[step_index - 1], timestep]
+            prev_sample = self.multistep_dpm_solver_second_order_update(
+                self.model_outputs, timestep_list, prev_timestep, sample, noise=noise
+            )
+        else:
+            timestep_list = [self.timesteps[step_index - 2], self.timesteps[step_index - 1], timestep]
+            prev_sample = self.multistep_dpm_solver_third_order_update(
+                self.model_outputs, timestep_list, prev_timestep, sample
+            )
 
-        # For single-step solvers, we use the initial value at each time with order = 1.
-        if order == 1:
-            self.sample = sample
-
-        timestep_list = [self.timesteps[step_index - i] for i in range(order - 1, 0, -1)] + [timestep]
-        prev_sample = self.singlestep_dpm_solver_update(
-            self.model_outputs, timestep_list, prev_timestep, self.sample, order
-        )
+        if self.lower_order_nums < self.config.solver_order:
+            self.lower_order_nums += 1
 
         if not return_dict:
             return (prev_sample,)
 
         return SchedulerOutput(prev_sample=prev_sample)
 
-    def scale_model_input(self, sample: paddle.Tensor, *args, **kwargs) -> paddle.Tensor:
+    def scale_model_input(self, sample: torch.FloatTensor, *args, **kwargs) -> torch.FloatTensor:
         """
         Ensures interchangeability with schedulers that need to scale the denoising model input depending on the
         current timestep.
 
         Args:
-            sample (`paddle.Tensor`): input sample
+            sample (`torch.FloatTensor`): input sample
 
         Returns:
-            `paddle.Tensor`: scaled input sample
+            `torch.FloatTensor`: scaled input sample
         """
         return sample
 
-    # Copied from ppdiffusers.schedulers.scheduling_ddpm.DDPMScheduler.add_noise
+    # Copied from diffusers.schedulers.scheduling_ddpm.DDPMScheduler.add_noise
     def add_noise(
         self,
-        original_samples: paddle.Tensor,
-        noise: paddle.Tensor,
-        timesteps: paddle.Tensor,
-    ) -> paddle.Tensor:
-        # Make sure alphas_cumprod and timestep have same dtype as original_samples
-        alphas_cumprod = self.alphas_cumprod.cast(original_samples.dtype)
+        original_samples: torch.FloatTensor,
+        noise: torch.FloatTensor,
+        timesteps: torch.IntTensor,
+    ) -> torch.FloatTensor:
+        # Make sure alphas_cumprod and timestep have same device and dtype as original_samples
+        alphas_cumprod = self.alphas_cumprod.to(device=original_samples.device, dtype=original_samples.dtype)
+        timesteps = timesteps.to(original_samples.device)
 
         sqrt_alpha_prod = alphas_cumprod[timesteps] ** 0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()

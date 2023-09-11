@@ -17,13 +17,13 @@ import tempfile
 import unittest
 
 import numpy as np
-import paddle
-import paddle.nn as nn
-import paddle.nn.functional as F
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 from huggingface_hub.repocard import RepoCard
-from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer
+from transformers import CLIPTextConfig, CLIPTextModel, CLIPTextModelWithProjection, CLIPTokenizer
 
-from ppdiffusers import (
+from diffusers import (
     AutoencoderKL,
     DDIMScheduler,
     EulerDiscreteScheduler,
@@ -31,19 +31,21 @@ from ppdiffusers import (
     StableDiffusionXLPipeline,
     UNet2DConditionModel,
 )
-from ppdiffusers.loaders import AttnProcsLayers, LoraLoaderMixin, PatchedLoraProjection, text_encoder_attn_modules
-from ppdiffusers.models.attention_processor import (
+from diffusers.loaders import AttnProcsLayers, LoraLoaderMixin, PatchedLoraProjection, text_encoder_attn_modules
+from diffusers.models.attention_processor import (
     Attention,
     AttnProcessor,
+    AttnProcessor2_0,
     LoRAAttnProcessor,
+    LoRAAttnProcessor2_0,
     LoRAXFormersAttnProcessor,
     XFormersAttnProcessor,
 )
-from ppdiffusers.utils import floats_tensor, paddle_device
-from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
+from diffusers.utils import floats_tensor, paddle_device
+from diffusers.utils.testing_utils import require_torch_gpu, slow
 
 
-def create_unet_lora_layers(unet: nn.Layer):
+def create_unet_lora_layers(unet: nn.Module):
     lora_attn_procs = {}
     for name in unet.attn_processors.keys():
         cross_attention_dim = None if name.endswith("attn1.processor") else unet.config.cross_attention_dim
@@ -55,7 +57,9 @@ def create_unet_lora_layers(unet: nn.Layer):
         elif name.startswith("down_blocks"):
             block_id = int(name[len("down_blocks.")])
             hidden_size = unet.config.block_out_channels[block_id]
-        lora_attn_processor_class = LoRAAttnProcessor
+        lora_attn_processor_class = (
+            LoRAAttnProcessor2_0 if hasattr(F, "scaled_dot_product_attention") else LoRAAttnProcessor
+        )
         lora_attn_procs[name] = lora_attn_processor_class(
             hidden_size=hidden_size, cross_attention_dim=cross_attention_dim
         )
@@ -63,14 +67,16 @@ def create_unet_lora_layers(unet: nn.Layer):
     return lora_attn_procs, unet_lora_layers
 
 
-def create_text_encoder_lora_attn_procs(text_encoder: nn.Layer):
+def create_text_encoder_lora_attn_procs(text_encoder: nn.Module):
     text_lora_attn_procs = {}
-    lora_attn_processor_class = LoRAAttnProcessor
+    lora_attn_processor_class = (
+        LoRAAttnProcessor2_0 if hasattr(F, "scaled_dot_product_attention") else LoRAAttnProcessor
+    )
     for name, module in text_encoder_attn_modules(text_encoder):
         if isinstance(module.out_proj, nn.Linear):
-            out_features = module.out_proj.weight.shape[1]
+            out_features = module.out_proj.out_features
         elif isinstance(module.out_proj, PatchedLoraProjection):
-            out_features = module.out_proj.regular_linear_layer.weight.shape[1]
+            out_features = module.out_proj.regular_linear_layer.out_features
         else:
             assert False, module.out_proj.__class__
 
@@ -78,24 +84,24 @@ def create_text_encoder_lora_attn_procs(text_encoder: nn.Layer):
     return text_lora_attn_procs
 
 
-def create_text_encoder_lora_layers(text_encoder: nn.Layer):
+def create_text_encoder_lora_layers(text_encoder: nn.Module):
     text_lora_attn_procs = create_text_encoder_lora_attn_procs(text_encoder)
     text_encoder_lora_layers = AttnProcsLayers(text_lora_attn_procs)
     return text_encoder_lora_layers
 
 
 def set_lora_weights(lora_attn_parameters, randn_weight=False):
-    with paddle.no_grad():
+    with torch.no_grad():
         for parameter in lora_attn_parameters:
             if randn_weight:
-                parameter[:] = paddle.randn_like(parameter)
+                parameter[:] = torch.randn_like(parameter)
             else:
-                paddle.zero_(parameter)
+                torch.zero_(parameter)
 
 
 class LoraLoaderMixinTests(unittest.TestCase):
     def get_dummy_components(self):
-        paddle.seed(0)
+        torch.manual_seed(0)
         unet = UNet2DConditionModel(
             block_out_channels=(32, 64),
             layers_per_block=2,
@@ -114,7 +120,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
             set_alpha_to_one=False,
             steps_offset=1,
         )
-        paddle.seed(0)
+        torch.manual_seed(0)
         vae = AutoencoderKL(
             block_out_channels=[32, 64],
             in_channels=3,
@@ -162,9 +168,9 @@ class LoraLoaderMixinTests(unittest.TestCase):
         num_channels = 4
         sizes = (32, 32)
 
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.manual_seed(0)
         noise = floats_tensor((batch_size, num_channels) + sizes)
-        input_ids = paddle.randint(1, sequence_length, size=(batch_size, sequence_length), generator=generator)
+        input_ids = torch.randint(1, sequence_length, size=(batch_size, sequence_length), generator=generator)
 
         pipeline_inputs = {
             "prompt": "A painting of a squirrel eating a burger",
@@ -181,7 +187,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
     def get_dummy_tokens(self):
         max_seq_length = 77
 
-        inputs = paddle.randint(2, 56, size=(1, max_seq_length), generator=paddle.Generator().manual_seed(0))
+        inputs = torch.randint(2, 56, size=(1, max_seq_length), generator=torch.manual_seed(0))
 
         prepared_inputs = {}
         prepared_inputs["input_ids"] = inputs
@@ -194,14 +200,15 @@ class LoraLoaderMixinTests(unittest.TestCase):
             unet_lora_layers=lora_components["unet_lora_layers"],
             text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
         )
-        self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+        self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
 
     def test_lora_save_load(self):
         pipeline_components, lora_components = self.get_dummy_components()
         sd_pipe = StableDiffusionPipeline(**pipeline_components)
+        sd_pipe = sd_pipe.to(paddle_device)
         sd_pipe.set_progress_bar_config(disable=None)
 
-        noise, input_ids, pipeline_inputs = self.get_dummy_inputs()
+        _, _, pipeline_inputs = self.get_dummy_inputs()
 
         original_images = sd_pipe(**pipeline_inputs).images
         orig_image_slice = original_images[0, -3:, -3:, -1]
@@ -211,23 +218,23 @@ class LoraLoaderMixinTests(unittest.TestCase):
                 save_directory=tmpdirname,
                 unet_lora_layers=lora_components["unet_lora_layers"],
                 text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
-                to_diffusers=False,
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
-            sd_pipe.load_lora_weights(tmpdirname, from_diffusers=False)
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            sd_pipe.load_lora_weights(tmpdirname)
 
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
 
         # Outputs shouldn't match.
-        self.assertFalse(paddle.allclose(paddle.to_tensor(orig_image_slice), paddle.to_tensor(lora_image_slice)))
+        self.assertFalse(torch.allclose(torch.from_numpy(orig_image_slice), torch.from_numpy(lora_image_slice)))
 
     def test_lora_save_load_safetensors(self):
         pipeline_components, lora_components = self.get_dummy_components()
         sd_pipe = StableDiffusionPipeline(**pipeline_components)
+        sd_pipe = sd_pipe.to(paddle_device)
         sd_pipe.set_progress_bar_config(disable=None)
 
-        noise, input_ids, pipeline_inputs = self.get_dummy_inputs()
+        _, _, pipeline_inputs = self.get_dummy_inputs()
 
         original_images = sd_pipe(**pipeline_inputs).images
         orig_image_slice = original_images[0, -3:, -3:, -1]
@@ -238,24 +245,24 @@ class LoraLoaderMixinTests(unittest.TestCase):
                 unet_lora_layers=lora_components["unet_lora_layers"],
                 text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
                 safe_serialization=True,
-                to_diffusers=True,
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.safetensors")))
-            sd_pipe.load_lora_weights(tmpdirname, from_diffusers=True)
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.safetensors")))
+            sd_pipe.load_lora_weights(tmpdirname)
 
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
 
         # Outputs shouldn't match.
-        self.assertFalse(paddle.allclose(paddle.to_tensor(orig_image_slice), paddle.to_tensor(lora_image_slice)))
+        self.assertFalse(torch.allclose(torch.from_numpy(orig_image_slice), torch.from_numpy(lora_image_slice)))
 
     def test_lora_save_load_legacy(self):
         pipeline_components, lora_components = self.get_dummy_components()
         unet_lora_attn_procs = lora_components["unet_lora_attn_procs"]
         sd_pipe = StableDiffusionPipeline(**pipeline_components)
+        sd_pipe = sd_pipe.to(paddle_device)
         sd_pipe.set_progress_bar_config(disable=None)
 
-        noise, input_ids, pipeline_inputs = self.get_dummy_inputs()
+        _, _, pipeline_inputs = self.get_dummy_inputs()
 
         original_images = sd_pipe(**pipeline_inputs).images
         orig_image_slice = original_images[0, -3:, -3:, -1]
@@ -263,16 +270,17 @@ class LoraLoaderMixinTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdirname:
             unet = sd_pipe.unet
             unet.set_attn_processor(unet_lora_attn_procs)
-            unet.save_attn_procs(tmpdirname, to_diffusers=False)
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
-            sd_pipe.load_lora_weights(tmpdirname, from_diffusers=False)
+            unet.save_attn_procs(tmpdirname)
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            sd_pipe.load_lora_weights(tmpdirname)
 
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
 
         # Outputs shouldn't match.
-        self.assertFalse(paddle.allclose(paddle.to_tensor(orig_image_slice), paddle.to_tensor(lora_image_slice)))
-def test_text_encoder_lora_monkey_patch(self):
+        self.assertFalse(torch.allclose(torch.from_numpy(orig_image_slice), torch.from_numpy(lora_image_slice)))
+
+    def test_text_encoder_lora_monkey_patch(self):
         pipeline_components, _ = self.get_dummy_components()
         pipe = StableDiffusionPipeline(**pipeline_components)
 
@@ -291,7 +299,7 @@ def test_text_encoder_lora_monkey_patch(self):
         outputs_with_lora = pipe.text_encoder(**dummy_tokens)[0]
         assert outputs_with_lora.shape == (1, 77, 32)
 
-        assert paddle.allclose(
+        assert torch.allclose(
             outputs_without_lora, outputs_with_lora
         ), "lora_up_weight are all zero, so the lora outputs should be the same to without lora outputs"
 
@@ -307,202 +315,204 @@ def test_text_encoder_lora_monkey_patch(self):
         outputs_with_lora = pipe.text_encoder(**dummy_tokens)[0]
         assert outputs_with_lora.shape == (1, 77, 32)
 
-        assert not paddle.allclose(
+        assert not torch.allclose(
             outputs_without_lora, outputs_with_lora
         ), "lora_up_weight are not zero, so the lora outputs should be different to without lora outputs"
 
-def test_text_encoder_lora_remove_monkey_patch(self):
-    pipeline_components, _ = self.get_dummy_components()
-    pipe = StableDiffusionPipeline(**pipeline_components)
-
-    dummy_tokens = self.get_dummy_tokens()
-
-    # inference without lora
-    outputs_without_lora = pipe.text_encoder(**dummy_tokens)[0]
-    assert outputs_without_lora.shape == (1, 77, 32)
-
-    # monkey patch
-    params = pipe._modify_text_encoder(pipe.text_encoder, pipe.lora_scale)
-
-    set_lora_weights(params, randn_weight=True)
-
-    # inference with lora
-    outputs_with_lora = pipe.text_encoder(**dummy_tokens)[0]
-    assert outputs_with_lora.shape == (1, 77, 32)
-
-    assert not paddle.allclose(
-        outputs_without_lora, outputs_with_lora
-    ), "lora outputs should be different to without lora outputs"
-
-    # remove monkey patch
-    pipe._remove_text_encoder_monkey_patch()
-
-    # inference with removed lora
-    outputs_without_lora_removed = pipe.text_encoder(**dummy_tokens)[0]
-    assert outputs_without_lora_removed.shape == (1, 77, 32)
-
-    assert paddle.allclose(
-        outputs_without_lora, outputs_without_lora_removed
-    ), "remove lora monkey patch should restore the original outputs"
-
-def test_text_encoder_lora_scale(self):
-    pipeline_components, lora_components = self.get_dummy_components()
-    sd_pipe = StableDiffusionPipeline(**pipeline_components)
-    sd_pipe = sd_pipe.to(paddle_device)
-    sd_pipe.set_progress_bar_config(disable=None)
-
-    _, _, pipeline_inputs = self.get_dummy_inputs()
-
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        LoraLoaderMixin.save_lora_weights(
-            save_directory=tmpdirname,
-            unet_lora_layers=lora_components["unet_lora_layers"],
-            text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
-        )
-        self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
-        sd_pipe.load_lora_weights(tmpdirname)
-
-    lora_images = sd_pipe(**pipeline_inputs).images
-    lora_image_slice = lora_images[0, -3:, -3:, -1]
-
-    lora_images_with_scale = sd_pipe(**pipeline_inputs, cross_attention_kwargs={"scale": 0.5}).images
-    lora_image_with_scale_slice = lora_images_with_scale[0, -3:, -3:, -1]
-
-    # Outputs shouldn't match.
-    self.assertFalse(
-        paddle.allclose(paddle.to_tensor(lora_image_slice), paddle.to_tensor(lora_image_with_scale_slice))
-    )
-
-def test_lora_unet_attn_processors(self):
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        self.create_lora_weight_file(tmpdirname)
-
+    def test_text_encoder_lora_remove_monkey_patch(self):
         pipeline_components, _ = self.get_dummy_components()
+        pipe = StableDiffusionPipeline(**pipeline_components)
+
+        dummy_tokens = self.get_dummy_tokens()
+
+        # inference without lora
+        outputs_without_lora = pipe.text_encoder(**dummy_tokens)[0]
+        assert outputs_without_lora.shape == (1, 77, 32)
+
+        # monkey patch
+        params = pipe._modify_text_encoder(pipe.text_encoder, pipe.lora_scale)
+
+        set_lora_weights(params, randn_weight=True)
+
+        # inference with lora
+        outputs_with_lora = pipe.text_encoder(**dummy_tokens)[0]
+        assert outputs_with_lora.shape == (1, 77, 32)
+
+        assert not torch.allclose(
+            outputs_without_lora, outputs_with_lora
+        ), "lora outputs should be different to without lora outputs"
+
+        # remove monkey patch
+        pipe._remove_text_encoder_monkey_patch()
+
+        # inference with removed lora
+        outputs_without_lora_removed = pipe.text_encoder(**dummy_tokens)[0]
+        assert outputs_without_lora_removed.shape == (1, 77, 32)
+
+        assert torch.allclose(
+            outputs_without_lora, outputs_without_lora_removed
+        ), "remove lora monkey patch should restore the original outputs"
+
+    def test_text_encoder_lora_scale(self):
+        pipeline_components, lora_components = self.get_dummy_components()
         sd_pipe = StableDiffusionPipeline(**pipeline_components)
         sd_pipe = sd_pipe.to(paddle_device)
         sd_pipe.set_progress_bar_config(disable=None)
 
-        # check if vanilla attention processors are used
-        for _, module in sd_pipe.unet.named_modules():
-            if isinstance(module, Attention):
-                self.assertIsInstance(module.processor, (AttnProcessor,))
+        _, _, pipeline_inputs = self.get_dummy_inputs()
 
-        # load LoRA weight file
-        sd_pipe.load_lora_weights(tmpdirname)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            LoraLoaderMixin.save_lora_weights(
+                save_directory=tmpdirname,
+                unet_lora_layers=lora_components["unet_lora_layers"],
+                text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
+            )
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            sd_pipe.load_lora_weights(tmpdirname)
 
-        # check if lora attention processors are used
-        for _, module in sd_pipe.unet.named_modules():
-            if isinstance(module, Attention):
-                attn_proc_class = LoRAAttnProcessor
-                self.assertIsInstance(module.processor, attn_proc_class)
+        lora_images = sd_pipe(**pipeline_inputs).images
+        lora_image_slice = lora_images[0, -3:, -3:, -1]
 
-def test_unload_lora_sd(self):
-    pipeline_components, lora_components = self.get_dummy_components()
-    _, _, pipeline_inputs = self.get_dummy_inputs(with_generator=False)
-    sd_pipe = StableDiffusionPipeline(**pipeline_components)
+        lora_images_with_scale = sd_pipe(**pipeline_inputs, cross_attention_kwargs={"scale": 0.5}).images
+        lora_image_with_scale_slice = lora_images_with_scale[0, -3:, -3:, -1]
 
-    original_images = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
-    orig_image_slice = original_images[0, -3:, -3:, -1]
-
-    # Emulate training.
-    set_lora_weights(lora_components["unet_lora_layers"].parameters(), randn_weight=True)
-    set_lora_weights(lora_components["text_encoder_lora_layers"].parameters(), randn_weight=True)
-
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        LoraLoaderMixin.save_lora_weights(
-            save_directory=tmpdirname,
-            unet_lora_layers=lora_components["unet_lora_layers"],
-            text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
+        # Outputs shouldn't match.
+        self.assertFalse(
+            torch.allclose(torch.from_numpy(lora_image_slice), torch.from_numpy(lora_image_with_scale_slice))
         )
-        self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
-        sd_pipe.load_lora_weights(tmpdirname)
 
-    lora_images = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
-    lora_image_slice = lora_images[0, -3:, -3:, -1]
+    def test_lora_unet_attn_processors(self):
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            self.create_lora_weight_file(tmpdirname)
 
-    # Unload LoRA parameters.
-    sd_pipe.unload_lora_weights()
-    original_images_two = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
-    orig_image_slice_two = original_images_two[0, -3:, -3:, -1]
+            pipeline_components, _ = self.get_dummy_components()
+            sd_pipe = StableDiffusionPipeline(**pipeline_components)
+            sd_pipe = sd_pipe.to(paddle_device)
+            sd_pipe.set_progress_bar_config(disable=None)
 
-    assert not np.allclose(
-        orig_image_slice, lora_image_slice
-    ), "LoRA parameters should lead to a different image slice."
-    assert not np.allclose(
-        orig_image_slice_two, lora_image_slice
-    ), "LoRA parameters should lead to a different image slice."
-    assert np.allclose(
-        orig_image_slice, orig_image_slice_two, atol=1e-3
-    ), "Unloading LoRA parameters should lead to results similar to what was obtained with the pipeline without any LoRA parameters."
+            # check if vanilla attention processors are used
+            for _, module in sd_pipe.unet.named_modules():
+                if isinstance(module, Attention):
+                    self.assertIsInstance(module.processor, (AttnProcessor, AttnProcessor2_0))
 
-@unittest.skipIf(paddle_device != "gpu", "This test is supposed to run on GPU")
-def test_lora_unet_attn_processors_with_xformers(self):
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        self.create_lora_weight_file(tmpdirname)
+            # load LoRA weight file
+            sd_pipe.load_lora_weights(tmpdirname)
 
-        pipeline_components, _ = self.get_dummy_components()
+            # check if lora attention processors are used
+            for _, module in sd_pipe.unet.named_modules():
+                if isinstance(module, Attention):
+                    attn_proc_class = (
+                        LoRAAttnProcessor2_0 if hasattr(F, "scaled_dot_product_attention") else LoRAAttnProcessor
+                    )
+                    self.assertIsInstance(module.processor, attn_proc_class)
+
+    def test_unload_lora_sd(self):
+        pipeline_components, lora_components = self.get_dummy_components()
+        _, _, pipeline_inputs = self.get_dummy_inputs(with_generator=False)
+        sd_pipe = StableDiffusionPipeline(**pipeline_components)
+
+        original_images = sd_pipe(**pipeline_inputs, generator=torch.manual_seed(0)).images
+        orig_image_slice = original_images[0, -3:, -3:, -1]
+
+        # Emulate training.
+        set_lora_weights(lora_components["unet_lora_layers"].parameters(), randn_weight=True)
+        set_lora_weights(lora_components["text_encoder_lora_layers"].parameters(), randn_weight=True)
+
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            LoraLoaderMixin.save_lora_weights(
+                save_directory=tmpdirname,
+                unet_lora_layers=lora_components["unet_lora_layers"],
+                text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
+            )
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            sd_pipe.load_lora_weights(tmpdirname)
+
+        lora_images = sd_pipe(**pipeline_inputs, generator=torch.manual_seed(0)).images
+        lora_image_slice = lora_images[0, -3:, -3:, -1]
+
+        # Unload LoRA parameters.
+        sd_pipe.unload_lora_weights()
+        original_images_two = sd_pipe(**pipeline_inputs, generator=torch.manual_seed(0)).images
+        orig_image_slice_two = original_images_two[0, -3:, -3:, -1]
+
+        assert not np.allclose(
+            orig_image_slice, lora_image_slice
+        ), "LoRA parameters should lead to a different image slice."
+        assert not np.allclose(
+            orig_image_slice_two, lora_image_slice
+        ), "LoRA parameters should lead to a different image slice."
+        assert np.allclose(
+            orig_image_slice, orig_image_slice_two, atol=1e-3
+        ), "Unloading LoRA parameters should lead to results similar to what was obtained with the pipeline without any LoRA parameters."
+
+    @unittest.skipIf(paddle_device != "gpu", "This test is supposed to run on GPU")
+    def test_lora_unet_attn_processors_with_xformers(self):
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            self.create_lora_weight_file(tmpdirname)
+
+            pipeline_components, _ = self.get_dummy_components()
+            sd_pipe = StableDiffusionPipeline(**pipeline_components)
+            sd_pipe = sd_pipe.to(paddle_device)
+            sd_pipe.set_progress_bar_config(disable=None)
+
+            # enable XFormers
+            sd_pipe.enable_xformers_memory_efficient_attention()
+
+            # check if xFormers attention processors are used
+            for _, module in sd_pipe.unet.named_modules():
+                if isinstance(module, Attention):
+                    self.assertIsInstance(module.processor, XFormersAttnProcessor)
+
+            # load LoRA weight file
+            sd_pipe.load_lora_weights(tmpdirname)
+
+            # check if lora attention processors are used
+            for _, module in sd_pipe.unet.named_modules():
+                if isinstance(module, Attention):
+                    self.assertIsInstance(module.processor, LoRAXFormersAttnProcessor)
+
+            # unload lora weights
+            sd_pipe.unload_lora_weights()
+
+            # check if attention processors are reverted back to xFormers
+            for _, module in sd_pipe.unet.named_modules():
+                if isinstance(module, Attention):
+                    self.assertIsInstance(module.processor, XFormersAttnProcessor)
+
+    @unittest.skipIf(paddle_device != "", "This test is supposed to run on GPU")
+    def test_lora_save_load_with_xformers(self):
+        pipeline_components, lora_components = self.get_dummy_components()
         sd_pipe = StableDiffusionPipeline(**pipeline_components)
         sd_pipe = sd_pipe.to(paddle_device)
         sd_pipe.set_progress_bar_config(disable=None)
+
+        _, _, pipeline_inputs = self.get_dummy_inputs()
 
         # enable XFormers
         sd_pipe.enable_xformers_memory_efficient_attention()
 
-        # check if xFormers attention processors are used
-        for _, module in sd_pipe.unet.named_modules():
-            if isinstance(module, Attention):
-                self.assertIsInstance(module.processor, XFormersAttnProcessor)
+        original_images = sd_pipe(**pipeline_inputs).images
+        orig_image_slice = original_images[0, -3:, -3:, -1]
 
-        # load LoRA weight file
-        sd_pipe.load_lora_weights(tmpdirname)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            LoraLoaderMixin.save_lora_weights(
+                save_directory=tmpdirname,
+                unet_lora_layers=lora_components["unet_lora_layers"],
+                text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
+            )
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            sd_pipe.load_lora_weights(tmpdirname)
 
-        # check if lora attention processors are used
-        for _, module in sd_pipe.unet.named_modules():
-            if isinstance(module, Attention):
-                self.assertIsInstance(module.processor, LoRAXFormersAttnProcessor)
+        lora_images = sd_pipe(**pipeline_inputs).images
+        lora_image_slice = lora_images[0, -3:, -3:, -1]
 
-        # unload lora weights
-        sd_pipe.unload_lora_weights()
-
-        # check if attention processors are reverted back to xFormers
-        for _, module in sd_pipe.unet.named_modules():
-            if isinstance(module, Attention):
-                self.assertIsInstance(module.processor, XFormersAttnProcessor)
-
-@unittest.skipIf(paddle_device != "cuda", "This test is supposed to run on GPU")
-def test_lora_save_load_with_xformers(self):
-    pipeline_components, lora_components = self.get_dummy_components()
-    sd_pipe = StableDiffusionPipeline(**pipeline_components)
-    sd_pipe = sd_pipe.to(paddle_device)
-    sd_pipe.set_progress_bar_config(disable=None)
-
-    _, _, pipeline_inputs = self.get_dummy_inputs()
-
-    # enable XFormers
-    sd_pipe.enable_xformers_memory_efficient_attention()
-
-    original_images = sd_pipe(**pipeline_inputs).images
-    orig_image_slice = original_images[0, -3:, -3:, -1]
-
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        LoraLoaderMixin.save_lora_weights(
-            save_directory=tmpdirname,
-            unet_lora_layers=lora_components["unet_lora_layers"],
-            text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
-        )
-        self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
-        sd_pipe.load_lora_weights(tmpdirname)
-
-    lora_images = sd_pipe(**pipeline_inputs).images
-    lora_image_slice = lora_images[0, -3:, -3:, -1]
-
-    # Outputs shouldn't match.
-    self.assertFalse(paddle.allclose(paddle.to_tensor(orig_image_slice), paddle.to_tensor(lora_image_slice)))
+        # Outputs shouldn't match.
+        self.assertFalse(torch.allclose(torch.from_numpy(orig_image_slice), torch.from_numpy(lora_image_slice)))
 
 
 class SDXLLoraLoaderMixinTests(unittest.TestCase):
     def get_dummy_components(self):
-        paddle.Generator().manual_seed(0)
+        torch.manual_seed(0)
         unet = UNet2DConditionModel(
             block_out_channels=(32, 64),
             layers_per_block=2,
@@ -527,7 +537,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
             beta_schedule="scaled_linear",
             timestep_spacing="leading",
         )
-        paddle.Generator().manual_seed(0)
+        torch.manual_seed(0)
         vae = AutoencoderKL(
             block_out_channels=[32, 64],
             in_channels=3,
@@ -537,7 +547,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
             latent_channels=4,
             sample_size=128,
         )
-        paddle.Generator().manual_seed(0)
+        torch.manual_seed(0)
         text_encoder_config = CLIPTextConfig(
             bos_token_id=0,
             eos_token_id=2,
@@ -585,9 +595,9 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
         num_channels = 4
         sizes = (32, 32)
 
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.manual_seed(0)
         noise = floats_tensor((batch_size, num_channels) + sizes)
-        input_ids = paddle.randint(1, sequence_length, size=(batch_size, sequence_length), generator=generator)
+        input_ids = torch.randint(1, sequence_length, size=(batch_size, sequence_length), generator=generator)
 
         pipeline_inputs = {
             "prompt": "A painting of a squirrel eating a burger",
@@ -618,21 +628,21 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
                 text_encoder_lora_layers=lora_components["text_encoder_one_lora_layers"],
                 text_encoder_2_lora_layers=lora_components["text_encoder_two_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
             sd_pipe.load_lora_weights(tmpdirname)
 
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
 
         # Outputs shouldn't match.
-        self.assertFalse(paddle.allclose(paddle.to_tensor(orig_image_slice), paddle.to_tensor(lora_image_slice)))
+        self.assertFalse(torch.allclose(torch.from_numpy(orig_image_slice), torch.from_numpy(lora_image_slice)))
 
     def test_unload_lora_sdxl(self):
         pipeline_components, lora_components = self.get_dummy_components()
         _, _, pipeline_inputs = self.get_dummy_inputs(with_generator=False)
         sd_pipe = StableDiffusionXLPipeline(**pipeline_components)
 
-        original_images = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
+        original_images = sd_pipe(**pipeline_inputs, generator=torch.manual_seed(0)).images
         orig_image_slice = original_images[0, -3:, -3:, -1]
 
         # Emulate training.
@@ -647,15 +657,15 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
                 text_encoder_lora_layers=lora_components["text_encoder_one_lora_layers"],
                 text_encoder_2_lora_layers=lora_components["text_encoder_two_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
             sd_pipe.load_lora_weights(tmpdirname)
 
-        lora_images = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
+        lora_images = sd_pipe(**pipeline_inputs, generator=torch.manual_seed(0)).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
 
         # Unload LoRA parameters.
         sd_pipe.unload_lora_weights()
-        original_images_two = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
+        original_images_two = sd_pipe(**pipeline_inputs, generator=torch.manual_seed(0)).images
         orig_image_slice_two = original_images_two[0, -3:, -3:, -1]
 
         assert not np.allclose(
@@ -670,10 +680,10 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
 
 
 @slow
-@require_paddle_gpu
+@require_torch_gpu
 class LoraIntegrationTests(unittest.TestCase):
     def test_dreambooth_old_format(self):
-        generator = paddle.Generator("cpu").manual_seed(0)
+        generator = torch.Generator("cpu").manual_seed(0)
 
         lora_model_id = "hf-internal-testing/lora_dreambooth_dog_example"
         card = RepoCard.load(lora_model_id)
@@ -694,7 +704,7 @@ class LoraIntegrationTests(unittest.TestCase):
         self.assertTrue(np.allclose(images, expected, atol=1e-4))
 
     def test_dreambooth_text_encoder_new_format(self):
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.Generator().manual_seed(0)
 
         lora_model_id = "hf-internal-testing/lora-trained"
         card = RepoCard.load(lora_model_id)
@@ -713,7 +723,7 @@ class LoraIntegrationTests(unittest.TestCase):
         self.assertTrue(np.allclose(images, expected, atol=1e-4))
 
     def test_a1111(self):
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.Generator().manual_seed(0)
 
         pipe = StableDiffusionPipeline.from_pretrained("hf-internal-testing/Counterfeit-V2.5", safety_checker=None).to(
             paddle_device
@@ -732,7 +742,7 @@ class LoraIntegrationTests(unittest.TestCase):
         self.assertTrue(np.allclose(images, expected, atol=1e-4))
 
     def test_vanilla_funetuning(self):
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.Generator().manual_seed(0)
 
         lora_model_id = "hf-internal-testing/sd-model-finetuned-lora-t4"
         card = RepoCard.load(lora_model_id)
@@ -751,7 +761,7 @@ class LoraIntegrationTests(unittest.TestCase):
         self.assertTrue(np.allclose(images, expected, atol=1e-4))
 
     def test_unload_lora(self):
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.manual_seed(0)
         prompt = "masterpiece, best quality, mountain"
         num_inference_steps = 2
 
@@ -767,14 +777,14 @@ class LoraIntegrationTests(unittest.TestCase):
         lora_filename = "Colored_Icons_by_vizsumit.safetensors"
 
         pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.manual_seed(0)
         lora_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
         ).images
         lora_images = lora_images[0, -3:, -3:, -1].flatten()
 
         pipe.unload_lora_weights()
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.manual_seed(0)
         unloaded_lora_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
         ).images
@@ -787,7 +797,7 @@ class LoraIntegrationTests(unittest.TestCase):
         # This test ensures that a Kohya-style LoRA can be safely unloaded and then loaded
         # without introducing any side-effects. Even though the test uses a Kohya-style
         # LoRA, the underlying adapter handling mechanism is format-agnostic.
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.manual_seed(0)
         prompt = "masterpiece, best quality, mountain"
         num_inference_steps = 2
 
@@ -803,14 +813,14 @@ class LoraIntegrationTests(unittest.TestCase):
         lora_filename = "Colored_Icons_by_vizsumit.safetensors"
 
         pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.manual_seed(0)
         lora_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
         ).images
         lora_images = lora_images[0, -3:, -3:, -1].flatten()
 
         pipe.unload_lora_weights()
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.manual_seed(0)
         unloaded_lora_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
         ).images
@@ -822,7 +832,7 @@ class LoraIntegrationTests(unittest.TestCase):
         # make sure we can load a LoRA again after unloading and they don't have
         # any undesired effects.
         pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
-        generator = paddle.Generator().manual_seed(0)
+        generator = torch.manual_seed(0)
         lora_images_again = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
         ).images

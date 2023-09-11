@@ -255,6 +255,7 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
     def set_timesteps(
         self,
         num_inference_steps: int,
+        device: str = None,
         num_train_timesteps: Optional[int] = None,
     ):
         """
