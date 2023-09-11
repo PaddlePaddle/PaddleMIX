@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import random
 import sys
 from dataclasses import dataclass, field
@@ -153,14 +154,53 @@ def main():
         mode="test",
     )
     model = create_model(model_args)
+
+    decorated = paddle.amp.decorate(
+                     models=[model.language_model], optimizers=None, level="O2"
+                 )
+    [model.language_model] = decorated
+
     model.eval()
     if training_args.model_path is not None:
         checkpoint = training_args.model_path
         load_model(training_args, model, ckpt_dir=checkpoint, load_language_model=False)
         load_model(training_args, model.language_model, ckpt_dir=LLM_LIST[model_args.text_model_name_or_path])
-    generated_ids, scores = model.generate(**inputs)
-    generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-    logger.info("Generate text: {}".format(generated_text))
+
+
+    warm_up = 5
+    repeate = 10
+    print("**inputs")
+    print(inputs)
+
+    # input_spec=[
+    #     paddle.static.InputSpec(shape=[None, 3, None, None], dtype="float32"),  # pixel_values
+    #     paddle.static.InputSpec(shape=[None, None], dtype="int64"),  # input_ids
+    #     paddle.static.InputSpec(shape=[None, None], dtype="int64"),  # attention_mask
+    # ]
+    # model = paddle.jit.to_static(model.generate, input_spec=input_spec)
+    # paddle.jit.save(model, "./blip2/inference")
+    # exit(0)
+
+
+    for i in range(warm_up):
+        generated_ids, scores = model.generate(**inputs)
+        generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+        logger.info("Generate text: {}".format(generated_text))
+
+
+    import datetime
+    import time
+    starttime = datetime.datetime.now()
+    for i in range(repeate):
+        generated_ids, scores = model.generate(**inputs)
+        generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
+        logger.info("Generate text: {}".format(generated_text))
+
+    endtime = datetime.datetime.now()
+    duringtime = endtime - starttime
+    ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+    print (ms / repeate)# 单位是毫秒
+
     return model
 
 

@@ -767,23 +767,27 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
 
         language_model_inputs = self.Qformer.language_projection(query_output)
         language_attention_mask = paddle.ones(language_model_inputs.shape[:-1], dtype="int64")
-        if input_ids is None:
-            input_ids = paddle.to_tensor([[self.config.text_config.bos_token_id]]).tile([batch_size, 1])
+        # if input_ids is None:
+        #     input_ids = paddle.to_tensor([[self.config.text_config.bos_token_id]]).tile([batch_size, 1])
         if attention_mask is None:
             attention_mask = paddle.ones_like(input_ids)
+        print("attention_mask")
+        print(attention_mask)
         attention_mask = paddle.concat([language_attention_mask, attention_mask], axis=1)
         # concatenate query embeddings with prompt embeddings
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
+        language_model_inputs = paddle.cast(language_model_inputs, dtype="float16")
         inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
 
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            do_sample=False,
-            top_p=0.9,
-            decode_strategy="greedy_search",
+            do_sample=True,
+            top_p=1.0,
+            top_k=1,
+            decode_strategy="sampling",
             temperature=1,
-            num_beams=5,
+            num_beams=1,
             max_length=30,
             min_length=8,
             eos_token_id=50118,

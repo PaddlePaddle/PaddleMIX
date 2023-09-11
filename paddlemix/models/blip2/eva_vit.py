@@ -431,6 +431,9 @@ class VisionTransformer(Blip2PretrainedModel):
         B = paddle.shape(x)[0]
         x = self.patch_embed(x)
         cls_tokens = self.cls_token.expand((B, -1, -1))
+        print(cls_tokens.dtype)
+        print(x.dtype)
+        print("cls_tokens.dtype")
         x = paddle.concat((cls_tokens, x), axis=1)
 
         if self.pos_embed is not None:

@@ -18,6 +18,7 @@ from __future__ import annotations
 import collections
 from functools import partial
 from typing import Any, Dict, List
+from paddle.incubate.nn import FusedMultiTransformer
 
 import numpy as np
 import paddle
@@ -462,6 +463,131 @@ class TransformerDecoder(Layer):
 
         self.checkpoints = []
 
+
+        self.hidden_size = config.hidden_size
+        self.num_heads = config.num_attention_heads
+        self.head_size = self.hidden_size // self.num_heads
+
+        weight_file = "/root/.paddlenlp/models/facebook/opt-2.7b/model_state.pdparams"
+        self.state_dict = paddle.load(weight_file, return_numpy=True)
+
+        for k  in self.state_dict.keys():
+            pass
+
+        paddle.set_default_dtype("float16")
+        ln_scale_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.norm1.weight".format(i)) for i in range(config.num_hidden_layers)]
+        ln_bias_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.norm1.bias".format(i)) for i in range(config.num_hidden_layers)]
+
+        qkv_weight_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.qkv_weight".format(i)) for i in range(config.num_hidden_layers)]
+
+        out_proj_weight_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.self_attn.out_proj.weight".format(i)) for i in range(config.num_hidden_layers)]
+        out_proj_bias_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.self_attn.out_proj.bias".format(i)) for i in range(config.num_hidden_layers)]
+
+        ffn_ln_scale_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.norm2.weight".format(i)) for i in range(config.num_hidden_layers)]
+        ffn_ln_bias_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.norm2.bias".format(i)) for i in range(config.num_hidden_layers)]
+
+        ffn1_weight_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.linear1.weight".format(i)) for i in range(config.num_hidden_layers)]
+        ffn1_bias_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.linear1.bias".format(i)) for i in range(config.num_hidden_layers)]
+        ffn2_weight_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.linear2.weight".format(i)) for i in range(config.num_hidden_layers)]
+        ffn2_bias_attrs = [paddle.ParamAttr(name="opt.decoder.layers.{}.linear2.bias".format(i)) for i in range(config.num_hidden_layers)]
+
+        self.transformer_block = FusedMultiTransformer(config.hidden_size,
+                                                    config.num_attention_heads,
+                                                    config.intermediate_size,
+                                                    dropout_rate=0.0,
+                                                    activation="relu",
+                                                    normalize_before=True,
+                                                    num_layers=config.num_hidden_layers,
+                                                    nranks=1,
+                                                    ring_id=-1,
+                                                    ln_scale_attrs=ln_scale_attrs,
+                                                    ln_bias_attrs = ln_bias_attrs,
+                                                    qkv_weight_attrs=qkv_weight_attrs,
+                                                    linear_weight_attrs=out_proj_weight_attrs,
+                                                    linear_bias_attrs=out_proj_bias_attrs,
+                                                    ffn_ln_scale_attrs=ffn_ln_scale_attrs,
+                                                    ffn_ln_bias_attrs=ffn_ln_bias_attrs,
+                                                    ffn1_weight_attrs=ffn1_weight_attrs,
+                                                    ffn1_bias_attrs=ffn1_bias_attrs,
+                                                    ffn2_weight_attrs=ffn2_weight_attrs,
+                                                    ffn2_bias_attrs=ffn2_bias_attrs, 
+                                                    epsilon=1e-5)
+        self.cache_kvs = []
+
+        for i in range(self.num_layers):
+            ln_scale = paddle.to_tensor(self.state_dict["opt.decoder.layers.{}.norm1.weight".format(i)])
+            ln_scale = paddle.cast(ln_scale, "float32")
+            ln_bias = paddle.to_tensor(self.state_dict["opt.decoder.layers.{}.norm1.bias".format(i)])
+            ln_bias = paddle.cast(ln_bias, "float32")
+
+            q_weight = self.state_dict["opt.decoder.layers.{}.self_attn.q_proj.weight".format(i)]
+            k_weight = self.state_dict["opt.decoder.layers.{}.self_attn.k_proj.weight".format(i)]
+            v_weight = self.state_dict["opt.decoder.layers.{}.self_attn.v_proj.weight".format(i)]
+            q_bias = self.state_dict["opt.decoder.layers.{}.self_attn.q_proj.bias".format(i)]
+            k_bias = self.state_dict["opt.decoder.layers.{}.self_attn.k_proj.bias".format(i)]
+            v_bias = self.state_dict["opt.decoder.layers.{}.self_attn.v_proj.bias".format(i)]
+
+            concated_qkv_weight = np.concatenate([q_weight, k_weight, v_weight], axis=-1)
+            concated_qkv_weight = concated_qkv_weight.transpose(1, 0)
+            concated_qkv_weight = concated_qkv_weight.reshape(3, self.num_heads, self.head_size, self.hidden_size)
+            concated_qkv_weight = paddle.to_tensor(concated_qkv_weight)
+            concated_qkv_weight = paddle.cast(concated_qkv_weight, "float16")
+
+            concated_qkv_bias = np.concatenate([q_bias, k_bias, v_bias], axis=-1)
+            concated_qkv_bias = concated_qkv_bias.reshape(3, self.num_heads, self.head_size)
+            concated_qkv_bias = paddle.to_tensor(concated_qkv_bias)
+            concated_qkv_bias = paddle.cast(concated_qkv_bias, "float16")
+
+            out_proj_weight = paddle.to_tensor(self.state_dict["opt.decoder.layers.{}.self_attn.out_proj.weight".format(i)])
+            out_proj_bias =  paddle.to_tensor(self.state_dict["opt.decoder.layers.{}.self_attn.out_proj.bias".format(i)])
+            out_proj_weight = paddle.cast(out_proj_weight, "float16")
+            out_proj_bias = paddle.cast(out_proj_bias, "float16")
+
+            ffn_ln_scale = paddle.to_tensor(self.state_dict["opt.decoder.layers.{}.norm2.weight".format(i)])
+            ffn_ln_bias = paddle.to_tensor(self.state_dict["opt.decoder.layers.{}.norm2.bias".format(i)])
+            ffn_ln_scale = paddle.cast(ffn_ln_scale, "float32")
+            ffn_ln_bias = paddle.cast(ffn_ln_bias, "float32")
+
+            ffn1_weight = paddle.to_tensor(self.state_dict["opt.decoder.layers.{}.linear1.weight".format(i)])
+            ffn1_bias = paddle.to_tensor(self.state_dict["opt.decoder.layers.{}.linear1.bias".format(i)])
+            ffn2_weight = paddle.to_tensor(self.state_dict["opt.decoder.layers.{}.linear2.weight".format(i)])
+            ffn2_bias = paddle.to_tensor(self.state_dict["opt.decoder.layers.{}.linear2.bias".format(i)])
+            ffn1_weight = paddle.cast(ffn1_weight, "float16")
+            ffn1_bias = paddle.cast(ffn1_bias, "float16")
+            ffn2_weight = paddle.cast(ffn2_weight, "float16")
+            ffn2_bias = paddle.cast(ffn2_bias, "float16")
+
+
+            # qkv_weight = paddle.concat(q_weight, k_weight, v_weight)
+            list_weight = [
+                ln_scale, ln_bias,
+                concated_qkv_weight, concated_qkv_bias,
+                out_proj_weight, out_proj_bias, 
+                ffn_ln_scale, ffn_ln_bias,
+                ffn1_weight, ffn1_bias,
+                ffn2_weight, ffn2_bias,
+            ]
+            self.transformer_block.ln_scales[i].set_value(list_weight[0])
+            self.transformer_block.ln_biases[i].set_value(list_weight[1])
+
+            self.transformer_block.qkv_weights[i].set_value(list_weight[2])
+            self.transformer_block.qkv_biases[i].set_value(list_weight[3])
+
+            self.transformer_block.linear_weights[i].set_value(list_weight[4])
+            self.transformer_block.linear_biases[i].set_value(list_weight[5])
+
+            self.transformer_block.ffn_ln_scales[i].set_value(list_weight[6])
+            self.transformer_block.ffn_ln_biases[i].set_value(list_weight[7])
+
+            self.transformer_block.ffn1_weights[i].set_value(list_weight[8])
+            self.transformer_block.ffn1_biases[i].set_value(list_weight[9])
+
+            self.transformer_block.ffn2_weights[i].set_value(list_weight[10])
+            self.transformer_block.ffn2_biases[i].set_value(list_weight[11])
+
+        paddle.set_default_dtype("float32")
+
+
     def forward(
         self,
         tgt,
@@ -485,7 +611,37 @@ class TransformerDecoder(Layer):
         all_self_attentions = () if output_attentions else None
         all_hidden_states = () if output_hidden_states else None
 
+        if (len(self.cache_kvs) == 0):
+            max_seq_length = 1024
+            # self.cache_kvs = [
+            #         paddle.fluid.layers.fill_constant_batch_size_like(
+            #             paddle.zeros(paddle.shape(tgt)[0:2], dtype='float32'),
+            #             shape=[2, -1, self.num_heads, max_seq_length, self.head_size],
+            #             input_dim_idx=0,
+            #             output_dim_idx=1,
+            #             value=0.,
+            #             dtype="float16") for _ in range(self.num_layers)]
+            self.cache_kvs = [
+                    paddle.tensor.fill_constant(
+                        shape=[2, paddle.shape(tgt)[0], self.num_heads, max_seq_length, self.head_size],
+                        value=0.,
+                        dtype="float16") for _ in range(self.num_layers)]
+
+        is_decoder = cache is not None
+        output = paddle.cast(output, "float16")
+        tgt_mask = paddle.cast(tgt_mask, "float16")
+        # print("output", output.shape)
+        # presents 就是那个原地的大小！永远是最大的shape！
+        hidden_states, presents = self.transformer_block(output, 
+                                                        attn_mask = tgt_mask , 
+                                                        caches=self.cache_kvs,
+                                                        time_step=paddle.increment(paddle.shape(tgt_mask)[-1], -1) if is_decoder else None)
+        # 将output强行令为我的大Op的输出的hidden_states
+        output = hidden_states
+
+
         for i, mod in enumerate(self.layers):
+            break
             outputs = mod(
                 output,
                 memory,
@@ -837,12 +993,16 @@ class OPTModel(OPTPretrainedModel):
             decoder_layers.append(TransformerDecoderLayer(config))
         self.decoder = TransformerDecoder(config, decoder_layers)
         self.checkpoints = []
+        
+        self.past_key_values_length = 0
 
     def _prepare_decoder_attention_mask(self, attention_mask, input_shape, past_key_values_length):
         # create causal mask
         # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
         combined_attention_mask = None
+        # 只有第一次的时候才会进来哦！
         if input_shape[-1] > 1:
+            print("只有第一次的时候才会进来哦！")
             combined_attention_mask = _make_causal_mask(
                 input_shape, past_key_values_length=past_key_values_length, dtype=attention_mask.dtype
             )
@@ -950,8 +1110,15 @@ class OPTModel(OPTPretrainedModel):
         else:
             raise ValueError("You have to specify either input_ids or inputs_embeds")
 
-        self.checkpoints = []
-        past_key_values_length = paddle.shape(cache[0].k)[2] if cache is not None else 0
+        # self.checkpoints = []
+        # past_key_values_length = paddle.shape(cache[0].k)[2] if cache is not None else 0
+
+
+        if (input_shape[1] > 1):
+             self.past_key_values_length = paddle.to_tensor([0])
+        self.past_key_values_length = self.past_key_values_length.reshape([1], name = "self.past_key_values_length")
+        past_key_values_length = paddle.to_tensor([self.past_key_values_length])
+        self.past_key_values_length += input_shape[1]
 
         seq_length_with_past = input_shape[-1] + past_key_values_length
 
@@ -1194,7 +1361,7 @@ class OPTForCausalLM(OPTPretrainedModel):
         self, input_ids, use_cache=False, cache=None, attention_mask=None, inputs_embeds=None, **kwargs
     ):
         if cache is not None:
-            input_ids = input_ids[:, -1:]
+            input_ids = input_ids[:, -1:2147483647]
 
         # if `inputs_embeds` are passed, we only want to use them in the 1st generation step
         if inputs_embeds is not None and cache is None:
