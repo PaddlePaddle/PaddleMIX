@@ -605,7 +605,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
         model_to_save = unwrap_model(self)
         if config_to_save is None:
             config_to_save = copy.deepcopy(model_to_save.config)
-
+        config_to_save.mp_degree = getattr(config_to_save, "config_to_save", 1)
         # Save the model
         state_dict = model_to_save.state_dict()
         self._keys_to_ignore_on_save = []
