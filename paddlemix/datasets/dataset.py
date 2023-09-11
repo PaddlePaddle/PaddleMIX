@@ -20,7 +20,9 @@ import warnings
 from collections import namedtuple
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 
+import cv2
 import datasets
+import numpy as np
 from multiprocess import Pool, RLock
 from PIL import Image
 
@@ -891,14 +893,13 @@ class DatasetFolder(Dataset):
         target_transform: Optional[Callable] = None,
         is_valid_file: Optional[Callable[[str], bool]] = None,
     ) -> None:
-        # super().__init__(root, transform=transform, target_transform=target_transform)
-        # super().__init__()
         self.root = root
         self.transform = transform
         self.target_transform = target_transform
 
         classes, class_to_idx = self.find_classes(self.root)
         samples = self.make_dataset(self.root, class_to_idx, extensions, is_valid_file)
+        print(f"find total {len(classes)} classes and {len(samples)} images.")
 
         self.loader = loader
         self.extensions = extensions
@@ -987,24 +988,19 @@ class DatasetFolder(Dataset):
             sample = self.transform(sample)
         if self.target_transform is not None:
             target = self.target_transform(target)
-
-        return sample, target
+        return sample, np.int32(target)
 
     def __len__(self) -> int:
         return len(self.samples)
 
+    @property
+    def class_num(self):
+        return len(set(self.classes))
 
-IMG_EXTENSIONS = (
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".ppm",
-    ".bmp",
-    ".pgm",
-    ".tif",
-    ".tiff",
-    ".webp",
-)
+
+IMG_EXTENSIONS = (".jpg", ".jpeg", ".png", ".ppm", ".bmp", ".pgm", ".tif", ".tiff", ".webp")
+
+_image_backend = "pil"
 
 
 def pil_loader(path: str) -> Image.Image:
@@ -1014,8 +1010,37 @@ def pil_loader(path: str) -> Image.Image:
         return img.convert("RGB")
 
 
+def set_image_backend(backend):
+    """
+    Specifies the package used to load images.
+
+    Args:
+        backend (string): Name of the image backend. one of {'PIL', 'accimage'}.
+            The :mod:`accimage` package uses the Intel IPP library. It is
+            generally faster than PIL, but does not support as many operations.
+    """
+    global _image_backend
+    if backend not in ["pil", "cv2"]:
+        raise ValueError(f"Invalid backend '{backend}'. Options are 'pil' and 'cv2'")
+    _image_backend = backend
+
+
+def get_image_backend():
+    """
+    Gets the name of the package used to load images
+    """
+    return _image_backend
+
+
+def cv2_loader(path: str):
+    return cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
+
+
 def default_loader(path: str) -> Any:
-    return pil_loader(path)
+    if get_image_backend() == "cv2":
+        return cv2_loader(path)
+    else:
+        return pil_loader(path)
 
 
 class ImageFolder(DatasetFolder):
