@@ -120,8 +120,11 @@ class LoRACompatibleConv(nn.Conv2D):
         if self.lora_layer is None:
             # make sure to the functional Conv2D function as otherwise torch.compile's graph will break
             # see: https://github.com/huggingface/diffusers/pull/4315
-            # return F.conv2d(x, self.weight, self.bias, self._stride, self._padding, self._dilation, self._groups)
-            return super().forward(x)
+            return nn.functional.conv2d(
+                x, self.weight, self.bias, self._stride, self._padding, self._dilation, self._groups
+            )
+            # return super().forward(x)
+            # return nn.functional.conv2d(x, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups)
         else:
             return super().forward(x) + self.lora_layer(x)
 

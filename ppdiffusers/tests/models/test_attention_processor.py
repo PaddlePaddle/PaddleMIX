@@ -14,7 +14,6 @@
 import tempfile
 import unittest
 
-
 import numpy as np
 import paddle
 
@@ -97,40 +96,29 @@ class AttnAddedKVProcessorTests(unittest.TestCase):
 class DeprecatedAttentionBlockTests(unittest.TestCase):
     def test_conversion_when_using_device_map(self):
         pipe = DiffusionPipeline.from_pretrained("hf-internal-testing/tiny-stable-diffusion-pipe", safety_checker=None)
-
         pre_conversion = pipe(
             "foo",
             num_inference_steps=2,
             generator=paddle.Generator().manual_seed(0),
             output_type="np",
         ).images
-
-        # the initial conversion succeeds
         pipe = DiffusionPipeline.from_pretrained(
             "hf-internal-testing/tiny-stable-diffusion-pipe", device_map="sequential", safety_checker=None
         )
-
         conversion = pipe(
             "foo",
             num_inference_steps=2,
-            generator=paddle.Generator().manual_seed(0),
+            generator=paddle.Generator().manual_seed().manual_seed(0),
             output_type="np",
         ).images
-
         with tempfile.TemporaryDirectory() as tmpdir:
-            # save the converted model
             pipe.save_pretrained(tmpdir)
-
-            # can also load the converted weights
             pipe = DiffusionPipeline.from_pretrained(tmpdir, device_map="sequential", safety_checker=None)
-
         after_conversion = pipe(
             "foo",
             num_inference_steps=2,
-            generator=paddle.Generator().manual_seed(0),
+            generator=paddle.Generator().manual_seed().manual_seed(0),
             output_type="np",
         ).images
-
-        self.assertTrue(np.allclose(pre_conversion, conversion, atol=1e-5))
-        self.assertTrue(np.allclose(conversion, after_conversion, atol=1e-5))
-        
+        self.assertTrue(np.allclose(pre_conversion, conversion, atol=1e-05))
+        self.assertTrue(np.allclose(conversion, after_conversion, atol=1e-05))

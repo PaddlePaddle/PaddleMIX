@@ -19,11 +19,7 @@ import numpy as np
 import paddle
 import paddle.nn
 
-from ppdiffusers.models.attention import (
-    GEGLU,
-    AdaLayerNorm,
-    ApproximateGELU,
-)
+from ppdiffusers.models.attention import GEGLU, AdaLayerNorm, ApproximateGELU
 from ppdiffusers.models.embeddings import get_timestep_embedding
 from ppdiffusers.models.lora import LoRACompatibleLinear
 from ppdiffusers.models.resnet import Downsample2D, ResnetBlock2D, Upsample2D

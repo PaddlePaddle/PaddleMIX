@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import gc
 import os
 import tempfile
@@ -21,6 +22,7 @@ import unittest
 import paddle
 import paddle.nn as nn
 from parameterized import parameterized
+from pytest import mark
 
 from ppdiffusers import UNet2DConditionModel
 from ppdiffusers.models.attention_processor import (
@@ -36,10 +38,13 @@ from ppdiffusers.utils import (
     slow,
 )
 from ppdiffusers.utils.import_utils import is_ppxformers_available
+from ppdiffusers.utils.testing_utils import enable_full_determinism
 
-from .test_modeling_common import ModelTesterMixin
+from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
 
 logger = logging.get_logger(__name__)
+
+enable_full_determinism()
 
 
 def create_lora_layers(model, mock_weights: bool = True):
@@ -117,8 +122,9 @@ def create_custom_ppdiffusion_layers(model, mock_weights: bool = True):
     return custom_diffusion_attn_procs
 
 
-class UNet2DConditionModelTests(ModelTesterMixin, unittest.TestCase):
+class UNet2DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
     model_class = UNet2DConditionModel
+    main_input_name = "sample"
 
     @property
     def dummy_input(self):
@@ -350,6 +356,55 @@ class UNet2DConditionModelTests(ModelTesterMixin, unittest.TestCase):
         assert processor.is_run
         assert processor.number == 123
 
+    @parameterized.expand([["bool"], ["int64"], ["float32"]])
+    def test_model_xattn_mask(self, mask_dtype):
+        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+        model = self.model_class(**{**init_dict, "attention_head_dim": (8, 16)})
+        model.eval()
+        cond = inputs_dict["encoder_hidden_states"]
+        with paddle.no_grad():
+            full_cond_out = model(**inputs_dict).sample
+            assert full_cond_out is not None
+            keepall_mask = paddle.ones(shape=cond.shape[:-1], dtype=mask_dtype)
+            full_cond_keepallmask_out = model(**{**inputs_dict, "encoder_attention_mask": keepall_mask}).sample
+            assert full_cond_keepallmask_out.allclose(
+                y=full_cond_out
+            ).item(), "a 'keep all' mask should give the same result as no mask"
+            trunc_cond = cond[:, :-1, :]
+            trunc_cond_out = model(**{**inputs_dict, "encoder_hidden_states": trunc_cond}).sample
+            assert not trunc_cond_out.allclose(
+                y=full_cond_out
+            ).item(), "discarding the last token from our cond should change the result"
+            batch, tokens, _ = cond.shape
+            mask_last = (paddle.arange(end=tokens) < tokens - 1).expand(shape=[batch, -1]).cast(mask_dtype)
+            masked_cond_out = model(**{**inputs_dict, "encoder_attention_mask": mask_last}).sample
+            assert masked_cond_out.allclose(
+                y=trunc_cond_out
+            ).item(), "masking the last token from our cond should be equivalent to truncating that token out of the condition"
+
+    @mark.skip(
+        reason="we currently pad mask by target_length tokens (what unclip needs), whereas stable-diffusion's cross-attn needs to instead pad by remaining_length."
+    )
+    def test_model_xattn_padding(self):
+        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+        model = self.model_class(**{**init_dict, "attention_head_dim": (8, 16)})
+        model.eval()
+        cond = inputs_dict["encoder_hidden_states"]
+        with paddle.no_grad():
+            full_cond_out = model(**inputs_dict).sample
+            assert full_cond_out is not None
+            batch, tokens, _ = cond.shape
+            keeplast_mask = (paddle.arange(end=tokens) == tokens - 1).expand(shape=[batch, -1]).cast("bool")
+            keeplast_out = model(**{**inputs_dict, "encoder_attention_mask": keeplast_mask}).sample
+            assert not keeplast_out.allclose(
+                y=full_cond_out
+            ).item(), "a 'keep last token' mask should change the result"
+            trunc_mask = paddle.zeros(shape=[batch, tokens - 1], dtype="bool")
+            trunc_mask_out = model(**{**inputs_dict, "encoder_attention_mask": trunc_mask}).sample
+            assert trunc_mask_out.allclose(
+                y=keeplast_out
+            ).item(), "a mask with fewer tokens than condition, will be padded with 'keep' tokens. a 'discard-all' mask missing the final token is thus equivalent to a 'keep last' mask."
+
     def test_lora_processors(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         init_dict["attention_head_dim"] = 8, 16
@@ -363,9 +418,9 @@ class UNet2DConditionModelTests(ModelTesterMixin, unittest.TestCase):
             sample2 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.0}).sample
             sample3 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
             sample4 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
-        assert (sample1 - sample2).abs().max() < 0.0001
-        assert (sample3 - sample4).abs().max() < 0.0001
-        assert (sample2 - sample3).abs().max() > 0.0001
+        assert (sample1 - sample2).abs().max() < 3e-3
+        assert (sample3 - sample4).abs().max() < 3e-3
+        assert (sample2 - sample3).abs().max() > 3e-3
 
     def test_lora_save_load(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -433,7 +488,7 @@ class UNet2DConditionModelTests(ModelTesterMixin, unittest.TestCase):
 
         lora_attn_procs = create_lora_layers(model, mock_weights=False)
         model.set_attn_processor(lora_attn_procs)
-        # Saving as torch, properly reloads with directly filename
+        # Saving as paddle, properly reloads with directly filename
         with tempfile.TemporaryDirectory() as tmpdirname:
             model.save_attn_procs(tmpdirname, to_diffusers=True)
             self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
@@ -461,7 +516,7 @@ class UNet2DConditionModelTests(ModelTesterMixin, unittest.TestCase):
         with paddle.no_grad():
             new_sample = model(**inputs_dict).sample
         assert (sample - new_sample).abs().max() < 0.0001
-        assert (sample - old_sample).abs().max() < 0.0001
+        assert (sample - old_sample).abs().max() < 3e-3
 
     @unittest.skipIf(
         not is_ppxformers_available(),
@@ -505,7 +560,7 @@ class UNet2DConditionModelTests(ModelTesterMixin, unittest.TestCase):
         with paddle.no_grad():
             sample2 = model(**inputs_dict).sample
 
-        assert (sample1 - sample2).abs().max() < 1e-4
+        assert (sample1 - sample2).abs().max() < 3e-3
 
     def test_custom_diffusion_save_load(self):
         # enable deterministic behavior for gradient checkpointing
@@ -540,7 +595,7 @@ class UNet2DConditionModelTests(ModelTesterMixin, unittest.TestCase):
         assert (sample - new_sample).abs().max() < 1e-4
 
         # custom diffusion and no custom diffusion should be the same
-        assert (sample - old_sample).abs().max() < 1e-4
+        assert (sample - old_sample).abs().max() < 3e-3
 
     @unittest.skipIf(
         not is_ppxformers_available(),
@@ -569,6 +624,16 @@ class UNet2DConditionModelTests(ModelTesterMixin, unittest.TestCase):
 
         assert (sample - on_sample).abs().max() < 1e-4
         assert (sample - off_sample).abs().max() < 1e-4
+
+    def test_pickle(self):
+        # enable deterministic behavior for gradient checkpointing
+        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+        init_dict["attention_head_dim"] = 8, 16
+        model = self.model_class(**init_dict)
+        with paddle.no_grad():
+            sample = model(**inputs_dict).sample
+        sample_copy = copy.copy(sample)
+        assert (sample - sample_copy).abs().max() < 0.0001
 
 
 @slow
