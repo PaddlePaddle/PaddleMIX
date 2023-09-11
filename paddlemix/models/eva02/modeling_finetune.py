@@ -334,7 +334,7 @@ class Block(paddle.nn.Layer):
 
         self.deepnorm = config.deepnorm
         if self.deepnorm:
-            self.alpha = math.pow(2.0 * config.depth, 0.25)
+            self.alpha = math.pow(2.0 * config.layers, 0.25)
         self.postnorm = config.postnorm
 
     def forward(self, x, rel_pos_bias=None, attn_mask=None):
@@ -502,7 +502,7 @@ class EVA02VisionTransformerConfig(PretrainedConfig):
         in_chans=3,
         num_classes=1000,
         embed_dim=768,
-        depth=12,
+        layers=12,
         num_heads=12,
         mlp_ratio=4.0,
         qkv_bias=False,
@@ -537,7 +537,7 @@ class EVA02VisionTransformerConfig(PretrainedConfig):
         self.in_chans = in_chans
         self.num_classes = num_classes
         self.embed_dim = embed_dim
-        self.depth = depth
+        self.layers = layers
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
         self.qkv_bias = qkv_bias
@@ -637,7 +637,7 @@ class EVA02VisionTransformer(EVA02VisionTransformerPretrainedModel):
         else:
             self.rope = None
 
-        dpr = [x.item() for x in paddle.linspace(0, config.drop_path_rate, config.depth)]
+        dpr = [x.item() for x in paddle.linspace(0, config.drop_path_rate, config.layers)]
         self.blocks = paddle.nn.LayerList(
             sublayers=[
                 Block(
@@ -647,7 +647,7 @@ class EVA02VisionTransformer(EVA02VisionTransformerPretrainedModel):
                     window_size=self.patch_embed.patch_shape if config.use_rel_pos_bias else None,
                     rope=self.rope,
                 )
-                for i in range(config.depth)
+                for i in range(config.layers)
             ]
         )
 

@@ -63,7 +63,7 @@ class EVA02VisionTransformerForMIMConfig(PretrainedConfig):
         patch_size=14,
         in_chans=3,
         embed_dim=768,
-        depth=12,
+        layers=12,
         num_heads=12,
         mlp_ratio=4.0,
         qkv_bias=False,
@@ -99,7 +99,7 @@ class EVA02VisionTransformerForMIMConfig(PretrainedConfig):
         self.patch_size = patch_size
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-        self.depth = depth
+        self.layers = layers
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
         self.qkv_bias = qkv_bias
@@ -210,7 +210,7 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
         else:
             self.rope = None
 
-        dpr = [x.item() for x in paddle.linspace(0, config.drop_path_rate, config.depth)]
+        dpr = [x.item() for x in paddle.linspace(0, config.drop_path_rate, config.layers)]
         self.blocks = paddle.nn.LayerList(
             sublayers=[
                 Block(
@@ -220,7 +220,7 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
                     window_size=self.patch_embed.patch_shape if config.use_rel_pos_bias else None,
                     rope=self.rope,
                 )
-                for i in range(config.depth)
+                for i in range(config.layers)
             ]
         )
 
@@ -258,7 +258,7 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
             self._reinit_respostnorm_ln()
 
         if self.deepnorm:
-            init_scale = math.pow(8.0 * config.depth, 0.25)
+            init_scale = math.pow(8.0 * config.layers, 0.25)
             for name, p in self.named_parameters():
                 if "mlp.fc" in name or "mlp.w" in name or "attn.proj" in name or "attn.v_proj" in name:
                     print("deepnorm rescale:", name, "/", init_scale)
@@ -267,7 +267,7 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
         self.subln = config.subln
         if self.subln and self.naiveswiglu:
             # only B/L
-            init_scale = math.sqrt(math.log(config.depth * 2))
+            init_scale = math.sqrt(math.log(config.layers * 2))
             for name, p in self.named_parameters():
                 if "mlp.fc" in name or "mlp.w" in name or "attn.proj" in name or "attn.v_proj" in name:
                     print("subln rescale:", name, "x", init_scale)
