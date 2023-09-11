@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import inspect
+import os
 import tempfile
 import unittest
 import unittest.mock as mock
@@ -25,9 +26,14 @@ import requests_mock
 from requests.exceptions import HTTPError
 
 from ppdiffusers.models import UNet2DConditionModel
+from ppdiffusers.models.attention_processor import (
+    AttnProcessor,
+    AttnProcessor2_5,
+    XFormersAttnProcessor,
+)
 from ppdiffusers.training_utils import EMAModel
 from ppdiffusers.utils import logging
-from ppdiffusers.utils.testing_utils import CaptureLogger
+from ppdiffusers.utils.testing_utils import CaptureLogger, require_paddle_gpu
 
 
 class ModelUtilsTest(unittest.TestCase):
@@ -120,7 +126,34 @@ class ModelUtilsTest(unittest.TestCase):
         assert model.config.in_channels == 9
 
 
+class UNetTesterMixin:
+    def test_forward_signature(self):
+        init_dict, _ = self.prepare_init_args_and_inputs_for_common()
+        model = self.model_class(**init_dict)
+        signature = inspect.signature(model.forward)
+        arg_names = [*signature.parameters.keys()]
+        expected_arg_names = ["sample", "timestep"]
+        self.assertListEqual(arg_names[:2], expected_arg_names)
+
+    def test_forward_with_norm_groups(self):
+        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+        init_dict["norm_num_groups"] = 16
+        init_dict["block_out_channels"] = 16, 32
+        model = self.model_class(**init_dict)
+        model.eval()
+        with paddle.no_grad():
+            output = model(**inputs_dict)
+            if isinstance(output, dict):
+                output = output.to_tuple()[0]
+        self.assertIsNotNone(output)
+        expected_shape = inputs_dict["sample"].shape
+        self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
+
+
 class ModelTesterMixin:
+    main_input_name = None  # overwrite in model specific tester class
+    base_precision = 1e-3
+
     def test_from_save_pretrained(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
@@ -135,10 +168,10 @@ class ModelTesterMixin:
         with paddle.no_grad():
             image = model(**inputs_dict)
             if isinstance(image, dict):
-                image = image.sample
+                image = image.to_tuple()[0]
             new_image = new_model(**inputs_dict)
             if isinstance(new_image, dict):
-                new_image = new_image.sample
+                new_image = new_image.to_tuple()[0]
         max_diff = (image - new_image).abs().sum().item()
         self.assertLessEqual(max_diff, 5e-05, "Models give different forward passes")
 
@@ -150,7 +183,7 @@ class ModelTesterMixin:
         model.dummy_attribute = 5
         model.register_to_config(test_attribute=5)
 
-        logger = logging.get_logger("diffusers.models.modeling_utils")
+        logger = logging.get_logger("ppdiffusers.models.modeling_utils")
         # 30 for warning
         logger.setLevel(30)
         with CaptureLogger(logger) as cap_logger:
@@ -161,7 +194,7 @@ class ModelTesterMixin:
         # no warning should be thrown
         assert cap_logger.out == ""
 
-        logger = logging.get_logger("diffusers.models.modeling_utils")
+        logger = logging.get_logger("ppdiffusers.models.modeling_utils")
         # 30 for warning
         logger.setLevel(30)
         with CaptureLogger(logger) as cap_logger:
@@ -184,6 +217,46 @@ class ModelTesterMixin:
             model.does_not_exist
 
         assert str(error.exception) == f"'{type(model).__name__}' object has no attribute 'does_not_exist'"
+
+    @require_paddle_gpu
+    def test_set_attn_processor_for_determinism(self):
+        os.environ["FLAGS_cudnn_deterministic"] = "False"
+        os.environ["FLAGS_cpu_deterministic"] = "False"
+
+        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+        model = self.model_class(**init_dict)
+        if not hasattr(model, "set_attn_processor"):
+            return
+        assert all(type(proc) == AttnProcessor2_5 for proc in model.attn_processors.values())
+        with paddle.no_grad():
+            output_1 = model(**inputs_dict)[0]
+        model.set_default_attn_processor()
+        assert all(type(proc) == AttnProcessor for proc in model.attn_processors.values())
+        with paddle.no_grad():
+            output_2 = model(**inputs_dict)[0]
+        model.enable_xformers_memory_efficient_attention()
+        assert all(type(proc) == XFormersAttnProcessor for proc in model.attn_processors.values())
+        with paddle.no_grad():
+            output_3 = model(**inputs_dict)[0]
+        model.set_attn_processor(AttnProcessor2_5())
+        assert all(type(proc) == AttnProcessor2_5 for proc in model.attn_processors.values())
+        with paddle.no_grad():
+            output_4 = model(**inputs_dict)[0]
+        model.set_attn_processor(AttnProcessor())
+        assert all(type(proc) == AttnProcessor for proc in model.attn_processors.values())
+        with paddle.no_grad():
+            output_5 = model(**inputs_dict)[0]
+        model.set_attn_processor(XFormersAttnProcessor())
+        assert all(type(proc) == XFormersAttnProcessor for proc in model.attn_processors.values())
+        with paddle.no_grad():
+            output_6 = model(**inputs_dict)[0]
+        os.environ["FLAGS_cudnn_deterministic"] = "True"
+        os.environ["FLAGS_cpu_deterministic"] = "True"
+        assert paddle.allclose(x=output_2, y=output_1, atol=self.base_precision).item()
+        assert paddle.allclose(x=output_2, y=output_3, atol=self.base_precision).item()
+        assert paddle.allclose(x=output_2, y=output_4, atol=self.base_precision).item()
+        assert paddle.allclose(x=output_2, y=output_5, atol=self.base_precision).item()
+        assert paddle.allclose(x=output_2, y=output_6, atol=self.base_precision).item()
 
     def test_from_save_pretrained_variant(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -209,10 +282,10 @@ class ModelTesterMixin:
 
             image = model(**inputs_dict)
             if isinstance(image, dict):
-                image = image.sample
+                image = image.to_tuple()[0]
             new_image = new_model(**inputs_dict)
             if isinstance(new_image, dict):
-                new_image = new_image.sample
+                new_image = new_image.to_tuple()[0]
         max_diff = (image - new_image).abs().sum().item()
         self.assertLessEqual(max_diff, 5e-05, "Models give different forward passes")
 
@@ -230,23 +303,23 @@ class ModelTesterMixin:
                 new_model = self.model_class.from_pretrained(tmpdirname, paddle_dtype=dtype)
                 assert new_model.dtype == dtype
 
-    def test_determinism(self):
+    def test_determinism(self, expected_max_diff=1e-5):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
         model.eval()
         with paddle.no_grad():
             first = model(**inputs_dict)
             if isinstance(first, dict):
-                first = first.sample
+                first = first.to_tuple()[0]
             second = model(**inputs_dict)
             if isinstance(second, dict):
-                second = second.sample
+                second = second.to_tuple()[0]
         out_1 = first.cpu().numpy()
         out_2 = second.cpu().numpy()
         out_1 = out_1[~np.isnan(out_1)]
         out_2 = out_2[~np.isnan(out_2)]
         max_diff = np.amax(np.abs(out_1 - out_2))
-        self.assertLessEqual(max_diff, 1e-05)
+        self.assertLessEqual(max_diff, expected_max_diff)
 
     def test_output(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -255,37 +328,21 @@ class ModelTesterMixin:
         with paddle.no_grad():
             output = model(**inputs_dict)
             if isinstance(output, dict):
-                output = output.sample
+                output = output.to_tuple()[0]
         self.assertIsNotNone(output)
+        # input & output have to have the same shape
+        input_tensor = inputs_dict[self.main_input_name]
+        expected_shape = input_tensor.shape
         expected_shape = inputs_dict["sample"].shape
         self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
-
-    def test_forward_with_norm_groups(self):
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        init_dict["norm_num_groups"] = 16
-        init_dict["block_out_channels"] = 16, 32
-        model = self.model_class(**init_dict)
-        model.eval()
-        with paddle.no_grad():
-            output = model(**inputs_dict)
-            if isinstance(output, dict):
-                output = output.sample
-        self.assertIsNotNone(output)
-        expected_shape = inputs_dict["sample"].shape
-        self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
-
-    def test_forward_signature(self):
-        init_dict, _ = self.prepare_init_args_and_inputs_for_common()
-        model = self.model_class(**init_dict)
-        signature = inspect.signature(model.forward)
-        arg_names = [*signature.parameters.keys()]
-        expected_arg_names = ["sample", "timestep"]
-        self.assertListEqual(arg_names[:2], expected_arg_names)
 
     def test_model_from_pretrained(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
         model.eval()
+
+        # test if the model can be loaded from the config
+        # and has all the expected shape
         with tempfile.TemporaryDirectory() as tmpdirname:
             model.save_pretrained(tmpdirname)
             new_model = self.model_class.from_pretrained(tmpdirname)
@@ -297,10 +354,10 @@ class ModelTesterMixin:
         with paddle.no_grad():
             output_1 = model(**inputs_dict)
             if isinstance(output_1, dict):
-                output_1 = output_1.sample
+                output_1 = output_1.to_tuple()[0]
             output_2 = new_model(**inputs_dict)
             if isinstance(output_2, dict):
-                output_2 = output_2.sample
+                output_2 = output_2.to_tuple()[0]
         self.assertEqual(output_1.shape, output_2.shape)
 
     def test_training(self):
@@ -309,8 +366,9 @@ class ModelTesterMixin:
         model.train()
         output = model(**inputs_dict)
         if isinstance(output, dict):
-            output = output.sample
-        noise = paddle.randn(shape=list((inputs_dict["sample"].shape[0],) + self.output_shape))
+            output = output.to_tuple()[0]
+        input_tensor = inputs_dict[self.main_input_name]
+        noise = paddle.randn(shape=(input_tensor.shape[0],) + self.output_shape)
         loss = paddle.nn.functional.mse_loss(input=output, label=noise)
         loss.backward()
 
@@ -321,8 +379,9 @@ class ModelTesterMixin:
         ema_model = EMAModel(model.parameters())
         output = model(**inputs_dict)
         if isinstance(output, dict):
-            output = output.sample
-        noise = paddle.randn(shape=list((inputs_dict["sample"].shape[0],) + self.output_shape))
+            output = output.to_tuple()[0]
+        input_tensor = inputs_dict[self.main_input_name]
+        noise = paddle.randn(shape=(input_tensor.shape[0],) + self.output_shape)
         loss = paddle.nn.functional.mse_loss(input=output, label=noise)
         loss.backward()
         ema_model.step(model.parameters())

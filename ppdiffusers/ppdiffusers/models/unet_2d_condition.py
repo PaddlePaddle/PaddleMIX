@@ -860,8 +860,10 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                     f"{self.__class__} has the config param `addition_embed_type` set to 'text_time' which requires the keyword argument `time_ids` to be passed in `added_cond_kwargs`"
                 )
             time_ids = added_cond_kwargs.get("time_ids")
+            time_embeds_size_1 = time_ids.shape[1]
             time_embeds = self.add_time_proj(time_ids.flatten())
-            time_embeds = time_embeds.reshape((text_embeds.shape[0], -1))
+            time_embeds_size_2 = time_embeds.shape[1]
+            time_embeds = time_embeds.reshape((text_embeds.shape[0], time_embeds_size_1 * time_embeds_size_2))
             # make sure [text_embeds, time_embeds] has the same dtype
             time_embeds = time_embeds.cast(text_embeds.dtype)
             add_embeds = paddle.concat([text_embeds, time_embeds], axis=-1)

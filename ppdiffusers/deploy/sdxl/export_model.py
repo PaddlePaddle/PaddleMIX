@@ -150,6 +150,10 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     del pipeline.vae
 
     fd_pipe_cls = FastDeploySFastDeployStableDiffusionXLPipelineHousing
+    print("mark 1")
+    text_encoder = (FastDeployRuntimeModel.from_pretrained(output_path / "text_encoder"),)
+    # vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
+    print("mark 2")
 
     fastdeploy_pipeline = fd_pipe_cls(
         vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
@@ -161,6 +165,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         tokenizer_2=pipeline.tokenizer_2,
         scheduler=pipeline.scheduler,
     )
+    print("start saving")
     fastdeploy_pipeline.save_pretrained(output_path)
     print("FastDeploy pipeline saved to", output_path)
 
