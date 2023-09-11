@@ -42,6 +42,11 @@ __all__ = [
     "Blip2ForConditionalGeneration",
 ]
 
+BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST = [
+    "Salesforce/blip2-flan-t5-xl",
+    "Salesforce/blip2-opt-2.7b",
+]
+
 
 def Parameter(tensor):
     return paddle.create_parameter(
