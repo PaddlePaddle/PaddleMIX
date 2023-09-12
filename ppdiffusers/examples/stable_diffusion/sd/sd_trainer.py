@@ -54,7 +54,7 @@ class VisualDLWithImageCallback(VisualDLCallback):
                 if args.amp_custom_white_list is not None:
                     custom_white_list.extend(args.amp_custom_white_list)
             if hasattr(args, "amp_custom_black_list"):
-                if self.args.amp_custom_black_list is not None:
+                if args.amp_custom_black_list is not None:
                     custom_black_list.extend(args.amp_custom_black_list)
 
             ctx_manager = autocast(
