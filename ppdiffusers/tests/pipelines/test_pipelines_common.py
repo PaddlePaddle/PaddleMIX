@@ -55,7 +55,7 @@ class PipelineLatentTesterMixin:
     @property
     def image_params(self) -> frozenset:
         raise NotImplementedError(
-            "You need to set the attribute `image_params` in the child test class. `image_params` are tested for if all accepted input image types (i.e. `pt`,`pil`,`np`) are producing same results"
+            "You need to set the attribute `image_params` in the child test class. `image_params` are tested for if all accepted input image types (i.e. `pd`,`pil`,`np`) are producing same results"
         )
 
     @property
@@ -64,28 +64,28 @@ class PipelineLatentTesterMixin:
             "You need to set the attribute `image_latents_params` in the child test class. `image_latents_params` are tested for if passing latents directly are producing same results"
         )
 
-    def get_dummy_inputs_by_type(self, seed=0, input_image_type="pt", output_type="np"):
+    def get_dummy_inputs_by_type(self, seed=0, input_image_type="pd", output_type="np"):
         inputs = self.get_dummy_inputs(seed)
 
-        def convert_to_pt(image):
+        def convert_to_pd(image):
             if isinstance(image, paddle.Tensor):
                 input_image = image
             elif isinstance(image, np.ndarray):
-                input_image = VaeImageProcessor.numpy_to_pt(image)
+                input_image = VaeImageProcessor.numpy_to_pd(image)
             elif isinstance(image, PIL.Image.Image):
                 input_image = VaeImageProcessor.pil_to_numpy(image)
-                input_image = VaeImageProcessor.numpy_to_pt(input_image)
+                input_image = VaeImageProcessor.numpy_to_pd(input_image)
             else:
                 raise ValueError(f"unsupported input_image_type {type(image)}")
             return input_image
 
-        def convert_pt_to_type(image, input_image_type):
-            if input_image_type == "pt":
+        def convert_pd_to_type(image, input_image_type):
+            if input_image_type == "pd":
                 input_image = image
             elif input_image_type == "np":
-                input_image = VaeImageProcessor.pt_to_numpy(image)
+                input_image = VaeImageProcessor.pd_to_numpy(image)
             elif input_image_type == "pil":
-                input_image = VaeImageProcessor.pt_to_numpy(image)
+                input_image = VaeImageProcessor.pd_to_numpy(image)
                 input_image = VaeImageProcessor.numpy_to_pil(input_image)
             else:
                 raise ValueError(f"unsupported input_image_type {input_image_type}.")
@@ -93,42 +93,40 @@ class PipelineLatentTesterMixin:
 
         for image_param in self.image_params:
             if image_param in inputs.keys():
-                inputs[image_param] = convert_pt_to_type(convert_to_pt(inputs[image_param]), input_image_type)
+                inputs[image_param] = convert_pd_to_type(convert_to_pd(inputs[image_param]), input_image_type)
         inputs["output_type"] = output_type
         return inputs
 
-    def test_pt_np_pil_outputs_equivalent(self, expected_max_diff=0.0001):
-        self._test_pt_np_pil_outputs_equivalent(expected_max_diff=expected_max_diff)
+    def test_pd_np_pil_outputs_equivalent(self, expected_max_diff=0.0001):
+        self._test_pd_np_pil_outputs_equivalent(expected_max_diff=expected_max_diff)
 
-    def _test_pt_np_pil_outputs_equivalent(self, expected_max_diff=0.0001, input_image_type="pt"):
+    def _test_pd_np_pil_outputs_equivalent(self, expected_max_diff=0.0001, input_image_type="pd"):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe = pipe.to(paddle_device)
         pipe.set_progress_bar_config(disable=None)
-        output_pt = pipe(**self.get_dummy_inputs_by_type(input_image_type=input_image_type, output_type="pt"))[0]
+        output_pd = pipe(**self.get_dummy_inputs_by_type(input_image_type=input_image_type, output_type="pd"))[0]
         output_np = pipe(**self.get_dummy_inputs_by_type(input_image_type=input_image_type, output_type="np"))[0]
         output_pil = pipe(**self.get_dummy_inputs_by_type(input_image_type=input_image_type, output_type="pil"))[0]
-        max_diff = np.abs(output_pt.cpu().numpy().transpose(0, 2, 3, 1) - output_np).max()
+        max_diff = np.abs(output_pd.cpu().numpy().transpose(0, 2, 3, 1) - output_np).max()
         self.assertLess(
-            max_diff, expected_max_diff, "`output_type=='pt'` generate different results from `output_type=='np'`"
+            max_diff, expected_max_diff, "`output_type=='pd'` generate different results from `output_type=='np'`"
         )
         max_diff = np.abs(np.array(output_pil[0]) - (output_np * 255).round()).max()
         self.assertLess(max_diff, 2.0, "`output_type=='pil'` generate different results from `output_type=='np'`")
 
-    def test_pt_np_pil_inputs_equivalent(self):
+    def test_pd_np_pil_inputs_equivalent(self):
         if len(self.image_params) == 0:
             return
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe = pipe.to(paddle_device)
         pipe.set_progress_bar_config(disable=None)
-        out_input_pt = pipe(**self.get_dummy_inputs_by_type(input_image_type="pt"))[0]
+        out_input_pd = pipe(**self.get_dummy_inputs_by_type(input_image_type="pd"))[0]
         out_input_np = pipe(**self.get_dummy_inputs_by_type(input_image_type="np"))[0]
         out_input_pil = pipe(**self.get_dummy_inputs_by_type(input_image_type="pil"))[0]
-        max_diff = np.abs(out_input_pt - out_input_np).max()
-        self.assertLess(max_diff, 0.0001, "`input_type=='pt'` generate different result from `input_type=='np'`")
+        max_diff = np.abs(out_input_pd - out_input_np).max()
+        self.assertLess(max_diff, 0.0001, "`input_type=='pd'` generate different result from `input_type=='np'`")
         max_diff = np.abs(out_input_pil - out_input_np).max()
-        self.assertLess(max_diff, 0.01, "`input_type=='pt'` generate different result from `input_type=='np'`")
+        self.assertLess(max_diff, 0.01, "`input_type=='pd'` generate different result from `input_type=='np'`")
 
     def test_latents_input(self):
         if len(self.image_latents_params) == 0:
@@ -138,9 +136,9 @@ class PipelineLatentTesterMixin:
         pipe.image_processor = VaeImageProcessor(do_resize=False, do_normalize=False)
         pipe = pipe.to(paddle_device)
         pipe.set_progress_bar_config(disable=None)
-        out = pipe(**self.get_dummy_inputs_by_type(input_image_type="pt"))[0]
+        out = pipe(**self.get_dummy_inputs_by_type(input_image_type="pd"))[0]
         vae = components["vae"]
-        inputs = self.get_dummy_inputs_by_type(input_image_type="pt")
+        inputs = self.get_dummy_inputs_by_type(input_image_type="pd")
         generator = inputs["generator"]
         for image_param in self.image_latents_params:
             if image_param in inputs.keys():
@@ -184,6 +182,7 @@ class PipelineKarrasSchedulerTesterMixin:
 
             scheduler_cls = getattr(ppdiffusers, scheduler_enum.name)
             pipe.scheduler = scheduler_cls.from_config(pipe.scheduler.config)
+
             output = pipe(**inputs)[0]
             outputs.append(output)
 
