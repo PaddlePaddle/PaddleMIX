@@ -17,11 +17,11 @@ import os
 import paddle
 from paddle.io import DataLoader
 from paddlenlp.trainer.trainer import Trainer
+from paddlenlp.transformers.model_utils import unwrap_model
 from paddlenlp.utils.log import logger
 from tensorboardX import SummaryWriter
 
 from paddlemix.models.eva02.optim_factory import get_grad_norm_and_clip
-from ppdiffusers.training_utils import unwrap_model
 
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
 TRAINING_ARGS_NAME = "training_args.bin"
