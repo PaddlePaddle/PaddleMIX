@@ -18,9 +18,12 @@ import tempfile
 import unittest
 
 import paddle
+from diffusers.utils.testing_utils import enable_full_determinism
 
 from ppdiffusers import UNet2DConditionModel
 from ppdiffusers.training_utils import EMAModel
+
+enable_full_determinism()
 
 
 class EMAModelTests(unittest.TestCase):

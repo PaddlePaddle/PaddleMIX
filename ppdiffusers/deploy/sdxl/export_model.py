@@ -21,12 +21,9 @@ import paddle
 from fd_stable_diffusion_xl_housing import (
     FastDeploySFastDeployStableDiffusionXLPipelineHousing,
 )
+from unet_2d_condition_housing import UNet2DConditionModelSDXLHousing
 
-from ppdiffusers import (
-    FastDeployRuntimeModel,
-    StableDiffusionXLPipeline,
-    UNet2DConditionModel,
-)
+from ppdiffusers import FastDeployRuntimeModel, StableDiffusionXLPipeline
 
 
 def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
@@ -37,7 +34,9 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     width: int = None,
 ):
     # specify unet model with unet pre_temb_act opt enabled.
-    unet_model = UNet2DConditionModel.from_pretrained(model_path, resnet_pre_temb_non_linearity=True, subfolder="unet")
+    unet_model = UNet2DConditionModelSDXLHousing.from_pretrained(
+        model_path, resnet_pre_temb_non_linearity=True, subfolder="unet"
+    )
     pipeline = StableDiffusionXLPipeline.from_pretrained(
         model_path, unet=unet_model, safety_checker=None, feature_extractor=None
     )
@@ -59,6 +58,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         f"vae_encoder_in_channels: {vae_in_channels}\n",
         f"vae_decoder_latent_channels: {vae_latent_channels}",
     )
+
     # 1. Convert text_encoder
     text_encoder = paddle.jit.to_static(
         pipeline.text_encoder,
@@ -90,11 +90,9 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
                 shape=[None, None, cross_attention_dim], dtype="float32", name="encoder_hidden_states"
             ),  # encoder_hidden_states
             paddle.static.InputSpec(
-                shape=[None, 1280], dtype="float32", name="added_cond_kwargs_text_embeds"
+                shape=[None, 1280], dtype="float32", name="text_embeds"
             ),  # added_cond_kwargs_text_embeds
-            paddle.static.InputSpec(
-                shape=[None, None], dtype="float32", name="added_cond_kwargs_time_ids"
-            ),  # added_cond_kwargs_time_ids
+            paddle.static.InputSpec(shape=[None, 6], dtype="int64", name="time_ids"),  # added_cond_kwargs_time_ids
         ],
     )
     save_path = os.path.join(args.output_path, "unet", "inference")
@@ -152,6 +150,10 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     del pipeline.vae
 
     fd_pipe_cls = FastDeploySFastDeployStableDiffusionXLPipelineHousing
+    print("mark 1")
+    text_encoder = (FastDeployRuntimeModel.from_pretrained(output_path / "text_encoder"),)
+    # vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
+    print("mark 2")
 
     fastdeploy_pipeline = fd_pipe_cls(
         vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
@@ -163,6 +165,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         tokenizer_2=pipeline.tokenizer_2,
         scheduler=pipeline.scheduler,
     )
+    print("start saving")
     fastdeploy_pipeline.save_pretrained(output_path)
     print("FastDeploy pipeline saved to", output_path)
 
