@@ -18,12 +18,12 @@ import unittest
 
 import numpy as np
 import paddle
-from diffusers.utils.testing_utils import enable_full_determinism
 
 from ppdiffusers.models import UNet3DConditionModel
 from ppdiffusers.models.attention_processor import AttnProcessor, LoRAAttnProcessor
 from ppdiffusers.utils import floats_tensor, logging
 from ppdiffusers.utils.import_utils import is_ppxformers_available
+from ppdiffusers.utils.testing_utils import enable_full_determinism
 
 from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
 
