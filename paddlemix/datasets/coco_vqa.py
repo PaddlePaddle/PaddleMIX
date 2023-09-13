@@ -16,6 +16,8 @@ import collections
 import json
 import os
 
+from paddle.utils.download import get_path_from_url
+
 from paddlemix.utils.env import DATA_HOME
 from paddlemix.utils.log import logger
 
@@ -29,7 +31,7 @@ class VQADataset(DatasetBuilder):
     Caption dataset.
     """
 
-    URL = "https://bj.bcebos.com/paddlemix/datasets/coco.tar.gz"
+    URL = "https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco.tar"
     META_INFO = collections.namedtuple("META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
     MD5 = ""
     SPLITS = {
@@ -69,8 +71,12 @@ class VQADataset(DatasetBuilder):
             anno_fullname = []
             for ann in annotations:
                 anno_fullname.append(os.path.join(DATA_HOME, ann))
+                if not os.path.exists(image_fullname) or not os.path.exists(os.path.join(DATA_HOME, ann)):
+                    get_path_from_url(self.URL, DATA_HOME, self.MD5)
         else:
             anno_fullname = os.path.join(DATA_HOME, annotations)
+            if not os.path.exists(image_fullname) or not os.path.exists(anno_fullname):
+                get_path_from_url(self.URL, DATA_HOME, self.MD5)
         return image_fullname, anno_fullname, mode
 
     def _read(self, filename, *args):
@@ -90,8 +96,8 @@ class VQADataset(DatasetBuilder):
                     "image": image_path,
                 }
                 yield_data["text_input"] = ann["question"]
-                yield_data["answers"] = ann["answers"]
-                yield_data["image_ids"] = ann["image_ids"]
+                yield_data["answers"] = ann["answer"]
+                yield_data["image_ids"] = ann["image"].split("/")[-1].strip(".jpg").split("_")[-1]
 
             else:
                 yield_data = {

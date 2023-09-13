@@ -26,6 +26,8 @@ import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
+from paddlenlp.transformers import AutoTokenizer
 
 from paddlemix.datasets import load_dataset
 from paddlemix.examples.blip2.utils import load_model
@@ -38,8 +40,6 @@ from paddlemix.processors.blip_processing import (
 )
 from paddlemix.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlemix.utils.log import logger
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
-from paddlenlp.transformers import AutoTokenizer
 
 
 class BlipCollator:
@@ -87,7 +87,7 @@ class DataArguments:
     the command line.
     """
 
-    task_name: list or str = field(
+    task_name: str = field(
         default="coco_caption",
         metadata={"help": "The name of the task to use (via the datasets library)."},
     )
@@ -240,7 +240,7 @@ def main():
         warnings.warn("Do not support multiple {} and {} datasets.".format("test", "eval"))
         eval_dataset = {"test": load_dataset(data_args.task_name[0], splits="test")}
     else:
-        train_dataset.append(load_dataset(data_args.task_name, splits="train"))
+        train_dataset = load_dataset(data_args.task_name, splits="train")
         eval_dataset = {"test": load_dataset(data_args.task_name, splits="test")}
     # train_dataset = load_dataset(data_args.task_name,data_files=[['/root/.paddlemix/datasets/coco/images/','/root/.paddlemix/datasets/coco/annotations/coco_karpathy_train.json',"train"]])
 
