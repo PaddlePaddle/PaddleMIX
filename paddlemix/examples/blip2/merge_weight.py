@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
 import os
-
-from paddlemix.utils.log import logger
+import sys
+import argparse
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 
 import paddle
-
+from paddlemix.utils.log import logger
 from paddlenlp.transformers import LlamaForCausalLM
 from paddlenlp.transformers.opt.modeling import OPTForCausalLM
 from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
