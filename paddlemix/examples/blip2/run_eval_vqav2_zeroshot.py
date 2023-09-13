@@ -14,19 +14,18 @@
 
 import os
 import sys
-
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 import random
+import numpy as np
 from dataclasses import dataclass, field
 
-import numpy as np
 import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 
 from paddlemix.datasets import load_dataset
-from paddlemix.examples.blip2.utils import BlipCollator, create_tokenizer, load_model
+from paddlemix.models.blip2.utils import load_model, BlipCollator, create_tokenizer
 from paddlemix.models.blip2.configuration import Blip2Config
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
 from paddlemix.processors.blip_processing import (
@@ -37,6 +36,7 @@ from paddlemix.processors.blip_processing import (
 from paddlemix.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlemix.utils.log import logger
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
+
 
 
 class BlipCollator_VQA(BlipCollator):
