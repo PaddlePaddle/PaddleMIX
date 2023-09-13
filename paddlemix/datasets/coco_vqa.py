@@ -72,11 +72,11 @@ class VQADataset(DatasetBuilder):
             for ann in annotations:
                 anno_fullname.append(os.path.join(DATA_HOME, ann))
                 if not os.path.exists(image_fullname) or not os.path.exists(os.path.join(DATA_HOME, ann)):
-                    get_path_from_url(self.URL, DATA_HOME, self.MD5)
+                    get_path_from_url(self.URL, DATA_HOME)
         else:
             anno_fullname = os.path.join(DATA_HOME, annotations)
             if not os.path.exists(image_fullname) or not os.path.exists(anno_fullname):
-                get_path_from_url(self.URL, DATA_HOME, self.MD5)
+                get_path_from_url(self.URL, DATA_HOME)
         return image_fullname, anno_fullname, mode
 
     def _read(self, filename, *args):

@@ -61,7 +61,7 @@ class CaptionDataset(DatasetBuilder):
         image_fullname = os.path.join(DATA_HOME, images)
         anno_fullname = os.path.join(DATA_HOME, annotations)
         if not os.path.exists(image_fullname) or not os.path.exists(anno_fullname):
-            get_path_from_url(self.URL, DATA_HOME, self.MD5)
+            get_path_from_url(self.URL, DATA_HOME)
 
         return image_fullname, anno_fullname, mode
 
