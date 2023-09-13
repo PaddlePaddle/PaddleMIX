@@ -42,6 +42,10 @@ PROCESSOR_CONFIG_MAPPING = {
     "image": "image_preprocessor_config.json",
     "text": "text_preprocessor_config.json",
     "audio": "audio_preprocessor_config.json",
+    "image_train": "image_preprocessor_config.json",
+    "text_train": "text_preprocessor_config.json",
+    "image_eval": "image_preprocessor_config.json",
+    "text_eval": "text_preprocessor_config.json",
 }
 
 

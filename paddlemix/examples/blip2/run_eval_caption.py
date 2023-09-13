@@ -18,17 +18,19 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 import random
 from dataclasses import dataclass, field
+from typing import Optional
 
 import numpy as np
 import paddle
 import paddle.distributed as dist
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 
 from paddlemix.datasets import load_dataset
-from paddlemix.examples.blip2.utils import BlipCollator, create_tokenizer, load_model
 from paddlemix.models.blip2.configuration import Blip2Config
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
+from paddlemix.models.blip2.utils import BlipCollator, create_tokenizer, load_model
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
     BlipImageProcessor,
@@ -36,7 +38,6 @@ from paddlemix.processors.blip_processing import (
 )
 from paddlemix.trainer.blip2_trainer import BLIP2Trainer as Trainer
 from paddlemix.utils.log import logger
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 
 
 @dataclass
@@ -124,6 +125,14 @@ class PreTrainingArguments(TrainingArguments):
     load_model_path: str = field(
         default=None,
         metadata={"help": "The path to model if you want to load weights from the specified path"},
+    )
+    benchmark: bool = field(
+        default=False,
+        metadata={"help": "Whether or not run benchmark (True/False)."},
+    )
+    profiler_options: Optional[str] = field(
+        default=None,
+        metadata={"help": "profiler_options (batch_range=[10,20])."},
     )
 
 

@@ -14,28 +14,27 @@
 import os
 import random
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 from dataclasses import dataclass, field
 
 import numpy as np
 import paddle
 import paddle.distributed as dist
+import requests
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
-
-import requests
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 from PIL import Image
 
-from paddlemix.examples.blip2.utils import create_tokenizer, load_model
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
+from paddlemix.models.blip2.utils import create_tokenizer, load_model
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
     BlipImageProcessor,
     BlipTextProcessor,
 )
 from paddlemix.utils.log import logger
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 
 @dataclass

@@ -24,10 +24,6 @@ import paddle.amp.auto_cast as autocast
 import paddle.nn as nn
 from paddle.distributed import fleet
 from paddle.io import DataLoader, Dataset
-
-import paddlemix
-from paddlemix.examples.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
-from paddlemix.optimization import FilterParamsName
 from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
 from paddlenlp.trainer.integrations import TrainerCallback
 from paddlenlp.trainer.trainer_callback import DefaultFlowCallback
@@ -42,6 +38,10 @@ from paddlenlp.transformers.model_utils import unwrap_model
 from paddlenlp.utils import device_guard, profiler
 from paddlenlp.utils.import_utils import is_datasets_available
 from paddlenlp.utils.log import logger
+
+import paddlemix
+from paddlemix.models.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
+from paddlemix.optimization import FilterParamsName
 
 DEFAULT_CALLBACKS = [DefaultFlowCallback]
 DEFAULT_PROGRESS_CALLBACK = ProgressCallback
@@ -683,12 +683,17 @@ class BLIP2Trainer(Trainer):
         # They can then be reloaded using `from_pretrained()`
 
         merge_tensor_parallel = merge_tensor_parallel and self.args.use_hybrid_parallel
-
+        self.eval_processor.image_processor.save_pretrained(os.path.join(output_dir, "processor", "eval"))
+        self.eval_processor.text_processor.save_pretrained(os.path.join(output_dir, "processor", "eval"))
+        self.processor.image_processor.save_pretrained(os.path.join(output_dir, "processor", "train"))
+        self.processor.text_processor.save_pretrained(os.path.join(output_dir, "processor", "train"))
         self.model.save_pretrained(
             output_dir,
             merge_tensor_parallel=merge_tensor_parallel,
             variant=self.args.weight_name_suffix,
             is_main_process=self.args.should_save,
+            processor=self.processor,
+            eval_processor=self.eval_processor,
         )
 
         if self.args.should_save:

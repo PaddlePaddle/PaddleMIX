@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import copy
 import datetime
 import json
@@ -20,12 +21,12 @@ import sys
 import time
 
 import paddle
+from paddlenlp.transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 from pycocoevalcap.eval import COCOEvalCap
 from pycocotools.coco import COCO
 
 from paddlemix.utils import device_guard
 from paddlemix.utils.downloader import WEIGHTS_HOME, get_path_from_url
-from paddlenlp.transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 
 LLM_LIST = {
     "facebook/opt-2.7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-2.7b/model_state.pdparams",
