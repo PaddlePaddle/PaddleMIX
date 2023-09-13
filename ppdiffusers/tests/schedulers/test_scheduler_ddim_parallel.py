@@ -1,4 +1,5 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 ParaDiGMS authors and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,13 +15,13 @@
 
 import paddle
 
-from ppdiffusers import DDIMScheduler
+from ppdiffusers import DDIMParallelScheduler
 
 from .test_schedulers import SchedulerCommonTest
 
 
-class DDIMSchedulerTest(SchedulerCommonTest):
-    scheduler_classes = (DDIMScheduler,)
+class DDIMParallelSchedulerTest(SchedulerCommonTest):
+    scheduler_classes = (DDIMParallelScheduler,)
     forward_default_kwargs = (("eta", 0.0), ("num_inference_steps", 50))
 
     def get_scheduler_config(self, **kwargs):
@@ -65,7 +66,7 @@ class DDIMSchedulerTest(SchedulerCommonTest):
         scheduler_config = self.get_scheduler_config(steps_offset=1)
         scheduler = scheduler_class(**scheduler_config)
         scheduler.set_timesteps(5)
-        assert paddle.equal_all(scheduler.timesteps, paddle.to_tensor([801, 601, 401, 201, 1]))
+        assert paddle.equal_all(scheduler.timesteps, paddle.to_tensor([801, 601, 401, 201, 1], dtype="int64")).item()
 
     def test_betas(self):
         for beta_start, beta_end in zip([0.0001, 0.001, 0.01, 0.1], [0.002, 0.02, 0.2, 2]):
@@ -124,6 +125,33 @@ class DDIMSchedulerTest(SchedulerCommonTest):
         assert paddle.sum(paddle.abs(scheduler._get_variance(0, 0) - 0.0)) < 1e-5
         assert paddle.sum(paddle.abs(scheduler._get_variance(487, 486) - 0.00979)) < 1e-5
         assert paddle.sum(paddle.abs(scheduler._get_variance(999, 998) - 0.02)) < 1e-5
+
+    def test_batch_step_no_noise(self):
+        scheduler_class = self.scheduler_classes[0]
+        scheduler_config = self.get_scheduler_config()
+        scheduler = scheduler_class(**scheduler_config)
+
+        num_inference_steps, eta = 10, 0.0
+        scheduler.set_timesteps(num_inference_steps)
+
+        model = self.dummy_model()
+        sample1 = self.dummy_sample_deter
+        sample2 = self.dummy_sample_deter + 0.1
+        sample3 = self.dummy_sample_deter - 0.1
+
+        per_sample_batch = sample1.shape[0]
+        samples = paddle.stack(x=[sample1, sample2, sample3], axis=0)
+        timesteps = paddle.arange(end=num_inference_steps)[0:3, None].tile([1, per_sample_batch])
+
+
+        residual = model(samples.flatten(0, 1), timesteps.flatten(0, 1))
+        pred_prev_sample = scheduler.batch_step_no_noise(residual, timesteps.flatten(0, 1), samples.flatten(0, 1), eta)
+
+        result_sum = paddle.sum(paddle.abs(pred_prev_sample))
+        result_mean = paddle.mean(paddle.abs(pred_prev_sample))
+
+        assert abs(result_sum.item() - 1147.7904) < 1e-2
+        assert abs(result_mean.item() - 0.4982) < 1e-3
 
     def test_full_loop_no_noise(self):
         sample = self.full_loop()
