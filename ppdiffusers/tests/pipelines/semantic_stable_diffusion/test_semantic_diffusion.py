@@ -33,9 +33,7 @@ from ppdiffusers.pipelines.semantic_stable_diffusion import (
     SemanticStableDiffusionPipeline as StableDiffusionPipeline,
 )
 from ppdiffusers.utils import floats_tensor, nightly
-from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
-
-enable_full_determinism()
+from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
 
 class SafeDiffusionPipelineFastTests(unittest.TestCase):

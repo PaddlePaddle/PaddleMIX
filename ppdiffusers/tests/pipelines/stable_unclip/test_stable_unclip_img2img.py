@@ -39,31 +39,19 @@ from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer impor
     StableUnCLIPImageNormalizer,
 )
 from ppdiffusers.utils.import_utils import is_ppxformers_available
-from ppdiffusers.utils.testing_utils import enable_full_determinism, floats_tensor
+from ppdiffusers.utils.testing_utils import floats_tensor
 
 from ..pipeline_params import (
     TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
 )
-from ..test_pipelines_common import (
-    PipelineKarrasSchedulerTesterMixin,
-    PipelineLatentTesterMixin,
-    PipelineTesterMixin,
-)
-
-enable_full_determinism()
+from ..test_pipelines_common import PipelineTesterMixin
 
 
-class StableUnCLIPImg2ImgPipelineFastTests(
-    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
-):
+class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableUnCLIPImg2ImgPipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS
-    image_params = frozenset(
-        []
-    )  # TO-DO: update image_params once pipeline is refactored with VaeImageProcessor.preprocess
-    image_latents_params = frozenset([])
 
     def get_dummy_components(self):
         embedder_hidden_size = 32

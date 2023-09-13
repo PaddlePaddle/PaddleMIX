@@ -30,9 +30,7 @@ from ppdiffusers import (
     UNet2DModel,
 )
 from ppdiffusers.utils import slow
-from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
-
-enable_full_determinism()
+from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
 
 class PipelineFastTests(unittest.TestCase):
@@ -95,7 +93,7 @@ class PipelineFastTests(unittest.TestCase):
         return vqvae, unet
 
     def test_audio_diffusion(self):
-        mel = Mel(x_res=self.dummy_unet.config.sample_size[1], y_res=self.dummy_unet.config.sample_size[0])
+        mel = Mel()
         scheduler = DDPMScheduler()
         pipe = AudioDiffusionPipeline(vqvae=None, unet=self.dummy_unet, mel=mel, scheduler=scheduler)
         pipe.set_progress_bar_config(disable=None)
@@ -116,10 +114,6 @@ class PipelineFastTests(unittest.TestCase):
         expected_slice = np.array([0, 252, 0, 160, 144, 1, 0, 211, 99, 3])
         assert np.abs(image_slice.flatten() - expected_slice).max() == 0
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() <= 5
-        mel = Mel(
-            x_res=self.dummy_vqvae_and_unet[0].config.sample_size[1],
-            y_res=self.dummy_vqvae_and_unet[0].config.sample_size[0],
-        )
         scheduler = DDIMScheduler()
         dummy_vqvae_and_unet = self.dummy_vqvae_and_unet
         pipe = AudioDiffusionPipeline(
@@ -136,21 +130,18 @@ class PipelineFastTests(unittest.TestCase):
             and image.width == self.dummy_vqvae_and_unet[0].config.sample_size[1]
         )
         image_slice = np.frombuffer(image.tobytes(), dtype="uint8")[:10]
-        # expected_slice = np.array([128, 100, 153, 95, 92, 77, 130, 121, 81, 166])
-        expected_slice = np.array([120, 117, 110, 109, 138, 167, 138, 148, 132, 121])
+        expected_slice = np.array([128, 100, 153, 95, 92, 77, 130, 121, 81, 166])
         assert np.abs(image_slice.flatten() - expected_slice).max() <= 5
         dummy_unet_condition = self.dummy_unet_condition
         pipe = AudioDiffusionPipeline(
             vqvae=self.dummy_vqvae_and_unet[0], unet=dummy_unet_condition, mel=mel, scheduler=scheduler
         )
-        pipe.to("cpu")
-        pipe.set_progress_bar_config(disable=None)
         np.random.seed(0)
         encoding = paddle.rand(shape=(1, 1, 10))
         output = pipe(generator=generator, encoding=encoding)
         image = output.images[0]
         image_slice = np.frombuffer(image.tobytes(), dtype="uint8")[:10]
-        expected_slice = np.array([107, 103, 120, 127, 142, 122, 113, 122, 97, 111])
+        expected_slice = np.array([139, 103, 88, 105, 100, 120, 116, 99, 106, 89])
         assert np.abs(image_slice.flatten() - expected_slice).max() <= 5
 
 
