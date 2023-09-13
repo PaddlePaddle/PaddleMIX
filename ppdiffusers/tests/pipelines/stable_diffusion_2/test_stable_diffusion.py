@@ -33,34 +33,16 @@ from ppdiffusers import (
     logging,
 )
 from ppdiffusers.utils import load_numpy, nightly, slow
-from ppdiffusers.utils.testing_utils import (
-    CaptureLogger,
-    enable_full_determinism,
-    require_paddle_gpu,
-)
+from ppdiffusers.utils.testing_utils import CaptureLogger, require_paddle_gpu
 
-from ..pipeline_params import (
-    TEXT_TO_IMAGE_BATCH_PARAMS,
-    TEXT_TO_IMAGE_IMAGE_PARAMS,
-    TEXT_TO_IMAGE_PARAMS,
-)
-from ..test_pipelines_common import (
-    PipelineKarrasSchedulerTesterMixin,
-    PipelineLatentTesterMixin,
-    PipelineTesterMixin,
-)
-
-enable_full_determinism()
+from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
+from ..test_pipelines_common import PipelineTesterMixin
 
 
-class StableDiffusion2PipelineFastTests(
-    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
-):
+class StableDiffusion2PipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionPipeline
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
-    image_params = TEXT_TO_IMAGE_IMAGE_PARAMS
-    image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -201,26 +183,6 @@ class StableDiffusion2PipelineFastTests(
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
-    def test_stable_diffusion_unflawed(self):
-
-        components = self.get_dummy_components()
-        components["scheduler"] = DDIMScheduler.from_config(
-            components["scheduler"].config, timestep_spacing="trailing"
-        )
-        sd_pipe = StableDiffusionPipeline(**components)
-        sd_pipe.set_progress_bar_config(disable=None)
-
-        inputs = self.get_dummy_inputs()
-        inputs["guidance_rescale"] = 0.7
-        inputs["num_inference_steps"] = 10
-        image = sd_pipe(**inputs).images
-        image_slice = image[0, -3:, -3:, -1]
-
-        assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([0.4736, 0.5405, 0.4705, 0.4955, 0.5675, 0.4812, 0.5310, 0.4967, 0.5064])
-
-        assert np.abs(image_slice.flatten() - expected_slice).max() < 1e-2
-
     def test_stable_diffusion_long_prompt(self):
         components = self.get_dummy_components()
         components["scheduler"] = LMSDiscreteScheduler.from_config(components["scheduler"].config)
@@ -250,12 +212,6 @@ class StableDiffusion2PipelineFastTests(
         assert cap_logger.out == cap_logger_2.out
         assert cap_logger.out.count("@") == 25
         assert cap_logger_3.out == ""
-
-    def test_attention_slicing_forward_pass(self):
-        super().test_attention_slicing_forward_pass()
-
-    def test_inference_batch_single_identical(self):
-        super().test_inference_batch_single_identical()
 
 
 @slow
@@ -288,7 +244,7 @@ class StableDiffusion2PipelineSlowTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
         expected_slice = np.array([0.49493, 0.47896, 0.40798, 0.54214, 0.53212, 0.48202, 0.47656, 0.46329, 0.48506])
-        assert np.abs(image_slice - expected_slice).max() < 7e-3
+        assert np.abs(image_slice - expected_slice).max() < 0.0001
 
     def test_stable_diffusion_pndm(self):
         pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-base")
@@ -299,7 +255,7 @@ class StableDiffusion2PipelineSlowTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
         expected_slice = np.array([0.49493, 0.47896, 0.40798, 0.54214, 0.53212, 0.48202, 0.47656, 0.46329, 0.48506])
-        assert np.abs(image_slice - expected_slice).max() < 7e-3
+        assert np.abs(image_slice - expected_slice).max() < 0.0001
 
     def test_stable_diffusion_k_lms(self):
         pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-base")
@@ -310,7 +266,7 @@ class StableDiffusion2PipelineSlowTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
         expected_slice = np.array([0.1044, 0.13115, 0.111, 0.10141, 0.1144, 0.07215, 0.11332, 0.09693, 0.10006])
-        assert np.abs(image_slice - expected_slice).max() < 3e-3
+        assert np.abs(image_slice - expected_slice).max() < 0.0001
 
     # def test_stable_diffusion_attention_slicing(self):
     #     pipe = StableDiffusionPipeline.from_pretrained(

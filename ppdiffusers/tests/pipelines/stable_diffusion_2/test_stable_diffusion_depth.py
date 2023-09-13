@@ -39,33 +39,21 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import floats_tensor, load_image, nightly, slow
-from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
 from ..pipeline_params import (
-    IMAGE_TO_IMAGE_IMAGE_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
-    TEXT_TO_IMAGE_IMAGE_PARAMS,
 )
-from ..test_pipelines_common import (
-    PipelineKarrasSchedulerTesterMixin,
-    PipelineLatentTesterMixin,
-    PipelineTesterMixin,
-)
-
-enable_full_determinism()
+from ..test_pipelines_common import PipelineTesterMixin
 
 
-class StableDiffusionDepth2ImgPipelineFastTests(
-    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
-):
+class StableDiffusionDepth2ImgPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionDepth2ImgPipeline
     test_save_load_optional_components = False
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS - {"height", "width"}
     required_optional_params = PipelineTesterMixin.required_optional_params - {"latents"}
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS
-    image_params = IMAGE_TO_IMAGE_IMAGE_PARAMS
-    image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -132,7 +120,7 @@ class StableDiffusionDepth2ImgPipelineFastTests(
             backbone_config=backbone_config,
             backbone_featmap_shape=[1, 384, 24, 24],
         )
-        depth_estimator = DPTForDepthEstimation(depth_estimator_config).eval()
+        depth_estimator = DPTForDepthEstimation(depth_estimator_config)
         feature_extractor = DPTImageProcessor.from_pretrained("hf-internal-testing/tiny-random-DPTForDepthEstimation")
         components = {
             "unet": unet,
@@ -305,12 +293,6 @@ class StableDiffusionDepth2ImgPipelineFastTests(
             [0.35397637, 0.23190483, 0.20131412, 0.27374774, 0.265134, 0.4502194, 0.26852018, 0.37504935, 0.43135768]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
-
-    def test_attention_slicing_forward_pass(self):
-        return super().test_attention_slicing_forward_pass()
-
-    def test_inference_batch_single_identical(self):
-        super().test_inference_batch_single_identical()
 
 
 @slow

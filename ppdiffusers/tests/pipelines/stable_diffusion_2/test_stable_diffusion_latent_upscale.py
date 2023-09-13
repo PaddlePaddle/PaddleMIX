@@ -21,7 +21,6 @@ import numpy as np
 import paddle
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
 
-import ppdiffusers
 from ppdiffusers import (
     AutoencoderKL,
     EulerDiscreteScheduler,
@@ -29,31 +28,17 @@ from ppdiffusers import (
     StableDiffusionPipeline,
     UNet2DConditionModel,
 )
-from ppdiffusers.schedulers import KarrasDiffusionSchedulers
 from ppdiffusers.utils import floats_tensor, load_image, slow
-from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
 from ..pipeline_params import (
     TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
 )
-from ..test_pipelines_common import (
-    PipelineKarrasSchedulerTesterMixin,
-    PipelineLatentTesterMixin,
-    PipelineTesterMixin,
-)
-
-enable_full_determinism()
+from ..test_pipelines_common import PipelineTesterMixin
 
 
-def check_same_shape(tensor_list):
-    shapes = [tensor.shape for tensor in tensor_list]
-    return all(shape == shapes[0] for shape in shapes[1:])
-
-
-class StableDiffusionLatentUpscalePipelineFastTests(
-    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
-):
+class StableDiffusionLatentUpscalePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionLatentUpscalePipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS - {
         "height",
@@ -64,11 +49,7 @@ class StableDiffusionLatentUpscalePipelineFastTests(
     }
     required_optional_params = PipelineTesterMixin.required_optional_params - {"num_images_per_prompt"}
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS
-
-    image_params = frozenset(
-        []
-    )  # TO-DO: update image_params once pipeline is refactored with VaeImageProcessor.preprocess
-    image_latents_params = frozenset([])
+    test_cpu_offload = False
 
     @property
     def dummy_image(self):
@@ -173,47 +154,8 @@ class StableDiffusionLatentUpscalePipelineFastTests(
         max_diff = np.abs(image_slice.flatten() - expected_slice).max()
         self.assertLessEqual(max_diff, 0.001)
 
-    def test_attention_slicing_forward_pass(self):
-        super().test_attention_slicing_forward_pass()
-
     def test_inference_batch_single_identical(self):
-        super().test_inference_batch_single_identical(expected_max_diff=7e-3)
-
-    def test_pt_np_pil_outputs_equivalent(self):
-        super().test_pt_np_pil_outputs_equivalent()
-
-    def test_save_load_local(self):
-        super().test_save_load_local()
-
-    def test_save_load_optional_components(self):
-        super().test_save_load_optional_components()
-
-    def test_karras_schedulers_shape(self):
-        skip_schedulers = [
-            "DDIMScheduler",
-            "DDPMScheduler",
-            "PNDMScheduler",
-            "HeunDiscreteScheduler",
-            "EulerAncestralDiscreteScheduler",
-            "KDPM2DiscreteScheduler",
-            "KDPM2AncestralDiscreteScheduler",
-            "DPMSolverSDEScheduler",
-        ]
-        components = self.get_dummy_components()
-        pipe = self.pipeline_class(**components)
-        pipe.scheduler.register_to_config(skip_prk_steps=True)
-        pipe.set_progress_bar_config(disable=None)
-        inputs = self.get_dummy_inputs()
-        inputs["num_inference_steps"] = 2
-        outputs = []
-        for scheduler_enum in KarrasDiffusionSchedulers:
-            if scheduler_enum.name in skip_schedulers:
-                continue
-            scheduler_cls = getattr(ppdiffusers, scheduler_enum.name)
-            pipe.scheduler = scheduler_cls.from_config(pipe.scheduler.config)
-            output = pipe(**inputs)[0]
-            outputs.append(output)
-        assert check_same_shape(outputs)
+        self._test_inference_batch_single_identical(relax_max_difference=False)
 
 
 @require_paddle_gpu

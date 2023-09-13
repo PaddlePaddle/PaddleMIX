@@ -33,7 +33,7 @@ class BatchedBrownianTree:
         if seed is None:
             seed = paddle.randint(
                 0,
-                2**31 - 1,  # 2**63 - 1,paddle will overflow
+                2**63 - 1,
                 [
                     1,
                 ],
@@ -201,7 +201,6 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
 
         #  set all values
         self.set_timesteps(num_train_timesteps, None, num_train_timesteps)
-
         self.use_karras_sigmas = use_karras_sigmas
         self.noise_sampler = None
         self.noise_sampler_seed = noise_sampler_seed
@@ -256,7 +255,6 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
     def set_timesteps(
         self,
         num_inference_steps: int,
-        device: str = None,
         num_train_timesteps: Optional[int] = None,
     ):
         """
@@ -310,7 +308,6 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         timesteps = paddle.concat([timesteps[:1], timesteps[1:].repeat_interleave(2)])
         timesteps[1::2] = second_order_timesteps
 
-        self.timesteps = timesteps
         # empty first order variables
         self.sample = None
         self.mid_point_sigma = None

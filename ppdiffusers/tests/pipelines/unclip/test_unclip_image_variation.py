@@ -37,16 +37,10 @@ from ppdiffusers import (
 )
 from ppdiffusers.pipelines.unclip.text_proj import UnCLIPTextProjModel
 from ppdiffusers.utils import floats_tensor, slow
-from ppdiffusers.utils.testing_utils import (
-    enable_full_determinism,
-    load_image,
-    require_paddle_gpu,
-)
+from ppdiffusers.utils.testing_utils import load_image, require_paddle_gpu
 
 from ..pipeline_params import IMAGE_VARIATION_BATCH_PARAMS, IMAGE_VARIATION_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
-
-enable_full_determinism()
 
 
 class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCase):

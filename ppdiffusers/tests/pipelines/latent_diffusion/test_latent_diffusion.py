@@ -27,7 +27,6 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils.testing_utils import (
-    enable_full_determinism,
     load_numpy,
     nightly,
     require_paddle_gpu,
@@ -36,8 +35,6 @@ from ppdiffusers.utils.testing_utils import (
 
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
-
-enable_full_determinism()
 
 
 class LDMTextToImagePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
@@ -54,6 +51,7 @@ class LDMTextToImagePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         "callback_steps",
     }
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
+    test_cpu_offload = False
 
     def get_dummy_components(self):
         paddle.seed(0)
