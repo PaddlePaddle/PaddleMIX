@@ -30,9 +30,9 @@ from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_chec
 from paddlenlp.transformers import AutoTokenizer
 
 from paddlemix.datasets import load_dataset
-from paddlemix.examples.blip2.utils import load_model
 from paddlemix.models.blip2.configuration import Blip2Config
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
+from paddlemix.models.blip2.utils import load_model
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
     BlipImageProcessor,

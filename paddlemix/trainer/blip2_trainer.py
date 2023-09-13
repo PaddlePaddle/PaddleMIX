@@ -40,7 +40,7 @@ from paddlenlp.utils.import_utils import is_datasets_available
 from paddlenlp.utils.log import logger
 
 import paddlemix
-from paddlemix.examples.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
+from paddlemix.models.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
 from paddlemix.optimization import FilterParamsName
 
 DEFAULT_CALLBACKS = [DefaultFlowCallback]

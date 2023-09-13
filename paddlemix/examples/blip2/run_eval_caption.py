@@ -28,9 +28,9 @@ from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 
 from paddlemix.datasets import load_dataset
-from paddlemix.examples.blip2.utils import BlipCollator, create_tokenizer, load_model
 from paddlemix.models.blip2.configuration import Blip2Config
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
+from paddlemix.models.blip2.utils import BlipCollator, create_tokenizer, load_model
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
     BlipImageProcessor,
