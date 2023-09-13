@@ -2,12 +2,12 @@ import paddle
 
 from ppdiffusers import DPMSolverSDEScheduler
 from ppdiffusers.utils import paddle_device
-from ppdiffusers.utils.testing_utils import require_paddlesde
+# from ppdiffusers.utils.testing_utils import require_paddlesde
 
 from .test_schedulers import SchedulerCommonTest
 
 
-@require_paddlesde
+# @require_paddlesde
 class DPMSolverSDESchedulerTest(SchedulerCommonTest):
     scheduler_classes = (DPMSolverSDEScheduler,)
     num_inference_steps = 10

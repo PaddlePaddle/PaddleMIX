@@ -33,7 +33,7 @@ class BatchedBrownianTree:
         if seed is None:
             seed = paddle.randint(
                 0,
-                2**63 - 1,
+                2**31 - 1,  # 2**63 - 1,paddle will overflow
                 [
                     1,
                 ],
@@ -308,6 +308,7 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         second_order_timesteps = paddle.to_tensor(second_order_timesteps)
         timesteps = paddle.concat([timesteps[:1], timesteps[1:].repeat_interleave(2)])
         timesteps[1::2] = second_order_timesteps
+        self.timesteps = timesteps
 
         # empty first order variables
         self.sample = None
