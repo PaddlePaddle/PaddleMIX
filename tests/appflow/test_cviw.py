@@ -18,6 +18,7 @@ import numpy as np
 
 from paddlemix.appflow import Appflow
 from ppdiffusers.utils import load_image, load_numpy
+from tests.testing_utils import slow
 
 
 class OpenSetDetSamApp(unittest.TestCase):
@@ -34,6 +35,7 @@ class OpenSetDetSamApp(unittest.TestCase):
 if __name__ == "__main__":
 
     def create_test(name, static_mode):
+        @slow
         def test_openset_det_sam(self):
             self.task = Appflow(
                 app="openset_det_sam",
