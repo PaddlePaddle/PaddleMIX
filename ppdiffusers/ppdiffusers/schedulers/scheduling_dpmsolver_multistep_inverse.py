@@ -235,7 +235,12 @@ class DPMSolverMultistepInverseScheduler(SchedulerMixin, ConfigMixin):
         """
         # Clipping the minimum of all lambda(t) for numerical stability.
         # This is critical for cosine (squaredcos_cap_v2) noise schedule.
-        clipped_idx = paddle.searchsorted(paddle.flip(self.lambda_t, [0]), self.lambda_min_clipped).item()
+        c = paddle.to_tensor(self.lambda_min_clipped)
+        t = paddle.flip(self.lambda_t, [0])
+        clipped_idx = paddle.searchsorted(t, c).item()
+        if paddle.isinf(c):
+            clipped_idx = paddle.to_tensor(0).item()
+        # clipped_idx = paddle.searchsorted(paddle.flip(self.lambda_t, [0]), paddle.to_tensor(self.lambda_min_clipped)).item()
         self.noisiest_timestep = self.config.num_train_timesteps - 1 - clipped_idx
 
         # "linspace", "leading", "trailing" corresponds to annotation of Table 2. of https://arxiv.org/abs/2305.08891
@@ -470,7 +475,7 @@ class DPMSolverMultistepInverseScheduler(SchedulerMixin, ConfigMixin):
             raise NotImplementedError(
                 f"Inversion step is not yet implemented for algorithm type {self.config.algorithm_type}."
             )
-        return x_t
+        return x_t.cast(sample.dtype)
 
     def multistep_dpm_solver_second_order_update(
         self,
@@ -620,6 +625,8 @@ class DPMSolverMultistepInverseScheduler(SchedulerMixin, ConfigMixin):
                 "Number of inference steps is 'None', you need to run 'set_timesteps' after creating the scheduler"
             )
 
+        # if isinstance(timestep, paddle.Tensor):
+        #     timestep = timestep.to(self.timesteps.device)
         step_index = (self.timesteps == timestep).nonzero()
         if len(step_index) == 0:
             step_index = len(self.timesteps) - 1

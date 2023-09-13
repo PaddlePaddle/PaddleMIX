@@ -348,7 +348,7 @@ class HeunDiscreteScheduler(SchedulerMixin, ConfigMixin):
                 sample / (sigma_input**2 + 1)
             )
         elif self.config.prediction_type == "sample":
-            raise NotImplementedError("prediction_type not implemented yet: sample")
+            pred_original_sample = model_output
         else:
             raise ValueError(
                 f"prediction_type given as {self.config.prediction_type} must be one of `epsilon`, or `v_prediction`"
