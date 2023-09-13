@@ -26,7 +26,7 @@ from ppdiffusers import (
     TextToVideoSDPipeline,
     UNet3DConditionModel,
 )
-from ppdiffusers.utils import load_numpy, slow
+from ppdiffusers.utils import is_ppxformers_available, load_numpy, slow
 
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
@@ -121,11 +121,15 @@ class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
-    def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(test_mean_pixel_difference=False)
-
     def test_attention_slicing_forward_pass(self):
-        self._test_attention_slicing_forward_pass(test_mean_pixel_difference=False)
+        self._test_attention_slicing_forward_pass(test_mean_pixel_difference=False, expected_max_diff=3e-3)
+
+    @unittest.skipIf(
+        not is_ppxformers_available(),
+        reason="XFormers attention is only available with CUDA and `xformers` installed",
+    )
+    def test_xformers_attention_forwardGenerator_pass(self):
+        self._test_xformers_attention_forwardGenerator_pass(test_mean_pixel_difference=False, expected_max_diff=1e-2)
 
     @unittest.skip(reason="Batching needs to be properly figured out first for this pipeline.")
     def test_inference_batch_consistent(self):

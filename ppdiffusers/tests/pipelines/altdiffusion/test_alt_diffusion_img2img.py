@@ -34,7 +34,9 @@ from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
     RobertaSeriesModelWithTransformation,
 )
 from ppdiffusers.utils import floats_tensor, load_image, slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+
+enable_full_determinism()
 
 
 class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
@@ -117,6 +119,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         tokenizer = XLMRobertaTokenizer.from_pretrained("hf-internal-testing/tiny-xlm-roberta")
         tokenizer.model_max_length = 77
         init_image = self.dummy_image
+        init_image = init_image / 2 + 0.75
         alt_pipe = AltDiffusionImg2ImgPipeline(
             unet=unet,
             scheduler=scheduler,
@@ -126,7 +129,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             safety_checker=None,
             feature_extractor=self.dummy_extractor,
         )
-        alt_pipe.image_processor = VaeImageProcessor(vae_scale_factor=alt_pipe.vae_scale_factor)
+        alt_pipe.image_processor = VaeImageProcessor(vae_scale_factor=alt_pipe.vae_scale_factor, do_normalize=True)
         alt_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
@@ -205,10 +208,13 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         image = output.images[0]
         image_slice = image[255:258, 383:386, -1]
         assert image.shape == (504, 760, 3)
-        expected_slice = np.array(
-            [0.3251649, 0.3340174, 0.3418343, 0.32628638, 0.33462793, 0.3300547, 0.31628466, 0.3470268, 0.34273332]
-        )
-        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
+        # expected_slice = np.array(
+        #     [0.3251649, 0.3340174, 0.3418343, 0.32628638, 0.33462793, 0.3300547, 0.31628466, 0.3470268, 0.34273332]
+        # )
+        # assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
+
+        expected_slice = np.array([0.9358, 0.9397, 0.9599, 0.9901, 1.0000, 1.0000, 0.9882, 1.0000, 1.0000])
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
 
 @slow

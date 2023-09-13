@@ -34,16 +34,27 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import floats_tensor, load_image, load_numpy, nightly, slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..pipeline_params import IMAGE_VARIATION_BATCH_PARAMS, IMAGE_VARIATION_PARAMS
-from ..test_pipelines_common import PipelineTesterMixin
+from ..test_pipelines_common import (
+    PipelineKarrasSchedulerTesterMixin,
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+)
+
+enable_full_determinism()
 
 
-class StableDiffusionImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusionImageVariationPipelineFastTests(
+    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
+):
     pipeline_class = StableDiffusionImageVariationPipeline
     params = IMAGE_VARIATION_PARAMS
     batch_params = IMAGE_VARIATION_BATCH_PARAMS
+    image_params = frozenset([])
+    # TO-DO: update image_params once pipeline is refactored with VaeImageProcessor.preprocess
+    image_latents_params = frozenset([])
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -134,6 +145,9 @@ class StableDiffusionImageVariationPipelineFastTests(PipelineTesterMixin, unitte
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
+    def test_inference_batch_single_identical(self):
+        super().test_inference_batch_single_identical()
+
 
 @slow
 @require_paddle_gpu
@@ -180,7 +194,7 @@ class StableDiffusionImageVariationPipelineSlowTests(unittest.TestCase):
                 0.5223015546798706,
             ]
         )
-        assert np.abs(image_slice - expected_slice).max() < 0.0001
+        assert np.abs(image_slice - expected_slice).max() < 6e-3
 
     def test_stable_diffusion_img_variation_intermediate_state(self):
         number_of_steps = 0

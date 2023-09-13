@@ -20,7 +20,13 @@ import paddle
 from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel
 
 from ppdiffusers import DDIMScheduler, LDMPipeline, UNet2DModel, VQModel
-from ppdiffusers.utils.testing_utils import require_paddle, slow
+from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
+    require_paddle,
+    slow,
+)
+
+enable_full_determinism()
 
 
 class LDMPipelineFastTests(unittest.TestCase):
