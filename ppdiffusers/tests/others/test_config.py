@@ -13,82 +13,212 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import tempfile
 import unittest
 
-import paddle
+from ppdiffusers import (
+    DDIMScheduler,
+    DDPMScheduler,
+    DPMSolverMultistepScheduler,
+    EulerAncestralDiscreteScheduler,
+    EulerDiscreteScheduler,
+    PNDMScheduler,
+    logging,
+)
+from ppdiffusers.configuration_utils import ConfigMixin, register_to_config
+from ppdiffusers.utils.testing_utils import CaptureLogger
 
-from ppdiffusers import VQModel
-from ppdiffusers.utils import floats_tensor
-from ppdiffusers.utils.testing_utils import enable_full_determinism
 
-from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
+class SampleObject(ConfigMixin):
+    config_name = "config.json"
 
-enable_full_determinism()
-
-
-class VQModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
-    model_class = VQModel
-    main_input_name = "sample"
-
-    @property
-    def dummy_input(self, sizes=(32, 32)):
-        batch_size = 4
-        num_channels = 3
-        image = floats_tensor((batch_size, num_channels) + sizes)
-        return {"sample": image}
-
-    @property
-    def input_shape(self):
-        return 3, 32, 32
-
-    @property
-    def output_shape(self):
-        return 3, 32, 32
-
-    def prepare_init_args_and_inputs_for_common(self):
-        init_dict = {
-            "block_out_channels": [32, 64],
-            "in_channels": 3,
-            "out_channels": 3,
-            "down_block_types": ["DownEncoderBlock2D", "DownEncoderBlock2D"],
-            "up_block_types": ["UpDecoderBlock2D", "UpDecoderBlock2D"],
-            "latent_channels": 3,
-        }
-        inputs_dict = self.dummy_input
-        return init_dict, inputs_dict
-
-    def test_forward_signature(self):
+    @register_to_config
+    def __init__(self, a=2, b=5, c=(2, 5), d="for diffusion", e=[1, 3]):
         pass
 
-    def test_training(self):
+
+class SampleObject2(ConfigMixin):
+    config_name = "config.json"
+
+    @register_to_config
+    def __init__(self, a=2, b=5, c=(2, 5), d="for diffusion", f=[1, 3]):
         pass
 
-    def test_from_pretrained_hub(self):
-        model, loading_info = VQModel.from_pretrained("fusing/vqgan-dummy", output_loading_info=True)
-        self.assertIsNotNone(model)
-        self.assertEqual(len(loading_info["missing_keys"]), 0)
-        image = model(**self.dummy_input)
-        assert image is not None, "Make sure output is not None"
 
-    def test_output_pretrained(self):
-        model = VQModel.from_pretrained("fusing/vqgan-dummy")
-        model.eval()
-        paddle.seed(0)
-        image = paddle.randn(shape=[1, model.config.in_channels, model.config.sample_size, model.config.sample_size])
-        with paddle.no_grad():
-            output = model(image).sample
-        output_slice = output[0, -1, -3:, -3:].flatten().cpu()
-        expected_output_slice = paddle.to_tensor(
-            [
-                -0.027147896587848663,
-                -0.41129639744758606,
-                -0.17730756103992462,
-                -0.5245445370674133,
-                -0.2423611730337143,
-                -0.3957087993621826,
-                -0.16461530327796936,
-                -0.06902074813842773,
-                -0.01736617460846901,
-            ]
-        )
-        self.assertTrue(paddle.allclose(output_slice, expected_output_slice, atol=0.01))
+class SampleObject3(ConfigMixin):
+    config_name = "config.json"
+
+    @register_to_config
+    def __init__(self, a=2, b=5, c=(2, 5), d="for diffusion", e=[1, 3], f=[1, 3]):
+        pass
+
+
+class SampleObject4(ConfigMixin):
+    config_name = "config.json"
+
+    @register_to_config
+    def __init__(self, a=2, b=5, c=(2, 5), d="for diffusion", e=[1, 5], f=[5, 4]):
+        pass
+
+
+class ConfigTester(unittest.TestCase):
+    def test_load_not_from_mixin(self):
+        with self.assertRaises(ValueError):
+            ConfigMixin.load_config("dummy_path")
+
+    def test_register_to_config(self):
+        obj = SampleObject()
+        config = obj.config
+        assert config["a"] == 2
+        assert config["b"] == 5
+        assert config["c"] == (2, 5)
+        assert config["d"] == "for diffusion"
+        assert config["e"] == [1, 3]
+        obj = SampleObject(_name_or_path="lalala")
+        config = obj.config
+        assert config["a"] == 2
+        assert config["b"] == 5
+        assert config["c"] == (2, 5)
+        assert config["d"] == "for diffusion"
+        assert config["e"] == [1, 3]
+        obj = SampleObject(c=6)
+        config = obj.config
+        assert config["a"] == 2
+        assert config["b"] == 5
+        assert config["c"] == 6
+        assert config["d"] == "for diffusion"
+        assert config["e"] == [1, 3]
+        obj = SampleObject(1, c=6)
+        config = obj.config
+        assert config["a"] == 1
+        assert config["b"] == 5
+        assert config["c"] == 6
+        assert config["d"] == "for diffusion"
+        assert config["e"] == [1, 3]
+
+    def test_save_load(self):
+        obj = SampleObject()
+        config = obj.config
+        assert config["a"] == 2
+        assert config["b"] == 5
+        assert config["c"] == (2, 5)
+        assert config["d"] == "for diffusion"
+        assert config["e"] == [1, 3]
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            obj.save_config(tmpdirname)
+            new_obj = SampleObject.from_config(SampleObject.load_config(tmpdirname))
+            new_config = new_obj.config
+        config = dict(config)
+        new_config = dict(new_config)
+        assert config.pop("c") == (2, 5)
+        assert new_config.pop("c") == [2, 5]
+        config.pop("_use_default_values")
+        assert config == new_config
+
+    def test_load_ddim_from_pndm(self):
+        logger = logging.get_logger("ppdiffusers.configuration_utils")
+        # 30 for warning
+        logger.setLevel(30)
+        with CaptureLogger(logger) as cap_logger:
+            ddim = DDIMScheduler.from_pretrained(
+                "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler"
+            )
+        assert ddim.__class__ == DDIMScheduler
+        assert cap_logger.out == ""
+
+    def test_load_euler_from_pndm(self):
+        logger = logging.get_logger("ppdiffusers.configuration_utils")
+        # 30 for warning
+        logger.setLevel(30)
+        with CaptureLogger(logger) as cap_logger:
+            euler = EulerDiscreteScheduler.from_pretrained(
+                "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler"
+            )
+        assert euler.__class__ == EulerDiscreteScheduler
+        assert cap_logger.out == ""
+
+    def test_load_euler_ancestral_from_pndm(self):
+        logger = logging.get_logger("ppdiffusers.configuration_utils")
+        # 30 for warning
+        logger.setLevel(30)
+        with CaptureLogger(logger) as cap_logger:
+            euler = EulerAncestralDiscreteScheduler.from_pretrained(
+                "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler"
+            )
+        assert euler.__class__ == EulerAncestralDiscreteScheduler
+        assert cap_logger.out == ""
+
+    def test_load_pndm(self):
+        logger = logging.get_logger("ppdiffusers.configuration_utils")
+        # 30 for warning
+        logger.setLevel(30)
+        with CaptureLogger(logger) as cap_logger:
+            pndm = PNDMScheduler.from_pretrained(
+                "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler"
+            )
+        assert pndm.__class__ == PNDMScheduler
+        assert cap_logger.out == ""
+
+    def test_overwrite_config_on_load(self):
+        logger = logging.get_logger("ppdiffusers.configuration_utils")
+        # 30 for warning
+        logger.setLevel(30)
+        with CaptureLogger(logger) as cap_logger:
+            ddpm = DDPMScheduler.from_pretrained(
+                "hf-internal-testing/tiny-stable-diffusion-torch",
+                subfolder="scheduler",
+                prediction_type="sample",
+                beta_end=8,
+            )
+        with CaptureLogger(logger) as cap_logger_2:
+            ddpm_2 = DDPMScheduler.from_pretrained("google/ddpm-celebahq-256", subfolder="scheduler", beta_start=88)
+        assert ddpm.__class__ == DDPMScheduler
+        assert ddpm.config.prediction_type == "sample"
+        assert ddpm.config.beta_end == 8
+        assert ddpm_2.config.beta_start == 88
+        assert cap_logger.out == ""
+        assert cap_logger_2.out == ""
+
+    def test_load_dpmsolver(self):
+        logger = logging.get_logger("ppdiffusers.configuration_utils")
+        # 30 for warning
+        logger.setLevel(30)
+        with CaptureLogger(logger) as cap_logger:
+            dpm = DPMSolverMultistepScheduler.from_pretrained(
+                "hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler"
+            )
+        assert dpm.__class__ == DPMSolverMultistepScheduler
+        assert cap_logger.out == ""
+
+    def test_use_default_values(self):
+        # let's first save a config that should be in the form
+        #    a=2,
+        #    b=5,
+        #    c=(2, 5),
+        #    d="for diffusion",
+        #    e=[1, 3],
+
+        config = SampleObject()
+
+        config_dict = {k: v for k, v in config.config.items() if not k.startswith("_")}
+
+        # make sure that default config has all keys in `_use_default_values`
+        assert set(config_dict.keys()) == set(config.config._use_default_values)
+        with tempfile.TemporaryDirectory() as tmpdirname:
+            config.save_config(tmpdirname)
+
+            # now loading it with SampleObject2 should put f into `_use_default_values`
+            config = SampleObject2.from_config(tmpdirname)
+            assert "f" in config._use_default_values
+            assert config.f == [1, 3]
+
+        # now loading the config, should **NOT** use [1, 3] for `f`, but the default [1, 4] value
+        # **BECAUSE** it is part of `config._use_default_values`
+        new_config = SampleObject4.from_config(config.config)
+        assert new_config.f == [5, 4]
+        config.config._use_default_values.pop()
+        new_config_2 = SampleObject4.from_config(config.config)
+        assert new_config_2.f == [1, 3]
+
+        # Nevertheless "e" should still be correctly loaded to [1, 3] from SampleObject2 instead of defaulting to [1, 5]
+        assert new_config_2.e == [1, 3]
