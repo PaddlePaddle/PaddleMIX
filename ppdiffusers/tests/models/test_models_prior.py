@@ -40,6 +40,7 @@ class PriorTransformerTests(ModelTesterMixin, unittest.TestCase):
         hidden_states = floats_tensor((batch_size, embedding_dim))
         proj_embedding = floats_tensor((batch_size, embedding_dim))
         encoder_hidden_states = floats_tensor((batch_size, num_embeddings, embedding_dim))
+
         return {
             "hidden_states": hidden_states,
             "timestep": 2,
@@ -48,7 +49,7 @@ class PriorTransformerTests(ModelTesterMixin, unittest.TestCase):
         }
 
     def get_dummy_seed_input(self, seed=0):
-        paddle.seed(seed=seed)
+        paddle.Generator().manual_seed(seed)
         batch_size = 4
         embedding_dim = 8
         num_embeddings = 7
@@ -64,11 +65,11 @@ class PriorTransformerTests(ModelTesterMixin, unittest.TestCase):
 
     @property
     def input_shape(self):
-        return 4, 8
+        return (4, 8)
 
     @property
     def output_shape(self):
-        return 4, 8
+        return (4, 8)
 
     def prepare_init_args_and_inputs_for_common(self):
         init_dict = {
@@ -106,6 +107,7 @@ class PriorTransformerTests(ModelTesterMixin, unittest.TestCase):
             model.set_default_attn_processor()
         input = self.get_dummy_seed_input()
         with paddle.no_grad():
+            breakpoint()
             output = model(**input)[0]
         output_slice = output[0, :5].flatten().cpu()
         print(output_slice)
@@ -119,7 +121,7 @@ class PriorTransformerTests(ModelTesterMixin, unittest.TestCase):
 @slow
 class PriorTransformerIntegrationTests(unittest.TestCase):
     def get_dummy_seed_input(self, batch_size=1, embedding_dim=768, num_embeddings=77, seed=0):
-        paddle.seed(seed=seed)
+        paddle.Generator().manual_seed(seed)
         batch_size = batch_size
         embedding_dim = embedding_dim
         num_embeddings = num_embeddings

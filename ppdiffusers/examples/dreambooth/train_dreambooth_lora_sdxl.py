@@ -69,7 +69,7 @@ from ppdiffusers.utils import check_min_version
 
 # Will error if the minimal version of ppdiffusers is not installed. Remove at your own risks.
 check_min_version("0.19.3")
-paddle_dtype = paddle.float16
+paddle_dtype = paddle.float32
 
 # Since HF sometimes timeout, we need to retry uploads
 # Credit: https://github.com/huggingface/datasets/blob/06ae3f678651bfbb3ca7dd3274ee2f38e0e0237e/src/datasets/utils/file_utils.py#L265

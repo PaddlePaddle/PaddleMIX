@@ -115,7 +115,7 @@ class StableDiffusionPix2PixZeroPipelineFastTests(PipelineLatentTesterMixin, Pip
             vocab_size=1000,
         )
         text_encoder = CLIPTextModel(text_encoder_config).eval()
-        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip", from_hf_hub=True)
         components = {
             "unet": unet,
             "scheduler": scheduler,

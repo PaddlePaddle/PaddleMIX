@@ -66,4 +66,4 @@ pipe_images = mixing_pipeline(
     generator=generator,
 ).images
 
-pipe_images[0].save("clip_guided_images_mixing_stable_diffusion.png")
+pipe_images[0].save("image_mixing-clip_guided_stable_diffusio-result-clip_guided_images_mixing_stable_diffusion.png")

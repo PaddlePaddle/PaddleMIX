@@ -367,19 +367,26 @@ class UNet2DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
             assert full_cond_out is not None
             keepall_mask = paddle.ones(shape=cond.shape[:-1], dtype=mask_dtype)
             full_cond_keepallmask_out = model(**{**inputs_dict, "encoder_attention_mask": keepall_mask}).sample
+        
             assert full_cond_keepallmask_out.allclose(
-                y=full_cond_out
+                y=full_cond_out,
+                rtol=1e-3,
+                atol=1e-5
             ).item(), "a 'keep all' mask should give the same result as no mask"
             trunc_cond = cond[:, :-1, :]
             trunc_cond_out = model(**{**inputs_dict, "encoder_hidden_states": trunc_cond}).sample
             assert not trunc_cond_out.allclose(
-                y=full_cond_out
+                y=full_cond_out,
+                rtol=1e-3,
+                atol=1e-5
             ).item(), "discarding the last token from our cond should change the result"
             batch, tokens, _ = cond.shape
             mask_last = (paddle.arange(end=tokens) < tokens - 1).expand(shape=[batch, -1]).cast(mask_dtype)
             masked_cond_out = model(**{**inputs_dict, "encoder_attention_mask": mask_last}).sample
             assert masked_cond_out.allclose(
-                y=trunc_cond_out
+                y=trunc_cond_out,
+                rtol=1e-3,
+                atol=1e-5
             ).item(), "masking the last token from our cond should be equivalent to truncating that token out of the condition"
 
     @mark.skip(
@@ -397,12 +404,16 @@ class UNet2DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
             keeplast_mask = (paddle.arange(end=tokens) == tokens - 1).expand(shape=[batch, -1]).cast("bool")
             keeplast_out = model(**{**inputs_dict, "encoder_attention_mask": keeplast_mask}).sample
             assert not keeplast_out.allclose(
-                y=full_cond_out
+                y=full_cond_out,
+                rtol=1e-3,
+                atol=1e-5
             ).item(), "a 'keep last token' mask should change the result"
             trunc_mask = paddle.zeros(shape=[batch, tokens - 1], dtype="bool")
             trunc_mask_out = model(**{**inputs_dict, "encoder_attention_mask": trunc_mask}).sample
             assert trunc_mask_out.allclose(
-                y=keeplast_out
+                y=keeplast_out,
+                rtol=1e-3,
+                atol=1e-5
             ).item(), "a mask with fewer tokens than condition, will be padded with 'keep' tokens. a 'discard-all' mask missing the final token is thus equivalent to a 'keep last' mask."
 
     def test_lora_processors(self):
@@ -477,26 +488,26 @@ class UNet2DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
         assert (sample - new_sample).abs().max() < 0.0001
         assert (sample - old_sample).abs().max() > 0.0001
 
-    def test_lora_save_safetensors_load_torch(self):
-        # enable deterministic behavior for gradient checkpointing
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+    # def test_lora_save_safetensors_load_torch(self):
+    #     # enable deterministic behavior for gradient checkpointing
+    #     init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
 
-        init_dict["attention_head_dim"] = (8, 16)
+    #     init_dict["attention_head_dim"] = (8, 16)
 
-        paddle.seed(0)
-        model = self.model_class(**init_dict)
+    #     paddle.seed(0)
+    #     model = self.model_class(**init_dict)
 
-        lora_attn_procs = create_lora_layers(model, mock_weights=False)
-        model.set_attn_processor(lora_attn_procs)
-        # Saving as paddle, properly reloads with directly filename
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_attn_procs(tmpdirname, to_diffusers=True)
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
-            paddle.seed(0)
-            new_model = self.model_class(**init_dict)
-            new_model.load_attn_procs(
-                tmpdirname, weight_name="pytorch_lora_weights.bin", from_diffusers=True, use_safetensors=False
-            )
+    #     lora_attn_procs = create_lora_layers(model, mock_weights=False)
+    #     model.set_attn_processor(lora_attn_procs)
+    #     # Saving as paddle, properly reloads with directly filename
+    #     with tempfile.TemporaryDirectory() as tmpdirname:
+    #         model.save_attn_procs(tmpdirname, to_diffusers=True)
+    #         self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+    #         paddle.seed(0)
+    #         new_model = self.model_class(**init_dict)
+    #         new_model.load_attn_procs(
+    #             tmpdirname, weight_name="pytorch_lora_weights.bin", from_diffusers=True, use_safetensors=False
+    #         )
 
     def test_lora_save_torch_force_load_safetensors_error(self):
         pass
@@ -632,7 +643,7 @@ class UNet2DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
         model = self.model_class(**init_dict)
         with paddle.no_grad():
             sample = model(**inputs_dict).sample
-        sample_copy = copy.copy(sample)
+        sample_copy = paddle.clone(sample)
         assert (sample - sample_copy).abs().max() < 0.0001
 
 

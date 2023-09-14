@@ -274,6 +274,7 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         clipped_idx = paddle.searchsorted(t, c)
         if paddle.isinf(c):
             clipped_idx = paddle.to_tensor(0)
+
         timesteps = (
             np.linspace(0, self.config.num_train_timesteps - 1 - clipped_idx, num_inference_steps + 1)
             .round()[::-1][:-1]

@@ -263,6 +263,7 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         # for exp beta schedules, such as the one for `pipeline_shap_e.py`
         # we need an index counter
         self._index_counter = defaultdict(int)
+
         self._step_index = None
 
     def sigma_to_t(self, sigma):

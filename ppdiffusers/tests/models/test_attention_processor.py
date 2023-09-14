@@ -67,7 +67,8 @@ class AttnAddedKVProcessorTests(unittest.TestCase):
         self.assertTrue(attn.to_v is not None)
 
         forward_args = self.get_forward_arguments(
-            query_dim=constructor_args["query_dim"], added_kv_proj_dim=constructor_args["added_kv_proj_dim"]
+            query_dim=constructor_args["query_dim"],
+            added_kv_proj_dim=constructor_args["added_kv_proj_dim"],
         )
 
         self_and_cross_attn_out = attn(**forward_args)
@@ -83,7 +84,8 @@ class AttnAddedKVProcessorTests(unittest.TestCase):
         self.assertTrue(attn.to_v is None)
 
         forward_args = self.get_forward_arguments(
-            query_dim=constructor_args["query_dim"], added_kv_proj_dim=constructor_args["added_kv_proj_dim"]
+            query_dim=constructor_args["query_dim"],
+            added_kv_proj_dim=constructor_args["added_kv_proj_dim"],
         )
 
         only_cross_attn_out = attn(**forward_args)
@@ -106,7 +108,7 @@ class DeprecatedAttentionBlockTests(unittest.TestCase):
         conversion = pipe(
             "foo",
             num_inference_steps=2,
-            generator=paddle.Generator().manual_seed().manual_seed(0),
+            generator=paddle.Generator().manual_seed(0),
             output_type="np",
         ).images
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -115,7 +117,7 @@ class DeprecatedAttentionBlockTests(unittest.TestCase):
         after_conversion = pipe(
             "foo",
             num_inference_steps=2,
-            generator=paddle.Generator().manual_seed().manual_seed(0),
+            generator=paddle.Generator().manual_seed(0),
             output_type="np",
         ).images
         self.assertTrue(np.allclose(pre_conversion, conversion, atol=1e-05))
