@@ -25,6 +25,7 @@ image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
 pipe = KandinskyV22Img2ImgPipeline.from_pretrained(
     "kandinsky-community/kandinsky-2-2-decoder", paddle_dtype=paddle.float16
 )
+
 init_image = load_image(
     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main" "/kandinsky/frog.png"
 )
