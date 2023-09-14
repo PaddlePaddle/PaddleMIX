@@ -128,13 +128,13 @@ class PipelineLatentTesterMixin:
         max_diff = np.abs(out_input_pil - out_input_np).max()
         self.assertLess(max_diff, 0.02, "`input_type=='pd'` generate different result from `input_type=='np'`")
 
+
     def test_latents_input(self):
         if len(self.image_latents_params) == 0:
             return
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
         pipe.image_processor = VaeImageProcessor(do_resize=False, do_normalize=False)
-        pipe = pipe.to(paddle_device)
         pipe.set_progress_bar_config(disable=None)
         out = pipe(**self.get_dummy_inputs_by_type(input_image_type="pd"))[0]
         vae = components["vae"]
@@ -355,7 +355,7 @@ class PipelineTesterMixin:
                     batched_inputs[name] = value
             for arg in additional_params_copy_to_batched_inputs:
                 batched_inputs[arg] = inputs[arg]
-            batched_inputs["output_type"] = None
+            batched_inputs["output_type"] = "np"
             if self.pipeline_class.__name__ == "DanceDiffusionPipeline":
                 batched_inputs.pop("output_type")
             output = pipe(**batched_inputs)

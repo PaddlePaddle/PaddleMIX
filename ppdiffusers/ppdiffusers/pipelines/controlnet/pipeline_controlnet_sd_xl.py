@@ -443,7 +443,7 @@ class StableDiffusionXLControlNetPipeline(DiffusionPipeline, TextualInversionLoa
 
     # Copied from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl.StableDiffusionXLPipeline._get_add_time_ids
     def _get_add_time_ids(self, original_size, crops_coords_top_left, target_size, dtype):
-        add_time_ids = list(original_size + crops_coords_top_left + target_size)
+        add_time_ids = list(tuple(original_size) + crops_coords_top_left + target_size)
         passed_add_embed_dim = (
             self.unet.config.addition_time_embed_dim * len(add_time_ids) + self.text_encoder_2.config.projection_dim
         )
@@ -467,9 +467,9 @@ class StableDiffusionXLControlNetPipeline(DiffusionPipeline, TextualInversionLoa
             ),
         )
         if use_xformers:
-            self.vae.post_quant_conv.to(dtype)
-            self.vae.decoder.conv_in.to(dtype)
-            self.vae.decoder.mid_block.to(dtype)
+            self.vae.post_quant_conv.to(dtype=dtype)
+            self.vae.decoder.conv_in.to(dtype=dtype)
+            self.vae.decoder.mid_block.to(dtype=dtype)
 
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)

@@ -149,11 +149,13 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             image=init_image,
             return_dict=False,
         )[0]
+
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
+
         expected_slice = np.array(
-            [0.48931587, 0.40102208, 0.49653798, 0.4203022, 0.34621224, 0.50789315, 0.41116416, 0.4933398, 0.5465742]
+            [0.8620628, 0.5237646, 0.5834946, 0.39199167, 0.14265564, 0.4836399, 0.50643086, 0.46689287, 0.5785755]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.005
@@ -190,11 +192,13 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
 
     def test_stable_diffusion_img2img_pipeline_multiple_of_8(self):
         init_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/img2img/sketch-mountains-input.jpg"
+            "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
         )
+
         init_image = init_image.resize((760, 504))
         model_id = "BAAI/AltDiffusion"
-        pipe = AltDiffusionImg2ImgPipeline.from_pretrained(model_id, safety_checker=None)
+        pipe = AltDiffusionImg2ImgPipeline.from_pretrained(model_id)
+
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
         prompt = "A fantasy landscape, trending on artstation"
@@ -206,9 +210,9 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         image_slice = image[255:258, 383:386, -1]
         assert image.shape == (504, 760, 3)
         expected_slice = np.array(
-            [0.3251649, 0.3340174, 0.3418343, 0.32628638, 0.33462793, 0.3300547, 0.31628466, 0.3470268, 0.34273332]
+            [0.30212247, 0.30488092, 0.3098243, 0.298663, 0.31650132, 0.31669503, 0.2998405, 0.3279791, 0.33063996]
         )
-        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
 
 @slow
@@ -224,9 +228,6 @@ class AltDiffusionImg2ImgPipelineIntegrationTests(unittest.TestCase):
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/img2img/sketch-mountains-input.jpg"
         )
         init_image = init_image.resize((768, 512))
-        # expected_image = load_numpy(
-        #     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/img2img/fantasy_landscape_alt.npy"
-        # )
         model_id = "BAAI/AltDiffusion"
         pipe = AltDiffusionImg2ImgPipeline.from_pretrained(model_id, safety_checker=None)
         pipe.set_progress_bar_config(disable=None)

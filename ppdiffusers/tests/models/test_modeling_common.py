@@ -283,7 +283,7 @@ class ModelTesterMixin:
             image = model(**inputs_dict)
             if isinstance(image, dict):
                 image = image.to_tuple()[0]
-            
+
             new_image = new_model(**inputs_dict)
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]

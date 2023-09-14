@@ -210,7 +210,7 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
         )
 
         # YiYi notes: for testing only to match ldm, we can directly create a latents with desired shape: batch_size, num_embeddings, embedding_dim
-        latents = latents.reshape(latents.shape[0], num_embeddings, embedding_dim)
+        latents = latents.reshape([latents.shape[0], num_embeddings, embedding_dim])
         for i, t in enumerate(self.progress_bar(timesteps)):
             # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
