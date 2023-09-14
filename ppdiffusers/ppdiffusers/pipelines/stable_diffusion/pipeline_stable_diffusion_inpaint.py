@@ -105,7 +105,7 @@ def prepare_mask_and_masked_image(image, mask, height, width, return_image: bool
         mask[mask >= 0.5] = 1
 
         # Image as float32
-        image = image.cast(dtype="float32")
+        image = image.cast(paddle.float32)
     elif isinstance(mask, paddle.Tensor):
         raise TypeError(f"`mask` is a paddle.Tensor but `image` (type: {type(image)} is not")
     else:
@@ -120,7 +120,7 @@ def prepare_mask_and_masked_image(image, mask, height, width, return_image: bool
         elif isinstance(image, list) and isinstance(image[0], np.ndarray):
             image = np.concatenate([i[None, :] for i in image], axis=0)
         image = image.transpose(0, 3, 1, 2)
-        image = paddle.to_tensor(data=image).cast(dtype="float32") / 127.5 - 1.0
+        image = paddle.to_tensor(image).cast(paddle.float32) / 127.5 - 1.0
 
         # preprocess mask
         if isinstance(mask, (PIL.Image.Image, np.ndarray)):
@@ -133,7 +133,7 @@ def prepare_mask_and_masked_image(image, mask, height, width, return_image: bool
             mask = np.concatenate([m[None, None, :] for m in mask], axis=0)
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
-        mask = paddle.to_tensor(data=mask)
+        mask = paddle.to_tensor(mask)
     masked_image = image * (mask < 0.5)
 
     # n.b. ensure backwards compatibility as old function does not return image
@@ -320,7 +320,7 @@ class StableDiffusionInpaintPipeline(
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(repeat_times=[1, num_images_per_prompt, 1])
-        prompt_embeds = prompt_embeds.reshape(bs_embed * num_images_per_prompt, seq_len, -1)
+        prompt_embeds = prompt_embeds.reshape([bs_embed * num_images_per_prompt, seq_len, -1])
 
         # get unconditional embeddings for classifier free guidance
         if do_classifier_free_guidance and negative_prompt_embeds is None:

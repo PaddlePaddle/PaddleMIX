@@ -29,19 +29,35 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import floats_tensor, load_image
-from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
+from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
+    require_paddle_gpu,
+    slow,
+)
 
 from ..pipeline_params import (
     TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_INPAINTING_PARAMS,
 )
-from ..test_pipelines_common import PipelineTesterMixin
+from ..test_pipelines_common import (
+    PipelineKarrasSchedulerTesterMixin,
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+)
+
+enable_full_determinism()
 
 
-class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusion2InpaintPipelineFastTests(
+    PipelineKarrasSchedulerTesterMixin, PipelineLatentTesterMixin, PipelineTesterMixin, unittest.TestCase
+):
     pipeline_class = StableDiffusionInpaintPipeline
     params = TEXT_GUIDED_IMAGE_INPAINTING_PARAMS
     batch_params = TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS
+    image_params = frozenset(
+        []
+    )  # TO-DO: update image_params once pipeline is refactored with VaeImageProcessor.preprocess
+    image_latents_params = frozenset([])
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -109,7 +125,7 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin, unittest.Tes
             "generator": generator,
             "num_inference_steps": 2,
             "guidance_scale": 6.0,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 
@@ -125,6 +141,9 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin, unittest.Tes
             [0.58470726, 0.49302375, 0.3954028, 0.4068969, 0.33668613, 0.50350493, 0.34411103, 0.25261122, 0.4531455]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
+
+    def test_inference_batch_single_identical(self):
+        super().test_inference_batch_single_identical()
 
 
 @slow

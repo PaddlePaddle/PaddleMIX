@@ -302,7 +302,7 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
             self.register_to_config(lower_order_final=True)
 
         self.order_list = self.get_order_list(num_inference_steps)
-        
+
     # Copied from ppdiffusers.schedulers.scheduling_ddpm.DDPMScheduler._threshold_sample
     def _threshold_sample(self, sample: paddle.Tensor) -> paddle.Tensor:
         """
