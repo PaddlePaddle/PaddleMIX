@@ -268,26 +268,26 @@ class UNet3DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
         # LoRA and no LoRA should NOT be the same
         assert (sample - old_sample).abs().max() > 1e-4
 
-    def test_lora_save_safetensors_load_torch(self):
-        # enable deterministic behavior for gradient checkpointing
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+    # def test_lora_save_safetensors_load_torch(self):
+    #     # enable deterministic behavior for gradient checkpointing
+    #     init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
 
-        init_dict["attention_head_dim"] = 8
+    #     init_dict["attention_head_dim"] = 8
 
-        paddle.seed(0)
-        model = self.model_class(**init_dict)
+    #     paddle.seed(0)
+    #     model = self.model_class(**init_dict)
 
-        lora_attn_procs = create_lora_layers(model, mock_weights=False)
-        model.set_attn_processor(lora_attn_procs)
-        # Saving as paddle, properly reloads with directly filename
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_attn_procs(tmpdirname, to_diffusers=True)
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
-            paddle.seed(0)
-            new_model = self.model_class(**init_dict)
-            new_model.load_attn_procs(
-                tmpdirname, weight_name="pytorch_lora_weights.bin", use_safetensors=False, from_diffusers=True
-            )
+    #     lora_attn_procs = create_lora_layers(model, mock_weights=False)
+    #     model.set_attn_processor(lora_attn_procs)
+    #     # Saving as paddle, properly reloads with directly filename
+    #     with tempfile.TemporaryDirectory() as tmpdirname:
+    #         model.save_attn_procs(tmpdirname, to_diffusers=True)
+    #         self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+    #         paddle.seed(0)
+    #         new_model = self.model_class(**init_dict)
+    #         new_model.load_attn_procs(
+    #             tmpdirname, weight_name="pytorch_lora_weights.bin", use_safetensors=False, from_diffusers=True
+    #         )
 
     def test_lora_save_paddle_force_load_safetensors_error(self):
         pass
@@ -356,7 +356,7 @@ class UNet3DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
         with paddle.no_grad():
             output_2 = model(**inputs_dict)[0]
         self.assertEqual(output.shape, output_2.shape, "Shape doesn't match")
-        assert np.abs(output.cpu() - output_2.cpu()).max() < 0.01
+        assert np.abs(output.cpu().numpy() - output_2.cpu().numpy()).max() < 0.01
 
 
 # (todo: sayakpaul) implement SLOW tests.

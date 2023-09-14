@@ -108,7 +108,7 @@ class DeprecatedAttentionBlockTests(unittest.TestCase):
         conversion = pipe(
             "foo",
             num_inference_steps=2,
-            generator=paddle.Generator().manual_seed().manual_seed(0),
+            generator=paddle.Generator().manual_seed(0),
             output_type="np",
         ).images
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -117,7 +117,7 @@ class DeprecatedAttentionBlockTests(unittest.TestCase):
         after_conversion = pipe(
             "foo",
             num_inference_steps=2,
-            generator=paddle.Generator().manual_seed().manual_seed(0),
+            generator=paddle.Generator().manual_seed(0),
             output_type="np",
         ).images
         self.assertTrue(np.allclose(pre_conversion, conversion, atol=1e-05))

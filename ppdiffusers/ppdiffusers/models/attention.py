@@ -469,7 +469,7 @@ class GELU(nn.Layer):
 
     def __init__(self, dim_in: int, dim_out: int, approximate: str = "none"):
         super().__init__()
-        self.proj = LoRACompatibleLinear(dim_in, dim_out * 2)
+        self.proj = LoRACompatibleLinear(dim_in, dim_out)
         self.approximate = approximate
         self.approximate_bool = approximate == "tanh"
 
