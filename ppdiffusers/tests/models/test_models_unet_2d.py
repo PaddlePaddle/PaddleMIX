@@ -13,232 +13,224 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import gc
-import math
 import unittest
 
 import paddle
 
-from ppdiffusers import UNet2DModel
-from ppdiffusers.utils import floats_tensor, logging, paddle_all_close, slow
+from ppdiffusers import UNet1DModel
+from ppdiffusers.utils import floats_tensor, slow
 
-from .test_modeling_common import ModelTesterMixin
-
-logger = logging.get_logger(__name__)
+from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
 
 
-class Unet2DModelTests(ModelTesterMixin, unittest.TestCase):
-    model_class = UNet2DModel
-
-    @property
-    def dummy_input(self):
-        batch_size = 4
-        num_channels = 3
-        sizes = 32, 32
-        noise = floats_tensor((batch_size, num_channels) + sizes)
-        time_step = paddle.to_tensor([10])
-        return {"sample": noise, "timestep": time_step}
-
-    @property
-    def input_shape(self):
-        return 3, 32, 32
-
-    @property
-    def output_shape(self):
-        return 3, 32, 32
-
-    def prepare_init_args_and_inputs_for_common(self):
-        init_dict = {
-            "block_out_channels": (32, 64),
-            "down_block_types": ("DownBlock2D", "AttnDownBlock2D"),
-            "up_block_types": ("AttnUpBlock2D", "UpBlock2D"),
-            "attention_head_dim": None,
-            "out_channels": 3,
-            "in_channels": 3,
-            "layers_per_block": 2,
-            "sample_size": 32,
-        }
-        inputs_dict = self.dummy_input
-        return init_dict, inputs_dict
-
-
-class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
-    model_class = UNet2DModel
+class UNet1DModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
+    model_class = UNet1DModel
+    main_input_name = "sample"
 
     @property
     def dummy_input(self):
         batch_size = 4
-        num_channels = 4
-        sizes = 32, 32
-        noise = floats_tensor((batch_size, num_channels) + sizes)
-        time_step = paddle.to_tensor([10])
+        num_features = 14
+        seq_len = 16
+        noise = floats_tensor((batch_size, num_features, seq_len))
+        time_step = paddle.to_tensor([10] * batch_size)
         return {"sample": noise, "timestep": time_step}
 
     @property
     def input_shape(self):
-        return 4, 32, 32
+        return 4, 14, 16
 
     @property
     def output_shape(self):
-        return 4, 32, 32
+        return 4, 14, 16
+
+    def test_ema_training(self):
+        pass
+
+    def test_training(self):
+        pass
+
+    def test_determinism(self):
+        super().test_determinism()
+
+    def test_outputs_equivalence(self):
+        super().test_outputs_equivalence()
+
+    def test_from_save_pretrained(self):
+        super().test_from_save_pretrained()
+
+    def test_model_from_pretrained(self):
+        super().test_model_from_pretrained()
+
+    def test_output(self):
+        super().test_output()
 
     def prepare_init_args_and_inputs_for_common(self):
         init_dict = {
-            "sample_size": 32,
-            "in_channels": 4,
-            "out_channels": 4,
-            "layers_per_block": 2,
-            "block_out_channels": (32, 64),
-            "attention_head_dim": 32,
-            "down_block_types": ("DownBlock2D", "DownBlock2D"),
-            "up_block_types": ("UpBlock2D", "UpBlock2D"),
+            "block_out_channels": (32, 64, 128, 256),
+            "in_channels": 14,
+            "out_channels": 14,
+            "time_embedding_type": "positional",
+            "use_timestep_embedding": True,
+            "flip_sin_to_cos": False,
+            "freq_shift": 1.0,
+            "out_block_type": "OutConv1DBlock",
+            "mid_block_type": "MidResTemporalBlock1D",
+            "down_block_types": ("DownResnetBlock1D", "DownResnetBlock1D", "DownResnetBlock1D", "DownResnetBlock1D"),
+            "up_block_types": ("UpResnetBlock1D", "UpResnetBlock1D", "UpResnetBlock1D"),
+            "act_fn": "mish",
         }
         inputs_dict = self.dummy_input
         return init_dict, inputs_dict
 
     def test_from_pretrained_hub(self):
-        model, loading_info = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update", output_loading_info=True)
+        model, loading_info = UNet1DModel.from_pretrained(
+            "bglick13/hopper-medium-v2-value-function-hor32", output_loading_info=True, subfolder="unet"
+        )
         self.assertIsNotNone(model)
         self.assertEqual(len(loading_info["missing_keys"]), 0)
-        image = model(**self.dummy_input).sample
+        image = model(**self.dummy_input)
         assert image is not None, "Make sure output is not None"
-
-    def test_from_pretrained_accelerate(self):
-        model, _ = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update", output_loading_info=True)
-        image = model(**self.dummy_input).sample
-        assert image is not None, "Make sure output is not None"
-
-    def test_from_pretrained_accelerate_wont_change_results(self):
-        model_accelerate, _ = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update", output_loading_info=True)
-        model_accelerate
-        model_accelerate.eval()
-        noise = paddle.randn(
-            shape=[
-                1,
-                model_accelerate.config.in_channels,
-                model_accelerate.config.sample_size,
-                model_accelerate.config.sample_size,
-            ],
-            generator=paddle.Generator().manual_seed(0),
-        )
-        time_step = paddle.to_tensor([10] * noise.shape[0])
-        arr_accelerate = model_accelerate(noise, time_step)["sample"]
-        del model_accelerate
-        paddle.device.cuda.empty_cache()
-        gc.collect()
-        model_normal_load, _ = UNet2DModel.from_pretrained(
-            "fusing/unet-ldm-dummy-update",
-            output_loading_info=True,
-        )
-        model_normal_load.eval()
-        arr_normal_load = model_normal_load(noise, time_step)["sample"]
-        assert paddle_all_close(arr_accelerate, arr_normal_load, rtol=0.001)
 
     def test_output_pretrained(self):
-        model = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update")
-        model.eval()
-        noise = paddle.randn(
-            shape=[1, model.config.in_channels, model.config.sample_size, model.config.sample_size],
-            generator=paddle.Generator().manual_seed(0),
-        )
-        time_step = paddle.to_tensor([10] * noise.shape[0])
+        model = UNet1DModel.from_pretrained("bglick13/hopper-medium-v2-value-function-hor32", subfolder="unet")
+        paddle.seed(0)
+        num_features = model.config.in_channels
+        seq_len = 16
+        noise = paddle.randn(shape=(1, seq_len, num_features)).transpose(perm=[0, 2, 1])
+        time_step = paddle.full(shape=(num_features,), fill_value=0)
         with paddle.no_grad():
-            output = model(noise, time_step).sample
-        output_slice = output[0, -1, -3:, -3:].flatten().cpu()
+            output = model(noise, time_step).sample.permute(0, 2, 1)
+        output_slice = output[0, -3:, -3:].flatten()
         expected_output_slice = paddle.to_tensor(
             [
-                0.43855608,
-                -10.29346752,
-                -9.60953522,
-                -8.39902020,
-                -16.29206276,
-                -13.07511997,
-                -9.30383205,
-                -13.69859409,
-                -10.52999401,
+                -0.2857576608657837,
+                -0.9908187389373779,
+                0.2976357340812683,
+                -0.8677187561988831,
+                -0.21778395771980286,
+                0.08095654845237732,
+                -0.5871752500534058,
+                0.3299727439880371,
+                -0.17421625554561615,
             ]
         )
-        self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.001))
+        self.assertTrue(paddle.allclose(output_slice, expected_output_slice, rtol=0.001))
+
+    def test_forward_with_norm_groups(self):
+        pass
+
+    # TODO, check this why not pass
+    @slow
+    def test_unet_1d_maestro(self):
+        model_id = "harmonai/maestro-150k"
+        model = UNet1DModel.from_pretrained(model_id, subfolder="unet")
+        sample_size = 65536
+        noise = paddle.sin(
+            x=paddle.arange(start=sample_size, dtype=paddle.float32)[None, None, :].tile(repeat_times=[1, 2, 1])
+        )
+        timestep = paddle.to_tensor([1.0])  # must cast float32
+        with paddle.no_grad():
+            output = model(noise, timestep).sample
+        output_sum = output.abs().sum()
+        output_max = output.abs().max()
+        assert (output_sum - 224.0896).abs() < 0.5
+        assert (output_max - 0.0607).abs() < 0.0004
 
 
-class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
-    model_class = UNet2DModel
+class UNetRLModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
+    model_class = UNet1DModel
+    main_input_name = "sample"
 
     @property
-    def dummy_input(self, sizes=(32, 32)):
+    def dummy_input(self):
         batch_size = 4
-        num_channels = 3
-        noise = floats_tensor((batch_size, num_channels) + sizes)
-        time_step = paddle.to_tensor(batch_size * [10]).cast("int32")
+        num_features = 14
+        seq_len = 16
+        noise = floats_tensor((batch_size, num_features, seq_len))
+        time_step = paddle.to_tensor([10] * batch_size)
         return {"sample": noise, "timestep": time_step}
 
     @property
     def input_shape(self):
-        return 3, 32, 32
+        return 4, 14, 16
 
     @property
     def output_shape(self):
-        return 3, 32, 32
+        return 4, 14, 1
+
+    def test_determinism(self):
+        super().test_determinism()
+
+    def test_outputs_equivalence(self):
+        super().test_outputs_equivalence()
+
+    def test_from_save_pretrained(self):
+        super().test_from_save_pretrained()
+
+    def test_model_from_pretrained(self):
+        super().test_model_from_pretrained()
+
+    def test_output(self):
+        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+        model = self.model_class(**init_dict)
+        model.eval()
+        with paddle.no_grad():
+            output = model(**inputs_dict)
+            if isinstance(output, dict):
+                output = output.sample
+        self.assertIsNotNone(output)
+        expected_shape = [inputs_dict["sample"].shape[0], 1]
+        self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
+
+    def test_ema_training(self):
+        pass
+
+    def test_training(self):
+        pass
 
     def prepare_init_args_and_inputs_for_common(self):
         init_dict = {
-            "block_out_channels": [32, 64, 64, 64],
-            "in_channels": 3,
+            "in_channels": 14,
+            "out_channels": 14,
+            "down_block_types": ["DownResnetBlock1D", "DownResnetBlock1D", "DownResnetBlock1D", "DownResnetBlock1D"],
+            "up_block_types": [],
+            "out_block_type": "ValueFunction",
+            "mid_block_type": "ValueFunctionMidBlock1D",
+            "block_out_channels": [32, 64, 128, 256],
             "layers_per_block": 1,
-            "out_channels": 3,
-            "time_embedding_type": "fourier",
-            "norm_eps": 1e-06,
-            "mid_block_scale_factor": math.sqrt(2.0),
-            "norm_num_groups": None,
-            "down_block_types": ["SkipDownBlock2D", "AttnSkipDownBlock2D", "SkipDownBlock2D", "SkipDownBlock2D"],
-            "up_block_types": ["SkipUpBlock2D", "SkipUpBlock2D", "AttnSkipUpBlock2D", "SkipUpBlock2D"],
+            "downsample_each_block": True,
+            "use_timestep_embedding": True,
+            "freq_shift": 1.0,
+            "flip_sin_to_cos": False,
+            "time_embedding_type": "positional",
+            "act_fn": "swish",
         }
         inputs_dict = self.dummy_input
         return init_dict, inputs_dict
 
-    @slow
     def test_from_pretrained_hub(self):
-        model, loading_info = UNet2DModel.from_pretrained("google/ncsnpp-celebahq-256", output_loading_info=True)
-        self.assertIsNotNone(model)
-        self.assertEqual(len(loading_info["missing_keys"]), 0)
-        inputs = self.dummy_input
-        noise = floats_tensor((4, 3) + (256, 256))
-        inputs["sample"] = noise
-        image = model(**inputs)
+        value_function, vf_loading_info = UNet1DModel.from_pretrained(
+            "bglick13/hopper-medium-v2-value-function-hor32", output_loading_info=True, subfolder="value_function"
+        )
+        self.assertIsNotNone(value_function)
+        self.assertEqual(len(vf_loading_info["missing_keys"]), 0)
+        image = value_function(**self.dummy_input)
         assert image is not None, "Make sure output is not None"
 
-    @slow
-    def test_output_pretrained_ve_mid(self):
-        model = UNet2DModel.from_pretrained("google/ncsnpp-celebahq-256")
-        paddle.seed(0)
-        batch_size = 4
-        num_channels = 3
-        sizes = 256, 256
-        noise = paddle.ones(shape=(batch_size, num_channels, *sizes))
-        time_step = paddle.to_tensor(batch_size * [0.0001])
-        with paddle.no_grad():
-            output = model(noise, time_step).sample
-        output_slice = output[0, -3:, -3:, -1].flatten().cpu()
-        expected_output_slice = paddle.to_tensor(
-            [-4836.2231, -6487.1387, -3816.7969, -7964.9253, -10966.2842, -20043.6016, 8137.0571, 2340.3499, 544.6114]
+    def test_output_pretrained(self):
+        value_function, vf_loading_info = UNet1DModel.from_pretrained(
+            "bglick13/hopper-medium-v2-value-function-hor32", output_loading_info=True, subfolder="value_function"
         )
-        self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.01))
-
-    def test_output_pretrained_ve_large(self):
-        model = UNet2DModel.from_pretrained("fusing/ncsnpp-ffhq-ve-dummy-update")
         paddle.seed(0)
-        batch_size = 4
-        num_channels = 3
-        sizes = 32, 32
-        noise = paddle.ones(shape=(batch_size, num_channels, *sizes))
-        time_step = paddle.to_tensor(batch_size * [0.0001])
+        num_features = value_function.config.in_channels
+        seq_len = 14
+        noise = paddle.randn(shape=(1, seq_len, num_features)).transpose(perm=[0, 2, 1])
+        time_step = paddle.full(shape=(num_features,), fill_value=0)
         with paddle.no_grad():
-            output = model(noise, time_step).sample
-        output_slice = output[0, -3:, -3:, -1].flatten().cpu()
-        expected_output_slice = paddle.to_tensor(
-            [-0.0325, -0.09, -0.0869, -0.0332, -0.0725, -0.027, -0.0101, 0.0227, 0.0256]
-        )
-        self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.01))
+            output = value_function(noise, time_step).sample
+        expected_output_slice = paddle.to_tensor([291.51135254] * seq_len)
+        self.assertTrue(paddle.allclose(output.squeeze(-1), expected_output_slice, rtol=0.001))
 
     def test_forward_with_norm_groups(self):
         pass
