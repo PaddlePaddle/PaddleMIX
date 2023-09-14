@@ -65,7 +65,6 @@ class VersatileDiffusionTextToImagePipelineIntegrationTests(unittest.TestCase):
         ).images
         image_slice = image[0, 253:256, 253:256, -1]
         assert image.shape == (1, 512, 512, 3)
-        # expected_slice = np.array([0.3493, 0.3757, 0.4093, 0.4495, 0.4233, 0.4102, 0.4507, 0.4756, 0.4787])
         expected_slice = np.array(
             [0.0390625, 0.00854492, 0.0, 0.03930664, 0.00878906, 0.04711914, 0.03686523, 0.0, 0.0246582]
         )

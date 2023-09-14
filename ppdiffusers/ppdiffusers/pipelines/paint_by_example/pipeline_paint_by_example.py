@@ -320,7 +320,7 @@ class PaintByExamplePipeline(DiffusionPipeline):
         return image_latents
 
     def _encode_image(self, image, num_images_per_prompt, do_classifier_free_guidance):
-        dtype = next(iter(self.image_encoder.parameters())).dtype
+        dtype = self.image_encoder.dtype
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(images=image, return_tensors="pd").pixel_values
         image = image.cast(dtype=dtype)

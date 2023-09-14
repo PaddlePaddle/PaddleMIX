@@ -115,7 +115,7 @@ class StableDiffusionImageVariationPipeline(DiffusionPipeline):
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
     def _encode_image(self, image, num_images_per_prompt, do_classifier_free_guidance):
-        dtype = next(self.image_encoder.parameters()).dtype
+        dtype = self.image_encoder.dtype
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(images=image, return_tensors="pd").pixel_values
         image = image.cast(dtype=dtype)

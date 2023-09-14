@@ -27,17 +27,24 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
-from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
-from ..test_pipelines_common import PipelineTesterMixin
+from ..pipeline_params import (
+    TEXT_TO_IMAGE_BATCH_PARAMS,
+    TEXT_TO_IMAGE_IMAGE_PARAMS,
+    TEXT_TO_IMAGE_PARAMS,
+)
+from ..test_pipelines_common import PipelineLatentTesterMixin, PipelineTesterMixin
+
+enable_full_determinism()
 
 
-class StableDiffusionSAGPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusionSAGPipelineFastTests(PipelineLatentTesterMixin, PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionSAGPipeline
-    test_cpu_offload = False
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
+    image_params = TEXT_TO_IMAGE_IMAGE_PARAMS
+    image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -101,9 +108,12 @@ class StableDiffusionSAGPipelineFastTests(PipelineTesterMixin, unittest.TestCase
             "num_inference_steps": 2,
             "guidance_scale": 1.0,
             "sag_scale": 1.0,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
+
+    def test_inference_batch_single_identical(self):
+        super().test_inference_batch_single_identical()
 
 
 @slow

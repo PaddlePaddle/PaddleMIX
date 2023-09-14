@@ -95,8 +95,6 @@ def print_tensor_test(tensor, filename="test_corrections.txt", expected_tensor_n
         tensor = paddle.to_tensor(tensor)
 
     tensor_str = str(tensor.detach().cpu().flatten().cast("float32")).replace("\n", "")
-    # format is usually:
-    # expected_slice = np.array([-0.5713, -0.3018, -0.9814, 0.04663, -0.879, 0.76, -1.734, 0.1044, 1.161])
     output_str = tensor_str.replace("tensor", f"{expected_tensor_name} = np.array")
     test_file, test_class, test_fn = test_name.split("::")
     test_fn = test_fn.split()[0]
