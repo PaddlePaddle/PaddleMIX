@@ -126,9 +126,7 @@ class StableDiffusionModelEditingPipelineFastTests(
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() default_case', image_slice.flatten())
         expected_slice = np.array([0.2471, 0.2747, 0.5817, 0.3581, 0.19, 0.4423, 0.3357, 0.1975, 0.4318])
-        # expected_slice = np.array([0.4755, 0.5132, 0.4976, 0.3904, 0.3554, 0.4765, 0.5139, 0.5158, 0.4889])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_model_editing_negative_prompt(self):
@@ -142,9 +140,7 @@ class StableDiffusionModelEditingPipelineFastTests(
         image = output.images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() negative_prompt', image_slice.flatten())
         expected_slice = np.array([0.2218, 0.2555, 0.5607, 0.2025, 0.2799, 0.5633, 0.2034, 0.2858, 0.4895])
-        # expected_slice = np.array([0.4992, 0.5101, 0.5004, 0.3949, 0.3604, 0.4735, 0.5216, 0.5204, 0.4913])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_model_editing_euler(self):
@@ -159,9 +155,7 @@ class StableDiffusionModelEditingPipelineFastTests(
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() editing_default_case', image_slice.flatten())
         expected_slice = np.array([0.2786, 0.1732, 0.3241, 0.2671, 0.2245, 0.5156, 0.2579, 0.2105, 0.4317])
-        # expected_slice = np.array([0.4747, 0.5372, 0.4779, 0.4982, 0.5543, 0.4816, 0.5238, 0.4904, 0.5027])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_model_editing_pndm(self):

@@ -146,9 +146,7 @@ class StableDiffusionXLImg2ImgPipelineFastTests(PipelineLatentTesterMixin, Pipel
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 32, 32, 3)
-        # print('image_slice.flatten() euler', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.0202, 0.7641, 0.6398, 0.1545, 0.9152, 0.4367, 0.3589, 0.6175, 0.4299])
-        # expected_slice = np.array([0.4664, 0.4886, 0.4403, 0.6902, 0.5592, 0.4534, 0.5931, 0.5951, 0.5224])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_xl_refiner(self):
@@ -159,9 +157,7 @@ class StableDiffusionXLImg2ImgPipelineFastTests(PipelineLatentTesterMixin, Pipel
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 32, 32, 3)
-        # print('image_slice.flatten() refiner', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.0665, 0.8092, 0.645, 0.1931, 0.894, 0.4368, 0.3969, 0.5983, 0.4375])
-        # expected_slice = np.array([0.4578, 0.4981, 0.4301, 0.6454, 0.5588, 0.4442, 0.5678, 0.594, 0.5176])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_attention_slicing_forward_pass(self):

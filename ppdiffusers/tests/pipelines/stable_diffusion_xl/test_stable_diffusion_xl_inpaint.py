@@ -153,9 +153,7 @@ class StableDiffusionXLInpaintPipelineFastTests(PipelineLatentTesterMixin, Pipel
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() inpaint_euler', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.0147, 0.1736, 0.0819, 0.6565, 0.2887, 0.4855, 0.9155, 0.5531, 0.6236])
-        # expected_slice = np.array([0.8029, 0.5523, 0.5825, 0.6003, 0.6702, 0.7018, 0.6369, 0.5955, 0.5123])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_attention_slicing_forward_pass(self):
@@ -229,9 +227,7 @@ class StableDiffusionXLInpaintPipelineFastTests(PipelineLatentTesterMixin, Pipel
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() refiner', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.2898, 0.2712, 0.1923, 0.5586, 0.1359, 0.5117, 0.8527, 0.4712, 0.5682])
-        # expected_slice = np.array([0.7045, 0.4838, 0.5454, 0.627, 0.6168, 0.6717, 0.6484, 0.5681, 0.4922])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_two_xl_mixture_of_denoiser(self):

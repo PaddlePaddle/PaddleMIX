@@ -347,7 +347,6 @@ class StableDiffusionDepth2ImgPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, 253:256, 253:256, -1].flatten()
         assert image.shape == (1, 480, 640, 3)
-        # expected_slice = np.array([0.9057, 0.9365, 0.9258, 0.8937, 0.8555, 0.8541, 0.826, 0.7747, 0.7421])
         expected_slice = np.array(
             [0.75446224, 0.746921, 0.7595095, 0.8161169, 0.8059271, 0.7999228, 0.9052905, 0.879215, 0.8690305]
         )
@@ -364,7 +363,6 @@ class StableDiffusionDepth2ImgPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, 253:256, 253:256, -1].flatten()
         assert image.shape == (1, 480, 640, 3)
-        # expected_slice = np.array([0.6363, 0.6274, 0.6309, 0.637, 0.6226, 0.6286, 0.6213, 0.6453, 0.6306])
         expected_slice = np.array(
             [0.6395747, 0.64879197, 0.6566683, 0.6438427, 0.6707787, 0.63587487, 0.66576767, 0.62180007, 0.6628648]
         )
@@ -381,7 +379,6 @@ class StableDiffusionDepth2ImgPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, 253:256, 253:256, -1].flatten()
         assert image.shape == (1, 480, 640, 3)
-        # expected_slice = np.array([0.6424, 0.6524, 0.6249, 0.6041, 0.6634, 0.642, 0.6522, 0.6555, 0.6436])
         expected_slice = np.array(
             [0.6283968, 0.6419119, 0.6295293, 0.63652724, 0.6420511, 0.61574477, 0.62251365, 0.65826833, 0.6480877]
         )

@@ -130,9 +130,7 @@ class StableDiffusionPanoramaPipelineFastTests(PipelineLatentTesterMixin, Pipeli
         image = sd_pipe(**inputs, circular_padding=True).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() circular_padding_case', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.3415, 0.2238, 0.2727, 0.3474, 0.2625, 0.2496, 0.2964, 0.3226, 0.4187])
-        # expected_slice = np.array([0.6127, 0.6299, 0.4595, 0.4051, 0.4543, 0.3925, 0.551, 0.5693, 0.5031])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     # override to speed the overall test timing up.
@@ -167,9 +165,7 @@ class StableDiffusionPanoramaPipelineFastTests(PipelineLatentTesterMixin, Pipeli
         image = output.images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() views_batch', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.2883, 0.2439, 0.2683, 0.3313, 0.2877, 0.4639, 0.2544, 0.3062, 0.4785])
-        # expected_slice = np.array([0.6187, 0.5375, 0.4915, 0.4136, 0.4114, 0.4563, 0.5128, 0.4976, 0.4757])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_panorama_views_batch_circular_padding(self):
@@ -181,9 +177,7 @@ class StableDiffusionPanoramaPipelineFastTests(PipelineLatentTesterMixin, Pipeli
         image = output.images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() views_batch_circular_padding', image_slice.flatten())
         expected_slice = np.array([0.3415, 0.2238, 0.2727, 0.3474, 0.2624, 0.2496, 0.2964, 0.3226, 0.4187])
-        # expected_slice = np.array([0.6127, 0.6299, 0.4595, 0.4051, 0.4543, 0.3925, 0.551, 0.5693, 0.5031])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_panorama_euler(self):
@@ -197,7 +191,6 @@ class StableDiffusionPanoramaPipelineFastTests(PipelineLatentTesterMixin, Pipeli
         image = sd_pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() panorama_euler', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.6232, 0.3473, 0.4286, 0.6933, 0.4569, 0.5877, 0.5722, 0.4873, 0.6144])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
@@ -209,11 +202,6 @@ class StableDiffusionPanoramaPipelineFastTests(PipelineLatentTesterMixin, Pipeli
         inputs = self.get_dummy_inputs()
         with self.assertRaises(ValueError):
             _ = sd_pipe(**inputs).images
-        # image = sd_pipe(**inputs).images
-        # image_slice = image[(0), -3:, -3:, (-1)]
-        # assert image.shape == (1, 64, 64, 3)
-        # expected_slice = np.array([0.6391, 0.6291, 0.4861, 0.5134, 0.5552, 0.4578, 0.5032, 0.5023, 0.4539])
-        # assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
 
 @slow

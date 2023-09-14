@@ -217,9 +217,7 @@ class StableDiffusion2PipelineFastTests(
         image_slice = image[0, -3:, -3:, -1]
 
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() unflawed', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.2907, 0.3519, 0.3543, 0.1222, 0.3108, 0.4291, 0.1256, 0.1755, 0.3492])
-        # expected_slice = np.array([0.4736, 0.5405, 0.4705, 0.4955, 0.5675, 0.4812, 0.5310, 0.4967, 0.5064])
 
         assert np.abs(image_slice.flatten() - expected_slice).max() < 1e-2
 

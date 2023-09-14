@@ -125,9 +125,7 @@ class StableDiffusionParadigmsPipelineFastTests(PipelineLatentTesterMixin, Pipel
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() default_case', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.2891, 0.3575, 0.3609, 0.1002, 0.2995, 0.408, 0.1136, 0.1684, 0.3375])
-        # expected_slice = np.array([0.4773, 0.5417, 0.4723, 0.4925, 0.5631, 0.4752, 0.524, 0.4935, 0.5023])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_paradigms_default_case_ddpm(self):
@@ -141,9 +139,7 @@ class StableDiffusionParadigmsPipelineFastTests(PipelineLatentTesterMixin, Pipel
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() default_case_ddpm', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.5261, 0.5763, 0.3414, 0.2257, 0.5636, 0.2942, 0.126, 0.2141, 0.2849])
-        # expected_slice = np.array([0.3573, 0.442, 0.496, 0.4799, 0.3796, 0.3879, 0.4819, 0.4365, 0.4468])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_inference_batch_consistent(self):
@@ -162,9 +158,7 @@ class StableDiffusionParadigmsPipelineFastTests(PipelineLatentTesterMixin, Pipel
         image = output.images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() negative_prompt', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.2559, 0.3297, 0.3684, 0.1491, 0.3172, 0.4713, 0.1574, 0.189, 0.384])
-        # expected_slice = np.array([0.4771, 0.542, 0.4683, 0.4918, 0.5636, 0.4725, 0.523, 0.4923, 0.5015])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
 

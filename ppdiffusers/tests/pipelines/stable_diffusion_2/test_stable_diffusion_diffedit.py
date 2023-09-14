@@ -208,9 +208,7 @@ class StableDiffusionDiffEditPipelineFastTests(PipelineLatentTesterMixin, Pipeli
         mask = pipe.generate_mask(**inputs)
         mask_slice = mask[(0), -3:, -3:]
         self.assertEqual(mask.shape, (1, 16, 16))
-        # expected_slice = np.array([0] * 9)
         expected_slice = np.array([0, 0, 0, 1, 1, 0, 0, 0, 0])
-        # print('mask_slice.flatten() test_mask', [x.round(4) for x in mask_slice.flatten()])
         max_diff = np.abs(mask_slice.flatten() - expected_slice).max()
         self.assertLessEqual(max_diff, 0.001)
         self.assertEqual(mask[0, -3, -4], 0)
@@ -223,9 +221,7 @@ class StableDiffusionDiffEditPipelineFastTests(PipelineLatentTesterMixin, Pipeli
         image = pipe.invert(**inputs).images
         image_slice = image[(0), (-1), -3:, -3:]
         self.assertEqual(image.shape, (2, 32, 32, 3))
-        # print('image_slice.flatten() test_inversion', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.4227, 0.4379, 0.4405, 0.5314, 0.5412, 0.523, 0.5163, 0.4944, 0.48])
-        # expected_slice = np.array([0.515, 0.5134, 0.5043, 0.5376, 0.4694, 0.5105, 0.5015, 0.4407, 0.4799])
         max_diff = np.abs(image_slice.flatten() - expected_slice).max()
         self.assertLessEqual(max_diff, 0.001)
 
@@ -243,9 +239,7 @@ class StableDiffusionDiffEditPipelineFastTests(PipelineLatentTesterMixin, Pipeli
         image = pipe.invert(**inputs).images
         image_slice = image[(0), (-1), -3:, -3:]
         self.assertEqual(image.shape, (2, 32, 32, 3))
-        # print('image_slice.flatten() test_inversion_dpm', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.7061, 0.9805, 0.6064, 0.7288, 0.8416, 0.6517, 0.5912, 0.5704, 0.5726])
-        # expected_slice = np.array([0.5305, 0.4673, 0.5314, 0.5308, 0.4886, 0.5279, 0.5142, 0.4724, 0.4892])
         max_diff = np.abs(image_slice.flatten() - expected_slice).max()
         self.assertLessEqual(max_diff, 0.001)
 

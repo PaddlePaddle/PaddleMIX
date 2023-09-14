@@ -137,9 +137,7 @@ class StableDiffusionXLPipelineFastTests(PipelineLatentTesterMixin, PipelineTest
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() euler', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.0, 0.0, 0.3135, 0.1048, 0.1784, 0.4079, 0.0893, 0.0314, 0.3707])
-        # expected_slice = np.array([0.5873, 0.6128, 0.4797, 0.5122, 0.5674, 0.4639, 0.5227, 0.5149, 0.4747])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_xl_prompt_embeds(self):

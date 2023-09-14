@@ -140,11 +140,7 @@ class StableDiffusionImg2ImgPipelineFastTests(
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        # print('image_slice  test_stable_diffusion_img2img_negative_prompt ', image_slice.flatten())
         expected_slice = np.array([0.8129, 0.6052, 0.5828, 0.4865, 0.505, 0.5728, 0.5985, 0.5965, 0.6619])
-        # expected_slice = np.array(
-        #     [0.48659712, 0.4004616, 0.4762491, 0.49117112, 0.5414775, 0.58218545, 0.5550886, 0.52305603, 0.61624044]
-        # )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_stable_diffusion_img2img_multiple_init_images(self):
@@ -157,11 +153,7 @@ class StableDiffusionImg2ImgPipelineFastTests(
         image = sd_pipe(**inputs).images
         image_slice = image[-1, -3:, -3:, -1]
         assert image.shape == (2, 32, 32, 3)
-        # print('image_slice  test_stable_diffusion_img2img_multiple_init_images ', image_slice.flatten())
         expected_slice = np.array([0.4915, 0.2387, 0.6499, 0.7189, 0.3702, 0.5765, 0.7953, 0.6532, 0.6312])
-        # expected_slice = np.array(
-        #     [0.49016288, 0.23989454, 0.4229045, 0.56873804, 0.467226, 0.5793949, 0.6967555, 0.7027658, 0.5809763]
-        # )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_stable_diffusion_img2img_k_lms(self):
@@ -175,11 +167,7 @@ class StableDiffusionImg2ImgPipelineFastTests(
         image = sd_pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        # print('image_slice  test_stable_diffusion_img2img_k_lms ', image_slice.flatten())
         expected_slice = np.array([0.1131, 0.7903, 0.67949, 0.1962, 0.8975, 0.4891, 0.4096, 0.6387, 0.4599])
-        # expected_slice = np.array(
-        #     [0.29999942, 0.5206376, 0.37915814, 0.4033721, 0.7630579, 0.4642547, 0.5823178, 0.6936951, 0.48969278]
-        # )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_inference_batch_single_identical(self):

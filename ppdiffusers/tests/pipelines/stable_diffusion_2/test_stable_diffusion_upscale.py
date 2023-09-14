@@ -244,9 +244,7 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
         image_from_prompt_embeds_slice = image_from_prompt_embeds[(0), -3:, -3:, (-1)]
         expected_height_width = low_res_image.size[0] * 4
         assert image.shape == (1, expected_height_width, expected_height_width, 3)
-        # print('image_slice.flatten() prompt_embeds', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.0, 0.0, 0.3617, 0.0, 0.0488, 0.592, 0.239, 0.0084, 0.5172])
-        # expected_slice = np.array([0.3113, 0.391, 0.4272, 0.4859, 0.5061, 0.4652, 0.5362, 0.5715, 0.5661])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_prompt_embeds_slice.flatten() - expected_slice).max() < 0.01
 

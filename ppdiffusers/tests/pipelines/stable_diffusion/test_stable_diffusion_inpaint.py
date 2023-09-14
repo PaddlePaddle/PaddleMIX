@@ -266,9 +266,7 @@ class StableDiffusionSimpleInpaintPipelineFastTests(StableDiffusionInpaintPipeli
         image = sd_pipe(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        # print('image_slice.flatten() inpaint', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.3216, 0.2463, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2595, 0.4763])
-        # expected_slice = np.array([0.4925, 0.4967, 0.41, 0.5234, 0.5322, 0.4532, 0.5805, 0.5877, 0.4151])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
     @unittest.skip("skipped here because area stays unchanged due to mask")

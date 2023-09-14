@@ -211,9 +211,7 @@ class StableDiffusionPix2PixZeroPipelineFastTests(PipelineLatentTesterMixin, Pip
         image = sd_pipe.invert(**inputs).images
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 32, 32, 3)
-        # print('image_slice.flatten() inversion', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.1796, 0.5736, 0.476, 0.2555, 0.6244, 0.4374, 0.3034, 0.4241, 0.4384])
-        # expected_slice = np.array([0.4823, 0.4783, 0.5638, 0.5201, 0.5247, 0.5644, 0.5029, 0.5404, 0.5062])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_stable_diffusion_pix2pix_zero_inversion_batch(self):
@@ -227,9 +225,7 @@ class StableDiffusionPix2PixZeroPipelineFastTests(PipelineLatentTesterMixin, Pip
         image = sd_pipe.invert(**inputs).images
         image_slice = image[(1), -3:, -3:, (-1)]
         assert image.shape == (2, 32, 32, 3)
-        # print('image_slice.flatten() inversion_batch', [x.round(4) for x in image_slice.flatten()])
         expected_slice = np.array([0.4973, 0.5835, 0.4483, 0.4783, 0.4661, 0.4567, 0.4922, 0.5104, 0.5553])
-        # expected_slice = np.array([0.6446, 0.5232, 0.4914, 0.4441, 0.4654, 0.5546, 0.465, 0.4938, 0.5044])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_stable_diffusion_pix2pix_zero_default_case(self):

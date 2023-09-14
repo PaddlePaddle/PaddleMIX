@@ -119,10 +119,6 @@ class StableDiffusionLDM3DPipelineFastTests(unittest.TestCase):
         image_slice_depth = depth[(0), -3:, (-1)]
         assert rgb.shape == (1, 64, 64, 3)
         assert depth.shape == (1, 64, 64)
-
-        # print('image_slice_rgb.flatten() ddim', image_slice_rgb.flatten())
-        # print('image_slice_depth.flatten() ddim', image_slice_depth.flatten())
-
         expected_slice_rgb = np.array(
             [0.2841416, 0.23691541, 0.38123265, 0.22021636, 0.26063156, 0.5175728, 0.25661945, 0.2500742, 0.47988796]
         )
