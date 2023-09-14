@@ -23,7 +23,7 @@ from ppdiffusers import (
     ConsistencyModelPipeline,
     UNet2DModel,
 )
-from ppdiffusers.utils import paddle_device, randn_tensor, slow
+from ppdiffusers.utils import randn_tensor, slow
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..pipeline_params import (
@@ -62,11 +62,8 @@ class ConsistencyModelPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         components = {"unet": unet, "scheduler": scheduler}
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
-        if str(device).startswith("mps"):
-            generator = paddle.seed(seed=seed)
-        else:
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+    def get_dummy_inputs(self, seed=0):
+        generator = paddle.Generator().manual_seed(seed)
         inputs = {
             "batch_size": 1,
             "num_inference_steps": None,
@@ -77,12 +74,10 @@ class ConsistencyModelPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         return inputs
 
     def test_consistency_model_pipeline_multistep(self):
-        device = "cpu"
         components = self.get_dummy_components()
         pipe = ConsistencyModelPipeline(**components)
-        pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=None)
-        inputs = self.get_dummy_inputs(device)
+        inputs = self.get_dummy_inputs()
         image = pipe(**inputs).images
         assert image.shape == (1, 32, 32, 3)
         image_slice = image[(0), -3:, -3:, (-1)]
@@ -90,12 +85,10 @@ class ConsistencyModelPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_consistency_model_pipeline_multistep_class_cond(self):
-        device = "cpu"
         components = self.get_dummy_components(class_cond=True)
         pipe = ConsistencyModelPipeline(**components)
-        pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=None)
-        inputs = self.get_dummy_inputs(device)
+        inputs = self.get_dummy_inputs()
         inputs["class_labels"] = 0
         image = pipe(**inputs).images
         assert image.shape == (1, 32, 32, 3)
@@ -104,12 +97,10 @@ class ConsistencyModelPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_consistency_model_pipeline_onestep(self):
-        device = "cpu"
         components = self.get_dummy_components()
         pipe = ConsistencyModelPipeline(**components)
-        pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=None)
-        inputs = self.get_dummy_inputs(device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = 1
         inputs["timesteps"] = None
         image = pipe(**inputs).images
@@ -119,12 +110,10 @@ class ConsistencyModelPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_consistency_model_pipeline_onestep_class_cond(self):
-        device = "cpu"
         components = self.get_dummy_components(class_cond=True)
         pipe = ConsistencyModelPipeline(**components)
-        pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=None)
-        inputs = self.get_dummy_inputs(device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = 1
         inputs["timesteps"] = None
         inputs["class_labels"] = 0
@@ -143,8 +132,8 @@ class ConsistencyModelPipelineSlowTests(unittest.TestCase):
         gc.collect()
         paddle.device.cuda.empty_cache()
 
-    def get_inputs(self, seed=0, get_fixed_latents=False, device="cpu", dtype="float32", shape=(1, 3, 64, 64)):
-        generator = paddle.seed(seed=seed)
+    def get_inputs(self, seed=0, get_fixed_latents=False, dtype="float32", shape=(1, 3, 64, 64)):
+        generator = paddle.Generator().manual_seed(seed)
         inputs = {
             "num_inference_steps": None,
             "timesteps": [22, 0],
@@ -157,18 +146,15 @@ class ConsistencyModelPipelineSlowTests(unittest.TestCase):
             inputs["latents"] = latents
         return inputs
 
-    def get_fixed_latents(self, seed=0, device="cpu", dtype="float32", shape=(1, 3, 64, 64)):
-        if type(device) == str:
-            device = str(device).replace("cuda", "gpu")
-        generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
-        latents = randn_tensor(shape, generator=generator, device=device, dtype=dtype)
+    def get_fixed_latents(self, seed=0, dtype="float32", shape=(1, 3, 64, 64)):
+        generator = paddle.Generator().manual_seed(seed)
+        latents = randn_tensor(shape, generator=generator, dtype=dtype)
         return latents
 
     def test_consistency_model_cd_multistep(self):
         unet = UNet2DModel.from_pretrained("diffusers/consistency_models", subfolder="diffusers_cd_imagenet64_l2")
         scheduler = CMStochasticIterativeScheduler(num_train_timesteps=40, sigma_min=0.002, sigma_max=80.0)
         pipe = ConsistencyModelPipeline(unet=unet, scheduler=scheduler)
-        pipe.to(paddle_device=paddle_device)
         pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
         image = pipe(**inputs).images
@@ -181,7 +167,6 @@ class ConsistencyModelPipelineSlowTests(unittest.TestCase):
         unet = UNet2DModel.from_pretrained("diffusers/consistency_models", subfolder="diffusers_cd_imagenet64_l2")
         scheduler = CMStochasticIterativeScheduler(num_train_timesteps=40, sigma_min=0.002, sigma_max=80.0)
         pipe = ConsistencyModelPipeline(unet=unet, scheduler=scheduler)
-        pipe.to(paddle_device=paddle_device)
         pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
         inputs["num_inference_steps"] = 1
@@ -196,9 +181,9 @@ class ConsistencyModelPipelineSlowTests(unittest.TestCase):
         unet = UNet2DModel.from_pretrained("diffusers/consistency_models", subfolder="diffusers_cd_imagenet64_l2")
         scheduler = CMStochasticIterativeScheduler(num_train_timesteps=40, sigma_min=0.002, sigma_max=80.0)
         pipe = ConsistencyModelPipeline(unet=unet, scheduler=scheduler)
-        pipe.to(paddle_device=paddle_device, paddle_dtype="float16")
+        pipe.to(paddle_dtype="float16")
         pipe.set_progress_bar_config(disable=None)
-        inputs = self.get_inputs(get_fixed_latents=True, device=paddle_device)
+        inputs = self.get_inputs(get_fixed_latents=True)
         image = pipe(**inputs).images
         assert image.shape == (1, 64, 64, 3)
         image_slice = image[(0), -3:, -3:, (-1)]
@@ -209,7 +194,7 @@ class ConsistencyModelPipelineSlowTests(unittest.TestCase):
         unet = UNet2DModel.from_pretrained("diffusers/consistency_models", subfolder="diffusers_cd_imagenet64_l2")
         scheduler = CMStochasticIterativeScheduler(num_train_timesteps=40, sigma_min=0.002, sigma_max=80.0)
         pipe = ConsistencyModelPipeline(unet=unet, scheduler=scheduler)
-        pipe.to(paddle_device=paddle_device, paddle_dtype="float16")
+        pipe.to(paddle_dtype="float16")
         pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs(get_fixed_latents=True)
         inputs["num_inference_steps"] = 1

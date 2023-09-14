@@ -21,7 +21,6 @@ from ppdiffusers import (
     KandinskyImg2ImgCombinedPipeline,
     KandinskyInpaintCombinedPipeline,
 )
-from ppdiffusers.utils import paddle_device
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..test_pipelines_common import PipelineTesterMixin
@@ -60,21 +59,19 @@ class KandinskyPipelineCombinedFastTests(PipelineTesterMixin, unittest.TestCase)
         components.update({f"prior_{k}": v for k, v in prior_dummy.get_dummy_components().items()})
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
+    def get_dummy_inputs(self, seed=0):
         prior_dummy = PriorDummies()
-        inputs = prior_dummy.get_dummy_inputs(device=device, seed=seed)
+        inputs = prior_dummy.get_dummy_inputs(seed=seed)
         inputs.update({"height": 64, "width": 64})
         return inputs
 
     def test_kandinsky(self):
-        device = "cpu"
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=None)
-        output = pipe(**self.get_dummy_inputs(device))
+        output = pipe(**self.get_dummy_inputs())
         image = output.images
-        image_from_tuple = pipe(**self.get_dummy_inputs(device), return_dict=False)[0]
+        image_from_tuple = pipe(**self.get_dummy_inputs(), return_dict=False)[0]
         image_slice = image[(0), -3:, -3:, (-1)]
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
@@ -90,7 +87,7 @@ class KandinskyPipelineCombinedFastTests(PipelineTesterMixin, unittest.TestCase)
     def test_offloads(self):
         pipes = []
         components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components).to(paddle_device)
+        sd_pipe = self.pipeline_class(**components)
         pipes.append(sd_pipe)
         components = self.get_dummy_components()
         sd_pipe = self.pipeline_class(**components)
@@ -102,7 +99,7 @@ class KandinskyPipelineCombinedFastTests(PipelineTesterMixin, unittest.TestCase)
         pipes.append(sd_pipe)
         image_slices = []
         for pipe in pipes:
-            inputs = self.get_dummy_inputs(paddle_device)
+            inputs = self.get_dummy_inputs()
             image = pipe(**inputs).images
             image_slices.append(image[(0), -3:, -3:, (-1)].flatten())
         assert np.abs(image_slices[0] - image_slices[1]).max() < 0.001
@@ -139,24 +136,22 @@ class KandinskyPipelineImg2ImgCombinedFastTests(PipelineTesterMixin, unittest.Te
         components.update({f"prior_{k}": v for k, v in prior_dummy.get_dummy_components().items()})
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
+    def get_dummy_inputs(self, seed=0):
         prior_dummy = PriorDummies()
         dummy = Img2ImgDummies()
-        inputs = prior_dummy.get_dummy_inputs(device=device, seed=seed)
-        inputs.update(dummy.get_dummy_inputs(device=device, seed=seed))
+        inputs = prior_dummy.get_dummy_inputs(seed=seed)
+        inputs.update(dummy.get_dummy_inputs(seed=seed))
         inputs.pop("image_embeds")
         inputs.pop("negative_image_embeds")
         return inputs
 
     def test_kandinsky(self):
-        device = "cpu"
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=None)
-        output = pipe(**self.get_dummy_inputs(device))
+        output = pipe(**self.get_dummy_inputs())
         image = output.images
-        image_from_tuple = pipe(**self.get_dummy_inputs(device), return_dict=False)[0]
+        image_from_tuple = pipe(**self.get_dummy_inputs(), return_dict=False)[0]
         image_slice = image[(0), -3:, -3:, (-1)]
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
@@ -172,7 +167,7 @@ class KandinskyPipelineImg2ImgCombinedFastTests(PipelineTesterMixin, unittest.Te
     def test_offloads(self):
         pipes = []
         components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components).to(paddle_device)
+        sd_pipe = self.pipeline_class(**components)
         pipes.append(sd_pipe)
         components = self.get_dummy_components()
         sd_pipe = self.pipeline_class(**components)
@@ -184,7 +179,7 @@ class KandinskyPipelineImg2ImgCombinedFastTests(PipelineTesterMixin, unittest.Te
         pipes.append(sd_pipe)
         image_slices = []
         for pipe in pipes:
-            inputs = self.get_dummy_inputs(paddle_device)
+            inputs = self.get_dummy_inputs()
             image = pipe(**inputs).images
             image_slices.append(image[(0), -3:, -3:, (-1)].flatten())
         assert np.abs(image_slices[0] - image_slices[1]).max() < 0.001
@@ -221,24 +216,22 @@ class KandinskyPipelineInpaintCombinedFastTests(PipelineTesterMixin, unittest.Te
         components.update({f"prior_{k}": v for k, v in prior_dummy.get_dummy_components().items()})
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
+    def get_dummy_inputs(self, seed=0):
         prior_dummy = PriorDummies()
         dummy = InpaintDummies()
-        inputs = prior_dummy.get_dummy_inputs(device=device, seed=seed)
-        inputs.update(dummy.get_dummy_inputs(device=device, seed=seed))
+        inputs = prior_dummy.get_dummy_inputs(seed=seed)
+        inputs.update(dummy.get_dummy_inputs(seed=seed))
         inputs.pop("image_embeds")
         inputs.pop("negative_image_embeds")
         return inputs
 
     def test_kandinsky(self):
-        device = "cpu"
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=None)
-        output = pipe(**self.get_dummy_inputs(device))
+        output = pipe(**self.get_dummy_inputs())
         image = output.images
-        image_from_tuple = pipe(**self.get_dummy_inputs(device), return_dict=False)[0]
+        image_from_tuple = pipe(**self.get_dummy_inputs(), return_dict=False)[0]
         image_slice = image[(0), -3:, -3:, (-1)]
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
@@ -254,7 +247,7 @@ class KandinskyPipelineInpaintCombinedFastTests(PipelineTesterMixin, unittest.Te
     def test_offloads(self):
         pipes = []
         components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components).to(paddle_device)
+        sd_pipe = self.pipeline_class(**components)
         pipes.append(sd_pipe)
         components = self.get_dummy_components()
         sd_pipe = self.pipeline_class(**components)
@@ -266,7 +259,7 @@ class KandinskyPipelineInpaintCombinedFastTests(PipelineTesterMixin, unittest.Te
         pipes.append(sd_pipe)
         image_slices = []
         for pipe in pipes:
-            inputs = self.get_dummy_inputs(paddle_device)
+            inputs = self.get_dummy_inputs()
             image = pipe(**inputs).images
             image_slices.append(image[(0), -3:, -3:, (-1)].flatten())
         assert np.abs(image_slices[0] - image_slices[1]).max() < 0.001

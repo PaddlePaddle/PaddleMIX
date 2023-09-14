@@ -28,7 +28,7 @@ from ppdiffusers import (
     VQModel,
 )
 from ppdiffusers.pipelines.kandinsky.text_encoder import MCLIPConfig, MultilingualCLIP
-from ppdiffusers.utils import floats_tensor, load_numpy, paddle_device, slow
+from ppdiffusers.utils import floats_tensor, load_numpy, slow
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
@@ -147,13 +147,10 @@ class Dummies:
         }
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
-        image_embeds = floats_tensor((1, self.cross_attention_dim), rng=random.Random(seed)).to(device)
-        negative_image_embeds = floats_tensor((1, self.cross_attention_dim), rng=random.Random(seed + 1)).to(device)
-        if str(device).startswith("mps"):
-            generator = paddle.seed(seed=seed)
-        else:
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+    def get_dummy_inputs(self, seed=0):
+        image_embeds = floats_tensor((1, self.cross_attention_dim), rng=random.Random(seed))
+        negative_image_embeds = floats_tensor((1, self.cross_attention_dim), rng=random.Random(seed + 1))
+        generator = paddle.Generator().manual_seed(seed)
         inputs = {
             "prompt": "horse",
             "image_embeds": image_embeds,
@@ -192,19 +189,17 @@ class KandinskyPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         dummy = Dummies()
         return dummy.get_dummy_components()
 
-    def get_dummy_inputs(self, device, seed=0):
+    def get_dummy_inputs(self, seed=0):
         dummy = Dummies()
-        return dummy.get_dummy_inputs(device=device, seed=seed)
+        return dummy.get_dummy_inputs(seed=seed)
 
     def test_kandinsky(self):
-        device = "cpu"
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=None)
-        output = pipe(**self.get_dummy_inputs(device))
+        output = pipe(**self.get_dummy_inputs())
         image = output.images
-        image_from_tuple = pipe(**self.get_dummy_inputs(device), return_dict=False)[0]
+        image_from_tuple = pipe(**self.get_dummy_inputs(), return_dict=False)[0]
         image_slice = image[(0), -3:, -3:, (-1)]
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
@@ -220,7 +215,7 @@ class KandinskyPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     def test_offloads(self):
         pipes = []
         components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components).to(paddle_device)
+        sd_pipe = self.pipeline_class(**components)
         pipes.append(sd_pipe)
         components = self.get_dummy_components()
         sd_pipe = self.pipeline_class(**components)
@@ -232,7 +227,7 @@ class KandinskyPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         pipes.append(sd_pipe)
         image_slices = []
         for pipe in pipes:
-            inputs = self.get_dummy_inputs(paddle_device)
+            inputs = self.get_dummy_inputs()
             image = pipe(**inputs).images
             image_slices.append(image[(0), -3:, -3:, (-1)].flatten())
         assert np.abs(image_slices[0] - image_slices[1]).max() < 0.001
@@ -254,18 +249,15 @@ class KandinskyPipelineIntegrationTests(unittest.TestCase):
         pipe_prior = KandinskyPriorPipeline.from_pretrained(
             "kandinsky-community/kandinsky-2-1-prior", paddle_dtype="float16"
         )
-        pipe_prior.to(paddle_device)
+
         pipeline = KandinskyPipeline.from_pretrained("kandinsky-community/kandinsky-2-1", paddle_dtype="float16")
-        pipeline = pipeline.to(paddle_device)
         pipeline.set_progress_bar_config(disable=None)
         prompt = "red cat, 4k photo"
-        device = paddle.device.get_device()
-        generator = paddle.framework.core.default_cuda_generator(int(device[-1])).manual_seed(0)
+        generator = paddle.Generator().manual_seed(0)
         image_emb, zero_image_emb = pipe_prior(
             prompt, generator=generator, num_inference_steps=5, negative_prompt=""
         ).to_tuple()
-        device = paddle.device.get_device()
-        generator = paddle.framework.core.default_cuda_generator(int(device[-1])).manual_seed(0)
+        generator = paddle.Generator().manual_seed(0)
         output = pipeline(
             prompt,
             image_embeds=image_emb,

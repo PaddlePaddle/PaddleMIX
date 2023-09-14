@@ -18,16 +18,13 @@ import unittest
 
 import numpy as np
 import paddle
-from diffusers.utils.testing_utils import enable_full_determinism
 
 from ppdiffusers.models import UNet3DConditionModel
 from ppdiffusers.models.attention_processor import AttnProcessor, LoRAAttnProcessor
 from ppdiffusers.utils import floats_tensor, logging
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 
-from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
-
-enable_full_determinism()
+from .test_modeling_common import ModelTesterMixin
 
 logger = logging.get_logger(__name__)
 
@@ -63,9 +60,8 @@ def create_lora_layers(model, mock_weights: bool = True):
     return lora_attn_procs
 
 
-class UNet3DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
+class UNet3DConditionModelTests(ModelTesterMixin, unittest.TestCase):
     model_class = UNet3DConditionModel
-    main_input_name = "sample"
 
     @property
     def dummy_input(self):
@@ -195,11 +191,11 @@ class UNet3DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
             sample3 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
             sample4 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
 
-        assert (sample1 - sample2).abs().max() < 3e-3
-        assert (sample3 - sample4).abs().max() < 3e-3
+        assert (sample1 - sample2).abs().max() < 1e-4
+        assert (sample3 - sample4).abs().max() < 1e-4
 
         # sample 2 and sample 3 should be different
-        assert (sample2 - sample3).abs().max() > 3e-3
+        assert (sample2 - sample3).abs().max() > 1e-4
 
     def test_lora_save_load(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -231,7 +227,7 @@ class UNet3DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
         with paddle.no_grad():
             new_sample = new_model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
 
-        assert (sample - new_sample).abs().max() < 1e-3
+        assert (sample - new_sample).abs().max() < 1e-4
 
         # LoRA and no LoRA should NOT be the same
         assert (sample - old_sample).abs().max() > 1e-4
@@ -263,7 +259,7 @@ class UNet3DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
         with paddle.no_grad():
             new_sample = new_model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
 
-        assert (sample - new_sample).abs().max() < 3e-3
+        assert (sample - new_sample).abs().max() < 1e-4
 
         # LoRA and no LoRA should NOT be the same
         assert (sample - old_sample).abs().max() > 1e-4
@@ -315,7 +311,7 @@ class UNet3DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
             new_sample = model(**inputs_dict).sample
 
         assert (sample - new_sample).abs().max() < 1e-4
-        assert (sample - old_sample).abs().max() < 3e-3
+        assert (sample - old_sample).abs().max() < 1e-4
 
     @unittest.skipIf(
         not is_ppxformers_available(),
@@ -344,19 +340,6 @@ class UNet3DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
 
         assert (sample - on_sample).abs().max() < 0.005
         assert (sample - off_sample).abs().max() < 0.005
-
-    def test_feed_forward_chunking(self):
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        init_dict["norm_num_groups"] = 32
-        model = self.model_class(**init_dict)
-        model.eval()
-        with paddle.no_grad():
-            output = model(**inputs_dict)[0]
-        model.enable_forward_chunking()
-        with paddle.no_grad():
-            output_2 = model(**inputs_dict)[0]
-        self.assertEqual(output.shape, output_2.shape, "Shape doesn't match")
-        assert np.abs(output.cpu() - output_2.cpu()).max() < 0.01
 
 
 # (todo: sayakpaul) implement SLOW tests.

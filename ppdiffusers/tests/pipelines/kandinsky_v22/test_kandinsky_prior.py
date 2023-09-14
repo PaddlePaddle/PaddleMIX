@@ -148,11 +148,8 @@ class Dummies:
         }
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
-        if str(device).startswith("mps"):
-            generator = paddle.seed(seed=seed)
-        else:
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+    def get_dummy_inputs(self, seed=0):
+        generator = paddle.Generator().manual_seed(seed)
         inputs = {
             "prompt": "horse",
             "generator": generator,
@@ -183,19 +180,19 @@ class KandinskyV22PriorPipelineFastTests(PipelineTesterMixin, unittest.TestCase)
         dummies = Dummies()
         return dummies.get_dummy_components()
 
-    def get_dummy_inputs(self, device, seed=0):
+    def get_dummy_inputs(self, seed=0):
         dummies = Dummies()
-        return dummies.get_dummy_inputs(device=device, seed=seed)
+        return dummies.get_dummy_inputs(seed=seed)
 
     def test_kandinsky_prior(self):
-        device = "cpu"
+
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe = pipe.to(device)
+
         pipe.set_progress_bar_config(disable=None)
-        output = pipe(**self.get_dummy_inputs(device))
+        output = pipe(**self.get_dummy_inputs())
         image = output.image_embeds
-        image_from_tuple = pipe(**self.get_dummy_inputs(device), return_dict=False)[0]
+        image_from_tuple = pipe(**self.get_dummy_inputs(), return_dict=False)[0]
         image_slice = image[(0), -10:]
         image_from_tuple_slice = image_from_tuple[(0), -10:]
         assert image.shape == (1, 32)

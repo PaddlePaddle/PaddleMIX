@@ -27,7 +27,7 @@ from ppdiffusers import (
     UNet2DConditionModel,
     VQModel,
 )
-from ppdiffusers.utils import floats_tensor, load_image, load_numpy, paddle_device, slow
+from ppdiffusers.utils import floats_tensor, load_image, load_numpy, slow
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
@@ -117,20 +117,15 @@ class Dummies:
         components = {"unet": unet, "scheduler": scheduler, "movq": movq}
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
-        image_embeds = floats_tensor((1, self.text_embedder_hidden_size), rng=random.Random(seed)).to(device)
-        negative_image_embeds = floats_tensor((1, self.text_embedder_hidden_size), rng=random.Random(seed + 1)).to(
-            device
-        )
-        image = floats_tensor((1, 3, 64, 64), rng=random.Random(seed)).to(device)
+    def get_dummy_inputs(self, seed=0):
+        image_embeds = floats_tensor((1, self.text_embedder_hidden_size), rng=random.Random(seed))
+        negative_image_embeds = floats_tensor((1, self.text_embedder_hidden_size), rng=random.Random(seed + 1))
+        image = floats_tensor((1, 3, 64, 64), rng=random.Random(seed))
         image = image.cpu().transpose(perm=[0, 2, 3, 1])[0]
         init_image = Image.fromarray(np.uint8(image)).convert("RGB").resize((256, 256))
         mask = np.zeros((64, 64), dtype=np.float32)
         mask[:32, :32] = 1
-        if str(device).startswith("mps"):
-            generator = paddle.seed(seed=seed)
-        else:
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+        generator = paddle.Generator().manual_seed(seed)
         inputs = {
             "image": init_image,
             "mask_image": mask,
@@ -169,19 +164,19 @@ class KandinskyV22InpaintPipelineFastTests(PipelineTesterMixin, unittest.TestCas
         dummies = Dummies()
         return dummies.get_dummy_components()
 
-    def get_dummy_inputs(self, device, seed=0):
+    def get_dummy_inputs(self, seed=0):
         dummies = Dummies()
-        return dummies.get_dummy_inputs(device=device, seed=seed)
+        return dummies.get_dummy_inputs(seed=seed)
 
     def test_kandinsky_inpaint(self):
-        device = "cpu"
+
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe = pipe.to(device)
+
         pipe.set_progress_bar_config(disable=None)
-        output = pipe(**self.get_dummy_inputs(device))
+        output = pipe(**self.get_dummy_inputs())
         image = output.images
-        image_from_tuple = pipe(**self.get_dummy_inputs(device), return_dict=False)[0]
+        image_from_tuple = pipe(**self.get_dummy_inputs(), return_dict=False)[0]
         image_slice = image[(0), -3:, -3:, (-1)]
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
@@ -220,11 +215,11 @@ class KandinskyV22InpaintPipelineIntegrationTests(unittest.TestCase):
         pipe_prior = KandinskyV22PriorPipeline.from_pretrained(
             "kandinsky-community/kandinsky-2-2-prior", paddle_dtype="float16"
         )
-        pipe_prior.to(paddle_device)
+
         pipeline = KandinskyV22InpaintPipeline.from_pretrained(
             "kandinsky-community/kandinsky-2-2-decoder-inpaint", paddle_dtype="float16"
         )
-        pipeline = pipeline.to(paddle_device)
+
         pipeline.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         image_emb, zero_image_emb = pipe_prior(

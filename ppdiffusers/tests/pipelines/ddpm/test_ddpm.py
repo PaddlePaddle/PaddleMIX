@@ -68,7 +68,7 @@ class DDPMPipelineFastTests(unittest.TestCase):
                 0.6665917634963989,
             ]
         )
-        print(image_slice.flatten().tolist())
+
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 

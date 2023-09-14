@@ -55,7 +55,7 @@ def posenc_nerf(x: paddle.Tensor, min_deg: int = 0, max_deg: int = 15) -> paddle
         return x
     scales = 2.0 ** paddle.arange(start=min_deg, end=max_deg).astype(x.dtype)
     *shape, dim = x.shape
-    xb = (x.reshape(-1, 1, dim) * scales.reshape([1, -1, 1])).reshape(*shape, -1)
+    xb = (paddle.reshape(x, shape=(-1, 1, dim)) * scales.reshape([1, -1, 1])).reshape([*shape, -1])
     assert xb.shape[-1] == dim * (max_deg - min_deg)
     emb = paddle.concat(x=[xb, xb + math.pi / 2.0], axis=-1).sin()
     return paddle.concat(x=[x, emb], axis=-1)
@@ -195,7 +195,8 @@ class VoidNeRFModel(paddle.nn.Layer):
         )
         out_70.stop_gradient = not True
         background = out_70
-        self.register_buffer(name="background", tensor=background)
+        # self.register_buffer(name="background", tensor=background)
+        self.add_parameter("background", background)
 
     def forward(self, position):
         background = self.background[None]
@@ -258,7 +259,7 @@ class BoundingBoxVolume(paddle.nn.Layer):
         self.bbox_min = paddle.to_tensor(data=bbox_min)
         self.bbox_max = paddle.to_tensor(data=bbox_max)
         self.bbox = paddle.stack(x=[self.bbox_min, self.bbox_max])
-        assert self.bbox.shape == (2, 3)
+        assert self.bbox.shape == [2, 3]
         assert min_dist >= 0.0
         assert min_t_range > 0.0
 

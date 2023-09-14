@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import math
+from collections import defaultdict
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
@@ -258,6 +259,12 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         self.timesteps = paddle.concat([timesteps[:1], interleaved_timesteps])
 
         self.sample = None
+
+        # for exp beta schedules, such as the one for `pipeline_shap_e.py`
+        # we need an index counter
+        self._index_counter = defaultdict(int)
+
+        self._step_index = None
 
     def sigma_to_t(self, sigma):
         # get log sigma

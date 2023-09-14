@@ -29,17 +29,11 @@ from ppdiffusers import (
     StableDiffusionControlNetInpaintPipeline,
     UNet2DConditionModel,
 )
+from ppdiffusers.initializer import normal_, ones_
 from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_controlnet import (
     MultiControlNetModel,
 )
-from ppdiffusers.utils import (
-    floats_tensor,
-    load_image,
-    load_numpy,
-    paddle_device,
-    randn_tensor,
-    slow,
-)
+from ppdiffusers.utils import floats_tensor, load_image, load_numpy, randn_tensor, slow
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..pipeline_params import (
@@ -129,18 +123,14 @@ class ControlNetInpaintPipelineFastTests(
         }
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
-        if str(device).startswith("mps"):
-            generator = paddle.seed(seed=seed)
-        else:
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+    def get_dummy_inputs(self, seed=0):
+        generator = paddle.Generator().manual_seed(seed)
         controlnet_embedder_scale_factor = 2
         control_image = randn_tensor(
             (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
             generator=generator,
-            device=str(device).replace("cuda", "gpu"),
         )
-        init_image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed)).to(device)
+        init_image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed))
         init_image = init_image.cpu().transpose(perm=[0, 2, 3, 1])[0]
         image = Image.fromarray(np.uint8(init_image)).convert("RGB").resize((64, 64))
         mask_image = Image.fromarray(np.uint8(init_image + 4)).convert("RGB").resize((64, 64))
@@ -260,8 +250,8 @@ class MultiControlNetInpaintPipelineFastTests(
 
         def init_weights(m):
             if isinstance(m, paddle.nn.Conv2D):
-                paddle.nn.initializer.normal(m.weight)
-                m.bias.data.fill_(1.0)
+                normal_(m.weight)
+                ones_(m.bias)
 
         controlnet1 = ControlNetModel(
             block_out_channels=(32, 64),
@@ -326,25 +316,20 @@ class MultiControlNetInpaintPipelineFastTests(
         }
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
-        if str(device).startswith("mps"):
-            generator = paddle.seed(seed=seed)
-        else:
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+    def get_dummy_inputs(self, seed=0):
+        generator = paddle.Generator().manual_seed(seed)
         controlnet_embedder_scale_factor = 2
         control_image = [
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
-                device=str(device).replace("cuda", "gpu"),
             ),
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
-                device=str(device).replace("cuda", "gpu"),
             ),
         ]
-        init_image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed)).to(device)
+        init_image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed))
         init_image = init_image.cpu().transpose(perm=[0, 2, 3, 1])[0]
         image = Image.fromarray(np.uint8(init_image)).convert("RGB").resize((64, 64))
         mask_image = Image.fromarray(np.uint8(init_image + 4)).convert("RGB").resize((64, 64))
@@ -363,22 +348,21 @@ class MultiControlNetInpaintPipelineFastTests(
     def test_control_guidance_switch(self):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe.to(paddle_device)
         scale = 10.0
         steps = 4
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_1 = pipe(**inputs)[0]
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_2 = pipe(**inputs, control_guidance_start=0.1, control_guidance_end=0.2)[0]
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_3 = pipe(**inputs, control_guidance_start=[0.1, 0.3], control_guidance_end=[0.2, 0.7])[0]
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_4 = pipe(**inputs, control_guidance_start=0.4, control_guidance_end=[0.5, 0.8])[0]
@@ -398,7 +382,6 @@ class MultiControlNetInpaintPipelineFastTests(
     def test_save_pretrained_raise_not_implemented_exception(self):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe.to(paddle_device)
         pipe.set_progress_bar_config(disable=None)
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
@@ -420,9 +403,9 @@ class ControlNetInpaintPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetInpaintPipeline.from_pretrained(
             "runwayml/stable-diffusion-inpainting", safety_checker=None, controlnet=controlnet
         )
-        pipe.enable_model_cpu_offload()
+        # pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
-        generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
+        generator = paddle.Generator().manual_seed(0)
         image = load_image(
             "https://huggingface.co/lllyasviel/sd-controlnet-canny/resolve/main/images/bird.png"
         ).resize((512, 512))
@@ -455,9 +438,9 @@ class ControlNetInpaintPipelineSlowTests(unittest.TestCase):
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
         pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
-        pipe.enable_model_cpu_offload()
+        # pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
-        generator = paddle.framework.core.default_cpu_generator().manual_seed(33)
+        generator = paddle.Generator().manual_seed(33)
         init_image = load_image(
             "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint/boy.png"
         )
@@ -521,9 +504,9 @@ class ControlNetInpaintPipelineSlowTests(unittest.TestCase):
         pipes = [pipe_1, pipe_2]
         images = []
         for pipe in pipes:
-            pipe.enable_model_cpu_offload()
+            # pipe.enable_model_cpu_offload()
             pipe.set_progress_bar_config(disable=None)
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
+            generator = paddle.Generator().manual_seed(0)
             prompt = "bird"
             output = pipe(
                 prompt,

@@ -143,7 +143,7 @@ class PipelineLatentTesterMixin:
         for image_param in self.image_latents_params:
             if image_param in inputs.keys():
                 inputs[image_param] = (
-                    vae.encode(inputs[image_param]).latent_dist.sample(shape=generator) * vae.config.scaling_factor
+                    vae.encode(inputs[image_param]).latent_dist.sample(generator=generator) * vae.config.scaling_factor
                 )
         out_latents_inputs = pipe(**inputs)[0]
         max_diff = np.abs(out - out_latents_inputs).max()
@@ -356,7 +356,7 @@ class PipelineTesterMixin:
                     batched_inputs[name] = value
             for arg in additional_params_copy_to_batched_inputs:
                 batched_inputs[arg] = inputs[arg]
-            batched_inputs["output_type"] = None
+            batched_inputs["output_type"] = "np"
             if self.pipeline_class.__name__ == "DanceDiffusionPipeline":
                 batched_inputs.pop("output_type")
             output = pipe(**batched_inputs)
@@ -368,8 +368,8 @@ class PipelineTesterMixin:
             assert output.shape[0] == batch_size
         logger.setLevel(level=ppdiffusers.logging.WARNING)
 
-    def test_inference_batch_single_identical(self, batch_size=3):
-        self._test_inference_batch_single_identical(batch_size=batch_size)
+    def test_inference_batch_single_identical(self, batch_size=3, expected_max_diff=1e-4):
+        self._test_inference_batch_single_identical(batch_size=batch_size, expected_max_diff=expected_max_diff)
 
     def _test_inference_batch_single_identical(
         self,

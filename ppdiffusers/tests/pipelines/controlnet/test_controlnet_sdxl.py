@@ -171,11 +171,11 @@ class ControlNetPipelineSDXLFastTests(
         pipes.append(sd_pipe)
         components = self.get_dummy_components()
         sd_pipe = self.pipeline_class(**components)
-        sd_pipe.enable_model_cpu_offload()
+
         pipes.append(sd_pipe)
         components = self.get_dummy_components()
         sd_pipe = self.pipeline_class(**components)
-        sd_pipe.enable_sequential_cpu_offload()
+
         pipes.append(sd_pipe)
         image_slices = []
         for pipe in pipes:

@@ -19,16 +19,12 @@ import paddle
 
 from ppdiffusers import VQModel
 from ppdiffusers.utils import floats_tensor
-from ppdiffusers.utils.testing_utils import enable_full_determinism
 
-from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
-
-enable_full_determinism()
+from .test_modeling_common import ModelTesterMixin
 
 
-class VQModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
+class VQModelTests(ModelTesterMixin, unittest.TestCase):
     model_class = VQModel
-    main_input_name = "sample"
 
     @property
     def dummy_input(self, sizes=(32, 32)):

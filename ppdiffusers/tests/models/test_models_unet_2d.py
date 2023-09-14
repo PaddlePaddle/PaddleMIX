@@ -21,18 +21,14 @@ import paddle
 
 from ppdiffusers import UNet2DModel
 from ppdiffusers.utils import floats_tensor, logging, paddle_all_close, slow
-from ppdiffusers.utils.testing_utils import enable_full_determinism
 
-from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
+from .test_modeling_common import ModelTesterMixin
 
 logger = logging.get_logger(__name__)
 
-enable_full_determinism()
 
-
-class Unet2DModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
+class Unet2DModelTests(ModelTesterMixin, unittest.TestCase):
     model_class = UNet2DModel
-    main_input_name = "sample"
 
     @property
     def dummy_input(self):
@@ -56,7 +52,7 @@ class Unet2DModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
             "block_out_channels": (32, 64),
             "down_block_types": ("DownBlock2D", "AttnDownBlock2D"),
             "up_block_types": ("AttnUpBlock2D", "UpBlock2D"),
-            "attention_head_dim": 3,
+            "attention_head_dim": None,
             "out_channels": 3,
             "in_channels": 3,
             "layers_per_block": 2,
@@ -66,9 +62,8 @@ class Unet2DModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
         return init_dict, inputs_dict
 
 
-class UNetLDMModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
+class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
     model_class = UNet2DModel
-    main_input_name = "sample"
 
     @property
     def dummy_input(self):
@@ -115,6 +110,7 @@ class UNetLDMModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
 
     def test_from_pretrained_accelerate_wont_change_results(self):
         model_accelerate, _ = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update", output_loading_info=True)
+        model_accelerate
         model_accelerate.eval()
         noise = paddle.randn(
             shape=[
@@ -165,9 +161,8 @@ class UNetLDMModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
         self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.001))
 
 
-class NCSNppModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
+class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
     model_class = UNet2DModel
-    main_input_name = "sample"
 
     @property
     def dummy_input(self, sizes=(32, 32)):

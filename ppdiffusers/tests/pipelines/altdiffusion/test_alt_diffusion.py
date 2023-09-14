@@ -126,10 +126,10 @@ class AltDiffusionPipelineFastTests(
         return inputs
 
     def test_attention_slicing_forward_pass(self):
-        super().test_attention_slicing_forward_pass(expected_max_diff=3e-3)
+        super().test_attention_slicing_forward_pass()
 
     def test_inference_batch_single_identical(self):
-        super().test_inference_batch_single_identical(expected_max_diff=3e-3)
+        super().test_inference_batch_single_identical()
 
     def test_alt_diffusion_ddim(self):
         components = self.get_dummy_components()

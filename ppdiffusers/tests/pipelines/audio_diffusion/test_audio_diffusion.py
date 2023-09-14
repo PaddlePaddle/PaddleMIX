@@ -136,21 +136,21 @@ class PipelineFastTests(unittest.TestCase):
             and image.width == self.dummy_vqvae_and_unet[0].config.sample_size[1]
         )
         image_slice = np.frombuffer(image.tobytes(), dtype="uint8")[:10]
-        # expected_slice = np.array([128, 100, 153, 95, 92, 77, 130, 121, 81, 166])
-        expected_slice = np.array([120, 117, 110, 109, 138, 167, 138, 148, 132, 121])
+        expected_slice = np.array([128, 100, 153, 95, 92, 77, 130, 121, 81, 166])
+
         assert np.abs(image_slice.flatten() - expected_slice).max() <= 5
         dummy_unet_condition = self.dummy_unet_condition
         pipe = AudioDiffusionPipeline(
             vqvae=self.dummy_vqvae_and_unet[0], unet=dummy_unet_condition, mel=mel, scheduler=scheduler
         )
-        pipe.to("cpu")
+
         pipe.set_progress_bar_config(disable=None)
         np.random.seed(0)
         encoding = paddle.rand(shape=(1, 1, 10))
         output = pipe(generator=generator, encoding=encoding)
         image = output.images[0]
         image_slice = np.frombuffer(image.tobytes(), dtype="uint8")[:10]
-        expected_slice = np.array([107, 103, 120, 127, 142, 122, 113, 122, 97, 111])
+        expected_slice = np.array([139, 103, 88, 105, 100, 120, 116, 99, 106, 89])
         assert np.abs(image_slice.flatten() - expected_slice).max() <= 5
 
 

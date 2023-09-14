@@ -26,7 +26,7 @@ from paddlenlp.transformers import (
 from ppdiffusers import HeunDiscreteScheduler, PriorTransformer, ShapEPipeline
 from ppdiffusers.pipelines.shap_e import ShapERenderer
 from ppdiffusers.utils import load_numpy, slow
-from ppdiffusers.utils.testing_utils import paddle_device, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
 from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
 
@@ -145,11 +145,8 @@ class ShapEPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         }
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
-        if str(device).startswith("mps"):
-            generator = paddle.seed(seed=seed)
-        else:
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+    def get_dummy_inputs(self, seed=0):
+        generator = paddle.Generator().manual_seed(seed)
         inputs = {
             "prompt": "horse",
             "generator": generator,
@@ -160,12 +157,10 @@ class ShapEPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         return inputs
 
     def test_shap_e(self):
-        device = "cpu"
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe = pipe.to(device)
         pipe.set_progress_bar_config(disable=None)
-        output = pipe(**self.get_dummy_inputs(device))
+        output = pipe(**self.get_dummy_inputs())
         image = output.images[0]
         image_slice = image[(0), -3:, -3:, (-1)]
         assert image.shape == (20, 32, 32, 3)
@@ -188,7 +183,7 @@ class ShapEPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         self._test_inference_batch_consistent(batch_sizes=[1, 2])
 
     def test_inference_batch_single_identical(self):
-        test_max_difference = paddle_device == "cpu"
+        test_max_difference = False
         relax_max_difference = True
         self._test_inference_batch_single_identical(
             batch_size=2, test_max_difference=test_max_difference, relax_max_difference=relax_max_difference
@@ -197,11 +192,10 @@ class ShapEPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     def test_num_images_per_prompt(self):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe = pipe.to(paddle_device)
         pipe.set_progress_bar_config(disable=None)
         batch_size = 1
         num_images_per_prompt = 2
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         for key in inputs.keys():
             if key in self.batch_params:
                 inputs[key] = batch_size * [inputs[key]]
@@ -222,7 +216,6 @@ class ShapEPipelineIntegrationTests(unittest.TestCase):
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/shap_e/test_shap_e_np_out.npy"
         )
         pipe = ShapEPipeline.from_pretrained("openai/shap-e")
-        pipe = pipe.to(paddle_device)
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         images = pipe(

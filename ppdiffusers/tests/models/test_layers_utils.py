@@ -19,9 +19,13 @@ import numpy as np
 import paddle
 import paddle.nn
 
-from ppdiffusers.models.attention import GEGLU, AdaLayerNorm, ApproximateGELU
+from ppdiffusers.models.attention import (
+    GEGLU,
+    AdaLayerNorm,
+    ApproximateGELU,
+    AttentionBlock,
+)
 from ppdiffusers.models.embeddings import get_timestep_embedding
-from ppdiffusers.models.lora import LoRACompatibleLinear
 from ppdiffusers.models.resnet import Downsample2D, ResnetBlock2D, Upsample2D
 from ppdiffusers.models.transformer_2d import Transformer2DModel
 
@@ -423,6 +427,56 @@ class ResnetBlock2DTests(unittest.TestCase):
         assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
 
 
+class AttentionBlockTests(unittest.TestCase):
+    def test_attention_block_default(self):
+        paddle.seed(0)
+        sample = paddle.randn(shape=[1, 32, 64, 64])
+        attentionBlock = AttentionBlock(
+            channels=32, num_head_channels=1, rescale_output_factor=1.0, eps=1e-06, norm_num_groups=32
+        )
+        with paddle.no_grad():
+            attention_scores = attentionBlock(sample)
+        assert attention_scores.shape == [1, 32, 64, 64]
+        output_slice = attention_scores[0, -1, -3:, -3:]
+        expected_slice = paddle.to_tensor(
+            [
+                1.638939619064331,
+                -0.15776772797107697,
+                -1.1130025386810303,
+                -0.8540273904800415,
+                -0.5696781873703003,
+                -2.0493741035461426,
+                -0.3732607960700989,
+                -1.740313172340393,
+                -0.5271167755126953,
+            ]
+        )
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+
+    def test_attention_block_sd(self):
+        paddle.seed(0)
+        sample = paddle.randn(shape=[1, 512, 64, 64])
+        attentionBlock = AttentionBlock(channels=512, rescale_output_factor=1.0, eps=1e-06, norm_num_groups=32)
+        with paddle.no_grad():
+            attention_scores = attentionBlock(sample)
+        assert attention_scores.shape == [1, 512, 64, 64]
+        output_slice = attention_scores[0, -1, -3:, -3:]
+        expected_slice = paddle.to_tensor(
+            [
+                -0.8007570505142212,
+                -0.770350992679596,
+                -3.5278191566467285,
+                -2.0540268421173096,
+                -0.7711739540100098,
+                -0.8278288245201111,
+                -0.48292720317840576,
+                1.6039936542510986,
+                0.626724362373352,
+            ]
+        )
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+
+
 class Transformer2DModelTests(unittest.TestCase):
     def test_spatial_transformer_default(self):
         paddle.seed(0)
@@ -589,7 +643,7 @@ class Transformer2DModelTests(unittest.TestCase):
         spatial_transformer_block = Transformer2DModel(num_attention_heads=1, attention_head_dim=32, in_channels=32)
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].__class__ == GEGLU
         assert spatial_transformer_block.transformer_blocks[0].ff.net[1].__class__ == paddle.nn.Dropout
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == LoRACompatibleLinear
+        assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == paddle.nn.Linear
         dim = 32
         inner_dim = 128
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].proj.weight.shape[0] == dim
@@ -603,7 +657,7 @@ class Transformer2DModelTests(unittest.TestCase):
         )
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].__class__ == ApproximateGELU
         assert spatial_transformer_block.transformer_blocks[0].ff.net[1].__class__ == paddle.nn.Dropout
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == LoRACompatibleLinear
+        assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == paddle.nn.Linear
         dim = 32
         inner_dim = 128
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].proj.weight.shape[0] == dim

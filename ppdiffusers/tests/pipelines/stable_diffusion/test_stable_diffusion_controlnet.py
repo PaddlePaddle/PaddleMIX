@@ -28,10 +28,11 @@ from ppdiffusers import (
     StableDiffusionControlNetPipeline,
     UNet2DConditionModel,
 )
+from ppdiffusers.initializer import normal_, ones_
 from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_controlnet import (
     MultiControlNetModel,
 )
-from ppdiffusers.utils import load_image, load_numpy, paddle_device, randn_tensor, slow
+from ppdiffusers.utils import load_image, load_numpy, randn_tensor, slow
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
@@ -123,16 +124,12 @@ class ControlNetPipelineFastTests(
         }
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
-        if str(device).startswith("mps"):
-            generator = paddle.seed(seed=seed)
-        else:
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+    def get_dummy_inputs(self, seed=0):
+        generator = paddle.Generator().manual_seed(seed)
         controlnet_embedder_scale_factor = 2
         image = randn_tensor(
             (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
             generator=generator,
-            device=str(device).replace("cuda", "gpu"),
         )
         inputs = {
             "prompt": "A painting of a squirrel eating a burger",
@@ -181,8 +178,8 @@ class StableDiffusionMultiControlNetPipelineFastTests(
 
         def init_weights(m):
             if isinstance(m, paddle.nn.Conv2D):
-                paddle.nn.initializer.normal(m.weight)
-                m.bias.data.fill_(1.0)
+                normal_(m.weight)
+                ones_(m.bias)
 
         controlnet1 = ControlNetModel(
             block_out_channels=(32, 64),
@@ -247,22 +244,17 @@ class StableDiffusionMultiControlNetPipelineFastTests(
         }
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
-        if str(device).startswith("mps"):
-            generator = paddle.seed(seed=seed)
-        else:
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+    def get_dummy_inputs(self, seed=0):
+        generator = paddle.Generator().manual_seed(seed)
         controlnet_embedder_scale_factor = 2
         images = [
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
-                device=str(device).replace("cuda", "gpu"),
             ),
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
-                device=str(device).replace("cuda", "gpu"),
             ),
         ]
         inputs = {
@@ -278,22 +270,21 @@ class StableDiffusionMultiControlNetPipelineFastTests(
     def test_control_guidance_switch(self):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe.to(paddle_device)
         scale = 10.0
         steps = 4
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_1 = pipe(**inputs)[0]
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_2 = pipe(**inputs, control_guidance_start=0.1, control_guidance_end=0.2)[0]
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_3 = pipe(**inputs, control_guidance_start=[0.1, 0.3], control_guidance_end=[0.2, 0.7])[0]
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_4 = pipe(**inputs, control_guidance_start=0.4, control_guidance_end=[0.5, 0.8])[0]
@@ -348,8 +339,8 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
 
         def init_weights(m):
             if isinstance(m, paddle.nn.Conv2D):
-                paddle.nn.initializer.normal(m.weight)
-                m.bias.data.fill_(1.0)
+                normal_(m.weight)
+                ones_(m.bias)
 
         controlnet = ControlNetModel(
             block_out_channels=(32, 64),
@@ -404,17 +395,13 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
         }
         return components
 
-    def get_dummy_inputs(self, device, seed=0):
-        if str(device).startswith("mps"):
-            generator = paddle.seed(seed=seed)
-        else:
-            generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+    def get_dummy_inputs(self, seed=0):
+        generator = paddle.Generator().manual_seed(seed)
         controlnet_embedder_scale_factor = 2
         images = [
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
-                device=str(device).replace("cuda", "gpu"),
             )
         ]
         inputs = {
@@ -430,22 +417,21 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
     def test_control_guidance_switch(self):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe.to(paddle_device)
         scale = 10.0
         steps = 4
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_1 = pipe(**inputs)[0]
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_2 = pipe(**inputs, control_guidance_start=0.1, control_guidance_end=0.2)[0]
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_3 = pipe(**inputs, control_guidance_start=[0.1], control_guidance_end=[0.2])[0]
-        inputs = self.get_dummy_inputs(paddle_device)
+        inputs = self.get_dummy_inputs()
         inputs["num_inference_steps"] = steps
         inputs["controlnet_conditioning_scale"] = scale
         output_4 = pipe(**inputs, control_guidance_start=0.4, control_guidance_end=[0.5])[0]
@@ -468,7 +454,6 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
     def test_save_pretrained_raise_not_implemented_exception(self):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe.to(paddle_device)
         pipe.set_progress_bar_config(disable=None)
         with tempfile.TemporaryDirectory() as tmpdir:
             try:

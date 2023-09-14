@@ -20,12 +20,11 @@ import paddle
 from ppdiffusers import UNet1DModel
 from ppdiffusers.utils import floats_tensor, slow
 
-from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
+from .test_modeling_common import ModelTesterMixin
 
 
-class UNet1DModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
+class UNet1DModelTests(ModelTesterMixin, unittest.TestCase):
     model_class = UNet1DModel
-    main_input_name = "sample"
 
     @property
     def dummy_input(self):
@@ -134,13 +133,12 @@ class UNet1DModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
             output = model(noise, timestep).sample
         output_sum = output.abs().sum()
         output_max = output.abs().max()
-        assert (output_sum - 224.0896).abs() < 0.5
+        assert (output_sum - 224.0896).abs() < 0.04
         assert (output_max - 0.0607).abs() < 0.0004
 
 
-class UNetRLModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
+class UNetRLModelTests(ModelTesterMixin, unittest.TestCase):
     model_class = UNet1DModel
-    main_input_name = "sample"
 
     @property
     def dummy_input(self):
@@ -204,7 +202,7 @@ class UNetRLModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
             "freq_shift": 1.0,
             "flip_sin_to_cos": False,
             "time_embedding_type": "positional",
-            "act_fn": "swish",
+            "act_fn": "mish",
         }
         inputs_dict = self.dummy_input
         return init_dict, inputs_dict
