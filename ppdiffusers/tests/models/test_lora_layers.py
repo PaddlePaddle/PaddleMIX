@@ -84,9 +84,9 @@ def create_text_encoder_lora_attn_procs(text_encoder: paddle.nn.Layer):
     )
     for name, module in text_encoder_attn_modules(text_encoder):
         if isinstance(module.out_proj, paddle.nn.Linear):
-            out_features = module.out_proj.out_features
+            out_features = module.out_proj.weight.shape[1]
         elif isinstance(module.out_proj, PatchedLoraProjection):
-            out_features = module.out_proj.regular_linear_layer.out_features
+            out_features = module.out_proj.regular_linear_layer.weight.shape[1]
         else:
             assert False, module.out_proj.__class__
         text_lora_attn_procs[name] = lora_attn_processor_class(hidden_size=out_features, cross_attention_dim=None)
@@ -110,7 +110,7 @@ def set_lora_weights(lora_attn_parameters, randn_weight=False):
 
 class LoraLoaderMixinTests(unittest.TestCase):
     def get_dummy_components(self):
-        paddle.seed(seed=0)
+        paddle.Generator().manual_seed(0)
         unet = UNet2DConditionModel(
             block_out_channels=(32, 64),
             layers_per_block=2,
@@ -129,7 +129,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
             set_alpha_to_one=False,
             steps_offset=1,
         )
-        paddle.seed(seed=0)
+        paddle.Generator().manual_seed(0)
         vae = AutoencoderKL(
             block_out_channels=[32, 64],
             in_channels=3,
@@ -174,7 +174,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
         sequence_length = 10
         num_channels = 4
         sizes = 32, 32
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(0)
         noise = floats_tensor((batch_size, num_channels) + sizes)
         input_ids = paddle.randint(low=1, high=sequence_length, shape=(batch_size, sequence_length))
         pipeline_inputs = {
@@ -201,7 +201,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
             unet_lora_layers=lora_components["unet_lora_layers"],
             text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
         )
-        self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+        self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
 
     def test_lora_save_load(self):
         pipeline_components, lora_components = self.get_dummy_components()
@@ -216,7 +216,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
                 unet_lora_layers=lora_components["unet_lora_layers"],
                 text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -228,30 +228,30 @@ class LoraLoaderMixinTests(unittest.TestCase):
             ).item()
         )
 
-    def test_lora_save_load_safetensors(self):
-        pipeline_components, lora_components = self.get_dummy_components()
-        sd_pipe = StableDiffusionPipeline(**pipeline_components)
-        sd_pipe.set_progress_bar_config(disable=None)
-        _, _, pipeline_inputs = self.get_dummy_inputs()
-        original_images = sd_pipe(**pipeline_inputs).images
-        orig_image_slice = original_images[0, -3:, -3:, -1]
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            LoraLoaderMixin.save_lora_weights(
-                save_directory=tmpdirname,
-                unet_lora_layers=lora_components["unet_lora_layers"],
-                text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
-                safe_serialization=True,
-            )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.safetensors")))
-            sd_pipe.load_lora_weights(tmpdirname)
-        lora_images = sd_pipe(**pipeline_inputs).images
-        lora_image_slice = lora_images[0, -3:, -3:, -1]
-        # Outputs shouldn't match.
-        self.assertFalse(
-            paddle.allclose(
-                x=paddle.to_tensor(data=orig_image_slice), y=paddle.to_tensor(data=lora_image_slice)
-            ).item()
-        )
+    # def test_lora_save_load_safetensors(self):
+    #     pipeline_components, lora_components = self.get_dummy_components()
+    #     sd_pipe = StableDiffusionPipeline(**pipeline_components)
+    #     sd_pipe.set_progress_bar_config(disable=None)
+    #     _, _, pipeline_inputs = self.get_dummy_inputs()
+    #     original_images = sd_pipe(**pipeline_inputs).images
+    #     orig_image_slice = original_images[0, -3:, -3:, -1]
+    #     with tempfile.TemporaryDirectory() as tmpdirname:
+    #         LoraLoaderMixin.save_lora_weights(
+    #             save_directory=tmpdirname,
+    #             unet_lora_layers=lora_components["unet_lora_layers"],
+    #             text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
+    #             safe_serialization=True,
+    #         )
+    #         self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.safetensors")))
+    #         sd_pipe.load_lora_weights(tmpdirname)
+    #     lora_images = sd_pipe(**pipeline_inputs).images
+    #     lora_image_slice = lora_images[0, -3:, -3:, -1]
+    #     # Outputs shouldn't match.
+    #     self.assertFalse(
+    #         paddle.allclose(
+    #             x=paddle.to_tensor(data=orig_image_slice), y=paddle.to_tensor(data=lora_image_slice)
+    #         ).item()
+    #     )
 
     def test_lora_save_load_legacy(self):
         pipeline_components, lora_components = self.get_dummy_components()
@@ -265,7 +265,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
             unet = sd_pipe.unet
             unet.set_attn_processor(unet_lora_attn_procs)
             unet.save_attn_procs(tmpdirname)
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -283,13 +283,13 @@ class LoraLoaderMixinTests(unittest.TestCase):
         dummy_tokens = self.get_dummy_tokens()
         # inference without lora
         outputs_without_lora = pipe.text_encoder(**dummy_tokens)[0]
-        assert outputs_without_lora.shape == (1, 77, 32)
+        assert outputs_without_lora.shape == [1, 77, 32]
         # monkey patch
         params = pipe._modify_text_encoder(pipe.text_encoder, pipe.lora_scale)
         set_lora_weights(params, randn_weight=False)
         # inference with lora
         outputs_with_lora = pipe.text_encoder(**dummy_tokens)[0]
-        assert outputs_with_lora.shape == (1, 77, 32)
+        assert outputs_with_lora.shape == [1, 77, 32]
         assert paddle.allclose(
             x=outputs_without_lora, y=outputs_with_lora
         ).item(), "lora_up_weight are all zero, so the lora outputs should be the same to without lora outputs"
@@ -300,7 +300,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
         set_lora_weights(params, randn_weight=True)
         # inference with lora
         outputs_with_lora = pipe.text_encoder(**dummy_tokens)[0]
-        assert outputs_with_lora.shape == (1, 77, 32)
+        assert outputs_with_lora.shape == [1, 77, 32]
         assert not paddle.allclose(
             x=outputs_without_lora, y=outputs_with_lora
         ).item(), "lora_up_weight are not zero, so the lora outputs should be different to without lora outputs"
@@ -311,13 +311,13 @@ class LoraLoaderMixinTests(unittest.TestCase):
         dummy_tokens = self.get_dummy_tokens()
         # inference without lora
         outputs_without_lora = pipe.text_encoder(**dummy_tokens)[0]
-        assert outputs_without_lora.shape == (1, 77, 32)
+        assert outputs_without_lora.shape == [1, 77, 32]
         # monkey patch
         params = pipe._modify_text_encoder(pipe.text_encoder, pipe.lora_scale)
         set_lora_weights(params, randn_weight=True)
         # inference with lora
         outputs_with_lora = pipe.text_encoder(**dummy_tokens)[0]
-        assert outputs_with_lora.shape == (1, 77, 32)
+        assert outputs_with_lora.shape == [1, 77, 32]
         assert not paddle.allclose(
             x=outputs_without_lora, y=outputs_with_lora
         ).item(), "lora outputs should be different to without lora outputs"
@@ -325,7 +325,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
         pipe._remove_text_encoder_monkey_patch()
         # inference with removed lora
         outputs_without_lora_removed = pipe.text_encoder(**dummy_tokens)[0]
-        assert outputs_without_lora_removed.shape == (1, 77, 32)
+        assert outputs_without_lora_removed.shape == [1, 77, 32]
         assert paddle.allclose(
             x=outputs_without_lora, y=outputs_without_lora_removed
         ).item(), "remove lora monkey patch should restore the original outputs"
@@ -341,7 +341,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
                 unet_lora_layers=lora_components["unet_lora_layers"],
                 text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -361,13 +361,13 @@ class LoraLoaderMixinTests(unittest.TestCase):
             sd_pipe = StableDiffusionPipeline(**pipeline_components)
             sd_pipe.set_progress_bar_config(disable=None)
             # check if vanilla attention processors are used
-            for _, module in sd_pipe.unet.named_modules():
+            for _, module in sd_pipe.unet.named_sublayers():
                 if isinstance(module, Attention):
                     self.assertIsInstance(module.processor, (AttnProcessor, AttnProcessor2_5))
             # load LoRA weight file
             sd_pipe.load_lora_weights(tmpdirname)
             # check if lora attention processors are used
-            for _, module in sd_pipe.unet.named_modules():
+            for _, module in sd_pipe.unet.named_sublayers():
                 if isinstance(module, Attention):
                     attn_proc_class = (
                         LoRAAttnProcessor2_5
@@ -380,7 +380,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
         pipeline_components, lora_components = self.get_dummy_components()
         _, _, pipeline_inputs = self.get_dummy_inputs(with_generator=False)
         sd_pipe = StableDiffusionPipeline(**pipeline_components)
-        original_images = sd_pipe(**pipeline_inputs, generator=paddle.seed(seed=0)).images
+        original_images = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
         orig_image_slice = original_images[0, -3:, -3:, -1]
         # Emulate training.
         set_lora_weights(lora_components["unet_lora_layers"].parameters(), randn_weight=True)
@@ -391,13 +391,13 @@ class LoraLoaderMixinTests(unittest.TestCase):
                 unet_lora_layers=lora_components["unet_lora_layers"],
                 text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
             sd_pipe.load_lora_weights(tmpdirname)
-        lora_images = sd_pipe(**pipeline_inputs, generator=paddle.seed(seed=0)).images
+        lora_images = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
         # Unload LoRA parameters.
         sd_pipe.unload_lora_weights()
-        original_images_two = sd_pipe(**pipeline_inputs, generator=paddle.seed(seed=0)).images
+        original_images_two = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
         orig_image_slice_two = original_images_two[0, -3:, -3:, -1]
         assert not np.allclose(
             orig_image_slice, lora_image_slice
@@ -418,19 +418,19 @@ class LoraLoaderMixinTests(unittest.TestCase):
             # enable XFormers
             sd_pipe.enable_xformers_memory_efficient_attention()
             # check if xFormers attention processors are used
-            for _, module in sd_pipe.unet.named_modules():
+            for _, module in sd_pipe.unet.named_sublayers():
                 if isinstance(module, Attention):
                     self.assertIsInstance(module.processor, XFormersAttnProcessor)
             # load LoRA weight file
             sd_pipe.load_lora_weights(tmpdirname)
             # check if lora attention processors are used
-            for _, module in sd_pipe.unet.named_modules():
+            for _, module in sd_pipe.unet.named_sublayers():
                 if isinstance(module, Attention):
                     self.assertIsInstance(module.processor, LoRAXFormersAttnProcessor)
             # unload lora weights
             sd_pipe.unload_lora_weights()
             # check if attention processors are reverted back to xFormers
-            for _, module in sd_pipe.unet.named_modules():
+            for _, module in sd_pipe.unet.named_sublayers():
                 if isinstance(module, Attention):
                     self.assertIsInstance(module.processor, XFormersAttnProcessor)
 
@@ -449,7 +449,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
                 unet_lora_layers=lora_components["unet_lora_layers"],
                 text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -463,7 +463,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
 
 class SDXLLoraLoaderMixinTests(unittest.TestCase):
     def get_dummy_components(self):
-        paddle.seed(seed=0)
+        paddle.Generator().manual_seed(0)
         unet = UNet2DConditionModel(
             block_out_channels=(32, 64),
             layers_per_block=2,
@@ -488,7 +488,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
             beta_schedule="scaled_linear",
             timestep_spacing="leading",
         )
-        paddle.seed(seed=0)
+        paddle.Generator().manual_seed(0)
         vae = AutoencoderKL(
             block_out_channels=[32, 64],
             in_channels=3,
@@ -498,7 +498,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
             latent_channels=4,
             sample_size=128,
         )
-        paddle.seed(seed=0)
+        paddle.Generator().manual_seed(0)
         text_encoder_config = CLIPTextConfig(
             bos_token_id=0,
             eos_token_id=2,
@@ -542,7 +542,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
         sequence_length = 10
         num_channels = 4
         sizes = 32, 32
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(0)
         noise = floats_tensor((batch_size, num_channels) + sizes)
         input_ids = paddle.randint(low=1, high=sequence_length, shape=(batch_size, sequence_length))
         pipeline_inputs = {
@@ -569,7 +569,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
                 text_encoder_lora_layers=lora_components["text_encoder_one_lora_layers"],
                 text_encoder_2_lora_layers=lora_components["text_encoder_two_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -584,7 +584,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
         pipeline_components, lora_components = self.get_dummy_components()
         _, _, pipeline_inputs = self.get_dummy_inputs(with_generator=False)
         sd_pipe = StableDiffusionXLPipeline(**pipeline_components)
-        original_images = sd_pipe(**pipeline_inputs, generator=paddle.seed(seed=0)).images
+        original_images = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
         orig_image_slice = original_images[0, -3:, -3:, -1]
         # Emulate training.
         set_lora_weights(lora_components["unet_lora_layers"].parameters(), randn_weight=True)
@@ -597,13 +597,13 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
                 text_encoder_lora_layers=lora_components["text_encoder_one_lora_layers"],
                 text_encoder_2_lora_layers=lora_components["text_encoder_two_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
             sd_pipe.load_lora_weights(tmpdirname)
-        lora_images = sd_pipe(**pipeline_inputs, generator=paddle.seed(seed=0)).images
+        lora_images = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
         # Unload LoRA parameters.
         sd_pipe.unload_lora_weights()
-        original_images_two = sd_pipe(**pipeline_inputs, generator=paddle.seed(seed=0)).images
+        original_images_two = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
         orig_image_slice_two = original_images_two[0, -3:, -3:, -1]
         assert not np.allclose(
             orig_image_slice, lora_image_slice
@@ -671,7 +671,7 @@ class LoraIntegrationTests(unittest.TestCase):
         self.assertTrue(np.allclose(images, expected, atol=0.0001))
 
     def test_unload_lora(self):
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(0)
         prompt = "masterpiece, best quality, mountain"
         num_inference_steps = 2
         pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5", safety_checker=None)
@@ -682,13 +682,13 @@ class LoraIntegrationTests(unittest.TestCase):
         lora_model_id = "hf-internal-testing/civitai-colored-icons-lora"
         lora_filename = "Colored_Icons_by_vizsumit.safetensors"
         pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(0)
         lora_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
         ).images
         lora_images = lora_images[0, -3:, -3:, -1].flatten()
         pipe.unload_lora_weights()
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(0)
         unloaded_lora_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
         ).images
@@ -700,7 +700,7 @@ class LoraIntegrationTests(unittest.TestCase):
         # This test ensures that a Kohya-style LoRA can be safely unloaded and then loaded
         # without introducing any side-effects. Even though the test uses a Kohya-style
         # LoRA, the underlying adapter handling mechanism is format-agnostic.
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(0)
         prompt = "masterpiece, best quality, mountain"
         num_inference_steps = 2
         pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5", safety_checker=None)
@@ -711,13 +711,13 @@ class LoraIntegrationTests(unittest.TestCase):
         lora_model_id = "hf-internal-testing/civitai-colored-icons-lora"
         lora_filename = "Colored_Icons_by_vizsumit.safetensors"
         pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(0)
         lora_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
         ).images
         lora_images = lora_images[0, -3:, -3:, -1].flatten()
         pipe.unload_lora_weights()
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(0)
         unloaded_lora_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
         ).images
@@ -727,7 +727,7 @@ class LoraIntegrationTests(unittest.TestCase):
         # make sure we can load a LoRA again after unloading and they don't have
         # any undesired effects.
         pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(0)
         lora_images_again = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
         ).images

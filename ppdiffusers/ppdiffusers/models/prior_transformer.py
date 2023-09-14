@@ -281,7 +281,7 @@ class PriorTransformer(ModelMixin, ConfigMixin):
                 If return_dict is True, a [`~models.prior_transformer.PriorTransformerOutput`] is returned, otherwise a
                 tuple is returned where the first element is the sample tensor.
         """
-        hidden_states = hidden_states.cast(self.dtype)
+        # hidden_states = hidden_states.cast(self.dtype)
         batch_size = hidden_states.shape[0]
 
         timesteps = timestep
@@ -368,6 +368,7 @@ class PriorTransformer(ModelMixin, ConfigMixin):
             hidden_states = self.norm_in(hidden_states)
 
         for block in self.transformer_blocks:
+            # breakpoint()
             hidden_states = block(hidden_states, attention_mask=attention_mask)
 
         hidden_states = self.norm_out(hidden_states)
