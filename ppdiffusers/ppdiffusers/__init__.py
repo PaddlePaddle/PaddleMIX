@@ -30,6 +30,7 @@ from .utils import (
     is_paddle_version,
     is_paddlenlp_available,
     is_paddlenlp_version,
+    is_paddlesde_available,
     is_ppxformers_available,
     is_safetensors_available,
     is_scipy_available,
@@ -142,6 +143,14 @@ except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_and_scipy_objects import *  # noqa F403
 else:
     from .schedulers import LMSDiscreteScheduler
+
+try:
+    if not (is_paddle_available() and is_paddlesde_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from .utils.dummy_paddle_and_paddlesde_objects import *  # noqa F403
+else:
+    from .schedulers import DPMSolverSDEScheduler
 
 try:
     if not (is_paddle_available() and is_paddlenlp_available()):

@@ -269,7 +269,11 @@ class DPMSolverSinglestepScheduler(SchedulerMixin, ConfigMixin):
         self.num_inference_steps = num_inference_steps
         # Clipping the minimum of all lambda(t) for numerical stability.
         # This is critical for cosine (squaredcos_cap_v2) noise schedule.
-        clipped_idx = paddle.searchsorted(paddle.flip(self.lambda_t, [0]), self.config.lambda_min_clipped)
+        t = paddle.flip(self.lambda_t, [0])
+        c = paddle.to_tensor(self.config.lambda_min_clipped)
+        clipped_idx = paddle.searchsorted(t, c)
+        if paddle.isinf(c):
+            clipped_idx = paddle.to_tensor(0)
         timesteps = (
             np.linspace(0, self.config.num_train_timesteps - 1 - clipped_idx, num_inference_steps + 1)
             .round()[::-1][:-1]

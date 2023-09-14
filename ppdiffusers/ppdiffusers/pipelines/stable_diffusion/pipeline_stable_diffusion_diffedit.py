@@ -819,7 +819,7 @@ class StableDiffusionDiffEditPipeline(DiffusionPipeline, TextualInversionLoaderM
         # TODO: Consider smoothing mask guidance map
         mask_guidance_map = (
             paddle.abs(x=noise_pred_target - noise_pred_source)
-            .reshape(batch_size, num_maps_per_mask, *noise_pred_target.shape[-3:])
+            .reshape([batch_size, num_maps_per_mask, *noise_pred_target.shape[-3:]])
             .mean(axis=[1, 2])
         )
         clamp_magnitude = mask_guidance_map.mean() * mask_thresholding_ratio
@@ -1191,14 +1191,14 @@ class StableDiffusionDiffEditPipeline(DiffusionPipeline, TextualInversionLoaderM
             image_latents = image_latents.detach()
         else:
             image_latents = self.image_processor.preprocess(image_latents).detach()
-        latent_shape = (self.vae.config.latent_channels, latent_height, latent_width)
+        latent_shape = [self.vae.config.latent_channels, latent_height, latent_width]
         if image_latents.shape[-3:] != latent_shape:
             raise ValueError(
                 f"Each latent image in `image_latents` must have shape {latent_shape}, but has shape {image_latents.shape[-3:]}"
             )
         if image_latents.ndim == 4:
-            image_latents = image_latents.reshape(batch_size, len(timesteps), *latent_shape)
-        if image_latents.shape[:2] != (batch_size, len(timesteps)):
+            image_latents = image_latents.reshape([batch_size, len(timesteps), *latent_shape])
+        if image_latents.shape[:2] != [batch_size, len(timesteps)]:
             raise ValueError(
                 f"`image_latents` must have batch size {batch_size} with latent images from {len(timesteps)} timesteps, but has batch size {image_latents.shape[0]} with latent images from {image_latents.shape[1]} timesteps."
             )

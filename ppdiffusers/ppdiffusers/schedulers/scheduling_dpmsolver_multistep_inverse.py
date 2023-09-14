@@ -235,7 +235,11 @@ class DPMSolverMultistepInverseScheduler(SchedulerMixin, ConfigMixin):
         """
         # Clipping the minimum of all lambda(t) for numerical stability.
         # This is critical for cosine (squaredcos_cap_v2) noise schedule.
-        clipped_idx = paddle.searchsorted(paddle.flip(self.lambda_t, [0]), self.lambda_min_clipped).item()
+        c = paddle.to_tensor(self.lambda_min_clipped)
+        t = paddle.flip(self.lambda_t, [0])
+        clipped_idx = paddle.searchsorted(t, c).item()
+        if paddle.isinf(c):
+            clipped_idx = paddle.to_tensor(0).item()
         self.noisiest_timestep = self.config.num_train_timesteps - 1 - clipped_idx
 
         # "linspace", "leading", "trailing" corresponds to annotation of Table 2. of https://arxiv.org/abs/2305.08891
@@ -470,7 +474,7 @@ class DPMSolverMultistepInverseScheduler(SchedulerMixin, ConfigMixin):
             raise NotImplementedError(
                 f"Inversion step is not yet implemented for algorithm type {self.config.algorithm_type}."
             )
-        return x_t
+        return x_t.cast(sample.dtype)
 
     def multistep_dpm_solver_second_order_update(
         self,

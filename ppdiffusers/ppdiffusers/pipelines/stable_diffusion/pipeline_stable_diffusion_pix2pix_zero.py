@@ -259,7 +259,7 @@ class Pix2PixZeroAttnProcessor:
             elif loss is not None:
                 prev_attn_probs = self.reference_cross_attn_map.pop(timestep.item())
                 loss.compute_loss(attention_probs, prev_attn_probs)
-        hidden_states = paddle.bmm(x=attention_probs, y=value)
+        hidden_states = paddle.matmul(attention_probs, value)
         hidden_states = attn.batch_to_head_dim(hidden_states)
 
         # linear proj

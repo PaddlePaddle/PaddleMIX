@@ -505,9 +505,10 @@ class StableDiffusionParadigmsPipeline(
         # We specify the error tolerance as a ratio of the scheduler's noise magnitude. We similarly compute the error tolerance
         # outside of the denoising loop to avoid recomputing it at every step.
         # We will be dividing the norm of the noise, so we store its inverse here to avoid a division at every step.
-        inverse_variance_norm = 1.0 / paddle.to_tensor(
-            data=[scheduler._get_variance(scheduler.timesteps[j]) for j in range(len(scheduler.timesteps))] + [0]
-        )
+        inverse_variance_norm = [
+            scheduler._get_variance(scheduler.timesteps[j]).item() for j in range(len(scheduler.timesteps))
+        ] + [0]
+        inverse_variance_norm = 1 / paddle.to_tensor(inverse_variance_norm)
         latent_dim = noise_array[0, 0].size
         inverse_variance_norm = inverse_variance_norm[:, (None)] / latent_dim
         scaled_tolerance = tolerance**2
@@ -546,12 +547,12 @@ class StableDiffusionParadigmsPipeline(
                 per_latent_shape = model_output.shape[1:]
                 if do_classifier_free_guidance:
                     model_output = model_output.reshape(
-                        parallel_len, 2, batch_size * num_images_per_prompt, *per_latent_shape
+                        [parallel_len, 2, batch_size * num_images_per_prompt, *per_latent_shape]
                     )
                     noise_pred_uncond, noise_pred_text = model_output[:, (0)], model_output[:, (1)]
                     model_output = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
                 model_output = model_output.reshape(
-                    parallel_len * batch_size * num_images_per_prompt, *per_latent_shape
+                    [parallel_len * batch_size * num_images_per_prompt, *per_latent_shape]
                 )
                 block_latents_denoise = scheduler.batch_step_no_noise(
                     model_output=model_output,
@@ -580,18 +581,19 @@ class StableDiffusionParadigmsPipeline(
                 )
                 cur_error = paddle.linalg.norm(
                     x=(block_latents_new - latents_time_evolution_buffer[begin_idx + 1 : end_idx + 1]).reshape(
-                        parallel_len, batch_size * num_images_per_prompt, -1
+                        [parallel_len, batch_size * num_images_per_prompt, -1]
                     ),
                     axis=-1,
                 ).pow(y=2)
                 error_ratio = cur_error * inverse_variance_norm[begin_idx + 1 : end_idx + 1]
+
                 # find the first index of the vector error_ratio that is greater than error tolerance
                 # we can shift the window for the next iteration up to this index
                 # error_ratio = torch.nn.functional.pad(error_ratio, (0, 0, 0, 1), value=1000000000.0)
                 concat_shape = list(error_ratio.shape)
                 concat_shape[-2] = 1
                 error_ratio = paddle.concat(
-                    error_ratio, paddle.ones(concat_shape) * 1000000000.0, axis=-2
+                    [error_ratio, paddle.ones(concat_shape) * 1000000000.0], axis=-2
                 )  # handle the case when everything is below ratio, by padding the end of parallel_len dimension
                 # any_error_at_time = torch.max(error_ratio > scaled_tolerance, dim=1).values.int()
                 any_error_at_time = paddle.max((error_ratio > scaled_tolerance).cast(paddle.int32), axis=1)

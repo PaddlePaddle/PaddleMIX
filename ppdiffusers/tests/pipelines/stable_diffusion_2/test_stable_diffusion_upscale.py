@@ -30,7 +30,9 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import floats_tensor, load_image, slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+
+enable_full_determinism()
 
 
 class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
@@ -194,6 +196,59 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
         )
         image = output.images
         assert image.shape[0] == 2
+
+    def test_stable_diffusion_upscale_prompt_embeds(self):
+        unet = self.dummy_cond_unet_upscale
+        low_res_scheduler = DDPMScheduler()
+        scheduler = DDIMScheduler(prediction_type="v_prediction")
+        vae = self.dummy_vae
+        text_encoder = self.dummy_text_encoder
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
+        image = self.dummy_image.cpu().transpose(perm=[0, 2, 3, 1])[0]
+        low_res_image = Image.fromarray(np.uint8(image)).convert("RGB").resize((64, 64))
+        sd_pipe = StableDiffusionUpscalePipeline(
+            unet=unet,
+            low_res_scheduler=low_res_scheduler,
+            scheduler=scheduler,
+            vae=vae,
+            text_encoder=text_encoder,
+            tokenizer=tokenizer,
+            max_noise_level=350,
+        )
+        sd_pipe.set_progress_bar_config(disable=None)
+        prompt = "A painting of a squirrel eating a burger"
+        generator = paddle.Generator().manual_seed(seed=0)
+        output = sd_pipe(
+            [prompt],
+            image=low_res_image,
+            generator=generator,
+            guidance_scale=6.0,
+            noise_level=20,
+            num_inference_steps=2,
+            output_type="np",
+        )
+        image = output.images
+        generator = paddle.Generator().manual_seed(seed=0)
+        prompt_embeds = sd_pipe._encode_prompt(prompt, 1, False)
+        image_from_prompt_embeds = sd_pipe(
+            prompt_embeds=prompt_embeds,
+            image=[low_res_image],
+            generator=generator,
+            guidance_scale=6.0,
+            noise_level=20,
+            num_inference_steps=2,
+            output_type="np",
+            return_dict=False,
+        )[0]
+        image_slice = image[(0), -3:, -3:, (-1)]
+        image_from_prompt_embeds_slice = image_from_prompt_embeds[(0), -3:, -3:, (-1)]
+        expected_height_width = low_res_image.size[0] * 4
+        assert image.shape == (1, expected_height_width, expected_height_width, 3)
+        # print('image_slice.flatten() prompt_embeds', [x.round(4) for x in image_slice.flatten()])
+        expected_slice = np.array([0.0, 0.0, 0.3617, 0.0, 0.0488, 0.592, 0.239, 0.0084, 0.5172])
+        # expected_slice = np.array([0.3113, 0.391, 0.4272, 0.4859, 0.5061, 0.4652, 0.5362, 0.5715, 0.5661])
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
+        assert np.abs(image_from_prompt_embeds_slice.flatten() - expected_slice).max() < 0.01
 
     def test_stable_diffusion_upscale_fp16(self):
         """Test that stable diffusion upscale works with fp16"""

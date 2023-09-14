@@ -96,7 +96,7 @@ class AttentionStore:
         attention_maps = self.get_average_attention()
         for location in from_where:
             for item in attention_maps[location]:
-                cross_maps = item.reshape(-1, self.attn_res[0], self.attn_res[1], item.shape[-1])
+                cross_maps = item.reshape([-1, self.attn_res[0], self.attn_res[1], item.shape[-1]])
                 out.append(cross_maps)
         out = paddle.concat(x=out, axis=0)
         out = out.sum(axis=0) / out.shape[0]
@@ -141,8 +141,8 @@ class AttendExciteAttnProcessor:
 
         # only need to store attention maps during the Attend and Excite process
         if not attention_probs.stop_gradient:
-            self.attnstore(attention_probs, is_cross, self.place_in_unet)
-        hidden_states = paddle.bmm(x=attention_probs, y=value)
+            self.attnstore(attention_probs.flatten(0, 1), is_cross, self.place_in_unet)
+        hidden_states = paddle.matmul(x=attention_probs, y=value)
         hidden_states = attn.batch_to_head_dim(hidden_states)
 
         # linear proj
@@ -512,9 +512,8 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline, TextualInversion
     @staticmethod
     def _update_latent(latents: paddle.Tensor, loss: paddle.Tensor, step_size: float) -> paddle.Tensor:
         """Update the latent according to the computed loss."""
-        out_92 = loss
-        out_92.stop_gradient = not True
-        grad_cond = paddle.grad(outputs=out_92, inputs=[latents], retain_graph=True)[0]
+        loss.stop_gradient = False
+        grad_cond = paddle.autograd.grad(loss, [latents], retain_graph=True)[0]
         latents = latents - step_size * grad_cond
         return latents
 
@@ -546,7 +545,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline, TextualInversion
             loss = self._compute_loss(max_attention_per_index)
             if loss != 0:
                 latents = self._update_latent(latents, loss, step_size)
-            logger.info(f"\t Try {iteration}. loss: {loss}")
+            logger.info(f"\t Try {iteration}. loss: {loss.item()}")
             if iteration >= max_refinement_steps:
                 logger.info(f"\t Exceeded max number of iterations ({max_refinement_steps})! ")
                 break
@@ -783,7 +782,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline, TextualInversion
                             encoder_hidden_states=text_embedding,
                             cross_attention_kwargs=cross_attention_kwargs,
                         ).sample
-                        self.unet.clear_grad()
+                        self.unet.clear_gradients()
 
                         # Get max activation value for each subject token
                         max_attention_per_index = self._aggregate_and_get_max_attention_per_token(indices=index)
@@ -805,7 +804,7 @@ class StableDiffusionAttendAndExcitePipeline(DiffusionPipeline, TextualInversion
                         if i < max_iter_to_alter:
                             if loss != 0:
                                 latent = self._update_latent(latents=latent, loss=loss, step_size=step_size[i])
-                            logger.info(f"Iteration {i} | Loss: {loss:0.4f}")
+                            logger.info(f"Iteration {i} | Loss: {loss.item():0.4f}")
                         updated_latents.append(latent)
                     latents = paddle.concat(x=updated_latents, axis=0)
 

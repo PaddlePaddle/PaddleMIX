@@ -35,10 +35,13 @@ from ppdiffusers import (
 )
 from ppdiffusers.utils import floats_tensor, load_image, nightly, slow
 from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
     load_numpy,
     preprocess_image,
     require_paddle_gpu,
 )
+
+enable_full_determinism()
 
 
 class StableDiffusionInpaintLegacyPipelineFastTests(unittest.TestCase):
@@ -369,7 +372,7 @@ class StableDiffusionInpaintLegacyPipelineSlowTests(unittest.TestCase):
             "num_inference_steps": 3,
             "strength": 0.75,
             "guidance_scale": 7.5,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 
@@ -493,7 +496,7 @@ class StableDiffusionInpaintLegacyPipelineNightlyTests(unittest.TestCase):
             "num_inference_steps": 50,
             "strength": 0.75,
             "guidance_scale": 7.5,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 

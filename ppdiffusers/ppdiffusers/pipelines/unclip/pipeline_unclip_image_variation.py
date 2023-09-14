@@ -168,7 +168,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
         return prompt_embeds, text_encoder_hidden_states, text_mask
 
     def _encode_image(self, image, num_images_per_prompt, image_embeddings: Optional[paddle.Tensor] = None):
-        dtype = next(self.image_encoder.parameters()).dtype
+        dtype = self.image_encoder.dtype
         if image_embeddings is None:
             if not isinstance(image, paddle.Tensor):
                 image = self.feature_extractor(images=image, return_tensors="pd").pixel_values
