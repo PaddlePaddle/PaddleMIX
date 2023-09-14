@@ -1182,7 +1182,7 @@ class TextTransformer(TextTransformerPretrainedModel):
             self.token_embedding = paddle.nn.Embedding(config.vocab_size, width)
         self.transformer = Transformer(config, act_layer=act_layer, norm_layer=norm_layer)
         self.ln_final = norm_layer(width)
-        init_data = paddle.empty(shape=[width, self.output_dim])
+        init_data = paddle.ones(shape=[width, self.output_dim])
         self.text_projection = self.create_parameter(
             shape=[width, self.output_dim],
             default_initializer=paddle.nn.initializer.Assign(init_data),
