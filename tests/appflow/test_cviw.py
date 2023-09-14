@@ -21,7 +21,7 @@ from ppdiffusers.utils import load_image, load_numpy
 from tests.testing_utils import slow
 
 
-class OpenSetDetSamApp(unittest.TestCase):
+class OpenSetDetSamAppSlowTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.url = (
@@ -55,7 +55,7 @@ if __name__ == "__main__":
             ).mean()
             assert avg_diff < 10, f"Error image deviates {avg_diff} pixels on average"
 
-        setattr(OpenSetDetSamApp, name, test_openset_det_sam)
+        setattr(OpenSetDetSamAppSlowTest, name, test_openset_det_sam)
 
     create_test(name="test_dygraph", static_mode=False)
     create_test(name="test_static", static_mode=True)
