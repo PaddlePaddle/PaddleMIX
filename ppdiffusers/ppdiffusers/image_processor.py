@@ -338,7 +338,7 @@ class VaeImageProcessorLDM3D(VaeImageProcessor):
             x=[(self.denormalize(image[i]) if do_denormalize[i] else image[i]) for i in range(image.shape[0])]
         )
 
-        image = self.pt_to_numpy(image)
+        image = self.pd_to_numpy(image)
 
         if output_type == "np":
             if image.shape[-1] == 6:

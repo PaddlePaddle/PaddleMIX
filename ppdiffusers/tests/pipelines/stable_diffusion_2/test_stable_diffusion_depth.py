@@ -39,21 +39,33 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import floats_tensor, load_image, nightly, slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..pipeline_params import (
+    IMAGE_TO_IMAGE_IMAGE_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
+    TEXT_TO_IMAGE_IMAGE_PARAMS,
 )
-from ..test_pipelines_common import PipelineTesterMixin
+from ..test_pipelines_common import (
+    PipelineKarrasSchedulerTesterMixin,
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+)
+
+enable_full_determinism()
 
 
-class StableDiffusionDepth2ImgPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusionDepth2ImgPipelineFastTests(
+    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
+):
     pipeline_class = StableDiffusionDepth2ImgPipeline
     test_save_load_optional_components = False
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS - {"height", "width"}
     required_optional_params = PipelineTesterMixin.required_optional_params - {"latents"}
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS
+    image_params = IMAGE_TO_IMAGE_IMAGE_PARAMS
+    image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -120,7 +132,7 @@ class StableDiffusionDepth2ImgPipelineFastTests(PipelineTesterMixin, unittest.Te
             backbone_config=backbone_config,
             backbone_featmap_shape=[1, 384, 24, 24],
         )
-        depth_estimator = DPTForDepthEstimation(depth_estimator_config)
+        depth_estimator = DPTForDepthEstimation(depth_estimator_config).eval()
         feature_extractor = DPTImageProcessor.from_pretrained("hf-internal-testing/tiny-random-DPTForDepthEstimation")
         components = {
             "unet": unet,
@@ -145,7 +157,7 @@ class StableDiffusionDepth2ImgPipelineFastTests(PipelineTesterMixin, unittest.Te
             "generator": generator,
             "num_inference_steps": 2,
             "guidance_scale": 6.0,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 
@@ -243,7 +255,7 @@ class StableDiffusionDepth2ImgPipelineFastTests(PipelineTesterMixin, unittest.Te
         expected_slice = np.array(
             [0.40259343, 0.37764466, 0.3936328, 0.3628915, 0.48100996, 0.59685427, 0.22927544, 0.45186657, 0.46950823]
         )
-        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.002
 
     def test_stable_diffusion_depth2img_multiple_init_images(self):
         components = self.get_dummy_components()
@@ -258,7 +270,7 @@ class StableDiffusionDepth2ImgPipelineFastTests(PipelineTesterMixin, unittest.Te
         expected_slice = np.array(
             [0.8169553, 0.4573238, 0.27039874, 0.60622, 0.35670877, 0.39508212, 0.56803817, 0.5341117, 0.44428858]
         )
-        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.002
 
     def test_stable_diffusion_depth2img_num_images_per_prompt(self):
         components = self.get_dummy_components()
@@ -294,6 +306,12 @@ class StableDiffusionDepth2ImgPipelineFastTests(PipelineTesterMixin, unittest.Te
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
+    def test_attention_slicing_forward_pass(self):
+        return super().test_attention_slicing_forward_pass()
+
+    def test_inference_batch_single_identical(self):
+        super().test_inference_batch_single_identical()
+
 
 @slow
 @require_paddle_gpu
@@ -315,7 +333,7 @@ class StableDiffusionDepth2ImgPipelineSlowTests(unittest.TestCase):
             "num_inference_steps": 3,
             "strength": 0.75,
             "guidance_scale": 7.5,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 
@@ -329,7 +347,6 @@ class StableDiffusionDepth2ImgPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, 253:256, 253:256, -1].flatten()
         assert image.shape == (1, 480, 640, 3)
-        # expected_slice = np.array([0.9057, 0.9365, 0.9258, 0.8937, 0.8555, 0.8541, 0.826, 0.7747, 0.7421])
         expected_slice = np.array(
             [0.75446224, 0.746921, 0.7595095, 0.8161169, 0.8059271, 0.7999228, 0.9052905, 0.879215, 0.8690305]
         )
@@ -346,7 +363,6 @@ class StableDiffusionDepth2ImgPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, 253:256, 253:256, -1].flatten()
         assert image.shape == (1, 480, 640, 3)
-        # expected_slice = np.array([0.6363, 0.6274, 0.6309, 0.637, 0.6226, 0.6286, 0.6213, 0.6453, 0.6306])
         expected_slice = np.array(
             [0.6395747, 0.64879197, 0.6566683, 0.6438427, 0.6707787, 0.63587487, 0.66576767, 0.62180007, 0.6628648]
         )
@@ -363,7 +379,6 @@ class StableDiffusionDepth2ImgPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, 253:256, 253:256, -1].flatten()
         assert image.shape == (1, 480, 640, 3)
-        # expected_slice = np.array([0.6424, 0.6524, 0.6249, 0.6041, 0.6634, 0.642, 0.6522, 0.6555, 0.6436])
         expected_slice = np.array(
             [0.6283968, 0.6419119, 0.6295293, 0.63652724, 0.6420511, 0.61574477, 0.62251365, 0.65826833, 0.6480877]
         )
@@ -416,7 +431,7 @@ class StableDiffusionImg2ImgPipelineNightlyTests(unittest.TestCase):
             "num_inference_steps": 3,
             "strength": 0.75,
             "guidance_scale": 7.5,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 

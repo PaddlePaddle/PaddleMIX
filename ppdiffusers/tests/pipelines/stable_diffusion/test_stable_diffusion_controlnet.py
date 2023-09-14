@@ -28,13 +28,13 @@ from ppdiffusers import (
     StableDiffusionControlNetPipeline,
     UNet2DConditionModel,
 )
-from ppdiffusers.initializer import normal_, ones_
 from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_controlnet import (
     MultiControlNetModel,
 )
-from ppdiffusers.utils import load_image, load_numpy, randn_tensor, slow
+from ppdiffusers.utils import load_image, load_numpy,  randn_tensor, slow
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+from ppdiffusers.initializer import normal_,ones_
 
 from ..pipeline_params import (
     IMAGE_TO_IMAGE_IMAGE_PARAMS,
@@ -251,10 +251,12 @@ class StableDiffusionMultiControlNetPipelineFastTests(
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
+               
             ),
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
+              
             ),
         ]
         inputs = {
@@ -402,6 +404,7 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
+              
             )
         ]
         inputs = {
