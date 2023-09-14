@@ -6,7 +6,7 @@ Enter audio and prompt words for question and answer.
 
 *****
 - No training is need.
-- Integration with the moedel of [minigpt4](), [chatglm](), [audioldm]().
+- Integration with the model of [minigpt4](), [chatglm](), [audioldm]().
 
 ----
 
@@ -16,7 +16,7 @@ example:
 
 ```python
 #music generation
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 import paddle
 from PIL import Image
 import scipy
