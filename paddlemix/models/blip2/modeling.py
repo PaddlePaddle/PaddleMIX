@@ -546,77 +546,72 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         language_model_inputs = paddle.cast(language_model_inputs, dtype=inputs_embeds.dtype)
         inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
 
-        # outputs = self.language_model.generate(
-        #     inputs_embeds=inputs_embeds,
-        #     attention_mask=attention_mask,
-        #     do_sample=False,
-        #     top_p=0.9,
-        #     decode_strategy="greedy_search",
-        #     temperature=1,
-        #     num_beams=5,
-        #     max_length=30,
-        #     min_length=8,
-        #     eos_token_id=50118,
-        #     repetition_penalty=1,
-        #     length_penalty=1,
-        #     num_return_sequences=1,
-        # )
+        if type(self.language_model) == OPTForCausalLMInferenceModel:
+            batch, seq,_ = inputs_embeds.shape
+            max_len = 204
+            dtype = "float16"
+            tgt_generation_mask = paddle.full([batch, 1, 1, max_len], 0, dtype=dtype)
+            tgt_generation_mask[:,0,0,:seq] = 1
+            attention_mask = paddle.full([batch, 1, max_len, max_len], 0, dtype=dtype)
+            attention_mask[:,0,:seq,:seq] = paddle.tril(
+                        paddle.ones(shape=(seq, seq), dtype=dtype)
+                    )
+            position_ids = paddle.full([batch, seq], 0, dtype="int64")
+            for i in range(batch):
+                position_ids[i,:] = paddle.to_tensor([i for i in range(seq)], dtype="int64")
+            
+            cache_kvs = []
+            num_hidden_layers = self.language_model.opt.num_layers
+            num_attention_heads = self.language_model.opt.num_heads
+            hidden_size = self.language_model.opt.hidden_size
 
+            for i in range(num_hidden_layers):
+                tmp = paddle.zeros(shape=[2, batch, num_attention_heads, max_len, hidden_size // num_attention_heads], dtype=dtype)
+                cache_kvs.append(tmp)
 
-        from paddlenlp.transformers import AutoConfig
-        config = AutoConfig.from_pretrained("/root/.paddlenlp/models/facebook/opt-2.7b")
-        # from paddlenlp.experimental.transformers import OPTForCausalLMInferenceModel
-        # language_model = OPTForCausalLMInferenceModel.from_pretrained("/root/.paddlenlp/models/facebook/opt-2.7b", 
-        #                                                     config=config, 
-        #                                                     dtype="float16")
-        # language_model.eval()
-        batch, seq,_ = inputs_embeds.shape
-        max_len = 204
-        dtype = "float16"
-        tgt_generation_mask = paddle.full([batch, 1, 1, max_len], 0, dtype=dtype)
-        tgt_generation_mask[:,0,0,:seq] = 1
-
-        attention_mask = paddle.full([batch, 1, max_len, max_len], 0, dtype=dtype)
-        attention_mask[:,0,:seq,:seq] = paddle.tril(
-                    paddle.ones(shape=(seq, seq), dtype=dtype)
-                )
-        position_ids = paddle.full([batch, seq], 0, dtype="int64")
-        for i in range(batch):
-            position_ids[i,:] = paddle.to_tensor([i for i in range(seq)], dtype="int64")
-        
-        cache_kvs = []
-        for i in range(config.num_hidden_layers):
-            tmp = paddle.zeros(shape=[2, batch, config.num_attention_heads, max_len, config.hidden_size // config.num_attention_heads], dtype=dtype)
-            cache_kvs.append(tmp)
-
-        self.language_model.generate(input_ids=None,
-        attention_mask=attention_mask,
-        position_ids=position_ids,
-        penalty_score=paddle.full([batch, 1], 1.0, dtype="float32"),
-        frequency_score=paddle.full([batch, 1], 0.0, dtype="float32"),
-        presence_score=paddle.full([batch, 1], 0.0, dtype="float32"),
-        min_length= paddle.full([batch, 1], 1, dtype="int64"),
-        max_length=paddle.full([batch, 1], max_len - seq, dtype="int64"),
-        temperature=paddle.full([batch, 1], 1.0, dtype="float32"),
-        top_p=paddle.full([batch, 1], 0.0, dtype="float32"),
-        eos_token_id=paddle.full([1], 50118, dtype="int64"),   
-        seq_len_encoder=paddle.full([batch, 1], seq, dtype="int32"), 
-        seq_len_decoder= paddle.full([batch, 1], seq, dtype="int32"),
-        step_idx=paddle.full([batch, 1], 0, dtype="int64"), 
-        stop_flags= paddle.full([batch, 1], False, dtype="bool"),
-        tgt_ids=paddle.full([batch, 1], -123, dtype="int64"), 
-        tgt_pos=paddle.full([batch, 1], seq - 1, dtype="int64"),
-        tgt_generation_mask=tgt_generation_mask,
-        pre_ids=paddle.full([batch, max_len], -100, dtype="int64"),
-        stop_nums= paddle.full([1], batch, dtype="int64"),
-        cache_kvs=cache_kvs,
-        inputs_embeds=paddle.cast(inputs_embeds, dtype='float16'),
-        logits_processors=None)
-        tokens: np.ndarray = load_real_time_tokens()
-        generate_ids = tokens.tolist()
-        return generate_ids, None
-
-        return outputs
+            self.language_model.generate(input_ids=None,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            penalty_score=paddle.full([batch, 1], 1.0, dtype="float32"),
+            frequency_score=paddle.full([batch, 1], 0.0, dtype="float32"),
+            presence_score=paddle.full([batch, 1], 0.0, dtype="float32"),
+            min_length= paddle.full([batch, 1], 1, dtype="int64"),
+            max_length=paddle.full([batch, 1], max_len - seq, dtype="int64"),
+            temperature=paddle.full([batch, 1], 1.0, dtype="float32"),
+            top_p=paddle.full([batch, 1], 0.0, dtype="float32"),
+            eos_token_id=paddle.full([1], 50118, dtype="int64"),   
+            seq_len_encoder=paddle.full([batch, 1], seq, dtype="int32"), 
+            seq_len_decoder= paddle.full([batch, 1], seq, dtype="int32"),
+            step_idx=paddle.full([batch, 1], 0, dtype="int64"), 
+            stop_flags= paddle.full([batch, 1], False, dtype="bool"),
+            tgt_ids=paddle.full([batch, 1], -123, dtype="int64"), 
+            tgt_pos=paddle.full([batch, 1], seq - 1, dtype="int64"),
+            tgt_generation_mask=tgt_generation_mask,
+            pre_ids=paddle.full([batch, max_len], -100, dtype="int64"),
+            stop_nums= paddle.full([1], batch, dtype="int64"),
+            cache_kvs=cache_kvs,
+            inputs_embeds=paddle.cast(inputs_embeds, dtype='float16'),
+            logits_processors=None)
+            tokens: np.ndarray = load_real_time_tokens()
+            generate_ids = tokens.tolist()
+            return generate_ids, None
+        else:
+            outputs = self.language_model.generate(
+                inputs_embeds=inputs_embeds,
+                attention_mask=attention_mask,
+                do_sample=False,
+                top_p=0.9,
+                decode_strategy="greedy_search",
+                temperature=1,
+                num_beams=5,
+                max_length=30,
+                min_length=8,
+                eos_token_id=50118,
+                repetition_penalty=1,
+                length_penalty=1,
+                num_return_sequences=1,
+            )
+            return outputs
 
     @paddle.no_grad()
     def encode_image(
