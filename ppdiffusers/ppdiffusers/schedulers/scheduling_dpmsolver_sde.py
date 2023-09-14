@@ -310,7 +310,6 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         timesteps[1::2] = second_order_timesteps
         self.timesteps = timesteps
 
-        self.timesteps = timesteps
         # empty first order variables
         self.sample = None
         self.mid_point_sigma = None
