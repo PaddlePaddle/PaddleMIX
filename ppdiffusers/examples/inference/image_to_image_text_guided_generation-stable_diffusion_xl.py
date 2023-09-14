@@ -11,3 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import paddle
+
+from ppdiffusers import StableDiffusionXLImg2ImgPipeline
+from ppdiffusers.utils import load_image
+
+pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-refiner-1.0", paddle_dtype=paddle.float16
+)
+url = "https://huggingface.co/datasets/patrickvonplaten/images/resolve/main/aa_xl/000000009.png"
+init_image = load_image(url).convert("RGB")
+prompt = "a photo of an astronaut riding a horse on mars"
+image = pipe(prompt, image=init_image).images[0]
+image.save("image_to_image_text_guided_generation-stable_diffusion_xl-result.png")

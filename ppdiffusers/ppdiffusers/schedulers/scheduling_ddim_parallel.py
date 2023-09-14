@@ -456,7 +456,7 @@ class DDIMParallelScheduler(SchedulerMixin, ConfigMixin):
         if self.config.thresholding:
             pred_original_sample = self._threshold_sample(pred_original_sample)
         elif self.config.clip_sample:
-            pred_original_sample = pred_original_sample.clamp(
+            pred_original_sample = pred_original_sample.clip(
                 -self.config.clip_sample_range, self.config.clip_sample_range
             )
 

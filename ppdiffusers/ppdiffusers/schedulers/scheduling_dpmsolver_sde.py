@@ -201,7 +201,6 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
 
         #  set all values
         self.set_timesteps(num_train_timesteps, None, num_train_timesteps)
-
         self.use_karras_sigmas = use_karras_sigmas
         self.noise_sampler = None
         self.noise_sampler_seed = noise_sampler_seed
@@ -309,8 +308,8 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         second_order_timesteps = paddle.to_tensor(second_order_timesteps)
         timesteps = paddle.concat([timesteps[:1], timesteps[1:].repeat_interleave(2)])
         timesteps[1::2] = second_order_timesteps
-
         self.timesteps = timesteps
+
         # empty first order variables
         self.sample = None
         self.mid_point_sigma = None

@@ -30,7 +30,7 @@ from ppdiffusers import (
 )
 from ppdiffusers.pipelines.paint_by_example import PaintByExampleImageEncoder
 from ppdiffusers.utils import floats_tensor, load_image, slow
-from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
 from ..pipeline_params import (
     IMAGE_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
@@ -38,14 +38,11 @@ from ..pipeline_params import (
 )
 from ..test_pipelines_common import PipelineTesterMixin
 
-enable_full_determinism()
-
 
 class PaintByExamplePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = PaintByExamplePipeline
     params = IMAGE_GUIDED_IMAGE_INPAINTING_PARAMS
     batch_params = IMAGE_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS
-    image_params = frozenset([])  # TO_DO: update the image_prams once refactored VaeImageProcessor.preprocess
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -152,9 +149,6 @@ class PaintByExamplePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         out_2 = output.images
         assert out_1.shape == (1, 64, 64, 3)
         assert np.abs(out_1.flatten() - out_2.flatten()).max() < 0.05
-
-    def test_inference_batch_single_identical(self):
-        super().test_inference_batch_single_identical()
 
 
 @slow

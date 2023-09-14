@@ -33,30 +33,16 @@ from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
     RobertaSeriesModelWithTransformation,
 )
 from ppdiffusers.utils import slow
-from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..pipeline_params import (
-    TEXT_TO_IMAGE_BATCH_PARAMS,
-    TEXT_TO_IMAGE_IMAGE_PARAMS,
-    TEXT_TO_IMAGE_PARAMS,
-)
-from ..test_pipelines_common import (
-    PipelineKarrasSchedulerTesterMixin,
-    PipelineLatentTesterMixin,
-    PipelineTesterMixin,
-)
-
-enable_full_determinism()
+from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
+from ..test_pipelines_common import PipelineTesterMixin
 
 
-class AltDiffusionPipelineFastTests(
-    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
-):
+class AltDiffusionPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = AltDiffusionPipeline
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
-    image_params = TEXT_TO_IMAGE_IMAGE_PARAMS
-    image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)

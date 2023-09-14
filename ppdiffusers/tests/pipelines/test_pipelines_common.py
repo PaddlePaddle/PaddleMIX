@@ -30,7 +30,7 @@ from ppdiffusers import DiffusionPipeline
 from ppdiffusers.image_processor import VaeImageProcessor
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
 from ppdiffusers.utils import logging
-from ppdiffusers.utils.testing_utils import paddle_device, require_paddle
+from ppdiffusers.utils.testing_utils import require_paddle
 
 
 def to_np(tensor):
@@ -134,7 +134,6 @@ class PipelineLatentTesterMixin:
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
         pipe.image_processor = VaeImageProcessor(do_resize=False, do_normalize=False)
-        pipe = pipe.to(paddle_device)
         pipe.set_progress_bar_config(disable=None)
         out = pipe(**self.get_dummy_inputs_by_type(input_image_type="pd"))[0]
         vae = components["vae"]

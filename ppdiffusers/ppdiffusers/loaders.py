@@ -1858,7 +1858,7 @@ class LoraLoaderMixin:
                 [attention_proc_class] = unet_attention_classes
                 self.unet.set_attn_processor(regular_attention_classes[attention_proc_class]())
 
-            for _, module in self.unet.named_modules():
+            for _, module in self.unet.named_sublayers():
                 if hasattr(module, "set_lora_layer"):
                     module.set_lora_layer(None)
 

@@ -19,11 +19,7 @@ import numpy as np
 import paddle
 
 from ppdiffusers import DDIMPipeline, DDIMScheduler, UNet2DModel
-from ppdiffusers.utils.testing_utils import (
-    enable_full_determinism,
-    require_paddle_gpu,
-    slow,
-)
+from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
 
 from ..pipeline_params import (
     UNCONDITIONAL_IMAGE_GENERATION_BATCH_PARAMS,
@@ -31,12 +27,10 @@ from ..pipeline_params import (
 )
 from ..test_pipelines_common import PipelineTesterMixin
 
-enable_full_determinism()
-
 
 class DDIMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = DDIMPipeline
-
+    test_cpu_offload = False
     params = UNCONDITIONAL_IMAGE_GENERATION_PARAMS
     required_optional_params = PipelineTesterMixin.required_optional_params - {
         "num_images_per_prompt",
@@ -78,18 +72,6 @@ class DDIMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         expected_slice = np.array([0.0, 0.00152004, 0.0, 0.0, 0.00860906, 0.00182715, 0.00189051, 1.0, 0.668702])
         max_diff = np.abs(image_slice.flatten() - expected_slice).max()
         self.assertLessEqual(max_diff, 0.001)
-
-    def test_save_load_local(self):
-        return super().test_save_load_local()
-
-    def test_dict_tuple_outputs_equivalent(self):
-        return super().test_dict_tuple_outputs_equivalent()
-
-    def test_save_load_optional_components(self):
-        return super().test_save_load_optional_components()
-
-    def test_inference_batch_single_identical(self):
-        return super().test_inference_batch_single_identical(expected_max_diff=3e-3)
 
 
 @slow

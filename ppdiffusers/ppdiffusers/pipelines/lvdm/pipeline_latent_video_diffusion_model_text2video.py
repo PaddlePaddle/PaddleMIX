@@ -34,10 +34,11 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import paddle
-        >>> from ppdiffusers import LVDMTextToVideoPipeline
-         >>>  seed = 2013
-         >>>  generator = paddle.Generator().manual_seed(seed)
+         >>> import paddle
+         >>> from ppdiffusers import LVDMTextToVideoPipeline
+         >>> pipe = LVDMTextToVideoPipeline.from_pretrained("westfish/lvdm_text2video_orig_webvid_2m")
+         >>> seed = 2013
+         >>> generator = paddle.Generator().manual_seed(seed)
          >>> samples = pipe(
                     prompt="cutting in kitchen",
                     num_frames=16,

@@ -34,6 +34,7 @@ from .utils import (
     is_ppxformers_available,
     is_safetensors_available,
     is_scipy_available,
+    is_torch_available,
     is_unidecode_available,
     is_visualdl_available,
     logging,

@@ -21,6 +21,9 @@ import paddle
 
 from ppdiffusers import UNet2DConditionModel
 from ppdiffusers.training_utils import EMAModel
+from ppdiffusers.utils.testing_utils import enable_full_determinism
+
+enable_full_determinism()
 
 
 class EMAModelTests(unittest.TestCase):

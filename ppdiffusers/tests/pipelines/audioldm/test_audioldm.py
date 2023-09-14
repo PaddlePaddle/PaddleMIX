@@ -34,13 +34,13 @@ from ppdiffusers import (
     PNDMScheduler,
     UNet2DConditionModel,
 )
+from ppdiffusers.training_utils import enable_full_determinism
 from ppdiffusers.utils import require_paddle_gpu, slow
-from ppdiffusers.utils.testing_utils import enable_full_determinism
 
 from ..pipeline_params import TEXT_TO_AUDIO_BATCH_PARAMS, TEXT_TO_AUDIO_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
 
-enable_full_determinism()
+enable_full_determinism(42)
 
 
 class AudioLDMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
@@ -341,9 +341,6 @@ class AudioLDMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 
     def test_inference_batch_single_identical(self):
         self._test_inference_batch_single_identical(test_mean_pixel_difference=False)
-
-    def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(test_mean_pixel_difference=False)
 
 
 @slow

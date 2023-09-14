@@ -11,3 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import paddle
+
+from ppdiffusers import DiffusionPipeline
+from ppdiffusers.utils import export_to_gif, load_image
+
+repo = "openai/shap-e-img2img"
+pipe = DiffusionPipeline.from_pretrained(repo, paddle_dtype=paddle.float16)
+guidance_scale = 3.0
+image_url = "https://hf.co/datasets/diffusers/docs-images/resolve/main/shap-e/corgi.png"
+image = load_image(image_url).convert("RGB")
+images = pipe(
+    image,
+    guidance_scale=guidance_scale,
+    num_inference_steps=64,
+    frame_size=256,
+).images
+gif_path = export_to_gif(images[0], "corgi_3d.gif")
