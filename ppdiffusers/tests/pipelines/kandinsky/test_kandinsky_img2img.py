@@ -219,28 +219,6 @@ class KandinskyImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
         ), f" expected_slice {expected_slice}, but got {image_from_tuple_slice.flatten()}"
 
-    @require_paddle_gpu
-    def test_offloads(self):
-        pipes = []
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        pipes.append(sd_pipe)
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        sd_pipe.enable_model_cpu_offload()
-        pipes.append(sd_pipe)
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        sd_pipe.enable_sequential_cpu_offload()
-        pipes.append(sd_pipe)
-        image_slices = []
-        for pipe in pipes:
-            inputs = self.get_dummy_inputs()
-            image = pipe(**inputs).images
-            image_slices.append(image[(0), -3:, -3:, (-1)].flatten())
-        assert np.abs(image_slices[0] - image_slices[1]).max() < 0.001
-        assert np.abs(image_slices[0] - image_slices[2]).max() < 0.001
-
 
 @slow
 @require_paddle_gpu

@@ -274,9 +274,10 @@ class KandinskyV22PriorEmb2EmbPipeline(DiffusionPipeline):
             max_length=self.tokenizer.model_max_length,
             truncation=True,
             return_tensors="pd",
+            return_attention_mask=True,
         )
         text_input_ids = text_inputs.input_ids
-        text_mask = text_inputs.attention_mask.bool()
+        text_mask = text_inputs.attention_mask
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
         if (
             untruncated_ids.shape[-1] >= text_input_ids.shape[-1]
@@ -317,8 +318,9 @@ class KandinskyV22PriorEmb2EmbPipeline(DiffusionPipeline):
                 max_length=self.tokenizer.model_max_length,
                 truncation=True,
                 return_tensors="pd",
+                return_attention_mask=True,
             )
-            uncond_text_mask = uncond_input.attention_mask.bool()
+            uncond_text_mask = uncond_input.attention_mask
             negative_prompt_embeds_text_encoder_output = self.text_encoder(uncond_input.input_ids)
             negative_prompt_embeds = negative_prompt_embeds_text_encoder_output.text_embeds
             uncond_text_encoder_hidden_states = negative_prompt_embeds_text_encoder_output.last_hidden_state

@@ -14,10 +14,10 @@
 # limitations under the License.
 import paddle
 import paddlenlp
-from paddlenlp.transformers import XLMConfig, XLMModel
+from paddlenlp.transformers import RobertaConfig, RobertaModel
 
 
-class MCLIPConfig(XLMConfig):
+class MCLIPConfig(RobertaConfig):
     model_type = "M-CLIP"
 
     def __init__(self, transformerDimSize=1024, imageDimSize=768, **kwargs):
@@ -31,7 +31,7 @@ class MultilingualCLIP(paddlenlp.transformers.PretrainedModel):
 
     def __init__(self, config, *args, **kwargs):
         super().__init__(config, *args, **kwargs)
-        self.transformer = XLMModel(config)
+        self.transformer = RobertaModel(config)
         self.LinearTransformation = paddle.nn.Linear(
             in_features=config.transformerDimensions, out_features=config.numDims
         )

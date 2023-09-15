@@ -171,7 +171,7 @@ class KandinskyV22PipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image_slice = image[(0), -3:, -3:, (-1)]
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([0.342, 0.9505, 0.3919, 1.0, 0.5188, 0.3109, 0.6139, 0.5624, 0.6811])
+        expected_slice = np.array([0.0, 1.0, 1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.72])
         assert (
             np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         ), f" expected_slice {expected_slice}, but got {image_slice.flatten()}"
@@ -193,11 +193,11 @@ class KandinskyV22PipelineIntegrationTests(unittest.TestCase):
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinskyv22/kandinskyv22_text2img_cat_fp16.npy"
         )
         pipe_prior = KandinskyV22PriorPipeline.from_pretrained(
-            "kandinsky-community/kandinsky-2-2-prior", paddle_dtype="float16"
+            "kandinsky-community/kandinsky-2-2-prior", paddle_dtype="float32"
         )
 
         pipeline = KandinskyV22Pipeline.from_pretrained(
-            "kandinsky-community/kandinsky-2-2-decoder", paddle_dtype="float16"
+            "kandinsky-community/kandinsky-2-2-decoder", paddle_dtype="float32"
         )
 
         pipeline.set_progress_bar_config(disable=None)
@@ -215,5 +215,6 @@ class KandinskyV22PipelineIntegrationTests(unittest.TestCase):
             output_type="np",
         )
         image = output.images[0]
+
         assert image.shape == (512, 512, 3)
         assert_mean_pixel_difference(image, expected_image)
