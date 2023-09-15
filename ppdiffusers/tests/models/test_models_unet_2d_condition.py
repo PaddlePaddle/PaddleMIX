@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import gc
 import os
 import tempfile
@@ -367,26 +366,20 @@ class UNet2DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
             assert full_cond_out is not None
             keepall_mask = paddle.ones(shape=cond.shape[:-1], dtype=mask_dtype)
             full_cond_keepallmask_out = model(**{**inputs_dict, "encoder_attention_mask": keepall_mask}).sample
-        
+
             assert full_cond_keepallmask_out.allclose(
-                y=full_cond_out,
-                rtol=1e-3,
-                atol=1e-5
+                y=full_cond_out, rtol=1e-3, atol=1e-5
             ).item(), "a 'keep all' mask should give the same result as no mask"
             trunc_cond = cond[:, :-1, :]
             trunc_cond_out = model(**{**inputs_dict, "encoder_hidden_states": trunc_cond}).sample
             assert not trunc_cond_out.allclose(
-                y=full_cond_out,
-                rtol=1e-3,
-                atol=1e-5
+                y=full_cond_out, rtol=1e-3, atol=1e-5
             ).item(), "discarding the last token from our cond should change the result"
             batch, tokens, _ = cond.shape
             mask_last = (paddle.arange(end=tokens) < tokens - 1).expand(shape=[batch, -1]).cast(mask_dtype)
             masked_cond_out = model(**{**inputs_dict, "encoder_attention_mask": mask_last}).sample
             assert masked_cond_out.allclose(
-                y=trunc_cond_out,
-                rtol=1e-3,
-                atol=1e-5
+                y=trunc_cond_out, rtol=1e-3, atol=1e-5
             ).item(), "masking the last token from our cond should be equivalent to truncating that token out of the condition"
 
     @mark.skip(
@@ -404,16 +397,12 @@ class UNet2DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
             keeplast_mask = (paddle.arange(end=tokens) == tokens - 1).expand(shape=[batch, -1]).cast("bool")
             keeplast_out = model(**{**inputs_dict, "encoder_attention_mask": keeplast_mask}).sample
             assert not keeplast_out.allclose(
-                y=full_cond_out,
-                rtol=1e-3,
-                atol=1e-5
+                y=full_cond_out, rtol=1e-3, atol=1e-5
             ).item(), "a 'keep last token' mask should change the result"
             trunc_mask = paddle.zeros(shape=[batch, tokens - 1], dtype="bool")
             trunc_mask_out = model(**{**inputs_dict, "encoder_attention_mask": trunc_mask}).sample
             assert trunc_mask_out.allclose(
-                y=keeplast_out,
-                rtol=1e-3,
-                atol=1e-5
+                y=keeplast_out, rtol=1e-3, atol=1e-5
             ).item(), "a mask with fewer tokens than condition, will be padded with 'keep' tokens. a 'discard-all' mask missing the final token is thus equivalent to a 'keep last' mask."
 
     def test_lora_processors(self):

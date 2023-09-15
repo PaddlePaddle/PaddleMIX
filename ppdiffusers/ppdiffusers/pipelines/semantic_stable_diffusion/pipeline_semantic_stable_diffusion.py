@@ -503,10 +503,14 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                 noise_guidance = guidance_scale * (noise_pred_text - noise_pred_uncond)
                 # noise_guidance = (noise_pred_text - noise_pred_edit_concepts[0])
                 if self.uncond_estimates is None:
-                    self.uncond_estimates = paddle.zeros(shape=(num_inference_steps + 1, *noise_pred_uncond.shape))
+                    self.uncond_estimates = paddle.zeros(
+                        shape=(num_inference_steps + 1, *noise_pred_uncond.shape), dtype=noise_pred_uncond.dtype
+                    )
                 self.uncond_estimates[i] = noise_pred_uncond.detach().cpu()
                 if self.text_estimates is None:
-                    self.text_estimates = paddle.zeros(shape=(num_inference_steps + 1, *noise_pred_text.shape))
+                    self.text_estimates = paddle.zeros(
+                        shape=(num_inference_steps + 1, *noise_pred_text.shape), dtype=noise_pred_text.dtype
+                    )
                 self.text_estimates[i] = noise_pred_text.detach().cpu()
                 if self.edit_estimates is None and enable_edit_guidance:
                     self.edit_estimates = paddle.zeros(

@@ -31,9 +31,10 @@ from ppdiffusers import (
 from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_controlnet import (
     MultiControlNetModel,
 )
-from ppdiffusers.utils import load_image, load_numpy, paddle_device, randn_tensor, slow
+from ppdiffusers.utils import load_image, load_numpy,  randn_tensor, slow
 from ppdiffusers.utils.import_utils import is_ppxformers_available
 from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+from ppdiffusers.initializer import normal_,ones_
 
 from ..pipeline_params import (
     IMAGE_TO_IMAGE_IMAGE_PARAMS,
@@ -48,12 +49,6 @@ from ..test_pipelines_common import (
 )
 
 enable_full_determinism()
-
-
-# def params_normal_(tensor, mean=0., std=1.):
-#     with paddle.no_grad():
-#         tensor.set_value(paddle.normal(mean=mean, std=std, shape=tensor.shape))
-#     return tensor
 
 
 class ControlNetPipelineFastTests(
@@ -141,7 +136,7 @@ class ControlNetPipelineFastTests(
             "generator": generator,
             "num_inference_steps": 2,
             "guidance_scale": 6.0,
-            "output_type": "np",
+            "output_type": "numpy",
             "image": image,
         }
         return inputs
@@ -181,19 +176,10 @@ class StableDiffusionMultiControlNetPipelineFastTests(
         )
         paddle.seed(seed=0)
 
-        # def init_weights(m):
-        #     if isinstance(m, paddle.nn.Conv2D):
-        #         # paddle.nn.initializer.normal(m.weight)
-        #         m.weight = params_normal_(m.weight)
-        #         m.bias.data.fill_(1.0)
-
-        # def init_weights(m):
-        #     if isinstance(m, paddle.nn.Conv2D):
-        #         reset_initialized_parameter(m.weight)
-        #         normal_(m.weight, 0, 0.02)
-        #         # paddle.nn.initializer.normal(m.weight)
-        #         #m.weight = params_normal_(m.weight)
-        #         zeros_(m.bias) #.data.fill_(1.0)
+        def init_weights(m):
+            if isinstance(m, paddle.nn.Conv2D):
+                normal_(m.weight)
+                ones_(m.bias)
 
         controlnet1 = ControlNetModel(
             block_out_channels=(32, 64),
@@ -203,7 +189,7 @@ class StableDiffusionMultiControlNetPipelineFastTests(
             cross_attention_dim=32,
             conditioning_embedding_out_channels=(16, 32),
         )
-        # controlnet1.controlnet_down_blocks.apply(init_weights)
+        controlnet1.controlnet_down_blocks.apply(init_weights)
         paddle.seed(seed=0)
         controlnet2 = ControlNetModel(
             block_out_channels=(32, 64),
@@ -213,7 +199,7 @@ class StableDiffusionMultiControlNetPipelineFastTests(
             cross_attention_dim=32,
             conditioning_embedding_out_channels=(16, 32),
         )
-        # controlnet2.controlnet_down_blocks.apply(init_weights)
+        controlnet2.controlnet_down_blocks.apply(init_weights)
         paddle.seed(seed=0)
         scheduler = DDIMScheduler(
             beta_start=0.00085,
@@ -265,10 +251,12 @@ class StableDiffusionMultiControlNetPipelineFastTests(
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
+               
             ),
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
+              
             ),
         ]
         inputs = {
@@ -276,7 +264,7 @@ class StableDiffusionMultiControlNetPipelineFastTests(
             "generator": generator,
             "num_inference_steps": 2,
             "guidance_scale": 6.0,
-            "output_type": "np",
+            "output_type": "numpy",
             "image": images,
         }
         return inputs
@@ -284,7 +272,6 @@ class StableDiffusionMultiControlNetPipelineFastTests(
     def test_control_guidance_switch(self):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe.to(paddle_device)
         scale = 10.0
         steps = 4
         inputs = self.get_dummy_inputs()
@@ -352,13 +339,10 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
         )
         paddle.seed(seed=0)
 
-        # def init_weights(m):
-        #     if isinstance(m, paddle.nn.Conv2D):
-        #         reset_initialized_parameter(m.weight)
-        #         normal_(m.weight, 0, 0.02)
-        #         # paddle.nn.initializer.normal(m.weight)
-        #         #m.weight = params_normal_(m.weight)
-        #         zeros_(m.bias) #.data.fill_(1.0)
+        def init_weights(m):
+            if isinstance(m, paddle.nn.Conv2D):
+                normal_(m.weight)
+                ones_(m.bias)
 
         controlnet = ControlNetModel(
             block_out_channels=(32, 64),
@@ -368,7 +352,7 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
             cross_attention_dim=32,
             conditioning_embedding_out_channels=(16, 32),
         )
-        # controlnet.controlnet_down_blocks.apply(init_weights)
+        controlnet.controlnet_down_blocks.apply(init_weights)
         paddle.seed(seed=0)
         scheduler = DDIMScheduler(
             beta_start=0.00085,
@@ -420,6 +404,7 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
             randn_tensor(
                 (1, 3, 32 * controlnet_embedder_scale_factor, 32 * controlnet_embedder_scale_factor),
                 generator=generator,
+              
             )
         ]
         inputs = {
@@ -427,7 +412,7 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
             "generator": generator,
             "num_inference_steps": 2,
             "guidance_scale": 6.0,
-            "output_type": "np",
+            "output_type": "numpy",
             "image": images,
         }
         return inputs
@@ -435,7 +420,6 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
     def test_control_guidance_switch(self):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe.to(paddle_device)
         scale = 10.0
         steps = 4
         inputs = self.get_dummy_inputs()
@@ -473,7 +457,6 @@ class StableDiffusionMultiControlNetOneModelPipelineFastTests(
     def test_save_pretrained_raise_not_implemented_exception(self):
         components = self.get_dummy_components()
         pipe = self.pipeline_class(**components)
-        pipe.to(paddle_device)
         pipe.set_progress_bar_config(disable=None)
         with tempfile.TemporaryDirectory() as tmpdir:
             try:
@@ -495,7 +478,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         prompt = "bird"
@@ -515,7 +498,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         prompt = "Stormtrooper's lecture"
@@ -535,7 +518,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         prompt = "oil painting of handsome old man, masterpiece"
@@ -555,7 +538,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         prompt = "room"
@@ -575,7 +558,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         prompt = "cute toy"
@@ -595,7 +578,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         prompt = "Chef in the kitchen"
@@ -615,7 +598,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(5)
         prompt = "bag"
@@ -635,7 +618,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(5)
         prompt = "house"
@@ -672,7 +655,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         prompt = ""
@@ -700,7 +683,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
         pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config)
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         prompt = ""
@@ -727,7 +710,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         prompt = "New York"
@@ -757,7 +740,7 @@ class ControlNetPipelineSlowTests(unittest.TestCase):
         pipes = [pipe_1, pipe_2]
         images = []
         for pipe in pipes:
-            # pipe.enable_model_cpu_offload()
+            pipe.enable_model_cpu_offload()
             pipe.set_progress_bar_config(disable=None)
             generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
             prompt = "bird"
@@ -786,7 +769,7 @@ class StableDiffusionMultiControlNetPipelineSlowTests(unittest.TestCase):
         pipe = StableDiffusionControlNetPipeline.from_pretrained(
             "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=[controlnet_pose, controlnet_canny]
         )
-        # pipe.enable_model_cpu_offload()
+        pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
         prompt = "bird and Chef"

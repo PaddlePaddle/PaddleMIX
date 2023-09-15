@@ -345,7 +345,7 @@ class Attention(nn.Layer):
         if attention_mask is None:
             return attention_mask
 
-        current_length = attention_mask.shape[-1]
+        current_length: int = attention_mask.shape[-1]
         if current_length != target_length:
             attention_mask = F.pad(attention_mask, (0, target_length), value=0.0, data_format="NCL")
         if out_dim == 3:
@@ -1457,7 +1457,7 @@ class SpatialNorm(nn.Layer):
         self.norm_layer = nn.GroupNorm(
             num_channels=f_channels,
             num_groups=32,
-            eps=1e-6,
+            epsilon=1e-6,
         )
         self.conv_y = nn.Conv2D(zq_channels, f_channels, kernel_size=1, stride=1, padding=0)
         self.conv_b = nn.Conv2D(zq_channels, f_channels, kernel_size=1, stride=1, padding=0)
