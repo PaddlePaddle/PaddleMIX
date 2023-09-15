@@ -1,21 +1,19 @@
 import argparse
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+import sys
+import requests
+import numpy as np
+import datetime
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
-
 
 import paddle
 from paddle import inference
 from paddlenlp.transformers import MiniGPT4Processor
 from PIL import Image
-import requests
 
-import sys
-
-# sys.path.append("/wangqinghui/PaddleNLP/llm")
 from utils import load_real_time_tokens
 
-import numpy as np
 
 class Predictor(object):
     def __init__(self, args):
@@ -62,7 +60,6 @@ class Predictor(object):
             # such as initialize the gpu memory, enable tensorrt
             config.enable_use_gpu(100, 0)
             precision_mode = inference.PrecisionType.Half
-            # breakpoint()
             # 第一个模型是要跑TRT的
             if self.args.use_tensorrt:
                 config.enable_tuned_tensorrt_dynamic_shape(shape_range_file, True)
@@ -74,7 +71,6 @@ class Predictor(object):
         predictor = paddle.inference.create_predictor(config)
         input_handles = [predictor.get_input_handle(name) for name in predictor.get_input_names()]
         output_handle = [predictor.get_output_handle(name) for name in predictor.get_output_names()]
-        # output_handle = predictor.get_output_handle(predictor.get_output_names()[0])
 
         return predictor, input_handles, output_handle
 
@@ -93,9 +89,6 @@ class Predictor(object):
                                      first_attention_mask=None,
                                      second_attention_mask=None,
                                      **generate_kwargs, ):
-        # print("image_attention_mask", image_attention_mask)
-        # print("first_attention_mask", first_attention_mask)
-        # print("second_attention_mask", second_attention_mask)
         batch, seq,_ = image_features.shape
         seq = image_features.shape[1] + first_input_ids.shape[1] + second_input_ids.shape[1]
         max_len = 204
@@ -200,23 +193,19 @@ if __name__ == "__main__":
     predictor = Predictor(args)
 
     url = "https://paddlenlp.bj.bcebos.com/data/images/mugs.png"
-    #url = "https://paddlenlp.bj.bcebos.com/data/images/female.png"
     image = Image.open(requests.get(url, stream=True).raw)
 
     text = "describe this image"
     prompt = "Give the following image: <Img>ImageContent</Img>. You will be able to see the image once I provide it to you. Please answer my questions.###Human: <Img><ImageHere></Img> <TextHere>###Assistant:"
 
-    # warp up
-    warm_up_times = 1
-    repeat_times = 5
+    # warm up
+    warm_up_times = 2
+    repeat_times = 10
     for i in range(warm_up_times):
         msg = predictor.predict(image, text, prompt)
 
-    
     # 测试50次
-    import datetime
     starttime = datetime.datetime.now()
-
     for i in range(repeat_times):
         msg = predictor.predict(image, text, prompt)
     
@@ -224,8 +213,6 @@ if __name__ == "__main__":
     duringtime = endtime - starttime
     time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
 
-    print(
-        "Reference: The image shows two black and white cats sitting next to each other on a blue background. The cats have black fur and white fur with black noses, eyes, and paws. They are both looking at the camera with a curious expression. The mugs are also blue with the same design of the cats on them. There is a small white flower on the left side of the mug. The background is a light blue color.")
+    print("Reference: The image shows two black and white cats sitting next to each other on a blue background. The cats have black fur and white fur with black noses, eyes, and paws. They are both looking at the camera with a curious expression. The mugs are also blue with the same design of the cats on them. There is a small white flower on the left side of the mug. The background is a light blue color.")
     print("Outputs: ", msg)
-    print("infer OK")
-    print("The whoel end to end time : ", time_ms / repeat_times, "ms")
+    print("The whole time on average: ", time_ms / repeat_times, "ms")

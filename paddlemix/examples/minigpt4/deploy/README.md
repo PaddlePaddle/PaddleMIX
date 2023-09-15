@@ -60,12 +60,17 @@ if not skip_prune_program:
 ## 2. MiniGPT4 分阶段导出
 
 ### 2.1 导出前一部分子图：
-请确保在该目录下：PaddleMIX/paddlemix/examples/minigpt4/deploy，按照以下命令进行导出：
+请确保在该目录下：PaddleMIX/paddlemix/examples/minigpt4/inference，按照以下命令进行导出：
 ```
 python export_image_encoder.py \
     --minigpt4_13b_path "you minigpt4 dir path" \
     --save_path "./checkpoints/encode_image/encode_image" 
 ```
+
+**参数说明**:
+- minigpt4_13b_path: 存放MiniGPT4的目录名
+- save_path: 前一部分模型的导出路径和名称
+
 
 ### 2.2 导出后一部分子图
 请进入到目录： PaddleNLP/llm, 按照以下命令进行导出：
@@ -80,16 +85,29 @@ python export_model.py \
     
 ```
 
+**参数说明**:
+- model_name_or_path: 存放Llama模型的目录名
+- output_path: 语言模型部分的导出路径和名称
+- dtype: 模型权重数据类型
+- inference_model: 表示是推理模型
+- model_prefix: 指明模型前缀
+- model_type: 指明模型类型
+
 **备注**： 当前导出Llama部分需要转移到PaddleNLP下进行手动导出，后续将支持在PaddleMIX下一键转出。
 
 ## 3. MiniGPT4 静态图推理
-请进入到目录PaddleMIX/paddlemix/examples/minigpt4/deploy，执行以下命令：
+请进入到目录PaddleMIX/paddlemix/examples/minigpt4/inference，执行以下命令：
 ```python
 python run_static_predict.py \
     --first_model_path "The dir name of image encoder model" \
     --second_model_path "The dir name of language model" \
     --minigpt4_path "The minigpt4 dir name of saving tokenizer"
 ```
+
+**参数说明**:
+- first_model_path: 存放前一部分（即vit和qformer）的静态图模型目录名
+- second_model_path: 存放后一部分（即语言模型）的静态图模型目录名
+- minigpt4_path: 存放 MiniGPT4 tokenizer的目录名
 
 以下展示了针对以下这个图片，MiniGPT4静态图推理的输出：
 
