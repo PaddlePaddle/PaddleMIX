@@ -97,7 +97,6 @@ fleetrun --master '127.0.0.1' --nnodes 1 --nproc_per_node 8 --ips '127.0.0.1:808
     --num_train_epochs 10 \
     --tensor_parallel_degree 1 \
     --sharding_parallel_degree 1 \
-    --sharding "stage1" \
     --output_dir "./output" \
     --logging_steps 50 \
     --do_train \
@@ -138,7 +137,7 @@ fleetrun --gpus=0,1,2,3 paddlemix/examples/blip2/run_pretrain_stage2.py
 
 #### task_vqa
 ```
-fleetrun --gpus=0,1,2,3 paddlemix/examples/blip2/run_eval_vqa2_zeroshot.py
+fleetrun --gpus=0,1,2,3 paddlemix/examples/blip2/run_eval_vqav2_zeroshot.py
 ```
 #### task_caption
 ```
