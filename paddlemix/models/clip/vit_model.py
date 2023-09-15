@@ -861,8 +861,8 @@ class VisionTransformerConfig(PretrainedConfig):
 
     def __init__(
         self,
-        image_size: int,
-        patch_size: int,
+        image_size: int = 224,
+        patch_size: int = 14,
         width: int = 768,
         layers: int = 12,
         head_width: int = 64,

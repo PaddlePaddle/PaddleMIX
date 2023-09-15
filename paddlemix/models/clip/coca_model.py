@@ -16,6 +16,7 @@
 
 Adapted from https://github.com/mlfoundations/open_clip/blob/main/src/open_clip/coca_model.py
 """
+import copy
 import os
 from typing import Union
 
@@ -78,6 +79,20 @@ class CoCaConfig(PretrainedConfig):
             )
 
         return cls.from_dict(config_dict, **kwargs)
+
+    def to_dict(self):
+        """
+        Serializes this instance to a Python dictionary. Override the default [`~PretrainedConfig.to_dict`].
+
+        Returns:
+            `Dict[str, any]`: Dictionary of all the attributes that make up this configuration instance,
+        """
+        output = copy.deepcopy(self.__dict__)
+        output["text_cfg"] = self.text_config
+        output["vision_cfg"] = self.vision_config
+        output["multimodal_cfg"] = self.multimodal_config
+        output["model_type"] = self.__class__.model_type
+        return output
 
 
 class CoCaPretrainedModel(MixPretrainedModel):

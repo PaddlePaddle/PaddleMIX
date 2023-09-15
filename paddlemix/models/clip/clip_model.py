@@ -18,6 +18,7 @@ import paddle
 
 Adapted from https://github.com/openai/CLIP. Originally MIT License, Copyright (c) 2021 OpenAI.
 """
+import copy
 import math
 import os
 from typing import Union
@@ -113,6 +114,19 @@ class CLIPConfig(PretrainedConfig):
                 )
 
         return cls.from_dict(config_dict, **kwargs)
+
+    def to_dict(self):
+        """
+        Serializes this instance to a Python dictionary. Override the default [`~PretrainedConfig.to_dict`].
+
+        Returns:
+            `Dict[str, any]`: Dictionary of all the attributes that make up this configuration instance,
+        """
+        output = copy.deepcopy(self.__dict__)
+        output["text_cfg"] = self.text_config
+        output["vision_cfg"] = self.vision_config
+        output["model_type"] = self.__class__.model_type
+        return output
 
 
 class CLIPPretrainedModel(MixPretrainedModel):

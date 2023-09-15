@@ -1103,8 +1103,6 @@ class TextTransformerConfig(PretrainedConfig):
         layers: int = 12,
         ls_init_value: float = None,
         embed_dim: int = 512,
-        act_layer: Callable = paddle.nn.GELU,
-        norm_layer: Callable = LayerNorm,
         xattn: bool = False,
         attn_mask: bool = True,
         pad_id: int = 0,
@@ -1127,8 +1125,6 @@ class TextTransformerConfig(PretrainedConfig):
         self.layers = layers
         self.ls_init_value = ls_init_value
         self.output_dim = embed_dim
-        self.act_layer = act_layer
-        self.norm_layer = norm_layer
         self.xattn = xattn
         self.attn_mask = attn_mask
         self.pad_id = pad_id
@@ -1186,7 +1182,7 @@ class TextTransformer(TextTransformerPretrainedModel):
             self.token_embedding = paddle.nn.Embedding(config.vocab_size, width)
         self.transformer = Transformer(config, act_layer=act_layer, norm_layer=norm_layer)
         self.ln_final = norm_layer(width)
-        init_data = paddle.empty(shape=[width, self.output_dim])
+        init_data = paddle.ones(shape=[width, self.output_dim])
         self.text_projection = self.create_parameter(
             shape=[width, self.output_dim],
             default_initializer=paddle.nn.initializer.Assign(init_data),
