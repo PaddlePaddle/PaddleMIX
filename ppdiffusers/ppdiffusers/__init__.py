@@ -238,7 +238,6 @@ else:
         VQDiffusionPipeline,
     )
     from .pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertModel
-    from .pipelines.unidiffuser.caption_decoder import CaptionDecoder
 
 try:
     if not (is_paddle_available() and is_paddlenlp_available() and is_k_diffusion_available()):
@@ -296,7 +295,11 @@ try:
 except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_and_einops_objects import *  # noqa F403
 else:
-    from .models import UViTModel
+    from .pipelines.unidiffuser import (
+        UniDiffuserModel,
+        UniDiffuserPipeline,
+        UniDiffuserTextDecoder,
+    )
 
 try:
     if not (is_note_seq_available()):

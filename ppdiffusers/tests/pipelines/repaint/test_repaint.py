@@ -21,6 +21,7 @@ import paddle
 
 from ppdiffusers import RePaintPipeline, RePaintScheduler, UNet2DModel
 from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
     load_image,
     load_numpy,
     nightly,
@@ -30,10 +31,12 @@ from ppdiffusers.utils.testing_utils import (
 from ..pipeline_params import IMAGE_INPAINTING_BATCH_PARAMS, IMAGE_INPAINTING_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
 
+enable_full_determinism()
+
 
 class RepaintPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = RePaintPipeline
-    test_cpu_offload = False
+
     params = IMAGE_INPAINTING_PARAMS - {"width", "height", "guidance_scale"}
     required_optional_params = PipelineTesterMixin.required_optional_params - {
         "latents",

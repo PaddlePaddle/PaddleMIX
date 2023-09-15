@@ -37,6 +37,9 @@ def to_np(tensor):
     if isinstance(tensor, paddle.Tensor):
         tensor = tensor.detach().cpu().numpy()
 
+    if isinstance(tensor, (list, tuple)):
+        tensor = np.array(tensor)
+
     return tensor
 
 
@@ -587,7 +590,7 @@ class PipelineTesterMixin:
                 output_with_xformers = output_with_xformers.numpy()
             if hasattr(output_without_xformers, "numpy"):
                 output_without_xformers = output_without_xformers.numpy()
-            max_diff = np.abs(output_with_xformers - output_without_xformers).max()
+            max_diff = np.abs(to_np(output_with_xformers) - to_np(output_without_xformers)).max()
             self.assertLess(max_diff, expected_max_diff, "XFormers attention should not affect the inference results")
         if test_mean_pixel_difference:
             assert_mean_pixel_difference(output_with_xformers[0], output_without_xformers[0])

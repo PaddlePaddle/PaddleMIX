@@ -50,14 +50,14 @@ EXAMPLE_DOC_STRING = """
 def tensor2vid(video: paddle.Tensor, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) -> List[np.ndarray]:
     # This code is copied from https://github.com/modelscope/modelscope/blob/1509fdb973e5871f37148a4b5e5964cafd43e64d/modelscope/pipelines/multi_modal/text_to_video_synthesis_pipeline.py#L78
     # reshape to ncfhw
-    mean = paddle.to_tensor(data=mean).reshape(1, -1, 1, 1, 1)
-    std = paddle.to_tensor(data=std).reshape(1, -1, 1, 1, 1)
+    mean = paddle.to_tensor(data=mean).reshape([1, -1, 1, 1, 1])
+    std = paddle.to_tensor(data=std).reshape([1, -1, 1, 1, 1])
     # unnormalize back to [0,1]
     video = video.multiply(std).add(y=paddle.to_tensor(mean))
     video.clip_(min=0, max=1)
     # prepare the final outputs
     i, c, f, h, w = video.shape
-    images = video.transpose(perm=[2, 3, 0, 4, 1]).reshape(f, h, i * w, c)
+    images = video.transpose(perm=[2, 3, 0, 4, 1]).reshape([f, h, i * w, c])
     images = images.unbind(axis=0)
     images = [(image.cpu().numpy() * 255).astype("uint8") for image in images]
     return images
@@ -256,9 +256,10 @@ class TextToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lora
     def decode_latents(self, latents):
         latents = 1 / self.vae.config.scaling_factor * latents
         batch_size, channels, num_frames, height, width = latents.shape
-        latents = latents.transpose(perm=[0, 2, 1, 3, 4]).reshape(batch_size * num_frames, channels, height, width)
+        latents = latents.transpose(perm=[0, 2, 1, 3, 4]).reshape([batch_size * num_frames, channels, height, width])
         image = self.vae.decode(latents).sample
-        video = image[None, :].reshape((batch_size, num_frames, -1) + image.shape[2:]).transpose(perm=[0, 2, 1, 3, 4])
+
+        video = image[None, :].reshape([batch_size, num_frames, -1] + image.shape[2:]).transpose(perm=[0, 2, 1, 3, 4])
 
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         video = video.astype(dtype="float32")
@@ -509,14 +510,16 @@ class TextToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lora
 
                 # reshape latents
                 bsz, channel, frames, width, height = latents.shape
-                latents = latents.transpose(perm=[0, 2, 1, 3, 4]).reshape(bsz * frames, channel, width, height)
-                noise_pred = noise_pred.transpose(perm=[0, 2, 1, 3, 4]).reshape(bsz * frames, channel, width, height)
+                latents = latents.transpose(perm=[0, 2, 1, 3, 4]).reshape([bsz * frames, channel, width, height])
+                noise_pred = noise_pred.transpose(perm=[0, 2, 1, 3, 4]).reshape([bsz * frames, channel, width, height])
 
                 # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # reshape latents back
-                latents = latents[None, :].reshape(bsz, frames, channel, width, height).transpose(perm=[0, 2, 1, 3, 4])
+                latents = (
+                    latents[None, :].reshape([bsz, frames, channel, width, height]).transpose(perm=[0, 2, 1, 3, 4])
+                )
 
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:

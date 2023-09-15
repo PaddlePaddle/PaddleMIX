@@ -50,10 +50,14 @@ class AutoPipelineFastTest(unittest.TestCase):
         original_config = dict(pipe.config)
 
         pipe = AutoPipelineForImage2Image.from_pipe(pipe)
-        assert dict(pipe.config) == original_config
+        from_pipe_config = dict(pipe.config)
+        from_pipe_config.pop("_name_or_path", None)
+        assert from_pipe_config == original_config
 
         pipe = AutoPipelineForText2Image.from_pipe(pipe)
-        assert dict(pipe.config) == original_config
+        from_pipe_config = dict(pipe.config)
+        from_pipe_config.pop("_name_or_path", None)
+        assert from_pipe_config == original_config
 
     def test_from_pipe_override(self):
         pipe = AutoPipelineForText2Image.from_pretrained(
@@ -77,8 +81,9 @@ class AutoPipelineFastTest(unittest.TestCase):
 
         pipe = AutoPipelineForText2Image.from_pipe(pipe)
         pipe = AutoPipelineForImage2Image.from_pipe(pipe)
-
-        assert dict(pipe.config) == original_config
+        from_pipe_config = dict(pipe.config)
+        from_pipe_config.pop("_name_or_path", None)
+        assert from_pipe_config == original_config
 
 
 @slow

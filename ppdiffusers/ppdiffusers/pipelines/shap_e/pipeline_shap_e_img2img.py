@@ -235,6 +235,7 @@ class ShapEImg2ImgPipeline(DiffusionPipeline):
         if output_type == "latent":
             return ShapEPipelineOutput(images=latents)
         images = []
+
         if output_type == "mesh":
             for i, latent in enumerate(latents):
                 mesh = self.shap_e_renderer.decode_to_mesh(

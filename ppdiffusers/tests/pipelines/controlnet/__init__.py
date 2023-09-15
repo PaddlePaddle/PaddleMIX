@@ -11,10 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from ppdiffusers import UniDiffuserPipeline
-
-pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser")
-result = pipe(mode="i", image=None, prompt=None)
-image = result.images[0]
-image.save("unconditional_image_generation-unidiffuser-result.png")

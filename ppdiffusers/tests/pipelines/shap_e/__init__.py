@@ -12,22 +12,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from ...utils import (
-    OptionalDependencyNotAvailable,
-    is_paddle_available,
-    is_paddlenlp_available,
-    is_transformers_version,
-)
-
-try:
-    if not (is_paddlenlp_available() and is_paddle_available()):
-        raise OptionalDependencyNotAvailable()
-except OptionalDependencyNotAvailable:
-    from ...utils.dummy_paddle_and_paddlenlp_objects import (
-        ImageTextPipelineOutput,
-        UniDiffuserPipeline,
-    )
-else:
-    from .modeling_text_decoder import UniDiffuserTextDecoder
-    from .modeling_uvit import UniDiffuserModel, UTransformer2DModel
-    from .pipeline_unidiffuser import ImageTextPipelineOutput, UniDiffuserPipeline

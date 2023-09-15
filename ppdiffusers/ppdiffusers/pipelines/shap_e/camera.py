@@ -50,7 +50,7 @@ class DifferentiableProjectiveCamera:
         """
         :return: coords of shape (width * height, 2)
         """
-        pixel_indices = paddle.arange(end=self.height * self.width).astype("float32")
+        pixel_indices = paddle.arange(end=self.height * self.width)
         coords = paddle.stack(
             x=[pixel_indices % self.width, paddle.trunc(paddle.divide(pixel_indices, paddle.to_tensor(self.width)))],
             axis=1,

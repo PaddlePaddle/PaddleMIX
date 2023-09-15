@@ -55,7 +55,7 @@ def posenc_nerf(x: paddle.Tensor, min_deg: int = 0, max_deg: int = 15) -> paddle
         return x
     scales = 2.0 ** paddle.arange(start=min_deg, end=max_deg).astype(x.dtype)
     *shape, dim = x.shape
-    xb = (paddle.reshape(x, shape=(-1, 1, dim)) * scales.reshape([1, -1, 1])).reshape([*shape, -1])
+    xb = (x.reshape([-1, 1, dim]) * scales.reshape([1, -1, 1])).reshape([*shape, -1])
     assert xb.shape[-1] == dim * (max_deg - min_deg)
     emb = paddle.concat(x=[xb, xb + math.pi / 2.0], axis=-1).sin()
     return paddle.concat(x=[x, emb], axis=-1)
@@ -195,7 +195,6 @@ class VoidNeRFModel(paddle.nn.Layer):
         )
         out_70.stop_gradient = not True
         background = out_70
-        # self.register_buffer(name="background", tensor=background)
         self.add_parameter("background", background)
 
     def forward(self, position):
@@ -297,9 +296,9 @@ class BoundingBoxVolume(paddle.nn.Layer):
         #
         # 1 and 4 are clearly handled from t0 < t1 below.
         # Making t0 at least min_dist (>= 0) takes care of 2 and 3.
-        t0 = ts.min(axis=-2).values.max(axis=-1, keepdim=True).values.clamp(self.min_dist)
-        t1 = ts.max(axis=-2).values.min(axis=-1, keepdim=True).values
-        assert t0.shape == t1.shape == (batch_size, *shape, 1)
+        t0 = ts.min(axis=-2).max(axis=-1, keepdim=True).clip(self.min_dist)
+        t1 = ts.max(axis=-2).min(axis=-1, keepdim=True)
+        assert t0.shape == t1.shape == [batch_size, *shape, 1]
         if t0_lower is not None:
             assert t0.shape == t0_lower.shape
             t0 = paddle.maximum(x=t0, y=t0_lower)
@@ -373,6 +372,7 @@ class ImportanceRaySampler(paddle.nn.Layer):
             blur_pool: if true, use 2-tap max + 2-tap blur filter from mip-NeRF.
             alpha: small value to add to weights.
         """
+        super().__init__()
         self.volume_range = volume_range
         self.ts = ts.clone().detach()
         self.weights = weights.clone().detach()
@@ -399,13 +399,13 @@ class ImportanceRaySampler(paddle.nn.Layer):
         weights = weights + self.alpha
         pmf = weights / weights.sum(axis=-2, keepdim=True)
         inds = sample_pmf(pmf, n_samples)
-        assert inds.shape == (batch_size, *shape, n_samples, 1)
+        assert inds.shape == [batch_size, *shape, n_samples, 1]
         assert (inds >= 0).astype("bool").all() and (inds < n_coarse_samples).astype("bool").all()
         t_rand = paddle.rand(shape=inds.shape)
         lower_ = paddle.take_along_axis(arr=lower, axis=-2, indices=inds)
         upper_ = paddle.take_along_axis(arr=upper, axis=-2, indices=inds)
         ts = lower_ + (upper_ - lower_) * t_rand
-        ts = (paddle.sort(x=ts, axis=-2), paddle.argsort(x=ts, axis=-2)).values
+        ts = paddle.sort(x=ts, axis=-2)
         return ts
 
 
@@ -563,7 +563,7 @@ class MLPNeRSTFModel(ModelMixin, ConfigMixin):
         output_widths = mlp_widths + [n_output]
         if insert_direction_at is not None:
             input_widths[insert_direction_at] += d_posenc_dir
-        self.mlp = paddle.nn.LayerList(
+        self.mlps = paddle.nn.LayerList(
             sublayers=[
                 paddle.nn.Linear(in_features=d_in, out_features=d_out)
                 for d_in, d_out in zip(input_widths, output_widths)
@@ -595,14 +595,15 @@ class MLPNeRSTFModel(ModelMixin, ConfigMixin):
         h = encode_position(position)
         h_preact = h
         h_directionless = None
-        for i, layer in enumerate(self.mlp):
+
+        for i, layer in enumerate(self.mlps):
             if i == self.config.insert_direction_at:
                 h_directionless = h_preact
                 h_direction = encode_direction(position, direction=direction)
                 h = paddle.concat(x=[h, h_direction], axis=-1)
             h = layer(h)
             h_preact = h
-            if i < len(self.mlp) - 1:
+            if i < len(self.mlps) - 1:
                 h = self.activation(h)
         h_final = h
         if h_directionless is None:
@@ -683,7 +684,7 @@ class ShapEParamsProjModel(ModelMixin, ConfigMixin):
             vectors, _ = shape
             end = start + vectors
             x_bvd = x[:, start:end]
-            out[k] = self.projections[_sanitize_name(k)](x_bvd).reshape(len(x), *shape)
+            out[k] = self.projections[_sanitize_name(k)](x_bvd).reshape([len(x), *shape])
             start = end
         return out
 
@@ -757,10 +758,8 @@ class ShapERenderer(ModelMixin, ConfigMixin):
         if prev_model_out is not None:
             # Append the previous ts now before fprop because previous
             # rendering used a different model and we can't reuse the output.
-            ts = (
-                paddle.sort(x=paddle.concat(x=[ts, prev_model_out.ts], axis=-2), axis=-2),
-                paddle.argsort(x=paddle.concat(x=[ts, prev_model_out.ts], axis=-2), axis=-2),
-            ).values
+            ts = paddle.sort(x=paddle.concat(x=[ts, prev_model_out.ts], axis=-2), axis=-2)
+            # paddle.argsort(x=paddle.concat(x=[ts, prev_model_out.ts], axis=-2), axis=-2),
         batch_size, *_shape, _t0_dim = vrange.t0.shape
         _, *ts_shape, _ts_dim = ts.shape
         # 2. Get the points along the ray and query the model
@@ -769,6 +768,7 @@ class ShapERenderer(ModelMixin, ConfigMixin):
         directions = directions.cast(self.mlp.dtype)
         positions = positions.cast(self.mlp.dtype)
         optional_directions = directions if render_with_direction else None
+
         model_out = self.mlp(
             position=positions,
             direction=optional_directions,

@@ -118,10 +118,14 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
 
         # get prompt text embeddings
         text_inputs = self.tokenizer(
-            prompt, padding="max_length", max_length=self.tokenizer.model_max_length, return_tensors="pd"
+            prompt,
+            padding="max_length",
+            max_length=self.tokenizer.model_max_length,
+            return_attention_mask=True,
+            return_tensors="pd",
         )
         text_input_ids = text_inputs.input_ids
-        text_mask = text_inputs.attention_mask.bool()
+        text_mask = text_inputs.attention_mask
         text_encoder_output = self.text_encoder(text_input_ids)
         prompt_embeds = text_encoder_output.text_embeds
         text_encoder_hidden_states = text_encoder_output.last_hidden_state
@@ -134,9 +138,14 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
             uncond_tokens = [""] * batch_size
             max_length = text_input_ids.shape[-1]
             uncond_input = self.tokenizer(
-                uncond_tokens, padding="max_length", max_length=max_length, truncation=True, return_tensors="pd"
+                uncond_tokens,
+                padding="max_length",
+                max_length=max_length,
+                truncation=True,
+                return_attention_mask=True,
+                return_tensors="pd",
             )
-            uncond_text_mask = uncond_input.attention_mask.bool()
+            uncond_text_mask = uncond_input.attention_mask
             negative_prompt_embeds_text_encoder_output = self.text_encoder(uncond_input.input_ids)
             negative_prompt_embeds = negative_prompt_embeds_text_encoder_output.text_embeds
             uncond_text_encoder_hidden_states = negative_prompt_embeds_text_encoder_output.last_hidden_state

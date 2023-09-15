@@ -11,11 +11,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from ppdiffusers import UniDiffuserPipeline
-
-pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser")
-result = pipe(mode="t", image=None, prompt=None)
-text = result.texts[0]
-with open("unconditional_text_generation-unidiffuser-result.txt", "w") as f:
-    print("{}\n".format(text), file=f)
