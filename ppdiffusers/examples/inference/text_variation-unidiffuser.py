@@ -12,11 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import paddle
+from paddlenlp.trainer import set_seed
+
 from ppdiffusers import UniDiffuserPipeline
 
-pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser")
+model_id_or_path = "thu-ml/unidiffuser-v1"
+pipe = UniDiffuserPipeline.from_pretrained(model_id_or_path, paddle_dtype=paddle.float16)
+set_seed(42)
+
+# Text variation can be performed with a text-to-image generation followed by a image-to-text generation:
+# 1. Text-to-image generation
 prompt = "an elephant under the sea"
-result = pipe(mode="t2i2t", image=None, prompt=prompt)
-text = result.texts[0]
+sample = pipe(prompt=prompt, num_inference_steps=20, guidance_scale=8.0)
+t2i_image = sample.images[0]
+
+# 2. Image-to-text generation
+sample = pipe(image=t2i_image, num_inference_steps=20, guidance_scale=8.0)
+final_prompt = sample.text[0]
 with open("text_variation-unidiffuser-result.txt", "w") as f:
-    print("{}\n".format(text), file=f)
+    print("{}\n".format(final_prompt), file=f)

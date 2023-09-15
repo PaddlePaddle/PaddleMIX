@@ -102,7 +102,7 @@ class UnCLIPPipeline(DiffusionPipeline):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            if latents.shape != shape:
+            if latents.shape != list(shape):
                 raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {shape}")
         latents = latents * scheduler.init_noise_sigma
         return latents
@@ -122,11 +122,12 @@ class UnCLIPPipeline(DiffusionPipeline):
                 prompt,
                 padding="max_length",
                 max_length=self.tokenizer.model_max_length,
+                return_attention_mask=True,
                 truncation=True,
                 return_tensors="pd",
             )
             text_input_ids = text_inputs.input_ids
-            text_mask = text_inputs.attention_mask.bool()
+            text_mask = text_inputs.attention_mask
             untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
             if (
                 untruncated_ids.shape[-1] >= text_input_ids.shape[-1]
@@ -157,10 +158,11 @@ class UnCLIPPipeline(DiffusionPipeline):
                 uncond_tokens,
                 padding="max_length",
                 max_length=self.tokenizer.model_max_length,
+                return_attention_mask=True,
                 truncation=True,
                 return_tensors="pd",
             )
-            uncond_text_mask = uncond_input.attention_mask.bool()
+            uncond_text_mask = uncond_input.attention_mask
             negative_prompt_embeds_text_encoder_output = self.text_encoder(uncond_input.input_ids)
             negative_prompt_embeds = negative_prompt_embeds_text_encoder_output.text_embeds
             uncond_text_encoder_hidden_states = negative_prompt_embeds_text_encoder_output.last_hidden_state
@@ -324,7 +326,7 @@ class UnCLIPPipeline(DiffusionPipeline):
             do_classifier_free_guidance=do_classifier_free_guidance,
         )
 
-        decoder_text_mask = paddle.nn.functional.pad.pad(
+        decoder_text_mask = paddle.nn.functional.pad(
             text_mask.unsqueeze(0), (self.text_proj.clip_extra_context_tokens, 0), value=1, data_format="NCL"
         ).squeeze(0)
 

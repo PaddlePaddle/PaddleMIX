@@ -21,7 +21,9 @@ import paddle
 
 from ppdiffusers import DDIMScheduler, LDMSuperResolutionPipeline, UNet2DModel, VQModel
 from ppdiffusers.utils import PIL_INTERPOLATION, floats_tensor, load_image, slow
-from ppdiffusers.utils.testing_utils import require_paddle
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle
+
+enable_full_determinism()
 
 
 class LDMSuperResolutionPipelineFastTests(unittest.TestCase):

@@ -16,16 +16,15 @@ from typing import Optional
 
 import numpy as np
 import paddle
+import paddle.nn as nn
 from paddlenlp.transformers import GPTConfig, GPTLMHeadModel
 
-from ...configuration_utils import ConfigMixin, register_to_config
+from ...configuration_utils import ConfigMixin, ModuleUtilsMixin, register_to_config
 from ...models import ModelMixin
-
-# from paddlenlp.transformers.model_utils import ModuleUtilsMixin
 
 
 # Modified from ClipCaptionModel in https://github.com/thu-ml/unidiffuser/blob/main/libs/caption_decoder.py
-class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
+class UniDiffuserTextDecoder(ModelMixin, ConfigMixin, ModuleUtilsMixin):
     """
     Text decoder model for a image-text [UniDiffuser](https://arxiv.org/pdf/2303.06555.pdf) model. This is used to
     generate text from the UniDiffuser image-text embedding.
@@ -75,6 +74,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
             dot-product/softmax to float() when training with mixed precision.
     """
 
+    # _keys_to_ignore_on_load_unexpected = [r"h\.\d+\.attn\.bias", r"h\.\d+\.attn\.masked_bias"]
     _keys_to_ignore_on_load_unexpected = ["h\\.\\d+\\.attn\\.bias", "h\\.\\d+\\.attn\\.masked_bias"]
 
     @register_to_config
@@ -83,7 +83,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         prefix_length: int,
         prefix_inner_dim: int,
         prefix_hidden_dim: Optional[int] = None,
-        vocab_size: int = 50257,
+        vocab_size: int = 50257,  # Start of GPT2 config args
         n_positions: int = 1024,
         n_embd: int = 768,
         n_layer: int = 12,
@@ -93,7 +93,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         resid_pdrop: float = 0.1,
         embd_pdrop: float = 0.1,
         attn_pdrop: float = 0.1,
-        layer_norm_epsilon: float = 1e-05,
+        layer_norm_epsilon: float = 1e-5,
         initializer_range: float = 0.02,
         scale_attn_weights: bool = True,
         use_cache: bool = True,
@@ -101,22 +101,25 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         reorder_and_upcast_attn: bool = False,
     ):
         super().__init__()
+
         self.prefix_length = prefix_length
+
         if prefix_inner_dim != n_embd and prefix_hidden_dim is None:
             raise ValueError(
-                f"`prefix_hidden_dim` cannot be `None` when `prefix_inner_dim`: {prefix_hidden_dim} and `n_embd`: {n_embd} are not equal."
+                f"`prefix_hidden_dim` cannot be `None` when `prefix_inner_dim`: {prefix_hidden_dim} and"
+                f" `n_embd`: {n_embd} are not equal."
             )
+
         self.prefix_inner_dim = prefix_inner_dim
         self.prefix_hidden_dim = prefix_hidden_dim
+
         self.encode_prefix = (
-            paddle.nn.Linear(in_features=self.prefix_inner_dim, out_features=self.prefix_hidden_dim)
+            nn.Linear(self.prefix_inner_dim, self.prefix_hidden_dim)
             if self.prefix_hidden_dim is not None
-            else paddle.nn.Identity()
+            else nn.Identity()
         )
         self.decode_prefix = (
-            paddle.nn.Linear(in_features=self.prefix_hidden_dim, out_features=n_embd)
-            if self.prefix_hidden_dim is not None
-            else paddle.nn.Identity()
+            nn.Linear(self.prefix_hidden_dim, n_embd) if self.prefix_hidden_dim is not None else nn.Identity()
         )
         gpt_config = GPTConfig(
             vocab_size=vocab_size,
@@ -136,6 +139,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
             scale_attn_by_inverse_layer_idx=scale_attn_by_inverse_layer_idx,
             reorder_and_upcast_attn=reorder_and_upcast_attn,
         )
+        gpt_config.max_position_embeddings = 1024  # Note： hard code
         self.transformer = GPTLMHeadModel(gpt_config)
 
     def forward(
@@ -159,7 +163,7 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         embedding_text = self.transformer.transformer.wte(input_ids)
         hidden = self.encode_prefix(prefix_embeds)
         prefix_embeds = self.decode_prefix(hidden)
-        embedding_cat = paddle.concat(x=(prefix_embeds, embedding_text), axis=1)
+        embedding_cat = paddle.concat((prefix_embeds, embedding_text), axis=1)
         if labels is not None:
             dummy_token = self.get_dummy_token(input_ids.shape[0])
             labels = paddle.concat(x=(dummy_token, input_ids), axis=1)
@@ -196,17 +200,20 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         Returns:
             `List[str]`: A list of strings generated from the decoder model.
         """
-        features = paddle.split(x=features, num_or_sections=features.shape[0] // 1, axis=0)
+        # TODO junnyu, support float16
+        features = features.cast(self.dtype)
+        # the low dimension representation of clip feature
+        features = paddle.split(features, 1, axis=0)
         generated_tokens = []
         generated_seq_lengths = []
         for feature in features:
-            feature = self.decode_prefix(feature)
+            feature = self.decode_prefix(feature)  # back to the clip feature
             # Only support beam search for now
             output_tokens, seq_lengths = self.generate_beam(input_embeds=feature, eos_token_id=eos_token_id)
             generated_tokens.append(output_tokens[0])
             generated_seq_lengths.append(seq_lengths[0])
-        generated_tokens = paddle.stack(x=generated_tokens)
-        generated_seq_lengths = paddle.stack(x=generated_seq_lengths)
+        generated_tokens = paddle.stack(generated_tokens)
+        generated_seq_lengths = paddle.stack(generated_seq_lengths)
         return generated_tokens, generated_seq_lengths
 
     @paddle.no_grad()
@@ -251,13 +258,14 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
         scores = None
         seq_lengths = paddle.ones(shape=beam_size, dtype="int32")
         is_stopped = paddle.zeros(shape=beam_size, dtype="bool")
+
         if input_embeds is not None:
             generated = input_embeds
         else:
-            generated = self.transformer.transformer.wte(input_ids)
+            generated = self.transformer.get_input_embeddings()(input_ids)
+
         for i in range(entry_length):
-            outputs = self.transformer(inputs_embeds=generated)
-            logits = outputs.logits
+            logits = self.transformer(inputs_embeds=generated)
             logits = logits[:, -1, :] / (temperature if temperature > 0 else 1.0)
             logits = paddle.nn.functional.softmax(logits, axis=-1).log()
             if scores is None:
@@ -275,27 +283,31 @@ class UniDiffuserTextDecoder(ModelMixin, ConfigMixin):
                 scores_sum = scores[:, None] + logits
                 seq_lengths[~is_stopped] += 1
                 scores_sum_average = scores_sum / seq_lengths[:, None]
-                scores_sum_average, next_tokens = scores_sum_average.reshape([-1]).topk(k=beam_size, axis=-1)
+                scores_sum_average, next_tokens = scores_sum_average.reshape([-1]).topk(beam_size, -1)
                 next_tokens_source = next_tokens // scores_sum.shape[1]
                 seq_lengths = seq_lengths[next_tokens_source]
                 next_tokens = next_tokens % scores_sum.shape[1]
-                next_tokens = next_tokens.unsqueeze(axis=1)
+                next_tokens = next_tokens.unsqueeze(1)
                 tokens = tokens[next_tokens_source]
                 tokens = paddle.concat(x=(tokens, next_tokens), axis=1)
                 generated = generated[next_tokens_source]
                 scores = scores_sum_average * seq_lengths
+                is_stopped = paddle.cast(is_stopped, "int32")  # TODO: nf
                 is_stopped = is_stopped[next_tokens_source]
-            next_token_embed = self.transformer.transformer.wte(next_tokens.squeeze()).reshape(
+                is_stopped = paddle.cast(is_stopped, "bool")
+
+            next_token_embed = self.transformer.get_input_embeddings()(next_tokens.squeeze()).reshape(
                 [generated.shape[0], 1, -1]
             )
-            generated = paddle.concat(x=(generated, next_token_embed), axis=1)
-            is_stopped = is_stopped + next_tokens.equal(y=stop_token_index).squeeze()
+            generated = paddle.concat((generated, next_token_embed), axis=1)
+            is_stopped = paddle.bitwise_or(is_stopped, next_tokens.equal(stop_token_index).squeeze())
             if is_stopped.astype("bool").all():
                 break
+
         scores = scores / seq_lengths
         order = scores.argsort(descending=True)
         # tokens tensors are already padded to max_seq_length
         output_texts = [tokens[i] for i in order]
-        output_texts = paddle.stack(x=output_texts, axis=0)
+        output_texts = paddle.stack(output_texts, axis=0)
         seq_lengths = paddle.to_tensor(data=[seq_lengths[i] for i in order], dtype=seq_lengths.dtype)
         return output_texts, seq_lengths

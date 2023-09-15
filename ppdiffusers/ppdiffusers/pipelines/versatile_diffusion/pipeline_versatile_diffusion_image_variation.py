@@ -96,7 +96,7 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
             embeds = self.image_encoder.vision_model.ln_post(encoder_output.last_hidden_state)
             embeds = paddle.matmul(embeds, self.image_encoder.vision_projection)
             embeds_pooled = embeds[:, 0:1]
-            embeds = embeds / paddle.linalg.norm(x=embeds_pooled, axis=-1, keepdim=True)
+            embeds = embeds / paddle.norm(embeds_pooled, axis=-1, keepdim=True)
             return embeds
 
         if isinstance(prompt, paddle.Tensor) and len(prompt.shape) == 4:
