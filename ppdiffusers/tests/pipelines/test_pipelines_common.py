@@ -30,12 +30,15 @@ from ppdiffusers import DiffusionPipeline
 from ppdiffusers.image_processor import VaeImageProcessor
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
 from ppdiffusers.utils import logging
-from ppdiffusers.utils.testing_utils import paddle_device, require_paddle
+from ppdiffusers.utils.testing_utils import require_paddle
 
 
 def to_np(tensor):
     if isinstance(tensor, paddle.Tensor):
         tensor = tensor.detach().cpu().numpy()
+
+    if isinstance(tensor, (list, tuple)):
+        tensor = np.array(tensor)
 
     return tensor
 
@@ -127,7 +130,6 @@ class PipelineLatentTesterMixin:
         self.assertLess(max_diff, 0.0001, "`input_type=='pd'` generate different result from `input_type=='np'`")
         max_diff = np.abs(out_input_pil - out_input_np).max()
         self.assertLess(max_diff, 0.02, "`input_type=='pd'` generate different result from `input_type=='np'`")
-
 
     def test_latents_input(self):
         if len(self.image_latents_params) == 0:
@@ -588,7 +590,7 @@ class PipelineTesterMixin:
                 output_with_xformers = output_with_xformers.numpy()
             if hasattr(output_without_xformers, "numpy"):
                 output_without_xformers = output_without_xformers.numpy()
-            max_diff = np.abs(output_with_xformers - output_without_xformers).max()
+            max_diff = np.abs(to_np(output_with_xformers) - to_np(output_without_xformers)).max()
             self.assertLess(max_diff, expected_max_diff, "XFormers attention should not affect the inference results")
         if test_mean_pixel_difference:
             assert_mean_pixel_difference(output_with_xformers[0], output_without_xformers[0])

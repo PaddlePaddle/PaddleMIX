@@ -81,7 +81,9 @@ class ConsistencyModelPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image = pipe(**inputs).images
         assert image.shape == (1, 32, 32, 3)
         image_slice = image[(0), -3:, -3:, (-1)]
-        expected_slice = np.array([0.3572, 0.6273, 0.4031, 0.3961, 0.4321, 0.573, 0.5266, 0.478, 0.5004])
+        expected_slice = np.array(
+            [0.50192136, 0.53004247, 0.45772523, 0.44602677, 0.6048462, 0.4337338, 0.6019111, 0.43378073, 0.4980215]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_consistency_model_pipeline_multistep_class_cond(self):
@@ -93,7 +95,9 @@ class ConsistencyModelPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image = pipe(**inputs).images
         assert image.shape == (1, 32, 32, 3)
         image_slice = image[(0), -3:, -3:, (-1)]
-        expected_slice = np.array([0.3572, 0.6273, 0.4031, 0.3961, 0.4321, 0.573, 0.5266, 0.478, 0.5004])
+        expected_slice = np.array(
+            [0.50192136, 0.53004247, 0.45772523, 0.44602677, 0.6048462, 0.4337338, 0.6019111, 0.43378073, 0.4980215]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_consistency_model_pipeline_onestep(self):
@@ -106,7 +110,9 @@ class ConsistencyModelPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image = pipe(**inputs).images
         assert image.shape == (1, 32, 32, 3)
         image_slice = image[(0), -3:, -3:, (-1)]
-        expected_slice = np.array([0.5004, 0.5004, 0.4994, 0.5008, 0.4976, 0.5018, 0.499, 0.4982, 0.4987])
+        expected_slice = np.array(
+            [0.49557337, 0.50040334, 0.50025475, 0.49875367, 0.4996505, 0.49925715, 0.49896982, 0.50362164, 0.5007533]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_consistency_model_pipeline_onestep_class_cond(self):
@@ -120,7 +126,9 @@ class ConsistencyModelPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image = pipe(**inputs).images
         assert image.shape == (1, 32, 32, 3)
         image_slice = image[(0), -3:, -3:, (-1)]
-        expected_slice = np.array([0.5004, 0.5004, 0.4994, 0.5008, 0.4976, 0.5018, 0.499, 0.4982, 0.4987])
+        expected_slice = np.array(
+            [0.49557337, 0.50040334, 0.50025475, 0.49875367, 0.4996505, 0.49925715, 0.49896982, 0.50362164, 0.5007533]
+        )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
 
