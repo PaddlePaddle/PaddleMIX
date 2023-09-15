@@ -683,8 +683,9 @@ class BLIP2Trainer(Trainer):
         # They can then be reloaded using `from_pretrained()`
 
         merge_tensor_parallel = merge_tensor_parallel and self.args.use_hybrid_parallel
-        self.eval_processor.image_processor.save_pretrained(os.path.join(output_dir, "processor", "eval"))
-        self.eval_processor.text_processor.save_pretrained(os.path.join(output_dir, "processor", "eval"))
+        if self.eval_processor is not None:
+            self.eval_processor.image_processor.save_pretrained(os.path.join(output_dir, "processor", "eval"))
+            self.eval_processor.text_processor.save_pretrained(os.path.join(output_dir, "processor", "eval"))
         self.processor.image_processor.save_pretrained(os.path.join(output_dir, "processor", "train"))
         self.processor.text_processor.save_pretrained(os.path.join(output_dir, "processor", "train"))
         self.model.save_pretrained(
