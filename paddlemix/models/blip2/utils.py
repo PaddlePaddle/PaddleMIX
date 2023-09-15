@@ -267,7 +267,7 @@ def save_result(result, result_dir, filename, remove_duplicate="", world_size=1)
     rank_id_curr_node = int(os.environ.get("PADDLE_RANK_IN_NODE", 0))
     result_file = os.path.join(result_dir, "%s_rank%d.json" % (filename, rank_id_curr_node))
     if not os.path.exists(result_dir):
-        os.mkdir(result_dir)
+        os.makedirs(result_dir)
     json.dump(result, open(result_file, "w"))
 
     final_result_file = os.path.join(result_dir, "%s.json" % filename)

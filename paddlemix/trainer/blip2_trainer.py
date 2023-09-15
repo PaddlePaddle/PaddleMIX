@@ -619,7 +619,7 @@ class BLIP2Trainer(Trainer):
         elif "vqa" in self.task_name:
             eval_result_file = save_result(
                 val_result,
-                result_dir=self.args.output_dir + self.task_name + "/result",
+                result_dir=self.args.output_dir + "/result" + "/" + self.task_name,
                 filename="{}_epoch{}".format("eval", "eval"),
                 remove_duplicate="question_id",
             )
