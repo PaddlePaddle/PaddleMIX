@@ -12,10 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import paddle
+from paddlenlp.trainer import set_seed
+
 from ppdiffusers import UniDiffuserPipeline
 
-pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser")
+model_id_or_path = "thu-ml/unidiffuser-v1"
+pipe = UniDiffuserPipeline.from_pretrained(model_id_or_path, paddle_dtype=paddle.float16)
+set_seed(42)
+
+# Text-to-image generation
 prompt = "an elephant under the sea"
-result = pipe(mode="t2i", image=None, prompt=prompt)
-image = result.images[0]
-image.save("text_to_image_generation-unidiffuser-result.png")
+sample = pipe(prompt=prompt, num_inference_steps=20, guidance_scale=8.0)
+t2i_image = sample.images[0]
+t2i_image.save("text_to_image_generation-unidiffuser-result.png")
