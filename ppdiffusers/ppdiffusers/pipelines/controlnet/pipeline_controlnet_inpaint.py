@@ -60,7 +60,7 @@ EXAMPLE_DOC_STRING = """
         ...     assert image.shape[0:1] == image_mask.shape[0:1], "image and image_mask must have the same image size"
         ...     image[image_mask > 0.5] = -1.0  # set as masked pixel
         ...     image = np.expand_dims(image, 0).transpose(0, 3, 1, 2)
-        ...     image = paddle.from_numpy(image)
+        ...     image = paddle.to_tensor(image)
         ...     return image
 
 

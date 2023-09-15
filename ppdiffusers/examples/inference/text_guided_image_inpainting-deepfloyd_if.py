@@ -17,10 +17,10 @@ import paddle
 from ppdiffusers import IFInpaintingPipeline, IFInpaintingSuperResolutionPipeline
 from ppdiffusers.utils import load_image, pd_to_pil
 
-url = "https://huggingface.co/datasets/diffusers/docs-images/resolve/main/if/person.png"
+url = "https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-upgrade0193/if_person.png"
 original_image = load_image(url)
 
-url = "https://huggingface.co/datasets/diffusers/docs-images/resolve/main/if/glasses_mask.png"
+url = "https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-upgrade0193/if_glasses_mask.png"
 mask_image = load_image(url)
 
 pipe = IFInpaintingPipeline.from_pretrained("DeepFloyd/IF-I-XL-v1.0", variant="fp16", paddle_dtype=paddle.float16)

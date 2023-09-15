@@ -20,8 +20,6 @@ from ppdiffusers.utils import load_image
 sd_pipe = StableDiffusionImageVariationPipeline.from_pretrained(
     "lambdalabs/sd-image-variations-diffusers",
     revision="v2.0",
-    from_diffusers=True,
-    from_hf_hub=True,
 )
 
 im = load_image("https://bj.bcebos.com/v1/paddlenlp/models/community/thu-ml/data/space.jpg")

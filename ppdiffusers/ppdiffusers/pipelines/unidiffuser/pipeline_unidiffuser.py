@@ -29,9 +29,9 @@ from paddlenlp.transformers import (
 from PIL import Image
 
 from ...models import AutoencoderKL, UViTModel
-from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import DPMSolverUniDiffuserScheduler
 from ...utils import logging, randn_tensor
+from ..pipeline_utils import DiffusionPipeline
 from . import ImageTextPipelineOutput
 from .caption_decoder import CaptionDecoder
 

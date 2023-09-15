@@ -93,8 +93,8 @@ class VersatileDiffusionImageVariationPipeline(DiffusionPipeline):
         """
 
         def normalize_embeddings(encoder_output):
-            embeds = self.image_encoder.vision_model.post_layernorm(encoder_output.last_hidden_state)
-            embeds = self.image_encoder.visual_projection(embeds)
+            embeds = self.image_encoder.vision_model.ln_post(encoder_output.last_hidden_state)
+            embeds = paddle.matmul(embeds, self.image_encoder.vision_projection)
             embeds_pooled = embeds[:, 0:1]
             embeds = embeds / paddle.linalg.norm(x=embeds_pooled, axis=-1, keepdim=True)
             return embeds
