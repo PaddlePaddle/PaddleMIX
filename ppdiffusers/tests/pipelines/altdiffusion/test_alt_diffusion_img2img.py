@@ -34,7 +34,9 @@ from ppdiffusers.pipelines.alt_diffusion.modeling_roberta_series import (
     RobertaSeriesModelWithTransformation,
 )
 from ppdiffusers.utils import floats_tensor, load_image, slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+
+enable_full_determinism()
 
 
 class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
@@ -117,6 +119,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         tokenizer = XLMRobertaTokenizer.from_pretrained("hf-internal-testing/tiny-xlm-roberta")
         tokenizer.model_max_length = 77
         init_image = self.dummy_image
+        init_image = init_image / 2 + 0.75
         alt_pipe = AltDiffusionImg2ImgPipeline(
             unet=unet,
             scheduler=scheduler,
@@ -126,7 +129,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
             safety_checker=None,
             feature_extractor=self.dummy_extractor,
         )
-        alt_pipe.image_processor = VaeImageProcessor(vae_scale_factor=alt_pipe.vae_scale_factor)
+        alt_pipe.image_processor = VaeImageProcessor(vae_scale_factor=alt_pipe.vae_scale_factor, do_normalize=True)
         alt_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
@@ -212,6 +215,7 @@ class AltDiffusionImg2ImgPipelineFastTests(unittest.TestCase):
         expected_slice = np.array(
             [0.30212247, 0.30488092, 0.3098243, 0.298663, 0.31650132, 0.31669503, 0.2998405, 0.3279791, 0.33063996]
         )
+
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
 
@@ -228,6 +232,9 @@ class AltDiffusionImg2ImgPipelineIntegrationTests(unittest.TestCase):
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/img2img/sketch-mountains-input.jpg"
         )
         init_image = init_image.resize((768, 512))
+        # expected_image = load_numpy(
+        #     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/img2img/fantasy_landscape_alt.npy"
+        # )
         model_id = "BAAI/AltDiffusion"
         pipe = AltDiffusionImg2ImgPipeline.from_pretrained(model_id, safety_checker=None)
         pipe.set_progress_bar_config(disable=None)

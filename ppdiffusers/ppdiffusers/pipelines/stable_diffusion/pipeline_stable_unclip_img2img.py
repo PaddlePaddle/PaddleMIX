@@ -460,7 +460,7 @@ class StableUnCLIPImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
         """
         if noise is None:
             noise = randn_tensor(image_embeds.shape, generator=generator, dtype=image_embeds.dtype)
-        noise_level = paddle.to_tensor(data=[noise_level] * image_embeds.shape[0])
+        noise_level = paddle.to_tensor(data=paddle.repeat_interleave(noise_level, image_embeds.shape[0], axis=0))
         image_embeds = self.image_normalizer.scale(image_embeds)
         image_embeds = self.image_noising_scheduler.add_noise(image_embeds, timesteps=noise_level, noise=noise)
         image_embeds = self.image_normalizer.unscale(image_embeds)
