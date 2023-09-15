@@ -12,12 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import paddle
+from paddlenlp.trainer import set_seed
+
 from ppdiffusers import UniDiffuserPipeline
 
-pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser")
-result = pipe(mode="joint", image=None, prompt=None)
-image = result.images[0]
-image.save("unconditional_image_text_generation-unidiffuser-result.png")
-text = result.texts[0]
-with open("unconditional_image_text_generation-unidiffuser-result.txt", "w") as f:
+model_id_or_path = "thu-ml/unidiffuser-v1"
+pipe = UniDiffuserPipeline.from_pretrained(model_id_or_path, paddle_dtype=paddle.float16)
+set_seed(42)
+
+# Unconditional image and text generation. The generation task is automatically inferred.
+sample = pipe(num_inference_steps=20, guidance_scale=8.0)
+image = sample.images[0]
+text = sample.text[0]
+image.save("unconditional_image_text_joint_generation-unidiffuser-result.png")
+with open("unconditional_image_text_joint_generation-unidiffuser-result.txt", "w") as f:
     print("{}\n".format(text), file=f)

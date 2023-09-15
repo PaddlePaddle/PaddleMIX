@@ -12,12 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import paddle
+from paddlenlp.trainer import set_seed
+
 from ppdiffusers import UniDiffuserPipeline
+
+model_id_or_path = "thu-ml/unidiffuser-v1"
+pipe = UniDiffuserPipeline.from_pretrained(model_id_or_path, paddle_dtype=paddle.float16)
+set_seed(42)
+
+# Image-to-text generation
 from ppdiffusers.utils import load_image
 
-pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser")
-image = load_image("https://bj.bcebos.com/v1/paddlenlp/models/community/thu-ml/data/space.jpg")
-result = pipe(mode="i2t", image=image, prompt=None)
-text = result.texts[0]
+image_url = "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/unidiffuser/unidiffuser_example_image.jpg"
+init_image = load_image(image_url).resize((512, 512))
+sample = pipe(image=init_image, num_inference_steps=20, guidance_scale=8.0)
+i2t_text = sample.text[0]
 with open("image_to_text_generation-unidiffuser-result.txt", "w") as f:
-    print("{}\n".format(text), file=f)
+    print("{}\n".format(i2t_text), file=f)
