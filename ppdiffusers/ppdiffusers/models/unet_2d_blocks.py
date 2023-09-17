@@ -1997,7 +1997,7 @@ class AttnUpBlock2D(nn.Layer):
         if upsample_type == "conv":
             self.upsamplers = nn.LayerList([Upsample2D(out_channels, use_conv=True, out_channels=out_channels)])
         elif upsample_type == "resnet":
-            self.upsamplers = nn.ModuleList(
+            self.upsamplers = nn.LayerList(
                 [
                     ResnetBlock2D(
                         in_channels=out_channels,
