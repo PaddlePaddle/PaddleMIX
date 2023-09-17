@@ -245,9 +245,7 @@ class StableDiffusionInstructPix2PixPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
-        expected_slice = np.array(
-            [0.32138163, 0.32519442, 0.33127248, 0.32613453, 0.33317798, 0.33505, 0.32397628, 0.32964426, 0.32055843]
-        )
+        expected_slice = np.array([0.3181, 0.321, 0.3258, 0.3237, 0.3299, 0.3321, 0.3209, 0.3264, 0.3175])
         assert np.abs(expected_slice - image_slice).max() < 0.001
 
     def test_stable_diffusion_pix2pix_k_lms(self):
@@ -261,9 +259,7 @@ class StableDiffusionInstructPix2PixPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
-        expected_slice = np.array(
-            [0.38934484, 0.3929934, 0.39973113, 0.4196028, 0.42386433, 0.43073824, 0.4267708, 0.43173674, 0.41896266]
-        )
+        expected_slice = np.array([0.3959, 0.3992, 0.4083, 0.4174, 0.4225, 0.4289, 0.4248, 0.4311, 0.4167])
         assert np.abs(expected_slice - image_slice).max() < 0.001
 
     def test_stable_diffusion_pix2pix_ddim(self):

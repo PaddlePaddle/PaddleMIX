@@ -433,8 +433,12 @@ class StableDiffusionModelEditingPipeline(DiffusionPipeline, TextualInversionLoa
         for old_text, new_text in zip(old_texts, new_texts):
             tokens_a = self.tokenizer(old_text).input_ids
             tokens_b = self.tokenizer(new_text).input_ids
-            tokens_a = [(self.tokenizer.encode("a ")[1] if self.tokenizer.decode(t) == "an" else t) for t in tokens_a]
-            tokens_b = [(self.tokenizer.encode("a ")[1] if self.tokenizer.decode(t) == "an" else t) for t in tokens_b]
+            tokens_a = [
+                (self.tokenizer.encode("a ").input_ids[1] if self.tokenizer.decode(t) == "an" else t) for t in tokens_a
+            ]
+            tokens_b = [
+                (self.tokenizer.encode("a ").input_ids[1] if self.tokenizer.decode(t) == "an" else t) for t in tokens_b
+            ]
             num_orig_tokens = len(tokens_a)
             idxs_replace = []
             j = 0

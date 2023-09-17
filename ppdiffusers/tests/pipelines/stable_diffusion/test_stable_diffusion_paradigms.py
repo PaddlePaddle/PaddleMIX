@@ -171,7 +171,7 @@ class StableDiffusionParadigmsPipelineSlowTests(unittest.TestCase):
         paddle.device.cuda.empty_cache()
 
     def get_inputs(self, seed=0):
-        generator = paddle.framework.core.default_cpu_generator().manual_seed(seed)
+        generator = paddle.Generator().manual_seed(seed)
         inputs = {
             "prompt": "a photograph of an astronaut riding a horse",
             "generator": generator,

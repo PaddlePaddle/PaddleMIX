@@ -172,7 +172,7 @@ class CycleDiffusionPipelineIntegrationTests(unittest.TestCase):
 
     def test_cycle_diffusion_pipeline_fp16(self):
         init_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/cycle-diffusion/black_colored_car.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/cycle-diffusion/black_colored_car.png"
         )
         expected_image = np.array([[0.14477539, 0.20483398, 0.14135742], [0.10009766, 0.17602539, 0.11083984]])
         init_image = init_image.resize((512, 512))
@@ -203,7 +203,7 @@ class CycleDiffusionPipelineIntegrationTests(unittest.TestCase):
 
     def test_cycle_diffusion_pipeline(self):
         init_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/cycle-diffusion/black_colored_car.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/cycle-diffusion/black_colored_car.png"
         )
         expected_image = np.array([[0.16294342, 0.20514232, 0.14554858], [0.11476257, 0.16831946, 0.11495486]])
         init_image = init_image.resize((512, 512))

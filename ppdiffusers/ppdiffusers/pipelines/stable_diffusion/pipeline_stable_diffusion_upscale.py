@@ -479,7 +479,7 @@ class StableDiffusionUpscalePipeline(DiffusionPipeline, TextualInversionLoaderMi
         ... )
 
         >>> # let's download an  image
-        >>> url = "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/low_res_cat.png"
+        >>> url = "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/low_res_cat.png"
         >>> response = requests.get(url)
         >>> low_res_img = Image.open(BytesIO(response.content)).convert("RGB")
         >>> low_res_img = low_res_img.resize((128, 128))
