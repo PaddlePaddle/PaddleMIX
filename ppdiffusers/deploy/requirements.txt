@@ -1,1 +1,2 @@
 ppdiffusers>=0.16.1
+ligo-segments
