@@ -26,7 +26,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Export Inference Model.")
     parser.add_argument(
         "--model_type",
-        choices=["SamVitL", "SamVitB", "SamVitH"],
+        choices=["Sam/SamVitH-1024", "Sam/SamVitB", "Sam/SamVitL"],
         required=True,
         help="The model type.",
         type=str,
