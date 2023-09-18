@@ -23,12 +23,12 @@ from ppdiffusers import (
 from ppdiffusers.utils import load_image
 
 init_image = load_image(
-    "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint/boy.png"
+    "https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-upgrade0193/stable_diffusion_inpaint_boy.png"
 )
 init_image = init_image.resize((512, 512))
 generator = paddle.Generator().manual_seed(1)
 mask_image = load_image(
-    "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint/boy_mask.png"
+    "https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-upgrade0193/stable_diffusion_inpaint_boy_mask.png"
 )
 mask_image = mask_image.resize((512, 512))
 
@@ -39,7 +39,7 @@ def make_inpaint_condition(image, image_mask):
     assert image.shape[0:1] == image_mask.shape[0:1], "image and image_mask must have the same image size"
     image[image_mask > 0.5] = -1.0  # set as masked pixel
     image = np.expand_dims(image, 0).transpose(0, 3, 1, 2)
-    image = paddle.from_numpy(image)
+    image = paddle.to_tensor(image)
     return image
 
 

@@ -483,10 +483,10 @@ class StableDiffusionInpaintLegacyPipelineNightlyTests(unittest.TestCase):
     def get_inputs(self, dtype="float32", seed=0):
         generator = paddle.Generator().manual_seed(seed)
         init_image = load_image(
-            "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint/input_bench_image.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint/input_bench_image.png"
         )
         mask_image = load_image(
-            "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint/input_bench_mask.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint/input_bench_mask.png"
         )
         inputs = {
             "prompt": "A red cat sitting on a park bench",
@@ -518,7 +518,7 @@ class StableDiffusionInpaintLegacyPipelineNightlyTests(unittest.TestCase):
         inputs = self.get_inputs()
         image = sd_pipe(**inputs).images[0]
         expected_image = load_numpy(
-            "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint_legacy/stable_diffusion_1_5_ddim.npy"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint_legacy/stable_diffusion_1_5_ddim.npy"
         )
         expected_image = np.array([[0.7290994, 0.794852, 0.82096446], [0.7330909, 0.79727536, 0.8420528]])
         max_diff = np.abs(expected_image - image[0][0:2]).max()

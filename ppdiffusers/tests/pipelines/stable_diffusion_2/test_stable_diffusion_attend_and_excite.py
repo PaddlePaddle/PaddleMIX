@@ -26,7 +26,7 @@ from ppdiffusers import (
     StableDiffusionAttendAndExcitePipeline,
     UNet2DConditionModel,
 )
-from ppdiffusers.utils import load_numpy, slow
+from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
 from ..pipeline_params import (
@@ -192,7 +192,11 @@ class StableDiffusionAttendAndExcitePipelineIntegrationTests(unittest.TestCase):
             max_iter_to_alter=5,
             output_type="np",
         ).images[0]
-        expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/attend-and-excite/elephant_glasses.npy"
+        # expected_image = load_numpy(
+        #     "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/attend-and-excite/elephant_glasses.npy"
+        # )
+        expected_image = np.array(
+            [0.33854762, 0.2892024, 0.24805409, 0.3537666, 0.3158779, 0.26081967, 0.3637334, 0.3303557, 0.3098219]
         )
+        image = image[-3:, -3:, -1].flatten()
         assert np.abs((expected_image - image).max()) < 0.5

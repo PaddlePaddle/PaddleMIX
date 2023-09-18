@@ -12,13 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
-
-from ppdiffusers import StableDiffusionXLPipeline
-
-pipe = StableDiffusionXLPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16
-)
-prompt = "a photo of an astronaut riding a horse on mars"
-image = pipe(prompt).images[0]
-image.save("text_to_image_generation-stable_diffusion_xl-result.png")
+# todo

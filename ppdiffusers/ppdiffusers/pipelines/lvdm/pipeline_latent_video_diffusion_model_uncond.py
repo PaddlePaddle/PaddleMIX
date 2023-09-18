@@ -22,9 +22,9 @@ import paddle
 
 from ...configuration_utils import FrozenDict
 from ...models import LVDMAutoencoderKL, LVDMUNet3DModel
-from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from ...utils import deprecate, logging, randn_tensor
+from ..pipeline_utils import DiffusionPipeline
 from . import VideoPipelineOutput
 from .video_save import save_results
 

@@ -289,11 +289,11 @@ class StableDiffusionUpscalePipelineIntegrationTests(unittest.TestCase):
 
     def test_stable_diffusion_upscale_pipeline(self):
         image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/low_res_cat.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/low_res_cat.png"
         )
         # invalid expected_image
         # expected_image = load_numpy(
-        #     'https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/upsampled_cat.npy'
+        #     'https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/upsampled_cat.npy'
         #     )
         model_id = "stabilityai/stable-diffusion-x4-upscaler"
         pipe = StableDiffusionUpscalePipeline.from_pretrained(model_id)
