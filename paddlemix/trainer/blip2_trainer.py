@@ -609,7 +609,7 @@ class BLIP2Trainer(Trainer):
         if "caption" in self.task_name:
             eval_result_file = save_result(
                 result=val_result,
-                result_dir=self.args.output_dir + "/result" + "/" + self.task_name,
+                result_dir=self.args.output_dir + self.task_name + "/result",
                 filename="{}_epoch{}".format("eval", "eval"),
                 remove_duplicate="image_id",
                 world_size=self.args.world_size,
@@ -632,7 +632,7 @@ class BLIP2Trainer(Trainer):
     def _report_metrics_caption(self, eval_result_file, split_name="test"):
 
         # TODO better way to define this
-        coco_gt_root = os.path.join("/root/.paddlemix/datasets/", "coco_gt")
+        coco_gt_root = os.path.join("/root/.paddlemix/datasets/", "")
         coco_val = coco_caption_eval(coco_gt_root, eval_result_file, split_name)
 
         agg_metrics = coco_val.eval["CIDEr"] + coco_val.eval["Bleu_4"]
