@@ -112,10 +112,10 @@ class BlipCollator:
 
 
 def coco_caption_eval(coco_gt_root, results_file, split):
-    # urls = {
-    #     "val": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json",
-    #     "test": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json",
-    # }
+    urls = {
+        "val": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json",
+        "test": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json",
+    }
     filenames = {
         "val": "coco_karpathy_val_gt.json",
         "test": "coco_karpathy_test_gt.json",
@@ -123,8 +123,11 @@ def coco_caption_eval(coco_gt_root, results_file, split):
 
     # download_url(urls[split], coco_gt_root)
     annotation_file = os.path.join(coco_gt_root, filenames["test"])
+    if not os.path.exists(annotation_file):
+        # create coco object and coco_result object
+        from paddle.utils.download import get_path_from_url
 
-    # create coco object and coco_result object
+        get_path_from_url(urls[split], coco_gt_root)
     coco = COCO(annotation_file)
     coco_result = coco.loadRes(results_file)
 
