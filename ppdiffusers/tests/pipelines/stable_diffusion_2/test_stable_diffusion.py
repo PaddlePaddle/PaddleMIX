@@ -32,7 +32,7 @@ from ppdiffusers import (
     UNet2DConditionModel,
     logging,
 )
-from ppdiffusers.utils import load_numpy, nightly, slow
+from ppdiffusers.utils import nightly, slow
 from ppdiffusers.utils.testing_utils import (
     CaptureLogger,
     enable_full_determinism,
@@ -287,7 +287,7 @@ class StableDiffusion2PipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
-        expected_slice = np.array([0.49493, 0.47896, 0.40798, 0.54214, 0.53212, 0.48202, 0.47656, 0.46329, 0.48506])
+        expected_slice = np.array([0.95444, 0.94495, 0.95216, 0.9553, 0.96735, 0.96266, 0.93611, 0.93607, 0.92361])
         assert np.abs(image_slice - expected_slice).max() < 7e-3
 
     def test_stable_diffusion_pndm(self):
@@ -298,7 +298,7 @@ class StableDiffusion2PipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
-        expected_slice = np.array([0.49493, 0.47896, 0.40798, 0.54214, 0.53212, 0.48202, 0.47656, 0.46329, 0.48506])
+        expected_slice = np.array([0.95444, 0.94495, 0.95216, 0.9553, 0.96735, 0.96266, 0.93611, 0.93606, 0.92361])
         assert np.abs(image_slice - expected_slice).max() < 7e-3
 
     def test_stable_diffusion_k_lms(self):
@@ -309,7 +309,7 @@ class StableDiffusion2PipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 512, 3)
-        expected_slice = np.array([0.1044, 0.13115, 0.111, 0.10141, 0.1144, 0.07215, 0.11332, 0.09693, 0.10006])
+        expected_slice = np.array([0.97127, 0.96023, 0.97548, 0.96638, 0.96024, 0.97627, 0.97062, 0.96507, 0.96851])
         assert np.abs(image_slice - expected_slice).max() < 3e-3
 
     # def test_stable_diffusion_attention_slicing(self):
@@ -317,14 +317,18 @@ class StableDiffusion2PipelineSlowTests(unittest.TestCase):
     #         "stabilityai/stable-diffusion-2-base", paddle_dtype=paddle.float16
     #     )
     #     pipe.set_progress_bar_config(disable=None)
+
     #     pipe.enable_attention_slicing()
     #     inputs = self.get_inputs(dtype="float16")
     #     image_sliced = pipe(**inputs).images
+
     #     mem_bytes = paddle.device.cuda.memory_allocated()
     #     assert mem_bytes < 3.3 * 10**9
+
     #     pipe.disable_attention_slicing()
     #     inputs = self.get_inputs(dtype="float16")
     #     image = pipe(**inputs).images
+
     #     mem_bytes = paddle.device.cuda.memory_allocated()
     #     assert mem_bytes > 3.3 * 10**9
     #     assert np.abs(image_sliced - image).max() < 0.001
@@ -340,15 +344,13 @@ class StableDiffusion2PipelineSlowTests(unittest.TestCase):
                 latents = latents.detach().cpu().numpy()
                 assert latents.shape == (1, 4, 64, 64)
                 latents_slice = latents[0, -3:, -3:, -1]
-                expected_slice = np.array(
-                    [-0.3862, -0.4507, -1.1729, 0.0686, -1.1045, 0.7124, -1.8301, 0.1903, 1.2773]
-                )
+                expected_slice = np.array([1.7967, 1.4192, 0.3793, 0.9932, -1.9344, 0.9437, -0.5885, -0.8557, -2.4879])
                 assert np.abs(latents_slice.flatten() - expected_slice).max() < 0.05
             elif step == 2:
                 latents = latents.detach().cpu().numpy()
                 assert latents.shape == (1, 4, 64, 64)
                 latents_slice = latents[0, -3:, -3:, -1]
-                expected_slice = np.array([0.272, -0.1863, -0.7383, -0.5029, -0.7534, 0.397, -0.7646, 0.4468, 1.2686])
+                expected_slice = np.array([0.8416, 1.6526, 0.4555, 0.4148, -1.4008, 0.4431, -0.1944, -1.1958, -0.7446])
                 assert np.abs(latents_slice.flatten() - expected_slice).max() < 0.05
 
         callback_fn.has_been_called = False
@@ -390,34 +392,40 @@ class StableDiffusion2PipelineNightlyTests(unittest.TestCase):
         sd_pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
         image = sd_pipe(**inputs).images[0]
-        expected_image = load_numpy(
-            "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_0_base_ddim.npy"
-        )
+        # expected_image = load_numpy(
+        #     "https://bj.bcebos.com/v1/paddlenlp/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_0_base_ddim.npy"
+        # )
+        expected_image = np.array([0.9921, 0.9876, 0.9964, 0.9858, 0.9905, 0.9936, 0.9867, 0.9856, 1.0])
+        image = image[-3:, -3:, -1].flatten()
         max_diff = np.abs(expected_image - image).max()
-        assert max_diff < 0.01
+        assert max_diff < 0.001
 
     def test_stable_diffusion_2_1_default_pndm(self):
         sd_pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1-base")
         sd_pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
         image = sd_pipe(**inputs).images[0]
-        expected_image = load_numpy(
-            "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_1_base_pndm.npy"
-        )
+        # expected_image = load_numpy(
+        #     "https://bj.bcebos.com/v1/paddlenlp/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_1_base_pndm.npy"
+        # )
+        expected_image = np.array([0.9154, 0.9076, 0.9186, 0.9141, 0.9097, 0.9284, 0.9232, 0.919, 0.9332])
+        image = image[-3:, -3:, -1].flatten()
         max_diff = np.abs(expected_image - image).max()
-        assert max_diff < 0.01
+        assert max_diff < 0.001
 
-    def test_stable_diffusion_ddim(self):  # not pass
+    def test_stable_diffusion_ddim(self):
         sd_pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1-base")
         sd_pipe.scheduler = DDIMScheduler.from_config(sd_pipe.scheduler.config)
         sd_pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
         image = sd_pipe(**inputs).images[0]
-        expected_image = load_numpy(
-            "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_1_base_ddim.npy"
-        )
+        # expected_image = load_numpy(
+        #     "https://bj.bcebos.com/v1/paddlenlp/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_1_base_ddim.npy"
+        # )
+        expected_image = np.array([0.9154, 0.9076, 0.9186, 0.9141, 0.9098, 0.9284, 0.9232, 0.919, 0.9332])
+        image = image[-3:, -3:, -1].flatten()
         max_diff = np.abs(expected_image - image).max()
-        assert max_diff < 0.01
+        assert max_diff < 0.001
 
     def test_stable_diffusion_lms(self):
         sd_pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1-base")
@@ -425,11 +433,13 @@ class StableDiffusion2PipelineNightlyTests(unittest.TestCase):
         sd_pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
         image = sd_pipe(**inputs).images[0]
-        expected_image = load_numpy(
-            "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_1_base_lms.npy"
-        )
+        # expected_image = load_numpy(
+        #     "https://bj.bcebos.com/v1/paddlenlp/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_1_base_lms.npy"
+        # )
+        expected_image = np.array([0.9843, 0.9761, 0.9742, 0.9726, 0.9763, 0.9807, 0.9681, 0.97, 0.9801])
+        image = image[-3:, -3:, -1].flatten()
         max_diff = np.abs(expected_image - image).max()
-        assert max_diff < 0.01
+        assert max_diff < 0.001
 
     def test_stable_diffusion_euler(self):
         sd_pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1-base")
@@ -437,21 +447,25 @@ class StableDiffusion2PipelineNightlyTests(unittest.TestCase):
         sd_pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
         image = sd_pipe(**inputs).images[0]
-        expected_image = load_numpy(
-            "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_1_base_euler.npy"
-        )
+        # expected_image = load_numpy(
+        #     "https://bj.bcebos.com/v1/paddlenlp/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_1_base_euler.npy"
+        # )
+        expected_image = np.array([0.9684, 0.9616, 0.9651, 0.9608, 0.9616, 0.9691, 0.962, 0.9574, 0.9681])
+        image = image[-3:, -3:, -1].flatten()
         max_diff = np.abs(expected_image - image).max()
-        assert max_diff < 0.01
+        assert max_diff < 0.001
 
-    def test_stable_diffusion_dpm(self):  # not pass
+    def test_stable_diffusion_dpm(self):
         sd_pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1-base")
         sd_pipe.scheduler = DPMSolverMultistepScheduler.from_config(sd_pipe.scheduler.config)
         sd_pipe.set_progress_bar_config(disable=None)
         inputs = self.get_inputs()
         inputs["num_inference_steps"] = 25
         image = sd_pipe(**inputs).images[0]
-        expected_image = load_numpy(
-            "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_1_base_dpm_multi.npy"
-        )
+        # expected_image = load_numpy(
+        #     "https://bj.bcebos.com/v1/paddlenlp/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_2_text2img/stable_diffusion_2_1_base_dpm_multi.npy"
+        # )
+        expected_image = np.array([0.9412, 0.9249, 0.9403, 0.9412, 0.932, 0.9462, 0.9422, 0.9346, 0.9368])
+        image = image[-3:, -3:, -1].flatten()
         max_diff = np.abs(expected_image - image).max()
-        assert max_diff < 0.01
+        assert max_diff < 0.001

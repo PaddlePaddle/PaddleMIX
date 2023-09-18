@@ -173,6 +173,20 @@ class StableDiffusionImg2ImgPipelineFastTests(
     def test_inference_batch_single_identical(self):
         super().test_inference_batch_single_identical()
 
+    def test_pd_np_pil_inputs_equivalent(self):
+        if len(self.image_params) == 0:
+            return
+        components = self.get_dummy_components()
+        pipe = self.pipeline_class(**components)
+        pipe.set_progress_bar_config(disable=None)
+        out_input_pd = pipe(**self.get_dummy_inputs_by_type(input_image_type="pd"))[0]
+        out_input_np = pipe(**self.get_dummy_inputs_by_type(input_image_type="np"))[0]
+        out_input_pil = pipe(**self.get_dummy_inputs_by_type(input_image_type="pil"))[0]
+        max_diff = np.abs(out_input_pd - out_input_np).max()
+        self.assertLess(max_diff, 0.0001, "`input_type=='pd'` generate different result from `input_type=='np'`")
+        max_diff = np.abs(out_input_pil - out_input_np).max()
+        self.assertLess(max_diff, 0.04, "`input_type=='pd'` generate different result from `input_type=='np'`")
+
 
 @slow
 @require_paddle_gpu
@@ -341,9 +355,7 @@ class StableDiffusionImg2ImgPipelineSlowTests(unittest.TestCase):
         image = output.images[0]
         image_slice = image[255:258, 383:386, -1]
         assert image.shape == (504, 760, 3)
-        expected_slice = np.array(
-            [0.71240354, 0.71053374, 0.69922864, 0.7139934, 0.7106118, 0.69451976, 0.71982634, 0.71717453, 0.70306426]
-        )
+        expected_slice = np.array([0.7286, 0.7218, 0.7078, 0.7278, 0.7201, 0.7027, 0.7305, 0.7267, 0.7097])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
 
 

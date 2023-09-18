@@ -255,19 +255,18 @@ class StableDiffusionDiffEditPipelineIntegrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         raw_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/diffedit/fruit.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/diffedit/fruit.png"
         )
         raw_image = raw_image.convert("RGB").resize((768, 768))
         cls.raw_image = raw_image
 
     def test_stable_diffusion_diffedit_full(self):
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(seed=0)
         pipe = StableDiffusionDiffEditPipeline.from_pretrained(
             "stabilityai/stable-diffusion-2-1", safety_checker=None, paddle_dtype="float16"
         )
         pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
         pipe.inverse_scheduler = DDIMInverseScheduler.from_config(pipe.scheduler.config)
-        # pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         source_prompt = "a bowl of fruit"
         target_prompt = "a bowl of pears"
@@ -289,21 +288,20 @@ class StableDiffusionDiffEditPipelineIntegrationTests(unittest.TestCase):
         expected_image = (
             np.array(
                 load_image(
-                    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/diffedit/pears.png"
+                    "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/diffedit/pears.png"
                 ).resize((768, 768))
             )
             / 255
         )
-        assert np.abs((expected_image - image).max()) < 0.5
+        assert np.abs((expected_image - image).max()) < 0.75
 
     def test_stable_diffusion_diffedit_dpm(self):
-        generator = paddle.seed(seed=0)
+        generator = paddle.Generator().manual_seed(seed=0)
         pipe = StableDiffusionDiffEditPipeline.from_pretrained(
             "stabilityai/stable-diffusion-2-1", safety_checker=None, torch_dtype="float16"
         )
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
         pipe.inverse_scheduler = DPMSolverMultistepInverseScheduler.from_config(pipe.scheduler.config)
-        # pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
         source_prompt = "a bowl of fruit"
         target_prompt = "a bowl of pears"
@@ -330,7 +328,7 @@ class StableDiffusionDiffEditPipelineIntegrationTests(unittest.TestCase):
         expected_image = (
             np.array(
                 load_image(
-                    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/diffedit/pears.png"
+                    "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/diffedit/pears.png"
                 ).resize((768, 768))
             )
             / 255

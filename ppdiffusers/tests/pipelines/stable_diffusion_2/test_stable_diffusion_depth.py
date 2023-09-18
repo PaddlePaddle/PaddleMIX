@@ -321,10 +321,10 @@ class StableDiffusionDepth2ImgPipelineSlowTests(unittest.TestCase):
         gc.collect()
         paddle.device.cuda.empty_cache()
 
-    def get_inputs(self, dtype="float32", seed=0):
+    def get_inputs(self, seed=0):
         generator = paddle.Generator().manual_seed(seed)
         init_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/depth2img/two_cats.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/depth2img/two_cats.png"
         )
         inputs = {
             "prompt": "two tigers",
@@ -396,16 +396,18 @@ class StableDiffusionDepth2ImgPipelineSlowTests(unittest.TestCase):
                 latents = latents.detach().cpu().numpy()
                 assert latents.shape == (1, 4, 60, 80)
                 latents_slice = latents[0, -3:, -3:, -1]
-                expected_slice = np.array([-1.148, -0.2147, -0.618, -2.48, -2.348, 0.3945, -2.05, -1.566, -1.52])
+                expected_slice = np.array(
+                    [-1.1489, -0.2159, -0.6202, -2.4766, -2.3504, 0.3692, -2.0518, -1.5729, -1.5275]
+                )
                 assert np.abs(latents_slice.flatten() - expected_slice).max() < 0.1
 
         callback_fn.has_been_called = False
         pipe = StableDiffusionDepth2ImgPipeline.from_pretrained(
-            "stabilityai/stable-diffusion-2-depth", safety_checker=None, paddle_dtype=paddle.float16
+            "stabilityai/stable-diffusion-2-depth",
         )
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
-        inputs = self.get_inputs(dtype="float16")
+        inputs = self.get_inputs()
         pipe(**inputs, callback=callback_fn, callback_steps=1)
         assert callback_fn.has_been_called
         assert number_of_steps == 2
@@ -419,10 +421,10 @@ class StableDiffusionImg2ImgPipelineNightlyTests(unittest.TestCase):
         gc.collect()
         paddle.device.cuda.empty_cache()
 
-    def get_inputs(self, dtype="float32", seed=0):
+    def get_inputs(self, seed=0):
         generator = paddle.Generator().manual_seed(seed)
         init_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/depth2img/two_cats.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/depth2img/two_cats.png"
         )
         inputs = {
             "prompt": "two tigers",
