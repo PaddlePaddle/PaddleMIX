@@ -2,7 +2,7 @@
 
 ## 1. 模型简介
 
-该模型是 [Segment Anything](https://ai.facebook.com/research/publications/segment-anything/)的 paddle 实现, 可输入点或框进行分割。
+该模型是 [Segment Anything](https://ai.facebook.com/research/publications/segment-anything/) 的 paddle 实现, 可输入点或框进行分割。
 
 
 
