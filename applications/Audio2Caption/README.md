@@ -25,7 +25,7 @@ python applications/AudioChat/audiochat.py \
 ```python
 #audio2caption -- Audio to caption converter
 
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 import paddle
 paddle.seed(1024)
 task = Appflow(app="audio2caption", models=["whisper", "THUDM/chatglm-6b"])
