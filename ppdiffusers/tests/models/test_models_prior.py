@@ -107,7 +107,6 @@ class PriorTransformerTests(ModelTesterMixin, unittest.TestCase):
             model.set_default_attn_processor()
         input = self.get_dummy_seed_input()
         with paddle.no_grad():
-            breakpoint()
             output = model(**input)[0]
         output_slice = output[0, :5].flatten().cpu()
         print(output_slice)
