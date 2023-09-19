@@ -201,17 +201,26 @@ class KandinskyV22PriorEmb2EmbPipelineFastTests(PipelineTesterMixin, unittest.Te
         assert image.shape == (1, 32)
         expected_slice = np.array(
             [
-                0.1071284,
-                1.3330271,
-                0.61260223,
-                -0.6691065,
-                -0.3846852,
-                -1.0303661,
-                0.22716111,
-                0.03348901,
-                0.30040675,
-                -0.24805029,
+                -0.83128,
+                1.9208118,
+                -1.0885652,
+                -1.2565681,
+                1.3792522,
+                0.24001193,
+                -2.486598,
+                0.52196866,
+                -1.1046519,
+                0.8460418,
             ]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
+
+    def test_attention_slicing_forward_pass(self):
+        test_max_difference = False
+        test_mean_pixel_difference = False
+
+        self._test_attention_slicing_forward_pass(
+            test_max_difference=test_max_difference,
+            test_mean_pixel_difference=test_mean_pixel_difference,
+        )

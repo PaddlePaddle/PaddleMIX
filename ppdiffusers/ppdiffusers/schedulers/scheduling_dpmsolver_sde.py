@@ -308,7 +308,7 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         second_order_timesteps = paddle.to_tensor(second_order_timesteps)
         timesteps = paddle.concat([timesteps[:1], timesteps[1:].repeat_interleave(2)])
         timesteps[1::2] = second_order_timesteps
-        self.timesteps = timesteps
+        self.timesteps = timesteps.cast(paddle.float32)
 
         # empty first order variables
         self.sample = None
