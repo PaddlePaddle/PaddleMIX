@@ -33,7 +33,7 @@ from ppdiffusers.models.attention_processor import (
 )
 from ppdiffusers.training_utils import EMAModel
 from ppdiffusers.utils import logging
-from ppdiffusers.utils.testing_utils import CaptureLogger, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import CaptureLogger, nightly, require_paddle_gpu
 
 
 class ModelUtilsTest(unittest.TestCase):
@@ -61,6 +61,7 @@ class ModelUtilsTest(unittest.TestCase):
             if (p1 != p2).cast("int64").sum() > 0:
                 assert False, "Parameters not the same!"
 
+    @nightly
     def test_one_request_upon_cached(self):
         import ppdiffusers
 
@@ -104,8 +105,8 @@ class ModelUtilsTest(unittest.TestCase):
                 subfolder="unet",
                 cache_dir=tmpdirname,
                 in_channels=9,
-                from_hf_hub=True,
-                from_diffusers=True,
+                # from_hf_hub=True,
+                # from_diffusers=True,
             )
 
         # make sure that error message states what keys are missing
@@ -119,8 +120,8 @@ class ModelUtilsTest(unittest.TestCase):
                 in_channels=9,
                 low_cpu_mem_usage=False,
                 ignore_mismatched_sizes=True,
-                from_hf_hub=True,
-                from_diffusers=True,
+                # from_hf_hub=True,
+                # from_diffusers=True,
             )
 
         assert model.config.in_channels == 9
@@ -334,7 +335,6 @@ class ModelTesterMixin:
         # input & output have to have the same shape
         input_tensor = inputs_dict[self.main_input_name]
         expected_shape = input_tensor.shape
-        expected_shape = inputs_dict["sample"].shape
         self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
 
     def test_model_from_pretrained(self):

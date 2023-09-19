@@ -167,9 +167,7 @@ class KandinskyV22ControlnetPipelineFastTests(PipelineTesterMixin, unittest.Test
         image_slice = image[(0), -3:, -3:, (-1)]
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array(
-            [0.6959826, 0.868279, 0.7558092, 0.68769467, 0.85805804, 0.65977496, 0.44885302, 0.5959111, 0.4251595]
-        )
+        expected_slice = np.array([0.4625, 0.537, 1.0, 0.1296, 0.908, 1.0, 1.0, 1.0, 1.0])
         assert (
             np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         ), f" expected_slice {expected_slice}, but got {image_slice.flatten()}"

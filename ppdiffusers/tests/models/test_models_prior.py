@@ -49,7 +49,7 @@ class PriorTransformerTests(ModelTesterMixin, unittest.TestCase):
         }
 
     def get_dummy_seed_input(self, seed=0):
-        paddle.Generator().manual_seed(seed)
+        paddle.seed(seed)
         batch_size = 4
         embedding_dim = 8
         num_embeddings = 7
@@ -113,7 +113,7 @@ class PriorTransformerTests(ModelTesterMixin, unittest.TestCase):
 
         # Since the VAE Gaussian prior's generator is seeded on the appropriate device,
         # the expected output slices are not the same for CPU and GPU.
-        expected_output_slice = paddle.to_tensor(data=[-1.3436, -0.287, 0.7538, 0.4368, -0.0239])
+        expected_output_slice = paddle.to_tensor(data=[-1.34477115, -0.31352618, 0.70679051, 0.39543846, 0.0106])
         self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.01))
 
 

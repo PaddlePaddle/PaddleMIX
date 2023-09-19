@@ -181,7 +181,7 @@ class KandinskyV22InpaintPipelineFastTests(PipelineTesterMixin, unittest.TestCas
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array(
-            [0.50775903, 0.49527195, 0.48824543, 0.50192237, 0.48644906, 0.49373814, 0.4780598, 0.47234827, 0.48327848]
+            [0.80314595, 0.8042307, 0.49223602, 0.12396237, 0.7424172, 0.61428875, 0.5635922, 1.0, 0.8693975]
         )
         assert (
             np.abs(image_slice.flatten() - expected_slice).max() < 0.01

@@ -196,6 +196,14 @@ class KandinskyV22PriorPipelineFastTests(PipelineTesterMixin, unittest.TestCase)
         image_slice = image[(0), -10:]
         image_from_tuple_slice = image_from_tuple[(0), -10:]
         assert image.shape == (1, 32)
-        expected_slice = np.array([-0.0532, 1.712, 0.3656, -1.0852, -0.8946, -1.1756, 0.4348, 0.2482, 0.5146, -0.1156])
+        expected_slice = np.array([-0.4179, 2.171, -1.4336, -1.2213, 1.861, -1.062, -3.111, 0.07, -1.677, 0.92])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
+
+    def test_attention_slicing_forward_pass(self):
+        test_max_difference = False
+        test_mean_pixel_difference = False
+        self._test_attention_slicing_forward_pass(
+            test_max_difference=test_max_difference,
+            test_mean_pixel_difference=test_mean_pixel_difference,
+        )

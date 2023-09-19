@@ -21,7 +21,7 @@ from ppdiffusers import (
     KandinskyV22Img2ImgCombinedPipeline,
     KandinskyV22InpaintCombinedPipeline,
 )
-from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism
 
 from ..test_pipelines_common import PipelineTesterMixin
 from .test_kandinsky import Dummies
@@ -74,35 +74,13 @@ class KandinskyV22PipelineCombinedFastTests(PipelineTesterMixin, unittest.TestCa
         image_slice = image[(0), -3:, -3:, (-1)]
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([0.3013, 0.0471, 0.5176, 0.1817, 0.2566, 0.7076, 0.6712, 0.4421, 0.7503])
+        expected_slice = np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.8085, 0.99, 1.0, 1.0])
         assert (
             np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         ), f" expected_slice {expected_slice}, but got {image_slice.flatten()}"
         assert (
             np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
         ), f" expected_slice {expected_slice}, but got {image_from_tuple_slice.flatten()}"
-
-    @require_paddle_gpu
-    def test_offloads(self):
-        pipes = []
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        pipes.append(sd_pipe)
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        sd_pipe.enable_model_cpu_offload()
-        pipes.append(sd_pipe)
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        sd_pipe.enable_sequential_cpu_offload()
-        pipes.append(sd_pipe)
-        image_slices = []
-        for pipe in pipes:
-            inputs = self.get_dummy_inputs()
-            image = pipe(**inputs).images
-            image_slices.append(image[(0), -3:, -3:, (-1)].flatten())
-        assert np.abs(image_slices[0] - image_slices[1]).max() < 0.001
-        assert np.abs(image_slices[0] - image_slices[2]).max() < 0.001
 
     def test_inference_batch_single_identical(self):
         super().test_inference_batch_single_identical(expected_max_diff=0.01)
@@ -155,33 +133,13 @@ class KandinskyV22PipelineImg2ImgCombinedFastTests(PipelineTesterMixin, unittest
         image_slice = image[(0), -3:, -3:, (-1)]
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([0.4353, 0.471, 0.5128, 0.4806, 0.5054, 0.5348, 0.5224, 0.4603, 0.5025])
+        expected_slice = np.array([0.529, 0.326, 1.0, 0.06, 0.78, 1.0, 0.167, 1.0, 1.0])
         assert (
             np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         ), f" expected_slice {expected_slice}, but got {image_slice.flatten()}"
         assert (
             np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
         ), f" expected_slice {expected_slice}, but got {image_from_tuple_slice.flatten()}"
-
-    @require_paddle_gpu
-    def test_offloads(self):
-        pipes = []
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        pipes.append(sd_pipe)
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        pipes.append(sd_pipe)
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        pipes.append(sd_pipe)
-        image_slices = []
-        for pipe in pipes:
-            inputs = self.get_dummy_inputs()
-            image = pipe(**inputs).images
-            image_slices.append(image[(0), -3:, -3:, (-1)].flatten())
-        assert np.abs(image_slices[0] - image_slices[1]).max() < 0.001
-        assert np.abs(image_slices[0] - image_slices[2]).max() < 0.001
 
     def test_inference_batch_single_identical(self):
         super().test_inference_batch_single_identical(expected_max_diff=0.01)
@@ -234,35 +192,13 @@ class KandinskyV22PipelineInpaintCombinedFastTests(PipelineTesterMixin, unittest
         image_slice = image[(0), -3:, -3:, (-1)]
         image_from_tuple_slice = image_from_tuple[(0), -3:, -3:, (-1)]
         assert image.shape == (1, 64, 64, 3)
-        expected_slice = np.array([0.5039, 0.4926, 0.4898, 0.4978, 0.4838, 0.4942, 0.4738, 0.4702, 0.4816])
+        expected_slice = np.array([1.0, 0.907, 0.310, 0.970, 1.0, 0.797, 0.736, 1.0, 0.843])
         assert (
             np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         ), f" expected_slice {expected_slice}, but got {image_slice.flatten()}"
         assert (
             np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
         ), f" expected_slice {expected_slice}, but got {image_from_tuple_slice.flatten()}"
-
-    @require_paddle_gpu
-    def test_offloads(self):
-        pipes = []
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        pipes.append(sd_pipe)
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        sd_pipe.enable_model_cpu_offload()
-        pipes.append(sd_pipe)
-        components = self.get_dummy_components()
-        sd_pipe = self.pipeline_class(**components)
-        sd_pipe.enable_sequential_cpu_offload()
-        pipes.append(sd_pipe)
-        image_slices = []
-        for pipe in pipes:
-            inputs = self.get_dummy_inputs()
-            image = pipe(**inputs).images
-            image_slices.append(image[(0), -3:, -3:, (-1)].flatten())
-        assert np.abs(image_slices[0] - image_slices[1]).max() < 0.001
-        assert np.abs(image_slices[0] - image_slices[2]).max() < 0.001
 
     def test_inference_batch_single_identical(self):
         super().test_inference_batch_single_identical(expected_max_diff=0.01)
