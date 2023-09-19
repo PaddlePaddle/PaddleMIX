@@ -567,7 +567,7 @@ class PipelineTesterMixin:
             max_diff = np.abs(to_np(output_with_slicing) - to_np(output_without_slicing)).max()
             self.assertLess(max_diff, expected_max_diff, "Attention slicing should not affect the inference results")
         if test_mean_pixel_difference:
-            assert_mean_pixel_difference(output_with_slicing, output_without_slicing)
+            assert_mean_pixel_difference(output_with_slicing[0], output_without_slicing[0])
 
     def test_xformers_attention_forwardGenerator_pass(self):
         self._test_xformers_attention_forwardGenerator_pass()

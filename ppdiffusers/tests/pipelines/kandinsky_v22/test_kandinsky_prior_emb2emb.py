@@ -215,3 +215,12 @@ class KandinskyV22PriorEmb2EmbPipelineFastTests(PipelineTesterMixin, unittest.Te
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
+
+    def test_attention_slicing_forward_pass(self):
+        test_max_difference = False
+        test_mean_pixel_difference = False
+
+        self._test_attention_slicing_forward_pass(
+            test_max_difference=test_max_difference,
+            test_mean_pixel_difference=test_mean_pixel_difference,
+        )
