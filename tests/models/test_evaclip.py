@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import inspect
 import unittest
 
@@ -39,14 +38,6 @@ CLIP_PRETRAINED_MODEL_ARCHIVE_LIST = ["paddlemix/EVA/EVA02-CLIP-L-14"]
 tracker = get_rng_state_tracker()
 tracker.add("global_seed", 6666)
 tracker.add("local_seed", 1025)
-
-
-def _config_zero_init(config):
-    configs_no_init = copy.deepcopy(config)
-    for key in configs_no_init.__dict__.keys():
-        if "_range" in key or "_std" in key or "initializer_factor" in key or "layer_scale" in key:
-            setattr(configs_no_init, key, 1e-10)
-    return configs_no_init
 
 
 class EVAVisionTransformerModelTester:
@@ -90,7 +81,7 @@ class EVAVisionTransformerModelTester:
         inner_attn_ln=True,  # False in eva-01 clip
         fusedlinear=False,
         flash_attn=False,
-        batchsize: int = 4,
+        batchsize=4,
     ):
         self.parent = parent
         self.image_size = image_size
