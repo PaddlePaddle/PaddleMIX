@@ -129,8 +129,6 @@ class StableDiffusionExtrasMixin:
             latents_shape[2] * self.vae_scale_factor,
             latents_shape[3] * self.vae_scale_factor,
         ]
-        print(output_shape)
-        print(latents.shape)
         images_vae = self.vae_decoder(
             latent_sample=latents,
             infer_op=infer_op,

@@ -14,17 +14,19 @@
 
 import argparse
 import os
+import sys
 
-from paddlemix.utils.log import logger
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 
 import paddle
-
 from paddlenlp.transformers import LlamaForCausalLM
 from paddlenlp.transformers.opt.modeling import OPTForCausalLM
 from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
+
+from paddlemix.utils.log import logger
 
 
 def merge(args):

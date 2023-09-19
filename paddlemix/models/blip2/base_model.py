@@ -20,16 +20,16 @@ from dataclasses import dataclass
 from typing import Any, Callable, List, Optional, Tuple, Union
 
 import paddle
-
-from paddlemix.examples.blip2.utils import blip2_load
-from paddlemix.models.model_utils import MixPretrainedModel
-from paddlemix.utils.log import logger
 from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.transformers.model_outputs import ModelOutput
 from paddlenlp.transformers.model_utils import _add_variant, weight_name_suffix
 from paddlenlp.utils.env import PADDLE_WEIGHTS_NAME, SAFE_WEIGHTS_NAME
 
+from paddlemix.models.model_utils import MixPretrainedModel
+from paddlemix.utils.log import logger
+
 from .configuration import Blip2Config
+from .utils import blip2_load
 
 VISION_WEIGHTS = {"eva_vit_g": "https://bj.bcebos.com/paddlenlp/models/community/paddlemix/blip2-stage2/eva_vit_g"}
 BRIDGE_WEIGHTS = {
@@ -605,7 +605,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
         model_to_save = unwrap_model(self)
         if config_to_save is None:
             config_to_save = copy.deepcopy(model_to_save.config)
-
+        config_to_save.mp_degree = getattr(config_to_save, "config_to_save", 1)
         # Save the model
         state_dict = model_to_save.state_dict()
         self._keys_to_ignore_on_save = []

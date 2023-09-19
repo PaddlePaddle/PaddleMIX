@@ -63,7 +63,7 @@ class EVA02VisionTransformerForMIMConfig(PretrainedConfig):
         patch_size=14,
         in_chans=3,
         embed_dim=768,
-        depth=12,
+        layers=12,
         num_heads=12,
         mlp_ratio=4.0,
         qkv_bias=False,
@@ -99,7 +99,7 @@ class EVA02VisionTransformerForMIMConfig(PretrainedConfig):
         self.patch_size = patch_size
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-        self.depth = depth
+        self.layers = layers
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
         self.qkv_bias = qkv_bias
@@ -210,7 +210,7 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
         else:
             self.rope = None
 
-        dpr = [x.item() for x in paddle.linspace(0, config.drop_path_rate, config.depth)]
+        dpr = [x.item() for x in paddle.linspace(0, config.drop_path_rate, config.layers)]
         self.blocks = paddle.nn.LayerList(
             sublayers=[
                 Block(
@@ -220,7 +220,7 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
                     window_size=self.patch_embed.patch_shape if config.use_rel_pos_bias else None,
                     rope=self.rope,
                 )
-                for i in range(config.depth)
+                for i in range(config.layers)
             ]
         )
 
@@ -258,7 +258,7 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
             self._reinit_respostnorm_ln()
 
         if self.deepnorm:
-            init_scale = math.pow(8.0 * config.depth, 0.25)
+            init_scale = math.pow(8.0 * config.layers, 0.25)
             for name, p in self.named_parameters():
                 if "mlp.fc" in name or "mlp.w" in name or "attn.proj" in name or "attn.v_proj" in name:
                     print("deepnorm rescale:", name, "/", init_scale)
@@ -267,7 +267,7 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
         self.subln = config.subln
         if self.subln and self.naiveswiglu:
             # only B/L
-            init_scale = math.sqrt(math.log(config.depth * 2))
+            init_scale = math.sqrt(math.log(config.layers * 2))
             for name, p in self.named_parameters():
                 if "mlp.fc" in name or "mlp.w" in name or "attn.proj" in name or "attn.v_proj" in name:
                     print("subln rescale:", name, "x", init_scale)
@@ -283,7 +283,6 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
 
     def fix_init_weight(self):
         def rescale(param, layer_id):
-            # param = param.divide(paddle.to_tensor(math.sqrt(2.0 * layer_id)))
             origin_dtype = paddle.get_default_dtype()
             paddle.set_default_dtype("float32")
             tmp = paddle.to_tensor(math.sqrt(2.0 * layer_id))
@@ -371,8 +370,8 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
 
         return self.norm(x)
 
-    def forward(self, x, bool_masked_pos=False):
-        x = self.forward_features(x, bool_masked_pos=bool_masked_pos)
+    def forward(self, image, bool_masked_pos=False):
+        x = self.forward_features(image, bool_masked_pos=bool_masked_pos)
         x = x[:, 1:]
         x = self.lm_head(x[bool_masked_pos])
         return x
@@ -530,15 +529,15 @@ class EVA02ForPretrain(EVA02ForPretrainModel):
         self.teacher.set_grad_checkpointing(enable)
         self.student.set_grad_checkpointing(enable)
 
-    def forward(self, samples, images, bool_masked_pos, **kwargs):
+    def forward(self, samples, image, bool_masked_pos, **kwargs):
         if self.beit_like:
             with paddle.no_grad(), paddle.amp.auto_cast():
-                clip_features = self.teacher.encode_image(images)  # [100, 256, 1024], not [100, 1024]
-                bool_masked_pos = bool_masked_pos.flatten(start_axis=1).cast("bool")  # [100, 256]
-                labels = clip_features[bool_masked_pos]  # [10458, 1024]
+                clip_features = self.teacher.encode_image(image)  # [bs, 256, 1024]
+                bool_masked_pos = bool_masked_pos.flatten(start_axis=1).cast("bool")  # [bs, 256]
+                labels = clip_features[bool_masked_pos]  # [N, 1024]
 
             with paddle.amp.auto_cast():
-                outputs = self.student(samples, bool_masked_pos=bool_masked_pos)  # [10458, 1024]
+                outputs = self.student(samples, bool_masked_pos=bool_masked_pos)
 
             loss = compute_loss(outputs, labels)
         else:

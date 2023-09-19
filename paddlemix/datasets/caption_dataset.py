@@ -16,13 +16,12 @@ import collections
 import json
 import os
 
+from paddle.utils.download import get_path_from_url
+
 from paddlemix.utils.env import DATA_HOME
 from paddlemix.utils.log import logger
 
 from .dataset import DatasetBuilder
-
-# from paddle.dataset.common import md5file
-# from paddle.utils.download import get_path_from_url
 
 __all__ = ["CaptionDataset"]
 
@@ -32,7 +31,7 @@ class CaptionDataset(DatasetBuilder):
     Caption dataset.
     """
 
-    URL = "https://bj.bcebos.com/paddlemix/datasets/coco.tar.gz"
+    URL = "https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco.tar"
     META_INFO = collections.namedtuple("META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
     MD5 = ""
     SPLITS = {
@@ -61,6 +60,8 @@ class CaptionDataset(DatasetBuilder):
         images, annotations, image_hash, anno_hash = self.SPLITS[mode]
         image_fullname = os.path.join(DATA_HOME, images)
         anno_fullname = os.path.join(DATA_HOME, annotations)
+        if not os.path.exists(image_fullname) or not os.path.exists(anno_fullname):
+            get_path_from_url(self.URL, DATA_HOME)
 
         return image_fullname, anno_fullname, mode
 

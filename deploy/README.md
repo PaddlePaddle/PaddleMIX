@@ -9,7 +9,7 @@ PaddleMIX基于Paddle Inference，提供了python的部署方案。
 ### 1.1 示例
 
 ```python
->>> from paddlemix import Appflow
+>>> from paddlemix.appflow import Appflow
 >>> from PIL import Image
 
 >>> task = Appflow(app="openset_det_sam",

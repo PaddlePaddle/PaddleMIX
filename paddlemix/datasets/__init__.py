@@ -16,5 +16,4 @@ from .caption_dataset import *
 from .coco_caption import *
 from .coco_clip import *
 from .dataset import *
-from .imagenet import *
 from .vg_caption import *

@@ -334,7 +334,7 @@ class Block(paddle.nn.Layer):
 
         self.deepnorm = config.deepnorm
         if self.deepnorm:
-            self.alpha = math.pow(2.0 * config.depth, 0.25)
+            self.alpha = math.pow(2.0 * config.layers, 0.25)
         self.postnorm = config.postnorm
 
     def forward(self, x, rel_pos_bias=None, attn_mask=None):
@@ -377,11 +377,11 @@ class PatchEmbed(paddle.nn.Layer):
 
     def __init__(self, config):
         super().__init__()
-        img_size = to_2tuple(config.img_size)
+        image_size = to_2tuple(config.image_size)
         patch_size = to_2tuple(config.patch_size)
-        num_patches = img_size[1] // patch_size[1] * (img_size[0] // patch_size[0])
-        self.patch_shape = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
-        self.img_size = img_size
+        num_patches = image_size[1] // patch_size[1] * (image_size[0] // patch_size[0])
+        self.patch_shape = image_size[0] // patch_size[0], image_size[1] // patch_size[1]
+        self.image_size = image_size
         self.patch_size = patch_size
         self.num_patches = num_patches
         self.proj = paddle.nn.Conv2D(
@@ -391,8 +391,8 @@ class PatchEmbed(paddle.nn.Layer):
     def forward(self, x, **kwargs):
         B, C, H, W = x.shape
         assert (
-            H == self.img_size[0] and W == self.img_size[1]
-        ), f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+            H == self.image_size[0] and W == self.image_size[1]
+        ), f"Input image size ({H}*{W}) doesn't match model ({self.image_size[0]}*{self.image_size[1]})."
         x = self.proj(x).flatten(2).transpose([0, 2, 1])
         return x
 
@@ -497,12 +497,12 @@ class EVA02VisionTransformerConfig(PretrainedConfig):
 
     def __init__(
         self,
-        img_size=224,
+        image_size=224,
         patch_size=16,
         in_chans=3,
         num_classes=1000,
         embed_dim=768,
-        depth=12,
+        layers=12,
         num_heads=12,
         mlp_ratio=4.0,
         qkv_bias=False,
@@ -532,12 +532,12 @@ class EVA02VisionTransformerConfig(PretrainedConfig):
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
-        self.img_size = img_size
+        self.image_size = image_size
         self.patch_size = patch_size
         self.in_chans = in_chans
         self.num_classes = num_classes
         self.embed_dim = embed_dim
-        self.depth = depth
+        self.layers = layers
         self.num_heads = num_heads
         self.mlp_ratio = mlp_ratio
         self.qkv_bias = qkv_bias
@@ -591,7 +591,7 @@ class EVA02VisionTransformerPretrainedModel(MixPretrainedModel):
 class EVA02VisionTransformer(EVA02VisionTransformerPretrainedModel):
     def __init__(self, config: EVA02VisionTransformerConfig):
         super(EVA02VisionTransformer, self).__init__(config)
-        self.image_size = config.img_size
+        self.image_size = config.image_size
         self.enable_recompute = config.enable_recompute
         self.num_classes = num_classes = config.num_classes
         self.embed_dim = embed_dim = config.embed_dim
@@ -630,14 +630,14 @@ class EVA02VisionTransformer(EVA02VisionTransformerPretrainedModel):
 
         if config.rope:
             half_head_dim = embed_dim // num_heads // 2
-            hw_seq_len = config.img_size // config.patch_size
+            hw_seq_len = config.image_size // config.patch_size
             self.rope = VisionRotaryEmbeddingFast(
                 dim=half_head_dim, pt_seq_len=config.pt_hw_seq_len, ft_seq_len=hw_seq_len if config.intp_freq else None
             )
         else:
             self.rope = None
 
-        dpr = [x.item() for x in paddle.linspace(0, config.drop_path_rate, config.depth)]
+        dpr = [x.item() for x in paddle.linspace(0, config.drop_path_rate, config.layers)]
         self.blocks = paddle.nn.LayerList(
             sublayers=[
                 Block(
@@ -647,7 +647,7 @@ class EVA02VisionTransformer(EVA02VisionTransformerPretrainedModel):
                     window_size=self.patch_embed.patch_shape if config.use_rel_pos_bias else None,
                     rope=self.rope,
                 )
-                for i in range(config.depth)
+                for i in range(config.layers)
             ]
         )
 
@@ -719,7 +719,7 @@ class EVA02VisionTransformer(EVA02VisionTransformerPretrainedModel):
     def get_classifier(self):
         return self.head
 
-    def reset_classifier(self, num_classes, global_pool=""):
+    def reset_classifier(self, num_classes):
         self.num_classes = num_classes
         if dist.get_world_size() > 1:
             self.head = (
@@ -762,14 +762,14 @@ class EVA02VisionTransformer(EVA02VisionTransformerPretrainedModel):
             if return_patch_tokens:
                 return self.fc_norm(t)
             else:
-                return self.fc_norm(t.mean(1))  #
+                return self.fc_norm(t.mean(1))
         else:
             if return_patch_tokens:
                 return x[:, 1:]
             else:
                 return x[:, 0]
 
-    def forward(self, x, return_patch_tokens=False):
-        x = self.forward_features(x, return_patch_tokens=return_patch_tokens)
+    def forward(self, image, return_patch_tokens=False):
+        x = self.forward_features(image, return_patch_tokens=return_patch_tokens)
         x = self.head(x)
         return x

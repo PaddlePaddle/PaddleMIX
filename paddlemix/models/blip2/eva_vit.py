@@ -475,7 +475,7 @@ def interpolate_pos_embed(model, checkpoint_model):
         num_patches = (
             model.visual_encoder.patch_embed.num_patches
             if hasattr(model, "visual_encoder")
-            else model.visual_encoder.patch_embed.num_patches
+            else model.patch_embed.num_patches
         )
         num_extra_tokens = (
             model.visual_encoder.pos_embed.shape[-2] - num_patches

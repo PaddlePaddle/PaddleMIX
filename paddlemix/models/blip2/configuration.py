@@ -263,6 +263,7 @@ class Blip2Config(PretrainedConfig):
         self.initializer_range = 0.02
         self.freeze_vit = kwargs.get("freeze_vit", True)
         self.mp_degree = kwargs.get("mp_gree", 1)
+        self.use_decoder_only_language_model = kwargs.get("use_decoder_only_language_model", True)
 
     @classmethod
     def from_vision_qformer_text_configs(

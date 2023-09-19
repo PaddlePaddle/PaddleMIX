@@ -18,6 +18,9 @@ from typing import Optional, Tuple, Union
 import paddle
 import paddle.distributed as dist
 import paddle.nn as nn
+from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
+from paddlenlp.transformers.opt.modeling import OPTForCausalLM
+from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 
 from paddlemix.models.blip2.base_model import (
     Blip2ForConditionalGenerationModelOutput,
@@ -32,10 +35,6 @@ from paddlemix.models.blip2.modeling_utils import (
 )
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
 from paddlemix.utils.log import logger
-from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
-from paddlenlp.transformers.opt.modeling import OPTForCausalLM
-from paddlenlp.experimental.transformers import OPTForCausalLMInferenceModel
-from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
 
 from .configuration import Blip2Config
 
@@ -43,57 +42,10 @@ __all__ = [
     "Blip2ForConditionalGeneration",
 ]
 
-
-import struct
-import glob
-import numpy as np
-import os
-
-def deserialize_from_file(fp):
-    x_type = fp.read(1)
-    x_type_out = struct.unpack("c", x_type)[0]
-    # data
-    data_list = []
-    if x_type_out == b"0":
-        data = fp.read(4)
-        data_out = struct.unpack("f", data)[0]
-        while data:
-            data_out = struct.unpack("f", data)[0]
-            data_list.append(data_out)
-            data = fp.read(4)
-    elif x_type_out == b"1":
-        data = fp.read(8)
-        while data:
-            data_out = struct.unpack("l", data)[0]
-            data_list.append(data_out)
-            data = fp.read(8)
-    elif x_type_out == b"2":
-        data = fp.read(4)
-        while data:
-            data_out = struct.unpack("i", data)[0]
-            data_list.append(data_out)
-            data = fp.read(4)
-    else:
-        print("type error")
-    data_arr = np.array(data_list)
-    return data_arr
-
-def load_real_time_tokens():
-    tokens = []
-    files = glob.glob(os.path.join("./real_time_save.*"))
-    for j in range(1, len(files) + 1):
-        filename = "./real_time_save.temp_ids_rank_0_step_{}".format(j)
-        if not os.path.exists(filename):
-            break
-        fp = open(filename, "rb+")
-        fp.read(1)
-        data_list = deserialize_from_file(fp)
-        fp.close()
-        tokens.append(np.array(data_list).reshape(-1, 1))
-    os.system("rm -f ./real_time_save.temp_ids_rank_*")
-    tokens = np.concatenate(tokens, axis=1)
-    return tokens
-
+BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST = [
+    "Salesforce/blip2-flan-t5-xl",
+    "Salesforce/blip2-opt-2.7b",
+]
 
 
 def Parameter(tensor):
@@ -159,14 +111,11 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         else:
             if config.use_decoder_only_language_model:
                 if "opt" in config.text_config:
-                    language_model = OPTForCausalLMInferenceModel.from_pretrained(
+                    language_model = OPTForCausalLM.from_pretrained(
                         config.text_config,
                         load_state_as_np=True,
                         ignore_mismatched_sizes=True,
-                        dtype="float16",
                     )
-                    language_model.hidden_size = language_model.opt.hidden_size
-                    language_model.pad_token_id = language_model.opt.pad_token_id
                 elif "llama" in config.text_config:
                     from paddlenlp.transformers.llama.configuration import LlamaConfig
 
@@ -201,7 +150,6 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             self.language_model = language_model
             for name, param in self.language_model.named_parameters():
                 param.stop_gradient = True
-            print("self.language_model", type(self.language_model))
             self.pad_token_id = self.language_model.pad_token_id
 
             self.Qformer = BertLMHeadModel(
@@ -543,75 +491,25 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         attention_mask = paddle.concat([language_attention_mask, attention_mask], axis=1)
         # concatenate query embeddings with prompt embeddings
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
-        language_model_inputs = paddle.cast(language_model_inputs, dtype=inputs_embeds.dtype)
         inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
 
-        if type(self.language_model) == OPTForCausalLMInferenceModel:
-            batch, seq,_ = inputs_embeds.shape
-            max_len = 204
-            dtype = "float16"
-            tgt_generation_mask = paddle.full([batch, 1, 1, max_len], 0, dtype=dtype)
-            tgt_generation_mask[:,0,0,:seq] = 1
-            attention_mask = paddle.full([batch, 1, max_len, max_len], 0, dtype=dtype)
-            attention_mask[:,0,:seq,:seq] = paddle.tril(
-                        paddle.ones(shape=(seq, seq), dtype=dtype)
-                    )
-            position_ids = paddle.full([batch, seq], 0, dtype="int64")
-            for i in range(batch):
-                position_ids[i,:] = paddle.to_tensor([i for i in range(seq)], dtype="int64")
-            
-            cache_kvs = []
-            num_hidden_layers = self.language_model.opt.num_layers
-            num_attention_heads = self.language_model.opt.num_heads
-            hidden_size = self.language_model.opt.hidden_size
-
-            for i in range(num_hidden_layers):
-                tmp = paddle.zeros(shape=[2, batch, num_attention_heads, max_len, hidden_size // num_attention_heads], dtype=dtype)
-                cache_kvs.append(tmp)
-
-            self.language_model.generate(input_ids=None,
+        outputs = self.language_model.generate(
+            inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            position_ids=position_ids,
-            penalty_score=paddle.full([batch, 1], 1.0, dtype="float32"),
-            frequency_score=paddle.full([batch, 1], 0.0, dtype="float32"),
-            presence_score=paddle.full([batch, 1], 0.0, dtype="float32"),
-            min_length= paddle.full([batch, 1], 1, dtype="int64"),
-            max_length=paddle.full([batch, 1], max_len - seq, dtype="int64"),
-            temperature=paddle.full([batch, 1], 1.0, dtype="float32"),
-            top_p=paddle.full([batch, 1], 0.0, dtype="float32"),
-            eos_token_id=paddle.full([1], 50118, dtype="int64"),   
-            seq_len_encoder=paddle.full([batch, 1], seq, dtype="int32"), 
-            seq_len_decoder= paddle.full([batch, 1], seq, dtype="int32"),
-            step_idx=paddle.full([batch, 1], 0, dtype="int64"), 
-            stop_flags= paddle.full([batch, 1], False, dtype="bool"),
-            tgt_ids=paddle.full([batch, 1], -123, dtype="int64"), 
-            tgt_pos=paddle.full([batch, 1], seq - 1, dtype="int64"),
-            tgt_generation_mask=tgt_generation_mask,
-            pre_ids=paddle.full([batch, max_len], -100, dtype="int64"),
-            stop_nums= paddle.full([1], batch, dtype="int64"),
-            cache_kvs=cache_kvs,
-            inputs_embeds=paddle.cast(inputs_embeds, dtype='float16'),
-            logits_processors=None)
-            tokens: np.ndarray = load_real_time_tokens()
-            generate_ids = tokens.tolist()
-            return generate_ids, None
-        else:
-            outputs = self.language_model.generate(
-                inputs_embeds=inputs_embeds,
-                attention_mask=attention_mask,
-                do_sample=False,
-                top_p=0.9,
-                decode_strategy="greedy_search",
-                temperature=1,
-                num_beams=5,
-                max_length=30,
-                min_length=8,
-                eos_token_id=50118,
-                repetition_penalty=1,
-                length_penalty=1,
-                num_return_sequences=1,
-            )
-            return outputs
+            do_sample=False,
+            top_p=0.9,
+            decode_strategy="greedy_search",
+            temperature=1,
+            num_beams=5,
+            max_length=30,
+            min_length=8,
+            eos_token_id=50118,
+            repetition_penalty=1,
+            length_penalty=1,
+            num_return_sequences=1,
+        )
+
+        return outputs
 
     @paddle.no_grad()
     def encode_image(

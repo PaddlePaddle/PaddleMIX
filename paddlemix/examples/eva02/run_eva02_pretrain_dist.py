@@ -15,6 +15,8 @@
 import os
 import sys
 
+import numpy as np
+
 parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 4)))
 sys.path.insert(0, parent_path)
 import pprint
@@ -26,12 +28,16 @@ import paddle
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 from paddlemix.checkpoint import load_model
-from paddlemix.datasets.imagenet.datasets_build import build_eva_pretraining_dataset
+from paddlemix.datasets.dataset import ImageFolder
 from paddlemix.models.eva02.modeling_pretrain import (
     EVA02ForPretrain,
     EVA02ForPretrainConfig,
 )
 from paddlemix.models.eva02.optim_factory import cosine_scheduler, create_optimizer
+from paddlemix.processors.eva02_processing import (
+    EVA02PretrainImageProcessor,
+    EVA02Processor,
+)
 from paddlemix.trainer.eva02_pretrain_trainer import EVA02PretrainTrainer
 from paddlemix.utils.env import setdistenv
 
@@ -45,48 +51,10 @@ class DataArguments:
     the command line.
     """
 
-    data_set: str = field(
-        default="IMNET",  # "image_folder"
-        metadata={"help": "ImageNet dataset path."},
-    )
     data_path: str = field(
-        default="/paddle/dataset/ILSVRC2012/train",
+        default="",
         metadata={"help": "The dataset path."},
     )
-    eval_data_path: str = field(
-        default="/paddle/dataset/ILSVRC2012/val",
-        metadata={"help": "ImageNet dataset path."},
-    )
-    nb_classes: int = field(
-        default=1000,
-        metadata={"help": "ImageNet dataset path."},
-    )
-    imagenet_default_mean_and_std: bool = field(
-        default=False,
-        metadata={"help": "ImageNet dataset path."},
-    )
-
-    # Augmentation parameters
-    color_jitter: float = field(
-        default=0.0,
-        metadata={"help": "Color jitter factor (default: 0.4)"},
-    )
-    train_interpolation: str = field(
-        default="bicubic",
-        metadata={"help": 'Training interpolation (random, bilinear, bicubic default: "bicubic")'},
-    )
-    second_interpolation: str = field(
-        default="bicubic",
-        metadata={"help": 'Training interpolation (random, bilinear, bicubic default: "bicubic")'},
-    )
-
-    # MIM  224*224/psz/psz * 0.4 = 102.4
-    num_mask_patches: int = field(default=105, metadata={"help": "number of the visual tokens/patches need be masked"})
-    max_mask_patches_per_block: int = field(default=None, metadata={"help": "D"})
-    min_mask_patches_per_block: int = field(default=16, metadata={"help": "D"})
-
-    # Evaluation parameters
-    crop_pct: float = field(default=None, metadata={"help": "Evaluation crop param for data aug."})
 
 
 @dataclass
@@ -107,13 +75,8 @@ class ModelArguments:
         default="paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_p14",
         metadata={"help": "student eva02-vit model name to create"},
     )
-    teacher_type: str = field(default="evaclip", metadata={"help": "0"})
 
     input_size: int = field(
-        default=224,
-        metadata={"help": "image size for training"},
-    )
-    second_input_size: int = field(
         default=224,
         metadata={"help": "image size for training"},
     )
@@ -331,11 +294,37 @@ class SelfTrainer(EVA02PretrainTrainer):
         self.args.save_steps = num_training_steps_per_epoch * self.args.save_epochs
 
 
+class Collator:
+    """
+    Data collator that will dynamically pad the inputs to the longest sequence in the batch.
+    Args:
+        processor (`paddlemix.processors.ProcessorMixin`):
+            The processor used for pre-process the data.
+    """
+
+    def __init__(self, processor, mode="train"):
+        self.processor = processor
+        self.mode = mode
+
+    def __call__(self, data_list):
+        images = [sample[0] for sample in data_list]
+        labels = [sample[-1] for sample in data_list]
+        batch = self.processor(
+            images=images,
+            return_tensors="pd",
+            mode=self.mode,
+        )
+        batch.update(
+            {"labels": paddle.to_tensor(np.array(labels))},
+        )
+        return batch
+
+
 def main_worker(training_args, model_args, data_args):
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("bfloat16")
 
-    if model_args.model != "None":
+    if model_args.model and model_args.model != "None":
         model_config = EVA02ForPretrainConfig.from_pretrained(model_args.model)
         # teacher_config should be str, but student_config can be a dict. if set dict, will only load config.
         if isinstance(model_config.teacher_config, str) and model_args.teacher != "None":
@@ -360,13 +349,19 @@ def main_worker(training_args, model_args, data_args):
     if training_args.stu_pretrained_model_path and training_args.stu_pretrained_model_path != "None":
         load_model(training_args, model.student, ckpt_dir=training_args.stu_pretrained_model_path)
 
-    data_args.input_size = model_args.input_size
-    data_args.second_input_size = model_args.second_input_size
     patch_size = model.student.get_final_patch_size()
     print("Patch size = %s" % str(patch_size))
-    data_args.window_size = (data_args.input_size // patch_size[0], data_args.input_size // patch_size[1])
-    data_args.teacher_type = model_args.teacher_type
-    train_dataset = build_eva_pretraining_dataset(data_args)
+
+    train_dataset = ImageFolder(root=f"{data_args.data_path}")
+    image_processor = EVA02PretrainImageProcessor.from_pretrained(
+        os.path.join(model_args.student, "processor", "train")
+    )
+    image_processor.window_size = (
+        image_processor.input_size // patch_size[0],
+        image_processor.input_size // patch_size[1],
+    )
+    processor = EVA02Processor(image_processor)
+    collator = Collator(processor, mode="train")
 
     if paddle.distributed.get_rank() == 0:
         print("Check parameter scale !")
@@ -384,6 +379,7 @@ def main_worker(training_args, model_args, data_args):
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        data_collator=collator,
     )
 
     # Training
@@ -406,9 +402,7 @@ if __name__ == "__main__":
     pprint.pprint(training_args)
 
     training_args.gradient_accumulation_steps = training_args.accum_freq
-
     setdistenv(training_args)
-
     model_args.data_world_rank = training_args.data_world_rank
     model_args.data_world_size = training_args.data_world_size
     main_worker(training_args, model_args, data_args)

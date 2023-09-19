@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import copy
 import datetime
 import json
@@ -20,12 +21,12 @@ import sys
 import time
 
 import paddle
+from paddlenlp.transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 from pycocoevalcap.eval import COCOEvalCap
 from pycocotools.coco import COCO
 
 from paddlemix.utils import device_guard
 from paddlemix.utils.downloader import WEIGHTS_HOME, get_path_from_url
-from paddlenlp.transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
 
 LLM_LIST = {
     "facebook/opt-2.7b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/opt-2.7b/model_state.pdparams",
@@ -111,10 +112,10 @@ class BlipCollator:
 
 
 def coco_caption_eval(coco_gt_root, results_file, split):
-    # urls = {
-    #     "val": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json",
-    #     "test": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json",
-    # }
+    urls = {
+        "val": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json",
+        "test": "https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json",
+    }
     filenames = {
         "val": "coco_karpathy_val_gt.json",
         "test": "coco_karpathy_test_gt.json",
@@ -122,8 +123,11 @@ def coco_caption_eval(coco_gt_root, results_file, split):
 
     # download_url(urls[split], coco_gt_root)
     annotation_file = os.path.join(coco_gt_root, filenames["test"])
+    if not os.path.exists(annotation_file):
+        # create coco object and coco_result object
+        from paddle.utils.download import get_path_from_url
 
-    # create coco object and coco_result object
+        get_path_from_url(urls[split], coco_gt_root)
     coco = COCO(annotation_file)
     coco_result = coco.loadRes(results_file)
 
@@ -266,7 +270,7 @@ def save_result(result, result_dir, filename, remove_duplicate="", world_size=1)
     rank_id_curr_node = int(os.environ.get("PADDLE_RANK_IN_NODE", 0))
     result_file = os.path.join(result_dir, "%s_rank%d.json" % (filename, rank_id_curr_node))
     if not os.path.exists(result_dir):
-        os.mkdir(result_dir)
+        os.makedirs(result_dir)
     json.dump(result, open(result_file, "w"))
 
     final_result_file = os.path.join(result_dir, "%s.json" % filename)
