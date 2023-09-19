@@ -15,8 +15,6 @@
 import os
 import sys
 
-import numpy as np
-
 parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 4)))
 sys.path.insert(0, parent_path)
 import pprint
@@ -308,14 +306,11 @@ class Collator:
 
     def __call__(self, data_list):
         images = [sample[0] for sample in data_list]
-        labels = [sample[-1] for sample in data_list]
+        # get labels from teacher's clip_features
         batch = self.processor(
             images=images,
             return_tensors="pd",
             mode=self.mode,
-        )
-        batch.update(
-            {"labels": paddle.to_tensor(np.array(labels))},
         )
         return batch
 
