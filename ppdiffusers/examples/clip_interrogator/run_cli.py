@@ -60,7 +60,11 @@ def main():
     parser.add_argument("-f", "--folder", help="path to folder of images")
     parser.add_argument("-i", "--image", help="image file or url")
     parser.add_argument(
-        "-m", "--mode", default="best", choices=["best", "classic", "fast"], help="best, classic, or fast"
+        "-m",
+        "--mode",
+        default="best",
+        choices=["best", "classic", "fast"],
+        help="best, classic, or fast",
     )
 
     args = parser.parse_args()
@@ -93,7 +97,10 @@ def main():
         device = args.device
     paddle.set_device(device)
     # generate a nice prompt
-    config = Config(clip_pretrained_model_name_or_path=args.clip, blip_pretrained_model_name_or_path=args.blip)
+    config = Config(
+        clip_pretrained_model_name_or_path=args.clip,
+        blip_pretrained_model_name_or_path=args.blip,
+    )
     ci = Interrogator(config)
 
     # process single image

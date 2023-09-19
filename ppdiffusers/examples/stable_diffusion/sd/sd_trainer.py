@@ -54,7 +54,7 @@ class VisualDLWithImageCallback(VisualDLCallback):
                 if args.amp_custom_white_list is not None:
                     custom_white_list.extend(args.amp_custom_white_list)
             if hasattr(args, "amp_custom_black_list"):
-                if self.args.amp_custom_black_list is not None:
+                if args.amp_custom_black_list is not None:
                     custom_black_list.extend(args.amp_custom_black_list)
 
             ctx_manager = autocast(
@@ -235,7 +235,10 @@ class StableDiffusionTrainer(Trainer):
         super().__init__(**kwargs)
         if self.args.benchmark or self.args.profiler_options is not None:
             self.add_callback(
-                BenchmarkCallback(benchmark=self.args.benchmark, profiler_options=self.args.profiler_options)
+                BenchmarkCallback(
+                    benchmark=self.args.benchmark,
+                    profiler_options=self.args.profiler_options,
+                )
             )
             if self.args.benchmark:
                 if self.args.disable_tqdm:
@@ -282,7 +285,10 @@ class StableDiffusionTrainer(Trainer):
                 state_dict = self.model.state_dict()
             paddle.save(
                 state_dict,
-                os.path.join(output_dir, _add_variant(PADDLE_WEIGHTS_NAME, self.args.weight_name_suffix)),
+                os.path.join(
+                    output_dir,
+                    _add_variant(PADDLE_WEIGHTS_NAME, self.args.weight_name_suffix),
+                ),
             )
             if self.args.should_save:
                 if self.tokenizer is not None:

@@ -60,7 +60,9 @@ def main():
     if training_args.to_static:
         input_ids = paddle.static.InputSpec(name="input_ids", shape=[-1, model_args.model_max_length], dtype="int64")
         pixel_values = paddle.static.InputSpec(
-            name="pixel_values", shape=[-1, 3, training_args.resolution, training_args.resolution], dtype="float32"
+            name="pixel_values",
+            shape=[-1, 3, training_args.resolution, training_args.resolution],
+            dtype="float32",
         )
         specs = [input_ids, pixel_values]
         paddle.jit.ignore_module([os])

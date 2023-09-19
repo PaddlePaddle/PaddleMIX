@@ -191,26 +191,47 @@ def main():
                         ddim_10_img = unwrap_model(model).log_image(input_ids=batch["input_ids"], guidance_scale=1.0)
                         ddim_75_img = unwrap_model(model).log_image(input_ids=batch["input_ids"], guidance_scale=7.5)
                         if rank == 0:
-                            writer.add_image("reconstruction", reconstruction_img, global_steps, dataformats="NHWC")
-                            writer.add_image("ddim-samples-1.0", ddim_10_img, global_steps, dataformats="NHWC")
-                            writer.add_image("ddim-samples-7.5", ddim_75_img, global_steps, dataformats="NHWC")
+                            writer.add_image(
+                                "reconstruction",
+                                reconstruction_img,
+                                global_steps,
+                                dataformats="NHWC",
+                            )
+                            writer.add_image(
+                                "ddim-samples-1.0",
+                                ddim_10_img,
+                                global_steps,
+                                dataformats="NHWC",
+                            )
+                            writer.add_image(
+                                "ddim-samples-7.5",
+                                ddim_75_img,
+                                global_steps,
+                                dataformats="NHWC",
+                            )
                     tic_train = time.time()
 
                     if rank == 0 and global_steps % training_args.save_steps == 0:
                         os.makedirs(
-                            os.path.join(training_args.output_dir, f"global-steps-{global_steps}"), exist_ok=True
+                            os.path.join(training_args.output_dir, f"global-steps-{global_steps}"),
+                            exist_ok=True,
                         )
                         paddle.save(
                             model.state_dict(),
                             os.path.join(
-                                training_args.output_dir, f"global-steps-{global_steps}", "model_state.pdparams"
+                                training_args.output_dir,
+                                f"global-steps-{global_steps}",
+                                "model_state.pdparams",
                             ),
                         )
 
                 if global_steps >= training_args.max_steps:
                     break
     if rank == 0:
-        paddle.save(model.state_dict(), os.path.join(training_args.output_dir, "model_state.pdparams"))
+        paddle.save(
+            model.state_dict(),
+            os.path.join(training_args.output_dir, "model_state.pdparams"),
+        )
         writer.close()
 
 

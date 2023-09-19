@@ -111,7 +111,11 @@ def collate_fn(examples):
     input_ids = paddle.stack([paddle.to_tensor(example["input_ids"]) for example in examples])
     adapter_cond = paddle.stack([paddle.to_tensor(example["adapter_cond"]) for example in examples])
 
-    batch = {"input_ids": input_ids, "pixel_values": pixel_values, "adapter_cond": adapter_cond}
+    batch = {
+        "input_ids": input_ids,
+        "pixel_values": pixel_values,
+        "adapter_cond": adapter_cond,
+    }
     return batch
 
 
@@ -135,6 +139,10 @@ class AdapterLDMTrainer(Trainer):
             return super().get_train_dataloader()
 
     def _save(self, output_dir=None, state_dict=None, merge_tensor_parallel=False):
-        super()._save(output_dir=output_dir, state_dict=state_dict, merge_tensor_parallel=merge_tensor_parallel)
+        super()._save(
+            output_dir=output_dir,
+            state_dict=state_dict,
+            merge_tensor_parallel=merge_tensor_parallel,
+        )
         output_dir = output_dir if output_dir is not None else self.args.output_dir
         unwrap_model(self.model).adapter.save_pretrained(os.path.join(output_dir, "adapter"))

@@ -65,7 +65,10 @@ def main():
     train_dataset = Fill50kDataset(model.tokenizer, data_args.file_path)
 
     trainer = ControlNetTrainer(
-        model=model, args=training_args, train_dataset=train_dataset, tokenizer=model.tokenizer
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        tokenizer=model.tokenizer,
     )
     # must set recompute after trainer init
     trainer.model.set_recompute(training_args.recompute)

@@ -24,7 +24,18 @@ from ._transforms_video import CenterCropVideo, RandomCropVideo
 
 """ VideoFrameDataset """
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-IMG_EXTENSIONS = [".jpg", ".JPG", ".jpeg", ".JPEG", ".png", ".PNG", ".ppm", ".PPM", ".bmp", ".BMP"]
+IMG_EXTENSIONS = [
+    ".jpg",
+    ".JPG",
+    ".jpeg",
+    ".JPEG",
+    ".png",
+    ".PNG",
+    ".ppm",
+    ".PPM",
+    ".bmp",
+    ".BMP",
+]
 
 
 def pil_loader(path):
@@ -257,7 +268,11 @@ class VideoFrameDataset(paddle.io.Dataset):
         else:
             func = make_dataset
         self.clips, self.videos = func(
-            video_dir, video_length, class_to_idx, frame_stride=frame_stride, clip_step=clip_step
+            video_dir,
+            video_length,
+            class_to_idx,
+            frame_stride=frame_stride,
+            clip_step=clip_step,
         )
         assert len(self.clips[0]) == video_length, f"Invalid clip length = {len(self.clips[0])}"
         if self.temporal_transform == "rand_clips":
@@ -277,12 +292,18 @@ class VideoFrameDataset(paddle.io.Dataset):
                 f"Found 0 clips in {video_dir}. \nSupported image extensions are: " + ",".join(IMG_EXTENSIONS)
             )
         self.img_transform = paddle.vision.transforms.Compose(
-            [paddle.vision.transforms.ToTensor(), paddle.vision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+            [
+                paddle.vision.transforms.ToTensor(),
+                paddle.vision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+            ]
         )
         if self.spatial_transform == "center_crop_resize":
             print("Spatial transform: center crop and then resize")
             self.video_transform = paddle.vision.transforms.Compose(
-                [paddle.vision.transforms.Resize(resolution), CenterCropVideo(resolution)]
+                [
+                    paddle.vision.transforms.Resize(resolution),
+                    CenterCropVideo(resolution),
+                ]
             )
             self.video_transform_step1 = paddle.vision.transforms.Compose(
                 [
@@ -345,7 +366,10 @@ class VideoFrameDataset(paddle.io.Dataset):
         example["frame_stride"] = self.frame_stride
 
         if self.text_processing:
-            tensor_out = {"pixel_values": example["image"], "input_ids": self.text_processing(example["caption"])}
+            tensor_out = {
+                "pixel_values": example["image"],
+                "input_ids": self.text_processing(example["caption"]),
+            }
         else:
             tensor_out = {
                 "pixel_values": example["image"],

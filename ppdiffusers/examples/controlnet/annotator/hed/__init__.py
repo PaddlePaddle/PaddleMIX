@@ -78,7 +78,8 @@ class Network(paddle.nn.Layer):
         self.netScoreFiv = paddle.nn.Conv2D(in_channels=512, out_channels=1, kernel_size=1, stride=1, padding=0)
 
         self.netCombine = paddle.nn.Sequential(
-            paddle.nn.Conv2D(in_channels=5, out_channels=1, kernel_size=1, stride=1, padding=0), paddle.nn.Sigmoid()
+            paddle.nn.Conv2D(in_channels=5, out_channels=1, kernel_size=1, stride=1, padding=0),
+            paddle.nn.Sigmoid(),
         )
 
         if model_path:
@@ -104,19 +105,34 @@ class Network(paddle.nn.Layer):
         tenScoreFiv = self.netScoreFiv(tenVggFiv)
 
         tenScoreOne = paddle.nn.functional.interpolate(
-            tenScoreOne, size=(tenInput.shape[2], tenInput.shape[3]), mode="bilinear", align_corners=False
+            tenScoreOne,
+            size=(tenInput.shape[2], tenInput.shape[3]),
+            mode="bilinear",
+            align_corners=False,
         )
         tenScoreTwo = paddle.nn.functional.interpolate(
-            tenScoreTwo, size=(tenInput.shape[2], tenInput.shape[3]), mode="bilinear", align_corners=False
+            tenScoreTwo,
+            size=(tenInput.shape[2], tenInput.shape[3]),
+            mode="bilinear",
+            align_corners=False,
         )
         tenScoreThr = paddle.nn.functional.interpolate(
-            tenScoreThr, size=(tenInput.shape[2], tenInput.shape[3]), mode="bilinear", align_corners=False
+            tenScoreThr,
+            size=(tenInput.shape[2], tenInput.shape[3]),
+            mode="bilinear",
+            align_corners=False,
         )
         tenScoreFou = paddle.nn.functional.interpolate(
-            tenScoreFou, size=(tenInput.shape[2], tenInput.shape[3]), mode="bilinear", align_corners=False
+            tenScoreFou,
+            size=(tenInput.shape[2], tenInput.shape[3]),
+            mode="bilinear",
+            align_corners=False,
         )
         tenScoreFiv = paddle.nn.functional.interpolate(
-            tenScoreFiv, size=(tenInput.shape[2], tenInput.shape[3]), mode="bilinear", align_corners=False
+            tenScoreFiv,
+            size=(tenInput.shape[2], tenInput.shape[3]),
+            mode="bilinear",
+            align_corners=False,
         )
 
         return self.netCombine(paddle.concat([tenScoreOne, tenScoreTwo, tenScoreThr, tenScoreFou, tenScoreFiv], 1))

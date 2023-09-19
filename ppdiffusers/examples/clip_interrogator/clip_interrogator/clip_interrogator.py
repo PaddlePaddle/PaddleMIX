@@ -114,13 +114,25 @@ class Interrogator:
         )
         self.artists = LabelTable(artists, "artists", self.clip_model, self.tokenize, config)
         self.flavors = LabelTable(
-            _load_list(config.data_path, "flavors.txt"), "flavors", self.clip_model, self.tokenize, config
+            _load_list(config.data_path, "flavors.txt"),
+            "flavors",
+            self.clip_model,
+            self.tokenize,
+            config,
         )
         self.mediums = LabelTable(
-            _load_list(config.data_path, "mediums.txt"), "mediums", self.clip_model, self.tokenize, config
+            _load_list(config.data_path, "mediums.txt"),
+            "mediums",
+            self.clip_model,
+            self.tokenize,
+            config,
         )
         self.movements = LabelTable(
-            _load_list(config.data_path, "movements.txt"), "movements", self.clip_model, self.tokenize, config
+            _load_list(config.data_path, "movements.txt"),
+            "movements",
+            self.clip_model,
+            self.tokenize,
+            config,
         )
         self.trendings = LabelTable(trending_list, "trendings", self.clip_model, self.tokenize, config)
         self.pad_token_id = self.clip_preprocess.tokenizer.pad_token_id
@@ -132,7 +144,8 @@ class Interrogator:
                 transforms.Resize((size, size), interpolation="bicubic"),
                 transforms.ToTensor(),
                 transforms.Normalize(
-                    self.clip_preprocess.image_processor.image_mean, self.clip_preprocess.image_processor.image_std
+                    self.clip_preprocess.image_processor.image_mean,
+                    self.clip_preprocess.image_processor.image_std,
                 ),
             ]
         )(pil_image).unsqueeze(0)
@@ -176,7 +189,10 @@ class Interrogator:
     def interrogate_fast(self, image: Image, max_flavors: int = 32) -> str:
         caption = self.generate_caption(image)
         image_features = self.image_to_features(image)
-        merged = _merge_tables([self.artists, self.flavors, self.mediums, self.movements, self.trendings], self.config)
+        merged = _merge_tables(
+            [self.artists, self.flavors, self.mediums, self.movements, self.trendings],
+            self.config,
+        )
         tops = merged.rank(image_features, max_flavors)
         return _truncate_to_fit(caption + ", " + ", ".join(tops), self.tokenize, self.pad_token_id)
 
@@ -276,7 +292,11 @@ class LabelTable:
         if len(self.labels) != len(self.embeds):
             self.embeds = []
             chunks = np.array_split(self.labels, max(1, len(self.labels) / config.chunk_size))
-            for chunk in tqdm(chunks, desc=f"Preprocessing {desc}" if desc else None, disable=self.config.quiet):
+            for chunk in tqdm(
+                chunks,
+                desc=f"Preprocessing {desc}" if desc else None,
+                disable=self.config.quiet,
+            ):
                 text_tokens = self.tokenize(chunk.tolist())
                 with paddle.no_grad():
                     text_features = clip_model.get_text_features(text_tokens["input_ids"])
@@ -297,7 +317,12 @@ class LabelTable:
                         f,
                     )
 
-    def _rank(self, image_features: paddle.Tensor, text_embeds: paddle.Tensor, top_count: int = 1) -> str:
+    def _rank(
+        self,
+        image_features: paddle.Tensor,
+        text_embeds: paddle.Tensor,
+        top_count: int = 1,
+    ) -> str:
         top_count = min(top_count, len(text_embeds))
         text_embeds = paddle.to_tensor(text_embeds)
         similarity = image_features @ text_embeds.T

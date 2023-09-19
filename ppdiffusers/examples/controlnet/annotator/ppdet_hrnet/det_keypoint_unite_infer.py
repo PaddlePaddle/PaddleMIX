@@ -23,21 +23,18 @@ import yaml
 from paddlenlp.utils.downloader import get_path_from_url_with_filelock
 
 from .det_keypoint_unite_utils import argsparser
-from .infer import (  # noqa F401
-    Detector,
-    DetectorPicoDet,
-    PredictConfig,
-    bench_log,
-    get_test_images,
-    print_arguments,
-)
+from .infer import PredictConfig  # noqa F401
+from .infer import bench_log, get_test_images, print_arguments
 from .keypoint_infer import KeyPointDetector
 from .keypoint_postprocess import translate_to_ori_images
 from .preprocess import decode_image
 from .utils import get_current_memory_mb
 from .visualize import visualize_pose
 
-KEYPOINT_SUPPORT_MODELS = {"HigherHRNet": "keypoint_bottomup", "HRNet": "keypoint_topdown"}
+KEYPOINT_SUPPORT_MODELS = {
+    "HigherHRNet": "keypoint_bottomup",
+    "HRNet": "keypoint_topdown",
+}
 
 
 def predict_with_given_det(image, det_res, keypoint_detector, keypoint_batch_size, run_benchmark):
@@ -62,7 +59,13 @@ def predict_with_given_det(image, det_res, keypoint_detector, keypoint_batch_siz
     return keypoint_res
 
 
-def topdown_unite_predict(detector, topdown_keypoint_detector, image_list, keypoint_batch_size=1, save_res=False):
+def topdown_unite_predict(
+    detector,
+    topdown_keypoint_detector,
+    image_list,
+    keypoint_batch_size=1,
+    save_res=False,
+):
     det_timer = detector.get_timer()
     store_res = []
     for i, img_file in enumerate(image_list):
@@ -83,13 +86,21 @@ def topdown_unite_predict(detector, topdown_keypoint_detector, image_list, keypo
         results = detector.filter_box(results, FLAGS.det_threshold)
         if results["boxes_num"] > 0:
             keypoint_res = predict_with_given_det(
-                image, results, topdown_keypoint_detector, keypoint_batch_size, FLAGS.run_benchmark
+                image,
+                results,
+                topdown_keypoint_detector,
+                keypoint_batch_size,
+                FLAGS.run_benchmark,
             )
 
             if save_res:
                 save_name = img_file if isinstance(img_file, str) else i
                 store_res.append(
-                    [save_name, keypoint_res["bbox"], [keypoint_res["keypoint"][0], keypoint_res["keypoint"][1]]]
+                    [
+                        save_name,
+                        keypoint_res["bbox"],
+                        [keypoint_res["keypoint"][0], keypoint_res["keypoint"][1]],
+                    ]
                 )
         else:
             results["keypoint"] = [[], []]
@@ -102,7 +113,12 @@ def topdown_unite_predict(detector, topdown_keypoint_detector, image_list, keypo
         else:
             if not os.path.exists(FLAGS.output_dir):
                 os.makedirs(FLAGS.output_dir)
-            visualize_pose(img_file, keypoint_res, visual_thresh=FLAGS.keypoint_threshold, save_dir=FLAGS.output_dir)
+            visualize_pose(
+                img_file,
+                keypoint_res,
+                visual_thresh=FLAGS.keypoint_threshold,
+                save_dir=FLAGS.output_dir,
+            )
     if save_res:
         """
         1) store_res: a list of image_data
@@ -116,7 +132,11 @@ def topdown_unite_predict(detector, topdown_keypoint_detector, image_list, keypo
 
 
 def topdown_unite_predict_singleimage(
-    detector, topdown_keypoint_detector, image, keypoint_batch_size=8, det_threshold=0.25
+    detector,
+    topdown_keypoint_detector,
+    image,
+    keypoint_batch_size=8,
+    det_threshold=0.25,
 ):
 
     results = detector.predict_image([image], visual=False)
@@ -130,7 +150,13 @@ def topdown_unite_predict_singleimage(
     return keypoint_res
 
 
-def topdown_unite_predict_video(detector, topdown_keypoint_detector, camera_id, keypoint_batch_size=1, save_res=False):
+def topdown_unite_predict_video(
+    detector,
+    topdown_keypoint_detector,
+    camera_id,
+    keypoint_batch_size=1,
+    save_res=False,
+):
     video_name = "output.mp4"
     if camera_id != -1:
         capture = cv2.VideoCapture(camera_id)
@@ -169,7 +195,11 @@ def topdown_unite_predict_video(detector, topdown_keypoint_detector, camera_id, 
             continue
 
         keypoint_res = predict_with_given_det(
-            frame2, results, topdown_keypoint_detector, keypoint_batch_size, FLAGS.run_benchmark
+            frame2,
+            results,
+            topdown_keypoint_detector,
+            keypoint_batch_size,
+            FLAGS.run_benchmark,
         )
 
         if FLAGS.smooth and len(keypoint_res["keypoint"][0]) == 1:
@@ -181,7 +211,13 @@ def topdown_unite_predict_video(detector, topdown_keypoint_detector, camera_id, 
         im = visualize_pose(frame, keypoint_res, visual_thresh=FLAGS.keypoint_threshold, returnimg=True)
 
         if save_res:
-            store_res.append([index, keypoint_res["bbox"], [keypoint_res["keypoint"][0], keypoint_res["keypoint"][1]]])
+            store_res.append(
+                [
+                    index,
+                    keypoint_res["bbox"],
+                    [keypoint_res["keypoint"][0], keypoint_res["keypoint"][1]],
+                ]
+            )
 
         writer.write(im)
         if camera_id != -1:
@@ -206,7 +242,17 @@ class KeypointSmoothing(object):
     # The following code are modified from:
     # https://github.com/jaantollander/OneEuroFilter
 
-    def __init__(self, width, height, filter_type, alpha=0.5, fc_d=0.1, fc_min=0.1, beta=0.1, thres_mult=0.3):
+    def __init__(
+        self,
+        width,
+        height,
+        filter_type,
+        alpha=0.5,
+        fc_d=0.1,
+        fc_min=0.1,
+        beta=0.1,
+        thres_mult=0.3,
+    ):
         super(KeypointSmoothing, self).__init__()
         self.image_width = width
         self.image_height = height
@@ -367,7 +413,11 @@ class PPDetPose(object):
     def ppdet_hrnet_infer(self, image):
         # predict from image
         return topdown_unite_predict_singleimage(
-            self.detector, self.topdown_keypoint_detector, image, keypoint_batch_size, det_threshold
+            self.detector,
+            self.topdown_keypoint_detector,
+            image,
+            keypoint_batch_size,
+            det_threshold,
         )
 
 
@@ -414,26 +464,45 @@ def main():
     # predict from video file or camera video stream
     if FLAGS.video_file is not None or FLAGS.camera_id != -1:
         topdown_unite_predict_video(
-            detector, topdown_keypoint_detector, FLAGS.camera_id, FLAGS.keypoint_batch_size, FLAGS.save_res
+            detector,
+            topdown_keypoint_detector,
+            FLAGS.camera_id,
+            FLAGS.keypoint_batch_size,
+            FLAGS.save_res,
         )
     else:
         # predict from image
         img_list = get_test_images(FLAGS.image_dir, FLAGS.image_file)
-        topdown_unite_predict(detector, topdown_keypoint_detector, img_list, FLAGS.keypoint_batch_size, FLAGS.save_res)
+        topdown_unite_predict(
+            detector,
+            topdown_keypoint_detector,
+            img_list,
+            FLAGS.keypoint_batch_size,
+            FLAGS.save_res,
+        )
         if not FLAGS.run_benchmark:
             detector.det_times.info(average=True)
             topdown_keypoint_detector.det_times.info(average=True)
         else:
             mode = FLAGS.run_mode
             det_model_dir = FLAGS.det_model_dir
-            det_model_info = {"model_name": det_model_dir.strip("/").split("/")[-1], "precision": mode.split("_")[-1]}
+            det_model_info = {
+                "model_name": det_model_dir.strip("/").split("/")[-1],
+                "precision": mode.split("_")[-1],
+            }
             bench_log(detector, img_list, det_model_info, name="Det")
             keypoint_model_dir = FLAGS.keypoint_model_dir
             keypoint_model_info = {
                 "model_name": keypoint_model_dir.strip("/").split("/")[-1],
                 "precision": mode.split("_")[-1],
             }
-            bench_log(topdown_keypoint_detector, img_list, keypoint_model_info, FLAGS.keypoint_batch_size, "KeyPoint")
+            bench_log(
+                topdown_keypoint_detector,
+                img_list,
+                keypoint_model_info,
+                FLAGS.keypoint_batch_size,
+                "KeyPoint",
+            )
 
 
 if __name__ == "__main__":

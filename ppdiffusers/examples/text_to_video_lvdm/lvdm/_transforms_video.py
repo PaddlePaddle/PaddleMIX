@@ -43,7 +43,13 @@ class RandomCropVideo(paddle.vision.transforms.RandomCrop):
 
 
 class RandomResizedCropVideo(paddle.vision.transforms.RandomResizedCrop):
-    def __init__(self, size, scale=(0.08, 1.0), ratio=(3.0 / 4.0, 4.0 / 3.0), interpolation_mode="bilinear"):
+    def __init__(
+        self,
+        size,
+        scale=(0.08, 1.0),
+        ratio=(3.0 / 4.0, 4.0 / 3.0),
+        interpolation_mode="bilinear",
+    ):
         if isinstance(size, tuple):
             if len(size) != 2:
                 raise ValueError(f"size should be tuple (height, width), instead got {size}")

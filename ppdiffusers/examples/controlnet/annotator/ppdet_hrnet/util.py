@@ -161,7 +161,15 @@ def draw_handpose(canvas, all_hand_peaks, show_number=False):
             x, y = keyponit
             cv2.circle(canvas, (x, y), 4, (0, 0, 255), thickness=-1)
             if show_number:
-                cv2.putText(canvas, str(i), (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 0, 0), lineType=cv2.LINE_AA)
+                cv2.putText(
+                    canvas,
+                    str(i),
+                    (x, y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.3,
+                    (0, 0, 0),
+                    lineType=cv2.LINE_AA,
+                )
     return canvas
 
 

@@ -345,7 +345,7 @@ class LatentVideoDiffusion(nn.Layer):
         decode_single_video_allframes=False,
         max_z_t=None,
         overlapped_length=0,
-        **kwargs
+        **kwargs,
     ):
         b, _, t, _, _ = z.shape
         if self.encoder_type == "2d" and z.dim() == 5:
@@ -415,7 +415,11 @@ class LatentVideoDiffusion(nn.Layer):
                     self.set_seed_for_alignment = False
                 if self.if_numpy_genarator_random_alignment:
                     timesteps = paddle.to_tensor(
-                        self.generator.randint(0, self.noise_scheduler.num_train_timesteps, size=(latents.shape[0],)),
+                        self.generator.randint(
+                            0,
+                            self.noise_scheduler.num_train_timesteps,
+                            size=(latents.shape[0],),
+                        ),
                         dtype="int64",
                     )
                     noise = paddle.to_tensor(self.generator.randn(*latents.shape), dtype="float32")
@@ -462,7 +466,14 @@ class LatentVideoDiffusion(nn.Layer):
 
     @paddle.no_grad()
     def log_text2video_sample_frames(
-        self, input_ids=None, height=256, width=256, eta=1.0, guidance_scale=9, num_frames=16, **kwargs
+        self,
+        input_ids=None,
+        height=256,
+        width=256,
+        eta=1.0,
+        guidance_scale=9,
+        num_frames=16,
+        **kwargs,
     ):
         self.eval()
         with self.ema_scope():
@@ -488,7 +499,13 @@ class LatentVideoDiffusion(nn.Layer):
             if self.use_preconfig_latents:
                 latents = self.preconfig_latents
             else:
-                shape = [input_ids.shape[0], self.unet.in_channels, num_frames, height // 8, width // 8]
+                shape = [
+                    input_ids.shape[0],
+                    self.unet.in_channels,
+                    num_frames,
+                    height // 8,
+                    width // 8,
+                ]
                 latents = paddle.randn(shape)
 
             accepts_eta = "eta" in set(inspect.signature(self.eval_scheduler.step).parameters.keys())
@@ -544,7 +561,13 @@ class LatentVideoDiffusion(nn.Layer):
             if self.use_preconfig_latents:
                 latents = self.preconfig_latents
             else:
-                shape = [batch_size, self.unet.in_channels, num_frames, height // 8, width // 8]
+                shape = [
+                    batch_size,
+                    self.unet.in_channels,
+                    num_frames,
+                    height // 8,
+                    width // 8,
+                ]
                 latents = paddle.randn(shape)
 
             accepts_eta = "eta" in set(inspect.signature(self.eval_scheduler.step).parameters.keys())

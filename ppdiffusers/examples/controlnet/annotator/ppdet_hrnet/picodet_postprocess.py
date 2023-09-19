@@ -201,7 +201,12 @@ class PicoDetPostProcess(object):
 
                 # resize output boxes
                 picked_box_probs[:, :4] = self.warp_boxes(picked_box_probs[:, :4], self.ori_shape[batch_id])
-                im_scale = np.concatenate([self.scale_factor[batch_id][::-1], self.scale_factor[batch_id][::-1]])
+                im_scale = np.concatenate(
+                    [
+                        self.scale_factor[batch_id][::-1],
+                        self.scale_factor[batch_id][::-1],
+                    ]
+                )
                 picked_box_probs[:, :4] /= im_scale
                 # clas score box
                 out_boxes_list.append(

@@ -37,8 +37,18 @@ def parse_arguments():
         default="runwayml/stable-diffusion-v1-5",
         help="The model directory of diffusion_model.",
     )
-    parser.add_argument("--inference_steps", type=int, default=50, help="The number of unet inference steps.")
-    parser.add_argument("--benchmark_steps", type=int, default=1, help="The number of performance benchmark steps.")
+    parser.add_argument(
+        "--inference_steps",
+        type=int,
+        default=50,
+        help="The number of unet inference steps.",
+    )
+    parser.add_argument(
+        "--benchmark_steps",
+        type=int,
+        default=1,
+        help="The number of performance benchmark steps.",
+    )
     parser.add_argument(
         "--task_name",
         type=str,
@@ -66,7 +76,11 @@ def parse_arguments():
     )
     parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
     parser.add_argument(
-        "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "flash", "all"], help="attention_type."
+        "--attention_type",
+        type=str,
+        default="raw",
+        choices=["raw", "cutlass", "flash", "all"],
+        help="attention_type.",
     )
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
@@ -136,6 +150,9 @@ def main(args):
                 else:
                     raise ValueError(e)
 
+        if not args.use_fp16 and attention_type == "flash":
+            print("Flash attention is not supported dtype=float32! Please use float16 or bfloat16. We will skip this!")
+            continue
         width = args.width
         height = args.height
         hr_resize_width = args.hr_resize_width

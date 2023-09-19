@@ -418,7 +418,9 @@ class MaskConditionDecoder(nn.Layer):
         if norm_type == "spatial":
             self.conv_norm_out = SpatialNorm(block_out_channels[0], temb_channels)
         else:
-            self.conv_norm_out = nn.GroupNorm(num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=1e-6)
+            self.conv_norm_out = nn.GroupNorm(
+                num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=1e-6
+            )
         self.conv_act = nn.Silu()
         self.conv_out = nn.Conv2D(block_out_channels[0], out_channels, 3, padding=1)
 

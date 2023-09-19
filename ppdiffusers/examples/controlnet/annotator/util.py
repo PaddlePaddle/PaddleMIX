@@ -50,7 +50,11 @@ def resize_image(input_image, resolution):
     W *= k
     H = int(np.round(H / 64.0)) * 64
     W = int(np.round(W / 64.0)) * 64
-    img = cv2.resize(input_image, (W, H), interpolation=cv2.INTER_LANCZOS4 if k > 1 else cv2.INTER_AREA)
+    img = cv2.resize(
+        input_image,
+        (W, H),
+        interpolation=cv2.INTER_LANCZOS4 if k > 1 else cv2.INTER_AREA,
+    )
     return img
 
 

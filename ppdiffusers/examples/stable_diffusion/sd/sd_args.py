@@ -63,7 +63,8 @@ class SDTrainingArguments(TrainingArguments):
     )
     unet_learning_rate: float = field(default=None, metadata={"help": "The initial learning rate for Unet Model."})
     text_encoder_learning_rate: float = field(
-        default=None, metadata={"help": "The initial learning rate for Text Encoder Model."}
+        default=None,
+        metadata={"help": "The initial learning rate for Text Encoder Model."},
     )
 
     def __post_init__(self):
@@ -126,7 +127,8 @@ class SDModelArguments:
         },
     )
     input_perturbation: Optional[float] = field(
-        default=0, metadata={"help": "The scale of input perturbation. Recommended 0.1."}
+        default=0,
+        metadata={"help": "The scale of input perturbation. Recommended 0.1."},
     )
 
 
@@ -137,7 +139,8 @@ class SDDataArguments:
     """
 
     file_list: str = field(
-        default="./data/filelist/train.filelist.list", metadata={"help": "The name of the file_list."}
+        default="./data/filelist/train.filelist.list",
+        metadata={"help": "The name of the file_list."},
     )
     num_records: int = field(default=10000000, metadata={"help": "num_records"})
     buffer_size: int = field(

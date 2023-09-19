@@ -27,7 +27,7 @@ except ImportError:
     raise ImportError(
         "OmegaConf is required to convert the SD checkpoints. Please install it with `pip install OmegaConf`."
     )
-# from paddlenlp.transformers import CLIPTextConfig, CLIPTextModel, CLIPTokenizer
+
 from ppdiffusers import (
     DDIMScheduler,
     DPMSolverMultistepScheduler,
@@ -289,10 +289,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--checkpoint_path", default=None, type=str, required=True, help="Path to the checkpoint to convert."
+        "--checkpoint_path",
+        default=None,
+        type=str,
+        required=True,
+        help="Path to the checkpoint to convert.",
     )
     parser.add_argument(
-        "--vae_checkpoint_path", default=None, type=str, required=False, help="Path to the checkpoint to convert."
+        "--vae_checkpoint_path",
+        default=None,
+        type=str,
+        required=False,
+        help="Path to the checkpoint to convert.",
     )
     parser.add_argument(
         "--original_config_file",
@@ -321,7 +329,13 @@ if __name__ == "__main__":
             " higher quality images for inference. Non-EMA weights are usually better to continue fine-tuning."
         ),
     )
-    parser.add_argument("--dump_path", default=None, type=str, required=True, help="Path to the output model.")
+    parser.add_argument(
+        "--dump_path",
+        default=None,
+        type=str,
+        required=True,
+        help="Path to the output model.",
+    )
     args = parser.parse_args()
 
     # image_size = 512
@@ -377,7 +391,10 @@ if __name__ == "__main__":
     # 1. Convert the LVDMUNet3DModel model.
     diffusers_unet_config = create_unet_diffusers_config(original_config)
     diffusers_unet_checkpoint = convert_lvdm_unet_checkpoint(
-        checkpoint, diffusers_unet_config, path=args.checkpoint_path, extract_ema=args.extract_ema
+        checkpoint,
+        diffusers_unet_config,
+        path=args.checkpoint_path,
+        extract_ema=args.extract_ema,
     )
     unet = LVDMUNet3DModel.from_config(diffusers_unet_config)
     ppdiffusers_unet_checkpoint = convert_diffusers_vae_unet_to_ppdiffusers(unet, diffusers_unet_checkpoint)

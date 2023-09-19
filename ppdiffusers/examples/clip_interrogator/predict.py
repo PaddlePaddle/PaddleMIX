@@ -64,7 +64,11 @@ class Predictor(BasePredictor):
         else:
             return self.ci.interrogate_fast(image)
 
-    def switch_model(self, clip_pretrained_model_name_or_path: str, blip_pretrained_model_name_or_path: str):
+    def switch_model(
+        self,
+        clip_pretrained_model_name_or_path: str,
+        blip_pretrained_model_name_or_path: str,
+    ):
         if clip_pretrained_model_name_or_path != self.ci.config.clip_pretrained_model_name_or_path:
             self.ci.config.clip_pretrained_model_name_or_path = clip_pretrained_model_name_or_path
             self.ci.load_clip_model()

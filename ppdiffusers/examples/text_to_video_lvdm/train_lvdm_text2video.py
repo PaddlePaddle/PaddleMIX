@@ -28,7 +28,12 @@ from paddlenlp.utils.log import logger
 
 def main():
     parser = PdArgumentParser((ModelArguments, WebVidDatasetArguments, TrainerArguments, TrainingArguments))
-    model_args, data_args, trainer_args, training_args = parser.parse_args_into_dataclasses()
+    (
+        model_args,
+        data_args,
+        trainer_args,
+        training_args,
+    ) = parser.parse_args_into_dataclasses()
     # report to custom_visualdl
     training_args.report_to = ["custom_visualdl"]
     training_args.resolution = data_args.resolution

@@ -37,8 +37,18 @@ def parse_arguments():
         default="runwayml/stable-diffusion-v1-5",
         help="The model directory of diffusion_model.",
     )
-    parser.add_argument("--inference_steps", type=int, default=50, help="The number of unet inference steps.")
-    parser.add_argument("--benchmark_steps", type=int, default=1, help="The number of performance benchmark steps.")
+    parser.add_argument(
+        "--inference_steps",
+        type=int,
+        default=50,
+        help="The number of unet inference steps.",
+    )
+    parser.add_argument(
+        "--benchmark_steps",
+        type=int,
+        default=1,
+        help="The number of performance benchmark steps.",
+    )
     parser.add_argument(
         "--parse_prompt_type",
         type=str,
@@ -51,7 +61,11 @@ def parse_arguments():
     )
     parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
     parser.add_argument(
-        "--attention_type", type=str, default="raw", choices=["raw", "cutlass", "flash", "all"], help="attention_type."
+        "--attention_type",
+        type=str,
+        default="raw",
+        choices=["raw", "cutlass", "flash", "all"],
+        help="attention_type.",
     )
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
     parser.add_argument("--height", type=int, default=512, help="Height of input image")

@@ -134,10 +134,17 @@ def generate_images(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--unet_model_name_or_path", default=None, type=str, required=True, help="unet_model_name_or_path."
+        "--unet_model_name_or_path",
+        default=None,
+        type=str,
+        required=True,
+        help="unet_model_name_or_path.",
     )
     parser.add_argument(
-        "--text_encoder_model_name_or_path", default=None, type=str, help="text_encoder_model_name_or_path."
+        "--text_encoder_model_name_or_path",
+        default=None,
+        type=str,
+        help="text_encoder_model_name_or_path.",
     )
     parser.add_argument(
         "--file",
@@ -170,7 +177,11 @@ if __name__ == "__main__":
     parser.add_argument("--num_inference_steps", default=50, type=int, help="num_inference_steps")
     parser.add_argument("--save_path", default="outputs", type=str, help="Path to the output file.")
     parser.add_argument(
-        "--guidance_scales", default=[1.5, 2, 3, 4, 5, 6, 7, 8], nargs="+", type=str, help="guidance_scales list."
+        "--guidance_scales",
+        default=[1.5, 2, 3, 4, 5, 6, 7, 8],
+        nargs="+",
+        type=str,
+        help="guidance_scales list.",
     )
     parser.add_argument("--height", default=256, type=int, help="height.")
     parser.add_argument("--width", default=256, type=int, help="width.")

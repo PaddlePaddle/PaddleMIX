@@ -142,7 +142,7 @@ class StableDiffusionExtrasMixin:
         lat = 1 / 0.18215 * lat
         image = vae.decode(lat).sample
         image = (image / 2 + 0.5).clip(min=0, max=1)
-        image = image.cpu().transpose(perm=[0, 2, 3, 1]).cast("float32").numpy()
+        image = image.cpu().transpose(perm=[0, 2, 3, 1]).numpy()
         return self.numpy_to_pil(image)
 
 
@@ -241,13 +241,14 @@ class StableDiffusionTilingPipeline(DiffusionPipeline, StableDiffusionExtrasMixi
         width = tile_width + (grid_cols - 1) * (tile_width - tile_col_overlap)
         latents_shape = (batch_size, self.unet.config.in_channels, height // 8, width // 8)
         generator = paddle.Generator().manual_seed(seed)
-        latents = paddle.randn(shape=latents_shape, generator=generator, dtype=self.text_encoder.dtype)
+        latents = paddle.randn(shape=latents_shape, generator=generator)
 
         # overwrite latents for specific tiles if provided
         if seed_tiles is not None:
             for row in range(grid_rows):
                 for col in range(grid_cols):
-                    if (seed_tile := seed_tiles[row][col]) is not None:
+                    seed_tile = seed_tiles[row][col]
+                    if (seed_tile) is not None:
                         mode = seed_tiles_mode[row][col]
                         if mode == self.SeedTilesMode.FULL.value:
                             row_init, row_end, col_init, col_end = _tile2latent_indices(
@@ -267,7 +268,7 @@ class StableDiffusionTilingPipeline(DiffusionPipeline, StableDiffusionExtrasMixi
                         tile_generator = paddle.Generator().manual_seed(seed_tile)
                         tile_shape = latents_shape[0], latents_shape[1], row_end - row_init, col_end - col_init
                         latents[:, :, row_init:row_end, col_init:col_end] = paddle.randn(
-                            shape=tile_shape, generator=tile_generator, dtype=self.text_encoder.dtype
+                            shape=tile_shape, generator=tile_generator
                         )
 
         # overwrite again for seed reroll regions
@@ -278,7 +279,7 @@ class StableDiffusionTilingPipeline(DiffusionPipeline, StableDiffusionExtrasMixi
             reroll_generator = paddle.Generator().manual_seed(seed_reroll)
             region_shape = latents_shape[0], latents_shape[1], row_end - row_init, col_end - col_init
             latents[:, :, row_init:row_end, col_init:col_end] = paddle.randn(
-                shape=region_shape, generator=reroll_generator, dtype=self.text_encoder.dtype
+                shape=region_shape, generator=reroll_generator
             )
 
         # Prepare scheduler
@@ -305,9 +306,7 @@ class StableDiffusionTilingPipeline(DiffusionPipeline, StableDiffusionExtrasMixi
             ]
             for row in prompt
         ]
-        text_embeddings = [
-            [self.text_encoder(col.input_ids)[0].cast(self.text_encoder.dtype) for col in row] for row in text_input
-        ]
+        text_embeddings = [[self.text_encoder(col.input_ids)[0] for col in row] for row in text_input]
 
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
@@ -321,7 +320,7 @@ class StableDiffusionTilingPipeline(DiffusionPipeline, StableDiffusionExtrasMixi
                     uncond_input = self.tokenizer(
                         [""] * batch_size, padding="max_length", max_length=max_length, return_tensors="pd"
                     )
-                    uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0].cast(self.text_encoder.dtype)
+                    uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0]
 
                     # For classifier free guidance, we need to do two forward passes.
                     # Here we concatenate the unconditional and text embeddings into a single batch

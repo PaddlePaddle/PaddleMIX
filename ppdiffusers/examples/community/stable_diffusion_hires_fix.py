@@ -421,8 +421,22 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
                     f" {negative_prompt_embeds.shape}."
                 )
 
-    def prepare_latents(self, batch_size, num_channels_latents, height, width, dtype, generator, latents=None):
-        shape = [batch_size, num_channels_latents, height // self.vae_scale_factor, width // self.vae_scale_factor]
+    def prepare_latents(
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
+        shape = [
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
+        ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -682,8 +696,12 @@ class StableDiffusionHiresFixPipeline(DiffusionPipeline):
             # 8. determine the upscaled width and height for upscaled images
             truncate_width = 0
             truncate_height = 0
-            self.hr_upscale_to_width, self.hr_upscale_to_height = self.get_upscaled_width_and_height(
-                width, height, hr_scale=hr_scale, hr_resize_width=hr_resize_width, hr_resize_height=hr_resize_height
+            (self.hr_upscale_to_width, self.hr_upscale_to_height,) = self.get_upscaled_width_and_height(
+                width,
+                height,
+                hr_scale=hr_scale,
+                hr_resize_width=hr_resize_width,
+                hr_resize_height=hr_resize_height,
             )
             if hr_resize_width != 0 and hr_resize_height != 0:
                 truncate_width = (self.hr_upscale_to_width - hr_resize_width) // self.vae_scale_factor

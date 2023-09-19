@@ -147,7 +147,11 @@ def parse_args():
         help="The prefix keys to be ignored when we resume from a pretrained model, e.g. ignore_keys = ['decoder.'], we will ignore 'decoder.xxx', 'decoder.xxx.xxx'.",
     )
     parser.add_argument(
-        "--input_size", default=None, type=int, nargs="*", help="The height and width of the input at the encoder."
+        "--input_size",
+        default=None,
+        type=int,
+        nargs="*",
+        help="The height and width of the input at the encoder.",
     )
     # dataset
     parser.add_argument(
@@ -202,26 +206,84 @@ def parse_args():
         default=5,
         help="The shuffle_every_n_samples of the text_image_pair dataset.",
     )
-    parser.add_argument("--init_from_ckpt", type=str, default=None, help="The path of checkpoint to be loaded.")
+    parser.add_argument(
+        "--init_from_ckpt",
+        type=str,
+        default=None,
+        help="The path of checkpoint to be loaded.",
+    )
 
     # loss fn
-    parser.add_argument("--disc_start", type=int, default=50001, help="The number of steps the discriminator started.")
-    parser.add_argument("--kl_weight", type=float, default=1.0e-6, help="The weight ratio of the kl_loss.")
-    parser.add_argument("--disc_weight", type=float, default=0.5, help="The weight ratio of the disc_loss.")
-    parser.add_argument("--logvar_init", type=float, default=0.0, help="The init value of the output log variances.")
-    parser.add_argument("--pixelloss_weight", type=float, default=1.0, help="The weight ratio of the pixelloss.")
-    parser.add_argument("--disc_num_layers", type=int, default=3, help="The num layers of the discriminator.")
-    parser.add_argument("--disc_in_channels", type=int, default=3, help="The in channels of the discriminator.")
-    parser.add_argument("--disc_factor", type=float, default=1.0, help="The factor of the discriminator loss.")
     parser.add_argument(
-        "--perceptual_weight", type=float, default=1.0, help="The weight ratio of the perceptual loss."
+        "--disc_start",
+        type=int,
+        default=50001,
+        help="The number of steps the discriminator started.",
     )
     parser.add_argument(
-        "--use_actnorm", action="store_true", help="Whether to use actnorm in NLayerDiscriminator layer."
+        "--kl_weight",
+        type=float,
+        default=1.0e-6,
+        help="The weight ratio of the kl_loss.",
     )
-    parser.add_argument("--disc_conditional", action="store_true", help="Whether to use conditional discriminator.")
     parser.add_argument(
-        "--disc_loss", type=str, choices=["hinge", "vanilla"], default="hinge", help="The type of discriminator loss."
+        "--disc_weight",
+        type=float,
+        default=0.5,
+        help="The weight ratio of the disc_loss.",
+    )
+    parser.add_argument(
+        "--logvar_init",
+        type=float,
+        default=0.0,
+        help="The init value of the output log variances.",
+    )
+    parser.add_argument(
+        "--pixelloss_weight",
+        type=float,
+        default=1.0,
+        help="The weight ratio of the pixelloss.",
+    )
+    parser.add_argument(
+        "--disc_num_layers",
+        type=int,
+        default=3,
+        help="The num layers of the discriminator.",
+    )
+    parser.add_argument(
+        "--disc_in_channels",
+        type=int,
+        default=3,
+        help="The in channels of the discriminator.",
+    )
+    parser.add_argument(
+        "--disc_factor",
+        type=float,
+        default=1.0,
+        help="The factor of the discriminator loss.",
+    )
+    parser.add_argument(
+        "--perceptual_weight",
+        type=float,
+        default=1.0,
+        help="The weight ratio of the perceptual loss.",
+    )
+    parser.add_argument(
+        "--use_actnorm",
+        action="store_true",
+        help="Whether to use actnorm in NLayerDiscriminator layer.",
+    )
+    parser.add_argument(
+        "--disc_conditional",
+        action="store_true",
+        help="Whether to use conditional discriminator.",
+    )
+    parser.add_argument(
+        "--disc_loss",
+        type=str,
+        choices=["hinge", "vanilla"],
+        default="hinge",
+        help="The type of discriminator loss.",
     )
     parser.add_argument("--use_ema", action="store_true", help="Whether to use_ema.")
     parser.add_argument(

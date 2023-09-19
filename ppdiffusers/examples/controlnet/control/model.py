@@ -105,7 +105,10 @@ class ControlNet(nn.Layer):
             reset_initialized_parameter(self.controlnet.controlnet_cond_embedding.blocks)
 
         self.noise_scheduler = DDPMScheduler(
-            beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", num_train_timesteps=1000
+            beta_start=0.00085,
+            beta_end=0.012,
+            beta_schedule="scaled_linear",
+            num_train_timesteps=1000,
         )
         self.eval_scheduler = DDIMScheduler(
             beta_start=0.00085,
@@ -203,7 +206,14 @@ class ControlNet(nn.Layer):
 
     @paddle.no_grad()
     def log_image(
-        self, input_ids=None, controlnet_cond=None, height=512, width=512, eta=0.0, guidance_scale=7.5, **kwargs
+        self,
+        input_ids=None,
+        controlnet_cond=None,
+        height=512,
+        width=512,
+        eta=0.0,
+        guidance_scale=7.5,
+        **kwargs,
     ):
         self.eval()
         with self.ema_scope():

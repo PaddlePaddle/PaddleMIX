@@ -28,7 +28,8 @@ class ModelArguments:
 
     # use pretrained vae kl-8.ckpt (CompVis/stable-diffusion-v1-4/vae)
     vae_name_or_path: Optional[str] = field(
-        default="CompVis/stable-diffusion-v1-4/vae", metadata={"help": "pretrained_vae_name_or_path"}
+        default="CompVis/stable-diffusion-v1-4/vae",
+        metadata={"help": "pretrained_vae_name_or_path"},
     )
     text_encoder_config_file: Optional[str] = field(
         default="./config/ldmbert.json", metadata={"help": "text_encoder_config_file"}
@@ -42,7 +43,8 @@ class ModelArguments:
     num_inference_steps: Optional[int] = field(default=200, metadata={"help": "num_inference_steps"})
     use_ema: bool = field(default=False, metadata={"help": "Whether or not use ema"})
     pretrained_model_name_or_path: str = field(
-        default=None, metadata={"help": "Path to pretrained model or model, when we want to resume training."}
+        default=None,
+        metadata={"help": "Path to pretrained model or model, when we want to resume training."},
     )
     image_logging_steps: Optional[int] = field(default=1000, metadata={"help": "Log image every X steps."})
     enable_xformers_memory_efficient_attention: bool = field(
@@ -73,7 +75,8 @@ class DataArguments:
     """
 
     file_list: str = field(
-        default="./data/filelist/train.filelist.list", metadata={"help": "The name of the file_list."}
+        default="./data/filelist/train.filelist.list",
+        metadata={"help": "The name of the file_list."},
     )
     resolution: int = field(
         default=256,
@@ -131,7 +134,10 @@ class NoTrainerTrainingArguments:
 
     save_steps: int = field(default=5000, metadata={"help": "Save checkpoint every X updates steps."})
 
-    seed: int = field(default=23, metadata={"help": "Random seed that will be set at the beginning of training."})
+    seed: int = field(
+        default=23,
+        metadata={"help": "Random seed that will be set at the beginning of training."},
+    )
     dataloader_num_workers: int = field(
         default=6,
         metadata={
@@ -139,7 +145,8 @@ class NoTrainerTrainingArguments:
         },
     )
     report_to: str = field(
-        default="visualdl", metadata={"help": "The list of integrations to report the results and logs to."}
+        default="visualdl",
+        metadata={"help": "The list of integrations to report the results and logs to."},
     )
     recompute: bool = field(
         default=False,

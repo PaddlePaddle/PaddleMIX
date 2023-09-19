@@ -410,7 +410,8 @@ class ComposableStableDiffusionPipeline(DiffusionPipeline):
         if self.safety_checker is not None:
             safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image, clip_input=safety_checker_input.pixel_values.astype(text_embeddings.dtype)
+                images=image,
+                clip_input=safety_checker_input.pixel_values.astype(text_embeddings.dtype),
             )
         else:
             has_nsfw_concept = None

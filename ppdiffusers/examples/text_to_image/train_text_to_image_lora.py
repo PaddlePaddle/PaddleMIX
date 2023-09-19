@@ -198,7 +198,10 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--image_column", type=str, default="image", help="The column of the dataset containing an image."
+        "--image_column",
+        type=str,
+        default="image",
+        help="The column of the dataset containing an image.",
     )
     parser.add_argument(
         "--caption_column",
@@ -207,7 +210,10 @@ def parse_args(input_args=None):
         help="The column of the dataset containing a caption or a list of captions.",
     )
     parser.add_argument(
-        "--validation_prompt", type=str, default=None, help="A prompt that is sampled during training for inference."
+        "--validation_prompt",
+        type=str,
+        default=None,
+        help="A prompt that is sampled during training for inference.",
     )
     parser.add_argument(
         "--num_validation_images",
@@ -294,7 +300,10 @@ def parse_args(input_args=None):
         help="whether to randomly flip images horizontally",
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=16, help="Batch size (per device) for the training dataloader."
+        "--train_batch_size",
+        type=int,
+        default=16,
+        help="Batch size (per device) for the training dataloader.",
     )
     parser.add_argument(
         "--train_text_encoder",
@@ -347,7 +356,10 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--lr_warmup_steps", type=int, default=500, help="Number of steps for the warmup in the lr scheduler."
+        "--lr_warmup_steps",
+        type=int,
+        default=500,
+        help="Number of steps for the warmup in the lr scheduler.",
     )
     parser.add_argument(
         "--lr_num_cycles",
@@ -355,7 +367,12 @@ def parse_args(input_args=None):
         default=1,
         help="Number of hard resets of the lr in cosine_with_restarts scheduler.",
     )
-    parser.add_argument("--lr_power", type=float, default=1.0, help="Power factor of the polynomial scheduler.")
+    parser.add_argument(
+        "--lr_power",
+        type=float,
+        default=1.0,
+        help="Power factor of the polynomial scheduler.",
+    )
     parser.add_argument("--debug", action="store_true", help="Whether to debug this training script.")
     parser.add_argument(
         "--dataloader_num_workers",
@@ -365,13 +382,37 @@ def parse_args(input_args=None):
             "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
         ),
     )
-    parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
-    parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
+    parser.add_argument(
+        "--adam_beta1",
+        type=float,
+        default=0.9,
+        help="The beta1 parameter for the Adam optimizer.",
+    )
+    parser.add_argument(
+        "--adam_beta2",
+        type=float,
+        default=0.999,
+        help="The beta2 parameter for the Adam optimizer.",
+    )
     parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
-    parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
+    parser.add_argument(
+        "--adam_epsilon",
+        type=float,
+        default=1e-08,
+        help="Epsilon value for the Adam optimizer",
+    )
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
-    parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Whether or not to push the model to the Hub.",
+    )
+    parser.add_argument(
+        "--hub_token",
+        type=str,
+        default=None,
+        help="The token to use to push to the Model Hub.",
+    )
     parser.add_argument(
         "--hub_model_id",
         type=str,
@@ -388,10 +429,16 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--report_to", type=str, default="visualdl", choices=["tensorboard", "visualdl"], help="Log writer type."
+        "--report_to",
+        type=str,
+        default="visualdl",
+        choices=["tensorboard", "visualdl"],
+        help="Log writer type.",
     )
     parser.add_argument(
-        "--enable_xformers_memory_efficient_attention", action="store_true", help="Whether or not to use xformers."
+        "--enable_xformers_memory_efficient_attention",
+        action="store_true",
+        help="Whether or not to use xformers.",
     )
     parser.add_argument("--noise_offset", type=float, default=0, help="The scale of noise offset.")
     if input_args is not None:
@@ -662,7 +709,10 @@ def main():
         pixel_values = paddle.stack([example["pixel_values"] for example in examples]).cast("float32")
         input_ids = [example["input_ids"] for example in examples]
         input_ids = tokenizer.pad(
-            {"input_ids": input_ids}, padding="max_length", max_length=tokenizer.model_max_length, return_tensors="pd"
+            {"input_ids": input_ids},
+            padding="max_length",
+            max_length=tokenizer.model_max_length,
+            return_tensors="pd",
         ).input_ids
         return {
             "input_ids": input_ids,
@@ -675,7 +725,10 @@ def main():
         else BatchSampler(train_dataset, batch_size=args.train_batch_size, shuffle=True)
     )
     train_dataloader = DataLoader(
-        train_dataset, batch_sampler=train_sampler, collate_fn=collate_fn, num_workers=args.dataloader_num_workers
+        train_dataset,
+        batch_sampler=train_sampler,
+        collate_fn=collate_fn,
+        num_workers=args.dataloader_num_workers,
     )
 
     # Scheduler and math around the number of training steps.
@@ -860,7 +913,11 @@ def main():
                 # run inference
                 generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
                 images = [
-                    pipeline(args.validation_prompt, num_inference_steps=30, generator=generator).images[0]
+                    pipeline(
+                        args.validation_prompt,
+                        num_inference_steps=30,
+                        generator=generator,
+                    ).images[0]
                     for _ in range(args.num_validation_images)
                 ]
                 np_images = np.stack([np.asarray(img) for img in images])
@@ -896,7 +953,9 @@ def main():
         # Final inference
         # Load previous pipeline
         pipeline = DiffusionPipeline.from_pretrained(
-            args.pretrained_model_name_or_path, safety_checker=None, requires_safety_checker=False
+            args.pretrained_model_name_or_path,
+            safety_checker=None,
+            requires_safety_checker=False,
         )
         pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
         # load attention processors

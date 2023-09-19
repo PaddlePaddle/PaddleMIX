@@ -72,7 +72,11 @@ class HrHRNetPostProcess(object):
         mask = heats > self.heat_thresh
         # cluster
         cluster = defaultdict(
-            lambda: {"coords": np.zeros((J, 2), dtype=np.float32), "scores": np.zeros(J, dtype=np.float32), "tags": []}
+            lambda: {
+                "coords": np.zeros((J, 2), dtype=np.float32),
+                "scores": np.zeros(J, dtype=np.float32),
+                "tags": [],
+            }
         )
         for jid, m in enumerate(mask):
             num_valid = m.sum()
@@ -99,7 +103,10 @@ class HrHRNetPostProcess(object):
             # pad the cost matrix, otherwise new pose are ignored
             if num_valid > num_clusters:
                 cost = np.pad(
-                    cost, ((0, 0), (0, num_valid - num_clusters)), "constant", constant_values=((0, 0), (0, 1e-10))
+                    cost,
+                    ((0, 0), (0, num_valid - num_clusters)),
+                    "constant",
+                    constant_values=((0, 0), (0, 1e-10)),
                 )
             rows, cols = linear_sum_assignment(cost)
             for y, x in zip(rows, cols):
@@ -310,7 +317,12 @@ class HRNetPostProcess(object):
                     px = int(math.floor(coords[n][p][0] + 0.5))
                     py = int(math.floor(coords[n][p][1] + 0.5))
                     if 1 < px < heatmap_width - 1 and 1 < py < heatmap_height - 1:
-                        diff = np.array([hm[py][px + 1] - hm[py][px - 1], hm[py + 1][px] - hm[py - 1][px]])
+                        diff = np.array(
+                            [
+                                hm[py][px + 1] - hm[py][px - 1],
+                                hm[py + 1][px] - hm[py - 1][px],
+                            ]
+                        )
                         coords[n][p] += np.sign(diff) * 0.25
         preds = coords.copy()
 

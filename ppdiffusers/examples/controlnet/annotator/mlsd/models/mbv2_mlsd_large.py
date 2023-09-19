@@ -91,7 +91,13 @@ class BlockTypeC(paddle.nn.Layer):
     def __init__(self, in_c, out_c):
         super(BlockTypeC, self).__init__()
         self.conv1 = paddle.nn.Sequential(
-            paddle.nn.Conv2D(in_channels=in_c, out_channels=in_c, kernel_size=3, padding=5, dilation=5),
+            paddle.nn.Conv2D(
+                in_channels=in_c,
+                out_channels=in_c,
+                kernel_size=3,
+                padding=5,
+                dilation=5,
+            ),
             paddle.nn.BatchNorm2D(
                 num_features=in_c,
                 momentum=1 - 0.1,
@@ -195,7 +201,12 @@ class InvertedResidual(paddle.nn.Layer):
             [
                 ConvBNReLU(hidden_dim, hidden_dim, stride=stride, groups=hidden_dim),
                 paddle.nn.Conv2D(
-                    in_channels=hidden_dim, out_channels=oup, kernel_size=1, stride=1, padding=0, bias_attr=False
+                    in_channels=hidden_dim,
+                    out_channels=oup,
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                    bias_attr=False,
                 ),
                 paddle.nn.BatchNorm2D(
                     num_features=oup,
@@ -234,7 +245,13 @@ class MobileNetV2(paddle.nn.Layer):
         last_channel = 1280
         width_mult = 1.0
         round_nearest = 8
-        inverted_residual_setting = [[1, 16, 1, 1], [6, 24, 2, 2], [6, 32, 3, 2], [6, 64, 4, 2], [6, 96, 3, 1]]
+        inverted_residual_setting = [
+            [1, 16, 1, 1],
+            [6, 24, 2, 2],
+            [6, 32, 3, 2],
+            [6, 64, 4, 2],
+            [6, 96, 3, 1],
+        ]
         if len(inverted_residual_setting) == 0 or len(inverted_residual_setting[0]) != 4:
             raise ValueError(
                 "inverted_residual_setting should be non-empty or a 4-element list, got {}".format(

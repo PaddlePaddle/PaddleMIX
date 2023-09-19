@@ -35,7 +35,9 @@ device_print = "GPU 🔥"
 device = "gpu"
 
 pipe = CycleDiffusionPipeline.from_pretrained(
-    model_id_or_path, use_auth_token=os.environ.get("USER_TOKEN"), paddle_dtype=paddle_dtype
+    model_id_or_path,
+    use_auth_token=os.environ.get("USER_TOKEN"),
+    paddle_dtype=paddle_dtype,
 )
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
 tokenizer = pipe.tokenizer
@@ -117,7 +119,14 @@ class EmptyControl(AttentionControl):
 class AttentionStore(AttentionControl):
     @staticmethod
     def get_empty_store():
-        return {"down_cross": [], "mid_cross": [], "up_cross": [], "down_self": [], "mid_self": [], "up_self": []}
+        return {
+            "down_cross": [],
+            "mid_cross": [],
+            "up_cross": [],
+            "down_self": [],
+            "mid_self": [],
+            "up_self": [],
+        }
 
     def forward(self, attn, is_cross: bool, place_in_unet: str):
         key = f"{place_in_unet}_{'cross' if is_cross else 'self'}"
@@ -246,7 +255,11 @@ class AttentionRefine(AttentionControlEdit):
         self.alphas = alphas.reshape([alphas.shape[0], 1, 1, alphas.shape[1]])
 
 
-def get_equalizer(text: str, word_select: Union[int, Tuple[int, ...]], values: Union[List[float], Tuple[float, ...]]):
+def get_equalizer(
+    text: str,
+    word_select: Union[int, Tuple[int, ...]],
+    values: Union[List[float], Tuple[float, ...]],
+):
     if type(word_select) is int or type(word_select) is str:
         word_select = (word_select,)
     equalizer = paddle.ones([len(values), 77])
@@ -398,18 +411,34 @@ with gr.Blocks(css=css) as demo:
                 with gr.Group():
                     with gr.Row():
                         source_prompt = gr.Textbox(
-                            label="Source prompt", placeholder="Source prompt describes the input image"
+                            label="Source prompt",
+                            placeholder="Source prompt describes the input image",
                         )
                         source_guidance_scale = gr.Slider(
-                            label="Source guidance scale", value=1, minimum=1, maximum=10
+                            label="Source guidance scale",
+                            value=1,
+                            minimum=1,
+                            maximum=10,
                         )
                     with gr.Row():
                         target_prompt = gr.Textbox(
-                            label="Target prompt", placeholder="Target prompt describes the output image"
+                            label="Target prompt",
+                            placeholder="Target prompt describes the output image",
                         )
-                        guidance_scale = gr.Slider(label="Target guidance scale", value=5, minimum=1, maximum=10)
+                        guidance_scale = gr.Slider(
+                            label="Target guidance scale",
+                            value=5,
+                            minimum=1,
+                            maximum=10,
+                        )
                     with gr.Row():
-                        strength = gr.Slider(label="Strength", value=0.7, minimum=0.5, maximum=1, step=0.01)
+                        strength = gr.Slider(
+                            label="Strength",
+                            value=0.7,
+                            minimum=0.5,
+                            maximum=1,
+                            step=0.01,
+                        )
                     with gr.Row():
                         generate1 = gr.Button(value="Run CycleDiffusion")
 
@@ -417,15 +446,25 @@ with gr.Blocks(css=css) as demo:
                 with gr.Group():
                     with gr.Row():
                         cross_attention_control = gr.Radio(
-                            label="CAC type", choices=["None", "Replace", "Refine"], value="None"
+                            label="CAC type",
+                            choices=["None", "Replace", "Refine"],
+                            value="None",
                         )
                     with gr.Row():
                         # If not "None", the following two parameters will be used.
                         cross_replace_steps = gr.Slider(
-                            label="Cross replace steps", value=0.8, minimum=0.0, maximum=1, step=0.01
+                            label="Cross replace steps",
+                            value=0.8,
+                            minimum=0.0,
+                            maximum=1,
+                            step=0.01,
                         )
                         self_replace_steps = gr.Slider(
-                            label="Self replace steps", value=0.4, minimum=0.0, maximum=1, step=0.01
+                            label="Self replace steps",
+                            value=0.4,
+                            minimum=0.0,
+                            maximum=1,
+                            step=0.01,
                         )
                     with gr.Row():
                         generate2 = gr.Button(value="Run CycleDiffusion")
@@ -434,7 +473,11 @@ with gr.Blocks(css=css) as demo:
                 with gr.Group():
                     with gr.Row():
                         num_inference_steps = gr.Slider(
-                            label="Inference steps", value=100, minimum=25, maximum=500, step=1
+                            label="Inference steps",
+                            value=100,
+                            minimum=25,
+                            maximum=500,
+                            step=1,
                         )
                         width = gr.Slider(label="Width", value=512, minimum=512, maximum=1024, step=8)
                         height = gr.Slider(label="Height", value=512, minimum=512, maximum=1024, step=8)

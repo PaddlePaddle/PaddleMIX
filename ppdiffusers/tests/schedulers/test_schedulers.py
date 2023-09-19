@@ -282,9 +282,8 @@ class SchedulerCommonTest(unittest.TestCase):
             if isinstance(t, paddle.Tensor):
                 num_dims = len(sample.shape)
                 # pad t with 1s to match num_dims
-                t = t.reshape([-1, *(1,) * (num_dims - 1)]).cast(
-                                sample.dtype)
-                
+                t = t.reshape([-1, *(1,) * (num_dims - 1)]).cast(sample.dtype)
+
             return sample * t / (t + 1)
 
         return model

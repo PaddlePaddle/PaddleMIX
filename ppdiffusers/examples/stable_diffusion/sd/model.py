@@ -168,7 +168,9 @@ class StableDiffusionModel(nn.Layer):
 
         # unet
         model_pred = self.unet(
-            sample=noisy_latents, timestep=timesteps, encoder_hidden_states=encoder_hidden_states
+            sample=noisy_latents,
+            timestep=timesteps,
+            encoder_hidden_states=encoder_hidden_states,
         ).sample
 
         # Get the target for loss depending on the prediction type
@@ -190,7 +192,9 @@ class StableDiffusionModel(nn.Layer):
             # This is discussed in Section 4.2 of the same paper.
             snr = self.compute_snr(timesteps)
             mse_loss_weights = (
-                paddle.stack([snr, self.model_args.snr_gamma * paddle.ones_like(timesteps)], axis=1).min(axis=1)[0]
+                paddle.stack([snr, self.model_args.snr_gamma * paddle.ones_like(timesteps)], axis=1,).min(
+                    axis=1
+                )[0]
                 / snr
             )
             # We first calculate the original loss. Then we mean over the non-batch dimensions and
@@ -280,7 +284,16 @@ class StableDiffusionModel(nn.Layer):
         return image
 
     @paddle.no_grad()
-    def log_image(self, input_ids=None, height=256, width=256, eta=0.0, guidance_scale=7.5, max_batch=8, **kwargs):
+    def log_image(
+        self,
+        input_ids=None,
+        height=256,
+        width=256,
+        eta=0.0,
+        guidance_scale=7.5,
+        max_batch=8,
+        **kwargs,
+    ):
         self.eval()
         with self.ema_scope():
             if height % 8 != 0 or width % 8 != 0:

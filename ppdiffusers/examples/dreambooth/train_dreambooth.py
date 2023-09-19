@@ -177,7 +177,12 @@ def parse_args(input_args=None):
         action="store_true",
         help="Flag to add prior preservation loss.",
     )
-    parser.add_argument("--prior_loss_weight", type=float, default=1.0, help="The weight of prior preservation loss.")
+    parser.add_argument(
+        "--prior_loss_weight",
+        type=float,
+        default=1.0,
+        help="The weight of prior preservation loss.",
+    )
     parser.add_argument(
         "--num_class_images",
         type=int,
@@ -241,10 +246,16 @@ def parse_args(input_args=None):
         help="Whether to train the text encoder. If set, the text encoder should be float32 precision.",
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=4, help="Batch size (per device) for the training dataloader."
+        "--train_batch_size",
+        type=int,
+        default=4,
+        help="Batch size (per device) for the training dataloader.",
     )
     parser.add_argument(
-        "--sample_batch_size", type=int, default=4, help="Batch size (per device) for sampling images."
+        "--sample_batch_size",
+        type=int,
+        default=4,
+        help="Batch size (per device) for sampling images.",
     )
     parser.add_argument("--num_train_epochs", type=int, default=1)
     parser.add_argument(
@@ -286,7 +297,10 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--lr_warmup_steps", type=int, default=500, help="Number of steps for the warmup in the lr scheduler."
+        "--lr_warmup_steps",
+        type=int,
+        default=500,
+        help="Number of steps for the warmup in the lr scheduler.",
     )
     parser.add_argument(
         "--lr_num_cycles",
@@ -294,7 +308,12 @@ def parse_args(input_args=None):
         default=1,
         help="Number of hard resets of the lr in cosine_with_restarts scheduler.",
     )
-    parser.add_argument("--lr_power", type=float, default=1.0, help="Power factor of the polynomial scheduler.")
+    parser.add_argument(
+        "--lr_power",
+        type=float,
+        default=1.0,
+        help="Power factor of the polynomial scheduler.",
+    )
     parser.add_argument(
         "--dataloader_num_workers",
         type=int,
@@ -303,13 +322,37 @@ def parse_args(input_args=None):
             "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
         ),
     )
-    parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
-    parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
+    parser.add_argument(
+        "--adam_beta1",
+        type=float,
+        default=0.9,
+        help="The beta1 parameter for the Adam optimizer.",
+    )
+    parser.add_argument(
+        "--adam_beta2",
+        type=float,
+        default=0.999,
+        help="The beta2 parameter for the Adam optimizer.",
+    )
     parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
-    parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
+    parser.add_argument(
+        "--adam_epsilon",
+        type=float,
+        default=1e-08,
+        help="Epsilon value for the Adam optimizer",
+    )
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
-    parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Whether or not to push the model to the Hub.",
+    )
+    parser.add_argument(
+        "--hub_token",
+        type=str,
+        default=None,
+        help="The token to use to push to the Model Hub.",
+    )
     parser.add_argument(
         "--hub_model_id",
         type=str,
@@ -339,7 +382,9 @@ def parse_args(input_args=None):
         help=("Save a checkpoint of the training state every X updates."),
     )
     parser.add_argument(
-        "--enable_xformers_memory_efficient_attention", action="store_true", help="Whether or not to use xformers."
+        "--enable_xformers_memory_efficient_attention",
+        action="store_true",
+        help="Whether or not to use xformers.",
     )
     parser.add_argument("--noise_offset", type=float, default=1.0, help="The scale of noise offset.")
 
@@ -514,7 +559,9 @@ def main():
 
         if cur_class_images < args.num_class_images:
             pipeline = DiffusionPipeline.from_pretrained(
-                args.pretrained_model_name_or_path, safety_checker=None, requires_safety_checker=False
+                args.pretrained_model_name_or_path,
+                safety_checker=None,
+                requires_safety_checker=False,
             )
             if args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
                 try:
@@ -536,10 +583,16 @@ def main():
                 else BatchSampler(sample_dataset, batch_size=args.sample_batch_size, shuffle=False)
             )
             sample_dataloader = DataLoader(
-                sample_dataset, batch_sampler=batch_sampler, num_workers=args.dataloader_num_workers
+                sample_dataset,
+                batch_sampler=batch_sampler,
+                num_workers=args.dataloader_num_workers,
             )
 
-            for example in tqdm(sample_dataloader, desc="Generating class images", disable=not is_main_process):
+            for example in tqdm(
+                sample_dataloader,
+                desc="Generating class images",
+                disable=not is_main_process,
+            ):
                 images = pipeline(example["prompt"]).images
 
                 for i, image in enumerate(images):
@@ -639,7 +692,10 @@ def main():
         pixel_values = paddle.stack(pixel_values).astype("float32")
 
         input_ids = tokenizer.pad(
-            {"input_ids": input_ids}, padding="max_length", max_length=tokenizer.model_max_length, return_tensors="pd"
+            {"input_ids": input_ids},
+            padding="max_length",
+            max_length=tokenizer.model_max_length,
+            return_tensors="pd",
         ).input_ids
 
         return {
@@ -653,7 +709,10 @@ def main():
         else BatchSampler(train_dataset, batch_size=args.train_batch_size, shuffle=True)
     )
     train_dataloader = DataLoader(
-        train_dataset, batch_sampler=train_sampler, collate_fn=collate_fn, num_workers=args.dataloader_num_workers
+        train_dataset,
+        batch_sampler=train_sampler,
+        collate_fn=collate_fn,
+        num_workers=args.dataloader_num_workers,
     )
 
     # Scheduler and math around the number of training steps.
@@ -743,7 +802,12 @@ def main():
                 )
             batch_size = latents.shape[0]
             # Sample a random timestep for each image
-            timesteps = paddle.randint(0, noise_scheduler.config.num_train_timesteps, (batch_size,), dtype="int64")
+            timesteps = paddle.randint(
+                0,
+                noise_scheduler.config.num_train_timesteps,
+                (batch_size,),
+                dtype="int64",
+            )
 
             # Add noise to the latents according to the noise magnitude at each timestep
             # (this is the forward diffusion process)

@@ -15,28 +15,27 @@
 import os
 from dataclasses import dataclass, field
 
-import paddle
+import matplotlib.pyplot as plt
+import nltk
 import numpy as np
-import requests
-from paddlenlp.trainer import PdArgumentParser
-from PIL import Image
-
 import paddle
 import paddle.nn.functional as F
-from PIL import Image, ImageDraw, ImageFont
-
-from paddlevlp.processors.groundingdino_processing import GroudingDinoProcessor
-from paddlevlp.models.groundingdino.modeling import GroundingDinoModel
-from paddlevlp.models.sam.modeling import SamModel
-from paddlevlp.processors.sam_processing import SamProcessor
+import requests
+from paddlenlp.trainer import PdArgumentParser
 from paddlenlp.transformers import AutoTokenizer
-from paddlevlp.processors.blip_processing import BlipImageProcessor, BlipTextProcessor
-from paddlevlp.models.blip2.modeling import Blip2ForConditionalGeneration
-from paddlevlp.processors.blip_processing import Blip2Processor
-import nltk
+from PIL import Image
 
-from paddlevlp.utils.log import logger
-import matplotlib.pyplot as plt
+from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
+from paddlemix.models.groundingdino.modeling import GroundingDinoModel
+from paddlemix.models.sam.modeling import SamModel
+from paddlemix.processors.blip_processing import (
+    Blip2Processor,
+    BlipImageProcessor,
+    BlipTextProcessor,
+)
+from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
+from paddlemix.processors.sam_processing import SamProcessor
+from paddlemix.utils.log import logger
 
 
 def show_mask(mask, ax, random_color=False):
@@ -52,9 +51,7 @@ def show_mask(mask, ax, random_color=False):
 def show_box(box, ax, label):
     x0, y0 = box[0], box[1]
     w, h = box[2] - box[0], box[3] - box[1]
-    ax.add_patch(
-        plt.Rectangle(
-            (x0, y0), w, h, edgecolor='green', facecolor=(0, 0, 0, 0), lw=2))
+    ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor="green", facecolor=(0, 0, 0, 0), lw=2))
     ax.text(x0, y0, label)
 
 
@@ -71,8 +68,8 @@ class DataArguments:
 
     prompt: str = field(
         default="describe the image",
-        metadata={"help": "The prompt of the image to be generated."
-                  })  # "Question: how many cats are there? Answer:"
+        metadata={"help": "The prompt of the image to be generated."},
+    )  # "Question: how many cats are there? Answer:"
 
 
 @dataclass
@@ -80,30 +77,39 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
     """
+
     blip2_model_name_or_path: str = field(
         default="paddlemix/blip2-caption-opt2.7b",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     text_model_name_or_path: str = field(
         default="facebook/opt-2.7b",
-        metadata={"help": "The type of text model to use (OPT, T5)."}, )
+        metadata={"help": "The type of text model to use (OPT, T5)."},
+    )
     dino_model_name_or_path: str = field(
         default="GroundingDino/groundingdino-swint-ogc",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     sam_model_name_or_path: str = field(
         default="Sam/SamVitH-1024",
-        metadata={"help": "Path to pretrained model or model identifier"}, )
+        metadata={"help": "Path to pretrained model or model identifier"},
+    )
     box_threshold: float = field(
         default=0.3,
-        metadata={"help": "box threshold."}, )
+        metadata={"help": "box threshold."},
+    )
     text_threshold: float = field(
         default=0.25,
-        metadata={"help": "text threshold."}, )
+        metadata={"help": "text threshold."},
+    )
     output_dir: str = field(
         default="automatic_label",
-        metadata={"help": "output directory."}, )
+        metadata={"help": "output directory."},
+    )
     visual: bool = field(
         default=True,
-        metadata={"help": "save visual image."}, )
+        metadata={"help": "save visual image."},
+    )
 
 
 def generate_caption(raw_image, prompt, processor, blip2_model):
@@ -113,10 +119,10 @@ def generate_caption(raw_image, prompt, processor, blip2_model):
         text=prompt,
         return_tensors="pd",
         return_attention_mask=True,
-        mode="test", )
+        mode="test",
+    )
     generated_ids, scores = blip2_model.generate(**inputs)
-    generated_text = processor.batch_decode(
-        generated_ids, skip_special_tokens=True)[0].strip()
+    generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
     logger.info("Generate text: {}".format(generated_text))
 
     return generated_text
@@ -125,13 +131,10 @@ def generate_caption(raw_image, prompt, processor, blip2_model):
 def generate_tags(caption):
     lemma = nltk.wordnet.WordNetLemmatizer()
 
-    nltk.download(['punkt', 'averaged_perceptron_tagger', 'wordnet'])
-    tags_list = [
-        word for (word, pos) in nltk.pos_tag(nltk.word_tokenize(caption))
-        if pos[0] == 'N'
-    ]
+    nltk.download(["punkt", "averaged_perceptron_tagger", "wordnet"])
+    tags_list = [word for (word, pos) in nltk.pos_tag(nltk.word_tokenize(caption)) if pos[0] == "N"]
     tags_lemma = [lemma.lemmatize(w) for w in tags_list]
-    tags = ', '.join(map(str, tags_lemma))
+    tags = ", ".join(map(str, tags_lemma))
 
     return tags
 
@@ -139,50 +142,44 @@ def generate_tags(caption):
 def main():
     parser = PdArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
-    url = (data_args.input_image)
+    url = data_args.input_image
 
     logger.info("blip2_model: {}".format(model_args.blip2_model_name_or_path))
-    #bulid blip2 processor
-    blip2_tokenizer_class = AutoTokenizer.from_pretrained(
-        model_args.text_model_name_or_path, use_fast=False)
+    # bulid blip2 processor
+    blip2_tokenizer_class = AutoTokenizer.from_pretrained(model_args.text_model_name_or_path, use_fast=False)
     blip2_image_processor = BlipImageProcessor.from_pretrained(
-        os.path.join(model_args.blip2_model_name_or_path, "processor", "eval"))
+        os.path.join(model_args.blip2_model_name_or_path, "processor", "eval")
+    )
     blip2_text_processor_class = BlipTextProcessor.from_pretrained(
-        os.path.join(model_args.blip2_model_name_or_path, "processor", "eval"))
-    blip2_processor = Blip2Processor(blip2_image_processor,
-                                     blip2_text_processor_class,
-                                     blip2_tokenizer_class)
+        os.path.join(model_args.blip2_model_name_or_path, "processor", "eval")
+    )
+    blip2_processor = Blip2Processor(blip2_image_processor, blip2_text_processor_class, blip2_tokenizer_class)
 
     # #bulid blip2 model
-    blip2_model = Blip2ForConditionalGeneration.from_pretrained(
-        model_args.blip2_model_name_or_path)
+    blip2_model = Blip2ForConditionalGeneration.from_pretrained(model_args.blip2_model_name_or_path)
     paddle.device.cuda.empty_cache()
     blip2_model.eval()
 
     logger.info("blip2_model build finish!")
 
     logger.info("dino_model: {}".format(model_args.dino_model_name_or_path))
-    #bulid dino processor
-    dino_processor = GroudingDinoProcessor.from_pretrained(
-        model_args.dino_model_name_or_path)
-    #bulid dino model
-    dino_model = GroundingDinoModel.from_pretrained(
-        model_args.dino_model_name_or_path)
+    # bulid dino processor
+    dino_processor = GroudingDinoProcessor.from_pretrained(model_args.dino_model_name_or_path)
+    # bulid dino model
+    dino_model = GroundingDinoModel.from_pretrained(model_args.dino_model_name_or_path)
     dino_model.eval()
     logger.info("dino_model build finish!")
 
-    #buidl sam processor
-    sam_processor = SamProcessor.from_pretrained(
-        model_args.sam_model_name_or_path)
-    #bulid model
+    # buidl sam processor
+    sam_processor = SamProcessor.from_pretrained(model_args.sam_model_name_or_path)
+    # bulid model
     logger.info("SamModel: {}".format(model_args.sam_model_name_or_path))
-    sam_model = SamModel.from_pretrained(
-        model_args.sam_model_name_or_path, input_type="boxs")
+    sam_model = SamModel.from_pretrained(model_args.sam_model_name_or_path, input_type="boxs")
     logger.info("SamModel build finish!")
 
-    #read image
+    # read image
     if os.path.isfile(url):
-        #read image
+        # read image
         image_pil = Image.open(data_args.input_image)
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw)
@@ -191,26 +188,26 @@ def main():
         image_pil,
         prompt=data_args.prompt,
         processor=blip2_processor,
-        blip2_model=blip2_model)
+        blip2_model=blip2_model,
+    )
 
     det_prompt = generate_tags(caption)
     logger.info("det prompt: {}".format(det_prompt))
 
     image_pil = image_pil.convert("RGB")
 
-    #preprocess image text_prompt
-    image_tensor, mask, tokenized_out = dino_processor(
-        images=image_pil, text=det_prompt)
+    # preprocess image text_prompt
+    image_tensor, mask, tokenized_out = dino_processor(images=image_pil, text=det_prompt)
 
     with paddle.no_grad():
         outputs = dino_model(
             image_tensor,
             mask,
-            input_ids=tokenized_out['input_ids'],
-            attention_mask=tokenized_out['attention_mask'],
-            text_self_attention_masks=tokenized_out[
-                'text_self_attention_masks'],
-            position_ids=tokenized_out['position_ids'])
+            input_ids=tokenized_out["input_ids"],
+            attention_mask=tokenized_out["attention_mask"],
+            text_self_attention_masks=tokenized_out["text_self_attention_masks"],
+            position_ids=tokenized_out["position_ids"],
+        )
 
     logits = F.sigmoid(outputs["pred_logits"])[0]  # (nq, 256)
     boxes = outputs["pred_boxes"][0]  # (nq, 4)
@@ -246,8 +243,7 @@ def main():
         x0, y0, x1, y1 = int(x0), int(y0), int(x1), int(y1)
         boxes.append([x0, y0, x1, y1])
     boxes = np.array(boxes)
-    image_seg, prompt = sam_processor(
-        image_pil, input_type="boxs", box=boxes, point_coords=None)
+    image_seg, prompt = sam_processor(image_pil, input_type="boxs", box=boxes, point_coords=None)
     seg_masks = sam_model(img=image_seg, prompt=prompt)
     seg_masks = sam_processor.postprocess_masks(seg_masks)
 
@@ -265,12 +261,13 @@ def main():
             show_box(box, plt.gca(), label)
 
         plt.title(caption)
-        plt.axis('off')
+        plt.axis("off")
         plt.savefig(
-            os.path.join(model_args.output_dir, 'mask_pred.jpg'),
+            os.path.join(model_args.output_dir, "mask_pred.jpg"),
             bbox_inches="tight",
             dpi=300,
-            pad_inches=0.0)
+            pad_inches=0.0,
+        )
 
     logger.info("finish!")
 

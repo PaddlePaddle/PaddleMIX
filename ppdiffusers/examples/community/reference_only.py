@@ -97,7 +97,13 @@ def var_mean(x, axis=-1, keepdim=True, unbiased=True, correction=None):
     return var, mean
 
 
-def self_attn_forward(self, hidden_states, encoder_hidden_states=None, attention_mask=None, **cross_attention_kwargs):
+def self_attn_forward(
+    self,
+    hidden_states,
+    encoder_hidden_states=None,
+    attention_mask=None,
+    **cross_attention_kwargs,
+):
     attn_output = None
 
     if getattr(self, "enable_attn", False):
@@ -831,8 +837,22 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                     f" {negative_prompt_embeds.shape}."
                 )
 
-    def prepare_latents(self, batch_size, num_channels_latents, height, width, dtype, generator, latents=None):
-        shape = [batch_size, num_channels_latents, height // self.vae_scale_factor, width // self.vae_scale_factor]
+    def prepare_latents(
+        self,
+        batch_size,
+        num_channels_latents,
+        height,
+        width,
+        dtype,
+        generator,
+        latents=None,
+    ):
+        shape = [
+            batch_size,
+            num_channels_latents,
+            height // self.vae_scale_factor,
+            width // self.vae_scale_factor,
+        ]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -846,7 +866,14 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
-    def prepare_image_latents(self, image, batch_size, dtype, generator=None, do_classifier_free_guidance=False):
+    def prepare_image_latents(
+        self,
+        image,
+        batch_size,
+        dtype,
+        generator=None,
+        do_classifier_free_guidance=False,
+    ):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
                 f"`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}"
@@ -965,7 +992,12 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
             list of `bool`s denoting whether the corresponding generated image likely represents "not-safe-for-work"
             (nsfw) content, according to the `safety_checker`.
         """
-        assert control_name in ["none", "reference_only", "reference_adain", "reference_adain+attn"]
+        assert control_name in [
+            "none",
+            "reference_only",
+            "reference_adain",
+            "reference_adain+attn",
+        ]
         assert num_images_per_prompt == 1
         # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
@@ -973,7 +1005,13 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
 
         # 1. Check inputs. Raise error if not correct
         self.check_inputs(
-            prompt, height, width, callback_steps, negative_prompt, prompt_embeds, negative_prompt_embeds
+            prompt,
+            height,
+            width,
+            callback_steps,
+            negative_prompt,
+            prompt_embeds,
+            negative_prompt_embeds,
         )
 
         # 2. Define call parameters
@@ -1059,7 +1097,12 @@ class ReferenceOnlyPipeline(DiffusionPipeline):
                     )
                     chunk_num = 2 if do_classifier_free_guidance else 1
                     noise_pred = self.unet(
-                        paddle.concat([latent_model_input, image_latent_model_input.cast(latent_model_input.dtype)]),
+                        paddle.concat(
+                            [
+                                latent_model_input,
+                                image_latent_model_input.cast(latent_model_input.dtype),
+                            ]
+                        ),
                         t,
                         encoder_hidden_states=prompt_embeds,
                         cross_attention_kwargs=cross_attention_kwargs,

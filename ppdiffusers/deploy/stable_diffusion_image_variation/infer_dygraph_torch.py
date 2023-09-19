@@ -106,8 +106,18 @@ def parse_arguments():
         default="runwayml/stable-diffusion-v1-5",
         help="The model directory of diffusion_model.",
     )
-    parser.add_argument("--inference_steps", type=int, default=50, help="The number of unet inference steps.")
-    parser.add_argument("--benchmark_steps", type=int, default=10, help="The number of performance benchmark steps.")
+    parser.add_argument(
+        "--inference_steps",
+        type=int,
+        default=50,
+        help="The number of unet inference steps.",
+    )
+    parser.add_argument(
+        "--benchmark_steps",
+        type=int,
+        default=10,
+        help="The number of performance benchmark steps.",
+    )
     parser.add_argument(
         "--parse_prompt_type",
         type=str,
@@ -118,7 +128,12 @@ def parse_arguments():
         ],
         help="The parse_prompt_type can be one of [raw, lpw]. ",
     )
-    parser.add_argument("--channels_last", type=strtobool, default=False, help="Wheter to use channels_last")
+    parser.add_argument(
+        "--channels_last",
+        type=strtobool,
+        default=False,
+        help="Wheter to use channels_last",
+    )
     parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
     parser.add_argument("--tf32", type=strtobool, default=True, help="tf32")
     parser.add_argument("--compile", type=strtobool, default=False, help="compile")

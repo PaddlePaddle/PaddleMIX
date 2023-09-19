@@ -28,7 +28,10 @@ from .utils import argsparser, get_current_memory_mb
 from .visualize import visualize_pose
 
 # Global dictionary
-KEYPOINT_SUPPORT_MODELS = {"HigherHRNet": "keypoint_bottomup", "HRNet": "keypoint_topdown"}
+KEYPOINT_SUPPORT_MODELS = {
+    "HigherHRNet": "keypoint_bottomup",
+    "HRNet": "keypoint_topdown",
+}
 
 
 class KeyPointDetector(Detector):
@@ -150,7 +153,11 @@ class KeyPointDetector(Detector):
                 masks_tensor = self.predictor.get_output_handle(output_names[1])
                 heat_k = self.predictor.get_output_handle(output_names[2])
                 inds_k = self.predictor.get_output_handle(output_names[3])
-                np_masks = [masks_tensor.copy_to_cpu(), heat_k.copy_to_cpu(), inds_k.copy_to_cpu()]
+                np_masks = [
+                    masks_tensor.copy_to_cpu(),
+                    heat_k.copy_to_cpu(),
+                    inds_k.copy_to_cpu(),
+                ]
         result = dict(heatmap=np_heatmap, masks=np_masks)
         return result
 
@@ -206,7 +213,12 @@ class KeyPointDetector(Detector):
                 if visual:
                     if not os.path.exists(self.output_dir):
                         os.makedirs(self.output_dir)
-                    visualize(batch_image_list, result, visual_thresh=self.threshold, save_dir=self.output_dir)
+                    visualize(
+                        batch_image_list,
+                        result,
+                        visual_thresh=self.threshold,
+                        save_dir=self.output_dir,
+                    )
 
             results.append(result)
         results = self.merge_batch_result(results)
@@ -355,8 +367,15 @@ def main():
             perf_info = detector.det_times.report(average=True)
             model_dir = FLAGS.model_dir
             mode = FLAGS.run_mode
-            model_info = {"model_name": model_dir.strip("/").split("/")[-1], "precision": mode.split("_")[-1]}
-            data_info = {"batch_size": 1, "shape": "dynamic_shape", "data_num": perf_info["img_num"]}
+            model_info = {
+                "model_name": model_dir.strip("/").split("/")[-1],
+                "precision": mode.split("_")[-1],
+            }
+            data_info = {
+                "batch_size": 1,
+                "shape": "dynamic_shape",
+                "data_num": perf_info["img_num"],
+            }
             det_log = PaddleInferBenchmark(detector.config, model_info, data_info, perf_info, mems)
             det_log("KeyPoint")
 
