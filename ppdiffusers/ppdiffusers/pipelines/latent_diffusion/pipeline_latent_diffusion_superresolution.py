@@ -136,7 +136,7 @@ class LDMSuperResolutionPipeline(DiffusionPipeline):
             extra_kwargs["eta"] = eta
         for t in self.progress_bar(timesteps_tensor):
             # concat latents and low resolution image in the channel dimension.
-            latents_input = paddle.concat(x=[latents, image], axis=1)
+            latents_input = paddle.concat(x=[latents, image.cast(latents.dtype)], axis=1)
             latents_input = self.scheduler.scale_model_input(latents_input, t)
             # predict the noise residual
             noise_pred = self.unet(latents_input, t).sample

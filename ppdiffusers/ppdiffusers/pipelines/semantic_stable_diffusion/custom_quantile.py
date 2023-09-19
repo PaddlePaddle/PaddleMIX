@@ -16,9 +16,9 @@
 import paddle
 
 try:
-    from paddle.framework import in_dygraph_mode
+    from paddle.framework import in_dynamic_mode
 except ImportError:
-    from paddle.fluid.framework import in_dygraph_mode
+    from paddle.fluid.framework import in_dynamic_mode
 
 
 def _compute_quantile(x, q, axis=None, keepdim=False, ignore_nan=False):
@@ -100,7 +100,7 @@ def _compute_quantile(x, q, axis=None, keepdim=False, ignore_nan=False):
     for q_num in q:
         if q_num < 0 or q_num > 1:
             raise ValueError("q should be in range [0, 1]")
-        if in_dygraph_mode():
+        if in_dynamic_mode():
             q_num = paddle.to_tensor(q_num, dtype="float64")
         if ignore_nan:
             indices.append(q_num * (valid_counts - 1))
