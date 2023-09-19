@@ -1145,7 +1145,11 @@ class CommonMixIn:
 
 
 class StableDiffusionMegaPipeline(
-    DiffusionPipeline, CommonMixIn, FromCkptMixin, LoraLoaderMixin, TextualInversionLoaderMixin
+    DiffusionPipeline,
+    CommonMixIn,
+    FromCkptMixin,
+    LoraLoaderMixin,
+    TextualInversionLoaderMixin,
 ):
     r"""
     Pipeline for mega using Stable Diffusion.
@@ -1250,7 +1254,9 @@ class StableDiffusionMegaPipeline(
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True)
         self.control_image_processor = VaeImageProcessor(
-            vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
+            vae_scale_factor=self.vae_scale_factor,
+            do_convert_rgb=True,
+            do_normalize=False,
         )
         self.supported_scheduler = [
             "pndm",
@@ -1574,7 +1580,12 @@ class StableDiffusionMegaPipeline(
                 # compute the previous noisy sample x_t -> x_t-1
                 if is_scheduler_support_step_index:
                     scheduler_output = self.scheduler.step(
-                        noise_pred, t, latents, step_index=i, return_pred_original_sample=False, **extra_step_kwargs
+                        noise_pred,
+                        t,
+                        latents,
+                        step_index=i,
+                        return_pred_original_sample=False,
+                        **extra_step_kwargs,
                     )
                 else:
                     scheduler_output = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)
@@ -2944,8 +2955,12 @@ class StableDiffusionMegaPipeline(
             # 8. determine the upscaled width and height for upscaled images
             truncate_width = 0
             truncate_height = 0
-            hr_upscale_to_width, hr_upscale_to_height = self.get_upscaled_width_and_height(
-                width, height, hr_scale=hr_scale, hr_resize_width=hr_resize_width, hr_resize_height=hr_resize_height
+            (hr_upscale_to_width, hr_upscale_to_height,) = self.get_upscaled_width_and_height(
+                width,
+                height,
+                hr_scale=hr_scale,
+                hr_resize_width=hr_resize_width,
+                hr_resize_height=hr_resize_height,
             )
             if hr_resize_width != 0 and hr_resize_height != 0:
                 truncate_width = (hr_upscale_to_width - hr_resize_width) // self.vae_scale_factor
@@ -2958,7 +2973,7 @@ class StableDiffusionMegaPipeline(
 
         if enable_hr:
             if do_controlnet:
-                control_image, control_conditioning_scale = self.prepare_controlnet_cond(
+                (control_image, control_conditioning_scale,) = self.prepare_controlnet_cond(
                     controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=controlnet_conditioning_scale,
                     width=hr_upscale_to_width,
@@ -3292,11 +3307,21 @@ class StableDiffusionMegaPipeline(
 
                 # Sample source_latents from the posterior distribution.
                 prev_source_latents = posterior_sample(
-                    self.scheduler, source_latents, t, clean_latents, generator=generator, **extra_step_kwargs
+                    self.scheduler,
+                    source_latents,
+                    t,
+                    clean_latents,
+                    generator=generator,
+                    **extra_step_kwargs,
                 )
                 # Compute noise.
                 noise = compute_noise(
-                    self.scheduler, prev_source_latents, source_latents, t, source_noise_pred, **extra_step_kwargs
+                    self.scheduler,
+                    prev_source_latents,
+                    source_latents,
+                    t,
+                    source_noise_pred,
+                    **extra_step_kwargs,
                 )
                 source_latents = prev_source_latents.cast(dtype)
 

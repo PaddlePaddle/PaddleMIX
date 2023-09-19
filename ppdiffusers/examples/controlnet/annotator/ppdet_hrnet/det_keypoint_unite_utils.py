@@ -40,7 +40,10 @@ def argsparser():
     )
     parser.add_argument("--image_file", type=str, default=None, help="Path of image file.")
     parser.add_argument(
-        "--image_dir", type=str, default=None, help="Dir of image file, `image_file` has a higher priority."
+        "--image_dir",
+        type=str,
+        default=None,
+        help="Dir of image file, `image_file` has a higher priority.",
     )
     parser.add_argument(
         "--keypoint_batch_size",
@@ -61,9 +64,17 @@ def argsparser():
     parser.add_argument("--camera_id", type=int, default=-1, help="device id of camera to predict.")
     parser.add_argument("--det_threshold", type=float, default=0.5, help="Threshold of score.")
     parser.add_argument("--keypoint_threshold", type=float, default=0.5, help="Threshold of score.")
-    parser.add_argument("--output_dir", type=str, default="output", help="Directory of output visualization files.")
     parser.add_argument(
-        "--run_mode", type=str, default="paddle", help="mode of running(paddle/trt_fp32/trt_fp16/trt_int8)"
+        "--output_dir",
+        type=str,
+        default="output",
+        help="Directory of output visualization files.",
+    )
+    parser.add_argument(
+        "--run_mode",
+        type=str,
+        default="paddle",
+        help="mode of running(paddle/trt_fp32/trt_fp16/trt_int8)",
     )
     parser.add_argument(
         "--device",
@@ -77,7 +88,12 @@ def argsparser():
         default=False,
         help="Whether to predict a image_file repeatedly for benchmark",
     )
-    parser.add_argument("--enable_mkldnn", type=ast.literal_eval, default=False, help="Whether use mkldnn with CPU.")
+    parser.add_argument(
+        "--enable_mkldnn",
+        type=ast.literal_eval,
+        default=False,
+        help="Whether use mkldnn with CPU.",
+    )
     parser.add_argument("--cpu_threads", type=int, default=1, help="Num of threads with CPU.")
     parser.add_argument("--trt_min_shape", type=int, default=1, help="min_shape for TensorRT.")
     parser.add_argument("--trt_max_shape", type=int, default=1280, help="max_shape for TensorRT.")

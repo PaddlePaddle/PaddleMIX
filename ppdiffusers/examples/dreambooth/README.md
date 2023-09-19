@@ -25,10 +25,18 @@ pip install -U ppdiffusers visualdl
 #### 1.2.1 硬件要求
 当我们开启`gradient_checkpointing`功能后（Tips：该功能可以在一定程度上减少显存消耗），我们可以在24GB显存的GPU上微调模型。如果想要使用更大的`batch_size`进行更快的训练，建议用户使用具有30GB+显存的显卡。
 
+#### 1.2.1 准备数据
+这里我们将使用`柯基狗`的图片进行训练，通过调用下面的代码，我们将下载到`柯基狗`的图片。
+```sh
+wget https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/dogs.tar.gz
+tar -zxvf dogs.tar.gz
+```
+
+
 #### 1.2.2 单机单卡训练
 ```bash
 export MODEL_NAME="CompVis/stable-diffusion-v1-4"
-export INSTANCE_DIR="./dream_image"
+export INSTANCE_DIR="./dogs"
 export OUTPUT_DIR="./dream_outputs"
 
 python -u train_dreambooth.py \
@@ -96,7 +104,7 @@ python -u train_dreambooth.py \
 
 ```bash
 export MODEL_NAME="CompVis/stable-diffusion-v1-4"
-export INSTANCE_DIR="./dream_image"
+export INSTANCE_DIR="./dogs"
 export OUTPUT_DIR="./dream_outputs"
 
 python -u -m paddle.distributed.launch --gpus "0,1,2,3" train_dreambooth.py \
@@ -164,7 +172,7 @@ image.save("sks-dog.png")
 #### 单机训练
 ```bash
 export MODEL_NAME="CompVis/stable-diffusion-v1-4"
-export INSTANCE_DIR="./dream_image"
+export INSTANCE_DIR="./dogs"
 export CLASS_DIR="./dream_class_image"
 export OUTPUT_DIR="./dream_outputs_with_class"
 
@@ -221,8 +229,8 @@ image.save("sks-dog-with-class.png")
 
 ```bash
 export MODEL_NAME="runwayml/stable-diffusion-v1-5"
-export INSTANCE_DIR="path-to-instance-images"
-export OUTPUT_DIR="path-to-save-model"
+export INSTANCE_DIR="./dogs"
+export OUTPUT_DIR="./lora_dream_outputs"
 
 python train_dreambooth_lora.py \
   --pretrained_model_name_or_path=$MODEL_NAME  \
@@ -264,7 +272,7 @@ pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
 接下来, 我们需要使用 `load_attn_procs` 方法将 `adapter layers` 添加到 UNet 模型中。
 ```python
-pipe.unet.load_attn_procs("junnyu/lora_dreambooth_dog_example", from_hf_hub=True)
+pipe.unet.load_attn_procs("./lora_dream_outputs")
 ```
 
 最终, 我们可以使用模型进行推理预测.

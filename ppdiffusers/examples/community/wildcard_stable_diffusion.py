@@ -61,7 +61,9 @@ def grab_wildcard_values(wildcard_option_dict: Dict[str, List[str]] = {}, wildca
 
 
 def replace_prompt_with_wildcards(
-    prompt: str, wildcard_option_dict: Dict[str, List[str]] = {}, wildcard_files: List[str] = []
+    prompt: str,
+    wildcard_option_dict: Dict[str, List[str]] = {},
+    wildcard_files: List[str] = [],
 ):
     new_prompt = prompt
 
@@ -348,7 +350,12 @@ class WildcardStableDiffusionPipeline(DiffusionPipeline):
         # Unlike in other pipelines, latents need to be generated in the target device
         # for 1-to-1 results reproducibility with the CompVis implementation.
         # However this currently doesn't work in `mps`.
-        latents_shape = [batch_size * num_images_per_prompt, self.unet.in_channels, height // 8, width // 8]
+        latents_shape = [
+            batch_size * num_images_per_prompt,
+            self.unet.in_channels,
+            height // 8,
+            width // 8,
+        ]
         latents_dtype = text_embeddings.dtype
         if latents is None:
             if seed is not None:
@@ -409,7 +416,8 @@ class WildcardStableDiffusionPipeline(DiffusionPipeline):
         if self.safety_checker is not None:
             safety_checker_input = self.feature_extractor(self.numpy_to_pil(image), return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image, clip_input=safety_checker_input.pixel_values.astype(text_embeddings.dtype)
+                images=image,
+                clip_input=safety_checker_input.pixel_values.astype(text_embeddings.dtype),
             )
         else:
             has_nsfw_concept = None

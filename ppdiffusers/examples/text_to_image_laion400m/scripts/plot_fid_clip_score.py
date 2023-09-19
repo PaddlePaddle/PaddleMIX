@@ -34,8 +34,24 @@ fid_pt = [
     75.6021109021998,
 ]
 
-plt.plot(clip_pd, fid_pd, label="Paddle line", linewidth=3, color="r", marker="o", markerfacecolor="blue")
-plt.plot(clip_pt, fid_pt, label="Pytorch line", linewidth=3, color="b", marker="o", markerfacecolor="red")
+plt.plot(
+    clip_pd,
+    fid_pd,
+    label="Paddle line",
+    linewidth=3,
+    color="r",
+    marker="o",
+    markerfacecolor="blue",
+)
+plt.plot(
+    clip_pt,
+    fid_pt,
+    label="Pytorch line",
+    linewidth=3,
+    color="b",
+    marker="o",
+    markerfacecolor="red",
+)
 plt.xlabel("CLIP Score")
 plt.ylabel("FID@1k")
 plt.title("12W Globel Step Pareto Curves - DDIM")

@@ -165,7 +165,11 @@ def parse_args():
         help="Pretrained tokenizer name or path if not the same as model_name",
     )
     parser.add_argument(
-        "--train_data_dir", type=str, default=None, required=True, help="A folder containing the training data."
+        "--train_data_dir",
+        type=str,
+        default=None,
+        required=True,
+        help="A folder containing the training data.",
     )
     parser.add_argument(
         "--placeholder_token",
@@ -175,10 +179,24 @@ def parse_args():
         help="A token to use as a placeholder for the concept.",
     )
     parser.add_argument(
-        "--initializer_token", type=str, default=None, required=True, help="A token to use as initializer word."
+        "--initializer_token",
+        type=str,
+        default=None,
+        required=True,
+        help="A token to use as initializer word.",
     )
-    parser.add_argument("--learnable_property", type=str, default="object", help="Choose between 'object' and 'style'")
-    parser.add_argument("--repeats", type=int, default=100, help="How many times to repeat the training data.")
+    parser.add_argument(
+        "--learnable_property",
+        type=str,
+        default="object",
+        help="Choose between 'object' and 'style'",
+    )
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=100,
+        help="How many times to repeat the training data.",
+    )
     parser.add_argument(
         "--output_dir",
         type=str,
@@ -214,10 +232,15 @@ def parse_args():
         ),
     )
     parser.add_argument(
-        "--center_crop", action="store_true", help="Whether to center crop images before resizing to resolution."
+        "--center_crop",
+        action="store_true",
+        help="Whether to center crop images before resizing to resolution.",
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=16, help="Batch size (per device) for the training dataloader."
+        "--train_batch_size",
+        type=int,
+        default=16,
+        help="Batch size (per device) for the training dataloader.",
     )
     parser.add_argument("--num_train_epochs", type=int, default=100)
     parser.add_argument(
@@ -267,7 +290,10 @@ def parse_args():
         ),
     )
     parser.add_argument(
-        "--lr_warmup_steps", type=int, default=500, help="Number of steps for the warmup in the lr scheduler."
+        "--lr_warmup_steps",
+        type=int,
+        default=500,
+        help="Number of steps for the warmup in the lr scheduler.",
     )
     parser.add_argument(
         "--lr_num_cycles",
@@ -275,14 +301,43 @@ def parse_args():
         default=1,
         help="Number of hard resets of the lr in cosine_with_restarts scheduler.",
     )
-    parser.add_argument("--lr_power", type=float, default=1.0, help="Power factor of the polynomial scheduler.")
-    parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
-    parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
+    parser.add_argument(
+        "--lr_power",
+        type=float,
+        default=1.0,
+        help="Power factor of the polynomial scheduler.",
+    )
+    parser.add_argument(
+        "--adam_beta1",
+        type=float,
+        default=0.9,
+        help="The beta1 parameter for the Adam optimizer.",
+    )
+    parser.add_argument(
+        "--adam_beta2",
+        type=float,
+        default=0.999,
+        help="The beta2 parameter for the Adam optimizer.",
+    )
     parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
-    parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
+    parser.add_argument(
+        "--adam_epsilon",
+        type=float,
+        default=1e-08,
+        help="Epsilon value for the Adam optimizer",
+    )
     parser.add_argument("--max_grad_norm", default=-1, type=float, help="Max gradient norm.")
-    parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
-    parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Whether or not to push the model to the Hub.",
+    )
+    parser.add_argument(
+        "--hub_token",
+        type=str,
+        default=None,
+        help="The token to use to push to the Model Hub.",
+    )
     parser.add_argument(
         "--hub_model_id",
         type=str,
@@ -307,7 +362,12 @@ def parse_args():
             ' (default), `"tensorboard"`.'
         ),
     )
-    parser.add_argument("--language", default="en", choices=["en", "zh", "zh_en"], help="Model language.")
+    parser.add_argument(
+        "--language",
+        default="en",
+        choices=["en", "zh", "zh_en"],
+        help="Model language.",
+    )
     parser.add_argument(
         "--validation_prompt",
         type=str,
@@ -331,7 +391,9 @@ def parse_args():
         ),
     )
     parser.add_argument(
-        "--enable_xformers_memory_efficient_attention", action="store_true", help="Whether or not to use xformers."
+        "--enable_xformers_memory_efficient_attention",
+        action="store_true",
+        help="Whether or not to use xformers.",
     )
     parser.add_argument("--noise_offset", type=float, default=0, help="The scale of noise offset.")
 
@@ -687,7 +749,10 @@ def main():
         input_ids = [example["input_ids"] for example in examples]
         pixel_values = paddle.to_tensor([example["pixel_values"] for example in examples], dtype="float32")
         input_ids = tokenizer.pad(
-            {"input_ids": input_ids}, padding="max_length", max_length=tokenizer.model_max_length, return_tensors="pd"
+            {"input_ids": input_ids},
+            padding="max_length",
+            max_length=tokenizer.model_max_length,
+            return_tensors="pd",
         ).input_ids
         return {
             "input_ids": input_ids,
@@ -700,7 +765,10 @@ def main():
         else BatchSampler(train_dataset, batch_size=args.train_batch_size, shuffle=True)
     )
     train_dataloader = DataLoader(
-        train_dataset, batch_sampler=train_sampler, collate_fn=collate_fn, num_workers=args.dataloader_num_workers
+        train_dataset,
+        batch_sampler=train_sampler,
+        collate_fn=collate_fn,
+        num_workers=args.dataloader_num_workers,
     )
 
     # Scheduler and math around the number of training steps.
@@ -835,7 +903,10 @@ def main():
 
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if num_processes > 1 and args.gradient_checkpointing:
-                    fused_allreduce_gradients(unwrap_model(text_encoder).get_input_embeddings().parameters(), None)
+                    fused_allreduce_gradients(
+                        unwrap_model(text_encoder).get_input_embeddings().parameters(),
+                        None,
+                    )
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.clear_grad()
@@ -861,7 +932,10 @@ def main():
                         writer.add_scalar(f"train/{name}", val, global_step)
 
                     if global_step % args.save_steps == 0:
-                        save_path = os.path.join(args.output_dir, f"learned_embeds-steps-{global_step}.pdparams")
+                        save_path = os.path.join(
+                            args.output_dir,
+                            f"learned_embeds-steps-{global_step}.pdparams",
+                        )
                         save_progress(text_encoder, placeholder_token_ids, args, save_path)
 
                 if global_step >= args.max_train_steps:
@@ -888,7 +962,11 @@ def main():
                 # run inference
                 generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
                 images = [
-                    pipeline(args.validation_prompt, num_inference_steps=25, generator=generator).images[0]
+                    pipeline(
+                        args.validation_prompt,
+                        num_inference_steps=25,
+                        generator=generator,
+                    ).images[0]
                     for _ in range(args.num_validation_images)
                 ]
                 np_images = np.stack([np.asarray(img) for img in images])

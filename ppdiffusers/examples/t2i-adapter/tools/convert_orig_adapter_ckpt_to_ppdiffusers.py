@@ -108,7 +108,12 @@ if __name__ == "__main__":
     from ldm.modules.encoders.adapter import Adapter as torch_network
 
     Torch_Model = torch_network(
-        cin=int(3 * 64), channels=[320, 640, 1280, 1280][:4], nums_rb=2, ksize=1, sk=True, use_conv=False
+        cin=int(3 * 64),
+        channels=[320, 640, 1280, 1280][:4],
+        nums_rb=2,
+        ksize=1,
+        sk=True,
+        use_conv=False,
     )
     from ppdiffusers import T2IAdapter as paddle_network
 
@@ -117,13 +122,21 @@ if __name__ == "__main__":
     torch_model = Torch_Model
     if args.orig_t2i_adapter_pretrained_ckpt_path:
         torch_model.load_state_dict(
-            torch.load(args.orig_t2i_adapter_pretrained_ckpt_path, map_location=torch.device("cpu")), strict=True
+            torch.load(
+                args.orig_t2i_adapter_pretrained_ckpt_path,
+                map_location=torch.device("cpu"),
+            ),
+            strict=True,
         )
     # When orig_t2i_adapter_pretrained_ckpt_path is not specified, the randomly initialized torch weights are stored in orig_t2i_adapter_pretrained_ckpt_path
     else:
         torch.save(
             torch_model.state_dict(),
-            os.path.join(args.orig_t2i_adapter_project_path, "ckpt", "torch_t2i_model_initialized.pth"),
+            os.path.join(
+                args.orig_t2i_adapter_project_path,
+                "ckpt",
+                "torch_t2i_model_initialized.pth",
+            ),
         )
     torch_model_dict = convert_adapter(torch_model.state_dict())
     numpy_state_dict = convert_to_paddle(torch_model_dict)

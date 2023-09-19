@@ -114,7 +114,10 @@ class AdapterLDM(nn.Layer):
             self.adapter = T2IAdapter(**read_json(model_args.adapter_config_file))
 
         self.noise_scheduler = DDPMScheduler(
-            beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", num_train_timesteps=1000
+            beta_start=0.00085,
+            beta_end=0.012,
+            beta_schedule="scaled_linear",
+            num_train_timesteps=1000,
         )
         self.eval_scheduler = DDIMScheduler(
             beta_start=0.00085,
@@ -184,7 +187,8 @@ class AdapterLDM(nn.Layer):
     def get_time_with_schedule_and_numpy_generator(self, timestep_sample_schedule, bs):
         if timestep_sample_schedule == "linear":
             t = paddle.to_tensor(
-                generator.randint(0, self.noise_scheduler.num_train_timesteps, size=(bs,)), dtype="int64"
+                generator.randint(0, self.noise_scheduler.num_train_timesteps, size=(bs,)),
+                dtype="int64",
             )
         elif timestep_sample_schedule == "cosine":
             t = paddle.to_tensor(generator.rand(bs))
@@ -251,7 +255,16 @@ class AdapterLDM(nn.Layer):
         return 255 * (adapter_cond.transpose([0, 2, 3, 1])).cast("float32").numpy().round()
 
     @paddle.no_grad()
-    def log_image(self, input_ids=None, adapter_cond=None, height=512, width=512, eta=0.0, guidance_scale=9, **kwargs):
+    def log_image(
+        self,
+        input_ids=None,
+        adapter_cond=None,
+        height=512,
+        width=512,
+        eta=0.0,
+        guidance_scale=9,
+        **kwargs,
+    ):
         adapter_cond = self.control_image_processor.process_model_forward(adapter_cond)
         self.eval()
         with self.ema_scope():

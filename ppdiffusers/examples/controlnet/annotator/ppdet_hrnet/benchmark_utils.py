@@ -31,7 +31,7 @@ class PaddleInferBenchmark(object):
         data_info: dict = {},
         perf_info: dict = {},
         resource_info: dict = {},
-        **kwargs
+        **kwargs,
     ):
         """
         Construct PaddleInferBenchmark Class to format logs.

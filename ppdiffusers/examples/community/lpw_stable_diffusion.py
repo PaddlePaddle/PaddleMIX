@@ -20,8 +20,8 @@ import numpy as np
 import paddle
 import PIL
 from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
-from paddlenlp.utils.tools import compare_version
 
+from paddlemix.utils.tools import compare_version
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipelines.stable_diffusion import (
     StableDiffusionPipeline,
@@ -451,7 +451,11 @@ class StableDiffusionLongPromptWeightingPipeline(StableDiffusionPipeline):
 
     def __init__additional__(self):
         if not hasattr(self, "vae_scale_factor"):
-            setattr(self, "vae_scale_factor", 2 ** (len(self.vae.config.block_out_channels) - 1))
+            setattr(
+                self,
+                "vae_scale_factor",
+                2 ** (len(self.vae.config.block_out_channels) - 1),
+            )
 
     def enable_attention_slicing(self, slice_size: Optional[Union[str, int]] = "auto"):
         r"""

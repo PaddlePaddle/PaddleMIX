@@ -93,14 +93,36 @@ with block:
             run_button = gr.Button(label="Run")
             with gr.Accordion("Advanced options", open=False):
                 num_samples = gr.Slider(label="Images", minimum=1, maximum=12, value=1, step=1)
-                image_resolution = gr.Slider(label="Image Resolution", minimum=256, maximum=768, value=512, step=64)
-                strength = gr.Slider(label="Control Strength", minimum=0.0, maximum=2.0, value=1.0, step=0.01)
+                image_resolution = gr.Slider(
+                    label="Image Resolution",
+                    minimum=256,
+                    maximum=768,
+                    value=512,
+                    step=64,
+                )
+                strength = gr.Slider(
+                    label="Control Strength",
+                    minimum=0.0,
+                    maximum=2.0,
+                    value=1.0,
+                    step=0.01,
+                )
                 guess_mode = gr.Checkbox(label="Guess Mode", value=False)
                 detect_resolution = gr.Slider(
-                    label="Segmentation Resolution", minimum=128, maximum=1024, value=512, step=1
+                    label="Segmentation Resolution",
+                    minimum=128,
+                    maximum=1024,
+                    value=512,
+                    step=1,
                 )
                 ddim_steps = gr.Slider(label="Steps", minimum=1, maximum=100, value=20, step=1)
-                scale = gr.Slider(label="Guidance Scale", minimum=0.1, maximum=30.0, value=9.0, step=0.1)
+                scale = gr.Slider(
+                    label="Guidance Scale",
+                    minimum=0.1,
+                    maximum=30.0,
+                    value=9.0,
+                    step=0.1,
+                )
                 seed = gr.Slider(label="Seed", minimum=-1, maximum=2147483647, step=1, randomize=True)
                 eta = gr.Number(label="eta (DDIM)", value=0.0)
                 a_prompt = gr.Textbox(label="Added Prompt", value="best quality, extremely detailed")

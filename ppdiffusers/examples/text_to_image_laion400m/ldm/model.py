@@ -36,7 +36,9 @@ from ppdiffusers.training_utils import freeze_params
 try:
     from ppdiffusers.models.attention import SpatialTransformer
 except ImportError:
-    from ppdiffusers.models.transformer_2d import Transformer2DModel as SpatialTransformer
+    from ppdiffusers.models.transformer_2d import (
+        Transformer2DModel as SpatialTransformer,
+    )
 
 import json
 
@@ -275,7 +277,15 @@ class LatentDiffusionModel(nn.Layer):
         return image
 
     @paddle.no_grad()
-    def log_image(self, input_ids=None, height=256, width=256, eta=0.0, guidance_scale=7.5, **kwargs):
+    def log_image(
+        self,
+        input_ids=None,
+        height=256,
+        width=256,
+        eta=0.0,
+        guidance_scale=7.5,
+        **kwargs,
+    ):
         self.eval()
         with self.ema_scope():
             if height % 8 != 0 or width % 8 != 0:

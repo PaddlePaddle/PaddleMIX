@@ -69,10 +69,16 @@ class VisualDLWithImageCallback(VisualDLCallback):
             with self.autocast_smart_context_manager(args):
                 image_logs["reconstruction"] = model.decode_image(pixel_values=inputs["pixel_values"])
                 image_logs["ddim-samples-1.0"] = model.log_image(
-                    input_ids=inputs["input_ids"], guidance_scale=1.0, height=args.resolution, width=args.resolution
+                    input_ids=inputs["input_ids"],
+                    guidance_scale=1.0,
+                    height=args.resolution,
+                    width=args.resolution,
                 )
                 image_logs["ddim-samples-7.5"] = model.log_image(
-                    input_ids=inputs["input_ids"], guidance_scale=7.5, height=args.resolution, width=args.resolution
+                    input_ids=inputs["input_ids"],
+                    guidance_scale=7.5,
+                    height=args.resolution,
+                    width=args.resolution,
                 )
 
         if not state.is_world_process_zero:
@@ -193,7 +199,10 @@ class LatentDiffusionTrainer(Trainer):
         super().__init__(**kwargs)
         if self.args.benchmark or self.args.profiler_options is not None:
             self.add_callback(
-                BenchmarkCallback(benchmark=self.args.benchmark, profiler_options=self.args.profiler_options)
+                BenchmarkCallback(
+                    benchmark=self.args.benchmark,
+                    profiler_options=self.args.profiler_options,
+                )
             )
             if self.args.benchmark:
                 if self.args.disable_tqdm:

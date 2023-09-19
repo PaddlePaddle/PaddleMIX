@@ -72,10 +72,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--checkpoint_path", default=None, type=str, required=True, help="Path to the checkpoint to convert."
+        "--checkpoint_path",
+        default=None,
+        type=str,
+        required=True,
+        help="Path to the checkpoint to convert.",
     )
     parser.add_argument(
-        "--output_path", default=None, type=str, required=True, help="Path to the store the result checkpoint."
+        "--output_path",
+        default=None,
+        type=str,
+        required=True,
+        help="Path to the store the result checkpoint.",
     )
     parser.add_argument(
         "--is_adapter_light",

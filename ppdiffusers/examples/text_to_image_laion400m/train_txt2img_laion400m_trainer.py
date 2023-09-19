@@ -75,7 +75,9 @@ def main():
     if model_args.to_static:
         input_ids = paddle.static.InputSpec(name="input_ids", shape=[-1, model_args.model_max_length], dtype="int64")
         pixel_values = paddle.static.InputSpec(
-            name="pixel_values", shape=[-1, 3, data_args.resolution, data_args.resolution], dtype="float32"
+            name="pixel_values",
+            shape=[-1, 3, data_args.resolution, data_args.resolution],
+            dtype="float32",
         )
         specs = [input_ids, pixel_values]
         paddle.jit.ignore_module([os])
@@ -83,7 +85,10 @@ def main():
         logger.info("Successfully to apply @to_static with specs: {}".format(specs))
 
     trainer = LatentDiffusionTrainer(
-        model=model, args=training_args, train_dataset=train_dataset, tokenizer=model.tokenizer
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        tokenizer=model.tokenizer,
     )
     # must set recompute after trainer init
     trainer.model.set_recompute(training_args.recompute)

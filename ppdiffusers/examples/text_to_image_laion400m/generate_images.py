@@ -116,7 +116,13 @@ def generate_images(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_name_or_path", default=None, type=str, required=True, help="model_name_or_path.")
+    parser.add_argument(
+        "--model_name_or_path",
+        default=None,
+        type=str,
+        required=True,
+        help="model_name_or_path.",
+    )
     parser.add_argument(
         "--file",
         default="./coco30k.tsv",
@@ -139,9 +145,18 @@ if __name__ == "__main__":
     parser.add_argument("--device", default="gpu", type=str, help="device")
     parser.add_argument("--batch_size", default=16, type=int, help="batch_size")
     parser.add_argument("--num_inference_steps", default=50, type=int, help="num_inference_steps")
-    parser.add_argument("--save_path", default="output/1.5b_ldm/12w.pd", type=str, help="Path to the output file.")
     parser.add_argument(
-        "--guidance_scales", default=[3, 4, 5, 6, 7, 8], nargs="+", type=str, help="guidance_scales list."
+        "--save_path",
+        default="output/1.5b_ldm/12w.pd",
+        type=str,
+        help="Path to the output file.",
+    )
+    parser.add_argument(
+        "--guidance_scales",
+        default=[3, 4, 5, 6, 7, 8],
+        nargs="+",
+        type=str,
+        help="guidance_scales list.",
     )
     parser.add_argument("--height", default=256, type=int, help="height.")
     parser.add_argument("--width", default=256, type=int, help="width.")

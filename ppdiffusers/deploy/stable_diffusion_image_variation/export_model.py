@@ -71,11 +71,15 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         pipeline.unet,
         input_spec=[
             paddle.static.InputSpec(
-                shape=[None, unet_channels, latent_height, latent_width], dtype="float32", name="sample"
+                shape=[None, unet_channels, latent_height, latent_width],
+                dtype="float32",
+                name="sample",
             ),  # sample
             paddle.static.InputSpec(shape=[1], dtype="float32", name="timestep"),  # timestep
             paddle.static.InputSpec(
-                shape=[None, None, cross_attention_dim], dtype="float32", name="encoder_hidden_states"
+                shape=[None, None, cross_attention_dim],
+                dtype="float32",
+                name="encoder_hidden_states",
             ),  # encoder_hidden_states
         ],
     )
@@ -123,7 +127,9 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         vae_decoder,
         input_spec=[
             paddle.static.InputSpec(
-                shape=[None, vae_latent_channels, latent_height, latent_width], dtype="float32", name="latent_sample"
+                shape=[None, vae_latent_channels, latent_height, latent_width],
+                dtype="float32",
+                name="latent_sample",
             ),  # latent_sample
         ],
     )
@@ -160,12 +166,29 @@ if __name__ == "__main__":
     )
     parser.add_argument("--output_path", type=str, required=True, help="Path to the output model.")
     parser.add_argument(
-        "--sample", action="store_true", default=False, help="Export the vae encoder in mode or sample"
+        "--sample",
+        action="store_true",
+        default=False,
+        help="Export the vae encoder in mode or sample",
     )
-    parser.add_argument("--height", type=int, default=None, help="The height of output images. Default: None")
-    parser.add_argument("--width", type=int, default=None, help="The width of output images. Default: None")
+    parser.add_argument(
+        "--height",
+        type=int,
+        default=None,
+        help="The height of output images. Default: None",
+    )
+    parser.add_argument(
+        "--width",
+        type=int,
+        default=None,
+        help="The width of output images. Default: None",
+    )
     args = parser.parse_args()
 
     convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
-        args.pretrained_model_name_or_path, args.output_path, args.sample, args.height, args.width
+        args.pretrained_model_name_or_path,
+        args.output_path,
+        args.sample,
+        args.height,
+        args.width,
     )

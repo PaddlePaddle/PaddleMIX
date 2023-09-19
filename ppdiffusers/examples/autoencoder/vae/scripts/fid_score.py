@@ -69,7 +69,9 @@ from inception import InceptionV3
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument("--batch-size", type=int, default=50, help="Batch size to use")
 parser.add_argument(
-    "--num-workers", type=int, help=("Number of processes to use for data loading. " "Defaults to `min(8, num_cpus)`")
+    "--num-workers",
+    type=int,
+    help=("Number of processes to use for data loading. " "Defaults to `min(8, num_cpus)`"),
 )
 parser.add_argument("--device", type=str, default=None, help="Device to use. Like gpu, gpu:0 or cpu")
 parser.add_argument(
@@ -79,7 +81,12 @@ parser.add_argument(
     choices=list(InceptionV3.BLOCK_INDEX_BY_DIM),
     help=("Dimensionality of Inception features to use. " "By default, uses pool3 features"),
 )
-parser.add_argument("path", type=str, nargs=2, help=("Paths to the generated images or " "to .npz statistic files"))
+parser.add_argument(
+    "path",
+    type=str,
+    nargs=2,
+    help=("Paths to the generated images or " "to .npz statistic files"),
+)
 
 IMAGE_EXTENSIONS = {"bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"}
 
@@ -127,7 +134,11 @@ def get_activations(files, model, batch_size=50, dims=2048, num_workers=1):
 
     dataset = ImagePathDataset(files, transforms=TF.ToTensor())
     dataloader = paddle.io.DataLoader(
-        dataset, batch_size=batch_size, shuffle=False, drop_last=False, num_workers=num_workers
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False,
+        num_workers=num_workers,
     )
 
     pred_arr = np.empty((len(files), dims))

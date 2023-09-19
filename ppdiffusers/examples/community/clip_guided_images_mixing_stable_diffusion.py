@@ -112,7 +112,12 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
         clip_model: CLIPModel,
         tokenizer: CLIPTokenizer,
         unet: UNet2DConditionModel,
-        scheduler: Union[PNDMScheduler, LMSDiscreteScheduler, DDIMScheduler, DPMSolverMultistepScheduler],
+        scheduler: Union[
+            PNDMScheduler,
+            LMSDiscreteScheduler,
+            DDIMScheduler,
+            DPMSolverMultistepScheduler,
+        ],
         feature_extractor: CLIPFeatureExtractor,
         safety_checker: StableDiffusionSafetyChecker,
         blip_model=None,
@@ -208,7 +213,6 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
             ]
             init_latents = paddle.concat(x=init_latents, axis=0)
         else:
-            breakpoint()
             init_latents = self.vae.encode(image).latent_dist.sample(generator)
         init_latents = 0.18215 * init_latents
         init_latents = init_latents.repeat_interleave(repeats=batch_size, axis=0)
@@ -281,7 +285,7 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
         # image = paddle.vision.transforms.Resize(self.feature_extractor_size)(image)
         c_size = image.shape[0]
         image = rearrange(image, "c t h w -> (c t) h w")
-        image = paddle.vision.transforms.Resize((self.feature_extractor_size, self.feature_extractor_size))(image)
+        image = paddle.vision.transforms.Resize(self.feature_extractor_size)(image)
         image = rearrange(image, "(c t) h w -> c t h w", c=c_size)
 
         image = self.normalize(image)
@@ -368,18 +372,28 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
         # Preprocess image
         preprocessed_content_image = preprocess(content_image, width, height)
         content_latents = self.prepare_latents(
-            preprocessed_content_image, latent_timestep, batch_size, text_embeddings.dtype, generator
+            preprocessed_content_image,
+            latent_timestep,
+            batch_size,
+            text_embeddings.dtype,
+            generator,
         )
         preprocessed_style_image = preprocess(style_image, width, height)
         style_latents = self.prepare_latents(
-            preprocessed_style_image, latent_timestep, batch_size, text_embeddings.dtype, generator
+            preprocessed_style_image,
+            latent_timestep,
+            batch_size,
+            text_embeddings.dtype,
+            generator,
         )
         latents = slerp(slerp_latent_style_strength, content_latents, style_latents)
         if clip_guidance_scale > 0:
             content_clip_image_embedding = self.get_clip_image_embeddings(content_image, batch_size)
             style_clip_image_embedding = self.get_clip_image_embeddings(style_image, batch_size)
             clip_image_embeddings = slerp(
-                slerp_clip_image_style_strength, content_clip_image_embedding, style_clip_image_embedding
+                slerp_clip_image_style_strength,
+                content_clip_image_embedding,
+                style_clip_image_embedding,
             )
 
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
@@ -394,7 +408,10 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
             else:
                 uncond_tokens = [negative_prompt]
             uncond_input = self.tokenizer(
-                uncond_tokens, padding="max_length", max_length=max_length, return_tensors="pd"
+                uncond_tokens,
+                padding="max_length",
+                max_length=max_length,
+                return_tensors="pd",
             )
             uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0]
             # duplicate unconditional embeddings for each generation per prompt
@@ -410,7 +427,12 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
         # Unlike in other pipelines, latents need to be generated in the target device
         # for 1-to-1 results reproducibility with the CompVis implementation.
         # However this currently doesn't work in `mps`.
-        latents_shape = [batch_size, self.unet.config.in_channels, height // 8, width // 8]
+        latents_shape = [
+            batch_size,
+            self.unet.config.in_channels,
+            height // 8,
+            width // 8,
+        ]
         latents_dtype = text_embeddings.dtype
         if latents is None:
             latents = paddle.randn(shape=latents_shape, generator=generator, dtype=latents_dtype)

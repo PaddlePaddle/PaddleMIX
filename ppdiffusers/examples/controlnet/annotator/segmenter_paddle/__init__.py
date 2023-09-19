@@ -34,7 +34,11 @@ def parse_args():
     # params of prediction
     parser.add_argument("--config", dest="cfg", help="The config file.", default=None, type=str)
     parser.add_argument(
-        "--model_path", dest="model_path", help="The path of model for prediction", type=str, default=None
+        "--model_path",
+        dest="model_path",
+        help="The path of model for prediction",
+        type=str,
+        default=None,
     )
     parser.add_argument(
         "--image_path",
@@ -58,7 +62,14 @@ def parse_args():
         help="Whether to use mulit-scales and flip augment for prediction",
         action="store_true",
     )
-    parser.add_argument("--scales", dest="scales", nargs="+", help="Scales for augment", type=float, default=1.0)
+    parser.add_argument(
+        "--scales",
+        dest="scales",
+        nargs="+",
+        help="Scales for augment",
+        type=float,
+        default=1.0,
+    )
     parser.add_argument(
         "--flip_horizontal",
         dest="flip_horizontal",
@@ -66,12 +77,18 @@ def parse_args():
         action="store_true",
     )
     parser.add_argument(
-        "--flip_vertical", dest="flip_vertical", help="Whether to use flip vertically augment", action="store_true"
+        "--flip_vertical",
+        dest="flip_vertical",
+        help="Whether to use flip vertically augment",
+        action="store_true",
     )
 
     # sliding window prediction
     parser.add_argument(
-        "--is_slide", dest="is_slide", help="Whether to prediction by sliding window", action="store_true"
+        "--is_slide",
+        dest="is_slide",
+        help="Whether to prediction by sliding window",
+        action="store_true",
     )
     parser.add_argument(
         "--crop_size",

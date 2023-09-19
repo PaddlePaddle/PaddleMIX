@@ -49,8 +49,18 @@ def parse_arguments():
         default="runwayml/stable-diffusion-v1-5@fastdeploy",
         help="The model directory of diffusion_model.",
     )
-    parser.add_argument("--inference_steps", type=int, default=50, help="The number of unet inference steps.")
-    parser.add_argument("--benchmark_steps", type=int, default=1, help="The number of performance benchmark steps.")
+    parser.add_argument(
+        "--inference_steps",
+        type=int,
+        default=50,
+        help="The number of unet inference steps.",
+    )
+    parser.add_argument(
+        "--benchmark_steps",
+        type=int,
+        default=1,
+        help="The number of performance benchmark steps.",
+    )
     parser.add_argument(
         "--backend",
         type=str,
@@ -135,8 +145,18 @@ def parse_arguments():
     parser.add_argument("--hr_resize_height", type=int, default=768, help="HR Height of input image")
     parser.add_argument("--hr_resize_width", type=int, default=768, help="HR Width of input image")
     parser.add_argument("--is_sd2_0", type=strtobool, default=False, help="Is sd2_0 model?")
-    parser.add_argument("--low_threshold", type=int, default=100, help="The value of Canny low threshold.")
-    parser.add_argument("--high_threshold", type=int, default=200, help="The value of Canny high threshold.")
+    parser.add_argument(
+        "--low_threshold",
+        type=int,
+        default=100,
+        help="The value of Canny low threshold.",
+    )
+    parser.add_argument(
+        "--high_threshold",
+        type=int,
+        default=200,
+        help="The value of Canny high threshold.",
+    )
     return parser.parse_args()
 
 
@@ -194,7 +214,10 @@ def create_paddle_inference_runtime(
             option.paddle_infer_option.collect_trt_shape = True
             for key, shape_dict in dynamic_shape.items():
                 option.trt_option.set_shape(
-                    key, shape_dict["min_shape"], shape_dict.get("opt_shape", None), shape_dict.get("max_shape", None)
+                    key,
+                    shape_dict["min_shape"],
+                    shape_dict.get("opt_shape", None),
+                    shape_dict.get("max_shape", None),
                 )
     return option
 
@@ -298,9 +321,24 @@ def main(args):
     }
     unet_dynamic_shape = {
         "sample": {
-            "min_shape": [1, unet_in_channels, min_image_size // 8, min_image_size // 8],
-            "max_shape": [2, unet_in_channels, max_image_size // 8, max_image_size // 8],
-            "opt_shape": [2, unet_in_channels, min_image_size // 8, min_image_size // 8],
+            "min_shape": [
+                1,
+                unet_in_channels,
+                min_image_size // 8,
+                min_image_size // 8,
+            ],
+            "max_shape": [
+                2,
+                unet_in_channels,
+                max_image_size // 8,
+                max_image_size // 8,
+            ],
+            "opt_shape": [
+                2,
+                unet_in_channels,
+                min_image_size // 8,
+                min_image_size // 8,
+            ],
         },
         "timestep": {
             "min_shape": [1],
@@ -341,16 +379,24 @@ def main(args):
     elif args.backend == "tensorrt":
         runtime_options = dict(
             text_encoder=create_trt_runtime(
-                dynamic_shape=text_encoder_dynamic_shape, use_fp16=args.use_fp16, device_id=args.device_id
+                dynamic_shape=text_encoder_dynamic_shape,
+                use_fp16=args.use_fp16,
+                device_id=args.device_id,
             ),
             vae_encoder=create_trt_runtime(
-                dynamic_shape=vae_encoder_dynamic_shape, use_fp16=args.use_fp16, device_id=args.device_id
+                dynamic_shape=vae_encoder_dynamic_shape,
+                use_fp16=args.use_fp16,
+                device_id=args.device_id,
             ),
             vae_decoder=create_trt_runtime(
-                dynamic_shape=vae_decoder_dynamic_shape, use_fp16=args.use_fp16, device_id=args.device_id
+                dynamic_shape=vae_decoder_dynamic_shape,
+                use_fp16=args.use_fp16,
+                device_id=args.device_id,
             ),
             unet=create_trt_runtime(
-                dynamic_shape=unet_dynamic_shape, use_fp16=args.use_fp16, device_id=args.device_id
+                dynamic_shape=unet_dynamic_shape,
+                use_fp16=args.use_fp16,
+                device_id=args.device_id,
             ),
         )
     elif args.backend == "paddle" or args.backend == "paddle_tensorrt":

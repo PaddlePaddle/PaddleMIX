@@ -79,7 +79,15 @@ def _no_grad_normal_(tensor, mean=0.0, std=1.0):
 
 
 def _calculate_gain(nonlinearity, param=None):
-    linear_fns = ["linear", "conv1d", "conv2d", "conv3d", "conv_transpose1d", "conv_transpose2d", "conv_transpose3d"]
+    linear_fns = [
+        "linear",
+        "conv1d",
+        "conv2d",
+        "conv3d",
+        "conv_transpose1d",
+        "conv_transpose2d",
+        "conv_transpose3d",
+    ]
     if nonlinearity in linear_fns or nonlinearity == "sigmoid":
         return 1
     elif nonlinearity == "tanh":

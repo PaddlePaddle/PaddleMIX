@@ -27,8 +27,20 @@ from paddlenlp.utils.log import logger
 
 
 def main():
-    parser = PdArgumentParser((ModelArguments, VideoFrameDatasetArguments, TrainerArguments, TrainingArguments))
-    model_args, data_args, trainer_args, training_args = parser.parse_args_into_dataclasses()
+    parser = PdArgumentParser(
+        (
+            ModelArguments,
+            VideoFrameDatasetArguments,
+            TrainerArguments,
+            TrainingArguments,
+        )
+    )
+    (
+        model_args,
+        data_args,
+        trainer_args,
+        training_args,
+    ) = parser.parse_args_into_dataclasses()
     # report to custom_visualdl
     training_args.report_to = ["custom_visualdl"]
     training_args.resolution = data_args.resolution
@@ -84,7 +96,10 @@ def main():
     )
 
     trainer = LatentVideoDiffusionTrainer(
-        model=model, args=training_args, train_dataset=train_dataset, eval_dataset=eval_dataset
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
     )
 
     # must set recompute after trainer init

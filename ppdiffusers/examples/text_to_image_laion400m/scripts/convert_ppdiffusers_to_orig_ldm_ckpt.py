@@ -302,9 +302,19 @@ def convert_ldmbert_state_dict(ldmbert_state_dict, num_layers=32):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_name_or_path", default=None, type=str, required=True, help="Path to the model to convert."
+        "--model_name_or_path",
+        default=None,
+        type=str,
+        required=True,
+        help="Path to the model to convert.",
     )
-    parser.add_argument("--dump_path", default=None, type=str, required=True, help="Path to the output model.")
+    parser.add_argument(
+        "--dump_path",
+        default=None,
+        type=str,
+        required=True,
+        help="Path to the output model.",
+    )
     parser.add_argument("--half", action="store_true", help="Save weights in half precision.")
 
     args = parser.parse_args()

@@ -22,7 +22,13 @@ from PIL import Image
 
 
 class Fill50kDataset(Dataset):
-    def __init__(self, tokenizer, file_path="./fill50k", do_image_processing=True, do_text_processing=True):
+    def __init__(
+        self,
+        tokenizer,
+        file_path="./fill50k",
+        do_image_processing=True,
+        do_text_processing=True,
+    ):
         self.tokenizer = tokenizer
         self.image_list = []
         self.label_list = []

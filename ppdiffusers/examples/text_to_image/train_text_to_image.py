@@ -178,7 +178,10 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--image_column", type=str, default="image", help="The column of the dataset containing an image."
+        "--image_column",
+        type=str,
+        default="image",
+        help="The column of the dataset containing an image.",
     )
     parser.add_argument(
         "--caption_column",
@@ -250,7 +253,10 @@ def parse_args(input_args=None):
         help="whether to randomly flip images horizontally",
     )
     parser.add_argument(
-        "--train_batch_size", type=int, default=16, help="Batch size (per device) for the training dataloader."
+        "--train_batch_size",
+        type=int,
+        default=16,
+        help="Batch size (per device) for the training dataloader.",
     )
     parser.add_argument("--num_train_epochs", type=int, default=100)
     parser.add_argument(
@@ -292,7 +298,10 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--lr_warmup_steps", type=int, default=500, help="Number of steps for the warmup in the lr scheduler."
+        "--lr_warmup_steps",
+        type=int,
+        default=500,
+        help="Number of steps for the warmup in the lr scheduler.",
     )
     parser.add_argument(
         "--snr_gamma",
@@ -307,7 +316,12 @@ def parse_args(input_args=None):
         default=1,
         help="Number of hard resets of the lr in cosine_with_restarts scheduler.",
     )
-    parser.add_argument("--lr_power", type=float, default=1.0, help="Power factor of the polynomial scheduler.")
+    parser.add_argument(
+        "--lr_power",
+        type=float,
+        default=1.0,
+        help="Power factor of the polynomial scheduler.",
+    )
     parser.add_argument("--use_ema", action="store_true", help="Whether to use EMA model.")
     parser.add_argument("--debug", action="store_true", help="Whether to debug this training script.")
     parser.add_argument(
@@ -318,13 +332,37 @@ def parse_args(input_args=None):
             "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
         ),
     )
-    parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
-    parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
+    parser.add_argument(
+        "--adam_beta1",
+        type=float,
+        default=0.9,
+        help="The beta1 parameter for the Adam optimizer.",
+    )
+    parser.add_argument(
+        "--adam_beta2",
+        type=float,
+        default=0.999,
+        help="The beta2 parameter for the Adam optimizer.",
+    )
     parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
-    parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
+    parser.add_argument(
+        "--adam_epsilon",
+        type=float,
+        default=1e-08,
+        help="Epsilon value for the Adam optimizer",
+    )
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
-    parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
+    parser.add_argument(
+        "--push_to_hub",
+        action="store_true",
+        help="Whether or not to push the model to the Hub.",
+    )
+    parser.add_argument(
+        "--hub_token",
+        type=str,
+        default=None,
+        help="The token to use to push to the Model Hub.",
+    )
     parser.add_argument(
         "--hub_model_id",
         type=str,
@@ -341,7 +379,11 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--report_to", type=str, default="visualdl", choices=["tensorboard", "visualdl"], help="Log writer type."
+        "--report_to",
+        type=str,
+        default="visualdl",
+        choices=["tensorboard", "visualdl"],
+        help="Log writer type.",
     )
     parser.add_argument(
         "--checkpointing_steps",
@@ -350,7 +392,9 @@ def parse_args(input_args=None):
         help=("Save a checkpoint of the training state every X updates."),
     )
     parser.add_argument(
-        "--enable_xformers_memory_efficient_attention", action="store_true", help="Whether or not to use xformers."
+        "--enable_xformers_memory_efficient_attention",
+        action="store_true",
+        help="Whether or not to use xformers.",
     )
     parser.add_argument("--noise_offset", type=float, default=0, help="The scale of noise offset.")
     if input_args is not None:
@@ -593,7 +637,10 @@ def main():
         pixel_values = paddle.stack([example["pixel_values"] for example in examples]).cast("float32")
         input_ids = [example["input_ids"] for example in examples]
         input_ids = tokenizer.pad(
-            {"input_ids": input_ids}, padding="max_length", max_length=tokenizer.model_max_length, return_tensors="pd"
+            {"input_ids": input_ids},
+            padding="max_length",
+            max_length=tokenizer.model_max_length,
+            return_tensors="pd",
         ).input_ids
         return {
             "input_ids": input_ids,
@@ -606,7 +653,10 @@ def main():
         else BatchSampler(train_dataset, batch_size=args.train_batch_size, shuffle=True)
     )
     train_dataloader = DataLoader(
-        train_dataset, batch_sampler=train_sampler, collate_fn=collate_fn, num_workers=args.dataloader_num_workers
+        train_dataset,
+        batch_sampler=train_sampler,
+        collate_fn=collate_fn,
+        num_workers=args.dataloader_num_workers,
     )
 
     # Scheduler and math around the number of training steps.
@@ -742,19 +792,30 @@ def main():
                         raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
                     if args.snr_gamma is None:
-                        loss = F.mse_loss(model_pred.cast("float32"), target.cast("float32"), reduction="mean")
+                        loss = F.mse_loss(
+                            model_pred.cast("float32"),
+                            target.cast("float32"),
+                            reduction="mean",
+                        )
                     else:
                         # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
                         # Since we predict the noise instead of x_0, the original formulation is slightly changed.
                         # This is discussed in Section 4.2 of the same paper.
                         snr = compute_snr(timesteps)
                         mse_loss_weights = (
-                            paddle.stack([snr, args.snr_gamma * paddle.ones_like(timesteps)], axis=1).min(1)[0] / snr
+                            paddle.stack([snr, args.snr_gamma * paddle.ones_like(timesteps)], axis=1,).min(
+                                1
+                            )[0]
+                            / snr
                         )
                         # We first calculate the original loss. Then we mean over the non-batch dimensions and
                         # rebalance the sample-wise losses with their respective loss weights.
                         # Finally, we take the mean of the rebalanced loss.
-                        loss = F.mse_loss(model_pred.cast("float32"), target.cast("float32"), reduction="none")
+                        loss = F.mse_loss(
+                            model_pred.cast("float32"),
+                            target.cast("float32"),
+                            reduction="none",
+                        )
                         loss = loss.mean(axis=list(range(1, len(loss.shape)))) * mse_loss_weights
                         loss = loss.mean()
 

@@ -51,7 +51,11 @@ def process(
 ):
     with paddle.no_grad():
         input_image = HWC3(input_image)
-        detected_map = apply_mlsd(resize_image(input_image, detect_resolution), value_threshold, distance_threshold)
+        detected_map = apply_mlsd(
+            resize_image(input_image, detect_resolution),
+            value_threshold,
+            distance_threshold,
+        )
         detected_map = HWC3(detected_map)
         img = resize_image(input_image, image_resolution)
         H, W, C = img.shape
@@ -95,20 +99,50 @@ with block:
             run_button = gr.Button(label="Run")
             with gr.Accordion("Advanced options", open=False):
                 num_samples = gr.Slider(label="Images", minimum=1, maximum=12, value=1, step=1)
-                image_resolution = gr.Slider(label="Image Resolution", minimum=256, maximum=768, value=512, step=64)
-                strength = gr.Slider(label="Control Strength", minimum=0.0, maximum=2.0, value=1.0, step=0.01)
+                image_resolution = gr.Slider(
+                    label="Image Resolution",
+                    minimum=256,
+                    maximum=768,
+                    value=512,
+                    step=64,
+                )
+                strength = gr.Slider(
+                    label="Control Strength",
+                    minimum=0.0,
+                    maximum=2.0,
+                    value=1.0,
+                    step=0.01,
+                )
                 guess_mode = gr.Checkbox(label="Guess Mode", value=False)
                 detect_resolution = gr.Slider(
-                    label="Hough Line Resolution", minimum=128, maximum=1024, value=512, step=1
+                    label="Hough Line Resolution",
+                    minimum=128,
+                    maximum=1024,
+                    value=512,
+                    step=1,
                 )
                 value_threshold = gr.Slider(
-                    label="Hough value threshold (MLSD)", minimum=0.01, maximum=2.0, value=0.1, step=0.01
+                    label="Hough value threshold (MLSD)",
+                    minimum=0.01,
+                    maximum=2.0,
+                    value=0.1,
+                    step=0.01,
                 )
                 distance_threshold = gr.Slider(
-                    label="Hough distance threshold (MLSD)", minimum=0.01, maximum=20.0, value=0.1, step=0.01
+                    label="Hough distance threshold (MLSD)",
+                    minimum=0.01,
+                    maximum=20.0,
+                    value=0.1,
+                    step=0.01,
                 )
                 ddim_steps = gr.Slider(label="Steps", minimum=1, maximum=100, value=20, step=1)
-                scale = gr.Slider(label="Guidance Scale", minimum=0.1, maximum=30.0, value=9.0, step=0.1)
+                scale = gr.Slider(
+                    label="Guidance Scale",
+                    minimum=0.1,
+                    maximum=30.0,
+                    value=9.0,
+                    step=0.1,
+                )
                 seed = gr.Slider(label="Seed", minimum=-1, maximum=2147483647, step=1, randomize=True)
                 eta = gr.Number(label="eta (DDIM)", value=0.0)
                 a_prompt = gr.Textbox(label="Added Prompt", value="best quality, extremely detailed")

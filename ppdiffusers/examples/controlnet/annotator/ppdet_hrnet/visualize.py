@@ -46,7 +46,14 @@ def visualize_box_mask(im, results, labels, threshold=0.5):
     if "boxes" in results and len(results["boxes"]) > 0:
         im = draw_box(im, results["boxes"], labels, threshold=threshold)
     if "segm" in results:
-        im = draw_segm(im, results["segm"], results["label"], results["score"], labels, threshold=threshold)
+        im = draw_segm(
+            im,
+            results["segm"],
+            results["label"],
+            results["score"],
+            labels,
+            threshold=threshold,
+        )
     return im
 
 
@@ -192,9 +199,22 @@ def draw_segm(im, np_segms, np_label, np_score, labels, threshold=0.5, alpha=0.7
         bbox_text = "%s %.2f" % (labels[clsid], score)
         t_size = cv2.getTextSize(bbox_text, 0, 0.3, thickness=1)[0]
         cv2.rectangle(
-            im, (x0, y0), (x0 + t_size[0], y0 - t_size[1] - 3), tuple(color_mask.astype("int32").tolist()), -1
+            im,
+            (x0, y0),
+            (x0 + t_size[0], y0 - t_size[1] - 3),
+            tuple(color_mask.astype("int32").tolist()),
+            -1,
         )
-        cv2.putText(im, bbox_text, (x0, y0 - 2), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 0, 0), 1, lineType=cv2.LINE_AA)
+        cv2.putText(
+            im,
+            bbox_text,
+            (x0, y0 - 2),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.3,
+            (0, 0, 0),
+            1,
+            lineType=cv2.LINE_AA,
+        )
     return Image.fromarray(im.astype("uint8"))
 
 
@@ -205,7 +225,13 @@ def get_color(idx):
 
 
 def visualize_pose(
-    imgfile, results, visual_thresh=0.6, save_name="pose.jpg", save_dir="output", returnimg=False, ids=None
+    imgfile,
+    results,
+    visual_thresh=0.6,
+    save_name="pose.jpg",
+    save_dir="output",
+    returnimg=False,
+    ids=None,
 ):
     try:
         import matplotlib.pyplot as plt
@@ -302,7 +328,13 @@ def visualize_pose(
             else:
                 color = get_color(ids[j])
 
-            cv2.circle(canvas, tuple(skeletons[j][i, 0:2].astype("int32")), 2, color, thickness=-1)
+            cv2.circle(
+                canvas,
+                tuple(skeletons[j][i, 0:2].astype("int32")),
+                2,
+                color,
+                thickness=-1,
+            )
 
     stickwidth = 2
 
@@ -361,5 +393,13 @@ def visualize_attr(im, results, boxes=None, is_mtmct=False):
         for text in res:
             text_h += int(line_inter)
             text_loc = (text_w, text_h)
-            cv2.putText(im, text, text_loc, cv2.FONT_ITALIC, text_scale, (0, 255, 255), thickness=text_thickness)
+            cv2.putText(
+                im,
+                text,
+                text_loc,
+                cv2.FONT_ITALIC,
+                text_scale,
+                (0, 255, 255),
+                thickness=text_thickness,
+            )
     return im

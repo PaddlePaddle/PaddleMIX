@@ -27,17 +27,8 @@ from paddle.inference import Config, create_predictor
 from .benchmark_utils import PaddleInferBenchmark
 from .keypoint_preprocess import EvalAffine, TopDownEvalAffine, expand_crop  # noqa F401
 from .picodet_postprocess import PicoDetPostProcess
-from .preprocess import (  # noqa F401
-    LetterBoxResize,
-    NormalizeImage,
-    Pad,
-    PadStride,
-    Permute,
-    Resize,
-    WarpAffine,
-    decode_image,
-    preprocess,
-)
+from .preprocess import Pad  # noqa F401
+from .preprocess import preprocess
 from .utils import (
     Timer,
     argsparser,
@@ -86,7 +77,11 @@ def bench_log(detector, img_list, model_info, batch_size=1, name=None):
         "gpu_util": detector.gpu_util * 100 / len(img_list),
     }
     perf_info = detector.det_times.report(average=True)
-    data_info = {"batch_size": batch_size, "shape": "dynamic_shape", "data_num": perf_info["img_num"]}
+    data_info = {
+        "batch_size": batch_size,
+        "shape": "dynamic_shape",
+        "data_num": perf_info["img_num"],
+    }
     log = PaddleInferBenchmark(detector.config, model_info, data_info, perf_info, mems)
     log(name)
 
@@ -352,7 +347,12 @@ class Detector(object):
 
             merged_results = {"boxes": []}
             if combine_method == "nms":
-                final_boxes = multiclass_nms(np.concatenate(merged_bboxs), num_classes, match_threshold, match_metric)
+                final_boxes = multiclass_nms(
+                    np.concatenate(merged_bboxs),
+                    num_classes,
+                    match_threshold,
+                    match_metric,
+                )
                 merged_results["boxes"] = np.concatenate(final_boxes)
             elif combine_method == "concat":
                 merged_results["boxes"] = np.concatenate(merged_bboxs)
@@ -377,7 +377,14 @@ class Detector(object):
             self.save_coco_results(img_list, results, use_coco_category=FLAGS.use_coco_category)
         return results
 
-    def predict_image(self, image_list, run_benchmark=False, repeats=1, visual=True, save_results=False):
+    def predict_image(
+        self,
+        image_list,
+        run_benchmark=False,
+        repeats=1,
+        visual=True,
+        save_results=False,
+    ):
         batch_loop_cnt = math.ceil(float(len(image_list)) / self.batch_size)
         results = []
         for i in range(batch_loop_cnt):
@@ -497,7 +504,12 @@ class Detector(object):
                             "image_id": img_id,
                             "category_id": coco_clsid2catid[int(box[0])] if use_coco_category else int(box[0]),
                             "file_name": file_name,
-                            "bbox": [box[2], box[3], box[4] - box[2], box[5] - box[3]],  # xyxy -> xywh
+                            "bbox": [
+                                box[2],
+                                box[3],
+                                box[4] - box[2],
+                                box[5] - box[3],
+                            ],  # xyxy -> xywh
                             "score": box[1],
                         }
                         for box in boxes
@@ -898,9 +910,18 @@ def load_predictor(
             config.enable_tuned_tensorrt_dynamic_shape(tuned_trt_shape_file, True)
 
         if use_dynamic_shape:
-            min_input_shape = {"image": [batch_size, 3, trt_min_shape, trt_min_shape], "scale_factor": [batch_size, 2]}
-            max_input_shape = {"image": [batch_size, 3, trt_max_shape, trt_max_shape], "scale_factor": [batch_size, 2]}
-            opt_input_shape = {"image": [batch_size, 3, trt_opt_shape, trt_opt_shape], "scale_factor": [batch_size, 2]}
+            min_input_shape = {
+                "image": [batch_size, 3, trt_min_shape, trt_min_shape],
+                "scale_factor": [batch_size, 2],
+            }
+            max_input_shape = {
+                "image": [batch_size, 3, trt_max_shape, trt_max_shape],
+                "scale_factor": [batch_size, 2],
+            }
+            opt_input_shape = {
+                "image": [batch_size, 3, trt_opt_shape, trt_opt_shape],
+                "scale_factor": [batch_size, 2],
+            }
             config.set_trt_dynamic_shape_info(min_input_shape, max_input_shape, opt_input_shape)
             print("trt set dynamic shape done!")
 
@@ -1025,14 +1046,21 @@ def main():
             )
         else:
             detector.predict_image(
-                img_list, FLAGS.run_benchmark, repeats=100, visual=FLAGS.save_images, save_results=FLAGS.save_results
+                img_list,
+                FLAGS.run_benchmark,
+                repeats=100,
+                visual=FLAGS.save_images,
+                save_results=FLAGS.save_results,
             )
         if not FLAGS.run_benchmark:
             detector.det_times.info(average=True)
         else:
             mode = FLAGS.run_mode
             model_dir = FLAGS.model_dir
-            model_info = {"model_name": model_dir.strip("/").split("/")[-1], "precision": mode.split("_")[-1]}
+            model_info = {
+                "model_name": model_dir.strip("/").split("/")[-1],
+                "precision": mode.split("_")[-1],
+            }
             bench_log(detector, img_list, model_info, name="DET")
 
 
@@ -1042,7 +1070,12 @@ if __name__ == "__main__":
     FLAGS = parser.parse_args()
     print_arguments(FLAGS)
     FLAGS.device = FLAGS.device.upper()
-    assert FLAGS.device in ["CPU", "GPU", "XPU", "NPU"], "device should be CPU, GPU, XPU or NPU"
+    assert FLAGS.device in [
+        "CPU",
+        "GPU",
+        "XPU",
+        "NPU",
+    ], "device should be CPU, GPU, XPU or NPU"
     assert not FLAGS.use_gpu, "use_gpu has been deprecated, please use --device"
 
     assert not (

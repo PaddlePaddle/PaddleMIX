@@ -32,9 +32,17 @@ from ppdiffusers.pipelines.latent_diffusion import LDMBertConfig
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_file", type=str, default="./model_state.pdparams", help="path to pretrained model_state.pdparams"
+        "--model_file",
+        type=str,
+        default="./model_state.pdparams",
+        help="path to pretrained model_state.pdparams",
     )
-    parser.add_argument("--output_path", type=str, default="./ldm_pipelines", help="the output path of pipeline.")
+    parser.add_argument(
+        "--output_path",
+        type=str,
+        default="./ldm_pipelines",
+        help="the output path of pipeline.",
+    )
     parser.add_argument(
         "--vae_name_or_path",
         type=str,
@@ -42,16 +50,29 @@ def parse_args():
         help="pretrained_vae_name_or_path.",
     )
     parser.add_argument(
-        "--text_encoder_config_file", type=str, default="./config/ldmbert.json", help="text_encoder_config_file."
+        "--text_encoder_config_file",
+        type=str,
+        default="./config/ldmbert.json",
+        help="text_encoder_config_file.",
     )
-    parser.add_argument("--unet_config_file", type=str, default="./config/unet.json", help="unet_config_file.")
+    parser.add_argument(
+        "--unet_config_file",
+        type=str,
+        default="./config/unet.json",
+        help="unet_config_file.",
+    )
     parser.add_argument(
         "--tokenizer_name_or_path",
         type=str,
         default="bert-base-uncased",
         help="Pretrained tokenizer name or path if not the same as model_name.",
     )
-    parser.add_argument("--model_max_length", type=int, default=77, help="Pretrained tokenizer model_max_length.")
+    parser.add_argument(
+        "--model_max_length",
+        type=int,
+        default=77,
+        help="Pretrained tokenizer model_max_length.",
+    )
     parser.add_argument("--device", type=str, default=None, help="Device to use. Like gpu:0 or cpu")
 
     return parser.parse_args()
@@ -148,7 +169,13 @@ def build_pipelines(
     unet.load_dict(unet_dict)
     vae.load_dict(vae_dict)
     text_encoder.load_dict(text_encoder_dict)
-    pipe = LDMTextToImagePipeline(bert=text_encoder, tokenizer=tokenizer, scheduler=scheduler, vqvae=vae, unet=unet)
+    pipe = LDMTextToImagePipeline(
+        bert=text_encoder,
+        tokenizer=tokenizer,
+        scheduler=scheduler,
+        vqvae=vae,
+        unet=unet,
+    )
     pipe.save_pretrained(output_path)
 
 

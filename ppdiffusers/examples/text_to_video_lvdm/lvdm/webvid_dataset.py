@@ -67,7 +67,10 @@ class WebVidDataset(paddle.io.Dataset):
         if self.spatial_transform == "center_crop_resize":
             print("Spatial transform: center crop and then resize")
             self.video_transform = paddle.vision.transforms.Compose(
-                [paddle.vision.transforms.Resize(resolution), CenterCropVideo(resolution)]
+                [
+                    paddle.vision.transforms.Resize(resolution),
+                    CenterCropVideo(resolution),
+                ]
             )
             self.video_transform_step1 = paddle.vision.transforms.Compose(
                 [
@@ -109,7 +112,8 @@ class WebVidDataset(paddle.io.Dataset):
                 self.annotations = fp.read().splitlines()
         else:
             self.annotations = sum(
-                [glob.glob(os.path.join(data_folder, "**", f"*.{ext}"), recursive=True) for ext in self.exts], []
+                [glob.glob(os.path.join(data_folder, "**", f"*.{ext}"), recursive=True) for ext in self.exts],
+                [],
             )
         print(f"Number of videos = {len(self.annotations)}")
 
@@ -131,7 +135,10 @@ class WebVidDataset(paddle.io.Dataset):
             caption, video_path = self.get_annotation(index)
             try:
                 video_reader = VideoReader(
-                    video_path, ctx=cpu(0), width=self.max_resolution, height=self.max_resolution
+                    video_path,
+                    ctx=cpu(0),
+                    width=self.max_resolution,
+                    height=self.max_resolution,
                 )
                 if len(video_reader) < self.video_length:
                     index += 1
@@ -165,7 +172,10 @@ class WebVidDataset(paddle.io.Dataset):
         data = {"video": frames, "caption": caption}
 
         if self.text_processing:
-            tensor_out = {"pixel_values": data["video"], "input_ids": self.text_processing(data["caption"])}
+            tensor_out = {
+                "pixel_values": data["video"],
+                "input_ids": self.text_processing(data["caption"]),
+            }
         else:
             tensor_out = {
                 "pixel_values": data["video"],
@@ -209,7 +219,14 @@ def main():
     starttime = time.time()
     for id, data in enumerate(dataloader):
         endtime = time.time()
-        print(id, "time:", endtime - starttime, " shape:", data["video"].shape, data["caption"])
+        print(
+            id,
+            "time:",
+            endtime - starttime,
+            " shape:",
+            data["video"].shape,
+            data["caption"],
+        )
         starttime = endtime
     return
 

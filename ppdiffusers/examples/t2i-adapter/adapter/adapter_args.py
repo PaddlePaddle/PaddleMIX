@@ -23,7 +23,8 @@ class ModelArguments:
     """
 
     adapter_config_file: Optional[str] = field(
-        default="./config/openpose_adapter.json", metadata={"help": "adapter_config_file"}
+        default="./config/openpose_adapter.json",
+        metadata={"help": "adapter_config_file"},
     )
     vae_name_or_path: Optional[str] = field(default=None, metadata={"help": "pretrained_vae_name_or_path"})
     text_encoder_name_or_path: Optional[str] = field(default=None, metadata={"help": "text_encoder_name_or_path"})
@@ -72,7 +73,8 @@ class DataArguments:
     """
 
     file_list: str = field(
-        default="./data/filelist/train.filelist.list", metadata={"help": "The name of the file_list."}
+        default="./data/filelist/train.filelist.list",
+        metadata={"help": "The name of the file_list."},
     )
     resolution: int = field(
         default=512,
@@ -123,7 +125,8 @@ class GenerateArguments:
     max_generation_limits: int = field(default=1000, metadata={"help": "max generation limits."})
     use_text_cond: bool = field(default=True, metadata={"help": "Whether or not use text condition"})
     use_default_neg_text_cond: bool = field(
-        default=True, metadata={"help": "Whether or not use default negative text condition"}
+        default=True,
+        metadata={"help": "Whether or not use default negative text condition"},
     )
     generate_data_format: str = field(default="img2img", metadata={"help": "Generate data format."})
     generate_control_image_processor_type: str = field(default="openpose", metadata={"help": "Generate data format."})

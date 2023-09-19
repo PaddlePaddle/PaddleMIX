@@ -445,7 +445,12 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
                 # compute the previous noisy sample x_t -> x_t-1
                 if is_scheduler_support_step_index:
                     scheduler_output = self.scheduler.step(
-                        noise_pred, t, latents, step_index=i, return_pred_original_sample=False, **extra_step_kwargs
+                        noise_pred,
+                        t,
+                        latents,
+                        step_index=i,
+                        return_pred_original_sample=False,
+                        **extra_step_kwargs,
                     )
                 else:
                     scheduler_output = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)
@@ -464,8 +469,12 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
             # 8. determine the upscaled width and height for upscaled images
             truncate_width = 0
             truncate_height = 0
-            hr_upscale_to_width, hr_upscale_to_height = self.get_upscaled_width_and_height(
-                width, height, hr_scale=hr_scale, hr_resize_width=hr_resize_width, hr_resize_height=hr_resize_height
+            (hr_upscale_to_width, hr_upscale_to_height,) = self.get_upscaled_width_and_height(
+                width,
+                height,
+                hr_scale=hr_scale,
+                hr_resize_width=hr_resize_width,
+                hr_resize_height=hr_resize_height,
             )
             if hr_resize_width != 0 and hr_resize_height != 0:
                 truncate_width = (hr_upscale_to_width - hr_resize_width) // self.vae_scale_factor
@@ -478,7 +487,7 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
 
         if enable_hr:
             if do_controlnet:
-                control_image, control_conditioning_scale = self.prepare_controlnet_cond(
+                (control_image, control_conditioning_scale,) = self.prepare_controlnet_cond(
                     controlnet_cond=controlnet_cond,
                     controlnet_conditioning_scale=controlnet_conditioning_scale,
                     width=hr_upscale_to_width,
@@ -569,7 +578,8 @@ class FastStableDiffusionHiresFixPipeline(DiffusionPipeline, FastDeployDiffusion
 
         if not output_type == "latent":
             image = self._decode_vae_latents(
-                latents / self.vae_scaling_factor, infer_op=infer_op_dict.get("vae_decoder", None)
+                latents / self.vae_scaling_factor,
+                infer_op=infer_op_dict.get("vae_decoder", None),
             )
             image, has_nsfw_concept = self.run_safety_checker(image)
         else:

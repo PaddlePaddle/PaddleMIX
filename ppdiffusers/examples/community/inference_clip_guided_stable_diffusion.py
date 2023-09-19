@@ -33,7 +33,9 @@ def image_grid(imgs, rows, cols):
 
 
 def create_clip_guided_pipeline(
-    model_id="CompVis/stable-diffusion-v1-4", clip_model_id="openai/clip-vit-large-patch14", scheduler="plms"
+    model_id="CompVis/stable-diffusion-v1-4",
+    clip_model_id="openai/clip-vit-large-patch14",
+    scheduler="plms",
 ):
     pipeline = StableDiffusionPipeline.from_pretrained(model_id, paddle_dtype=paddle.float16)
 
