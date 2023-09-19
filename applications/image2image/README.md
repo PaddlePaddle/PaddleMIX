@@ -64,6 +64,7 @@ image.save("versatile-diffusion-red_car.png")
 from paddlemix.appflow import Appflow
 from PIL import Image
 from ppdiffusers.utils import load_image
+import paddle
 
 url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/image_Kurisu.png"
 image = load_image(url).resize((512, 768))

@@ -17,7 +17,7 @@ def show_mask(mask, ax, random_color=False):
     mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
     ax.imshow(mask_image)
 
-task = Appflow(task="openset_det_sam",
+task = Appflow(app="openset_det_sam",
                    models=["GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024"],
                    static_mode=False) #如果开启静态图推理，设置为True,默认动态图
 url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
@@ -47,5 +47,3 @@ plt.savefig(
 | dog | ![overture-creations](https://github.com/LokeZhou/PaddleMIX/assets/13300429/fe13b5f6-e773-41c2-9660-3b2747575fc1) | ![dog](https://github.com/LokeZhou/PaddleMIX/assets/13300429/f472cbd9-7b68-4699-888c-d4ea87fa8256) |
 | horse,grasses,sky | ![horse](https://github.com/LokeZhou/PaddleMIX/assets/13300429/cae06f3c-a0e3-46cb-8231-6e9eae58bc2b) | ![horse_mask](https://github.com/LokeZhou/PaddleMIX/assets/13300429/3e5e14b9-1089-43d5-8775-1fe678f104b1) |
 </div>
-
-

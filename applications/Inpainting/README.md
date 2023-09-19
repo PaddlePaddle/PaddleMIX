@@ -7,6 +7,7 @@
 ```python
 from paddlemix.appflow import Appflow
 from ppdiffusers.utils import load_image
+import paddle
 task = Appflow(app="inpainting",
                models=["GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024","stabilityai/stable-diffusion-2-inpainting"]
                )
@@ -58,6 +59,7 @@ result = task(image=image_pil,prompt=prompt)
 ### 文本引导的图像编辑（Text-Guided Image Inpainting)
 
 ```python
+import paddle
 from paddlemix.appflow import Appflow
 from PIL import Image
 from ppdiffusers.utils import load_image
