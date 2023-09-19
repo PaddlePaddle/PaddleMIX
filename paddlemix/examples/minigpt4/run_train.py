@@ -13,9 +13,7 @@
 # limitations under the License.
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
-
 
 from dataclasses import dataclass, field
 import numpy as np
@@ -30,7 +28,7 @@ from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
                                get_last_checkpoint)
 from paddlenlp.transformers import LlamaForCausalLM
 from paddlemix.datasets import load_dataset
-from paddlemix import MiniGPT4Processor, MiniGPT4ForConditionalGeneration, MiniGPT4VisionConfig, MiniGPT4QFormerConfig, MiniGPT4Config, MiniGPT4VisionModel, MiniGPT4QFormerModel
+from paddlemix import MiniGPT4Processor, MiniGPT4ForConditionalGeneration, MiniGPT4Config, MiniGPT4VisionModel, MiniGPT4QFormerModel
 from paddlemix.utils import paddlemix_load
 from paddlemix.utils.log import logger
 from paddlemix.utils.parameters import freeze_parameters
