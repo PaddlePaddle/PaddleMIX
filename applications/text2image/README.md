@@ -4,7 +4,7 @@
 
 
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 
 paddle.seed(1024)
 task = Appflow(app="text2image_generation",

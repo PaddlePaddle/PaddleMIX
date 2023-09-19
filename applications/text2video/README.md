@@ -1,7 +1,7 @@
 ### 文本条件的视频生成（Text-to-Video Generation）
 
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 from PIL import Image
 
 
