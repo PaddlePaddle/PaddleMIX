@@ -618,12 +618,12 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         pixel_values: paddle.Tensor,
         **kwargs,
     ):
-        image_embeds = self.ln_vision(self.visual_encoder(pixel_values.astype("float16")))
+        image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values.astype("float16")))
         image_embeds = image_embeds.astype("float32")
 
         image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
 
-        query_tokens = self.query_tokens.expand([image_embeds.shape[0], -1, -1])
+        query_tokens = self.Qformer.query_tokens.expand([image_embeds.shape[0], -1, -1])
         query_outputs = self.Qformer.bert(
             query_embeds=query_tokens,
             encoder_hidden_states=image_embeds,

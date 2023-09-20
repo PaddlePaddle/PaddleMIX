@@ -59,7 +59,7 @@ class EVA02VisionTransformerForMIMConfig(PretrainedConfig):
 
     def __init__(
         self,
-        img_size=224,
+        image_size=224,
         patch_size=14,
         in_chans=3,
         embed_dim=768,
@@ -95,7 +95,7 @@ class EVA02VisionTransformerForMIMConfig(PretrainedConfig):
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
         super().__init__(**kwargs)
-        self.img_size = img_size
+        self.image_size = image_size
         self.patch_size = patch_size
         self.in_chans = in_chans
         self.embed_dim = embed_dim
@@ -156,7 +156,7 @@ class EVA02VisionTransformerForMIMPretrainedModel(MixPretrainedModel):
 class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
     def __init__(self, config: EVA02VisionTransformerForMIMConfig):
         super(EVA02VisionTransformerForMIM, self).__init__(config)
-        self.image_size = config.img_size
+        self.image_size = config.image_size
         self.enable_recompute = config.enable_recompute
         self.embed_dim = embed_dim = config.embed_dim
         self.swiglu = config.swiglu
@@ -205,7 +205,7 @@ class EVA02VisionTransformerForMIM(EVA02VisionTransformerForMIMPretrainedModel):
 
         if config.rope:
             half_head_dim = embed_dim // num_heads // 2
-            hw_seq_len = config.img_size // config.patch_size
+            hw_seq_len = config.image_size // config.patch_size
             self.rope = VisionRotaryEmbeddingFast(dim=half_head_dim, pt_seq_len=hw_seq_len, ft_seq_len=None)
         else:
             self.rope = None
@@ -529,7 +529,8 @@ class EVA02ForPretrain(EVA02ForPretrainModel):
         self.teacher.set_grad_checkpointing(enable)
         self.student.set_grad_checkpointing(enable)
 
-    def forward(self, samples, image, bool_masked_pos, **kwargs):
+    def forward(self, samples, image, bool_masked_pos, get_feats=False):
+        # [bs, 3, 224, 224] [bs, 3, 224, 224] [bs, 256]
         if self.beit_like:
             with paddle.no_grad(), paddle.amp.auto_cast():
                 clip_features = self.teacher.encode_image(image)  # [bs, 256, 1024]
@@ -537,11 +538,13 @@ class EVA02ForPretrain(EVA02ForPretrainModel):
                 labels = clip_features[bool_masked_pos]  # [N, 1024]
 
             with paddle.amp.auto_cast():
-                outputs = self.student(samples, bool_masked_pos=bool_masked_pos)
+                outputs = self.student(samples, bool_masked_pos=bool_masked_pos)  # [N, 1024]
 
             loss = compute_loss(outputs, labels)
         else:
             raise ValueError
+        if get_feats:
+            return outputs
         return loss
 
 
