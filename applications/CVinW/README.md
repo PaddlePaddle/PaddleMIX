@@ -5,6 +5,8 @@
 `Grounded-SAM` 示例:
 
 ```python
+import numpy as np
+import matplotlib.pyplot as plt
 from paddlemix.appflow import Appflow
 from ppdiffusers.utils import load_image
 
