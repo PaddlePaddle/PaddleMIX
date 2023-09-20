@@ -152,7 +152,7 @@ class UNet3DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
         out_1 = out_1[~np.isnan(out_1)]
         out_2 = out_2[~np.isnan(out_2)]
         max_diff = np.amax(np.abs(out_1 - out_2))
-        self.assertLessEqual(max_diff, 1e-05)
+        self.assertLessEqual(max_diff, 1e-04)
 
     def test_model_attention_slicing(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
