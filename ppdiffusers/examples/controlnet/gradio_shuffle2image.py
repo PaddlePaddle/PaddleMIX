@@ -53,7 +53,7 @@ def process(
         control = paddle.to_tensor(detected_map.copy(), dtype=paddle.float32) / 255.0
         control = control.unsqueeze(0).transpose([0, 3, 1, 2])
 
-        control_scales = [strength] * 13
+        control_scales = float(strength)
         if seed == -1:
             seed = random.randint(0, 65535)
         seed_everything(seed)
