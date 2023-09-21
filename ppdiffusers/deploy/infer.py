@@ -734,7 +734,7 @@ def main(args):
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
-            images[0].save("mixture_tiling.png")
+            images[0].save(f"{folder}/mixture_tiling.png")
 
 
 if __name__ == "__main__":
