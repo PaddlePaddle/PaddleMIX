@@ -355,7 +355,7 @@ def main(args):
         if args.task_name in ["img2img_control", "all"]:
             pipe_img2img = StableDiffusionControlNetImg2ImgPipeline(**pipe.components)
             pipe_img2img.set_progress_bar_config(disable=True)
-            img_url = "sketch-mountains-input.png"
+            img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
             init_image = load_image(img_url).resize((width, height))
             controlnet_cond = get_canny_image(init_image, args).resize((width, height))
             prompt = "A fantasy landscape, trending on artstation"

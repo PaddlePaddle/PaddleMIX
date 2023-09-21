@@ -125,6 +125,8 @@ class ControlNet(nn.Layer):
         self.control_scales = [1.0] * 13
         self.only_mid_control = model_args.only_mid_control
 
+        self.unet.set_default_attn_processor()
+        self.vae.set_default_attn_processor()
         if model_args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
             try:
                 self.unet.enable_xformers_memory_efficient_attention()

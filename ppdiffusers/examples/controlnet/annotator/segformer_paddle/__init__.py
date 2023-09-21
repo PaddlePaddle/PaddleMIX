@@ -373,11 +373,18 @@ class SegformerDetector:
 
             cfg = "annotator/segformer_paddle/segformer_b5_cityscapes_1024x1024_160k.yml"
         else:
-            segformer_annotator_ckpts_path = os.path.join(annotator_ckpts_path, "segformer_model")
+            segformer_annotator_ckpts_path = os.path.join(annotator_ckpts_path, "segformer_model_ade20k")
             modelpath = os.path.join(
                 segformer_annotator_ckpts_path,
-                "segformer_b5_ade20k_512x512_160k.pdparams",
+                "model.pdparams",
             )
+            if not os.path.exists(modelpath):
+                from paddlenlp.utils.downloader import get_path_from_url_with_filelock
+
+                checkpoint_files = (
+                    "https://bj.bcebos.com/v1/paddleseg/dygraph/ade20k/seaformer_ade20k_512x512_160k/model.pdparams"
+                )
+                get_path_from_url_with_filelock(checkpoint_files, root_dir=segformer_annotator_ckpts_path)
 
             self.model_path = modelpath
 

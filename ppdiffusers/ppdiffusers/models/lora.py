@@ -144,6 +144,11 @@ class LoRACompatibleLinear(nn.Linear):
     def forward(self, x):
         # breakpoint()
         if self.lora_layer is None:
-            return super().forward(x)
+            # return super().forward(x)
+            return nn.functional.linear(
+                x,
+                self.weight,
+                self.bias,
+            )
         else:
             return super().forward(x) + self.lora_layer(x)

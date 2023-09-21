@@ -55,10 +55,8 @@ def process(
 
         control = paddle.to_tensor(detected_map.copy(), dtype=paddle.float32) / 255.0
         control = control.unsqueeze(0).transpose([0, 3, 1, 2])
+        control_scales = strength * (0.825 ** float(12)) if guess_mode else float(strength)
 
-        control_scales = (
-            [strength * (0.825 ** float(12 - i)) for i in range(13)] if guess_mode else ([strength] * 13)
-        )  # Magic number. IDK why. Perhaps because 0.825**12<0.01 but 0.826**12>0.01
         if seed == -1:
             seed = random.randint(0, 65535)
         seed_everything(seed)
