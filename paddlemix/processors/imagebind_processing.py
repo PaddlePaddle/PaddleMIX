@@ -22,8 +22,10 @@ from typing import List, Optional, Union
 import paddle
 from paddle.vision.transforms import transforms as T
 from paddlenlp.transformers.tokenizer_utils_base import BatchEncoding
-from paddlevideo.data.clip_sampling import ConstantClipsPerVideoSampler
-
+# from paddlevideo.data.clip_sampling import ConstantClipsPerVideoSampler
+from typing import Any, Dict, NamedTuple, Optional, Tuple, Union, List
+from abc import ABC, abstractmethod
+from fractions import Fraction
 from .base_processing import ProcessorMixin
 from .processing_utils import BaseAudioProcessor
 
@@ -62,7 +64,7 @@ class ImageBindProcessor(ProcessorMixin):
             encoding["audio_values"] = self.audio_processor(audios, return_tensors=return_tensors, **kwargs)
 
         if text is not None and images is not None:
-            encoding["pixel_values"] = image_features.pixel_values
+            encoding["pixel_values"] = image_features['image']
             return encoding
         elif text is not None:
             return encoding
@@ -192,3 +194,114 @@ class ImageBindAudioProcessor(BaseAudioProcessor):
 
         fbank = fbank.unsqueeze(axis=0)
         return fbank
+
+
+
+class ClipInfo(NamedTuple):
+    """
+    Named-tuple for clip information with:
+        clip_start_sec  (Union[float, Fraction]): clip start time.
+        clip_end_sec (Union[float, Fraction]): clip end time.
+        clip_index (int): clip index in the video.
+        aug_index (int): augmentation index for the clip. Different augmentation methods
+            might generate multiple views for the same clip.
+        is_last_clip (bool): a bool specifying whether there are more clips to be
+            sampled from the video.
+    """
+
+    clip_start_sec: Union[float, Fraction]
+    clip_end_sec: Union[float, Fraction]
+    clip_index: int
+    aug_index: int
+    is_last_clip: bool
+
+
+class ClipSampler(ABC):
+    """
+    Interface for clip samplers that take a video time, previous sampled clip time,
+    and returns a named-tuple ``ClipInfo``.
+    """
+
+    def __init__(self, clip_duration: Union[float, Fraction]) -> None:
+        self._clip_duration = Fraction(clip_duration)
+        self._current_clip_index = 0
+        self._current_aug_index = 0
+
+    @abstractmethod
+    def __call__(
+        self,
+        last_clip_time: Union[float, Fraction],
+        video_duration: Union[float, Fraction],
+        annotation: Dict[str, Any],
+    ) -> ClipInfo:
+        pass
+
+    def reset(self) -> None:
+        """Resets any video-specific attributes in preperation for next video"""
+        pass
+
+
+
+class ConstantClipsPerVideoSampler(ClipSampler):
+    """
+    Evenly splits the video into clips_per_video increments and samples clips of size
+    clip_duration at these increments.
+    """
+
+    def __init__(
+        self, clip_duration: float, clips_per_video: int, augs_per_clip: int = 1
+    ) -> None:
+        super().__init__(clip_duration)
+        self._clips_per_video = clips_per_video
+        self._augs_per_clip = augs_per_clip
+
+    def __call__(
+        self, last_clip_time: float, video_duration: float, annotation: Dict[str, Any]
+    ) -> ClipInfo:
+        """
+        Args:
+            last_clip_time (float): Not used for ConstantClipsPerVideoSampler.
+            video_duration: (float): the duration (in seconds) for the video that's
+                being sampled.
+            annotation (Dict): Not used by this sampler.
+        Returns:
+            a named-tuple `ClipInfo`: includes the clip information of (clip_start_time,
+                clip_end_time, clip_index, aug_index, is_last_clip). The times are in seconds.
+                is_last_clip is True after clips_per_video clips have been sampled or the end
+                of the video is reached.
+
+        """
+        max_possible_clip_start = Fraction(max(video_duration - self._clip_duration, 0))
+        uniform_clip = Fraction(max_possible_clip_start, self._clips_per_video)
+        clip_start_sec = uniform_clip * self._current_clip_index
+        clip_index = self._current_clip_index
+        aug_index = self._current_aug_index
+
+        self._current_aug_index += 1
+        if self._current_aug_index >= self._augs_per_clip:
+            self._current_clip_index += 1
+            self._current_aug_index = 0
+
+        # Last clip is True if sampled self._clips_per_video or if end of video is reached.
+        is_last_clip = False
+        if (
+            self._current_clip_index >= self._clips_per_video
+            or uniform_clip * self._current_clip_index > max_possible_clip_start
+        ):
+            self._current_clip_index = 0
+            is_last_clip = True
+
+        if is_last_clip:
+            self.reset()
+
+        return ClipInfo(
+            clip_start_sec,
+            clip_start_sec + self._clip_duration,
+            clip_index,
+            aug_index,
+            is_last_clip,
+        )
+
+    def reset(self):
+        self._current_clip_index = 0
+        self._current_aug_index = 0

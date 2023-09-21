@@ -44,9 +44,9 @@ example: Use audio generate image across modalities (e.g. Image, Text and Audio)
 cd applications/Audio2Img
 
 python audio2img_imagebind.py \
---model_name_or_path The dir name of imagebind checkpoint. \
---stable_unclip_model_name_or_path The dir name of StableUnCLIPImg2ImgPipeline pretrained checkpoint. \
---input_audio an audio file.  \
+--model_name_or_path imagebind-1.2b/ \
+--stable_unclip_model_name_or_path stabilityai/stable-diffusion-2-1-unclip \
+--input_audio https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/bird_audio.wav \
 ```
 
 ----
@@ -60,14 +60,14 @@ python audio2img_imagebind.py \
 cd applications/Audio2Img
 
 python audio2img_imagebind.py \
---model_name_or_path The dir name of imagebind checkpoint. \
---stable_unclip_model_name_or_path The dir name of StableUnCLIPImg2ImgPipeline pretrained checkpoint. \
---input_audio bird_audio.wav  \
+--model_name_or_path imagebind-1.2b/ \
+--stable_unclip_model_name_or_path stabilityai/stable-diffusion-2-1-unclip \
+--input_audio https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/bird_audio.wav  \
 ```
 #### 3.1.2 Result
 |  Input Audio | Output Image |
 | --- | --- | 
-|[bird_audio.wav](https://github.com/luyao-cv/file_download/blob/main/assets/bird_audio.wav)| ![audio2img_output_bird](https://github.com/luyao-cv/file_download/blob/main/vis_audio2img/audio2img_output_bird.jpg)  |
+|[bird_audio.wav](https://github.com/luyao-cv/file_download/blob/main/assets/bird_audio.wav)| ![audio2img_output_bird](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/audio2img_output_bird.jpg)  |
 
 
 #### Audio+Text to Image
@@ -76,15 +76,15 @@ python audio2img_imagebind.py \
 cd applications/Audio2Img
 
 python audio2img_imagebind.py \
---model_name_or_path The dir name of imagebind checkpoint. \
---stable_unclip_model_name_or_path The dir name of StableUnCLIPImg2ImgPipeline pretrained checkpoint. \
---input_audio bird_audio.wav  \
+--model_name_or_path imagebind-1.2b/ \
+--stable_unclip_model_name_or_path stabilityai/stable-diffusion-2-1-unclip \
+--input_audio https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/bird_audio.wav  \
 --input_text 'A photo.' \
 ```
 #### 3.2.2 Result
 |  Input Audio | Input Text | Output Image |
 | --- | --- |  --- | 
-|[bird_audio.wav](https://github.com/luyao-cv/file_download/blob/main/assets/bird_audio.wav) | 'A photo.' | ![audio_text_to_img_output_bird_a_photo](https://github.com/luyao-cv/file_download/blob/main/vis_audio2img/audio_text_to_img_output_bird_a_photo.jpg)
+|[bird_audio.wav](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/bird_audio.wav) | 'A photo.' | ![audio_text_to_img_output_bird_a_photo](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/audio_text_to_img_output_bird_a_photo.jpg)
 
 
 #### Audio+Image to Image
@@ -93,14 +93,14 @@ python audio2img_imagebind.py \
 cd applications/Audio2Img
 
 python audio2img_imagebind.py \
---model_name_or_path The dir name of imagebind checkpoint. \
---stable_unclip_model_name_or_path The dir name of StableUnCLIPImg2ImgPipeline pretrained checkpoint. \
---input_audio wave.wav \
---input_image dog_image.jpg \
+--model_name_or_path imagebind-1.2b/ \
+--stable_unclip_model_name_or_path stabilityai/stable-diffusion-2-1-unclip \
+--input_audio https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/wave.wav \
+--input_image https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/dog_image.jpg \
 ```
 
 #### 3.3.2 Result
 |  Input Audio | Input Image | Output Image |
 | --- | --- |  --- | 
-|[wave.wav](https://github.com/luyao-cv/file_download/blob/main/assets/wave.wav) | ![input_dog_image](https://github.com/luyao-cv/file_download/blob/main/assets/dog_image.jpg) | ![audio_img_to_img_output_wave_dog](https://github.com/luyao-cv/file_download/blob/main/vis_audio2img/audio_img_to_img_output_wave_dog.jpg)
+|[wave.wav](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/wave.wav) | ![input_dog_image](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/dog_image.jpg) | ![audio_img_to_img_output_wave_dog](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/audio_img_to_img_output_wave_dog.jpg)
 

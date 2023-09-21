@@ -23,3 +23,4 @@ from .sam_processing import *
 from .tokenizer import SimpleTokenizer, tokenize
 from .visualglm_image_processing import *
 from .visualglm_processing import *
+from .imagebind_processing import *

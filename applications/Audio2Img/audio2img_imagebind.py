@@ -12,6 +12,7 @@ from paddlemix.models import *
 import numpy as np
 import argparse
 import requests
+from ppdiffusers.utils import load_image
 from PIL import Image
 from dataclasses import dataclass, field
 from paddlenlp.trainer import PdArgumentParser
@@ -19,8 +20,19 @@ from paddlenlp.trainer import PdArgumentParser
 from paddlemix.utils.log import logger
 from paddlemix.models.imagebind.modeling import ImageBindModel
 from paddlemix.models.imagebind.utils import *
+from types import SimpleNamespace
 # from paddlemix.models.imagebind.utils.resample import *
 # from paddlemix.models.imagebind.utils.paddle_aux import *
+
+
+ModalityType = SimpleNamespace(
+    VISION="vision",
+    TEXT="text",
+    AUDIO="audio",
+    THERMAL="thermal",
+    DEPTH="depth",
+    IMU="imu",
+)
 
 class Predictor:
     def __init__(self, model_args):
@@ -38,19 +50,28 @@ def main(model_args,data_args):
 
     #bulid model
     logger.info("imagebind_model: {}".format(model_args.model_name_or_path))
-
     url = (data_args.input_image)
     if os.path.isfile(url):
         #read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     elif url:
-        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
+        image_pil = load_image(url)
     else:
         image_pil = None
+
+    url = (data_args.input_audio)
+    if os.path.isfile(url):
+        #read image
+        input_audio = data_args.input_audio
+    elif url:
+        os.system("wget {}".format(url))
+        input_audio = os.path.basename(data_args.input_audio)
+    else:
+        input_audio = None
         
     predictor = Predictor(model_args)
         
-    encoding = predictor.processor(images=image_pil,text="", audios=data_args.input_audio, return_tensors='pd')
+    encoding = predictor.processor(images=image_pil,text="", audios=input_audio, return_tensors='pd')
     inputs = {}
 
     if image_pil:
@@ -66,7 +87,7 @@ def main(model_args,data_args):
 
     if image_pil: 
         logger.info("Generate vision embedding: {}".format(embeddings[ModalityType.VISION]))
-        image_proj_embeds +=  embeddings[ModalityType.VISION]
+        image_proj_embeds +=  embeddings[ModalityType.VISION] 
 
     if data_args.input_audio:
         logger.info("Generate audio embedding: {}".format(embeddings[ModalityType.AUDIO]))

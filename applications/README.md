@@ -54,7 +54,7 @@ result = task(prompt=prompt)['result']
 | [文本引导的图像变换（Image-to-Image Text-Guided Generation）](./image2image/README.md/#文本引导的图像变换image-to-image-text-guided-generation)              | `stable-diffusion-v1-5`    |    [fastdeploy](../ppdiffusers/deploy/README.md/#文本引导的图像变换image-to-image-text-guided-generation)    |
 | [文本图像双引导图像生成（Dual Text and Image Guided Generation）](./image2image/README.md/#文本图像双引导图像生成dual-text-and-image-guided-generation)          | `versatile-diffusion`    |    ❌      |
 | [文本条件的视频生成（Text-to-Video Generation）](./text2video/README.md/#文本条件的视频生成text-to-video-generation)      | `text-to-video-ms-1.7b`  |     ❌     |
-| [音频生成图像（Audio-to-Chat Generation）](./Audio2Img/README.md/#audio-to-image)  | `imagebind stable-diffusion-2-1-unclip`  |          |
+| [音频生成图像（Audio-to-Image Generation）](./Audio2Img/README.md/#audio-to-image)  | `imagebind stable-diffusion-2-1-unclip`  |          |
 | [音频描述（Audio-to-Caption Generation）](./Audio2Caption/README.md/#音频描述audio-to-caption-generation)  | `chatglm-6b whisper`  |          |
 | [音频对话（Audio-to-Chat Generation）](./AudioChat/README.md/#音频对话audio-to-chat-generation)  | `chatglm-6b whisper fastspeech2`  |          |
 | [音乐生成（Music Generation）](./MusicGeneration/README.md/#音乐生成music-generation)  | `chatglm-6b minigpt4 audioldm`  |          |
