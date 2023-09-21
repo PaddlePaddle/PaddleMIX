@@ -447,7 +447,6 @@ class UNet2DConditionLoadersMixin:
                             mapped_network_alphas.get(key),
                         )
                     else:
-                        breakpoint()
                         raise ValueError(f"Module {key} is not a LoRACompatibleConv or LoRACompatibleLinear module.")
 
                     value_dict = {k.replace("lora.", ""): v for k, v in value_dict.items()}

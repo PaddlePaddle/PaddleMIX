@@ -26,6 +26,20 @@ from packaging.version import Version, parse
 
 from . import logging
 
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if not isinstance(v, str):
+        v = str(v)
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise ValueError("Not supported value: {}".format(v))
+
+
 # The package importlib_metadata is in a different place, depending on the python version.
 if sys.version_info < (3, 8):
     import importlib_metadata
@@ -279,7 +293,11 @@ def is_fastdeploy_available():
 
 
 def is_ppxformers_available():
-    return _ppxformers_available
+    USE_PPXFORMERS = str2bool(os.getenv("USE_PPXFORMERS", True))
+    if USE_PPXFORMERS:
+        return _ppxformers_available
+    else:
+        False
 
 
 def is_torch_available():
