@@ -722,6 +722,9 @@ def main():
         # unet.enable_gradient_checkpointing()
         set_recompute(text_encoder, True)
 
+    # set attention to default
+    unet.set_default_attn_processor()
+    vae.set_default_attn_processor()
     if args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
         try:
             unet.enable_xformers_memory_efficient_attention()
