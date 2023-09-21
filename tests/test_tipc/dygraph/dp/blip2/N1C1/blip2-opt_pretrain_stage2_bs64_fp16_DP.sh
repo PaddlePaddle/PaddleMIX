@@ -18,7 +18,7 @@ bs_item=64
 fp_item=fp32
 run_mode=DP
 device_num=N1C1
-max_epochs=200
+max_epochs=20
 num_workers=0
 
 # get data
