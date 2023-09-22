@@ -428,7 +428,7 @@ class ControlNetInpaintPipelineSlowTests(unittest.TestCase):
         image = output.images[0]
         assert image.shape == (512, 512, 3)
         expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd_controlnet/inpaint.npy"
+            "https://bj.bcebos.com/v1/paddlenlp/models/community/hf-internal-testing/sd_controlnet/inpaint.npy"
         )
         assert np.abs(expected_image - image).max() < 0.09
 

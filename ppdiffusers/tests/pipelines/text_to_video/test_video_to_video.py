@@ -153,8 +153,7 @@ class VideoToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 class VideoToVideoSDPipelineSlowTests(unittest.TestCase):
     def test_two_step_model(self):
         pipe = VideoToVideoSDPipeline.from_pretrained("cerspense/zeroscope_v2_XL", torch_dtype="float16")
-        pipe.enable_model_cpu_offload()
-        generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
+        generator = paddle.Generator().manual_seed(0)
         video = paddle.randn(shape=(1, 10, 3, 1024, 576), generator=generator)
         prompt = "Spiderman is surfing"
         video_frames = pipe(prompt, video=video, generator=generator, num_inference_steps=3, output_type="pt").frames

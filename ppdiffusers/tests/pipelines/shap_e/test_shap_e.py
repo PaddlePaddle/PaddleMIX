@@ -217,7 +217,7 @@ class ShapEPipelineIntegrationTests(unittest.TestCase):
         )
         pipe = ShapEPipeline.from_pretrained("openai/shap-e")
         pipe.set_progress_bar_config(disable=None)
-        generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
+        generator = paddle.Generator().manual_seed(0)
         images = pipe(
             "a shark",
             generator=generator,
