@@ -95,7 +95,6 @@ class CrossFrameAttnProcessor:
         key = attn.head_to_batch_dim(key, out_dim=3)
         value = attn.head_to_batch_dim(value, out_dim=3)
         attention_probs = attn.get_attention_scores(query, key, attention_mask)
-        breakpoint()
         hidden_states = paddle.bmm(x=attention_probs, y=value)
         hidden_states = attn.batch_to_head_dim(hidden_states)
 
