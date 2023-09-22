@@ -324,6 +324,7 @@ class CLIPImageProcessor(BaseImageProcessor):
         scale: Optional[Union[List[float], Tuple[float]]] = (0.9, 1.0),
         do_collate: bool = False,
         mode: str = "train",
+        interpolation: str = "bilinear", 
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -347,6 +348,7 @@ class CLIPImageProcessor(BaseImageProcessor):
         self.do_rand_resize_crop = do_rand_resize_crop
         self.scale = scale
         self.do_collate = do_collate
+        self.interpolation = interpolation
 
     def resize(
         self,
