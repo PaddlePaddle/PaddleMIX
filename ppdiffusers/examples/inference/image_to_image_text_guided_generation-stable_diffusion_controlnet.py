@@ -26,7 +26,7 @@ from ppdiffusers.utils import load_image
 
 # download an image
 image = load_image(
-    "https://hf.co/datasets/huggingface/documentation-images/resolve/main/diffusers/input_image_vermeer.png"
+    "https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/paddle-internal-testing/input_image_vermeer.png"
 )
 np_image = np.array(image)
 # get canny image

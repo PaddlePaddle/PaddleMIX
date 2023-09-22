@@ -25,7 +25,8 @@ adapter = T2IAdapter.from_pretrained("TencentARC/t2iadapter_color_sd14v1", paddl
 pipe = StableDiffusionAdapterPipeline.from_pretrained(
     "CompVis/stable-diffusion-v1-4",
     adapter=adapter,
-    # paddle_dtype=paddle.float16,
+    safety_checker=None,
+    paddle_dtype=paddle.float16,
 )
 out_image = pipe(
     "At night, glowing cubes in front of the beach",

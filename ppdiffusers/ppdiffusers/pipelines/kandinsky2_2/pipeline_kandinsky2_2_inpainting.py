@@ -328,6 +328,8 @@ class KandinskyV22InpaintPipeline(DiffusionPipeline):
         if do_classifier_free_guidance:
             image_embeds = image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
             negative_image_embeds = negative_image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
+            negative_image_embeds = negative_image_embeds.cast(self.unet.dtype)
+            image_embeds = image_embeds.cast(self.unet.dtype)
             image_embeds = paddle.concat(x=[negative_image_embeds, image_embeds], axis=0).cast(dtype=self.unet.dtype)
         self.scheduler.set_timesteps(num_inference_steps)
         timesteps_tensor = self.scheduler.timesteps

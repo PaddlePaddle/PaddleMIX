@@ -12,28 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle
+# import paddle
 
-from ppdiffusers import KandinskyImg2ImgPipeline, KandinskyPriorPipeline
-from ppdiffusers.utils import load_image
+# from ppdiffusers import KandinskyImg2ImgPipeline, KandinskyPriorPipeline
+# from ppdiffusers.utils import load_image
 
-pipe_prior = KandinskyPriorPipeline.from_pretrained(
-    "kandinsky-community/kandinsky-2-1-prior", paddle_dtype=paddle.float16
-)
-prompt = "A red cartoon frog, 4k"
-image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
-pipe = KandinskyImg2ImgPipeline.from_pretrained("kandinsky-community/kandinsky-2-1", paddle_dtype=paddle.float16)
-init_image = load_image(
-    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main" "/kandinsky/frog.png"
-)
-image = pipe(
-    prompt,
-    image=init_image,
-    image_embeds=image_emb,
-    negative_image_embeds=zero_image_emb,
-    height=768,
-    width=768,
-    num_inference_steps=100,
-    strength=0.2,
-).images
-image[0].save("image_to_image_text_guided_generation-kandinsky-result-red_frog.png")
+# pipe_prior = KandinskyPriorPipeline.from_pretrained(
+#     "kandinsky-community/kandinsky-2-1-prior", paddle_dtype=paddle.float16
+# )
+# prompt = "A red cartoon frog, 4k"
+# image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
+# pipe = KandinskyImg2ImgPipeline.from_pretrained("kandinsky-community/kandinsky-2-1", paddle_dtype=paddle.float16)
+# init_image = load_image(
+#     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main" "/kandinsky/frog.png"
+# )
+# image = pipe(
+#     prompt,
+#     image=init_image,
+#     image_embeds=image_emb,
+#     negative_image_embeds=zero_image_emb,
+#     height=768,
+#     width=768,
+#     num_inference_steps=100,
+#     strength=0.2,
+# ).images
+# image[0].save("image_to_image_text_guided_generation-kandinsky-result-red_frog.png")
+
+# todo
