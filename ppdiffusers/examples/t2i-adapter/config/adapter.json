@@ -1,0 +1,12 @@
+{
+  "_class_name": "T2IAdapter",
+  "_diffusers_version": "0.18.0.dev0",
+  "adapter_type": "light_adapter",
+  "channels": [
+    320,
+    640,
+    1280
+  ],
+  "in_channels": 3,
+  "num_res_blocks": 4
+}

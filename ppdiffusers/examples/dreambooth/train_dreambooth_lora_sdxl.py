@@ -69,7 +69,7 @@ from ppdiffusers.utils import check_min_version
 
 # Will error if the minimal version of ppdiffusers is not installed. Remove at your own risks.
 check_min_version("0.19.3")
-paddle_dtype = paddle.float32
+paddle_dtype = paddle.float16
 
 # Since HF sometimes timeout, we need to retry uploads
 # Credit: https://github.com/huggingface/datasets/blob/06ae3f678651bfbb3ca7dd3274ee2f38e0e0237e/src/datasets/utils/file_utils.py#L265
@@ -418,13 +418,6 @@ def parse_args(input_args=None):
     )
     parser.add_argument("--lr_power", type=float, default=1.0, help="Power factor of the polynomial scheduler.")
     parser.add_argument(
-        "--snr_gamma",
-        type=float,
-        default=None,
-        help="SNR weighting gamma to be used if rebalancing the loss. Recommended value is 5.0. "
-        "More details here: https://arxiv.org/abs/2303.09556.",
-    )
-    parser.add_argument(
         "--dataloader_num_workers",
         type=int,
         default=0,
@@ -455,16 +448,6 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--mixed_precision",
-        type=str,
-        default="no",
-        choices=["no", "fp32", "fp16", "bf16"],
-        help=(
-            "Whether to use mixed precision. Choose between fp16 and bf16 (bfloat16). Bf16 requires Paddle >="
-            " 2.5.and an Nvidia Ampere GPU.  Default to the value of accelerate config of the current system or the"
-        ),
-    )
-    parser.add_argument(
         "--report_to",
         type=str,
         default="visualdl",
@@ -475,12 +458,7 @@ def parse_args(input_args=None):
         "--enable_xformers_memory_efficient_attention", action="store_true", help="Whether or not to use xformers."
     )
     parser.add_argument("--noise_offset", type=float, default=0, help="The scale of noise offset.")
-    parser.add_argument(
-        "--fp16_opt_level",
-        type=str,
-        default="O1",
-        help="fp16_opt_level.",
-    )
+
     if input_args is not None:
         args = parser.parse_args(input_args)
     else:
@@ -618,7 +596,7 @@ def tokenize_prompt(
 
 
 # Adapted from pipelines.StableDiffusionXLPipeline.encode_prompt
-def encode_prompt(text_encoders, tokenizers, prompt, text_input_ids_list=None, args=None):
+def encode_prompt(text_encoders, tokenizers, prompt, text_input_ids_list=None):
     prompt_embeds_list = []
     for i, text_encoder in enumerate(text_encoders):
         if tokenizers is not None:
@@ -627,15 +605,7 @@ def encode_prompt(text_encoders, tokenizers, prompt, text_input_ids_list=None, a
         else:
             assert text_input_ids_list is not None
             text_input_ids = text_input_ids_list[i]
-
-        with paddle.amp.auto_cast(
-            enable=args.mixed_precision in ["bf16", "fp16"] and args.train_text_encoder,
-            level=args.fp16_opt_level,
-            custom_black_list=["reduce_sum", "c_softmax_with_cross_entropy"],
-            custom_white_list=["lookup_table", "lookup_table_v2"] if args.fp16_opt_level == "O2" else ["layer_norm"],
-            dtype="bfloat16" if args.mixed_precision == "bf16" else "float16",
-        ):
-            prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
+        prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
         pooled_prompt_embeds = prompt_embeds[0]
         prompt_embeds = prompt_embeds.hidden_states[-2]
         bs_embed, seq_len, _ = prompt_embeds.shape
@@ -790,54 +760,15 @@ def main():
     freeze_params(text_encoder_two.parameters())
     freeze_params(unet.parameters())
 
-    # For mixed precision training we cast all non-trainable weigths (vae, non-lora text_encoder and non-lora unet) to half-precision
-    # as these weights are only used for inference, keeping weights in full precision is not required.
-    weight_dtype = "float32"
-    do_grad_scaling = False
-    scaler = None
-    if args.mixed_precision == "fp16":
-        weight_dtype = "float16"
-        scaler = paddle.amp.GradScaler(
-            enable=True,
-            init_loss_scaling=65536.0,
-            incr_every_n_steps=2000,
-        )
-        do_grad_scaling = True
-    elif args.mixed_precision == "bf16":
-        weight_dtype = "bfloat16"
-
-    # Move unet, vae and text_encoder to device and cast to weight_dtype
-    if weight_dtype != "float32":
-        paddle.amp.decorate(
-            models=[unet],
-            level="O2",
-            dtype=weight_dtype,
-        )
-        nn.Layer._to_impl(vae, dtype=weight_dtype, floating_only=True)
-        if args.train_text_encoder:
-            paddle.amp.decorate(
-                models=[text_encoder_one],
-                level="O2",
-                dtype=weight_dtype,
-            )
-            paddle.amp.decorate(
-                models=[text_encoder_two],
-                level="O2",
-                dtype=weight_dtype,
-            )
-        else:
-            nn.Layer._to_impl(text_encoder_one, dtype=weight_dtype, floating_only=True)
-            nn.Layer._to_impl(text_encoder_two, dtype=weight_dtype, floating_only=True)
-
-    # # Move unet, vae and text_encoder to device and cast to paddle_dtype
-    # # The VAE is in float32 to avoid NaN losses.
-    # unet.to(dtype=paddle_dtype)
-    # if args.pretrained_vae_model_name_or_path is None:
-    #     vae.to(dtype=paddle.float32)
-    # else:
-    #     vae.to(dtype=paddle_dtype)
-    # text_encoder_one.to(dtype=paddle_dtype)
-    # text_encoder_two.to(dtype=paddle_dtype)
+    # Move unet, vae and text_encoder to device and cast to paddle_dtype
+    # The VAE is in float32 to avoid NaN losses.
+    unet.to(dtype=paddle_dtype)
+    if args.pretrained_vae_model_name_or_path is None:
+        vae.to(dtype=paddle.float32)
+    else:
+        vae.to(dtype=paddle_dtype)
+    text_encoder_one.to(dtype=paddle_dtype)
+    text_encoder_two.to(dtype=paddle_dtype)
 
     if args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
         try:
@@ -890,30 +821,6 @@ def main():
         # ensure that dtype is float32, even if rest of the model that isn't trained is loaded in fp16
         text_lora_parameters_one = LoraLoaderMixin._modify_text_encoder(text_encoder_one, dtype=paddle.float32)
         text_lora_parameters_two = LoraLoaderMixin._modify_text_encoder(text_encoder_two, dtype=paddle.float32)
-
-    def compute_snr(timesteps):
-        """
-        Computes SNR as per https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L847-L849
-        """
-        alphas_cumprod = noise_scheduler.alphas_cumprod
-        sqrt_alphas_cumprod = alphas_cumprod**0.5
-        sqrt_one_minus_alphas_cumprod = (1.0 - alphas_cumprod) ** 0.5
-
-        # Expand the tensors.
-        # Adapted from https://github.com/TiankaiHang/Min-SNR-Diffusion-Training/blob/521b624bd70c67cee4bdf49225915f5945a872e3/guided_diffusion/gaussian_diffusion.py#L1026
-        sqrt_alphas_cumprod = sqrt_alphas_cumprod[timesteps].cast("float32")
-        while len(sqrt_alphas_cumprod.shape) < len(timesteps.shape):
-            sqrt_alphas_cumprod = sqrt_alphas_cumprod[..., None]
-        alpha = sqrt_alphas_cumprod.expand(timesteps.shape)
-
-        sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[timesteps].cast("float32")
-        while len(sqrt_one_minus_alphas_cumprod.shape) < len(timesteps.shape):
-            sqrt_one_minus_alphas_cumprod = sqrt_one_minus_alphas_cumprod[..., None]
-        sigma = sqrt_one_minus_alphas_cumprod.expand(timesteps.shape)
-
-        # Compute SNR.
-        snr = (alpha / sigma) ** 2
-        return snr
 
     # # create custom saving & loading functions for Lora
     # def save_model_func(models, weights, output_dir):
@@ -974,7 +881,7 @@ def main():
 
         def compute_text_embeddings(prompt, text_encoders, tokenizers):
             with paddle.no_grad():
-                prompt_embeds, pooled_prompt_embeds = encode_prompt(text_encoders, tokenizers, prompt, args=args)
+                prompt_embeds, pooled_prompt_embeds = encode_prompt(text_encoders, tokenizers, prompt)
             return prompt_embeds, pooled_prompt_embeds
 
     instance_time_ids = compute_time_ids()
@@ -1211,7 +1118,6 @@ def main():
                         tokenizers=None,
                         prompt=None,
                         text_input_ids_list=[tokens_one, tokens_two],
-                        args=args,
                     )
                     unet_added_conditions.update(
                         {"text_embeds": pooled_prompt_embeds.tile(repeat_times=[elems_to_repeat, 1])}
@@ -1222,18 +1128,9 @@ def main():
                     ).sample
 
                 # Predict the noise residual / sample
-                with paddle.amp.auto_cast(
-                    enable=args.mixed_precision in ["bf16", "fp16"],
-                    level=args.fp16_opt_level,
-                    custom_black_list=["reduce_sum", "c_softmax_with_cross_entropy"],
-                    custom_white_list=["lookup_table", "lookup_table_v2"]
-                    if args.fp16_opt_level == "O2"
-                    else ["layer_norm"],
-                    dtype="bfloat16" if args.mixed_precision == "bf16" else "float16",
-                ):
-                    model_pred = unet(
-                        noisy_model_input, timesteps, prompt_embeds, added_cond_kwargs=unet_added_conditions
-                    ).sample
+                model_pred = unet(
+                    noisy_model_input, timesteps, prompt_embeds, added_cond_kwargs=unet_added_conditions
+                ).sample
 
                 # Get the target for loss depending on the prediction type
                 if noise_scheduler.config.prediction_type == "epsilon":
@@ -1249,121 +1146,24 @@ def main():
                     target, target_prior = target.chunk(2, axis=0)
 
                     # Compute instance loss
-                    # loss = F.mse_loss(model_pred, target, reduction="mean")
-                    if args.snr_gamma is None:
-                        loss = F.mse_loss(
-                            model_pred.cast("float32"),
-                            target.cast("float32"),
-                            reduction="mean",
-                        )
-                    else:
-                        # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
-                        # Since we predict the noise instead of x_0, the original formulation is slightly changed.
-                        # This is discussed in Section 4.2 of the same paper.
-                        snr = compute_snr(timesteps)
-                        mse_loss_weights = (
-                            paddle.stack([snr, args.snr_gamma * paddle.ones_like(timesteps)], axis=1,).min(
-                                1
-                            )[0]
-                            / snr
-                        )
-                        # We first calculate the original loss. Then we mean over the non-batch dimensions and
-                        # rebalance the sample-wise losses with their respective loss weights.
-                        # Finally, we take the mean of the rebalanced loss.
-                        loss = F.mse_loss(
-                            model_pred.cast("float32"),
-                            target.cast("float32"),
-                            reduction="none",
-                        )
-                        loss = loss.mean(axis=list(range(1, len(loss.shape)))) * mse_loss_weights
-                        loss = loss.mean()
+                    loss = F.mse_loss(model_pred, target, reduction="mean")
 
                     # Compute prior loss
-                    # prior_loss = F.mse_loss(model_pred_prior, target_prior, reduction="mean")
-                    if args.snr_gamma is None:
-                        prior_loss = F.mse_loss(
-                            model_pred_prior.cast("float32"),
-                            target_prior.cast("float32"),
-                            reduction="mean",
-                        )
-                    else:
-                        # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
-                        # Since we predict the noise instead of x_0, the original formulation is slightly changed.
-                        # This is discussed in Section 4.2 of the same paper.
-                        snr = compute_snr(timesteps)
-                        mse_loss_weights = (
-                            paddle.stack([snr, args.snr_gamma * paddle.ones_like(timesteps)], axis=1,).min(
-                                1
-                            )[0]
-                            / snr
-                        )
-                        # We first calculate the original loss. Then we mean over the non-batch dimensions and
-                        # rebalance the sample-wise losses with their respective loss weights.
-                        # Finally, we take the mean of the rebalanced loss.
-                        prior_loss = F.mse_loss(
-                            model_pred_prior.cast("float32"),
-                            target_prior.cast("float32"),
-                            reduction="none",
-                        )
-                        prior_loss = prior_loss.mean(axis=list(range(1, len(loss.shape)))) * mse_loss_weights
-                        prior_loss = prior_loss.mean()
+                    prior_loss = F.mse_loss(model_pred_prior, target_prior, reduction="mean")
 
                     # Add the prior loss to the instance loss.
                     loss = loss + args.prior_loss_weight * prior_loss
                 else:
-                    # loss = F.mse_loss(model_pred, target, reduction="mean")
-                    if args.snr_gamma is None:
-                        loss = F.mse_loss(
-                            model_pred.cast("float32"),
-                            target.cast("float32"),
-                            reduction="mean",
-                        )
-                    else:
-                        # Compute loss-weights as per Section 3.4 of https://arxiv.org/abs/2303.09556.
-                        # Since we predict the noise instead of x_0, the original formulation is slightly changed.
-                        # This is discussed in Section 4.2 of the same paper.
-                        snr = compute_snr(timesteps)
-                        mse_loss_weights = (
-                            paddle.stack([snr, args.snr_gamma * paddle.ones_like(timesteps)], axis=1,).min(
-                                1
-                            )[0]
-                            / snr
-                        )
-                        # We first calculate the original loss. Then we mean over the non-batch dimensions and
-                        # rebalance the sample-wise losses with their respective loss weights.
-                        # Finally, we take the mean of the rebalanced loss.
-                        loss = F.mse_loss(
-                            model_pred.cast("float32"),
-                            target.cast("float32"),
-                            reduction="none",
-                        )
-                        loss = loss.mean(axis=list(range(1, len(loss.shape)))) * mse_loss_weights
-                        loss = loss.mean()
+                    loss = F.mse_loss(model_pred, target, reduction="mean")
 
                 if args.gradient_accumulation_steps > 1:
                     loss = loss / args.gradient_accumulation_steps
-
-                if do_grad_scaling:
-                    scaler.scale(loss).backward()
-                else:
-                    loss.backward()
+                loss.backward()
 
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if num_processes > 1 and args.gradient_checkpointing:
                     fused_allreduce_gradients(params_to_optimize, None)
-
-                if do_grad_scaling:
-                    scale_before = scaler._scale.numpy()
-                    scaler.step(optimizer)
-                    scaler.update()
-                    scale_after = scaler._scale.numpy()
-                    optimizer_was_run = not scaler._cache_founf_inf
-                    if not optimizer_was_run:
-                        logger.warning(
-                            f"optimizer not run, scale_before: {scale_before[0]}, scale_after: {scale_after[0]}"
-                        )
-                else:
-                    optimizer.step()
+                optimizer.step()
                 lr_scheduler.step()
                 optimizer.clear_grad()
                 progress_bar.update(1)
@@ -1371,7 +1171,7 @@ def main():
                 step_loss = loss.item() * args.gradient_accumulation_steps
                 logs = {
                     "epoch": str(epoch).zfill(4),
-                    "train_loss": round(step_loss, 10),
+                    "step_loss": round(step_loss, 10),
                     "lr": lr_scheduler.get_lr(),
                 }
                 progress_bar.set_postfix(**logs)

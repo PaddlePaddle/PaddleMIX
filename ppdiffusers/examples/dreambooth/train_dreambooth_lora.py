@@ -24,7 +24,7 @@ import sys
 import time
 import warnings
 from pathlib import Path
-from typing import Optional, Type
+from typing import Dict, Optional, Type
 
 import numpy as np
 import paddle
@@ -42,6 +42,7 @@ from paddlenlp.trainer import set_seed
 from paddlenlp.transformers import AutoTokenizer, PretrainedConfig
 from paddlenlp.utils.log import logger
 from PIL import Image
+from PIL.ImageOps import exif_transpose
 from tqdm.auto import tqdm
 
 from ppdiffusers import (
@@ -49,10 +50,11 @@ from ppdiffusers import (
     DDPMScheduler,
     DiffusionPipeline,
     DPMSolverMultistepScheduler,
+    StableDiffusionPipeline,
     UNet2DConditionModel,
     is_ppxformers_available,
 )
-from ppdiffusers.loaders import AttnProcsLayers, LoraLoaderMixin
+from ppdiffusers.loaders import LoraLoaderMixin, text_encoder_lora_state_dict
 from ppdiffusers.models.attention_processor import (
     AttnProcessor,
     AttnProcessor2_5,
@@ -61,10 +63,12 @@ from ppdiffusers.models.attention_processor import (
 )
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import freeze_params, unwrap_model
-from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE, check_min_version
+
+# from ppdiffusers.utils import check_min_version
+# from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE, check_min_version
 
 # Will error if the minimal version of ppdiffusers is not installed. Remove at your own risks.
-check_min_version("0.16.1")
+# check_min_version("0.19.3")
 
 # Since HF sometimes timeout, we need to retry uploads
 # Credit: https://github.com/huggingface/datasets/blob/06ae3f678651bfbb3ca7dd3274ee2f38e0e0237e/src/datasets/utils/file_utils.py#L265
@@ -106,6 +110,7 @@ def save_model_card(
     train_text_encoder=False,
     prompt=str,
     repo_folder=None,
+    pipeline: DiffusionPipeline = None,
 ):
     img_str = ""
     for i, image in enumerate(images):
@@ -118,8 +123,8 @@ license: creativeml-openrail-m
 base_model: {base_model}
 instance_prompt: {prompt}
 tags:
-- stable-diffusion
-- stable-diffusion-ppdiffusers
+- {'stable-diffusion' if isinstance(pipeline, StableDiffusionPipeline) else 'if'}
+- {'stable-diffusion-ppdiffusers' if isinstance(pipeline, StableDiffusionPipeline) else 'if-ppdiffusers'}
 - text-to-image
 - ppdiffusers
 - lora
@@ -157,6 +162,10 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
         )
 
         return RobertaSeriesModelWithTransformation
+    elif model_class == "T5EncoderModel":
+        from paddlenlp.transformers import T5EncoderModel
+
+        return T5EncoderModel
     elif model_class == "BertModel":
         from paddlenlp.transformers import BertModel
 
@@ -237,10 +246,7 @@ def parse_args(input_args=None):
         help="The prompt to specify images in the same class as provided instance images.",
     )
     parser.add_argument(
-        "--validation_prompt",
-        type=str,
-        default=None,
-        help="A prompt that is sampled during training for inference.",
+        "--validation_prompt", type=str, default=None, help="A prompt that is sampled during training for inference."
     )
     parser.add_argument(
         "--num_validation_images",
@@ -263,12 +269,7 @@ def parse_args(input_args=None):
         action="store_true",
         help="Flag to add prior preservation loss.",
     )
-    parser.add_argument(
-        "--prior_loss_weight",
-        type=float,
-        default=1.0,
-        help="The weight of prior preservation loss.",
-    )
+    parser.add_argument("--prior_loss_weight", type=float, default=1.0, help="The weight of prior preservation loss.")
     parser.add_argument(
         "--num_class_images",
         type=int,
@@ -333,10 +334,7 @@ def parse_args(input_args=None):
         help="whether to randomly flip images horizontally",
     )
     parser.add_argument(
-        "--train_batch_size",
-        type=int,
-        default=4,
-        help="Batch size (per device) for the training dataloader.",
+        "--train_batch_size", type=int, default=4, help="Batch size (per device) for the training dataloader."
     )
     parser.add_argument(
         "--train_text_encoder",
@@ -344,10 +342,7 @@ def parse_args(input_args=None):
         help="Whether to train the text encoder. If set, the text encoder should be float32 precision.",
     )
     parser.add_argument(
-        "--sample_batch_size",
-        type=int,
-        default=4,
-        help="Batch size (per device) for sampling images.",
+        "--sample_batch_size", type=int, default=4, help="Batch size (per device) for sampling images."
     )
     parser.add_argument("--num_train_epochs", type=int, default=1)
     parser.add_argument(
@@ -395,10 +390,7 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--lr_warmup_steps",
-        type=int,
-        default=500,
-        help="Number of steps for the warmup in the lr scheduler.",
+        "--lr_warmup_steps", type=int, default=500, help="Number of steps for the warmup in the lr scheduler."
     )
     parser.add_argument(
         "--lr_num_cycles",
@@ -406,12 +398,7 @@ def parse_args(input_args=None):
         default=1,
         help="Number of hard resets of the lr in cosine_with_restarts scheduler.",
     )
-    parser.add_argument(
-        "--lr_power",
-        type=float,
-        default=1.0,
-        help="Power factor of the polynomial scheduler.",
-    )
+    parser.add_argument("--lr_power", type=float, default=1.0, help="Power factor of the polynomial scheduler.")
     parser.add_argument(
         "--dataloader_num_workers",
         type=int,
@@ -420,37 +407,13 @@ def parse_args(input_args=None):
             "Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process."
         ),
     )
-    parser.add_argument(
-        "--adam_beta1",
-        type=float,
-        default=0.9,
-        help="The beta1 parameter for the Adam optimizer.",
-    )
-    parser.add_argument(
-        "--adam_beta2",
-        type=float,
-        default=0.999,
-        help="The beta2 parameter for the Adam optimizer.",
-    )
+    parser.add_argument("--adam_beta1", type=float, default=0.9, help="The beta1 parameter for the Adam optimizer.")
+    parser.add_argument("--adam_beta2", type=float, default=0.999, help="The beta2 parameter for the Adam optimizer.")
     parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
-    parser.add_argument(
-        "--adam_epsilon",
-        type=float,
-        default=1e-08,
-        help="Epsilon value for the Adam optimizer",
-    )
+    parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    parser.add_argument(
-        "--push_to_hub",
-        action="store_true",
-        help="Whether or not to push the model to the Hub.",
-    )
-    parser.add_argument(
-        "--hub_token",
-        type=str,
-        default=None,
-        help="The token to use to push to the Model Hub.",
-    )
+    parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
+    parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
     parser.add_argument(
         "--hub_model_id",
         type=str,
@@ -474,9 +437,44 @@ def parse_args(input_args=None):
         help="Log writer type.",
     )
     parser.add_argument(
-        "--enable_xformers_memory_efficient_attention",
+        "--enable_xformers_memory_efficient_attention", action="store_true", help="Whether or not to use xformers."
+    )
+    parser.add_argument(
+        "--pre_compute_text_embeddings",
         action="store_true",
-        help="Whether or not to use xformers.",
+        help="Whether or not to pre-compute text embeddings. If text embeddings are pre-computed, the text encoder will not be kept in memory during training and will leave more GPU memory available for training the rest of the model. This is not compatible with `--train_text_encoder`.",
+    )
+    parser.add_argument(
+        "--tokenizer_max_length",
+        type=int,
+        default=None,
+        required=False,
+        help="The maximum length of the tokenizer. If not set, will default to the tokenizer's max length.",
+    )
+    parser.add_argument(
+        "--text_encoder_use_attention_mask",
+        action="store_true",
+        required=False,
+        help="Whether to use attention mask for the text encoder",
+    )
+    parser.add_argument(
+        "--validation_images",
+        required=False,
+        default=None,
+        nargs="+",
+        help="Optional set of images to use for validation. Used when the target pipeline takes an initial image as input such as when training image variation or superresolution.",
+    )
+    parser.add_argument(
+        "--class_labels_conditioning",
+        required=False,
+        default=None,
+        help="The optional `class_label` conditioning to pass to the unet, available values are `timesteps`.",
+    )
+    parser.add_argument(
+        "--rank",
+        type=int,
+        default=4,
+        help=("The dimension of the LoRA update matrices."),
     )
     parser.add_argument("--noise_offset", type=float, default=0, help="The scale of noise offset.")
 
@@ -499,6 +497,9 @@ def parse_args(input_args=None):
             warnings.warn("You need not use --class_data_dir without --with_prior_preservation.")
         if args.class_prompt is not None:
             warnings.warn("You need not use --class_prompt without --with_prior_preservation.")
+
+    if args.train_text_encoder and args.pre_compute_text_embeddings:
+        raise ValueError("`--train_text_encoder` cannot be used with `--pre_compute_text_embeddings`")
 
     args.logging_dir = os.path.join(args.output_dir, args.logging_dir)
     if args.height is None or args.width is None and args.resolution is not None:
@@ -524,6 +525,9 @@ class DreamBoothDataset(Dataset):
         height=512,
         width=512,
         center_crop=False,
+        encoder_hidden_states=None,
+        instance_prompt_encoder_hidden_states=None,
+        tokenizer_max_length=None,
         interpolation="bilinear",
         random_flip=False,
     ):
@@ -531,6 +535,9 @@ class DreamBoothDataset(Dataset):
         self.width = width
         self.center_crop = center_crop
         self.tokenizer = tokenizer
+        self.encoder_hidden_states = encoder_hidden_states
+        self.instance_prompt_encoder_hidden_states = instance_prompt_encoder_hidden_states
+        self.tokenizer_max_length = tokenizer_max_length
 
         self.instance_data_root = Path(instance_data_root)
         if not self.instance_data_root.exists():
@@ -576,31 +583,103 @@ class DreamBoothDataset(Dataset):
     def __getitem__(self, index):
         example = {}
         instance_image = Image.open(self.instance_images_path[index % self.num_instance_images])
+        instance_image = exif_transpose(instance_image)
         if not instance_image.mode == "RGB":
             instance_image = instance_image.convert("RGB")
         example["instance_images"] = self.image_transforms(instance_image)
-        example["instance_prompt_ids"] = self.tokenizer(
-            self.instance_prompt,
-            padding="do_not_pad",
-            truncation=True,
-            max_length=self.tokenizer.model_max_length,
-            return_attention_mask=False,
-        ).input_ids
+
+        # example["instance_prompt_ids"] = self.tokenizer(
+        #     self.instance_prompt,
+        #     padding="do_not_pad",
+        #     truncation=True,
+        #     max_length=self.tokenizer.model_max_length,
+        #     return_attention_mask=False,
+        # ).input_ids
+        if self.encoder_hidden_states is not None:
+            example["instance_prompt_ids"] = self.encoder_hidden_states
+        else:
+            text_inputs = tokenize_prompt(
+                self.tokenizer, self.instance_prompt, tokenizer_max_length=self.tokenizer_max_length
+            )
+            example["instance_prompt_ids"] = text_inputs.input_ids
+            example["instance_attention_mask"] = text_inputs.attention_mask
+            # example["instance_attention_mask"] = (text_inputs.input_ids != self.tokenizer.pad_token_id).cast("int64")
 
         if self.class_data_root:
             class_image = Image.open(self.class_images_path[index % self.num_class_images])
+            class_image = exif_transpose(class_image)
+
             if not class_image.mode == "RGB":
                 class_image = class_image.convert("RGB")
             example["class_images"] = self.image_transforms(class_image)
-            example["class_prompt_ids"] = self.tokenizer(
-                self.class_prompt,
-                padding="do_not_pad",
-                truncation=True,
-                max_length=self.tokenizer.model_max_length,
-                return_attention_mask=False,
-            ).input_ids
+
+            # example["class_prompt_ids"] = self.tokenizer(
+            #     self.class_prompt,
+            #     padding="do_not_pad",
+            #     truncation=True,
+            #     max_length=self.tokenizer.model_max_length,
+            #     return_attention_mask=False,
+            # ).input_ids
+            if self.instance_prompt_encoder_hidden_states is not None:
+                example["class_prompt_ids"] = self.instance_prompt_encoder_hidden_states
+            else:
+                class_text_inputs = tokenize_prompt(
+                    self.tokenizer, self.class_prompt, tokenizer_max_length=self.tokenizer_max_length
+                )
+                example["class_prompt_ids"] = class_text_inputs.input_ids
+                example["class_attention_mask"] = class_text_inputs.attention_mask
 
         return example
+
+
+def tokenize_prompt(tokenizer, prompt, tokenizer_max_length=None):
+    if tokenizer_max_length is not None:
+        max_length = tokenizer_max_length
+    else:
+        max_length = tokenizer.model_max_length
+
+    text_inputs = tokenizer(
+        prompt,
+        truncation=True,
+        padding="do_not_pad",
+        max_length=max_length,
+        return_attention_mask=True,
+    )
+
+    return text_inputs
+
+
+def encode_prompt(text_encoder, input_ids, attention_mask, text_encoder_use_attention_mask=None):
+    text_input_ids = input_ids
+
+    if text_encoder_use_attention_mask:
+        attention_mask = attention_mask
+    else:
+        attention_mask = None
+
+    prompt_embeds = text_encoder(
+        text_input_ids,
+        attention_mask=attention_mask,
+    )
+    prompt_embeds = prompt_embeds[0]
+
+    return prompt_embeds
+
+
+def unet_attn_processors_state_dict(unet) -> Dict[str, paddle.Tensor]:
+    r"""
+    Returns:
+        a state dict containing just the attention processor parameters.
+    """
+    attn_processors = unet.attn_processors
+
+    attn_processors_state_dict = {}
+
+    for attn_processor_key, attn_processor in attn_processors.items():
+        for parameter_key, parameter in attn_processor.state_dict().items():
+            attn_processors_state_dict[f"{attn_processor_key}.{parameter_key}"] = parameter
+
+    return attn_processors_state_dict
 
 
 class PromptDataset(Dataset):
@@ -651,9 +730,7 @@ def main():
 
         if cur_class_images < args.num_class_images:
             pipeline = DiffusionPipeline.from_pretrained(
-                args.pretrained_model_name_or_path,
-                safety_checker=None,
-                requires_safety_checker=False,
+                args.pretrained_model_name_or_path, safety_checker=None, requires_safety_checker=False
             )
             if args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
                 try:
@@ -675,16 +752,10 @@ def main():
                 else BatchSampler(sample_dataset, batch_size=args.sample_batch_size, shuffle=False)
             )
             sample_dataloader = DataLoader(
-                sample_dataset,
-                batch_sampler=batch_sampler,
-                num_workers=args.dataloader_num_workers,
+                sample_dataset, batch_sampler=batch_sampler, num_workers=args.dataloader_num_workers
             )
 
-            for example in tqdm(
-                sample_dataloader,
-                desc="Generating class images",
-                disable=not is_main_process,
-            ):
+            for example in tqdm(sample_dataloader, desc="Generating class images", disable=not is_main_process):
                 images = pipeline(example["prompt"]).images
 
                 for i, image in enumerate(images):
@@ -725,19 +796,28 @@ def main():
     text_encoder = text_encoder_cls.from_pretrained(
         url_or_path_join(args.pretrained_model_name_or_path, "text_encoder")
     )
-    text_config = text_encoder.config if isinstance(text_encoder.config, dict) else text_encoder.config.to_dict()
-    if text_config.get("use_attention_mask", None) is not None and text_config["use_attention_mask"]:
-        use_attention_mask = True
-    else:
-        use_attention_mask = False
-    vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae")
+
+    # text_config = text_encoder.config if isinstance(text_encoder.config, dict) else text_encoder.config.to_dict()
+    # if text_config.get("use_attention_mask", None) is not None and text_config["use_attention_mask"]:
+    #     use_attention_mask = True
+    # else:
+    #     use_attention_mask = False
+
+    # vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae")
+    try:
+        vae = AutoencoderKL.from_pretrained(args.pretrained_model_name_or_path, subfolder="vae")
+    except OSError:
+        # IF does not have a VAE so let's just set it to None
+        # We don't have to error out here
+        vae = None
     unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_model_name_or_path,
         subfolder="unet",
     )
 
     # We only train the additional adapter LoRA layers
-    freeze_params(vae.parameters())
+    if vae is not None:
+        freeze_params(vae.parameters())
     freeze_params(text_encoder.parameters())
     freeze_params(unet.parameters())
 
@@ -764,6 +844,7 @@ def main():
 
     # Set correct lora layers
     unet_lora_attn_procs = {}
+    unet_lora_parameters = []
     for name, attn_processor in unet.attn_processors.items():
         cross_attention_dim = None if name.endswith("attn1.processor") else unet.config.cross_attention_dim
         if name.startswith("mid_block"):
@@ -782,35 +863,119 @@ def main():
         else:
             raise ValueError(f"Unknown attention processor type: {attn_processor.__class__.__name__}")
 
-        unet_lora_attn_procs[name] = lora_attn_processor_class(
-            hidden_size=hidden_size,
-            cross_attention_dim=cross_attention_dim,
-            rank=args.lora_rank,
+        module = lora_attn_processor_class(
+            hidden_size=hidden_size, cross_attention_dim=cross_attention_dim, rank=args.rank
         )
+        unet_lora_attn_procs[name] = module
+        unet_lora_parameters.extend(module.parameters())
 
     unet.set_attn_processor(unet_lora_attn_procs)
-    unet_lora_layers = AttnProcsLayers(unet.attn_processors)
 
     # The text encoder comes from 🤗 transformers, so we cannot directly modify it.
-    # So, instead, we monkey-patch the forward calls of its attention-blocks. For this,
-    # we first load a dummy pipeline with the text encoder and then do the monkey-patching.
-    text_encoder_lora_layers = None
+    # So, instead, we monkey-patch the forward calls of its attention-blocks.
     if args.train_text_encoder:
-        text_lora_attn_procs = {}
-        for name, module in text_encoder.named_sublayers(include_self=True):
-            if name.endswith(TEXT_ENCODER_ATTN_MODULE):
-                text_lora_attn_procs[name] = LoRAAttnProcessor(
-                    hidden_size=module.out_proj.weight.shape[1],
-                    cross_attention_dim=None,
-                    rank=args.lora_rank,
-                )
-        text_encoder_lora_layers = AttnProcsLayers(text_lora_attn_procs)
-        temp_pipeline = DiffusionPipeline.from_pretrained(
-            args.pretrained_model_name_or_path, text_encoder=text_encoder
+        # ensure that dtype is float32, even if rest of the model that isn't trained is loaded in fp16
+        text_lora_parameters = LoraLoaderMixin._modify_text_encoder(text_encoder, dtype=paddle.float32, rank=args.rank)
+
+    # text_encoder_lora_layers = None
+    # if args.train_text_encoder:
+    #     text_lora_attn_procs = {}
+    #     for name, module in text_encoder.named_sublayers(include_self=True):
+    #         if name.endswith(TEXT_ENCODER_ATTN_MODULE):
+    #             text_lora_attn_procs[name] = LoRAAttnProcessor(
+    #                 hidden_size=module.out_proj.weight.shape[1],
+    #                 cross_attention_dim=None,
+    #                 rank=args.lora_rank,
+    #             )
+    #     text_encoder_lora_layers = AttnProcsLayers(text_lora_attn_procs)
+    #     temp_pipeline = DiffusionPipeline.from_pretrained(
+    #         args.pretrained_model_name_or_path, text_encoder=text_encoder
+    #     )
+    #     temp_pipeline._modify_text_encoder(text_lora_attn_procs)
+    #     text_encoder = temp_pipeline.text_encoder
+    #     del temp_pipeline
+
+    # create custom saving & loading functions for Lora
+    def save_model_func(models, weights, output_dir):
+        # there are only two options here. Either are just the unet attn processor layers
+        # or there are the unet and text encoder atten layers
+        unet_lora_layers_to_save = None
+        text_encoder_lora_layers_to_save = None
+
+        for model in models:
+            if isinstance(model, type(unwrap_model(unet))):
+                unet_lora_layers_to_save = unet_attn_processors_state_dict(model)
+            elif isinstance(model, type(unwrap_model(text_encoder))):
+                text_encoder_lora_layers_to_save = text_encoder_lora_state_dict(model)
+            else:
+                raise ValueError(f"unexpected save model: {model.__class__}")
+
+            # make sure to pop weight so that corresponding model is not saved again
+            weights.pop()
+
+        LoraLoaderMixin.save_lora_weights(
+            output_dir,
+            unet_lora_layers=unet_lora_layers_to_save,
+            text_encoder_lora_layers=text_encoder_lora_layers_to_save,
         )
-        temp_pipeline._modify_text_encoder(text_lora_attn_procs)
-        text_encoder = temp_pipeline.text_encoder
-        del temp_pipeline
+
+    def load_model_func(models, input_dir):
+        unet_ = None
+        text_encoder_ = None
+
+        while len(models) > 0:
+            model = models.pop()
+
+            if isinstance(model, type(unwrap_model(unet))):
+                unet_ = model
+            elif isinstance(model, type(unwrap_model(text_encoder))):
+                text_encoder_ = model
+            else:
+                raise ValueError(f"unexpected save model: {model.__class__}")
+
+        lora_state_dict, network_alphas = LoraLoaderMixin.lora_state_dict(input_dir)
+        LoraLoaderMixin.load_lora_into_unet(lora_state_dict, network_alphas=network_alphas, unet=unet_)
+        LoraLoaderMixin.load_lora_into_text_encoder(
+            lora_state_dict, network_alphas=network_alphas, text_encoder=text_encoder_
+        )
+
+    if args.pre_compute_text_embeddings:
+
+        def compute_text_embeddings(prompt):
+            with paddle.no_grad():
+                text_inputs = tokenize_prompt(tokenizer, prompt, tokenizer_max_length=args.tokenizer_max_length)
+                prompt_embeds = encode_prompt(
+                    text_encoder,
+                    text_inputs.input_ids,
+                    text_inputs.attention_mask,
+                    text_encoder_use_attention_mask=args.text_encoder_use_attention_mask,
+                )
+
+            return prompt_embeds
+
+        pre_computed_encoder_hidden_states = compute_text_embeddings(args.instance_prompt)
+        validation_prompt_negative_prompt_embeds = compute_text_embeddings("")
+
+        if args.validation_prompt is not None:
+            validation_prompt_encoder_hidden_states = compute_text_embeddings(args.validation_prompt)
+        else:
+            validation_prompt_encoder_hidden_states = None
+
+        if args.instance_prompt is not None:
+            pre_computed_instance_prompt_encoder_hidden_states = compute_text_embeddings(args.instance_prompt)
+        else:
+            pre_computed_instance_prompt_encoder_hidden_states = None
+
+        text_encoder = None
+        tokenizer = None
+
+        gc.collect()
+        paddle.device.cuda.empty_cache()
+    else:
+        pre_computed_encoder_hidden_states = None
+        validation_prompt_encoder_hidden_states = None
+        validation_prompt_negative_prompt_embeds = None
+        pre_computed_instance_prompt_encoder_hidden_states = None
 
     # Dataset and DataLoaders creation:
     train_dataset = DreamBoothDataset(
@@ -823,33 +988,42 @@ def main():
         height=args.height,
         width=args.width,
         center_crop=args.center_crop,
+        encoder_hidden_states=pre_computed_encoder_hidden_states,
+        instance_prompt_encoder_hidden_states=pre_computed_instance_prompt_encoder_hidden_states,
+        tokenizer_max_length=args.tokenizer_max_length,
         interpolation="bilinear",
         random_flip=args.random_flip,
     )
 
-    def collate_fn(examples):
+    def collate_fn(examples, with_prior_preservation=False):
+        has_attention_mask = "instance_attention_mask" in examples[0]
+
         input_ids = [example["instance_prompt_ids"] for example in examples]
         pixel_values = [example["instance_images"] for example in examples]
 
+        if has_attention_mask:
+            attention_mask = [example["instance_attention_mask"] for example in examples]
         # Concat class and instance examples for prior preservation.
         # We do this to avoid doing two forward passes.
         if args.with_prior_preservation:
             input_ids += [example["class_prompt_ids"] for example in examples]
             pixel_values += [example["class_images"] for example in examples]
+            if has_attention_mask:
+                attention_mask += [example["class_attention_mask"] for example in examples]
 
         pixel_values = paddle.stack(pixel_values).astype("float32")
 
         input_ids = tokenizer.pad(
-            {"input_ids": input_ids},
-            padding="max_length",
-            max_length=tokenizer.model_max_length,
-            return_tensors="pd",
+            {"input_ids": input_ids}, padding="max_length", max_length=tokenizer.model_max_length, return_tensors="pd"
         ).input_ids
 
-        return {
+        batch = {
             "input_ids": input_ids,
             "pixel_values": pixel_values,
         }
+        if has_attention_mask:
+            batch["attention_mask"] = attention_mask
+        return batch
 
     train_sampler = (
         DistributedBatchSampler(train_dataset, batch_size=args.train_batch_size, shuffle=True)
@@ -857,10 +1031,7 @@ def main():
         else BatchSampler(train_dataset, batch_size=args.train_batch_size, shuffle=True)
     )
     train_dataloader = DataLoader(
-        train_dataset,
-        batch_sampler=train_sampler,
-        collate_fn=collate_fn,
-        num_workers=args.dataloader_num_workers,
+        train_dataset, batch_sampler=train_sampler, collate_fn=collate_fn, num_workers=args.dataloader_num_workers
     )
 
     # Scheduler and math around the number of training steps.
@@ -885,9 +1056,7 @@ def main():
     )
 
     params_to_optimize = (
-        list(unet_lora_layers.parameters()) + list(text_encoder_lora_layers.parameters())
-        if args.train_text_encoder
-        else unet_lora_layers.parameters()
+        unet_lora_parameters + text_lora_parameters if args.train_text_encoder else unet_lora_parameters
     )
     # Optimizer creation
     optimizer = AdamW(
@@ -937,24 +1106,33 @@ def main():
     for epoch in range(args.num_train_epochs):
         unet.train()
         for step, batch in enumerate(train_dataloader):
-            # Convert images to latent space
-            latents = vae.encode(batch["pixel_values"]).latent_dist.sample()
-            latents = latents * vae.config.scaling_factor
+            # # Convert images to latent space
+            # latents = vae.encode(batch["pixel_values"]).latent_dist.sample()
+            # latents = latents * vae.config.scaling_factor
+            pixel_values = batch["pixel_values"]
+
+            if vae is not None:
+                # Convert images to latent space
+                model_input = vae.encode(pixel_values).latent_dist.sample()
+                model_input = model_input * vae.config.scaling_factor
+            else:
+                model_input = pixel_values
 
             # Sample noise that we'll add to the latents
-            noise = paddle.randn(latents.shape, dtype=latents.dtype)
+            noise = paddle.randn(model_input.shape, dtype=model_input.dtype)
             if args.noise_offset:
                 # https://www.crosslabs.org//blog/diffusion-with-offset-noise
                 noise += args.noise_offset * paddle.randn(
-                    (latents.shape[0], latents.shape[1], 1, 1), dtype=latents.dtype
+                    (model_input.shape[0], model_input.shape[1], 1, 1), dtype=model_input.dtype
                 )
-            batch_size = latents.shape[0]
+            bsz, channels, height, width = model_input.shape
             # Sample a random timestep for each image
-            timesteps = paddle.randint(0, noise_scheduler.config.num_train_timesteps, (batch_size,)).cast("int64")
+            # timesteps = paddle.randint(0, noise_scheduler.config.num_train_timesteps, (batch_size,)).cast("int64")
+            timesteps = paddle.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,)).cast("int64")
 
-            # Add noise to the latents according to the noise magnitude at each timestep
+            # Add noise to the model input according to the noise magnitude at each timestep
             # (this is the forward diffusion process)
-            noisy_latents = noise_scheduler.add_noise(latents, noise, timesteps)
+            noisy_model_input = noise_scheduler.add_noise(model_input, noise, timesteps)
 
             if num_processes > 1 and (
                 args.gradient_checkpointing or ((step + 1) % args.gradient_accumulation_steps != 0)
@@ -966,21 +1144,44 @@ def main():
             else:
                 unet_ctx_manager = contextlib.nullcontext() if sys.version_info >= (3, 7) else contextlib.suppress()
 
-            if use_attention_mask:
-                attention_mask = (batch["input_ids"] != tokenizer.pad_token_id).cast("int64")
+            # if use_attention_mask:
+            #     attention_mask = (batch["input_ids"] != tokenizer.pad_token_id).cast("int64")
+            # else:
+            #     attention_mask = None
+
+            # Get the text embedding for conditioning
+            # encoder_hidden_states = text_encoder(batch["input_ids"], attention_mask=attention_mask)[0]
+            if args.pre_compute_text_embeddings:
+                encoder_hidden_states = batch["input_ids"]
             else:
-                attention_mask = None
-            encoder_hidden_states = text_encoder(batch["input_ids"], attention_mask=attention_mask)[0]
+                encoder_hidden_states = encode_prompt(
+                    text_encoder,
+                    batch["input_ids"],
+                    batch["attention_mask"],
+                    text_encoder_use_attention_mask=args.text_encoder_use_attention_mask,
+                )
+
+            if args.class_labels_conditioning == "timesteps":
+                class_labels = timesteps
+            else:
+                class_labels = None
 
             with unet_ctx_manager:
                 # Predict the noise residual / sample
-                model_pred = unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                model_pred = unet(
+                    noisy_model_input, timesteps, encoder_hidden_states, class_labels=class_labels
+                ).sample
+                # if model predicts variance, throw away the prediction. we will only train on the
+                # simplified training objective. This means that all schedulers using the fine tuned
+                # model must be configured to use one of the fixed variance variance types.
+                if model_pred.shape[1] == 6:
+                    model_pred, _ = paddle.chunk(model_pred, 2, axis=1)
 
                 # Get the target for loss depending on the prediction type
                 if noise_scheduler.config.prediction_type == "epsilon":
                     target = noise
                 elif noise_scheduler.config.prediction_type == "v_prediction":
-                    target = noise_scheduler.get_velocity(latents, noise, timesteps)
+                    target = noise_scheduler.get_velocity(model_input, noise, timesteps)
                 else:
                     raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
 
@@ -1030,11 +1231,20 @@ def main():
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                         # We combine the text encoder and UNet LoRA parameters with a simple
                         # custom logic. So, use `LoraLoaderMixin.save_lora_weights()`.
+                        unet_lora_layers = unet_attn_processors_state_dict(unwrap_model(unet).to(dtype=paddle.float32))
+                        if text_encoder is not None and args.train_text_encoder:
+                            text_encoder_lora_layers = text_encoder_lora_state_dict(
+                                unwrap_model(text_encoder).to(dtype=paddle.float32)
+                            )
+                        else:
+                            text_encoder_lora_layers = None
+
                         LoraLoaderMixin.save_lora_weights(
-                            save_directory=save_path,
+                            save_directory=args.output_dir,
                             unet_lora_layers=unet_lora_layers,
                             text_encoder_lora_layers=text_encoder_lora_layers,
                         )
+                        # save_model_func(models=[unet_lora_parameters, text_lora_parameters], weights=[unet_lora_parameters + text_lora_parameters if args.train_text_encoder else unet_lora_parameters], output_dir=save_path)
                         logger.info(f"Saved lora weights to {save_path}")
 
                 if global_step >= args.max_train_steps:
@@ -1050,23 +1260,57 @@ def main():
                 pipeline = DiffusionPipeline.from_pretrained(
                     args.pretrained_model_name_or_path,
                     unet=unwrap_model(unet),
-                    text_encoder=unwrap_model(text_encoder),
+                    text_encoder=None if args.pre_compute_text_embeddings else unwrap_model(text_encoder),
                     safety_checker=None,
                     requires_safety_checker=False,
                 )
-                pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
+                # pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
+                # We train on the simplified learning objective. If we were previously predicting a variance, we need the scheduler to ignore it
+                scheduler_args = {}
+
+                if "variance_type" in pipeline.scheduler.config:
+                    variance_type = pipeline.scheduler.config.variance_type
+
+                    if variance_type in ["learned", "learned_range"]:
+                        variance_type = "fixed_small"
+
+                    scheduler_args["variance_type"] = variance_type
+
+                pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
+                    pipeline.scheduler.config, **scheduler_args
+                )
+
                 pipeline.set_progress_bar_config(disable=True)
 
                 # run inference
+                # generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
+                # images = [
+                #     pipeline(args.validation_prompt, num_inference_steps=25, generator=generator).images[0]
+                #     for _ in range(args.num_validation_images)
+                # ]
                 generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
-                images = [
-                    pipeline(
-                        args.validation_prompt,
-                        num_inference_steps=25,
-                        generator=generator,
-                    ).images[0]
-                    for _ in range(args.num_validation_images)
-                ]
+                if args.pre_compute_text_embeddings:
+                    pipeline_args = {
+                        "prompt_embeds": validation_prompt_encoder_hidden_states,
+                        "negative_prompt_embeds": validation_prompt_negative_prompt_embeds,
+                    }
+                else:
+                    pipeline_args = {"prompt": args.validation_prompt}
+
+                if args.validation_images is None:
+                    images = []
+                    for _ in range(args.num_validation_images):
+                        with paddle.amp.auto_cast():
+                            image = pipeline(**pipeline_args, generator=generator).images[0]
+                            images.append(image)
+                else:
+                    images = []
+                    for image in args.validation_images:
+                        image = Image.open(image)
+                        with paddle.amp.auto_cast():
+                            image = pipeline(**pipeline_args, image=image, generator=generator).images[0]
+                        images.append(image)
+
                 np_images = np.stack([np.asarray(img) for img in images])
 
                 if args.report_to == "tensorboard":
@@ -1082,6 +1326,17 @@ def main():
 
     # Save the lora layers
     if is_main_process:
+        unet = unwrap_model(unet)
+        unet = unet.to(dtype=paddle.float32)
+        unet_lora_layers = unet_attn_processors_state_dict(unet)
+
+        if text_encoder is not None and args.train_text_encoder:
+            text_encoder = unwrap_model(text_encoder)
+            text_encoder = text_encoder.to(dtype=paddle.float32)
+            text_encoder_lora_layers = text_encoder_lora_state_dict(text_encoder)
+        else:
+            text_encoder_lora_layers = None
+
         LoraLoaderMixin.save_lora_weights(
             save_directory=args.output_dir,
             unet_lora_layers=unet_lora_layers,
@@ -1091,15 +1346,27 @@ def main():
         # Final inference
         # Load previous pipeline
         pipeline = DiffusionPipeline.from_pretrained(
-            args.pretrained_model_name_or_path,
-            safety_checker=None,
-            requires_safety_checker=False,
+            args.pretrained_model_name_or_path, safety_checker=None, requires_safety_checker=False
         )
-        pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
+        # pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
+        # We train on the simplified learning objective. If we were previously predicting a variance, we need the scheduler to ignore it
+        scheduler_args = {}
+
+        if "variance_type" in pipeline.scheduler.config:
+            variance_type = pipeline.scheduler.config.variance_type
+
+            if variance_type in ["learned", "learned_range"]:
+                variance_type = "fixed_small"
+
+            scheduler_args["variance_type"] = variance_type
+
+        pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config, **scheduler_args)
+
         # load attention processors
         pipeline.load_lora_weights(args.output_dir)
 
         # run inference
+        images = []
         if args.validation_prompt and args.num_validation_images > 0:
             generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
             images = [
@@ -1124,11 +1391,7 @@ def main():
 
             _retry(
                 create_repo,
-                func_kwargs={
-                    "repo_id": repo_id,
-                    "exist_ok": True,
-                    "token": args.hub_token,
-                },
+                func_kwargs={"repo_id": repo_id, "exist_ok": True, "token": args.hub_token},
                 base_wait_time=1.0,
                 max_retries=5,
                 max_wait_time=10.0,
@@ -1140,6 +1403,7 @@ def main():
                 base_model=args.pretrained_model_name_or_path,
                 prompt=args.instance_prompt,
                 repo_folder=args.output_dir,
+                pipeline=pipeline,
             )
             # Upload model
             logger.info(f"Pushing to {repo_id}")

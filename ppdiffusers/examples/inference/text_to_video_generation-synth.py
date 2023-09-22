@@ -18,6 +18,7 @@ from ppdiffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
 
 # from ppdiffusers.utils import export_to_video
 
+
 pipe = TextToVideoSDPipeline.from_pretrained("damo-vilab/text-to-video-ms-1.7b")
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 

@@ -11,26 +11,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import paddle
+from PIL import Image
 
 from ppdiffusers import StableDiffusionAdapterPipeline, T2IAdapter
-from ppdiffusers.utils import PIL_INTERPOLATION, load_image
+from ppdiffusers.utils import load_image
 
-input_image = load_image("https://huggingface.co/RzZ/sd-v1-4-adapter-color/resolve/main/color_ref.png")
-color_palette = input_image.resize((8, 8))
-color_palette = color_palette.resize((512, 512), resample=PIL_INTERPOLATION["nearest"])
-
-adapter = T2IAdapter.from_pretrained("TencentARC/t2iadapter_color_sd14v1")
-
+image = load_image("https://huggingface.co/datasets/diffusers/docs-images/resolve/main/t2i-adapter/color_ref.png")
+color_palette = image.resize((8, 8))
+color_palette = color_palette.resize((512, 512), resample=Image.Resampling.NEAREST)
+adapter = T2IAdapter.from_pretrained("TencentARC/t2iadapter_color_sd14v1", paddle_dtype=paddle.float16)
 pipe = StableDiffusionAdapterPipeline.from_pretrained(
     "CompVis/stable-diffusion-v1-4",
     adapter=adapter,
     safety_checker=None,
     paddle_dtype=paddle.float16,
 )
-
-image = pipe(
-    prompt="At night, glowing cubes in front of the beach",
+out_image = pipe(
+    "At night, glowing cubes in front of the beach",
     image=color_palette,
 ).images[0]
-image.save("text_to_image_generation-t2i-adapter-result-color_adapter.png")
+out_image.save("text_to_image_generation-t2i-adapter-result-color_adapter.png")

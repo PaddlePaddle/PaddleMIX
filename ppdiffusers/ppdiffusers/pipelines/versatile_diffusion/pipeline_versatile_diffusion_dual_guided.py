@@ -110,12 +110,12 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
         Replace image_unet's `Transformer2DModel` blocks with `DualTransformer2DModel` that contains transformer blocks
         from both `image_unet` and `text_unet`
         """
-        for name, module in self.image_unet.named_modules():
+        for name, module in self.image_unet.named_sublayers():
             if isinstance(module, Transformer2DModel):
                 parent_name, index = name.rsplit(".", 1)
                 index = int(index)
-                image_transformer = self.image_unet.get_submodule(parent_name)[index]
-                text_transformer = self.text_unet.get_submodule(parent_name)[index]
+                image_transformer = self.image_unet.get_sublayer(parent_name)[index]
+                text_transformer = self.text_unet.get_sublayer(parent_name)[index]
                 config = image_transformer.config
                 dual_transformer = DualTransformer2DModel(
                     num_attention_heads=config.num_attention_heads,
@@ -133,7 +133,7 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
                 )
                 dual_transformer.transformers[0] = image_transformer
                 dual_transformer.transformers[1] = text_transformer
-                self.image_unet.get_submodule(parent_name)[index] = dual_transformer
+                self.image_unet.get_sublayer(parent_name)[index] = dual_transformer
                 self.image_unet.register_to_config(dual_cross_attention=True)
 
     def _revert_dual_attention(self):
@@ -145,7 +145,7 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
             if isinstance(module, DualTransformer2DModel):
                 parent_name, index = name.rsplit(".", 1)
                 index = int(index)
-                self.image_unet.get_submodule(parent_name)[index] = module.transformers[0]
+                self.image_unet.get_sublayer(parent_name)[index] = module.transformers[0]
         self.image_unet.register_to_config(dual_cross_attention=False)
 
     def _encode_text_prompt(self, prompt, num_images_per_prompt, do_classifier_free_guidance):
@@ -162,7 +162,8 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
         """
 
         def normalize_embeddings(encoder_output):
-            embeds = self.text_encoder.text_projection(encoder_output.last_hidden_state)
+            # embeds = self.text_encoder.text_projection(encoder_output.last_hidden_state)
+            embeds = paddle.matmul(encoder_output.last_hidden_state, self.text_encoder.text_projection)
             embeds_pooled = encoder_output.text_embeds
             embeds = embeds / paddle.linalg.norm(x=embeds_pooled.unsqueeze(axis=1), axis=-1, keepdim=True)
             return embeds
@@ -233,8 +234,8 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
         """
 
         def normalize_embeddings(encoder_output):
-            embeds = self.image_encoder.vision_model.post_layernorm(encoder_output.last_hidden_state)
-            embeds = self.image_encoder.visual_projection(embeds)
+            embeds = self.image_encoder.vision_model.ln_post(encoder_output.last_hidden_state)
+            embeds = paddle.matmul(embeds, self.image_encoder.vision_projection)
             embeds_pooled = embeds[:, 0:1]
             embeds = embeds / paddle.linalg.norm(x=embeds_pooled, axis=-1, keepdim=True)
             return embeds
@@ -334,7 +335,7 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
         return latents
 
     def set_transformer_params(self, mix_ratio: float = 0.5, condition_types: Tuple = ("text", "image")):
-        for name, module in self.image_unet.named_modules():
+        for name, module in self.image_unet.named_sublayers():
             if isinstance(module, DualTransformer2DModel):
                 module.mix_ratio = mix_ratio
                 for i, type in enumerate(condition_types):
@@ -494,7 +495,7 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
             # predict the noise residual
-            noise_pred = self.image_unet(latent_model_input, t, encoder_hidden_states=dual_prompt_embeddings).sampl
+            noise_pred = self.image_unet(latent_model_input, t, encoder_hidden_states=dual_prompt_embeddings).sample
 
             # perform guidance
             if do_classifier_free_guidance:
