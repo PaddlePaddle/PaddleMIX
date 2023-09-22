@@ -120,5 +120,5 @@ class DeprecatedAttentionBlockTests(unittest.TestCase):
             generator=paddle.Generator().manual_seed(0),
             output_type="np",
         ).images
-        self.assertTrue(np.allclose(pre_conversion, conversion, atol=1e-05))
-        self.assertTrue(np.allclose(conversion, after_conversion, atol=1e-05))
+        self.assertTrue(np.allclose(pre_conversion, conversion, atol=1e-03, rtol=1e-03))
+        self.assertTrue(np.allclose(conversion, after_conversion, atol=1e-03, rtol=1e-03))

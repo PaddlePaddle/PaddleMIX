@@ -12,5 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-python export_model.py --pretrained_model_name_or_path stabilityai/stable-diffusion-xl-base-1.0 --output_path /root/project/paddlemix/upgrade/drawer/upgrade_0193/fastdeploy/static_model/stable-diffusion-xl-base-1.0 --height=1024 --width=1024
+nohup sh train.sh 1> train2.log 2>&1 &

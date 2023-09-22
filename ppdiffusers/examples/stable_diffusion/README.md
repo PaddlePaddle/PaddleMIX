@@ -59,6 +59,7 @@ Tips：
 
 #### 1.3.2 单机单卡训练
 ```bash
+export FLAG_FUSED_LINEAR=0
 export FLAGS_conv_workspace_size_limit=4096
 # 是否开启ema
 export FLAG_USE_EMA=0
@@ -135,6 +136,7 @@ python -u train_txt2img_laion400m_trainer.py \
 
 #### 1.3.3 单机多卡训练 (多机多卡训练，仅需在 paddle.distributed.launch 后加个 --ips IP1,IP2,IP3,IP4)
 ```bash
+export FLAG_FUSED_LINEAR=0
 export FLAGS_conv_workspace_size_limit=4096
 # 是否开启ema
 export FLAG_USE_EMA=0
