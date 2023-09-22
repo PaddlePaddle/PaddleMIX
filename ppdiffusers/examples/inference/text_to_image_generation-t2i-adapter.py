@@ -20,11 +20,12 @@ input_image = load_image("https://huggingface.co/RzZ/sd-v1-4-adapter-color/resol
 color_palette = input_image.resize((8, 8))
 color_palette = color_palette.resize((512, 512), resample=PIL_INTERPOLATION["nearest"])
 
-adapter = T2IAdapter.from_pretrained("westfish/sd-v1-4-adapter-color")
+adapter = T2IAdapter.from_pretrained("TencentARC/t2iadapter_color_sd14v1")
 
 pipe = StableDiffusionAdapterPipeline.from_pretrained(
     "CompVis/stable-diffusion-v1-4",
     adapter=adapter,
+    safety_checker=None,
     paddle_dtype=paddle.float16,
 )
 

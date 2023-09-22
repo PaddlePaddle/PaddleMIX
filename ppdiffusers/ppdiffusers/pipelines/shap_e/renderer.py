@@ -40,7 +40,7 @@ def sample_pmf(pmf: paddle.Tensor, n_samples: int) -> paddle.Tensor:
     """
     *shape, support_size, last_dim = pmf.shape
     assert last_dim == 1
-    cdf = paddle.cumsum(x=pmf.reshape([-1, support_size]), axis=1)
+    cdf = paddle.cumsum(x=pmf.reshape([-1, support_size]), axis=1).cast("float32")
     inds = paddle.searchsorted(sorted_sequence=cdf, values=paddle.rand(shape=[cdf.shape[0], n_samples]))
     return inds.reshape([*shape, n_samples, 1]).clip(min=0, max=support_size - 1)
 

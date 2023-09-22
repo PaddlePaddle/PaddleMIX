@@ -225,6 +225,8 @@ class KandinskyV22Img2ImgPipeline(DiffusionPipeline):
         if do_classifier_free_guidance:
             image_embeds = image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
             negative_image_embeds = negative_image_embeds.repeat_interleave(repeats=num_images_per_prompt, axis=0)
+            negative_image_embeds = negative_image_embeds.cast(self.unet.dtype)
+            image_embeds = image_embeds.cast(self.unet.dtype)
             image_embeds = paddle.concat(x=[negative_image_embeds, image_embeds], axis=0).cast(dtype=self.unet.dtype)
         if not isinstance(image, list):
             image = [image]

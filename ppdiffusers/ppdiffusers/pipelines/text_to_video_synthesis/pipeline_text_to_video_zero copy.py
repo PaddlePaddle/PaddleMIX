@@ -1,5 +1,4 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,43 +11,45 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import copy
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Union
 
 import numpy as np
-import paddle
 import PIL
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
-
-from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
-from ppdiffusers.pipelines.stable_diffusion import (
+import torch
+import torch.nn.functional as F
+from diffusers.models import AutoencoderKL, UNet2DConditionModel
+from diffusers.pipelines.stable_diffusion import (
     StableDiffusionPipeline,
     StableDiffusionSafetyChecker,
 )
-from ppdiffusers.schedulers import KarrasDiffusionSchedulers
-from ppdiffusers.utils import BaseOutput
+from diffusers.schedulers import KarrasDiffusionSchedulers
+from diffusers.utils import BaseOutput
+from torch.nn.functional import grid_sample
+from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
 
 
 def rearrange_0(tensor, f):
-    F, C, H, W = tensor.shape
-    tensor = paddle.transpose(x=paddle.reshape(x=tensor, shape=(F // f, f, C, H, W)), perm=(0, 2, 1, 3, 4))
+    F, C, H, W = tensor.size()
+    tensor = torch.permute(torch.reshape(tensor, (F // f, f, C, H, W)), (0, 2, 1, 3, 4))
     return tensor
 
 
 def rearrange_1(tensor):
-    B, C, F, H, W = tensor.shape
-    return paddle.reshape(x=paddle.transpose(x=tensor, perm=(0, 2, 1, 3, 4)), shape=(B * F, C, H, W))
+    B, C, F, H, W = tensor.size()
+    return torch.reshape(torch.permute(tensor, (0, 2, 1, 3, 4)), (B * F, C, H, W))
 
 
 def rearrange_3(tensor, f):
-    F, D, C = tensor.shape
-    return paddle.reshape(x=tensor, shape=(F // f, f, D, C))
+    F, D, C = tensor.size()
+    return torch.reshape(tensor, (F // f, f, D, C))
 
 
 def rearrange_4(tensor):
-    B, F, D, C = tensor.shape
-    return paddle.reshape(x=tensor, shape=(B * F, D, C))
+    B, F, D, C = tensor.size()
+    return torch.reshape(tensor, (B * F, D, C))
 
 
 class CrossFrameAttnProcessor:
@@ -68,48 +69,126 @@ class CrossFrameAttnProcessor:
         batch_size, sequence_length, _ = hidden_states.shape
         attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
         query = attn.to_q(hidden_states)
+
         is_cross_attention = encoder_hidden_states is not None
         if encoder_hidden_states is None:
             encoder_hidden_states = hidden_states
         elif attn.norm_cross:
             encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
+
         key = attn.to_k(encoder_hidden_states)
         value = attn.to_v(encoder_hidden_states)
 
         # Cross Frame Attention
         if not is_cross_attention:
-            video_length = key.shape[0] // self.batch_size
+            video_length = key.size()[0] // self.batch_size
             first_frame_index = [0] * video_length
 
             # rearrange keys to have batch and frames in the 1st and 2nd dims respectively
             key = rearrange_3(key, video_length)
-            key = key.index_select(paddle.to_tensor(first_frame_index), 1)
+            key = key[:, first_frame_index]
             # rearrange values to have batch and frames in the 1st and 2nd dims respectively
             value = rearrange_3(value, video_length)
-            value = value.index_select(paddle.to_tensor(first_frame_index), 1)
+            value = value[:, first_frame_index]
 
             # rearrange back to original shape
             key = rearrange_4(key)
             value = rearrange_4(value)
-        query = attn.head_to_batch_dim(query, out_dim=3)
-        key = attn.head_to_batch_dim(key, out_dim=3)
-        value = attn.head_to_batch_dim(value, out_dim=3)
+
+        query = attn.head_to_batch_dim(query)
+        key = attn.head_to_batch_dim(key)
+        value = attn.head_to_batch_dim(value)
+
         attention_probs = attn.get_attention_scores(query, key, attention_mask)
-        breakpoint()
-        hidden_states = paddle.bmm(x=attention_probs, y=value)
+        hidden_states = torch.bmm(attention_probs, value)
         hidden_states = attn.batch_to_head_dim(hidden_states)
 
         # linear proj
         hidden_states = attn.to_out[0](hidden_states)
         # dropout
+        hidden_states = attn.to_out[1](hidden_states)
 
+        return hidden_states
+
+
+class CrossFrameAttnProcessor2_0:
+    """
+    Cross frame attention processor with scaled_dot_product attention of Pytorch 2.0.
+
+    Args:
+        batch_size: The number that represents actual batch size, other than the frames.
+            For example, calling unet with a single prompt and num_images_per_prompt=1, batch_size should be equal to
+            2, due to classifier-free guidance.
+    """
+
+    def __init__(self, batch_size=2):
+        if not hasattr(F, "scaled_dot_product_attention"):
+            raise ImportError("AttnProcessor2_0 requires PyTorch 2.0, to use it, please upgrade PyTorch to 2.0.")
+        self.batch_size = batch_size
+
+    def __call__(self, attn, hidden_states, encoder_hidden_states=None, attention_mask=None):
+        batch_size, sequence_length, _ = (
+            hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
+        )
+        inner_dim = hidden_states.shape[-1]
+
+        if attention_mask is not None:
+            attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
+            # scaled_dot_product_attention expects attention_mask shape to be
+            # (batch, heads, source_length, target_length)
+            attention_mask = attention_mask.view(batch_size, attn.heads, -1, attention_mask.shape[-1])
+
+        query = attn.to_q(hidden_states)
+
+        is_cross_attention = encoder_hidden_states is not None
+        if encoder_hidden_states is None:
+            encoder_hidden_states = hidden_states
+        elif attn.norm_cross:
+            encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
+
+        key = attn.to_k(encoder_hidden_states)
+        value = attn.to_v(encoder_hidden_states)
+
+        # Cross Frame Attention
+        if not is_cross_attention:
+            video_length = key.size()[0] // self.batch_size
+            first_frame_index = [0] * video_length
+
+            # rearrange keys to have batch and frames in the 1st and 2nd dims respectively
+            key = rearrange_3(key, video_length)
+            key = key[:, first_frame_index]
+            # rearrange values to have batch and frames in the 1st and 2nd dims respectively
+            value = rearrange_3(value, video_length)
+            value = value[:, first_frame_index]
+
+            # rearrange back to original shape
+            key = rearrange_4(key)
+            value = rearrange_4(value)
+
+        head_dim = inner_dim // attn.heads
+        query = query.view(batch_size, -1, attn.heads, head_dim).transpose(1, 2)
+        key = key.view(batch_size, -1, attn.heads, head_dim).transpose(1, 2)
+        value = value.view(batch_size, -1, attn.heads, head_dim).transpose(1, 2)
+
+        # the output of sdp = (batch, num_heads, seq_len, head_dim)
+        # TODO: add support for attn.scale when we move to Torch 2.1
+        hidden_states = F.scaled_dot_product_attention(
+            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+        )
+
+        hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
+        hidden_states = hidden_states.to(query.dtype)
+
+        # linear proj
+        hidden_states = attn.to_out[0](hidden_states)
+        # dropout
         hidden_states = attn.to_out[1](hidden_states)
         return hidden_states
 
 
 @dataclass
 class TextToVideoPipelineOutput(BaseOutput):
-    """
+    r"""
     Output class for zero-shot text-to-video pipeline.
 
     Args:
@@ -120,16 +199,15 @@ class TextToVideoPipelineOutput(BaseOutput):
             List indicating whether the corresponding generated image contains "not-safe-for-work" (nsfw) content or
             `None` if safety checking could not be performed.
     """
-
     images: Union[List[PIL.Image.Image], np.ndarray]
     nsfw_content_detected: Optional[List[bool]]
 
 
-def coords_grid(batch, ht, wd):
+def coords_grid(batch, ht, wd, device):
     # Adapted from https://github.com/princeton-vl/RAFT/blob/master/core/utils/utils.py
-    coords = paddle.meshgrid(paddle.arange(end=ht), paddle.arange(end=wd))
-    coords = paddle.stack(x=coords[::-1], axis=0).astype(dtype="float32")
-    return coords[None].tile(repeat_times=[batch, 1, 1, 1])
+    coords = torch.meshgrid(torch.arange(ht, device=device), torch.arange(wd, device=device))
+    coords = torch.stack(coords[::-1], dim=0).float()
+    return coords[None].repeat(batch, 1, 1, 1)
 
 
 def warp_single_latent(latent, reference_flow):
@@ -143,20 +221,23 @@ def warp_single_latent(latent, reference_flow):
     Returns:
         warped: warped latent
     """
-    _, _, H, W = reference_flow.shape
-    _, _, h, w = latent.shape
-    coords0 = coords_grid(1, H, W).cast(latent.dtype)
+    _, _, H, W = reference_flow.size()
+    _, _, h, w = latent.size()
+    coords0 = coords_grid(1, H, W, device=latent.device).to(latent.dtype)
+
     coords_t0 = coords0 + reference_flow
     coords_t0[:, 0] /= W
     coords_t0[:, 1] /= H
+
     coords_t0 = coords_t0 * 2.0 - 1.0
-    coords_t0 = paddle.nn.functional.interpolate(x=coords_t0, size=(h, w), mode="bilinear")
-    coords_t0 = paddle.transpose(x=coords_t0, perm=(0, 2, 3, 1))
-    warped = paddle.nn.functional.grid_sample(x=latent, grid=coords_t0, mode="nearest", padding_mode="reflection")
+    coords_t0 = F.interpolate(coords_t0, size=(h, w), mode="bilinear")
+    coords_t0 = torch.permute(coords_t0, (0, 2, 3, 1))
+
+    warped = grid_sample(latent, coords_t0, mode="nearest", padding_mode="reflection")
     return warped
 
 
-def create_motion_field(motion_field_strength_x, motion_field_strength_y, frame_ids, dtype):
+def create_motion_field(motion_field_strength_x, motion_field_strength_y, frame_ids, device, dtype):
     """
     Create translation motion field
 
@@ -165,16 +246,17 @@ def create_motion_field(motion_field_strength_x, motion_field_strength_y, frame_
         motion_field_strength_y: motion strength along y-axis
         frame_ids: indexes of the frames the latents of which are being processed.
             This is needed when we perform chunk-by-chunk inference
+        device: device
         dtype: dtype
 
     Returns:
 
     """
     seq_length = len(frame_ids)
-    reference_flow = paddle.zeros(shape=(seq_length, 2, 512, 512), dtype=dtype)
+    reference_flow = torch.zeros((seq_length, 2, 512, 512), device=device, dtype=dtype)
     for fr_idx in range(seq_length):
-        reference_flow[fr_idx, 0, :, :] = motion_field_strength_x * frame_ids[fr_idx]
-        reference_flow[fr_idx, 1, :, :] = motion_field_strength_y * frame_ids[fr_idx]
+        reference_flow[fr_idx, 0, :, :] = motion_field_strength_x * (frame_ids[fr_idx])
+        reference_flow[fr_idx, 1, :, :] = motion_field_strength_y * (frame_ids[fr_idx])
     return reference_flow
 
 
@@ -196,6 +278,7 @@ def create_motion_field_and_warp_latents(motion_field_strength_x, motion_field_s
         motion_field_strength_x=motion_field_strength_x,
         motion_field_strength_y=motion_field_strength_y,
         frame_ids=frame_ids,
+        device=latents.device,
         dtype=latents.dtype,
     )
     warped_latents = latents.clone().detach()
@@ -205,7 +288,7 @@ def create_motion_field_and_warp_latents(motion_field_strength_x, motion_field_s
 
 
 class TextToVideoZeroPipeline(StableDiffusionPipeline):
-    """
+    r"""
     Pipeline for zero-shot text-to-video generation using Stable Diffusion.
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
@@ -245,7 +328,11 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         super().__init__(
             vae, text_encoder, tokenizer, unet, scheduler, safety_checker, feature_extractor, requires_safety_checker
         )
-        processor = CrossFrameAttnProcessor(batch_size=2)
+        processor = (
+            CrossFrameAttnProcessor2_0(batch_size=2)
+            if hasattr(F, "scaled_dot_product_attention")
+            else CrossFrameAttnProcessor(batch_size=2)
+        )
         self.unet.set_attn_processor(processor)
 
     def forward_loop(self, x_t0, t0, t1, generator):
@@ -259,17 +346,17 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
                 Timestep at t0.
             t1:
                 Timestamp at t1.
-            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
+            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
+                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
                 generation deterministic.
 
         Returns:
             x_t1:
                 Forward process applied to x_t0 from time t0 to t1.
         """
-        eps = paddle.randn(shape=x_t0.shape, generator=generator, dtype=x_t0.dtype)
-        alpha_vec = paddle.prod(x=self.scheduler.alphas[t0:t1])
-        x_t1 = paddle.sqrt(x=alpha_vec) * x_t0 + paddle.sqrt(x=1 - alpha_vec) * eps
+        eps = torch.randn(x_t0.size(), generator=generator, dtype=x_t0.dtype, device=x_t0.device)
+        alpha_vec = torch.prod(self.scheduler.alphas[t0:t1])
+        x_t1 = torch.sqrt(alpha_vec) * x_t0 + torch.sqrt(1 - alpha_vec) * eps
         return x_t1
 
     def backward_loop(
@@ -299,7 +386,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
                 `prompt` at the expense of lower image quality. Guidance scale is enabled when `guidance_scale > 1`.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -320,7 +407,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         with self.progress_bar(total=num_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
-                latent_model_input = paddle.concat(x=[latents] * 2) if do_classifier_free_guidance else latents
+                latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
@@ -333,20 +420,20 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
 
                 # perform guidance
                 if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(chunks=2)
+                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:
+                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
         return latents.clone().detach()
 
-    @paddle.no_grad()
+    @torch.no_grad()
     def __call__(
         self,
         prompt: Union[str, List[str]],
@@ -358,13 +445,13 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         negative_prompt: Optional[Union[str, List[str]]] = None,
         num_videos_per_prompt: Optional[int] = 1,
         eta: float = 0.0,
-        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
-        latents: Optional[paddle.Tensor] = None,
+        generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
+        latents: Optional[torch.FloatTensor] = None,
         motion_field_strength_x: float = 12,
         motion_field_strength_y: float = 12,
         output_type: Optional[str] = "tensor",
         return_dict: bool = True,
-        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
         callback_steps: Optional[int] = 1,
         t0: int = 44,
         t1: int = 47,
@@ -396,10 +483,10 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
-            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
+            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
+                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
                 generation deterministic.
-            latents (`paddle.Tensor`, *optional*):
+            latents (`torch.FloatTensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for video
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
                 tensor is generated by sampling using the supplied random `generator`.
@@ -411,7 +498,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
                 a plain tuple.
             callback (`Callable`, *optional*):
                 A function that calls every `callback_steps` steps during inference. The function is called with the
-                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
+                following arguments: `callback(step: int, timestep: int, latents: torch.FloatTensor)`.
             callback_steps (`int`, *optional*, defaults to 1):
                 The frequency at which the `callback` function is called. If not specified, the callback is called at
                 every step.
@@ -441,7 +528,9 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         if frame_ids is None:
             frame_ids = list(range(video_length))
         assert len(frame_ids) == video_length
+
         assert num_videos_per_prompt == 1
+
         if isinstance(prompt, str):
             prompt = [prompt]
         if isinstance(negative_prompt, str):
@@ -456,7 +545,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
 
         # Define call parameters
         batch_size = 1 if isinstance(prompt, str) else len(prompt)
-
+        device = self._execution_device
         # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
         # corresponds to doing no classifier free guidance.
@@ -464,11 +553,11 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
 
         # Encode input prompt
         prompt_embeds = self._encode_prompt(
-            prompt, num_videos_per_prompt, do_classifier_free_guidance, negative_prompt
+            prompt, device, num_videos_per_prompt, do_classifier_free_guidance, negative_prompt
         )
 
         # Prepare timesteps
-        self.scheduler.set_timesteps(num_inference_steps)
+        self.scheduler.set_timesteps(num_inference_steps, device=device)
         timesteps = self.scheduler.timesteps
 
         # Prepare latent variables
@@ -479,10 +568,10 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             height,
             width,
             prompt_embeds.dtype,
+            device,
             generator,
             latents,
         )
-
         # Prepare extra step kwargs.
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
@@ -513,7 +602,7 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
         )
 
         # Propagate first frame latents at time T_0 to remaining frames
-        x_2k_t0 = x_1_t0.tile(repeat_times=[video_length - 1, 1, 1, 1])
+        x_2k_t0 = x_1_t0.repeat(video_length - 1, 1, 1, 1)
 
         # Add motion in latents at time T_0
         x_2k_t0 = create_motion_field_and_warp_latents(
@@ -525,15 +614,17 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
 
         # Perform forward process up to time T_1
         x_2k_t1 = self.forward_loop(
-            x_t0=x_2k_t0, t0=timesteps[-t0 - 1].item(), t1=timesteps[-t1 - 1].item(), generator=generator
+            x_t0=x_2k_t0,
+            t0=timesteps[-t0 - 1].item(),
+            t1=timesteps[-t1 - 1].item(),
+            generator=generator,
         )
 
         # Perform backward process from time T_1 to 0
-        x_1k_t1 = paddle.concat(x=[x_1_t1, x_2k_t1])
-        b, l, d = prompt_embeds.shape
-        prompt_embeds = (
-            prompt_embeds[:, None].tile(repeat_times=[1, video_length, 1, 1]).reshape(b * video_length, l, d)
-        )
+        x_1k_t1 = torch.cat([x_1_t1, x_2k_t1])
+        b, l, d = prompt_embeds.size()
+        prompt_embeds = prompt_embeds[:, None].repeat(1, video_length, 1, 1).reshape(b * video_length, l, d)
+
         self.scheduler = scheduler_copy
         x_1k_0 = self.backward_loop(
             timesteps=timesteps[-t1 - 1 :],
@@ -546,15 +637,25 @@ class TextToVideoZeroPipeline(StableDiffusionPipeline):
             num_warmup_steps=0,
         )
         latents = x_1k_0
-        paddle.device.cuda.empty_cache()
+
+        # manually for max memory savings
+        if hasattr(self, "final_offload_hook") and self.final_offload_hook is not None:
+            self.unet.to("cpu")
+        torch.cuda.empty_cache()
+
         if output_type == "latent":
             image = latents
             has_nsfw_concept = None
         else:
             image = self.decode_latents(latents)
             # Run safety checker
-            image, has_nsfw_concept = self.run_safety_checker(image, prompt_embeds.dtype)
+            image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
+
+        # Offload last model to CPU
+        if hasattr(self, "final_offload_hook") and self.final_offload_hook is not None:
+            self.final_offload_hook.offload()
 
         if not return_dict:
-            return image, has_nsfw_concept
+            return (image, has_nsfw_concept)
+
         return TextToVideoPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

@@ -20,7 +20,7 @@ from ppdiffusers.utils import export_to_gif
 repo = "openai/shap-e"
 pipe = DiffusionPipeline.from_pretrained(repo, paddle_dtype=paddle.float16)
 guidance_scale = 15.0
-prompt = "a shark"
+prompt = "a chair"
 images = pipe(
     prompt,
     guidance_scale=guidance_scale,
