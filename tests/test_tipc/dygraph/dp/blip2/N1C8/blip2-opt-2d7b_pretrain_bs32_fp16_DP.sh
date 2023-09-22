@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-model_item=blip2-opt-stage2
+model_item=blip2-opt-2d7b_pretrain
 model=blip2
-bs_item=128
+bs_item=32
 fp_item=fp16
 run_mode=DP
-device_num=N1C1
+device_num=N1C8
 max_epochs=20
 num_workers=0
 
