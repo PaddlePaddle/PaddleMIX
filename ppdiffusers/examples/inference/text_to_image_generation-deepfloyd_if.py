@@ -54,7 +54,7 @@ super_res_1_pipe.to(paddle_device="cpu")
 
 # Stage 3: super resolution stage2
 super_res_2_pipe = DiffusionPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-x4-upscaler", paddle_dtype=paddle.float16
+    "stabilityai/stable-diffusion-x4-upscaler", paddle_dtype=paddle.float32
 )
 super_res_2_pipe.enable_xformers_memory_efficient_attention()
 
