@@ -1,0 +1,17 @@
+paddlenlp>=2.6.0rc0
+ppdiffusers>=0.16.1
+scipy
+safetensors
+pyyaml
+opencv-python
+albumentations
+fastcore
+visualdl
+requests
+Pillow
+cchardet
+datasets
+visualdl
+einops
+ligo-segments
+opencv-python-headless<=4.3

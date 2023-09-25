@@ -227,7 +227,7 @@ class ShapEImg2ImgPipelineIntegrationTests(unittest.TestCase):
         )
         pipe = ShapEImg2ImgPipeline.from_pretrained("openai/shap-e-img2img")
         pipe.set_progress_bar_config(disable=None)
-        generator = paddle.framework.core.default_cpu_generator().manual_seed(0)
+        generator = paddle.Generator().manual_seed(0)
         images = pipe(
             input_image,
             generator=generator,

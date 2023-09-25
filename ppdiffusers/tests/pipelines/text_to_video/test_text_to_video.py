@@ -150,11 +150,9 @@ class TextToVideoSDPipelineSlowTests(unittest.TestCase):
         expected_video = load_numpy(
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/text_to_video/video.npy"
         )
-        pipe = TextToVideoSDPipeline.from_pretrained(
-            "damo-vilab/text-to-video-ms-1.7b", from_hf_hub=True, from_diffusers=True
-        )
+        pipe = TextToVideoSDPipeline.from_pretrained("damo-vilab/text-to-video-ms-1.7b")
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-        pipe = pipe
+
         prompt = "Spiderman is surfing"
         generator = paddle.Generator().manual_seed(0)
         video_frames = pipe(prompt, generator=generator, num_inference_steps=25, output_type="pd").frames

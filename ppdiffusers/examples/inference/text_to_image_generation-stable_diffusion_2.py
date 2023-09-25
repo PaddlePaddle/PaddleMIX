@@ -14,37 +14,13 @@
 
 import paddle
 
-from ppdiffusers import DiffusionPipeline
+from ppdiffusers import DiffusionPipeline, DPMSolverMultistepScheduler
 
-# load both base & refiner
-base = DiffusionPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-xl-base-1.0",
-)
-refiner = DiffusionPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-xl-refiner-1.0",
-    text_encoder_2=base.text_encoder_2,
-    vae=base.vae,
-    paddle_dtype=paddle.float16,
-    variant="fp16",
-)
+repo_id = "stabilityai/stable-diffusion-2-base"
+pipe = DiffusionPipeline.from_pretrained(repo_id, paddle_dtype=paddle.float16)
 
-# Define how many steps and what % of steps to be run on each experts (80/20) here
-n_steps = 40
-high_noise_frac = 0.8
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 
-prompt = "A majestic lion jumping from a big stone at night"
-prompt = "a photo of an astronaut riding a horse on mars"
-generator = paddle.Generator().manual_seed(42)
-
-# run both experts
-image = base(
-    prompt=prompt,
-    output_type="latent",
-    generator=generator,
-).images
-image = refiner(
-    prompt=prompt,
-    image=image,
-    generator=generator,
-).images[0]
-image.save("sdxl_base_and_render_text2image.png")
+prompt = "High quality photo of an astronaut riding a horse in space"
+image = pipe(prompt, num_inference_steps=25).images[0]
+image.save("text_to_image_generation-stable_diffusion_2-result-astronaut.png")

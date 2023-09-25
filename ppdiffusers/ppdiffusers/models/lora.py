@@ -54,11 +54,7 @@ class LoRALinearLayer(nn.Layer):
     def forward(self, hidden_states):
         orig_dtype = hidden_states.dtype
         dtype = self.down.weight.dtype
-        try:
-            down_hidden_states = self.down(hidden_states.cast(dtype))
-        except:
-            breakpoint()
-
+        down_hidden_states = self.down(hidden_states.cast(dtype))
         up_hidden_states = self.up(down_hidden_states)
 
         if self.network_alpha is not None:
@@ -144,6 +140,11 @@ class LoRACompatibleLinear(nn.Linear):
     def forward(self, x):
         # breakpoint()
         if self.lora_layer is None:
-            return super().forward(x)
+            # return super().forward(x)
+            return nn.functional.linear(
+                x,
+                self.weight,
+                self.bias,
+            )
         else:
             return super().forward(x) + self.lora_layer(x)

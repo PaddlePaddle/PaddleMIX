@@ -132,7 +132,7 @@ class ConsistencyModelPipeline(DiffusionPipeline):
             )
         if latents is not None:
             expected_shape = batch_size, 3, img_size, img_size
-            if latents.shape != expected_shape:
+            if latents.shape != list(expected_shape):
                 raise ValueError(f"The shape of latents is {latents.shape} but is expected to be {expected_shape}.")
         if (
             callback_steps is None

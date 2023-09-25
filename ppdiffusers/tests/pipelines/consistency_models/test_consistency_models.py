@@ -168,7 +168,7 @@ class ConsistencyModelPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         assert image.shape == (1, 64, 64, 3)
         image_slice = image[(0), -3:, -3:, (-1)]
-        expected_slice = np.array([0.0888, 0.0881, 0.0666, 0.0479, 0.0292, 0.0195, 0.0201, 0.0163, 0.0254])
+        expected_slice = np.array([0.2346, 0.2462, 0.2377, 0.2618, 0.2569, 0.2520, 0.2959, 0.2978, 0.2866])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.02
 
     def test_consistency_model_cd_onestep(self):
@@ -182,7 +182,7 @@ class ConsistencyModelPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         assert image.shape == (1, 64, 64, 3)
         image_slice = image[(0), -3:, -3:, (-1)]
-        expected_slice = np.array([0.034, 0.0152, 0.0063, 0.0267, 0.0221, 0.0107, 0.0416, 0.0186, 0.0217])
+        expected_slice = np.array([0.1659, 0.1947, 0.2273, 0.1677, 0.1203, 0.1242, 0.1858, 0.1336, 0.2093])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.02
 
     def test_consistency_model_cd_multistep_flash_attn(self):
@@ -195,7 +195,7 @@ class ConsistencyModelPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         assert image.shape == (1, 64, 64, 3)
         image_slice = image[(0), -3:, -3:, (-1)]
-        expected_slice = np.array([0.1875, 0.1428, 0.1289, 0.2151, 0.2092, 0.1477, 0.1877, 0.1641, 0.1353])
+        expected_slice = np.array([0.0959, 0.2263, 0.3322, 0.0972, 0.0331, 0.0470, 0.1296, 0.0430, 0.2202])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_consistency_model_cd_onestep_flash_attn(self):

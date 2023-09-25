@@ -133,6 +133,9 @@ class AdapterLDM(nn.Layer):
             self.model_ema = LitEma(self.adapter)
         self.adapter_conditioning_scale = 1.0
 
+        # set attention to default
+        self.unet.set_default_attn_processor()
+        self.vae.set_default_attn_processor()
         if model_args.enable_xformers_memory_efficient_attention and is_ppxformers_available():
             try:
                 self.unet.enable_xformers_memory_efficient_attention()

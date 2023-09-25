@@ -163,7 +163,9 @@ def main(args):
         feature_extractor=None,
         requires_safety_checker=False,
         paddle_dtype=paddle_dtype,
-        custom_pipeline="stable_diffusion_mega",
+        custom_pipeline=os.path.join(
+            os.path.abspath(os.path.join(os.getcwd(), "../..")), "examples/community/stable_diffusion_mega.py"
+        ),
     )
     pipe.set_progress_bar_config(disable=True)
     pipe.change_scheduler(args.scheduler)

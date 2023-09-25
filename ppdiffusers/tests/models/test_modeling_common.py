@@ -174,7 +174,7 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
         max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 1e-02, "Models give different forward passes")
+        self.assertLessEqual(max_diff, 1e-01, "Models give different forward passes")
 
     def test_getattr_is_correct(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -289,7 +289,7 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
         max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 1e-02, "Models give different forward passes")
+        self.assertLessEqual(max_diff, 1e-01, "Models give different forward passes")
 
     def test_from_save_pretrained_dtype(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()

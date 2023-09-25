@@ -345,7 +345,7 @@ class Attention(nn.Layer):
         if attention_mask is None:
             return attention_mask
 
-        current_length: int = attention_mask.shape[-1]
+        current_length = attention_mask.shape[-1]
         if current_length != target_length:
             attention_mask = F.pad(attention_mask, (0, target_length), value=0.0, data_format="NCL")
         if out_dim == 3:
