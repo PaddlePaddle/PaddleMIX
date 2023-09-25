@@ -12,20 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import imageio
 import paddle
 from PIL import Image
 
 from ppdiffusers import DiffusionPipeline, DPMSolverMultistepScheduler
-from ppdiffusers.utils import export_to_video
+
+# from ppdiffusers.utils import export_to_video
 
 pipe = DiffusionPipeline.from_pretrained("cerspense/zeroscope_v2_576w", paddle_dtype=paddle.float16)
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
 prompt = "spiderman running in the desert"
 video_frames = pipe(prompt, num_inference_steps=40, height=320, width=576, num_frames=24).frames
 # safe low-res video
-video_path = export_to_video(
-    video_frames, output_video_path="text_to_video_generation-synth_img2img-result-video_576_spiderman.mp4"
-)
+# video_path = export_to_video(video_frames, output_video_path="./text_to_video_generation-synth_img2img-result-video_1024_spiderman_lowres.mp4")
+imageio.mimsave("text_to_video_generation-synth_img2img-result-video_1024_spiderman_lowres.mp4", video_frames, fps=8)
 # and load the image-to-image model
 pipe = DiffusionPipeline.from_pretrained("cerspense/zeroscope_v2_XL", paddle_dtype=paddle.float16)
 pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
@@ -35,6 +36,7 @@ pipe.vae.enable_slicing()
 video = [Image.fromarray(frame).resize((1024, 576)) for frame in video_frames]
 # and denoise it
 video_frames = pipe(prompt, video=video, strength=0.6).frames
-video_path = export_to_video(
-    video_frames, output_video_path="text_to_video_generation-synth_img2img-result-video_1024_spiderman.mp4"
-)
+# video_path = export_to_video(
+#     video_frames, output_video_path="text_to_video_generation-synth_img2img-result-video_1024_spiderman.mp4"
+# )
+imageio.mimsave("text_to_video_generation-synth_img2img-result-video_1024_spiderman.mp4", video_frames, fps=8)
