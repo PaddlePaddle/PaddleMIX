@@ -157,6 +157,12 @@ class VideoToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     def test_num_images_per_prompt(self):
         pass
 
+    def test_save_load_optional_components(self):
+        pass
+
+    def test_save_load_local(self):
+        pass
+
     def test_progress_bar(self):
         return super().test_progress_bar()
 

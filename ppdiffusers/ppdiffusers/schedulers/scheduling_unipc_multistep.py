@@ -556,7 +556,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         if self.predict_x0:
             x_t_ = sigma_t / sigma_s0 * x - alpha_t * h_phi_1 * m0
             if D1s is not None:
-                corr_res = paddle.einsum("k,bkchw->bchw", rhos_c[:-1].squeeze(1), D1s)
+                corr_res = paddle.einsum("k,bkchw->bchw", rhos_c[:-1].squeeze(1), D1s)  # mark
             else:
                 corr_res = 0
             D1_t = model_t - m0
@@ -564,7 +564,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         else:
             x_t_ = alpha_t / alpha_s0 * x - sigma_t * h_phi_1 * m0
             if D1s is not None:
-                corr_res = paddle.einsum("k,bkchw->bchw", rhos_c[:-1].squeeze(1), D1s)
+                corr_res = paddle.einsum("k,bkchw->bchw", rhos_c[:-1].squeeze(1), D1s)  # mark
             else:
                 corr_res = 0
             D1_t = model_t - m0
