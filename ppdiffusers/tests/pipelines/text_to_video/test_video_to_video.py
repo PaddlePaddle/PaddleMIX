@@ -36,6 +36,14 @@ from ..test_pipelines_common import PipelineTesterMixin
 
 enable_full_determinism()
 
+def to_np(tensor):
+    if isinstance(tensor, paddle.Tensor):
+        tensor = tensor.detach().cpu().numpy()
+
+    if isinstance(tensor, (list, tuple)):
+        tensor = np.array(tensor)
+
+    return tensor
 
 class VideoToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = VideoToVideoSDPipeline
@@ -147,6 +155,16 @@ class VideoToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 
     def test_progress_bar(self):
         return super().test_progress_bar()
+
+    def test_dict_tuple_outputs_equivalent(self):
+        components = self.get_dummy_components()
+        pipe = self.pipeline_class(**components)
+        pipe.set_progress_bar_config(disable=None)
+
+        output = pipe(**self.get_dummy_inputs())[0]
+        output_tuple = pipe(**self.get_dummy_inputs(), return_dict=False)[0]
+        mean_diff = np.abs(to_np(output) - to_np(output_tuple)).mean()
+        self.assertLess(mean_diff, 0.5)
 
 
 @slow
