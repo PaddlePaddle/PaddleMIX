@@ -14,7 +14,26 @@
 
 import numpy as np
 import paddle
+import paddle.nn as nn
 
+
+def disabled_train(mode="train"):
+    return
+
+
+def freeze_parameters(params, enable_eval=False):
+    if (not isinstance(params, nn.Layer)) and (not isinstance(params, paddle.Tensor)):
+        raise TypeError("An instance of Paddle.nn.Layer or paddle.Tensor expected, but acceived: {}".format(type(model)))
+
+    if isinstance(params, paddle.Tensor):
+        params.stop_gradient = True
+    else:
+        if enable_eval:
+            params.eval()
+            params.train = disabled_train
+
+        for name, param in params.named_parameters():
+            param.stop_gradient = True
 
 def transfer_param(p, is_bias=False, dtype="float16", restore_data=False):
     param_shape = p.shape
