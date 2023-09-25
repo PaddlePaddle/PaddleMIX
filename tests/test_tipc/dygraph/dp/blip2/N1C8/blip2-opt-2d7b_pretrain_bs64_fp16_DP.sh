@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-model_item=blip2-opt-stage2
+model_item=blip2-opt-2d7b_pretrain
 model=blip2
 bs_item=64
 fp_item=fp16
