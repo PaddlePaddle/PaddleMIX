@@ -288,15 +288,17 @@ def print_optim(optimizer):
 
 
 class FusedAdamW(paddle.optimizer.AdamW):
-    def __init__(self, learning_rate, parameters, grad_clip, **config):
+    def __init__(self, learning_rate, parameters, **config):
         self.parameters, self.buffers = fused_parameters(
             parameters, act=HOOK_ACTION.ALL_REDUCE, comm_overlap=True, group_params=True
         )
+        self.all_parameters = []
+        for pg in self.parameters:
+            self.all_parameters.extend(pg["params"])
 
         super().__init__(
             learning_rate=learning_rate,
             parameters=self.parameters,
-            grad_clip=grad_clip,
             **config,
         )
 
@@ -324,13 +326,12 @@ def create_optimizer(args, model, lr_scheduler=None, return_params=False):
             base_optimizer = FusedAdamW
     if args.fp16_opt_level == "O2":
         optimizer_args["multi_precision"] = True
-    grad_clip = None
-    if args.tensor_fusion and args.max_grad_norm:
-        grad_clip = paddle.nn.ClipGradByGlobalNorm(clip_norm=args.max_grad_norm)
-        optimizer_args["grad_clip"] = grad_clip
+    # if args.tensor_fusion and args.max_grad_norm:
+    #     grad_clip = paddle.nn.ClipGradByGlobalNorm(clip_norm=args.max_grad_norm)
+    #     optimizer_args["grad_clip"] = grad_clip
     parameters = get_all_parameters(args, model)
     if args.tensor_fusion:
-        optimizer = FusedAdamW(learning_rate, parameters, grad_clip)
+        optimizer = FusedAdamW(learning_rate, parameters)
     else:
         optimizer = base_optimizer(parameters=parameters, **optimizer_args)
     if is_master(args):

@@ -75,13 +75,16 @@ class CLIPTrainer(Trainer):
         else:
             loss.backward()
 
-        if self.args.max_grad_norm > 0.0 and not self.args.tensor_fusion:
-            grad_norms = clip_grad_norm(model, self.args.max_grad_norm)
+        if self.args.max_grad_norm > 0.0:
+            if self.args.tensor_fusion:
+                parameters = self.optimizer.all_parameters
+            else:
+                parameters = model.parameters()
+            grad_norms = clip_grad_norm(parameters, self.args.max_grad_norm)
         if self.rank == 0 and self.args.tensorboard:
             self.writer.add_scalar("train/loss", loss.item(), self.logstep)
             self.writer.add_scalar("train/lr", self.optimizer.get_lr(), self.logstep)
-            if not self.args.tensor_fusion:
-                self.writer.add_scalar("train/grad_norm", grad_norms.item(), self.logstep)
+            self.writer.add_scalar("train/grad_norm", grad_norms.item(), self.logstep)
             self.writer.add_scalar("train/logit_scale", logit_scale.item(), self.logstep)
             self.logstep += 1
 

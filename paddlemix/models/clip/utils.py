@@ -144,6 +144,5 @@ def clip_grad_norm_(parameters, max_norm, norm_type, error_if_nonfinite: bool = 
     return total_norm_clip
 
 
-def clip_grad_norm(model, max_norm, norm_type=2.0, error_if_nonfinite: bool = False):
-    parameters = model.parameters()
+def clip_grad_norm(parameters, max_norm, norm_type=2.0, error_if_nonfinite: bool = False):
     return clip_grad_norm_(parameters, max_norm, norm_type, error_if_nonfinite)
