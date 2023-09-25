@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+rm -rf coco.tar.gz
 rm -rf /root/.paddlemix/datasets/coco
 # dataset
 wget https://paddlenlp.bj.bcebos.com/models/community/paddlemix/benchmark/blip2/coco.tar.gz
