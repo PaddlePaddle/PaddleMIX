@@ -119,6 +119,10 @@ class PreTrainingArguments(TrainingArguments):
         default=False,
         metadata={"help": "Whether to use tensor fusion."},
     )
+    cpu_core_bind: bool = field(
+        default=False,
+        metadata={"help": "Whether to use cpu core bind."},
+    )
     pretrained_text_model: str = field(default="openclip", metadata={"help": "the model to pre-extract text feats"})
 
 
@@ -232,9 +236,10 @@ def main_worker(training_args, model_args, data_args):
     if training_args.resume_from_checkpoint is not None:
         checkpoint = training_args.resume_from_checkpoint
 
-    p = psutil.Process()
-    start_rank = paddle.distributed.get_rank() * 3
-    p.cpu_affinity([start_rank, start_rank + 1, start_rank + 2])
+    if training_args.cpu_core_bind:
+        p = psutil.Process()
+        start_rank = paddle.distributed.get_rank() * 3
+        p.cpu_affinity([start_rank, start_rank + 1, start_rank + 2])
 
     if training_args.do_train:
         trainer.train(resume_from_checkpoint=checkpoint)
