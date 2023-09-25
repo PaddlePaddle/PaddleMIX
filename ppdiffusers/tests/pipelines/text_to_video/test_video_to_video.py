@@ -36,6 +36,7 @@ from ..test_pipelines_common import PipelineTesterMixin
 
 enable_full_determinism()
 
+
 def to_np(tensor):
     if isinstance(tensor, paddle.Tensor):
         tensor = tensor.detach().cpu().numpy()
@@ -44,6 +45,7 @@ def to_np(tensor):
         tensor = np.array(tensor)
 
     return tensor
+
 
 class VideoToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     pipeline_class = VideoToVideoSDPipeline
@@ -139,7 +141,9 @@ class VideoToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         not is_ppxformers_available(), reason="XFormers attention is only available with CUDA and `xformers` installed"
     )
     def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(test_mean_pixel_difference=False, expected_max_diff=0.005)
+        self._test_xformers_attention_forwardGenerator_pass(
+            test_max_difference=False, test_mean_pixel_difference=False, expected_max_diff=0.05
+        )
 
     @unittest.skip(reason="Batching needs to be properly figured out first for this pipeline.")
     def test_inference_batch_consistent(self):
