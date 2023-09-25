@@ -3,13 +3,12 @@ safetensors>=0.3.1
 ftfy
 regex
 Pillow
-# invisible-watermark>=0.2.0
-omegaconf
-note_seq
-urllib3<=2.0.0
 opencv-python
-einops>=0.6.1
-paddlesde
 # for test
 parameterized
 requests_mock
+omegaconf
+note_seq
+urllib3<=2.0.0
+einops>=0.6.1
+paddlesde
