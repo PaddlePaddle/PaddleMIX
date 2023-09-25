@@ -29,6 +29,16 @@ from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin, Schedul
 quantile = paddle.quantile
 
 
+def updim_0dtensor(tensor: paddle.Tensor) -> paddle.Tensor:
+    """
+    Updim a tensor with dim 0
+    """
+    if len(tensor.shape) == 0:
+        return tensor[None]
+    else:
+        return tensor
+
+
 def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
     """
     Create a beta schedule that discretizes the given alpha_t_bar function, which defines the cumulative product of
@@ -380,9 +390,9 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             x_t = self.solver_p.step(model_output, s0, x).prev_sample
             return x_t
 
-        lambda_t, lambda_s0 = self.lambda_t[t], self.lambda_t[s0]
-        alpha_t, alpha_s0 = self.alpha_t[t], self.alpha_t[s0]
-        sigma_t, sigma_s0 = self.sigma_t[t], self.sigma_t[s0]
+        lambda_t, lambda_s0 = updim_0dtensor(self.lambda_t[t]), updim_0dtensor(self.lambda_t[s0])
+        alpha_t, alpha_s0 = updim_0dtensor(self.alpha_t[t]), updim_0dtensor(self.alpha_t[s0])
+        sigma_t, sigma_s0 = updim_0dtensor(self.sigma_t[t]), updim_0dtensor(self.sigma_t[s0])
 
         h = lambda_t - lambda_s0
 
@@ -487,9 +497,9 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         x_t = this_sample
         model_t = this_model_output
 
-        lambda_t, lambda_s0 = self.lambda_t[t], self.lambda_t[s0]
-        alpha_t, alpha_s0 = self.alpha_t[t], self.alpha_t[s0]
-        sigma_t, sigma_s0 = self.sigma_t[t], self.sigma_t[s0]
+        lambda_t, lambda_s0 = updim_0dtensor(self.lambda_t[t]), updim_0dtensor(self.lambda_t[s0])
+        alpha_t, alpha_s0 = updim_0dtensor(self.alpha_t[t]), updim_0dtensor(self.alpha_t[s0])
+        sigma_t, sigma_s0 = updim_0dtensor(self.sigma_t[t]), updim_0dtensor(self.sigma_t[s0])
 
         h = lambda_t - lambda_s0
 
