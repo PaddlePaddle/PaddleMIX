@@ -19,6 +19,7 @@ import re
 import paddle
 from paddle.optimizer.lr import LRScheduler
 
+from paddle.distributed.fleet.utils.tensor_fusion_helper import fused_parameters
 from paddlemix.utils.log import logger
 
 __all__ = [
@@ -283,6 +284,21 @@ def print_optim(optimizer):
         print(param_group["group"], param_group["learning_rate"], param_group["lr_scale"])
 
 
+class FusedAdamW(paddle.optimizer.AdamW):
+    def __init__(self, learning_rate, parameters, grad_clip, **config):
+        self.decay_fused_tensors, self.all_fused_tensors, _ = fused_parameters(parameters)
+        decay_params = [p.name for p in self.decay_fused_tensors]
+        apply_decay_param_fun = lambda x: x in decay_params
+
+        super().__init__(
+            learning_rate=learning_rate,
+            parameters=self.all_fused_tensors,
+            grad_clip=grad_clip,
+            apply_decay_param_fun=apply_decay_param_fun,
+            **config,
+        )
+
+
 def create_optimizer(args, model, lr_scheduler=None, return_params=False):
     optimizer_args = dict(beta1=args.adam_beta1, beta2=args.adam_beta2)
     if lr_scheduler is not None:
@@ -290,21 +306,23 @@ def create_optimizer(args, model, lr_scheduler=None, return_params=False):
     else:
         learning_rate = 1.0
 
-    if args.optimizer == "lamb":
-        optimizer_args["learning_rate"] = learning_rate
-        optimizer_args["lamb_weight_decay"] = args.weight_decay
-        base_optimizer = paddle.optimizer.Lamb
-    else:
-        optimizer_args["learning_rate"] = learning_rate
-        base_optimizer = paddle.optimizer.AdamW
+    # if args.optimizer == "lamb":
+    #     optimizer_args["learning_rate"] = learning_rate
+    #     optimizer_args["lamb_weight_decay"] = args.weight_decay
+    #     base_optimizer = paddle.optimizer.Lamb
+    # else:
+    #     optimizer_args["learning_rate"] = learning_rate
+    #     base_optimizer = paddle.optimizer.AdamW
     if args.fp16_opt_level == "O2":
         optimizer_args["multi_precision"] = True
-    # if args.max_grad_norm:
-    #     grad_clip = paddle.nn.ClipGradByGlobalNorm(
-    #         clip_norm=args.max_grad_norm)
-    #     optimizer_args['grad_clip'] = grad_clip
+    grad_clip = None
+    if args.max_grad_norm:
+        grad_clip = paddle.nn.ClipGradByGlobalNorm(clip_norm=args.max_grad_norm)
+        optimizer_args["grad_clip"] = grad_clip
     parameters = get_all_parameters(args, model)
-    optimizer = base_optimizer(parameters=parameters, **optimizer_args)
+    optimizer = FusedAdamW(
+        learning_rate, parameters, grad_clip
+    )  # base_optimizer(parameters=parameters, **optimizer_args)
     if is_master(args):
         print(f"Optimizer: {args.optimizer}")
         print(f"Optimizer config: {optimizer_args}")
