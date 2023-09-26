@@ -1,8 +1,8 @@
 ### 文本条件的视频生成（Text-to-Video Generation）
 
 ```python
-from paddlemix import Appflow
-from PIL import Image
+from paddlemix.appflow import Appflow
+import imageio
 
 
 prompt = "An astronaut riding a horse."

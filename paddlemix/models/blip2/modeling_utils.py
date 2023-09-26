@@ -36,7 +36,7 @@ def concat_all_gather(tensor):
         return tensor
 
     tensors_gather = []
-    paddle.distributed.all_gather(tensors_gather, tensor, sync_op=False)
+    paddle.distributed.all_gather(tensors_gather, tensor, sync_op=True)
 
     output = paddle.concat(tensors_gather, axis=0)
     return output

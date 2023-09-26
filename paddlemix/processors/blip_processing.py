@@ -132,7 +132,7 @@ class Blip2Processor(ProcessorMixin):
                 return_tensors=return_tensors,
                 return_token_type_ids=False,
                 max_length=32,
-                padding=True,
+                padding="longest",
                 **kwargs,
             )
             return text_encoding
@@ -141,7 +141,7 @@ class Blip2Processor(ProcessorMixin):
         encoding_image_processor = self.image_processor(images, return_tensors=return_tensors, mode=mode)
 
         if text is not None:
-            if "opt" in self.tokenizer.name_or_path:
+            if "t5" not in self.tokenizer.name_or_path:
                 text_encoding = self.text_processor(text, mode=mode)
                 text_encoding = self.tokenizer(
                     text=text_encoding,
@@ -154,7 +154,7 @@ class Blip2Processor(ProcessorMixin):
             else:
                 text_encoding = self.text_processor(text, mode=mode)
                 input_encoding = self.tokenizer(
-                    text=text_encoding,
+                    text=text_encoding["input"],
                     return_tensors="pd",
                     padding="longest",
                     truncation=True,
@@ -162,7 +162,7 @@ class Blip2Processor(ProcessorMixin):
                     return_attention_mask=True,
                 )
                 output_encoding = self.tokenizer(
-                    text=text_encoding,
+                    text=text_encoding["output"],
                     return_tensors="pd",
                     padding="longest",
                     truncation=True,

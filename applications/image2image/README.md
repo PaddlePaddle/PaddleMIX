@@ -1,7 +1,7 @@
 ### 文本引导的图像放大（Text-Guided Image Upscaling)
 
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 from PIL import Image
 from ppdiffusers.utils import load_image
 
@@ -32,7 +32,7 @@ image.save("upscaled_white_cat.png")
 ### 文本图像双引导图像生成（Dual Text and Image Guided Generation）
 
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 from PIL import Image
 from ppdiffusers.utils import load_image
 
@@ -61,9 +61,10 @@ image.save("versatile-diffusion-red_car.png")
 ### 文本引导的图像变换（Image-to-Image Text-Guided Generation）
 
 ```python
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 from PIL import Image
 from ppdiffusers.utils import load_image
+import paddle
 
 url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/image_Kurisu.png"
 image = load_image(url).resize((512, 768))

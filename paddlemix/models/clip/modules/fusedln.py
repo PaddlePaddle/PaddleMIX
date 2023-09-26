@@ -11,16 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# import sys
-# your should add the path to sys.path if the root isn't in the system ENV "PATH"
-# sys.path.insert(
-#     0,
-#     '/usr/local/lib/python3.7/site-packages/fast_ln-0.0.0-py3.7-linux-x86_64.egg/'
-# )
-# sys.path.insert(
-#     0,
-#     '/usr/local/lib/python3.7/site-packages/fused_ln-0.0.0-py3.7-linux-x86_64.egg/'
-# )
+
 import distutils.util
 import importlib
 import os
@@ -71,7 +62,8 @@ class FusedLayerNorm(OriginLayerNorm):
         check_normalized_shape(self._normalized_shape)
 
     def forward(self, input):
-        return fused_ln(input, self.weight, self.bias, self._epsilon)[0]
+        org_dtype = input.dtype
+        return fused_ln(input.cast(self.weight.dtype), self.weight, self.bias, self._epsilon)[0].cast(org_dtype)
 
 
 class FastLayerNorm(OriginLayerNorm):

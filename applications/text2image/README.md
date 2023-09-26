@@ -4,7 +4,8 @@
 
 
 ```python
-from paddlemix import Appflow
+import paddle
+from paddlemix.appflow import Appflow
 
 paddle.seed(1024)
 task = Appflow(app="text2image_generation",
@@ -22,4 +23,3 @@ result = task(prompt=prompt)['result']
 |:----:|:----:|
 | a photo of an astronaut riding a horse on mars | ![astronaut_rides_horse_sd](https://github.com/LokeZhou/PaddleMIX/assets/13300429/1622fb1e-c841-4531-ad39-9c5092a2456c)|
 </div>
-

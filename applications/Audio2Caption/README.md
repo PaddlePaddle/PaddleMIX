@@ -1,16 +1,18 @@
-# Audio2Caption
+### 音频描述（Audio-to-Caption Generation）
 
-## 1. 应用简介
+
+
+#### 1. Application introduction
 
 Enter audio and prompt words for question and answer.
 
 *****
 - No training is need.
-- Integration with the moedel of 🤗  [whisper](), [chatglm]().
+- Integration with the moedel of [whisper](), [chatglm]().
 
 ----
 
-## 2. Demo
+#### 2. Demo
 *****
 example:
 
@@ -23,7 +25,7 @@ python applications/AudioChat/audiochat.py \
 ```python
 #audio2caption -- Audio to caption converter
 
-from paddlemix import Appflow
+from paddlemix.appflow import Appflow
 import paddle
 paddle.seed(1024)
 task = Appflow(app="audio2caption", models=["whisper", "THUDM/chatglm-6b"])
@@ -37,7 +39,11 @@ print(result)
 
 ```
 
-|  输入音频 | 输入prompt | 输出识别 | 输出结果 |
+<div align="center">
+
+|  Input Audio | Input Prompt | Output ASR | Output Text |
 | --- | --- | ---  | --- | 
 |[zh.wav](https://github.com/luyao-cv/file_download/blob/main/assets/zh.wav) | "描述这段话." |"我认为跑步最重要的就是给我带来了身体健康" |这段话表达了作者认为跑步最重要的好处之一是身体健康。作者认为,通过跑步,身体得到了良好的锻炼,身体健康得到了改善。作者还强调了跑步对身体健康的重要性,并认为这是最值得投资的运动之一。 |
+
+<div>
 

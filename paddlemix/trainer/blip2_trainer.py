@@ -24,8 +24,9 @@ import paddle.amp.auto_cast as autocast
 import paddle.nn as nn
 from paddle.distributed import fleet
 from paddle.io import DataLoader, Dataset
-from paddlenlp.trainer.trainer import Trainer
-from paddlenlp.trainer.trainer_callback import DefaultFlowCallback, ProgressCallback
+from paddlenlp.trainer import PrinterCallback, ProgressCallback, Trainer
+from paddlenlp.trainer.integrations import TrainerCallback
+from paddlenlp.trainer.trainer_callback import DefaultFlowCallback
 from paddlenlp.trainer.trainer_utils import (  # set_hyrbid_parallel_seed,
     EvalLoopOutput,
     IterableDatasetShard,
@@ -34,12 +35,12 @@ from paddlenlp.trainer.trainer_utils import (  # set_hyrbid_parallel_seed,
     speed_metrics,
 )
 from paddlenlp.transformers.model_utils import unwrap_model
-from paddlenlp.utils import device_guard
+from paddlenlp.utils import device_guard, profiler
 from paddlenlp.utils.import_utils import is_datasets_available
 from paddlenlp.utils.log import logger
 
 import paddlemix
-from paddlemix.examples.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
+from paddlemix.models.blip2.utils import VQA, VQAEval, coco_caption_eval, save_result
 from paddlemix.optimization import FilterParamsName
 
 DEFAULT_CALLBACKS = [DefaultFlowCallback]
@@ -60,6 +61,91 @@ try:
     from paddle.distributed.fleet.utils import mix_precision_utils
 except:
     mix_precision_utils = None
+
+
+class AverageStatistical(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.total_cnt = 0
+        self.time = 0
+
+    def record(self, val, cnt=1):
+        self.time += val
+        self.total_cnt += cnt
+
+    def get_average(self):
+        if self.total_cnt == 0:
+            return 0
+
+        return self.time / self.total_cnt
+
+    def get_average_per_sec(self):
+        if self.time == 0.0:
+            return 0.0
+
+        return float(self.total_cnt) / self.time
+
+    def get_total_cnt(self):
+        return self.total_cnt
+
+    def get_total_time(self):
+        return self.time
+
+
+class BenchmarkCallback(TrainerCallback):
+    def __init__(self, benchmark=True, profiler_options=None):
+        self.benchmark = benchmark
+        self.profiler_options = profiler_options
+
+    def on_train_begin(self, args, state, control, **kwargs):
+        assert args.gradient_accumulation_steps == 1 and not args.do_eval and not args.do_predict
+        if self.benchmark:
+            self.reader_cost_avg = AverageStatistical()
+
+    def on_epoch_begin(self, args, state, control, **kwargs):
+        if self.benchmark:
+            self.epoch_start = time.time()
+            self.batch_start = time.time()
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        if self.benchmark:
+            self.reader_cost_avg.record(time.time() - self.batch_start)
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if self.profiler_options is not None:
+            profiler.add_profiler_step(self.profiler_options)
+
+        if self.benchmark:
+            self.batch_start = time.time()
+            if control.should_log:
+                self.maybe_log_save_evaluate_start = time.time()
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if self.benchmark:
+            if logs is not None and "interval_steps_per_second" in logs:
+                self.batch_start = self.batch_start + (time.time() - self.maybe_log_save_evaluate_start)
+                ips = logs["interval_steps_per_second"] * args.train_batch_size
+                avg_batch_cost = 1 / logs["interval_steps_per_second"]
+                logger.info(
+                    "global step %d / %d, loss: %f, avg_reader_cost: %.5f sec, avg_batch_cost: %.5f sec, avg_samples: %.5f, ips: %.5f sample/sec"
+                    % (
+                        state.global_step,
+                        state.max_steps,
+                        logs["loss"],
+                        self.reader_cost_avg.get_average(),
+                        avg_batch_cost,
+                        args.train_batch_size,
+                        ips,
+                    )
+                )
+                self.reader_cost_avg.reset()
+
+    def on_epoch_end(self, args, state, control, **kwargs):
+        if self.benchmark:
+            train_epoch_cost = time.time() - self.epoch_start
+            logger.info("train epoch: %d, epoch_cost: %.5f s" % (state.epoch, train_epoch_cost))
 
 
 def paddlenlp_load(path, return_numpy=False):
@@ -88,18 +174,23 @@ class BLIP2Trainer(Trainer):
 
     """
 
-    from paddlenlp.trainer.trainer_utils import (
-        log_metrics,
-        metrics_format,
-        save_metrics,
-        save_state,
-    )
-
     def __init__(self, processor=None, eval_processor=None, eval_collator=None, **kwargs):
         super().__init__(**kwargs)
         self.processor = processor
         self.eval_processor = eval_processor
         self.eval_collator = eval_collator
+        if self.args.benchmark or self.args.profiler_options is not None:
+            self.add_callback(
+                BenchmarkCallback(
+                    benchmark=self.args.benchmark,
+                    profiler_options=self.args.profiler_options,
+                )
+            )
+            if self.args.benchmark:
+                if self.args.disable_tqdm:
+                    self.pop_callback(PrinterCallback)
+                else:
+                    self.pop_callback(ProgressCallback)
 
     def create_optimizer_and_scheduler(self, num_training_steps: int):
         self.lr_scheduler = self.create_scheduler(num_training_steps // self.args.num_train_epochs)
@@ -541,7 +632,7 @@ class BLIP2Trainer(Trainer):
     def _report_metrics_caption(self, eval_result_file, split_name="test"):
 
         # TODO better way to define this
-        coco_gt_root = os.path.join("/root/.paddlemix/datasets/", "coco_gt")
+        coco_gt_root = os.path.join("/root/.paddlemix/datasets/", "")
         coco_val = coco_caption_eval(coco_gt_root, eval_result_file, split_name)
 
         agg_metrics = coco_val.eval["CIDEr"] + coco_val.eval["Bleu_4"]
@@ -582,3 +673,33 @@ class BLIP2Trainer(Trainer):
             f.write(json.dumps(metrics) + "\n")
 
         return metrics
+
+    def _save(self, output_dir: Optional[str] = None, state_dict=None, merge_tensor_parallel=False):
+        # If we are executing this function, we are the process zero, so we don't check for that.
+        output_dir = output_dir if output_dir is not None else self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        logger.info(f"Saving model checkpoint to {output_dir}")
+        # Save a trained model and configuration using `save_pretrained()`.
+        # They can then be reloaded using `from_pretrained()`
+
+        merge_tensor_parallel = merge_tensor_parallel and self.args.use_hybrid_parallel
+        if self.eval_processor is not None:
+            self.eval_processor.image_processor.save_pretrained(os.path.join(output_dir, "processor", "eval"))
+            self.eval_processor.text_processor.save_pretrained(os.path.join(output_dir, "processor", "eval"))
+        self.processor.image_processor.save_pretrained(os.path.join(output_dir, "processor", "train"))
+        self.processor.text_processor.save_pretrained(os.path.join(output_dir, "processor", "train"))
+        self.model.save_pretrained(
+            output_dir,
+            merge_tensor_parallel=merge_tensor_parallel,
+            variant=self.args.weight_name_suffix,
+            is_main_process=self.args.should_save,
+            processor=self.processor,
+            eval_processor=self.eval_processor,
+        )
+
+        if self.args.should_save:
+            if self.tokenizer is not None:
+                self.tokenizer.save_pretrained(output_dir)
+
+            # Good practice: save your training arguments together with the trained model
+            paddle.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))

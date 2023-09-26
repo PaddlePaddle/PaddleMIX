@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 import random
 from dataclasses import dataclass, field
+from typing import Optional
 
 import numpy as np
 import paddle
@@ -27,8 +28,9 @@ from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments, get_last_checkpoint
 
 from paddlemix.datasets import load_dataset
-from paddlemix.examples.blip2.utils import BlipCollator, create_tokenizer
+from paddlemix.models.blip2.configuration import Blip2Config
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
+from paddlemix.models.blip2.utils import BlipCollator, create_tokenizer, load_model
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
     BlipImageProcessor,
@@ -120,7 +122,7 @@ class PreTrainingArguments(TrainingArguments):
         default=128, metadata={"help": "Batch size per GPU core/CPU for training. (default: 8)"}
     )
     per_device_eval_batch_size: int = field(
-        default=1, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
+        default=64, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
     )
     warmup_start_lr: float = field(default=1e-6, metadata={"help": " The initial learning rate of blip2."})
     output_dir: str = field(default=".", metadata={"help": "The output path"})
@@ -140,15 +142,31 @@ class PreTrainingArguments(TrainingArguments):
         default=1, metadata={"help": "Set the number of sharding, enable sharding parallel"}
     )
     pipeline_parallel_degree: int = field(default=1, metadata={"help": "Enable pipeline parallel"})
-    model_path: str = field(
+    load_model_path: str = field(
         default=None,
         metadata={"help": "The path to model if you want to load weights from the specified path"},
     )
+    benchmark: bool = field(
+        default=False,
+        metadata={"help": "Whether or not run benchmark (True/False)."},
+    )
+    profiler_options: Optional[str] = field(
+        default=None,
+        metadata={"help": "profiler_options (batch_range=[10,20])."},
+    )
 
 
-def create_model(config):
-    # blip2_config = Blip2ForConditionalGeneration(onfig.model_name_or_path)
-    model = Blip2ForConditionalGeneration.from_pretrained(pretrained_model_name_or_path=config.model_name_or_path)
+def create_model(config, training_args=None):
+    blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
+    blip2_config.mp_degree = config.mp_degree
+    blip2_config.gradient_checkpointing = config.gradient_checkpointing
+    model = Blip2ForConditionalGeneration(blip2_config)
+    model.load_pretrained(
+        vision_and_bridge_name_or_path=getattr(config, "vision_and_bridge_name_or_path", None),
+        vision_name_or_path=getattr(config, "vision_name_or_path", None),
+        bridge_name_or_path=getattr(config, "bridge_name_or_path", None),
+        training_args=training_args,
+    )
     paddle.device.cuda.empty_cache()
     return model
 
@@ -183,6 +201,9 @@ def main():
 
     # create dataset
     tokenizer_class = create_tokenizer(model_args.text_model_name_or_path)
+    if "opt" in model_args.text_model_name_or_path:
+        tokenizer_class.padding_side = "left"
+
     image_processor = BlipImageProcessor.from_pretrained(
         os.path.join(model_args.model_name_or_path, "processor", "train")
     )
@@ -205,9 +226,11 @@ def main():
     blip_eval_collator = BlipCollator_VQA(eval_processor, mode="test")
     model_args.mp_degree = training_args.tensor_parallel_degree
     model_args.gradient_checkpointing = training_args.gradient_checkpointing
-    model = create_model(model_args)
+    model = create_model(model_args, training_args)
     logger.info("training_args.use_hybrid_parallel:{}".format(training_args.use_hybrid_parallel))
     # create trainer
+    if training_args.load_model_path is not None:
+        load_model(training_args, model, ckpt_dir=os.path.join(training_args.load_model_path, "model_state.pdparams"))
     trainer = Trainer(
         model=model,
         args=training_args,

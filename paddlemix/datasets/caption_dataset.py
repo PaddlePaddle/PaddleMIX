@@ -16,13 +16,12 @@ import collections
 import json
 import os
 
+from paddle.utils.download import get_path_from_url
+
 from paddlemix.utils.env import DATA_HOME
 from paddlemix.utils.log import logger
 
 from .dataset import DatasetBuilder
-
-# from paddle.dataset.common import md5file
-# from paddle.utils.download import get_path_from_url
 
 __all__ = ["CaptionDataset"]
 
@@ -32,7 +31,7 @@ class CaptionDataset(DatasetBuilder):
     Caption dataset.
     """
 
-    URL = "https://bj.bcebos.com/paddlemix/datasets/coco.tar.gz"
+    URL = "https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco.tar"
     META_INFO = collections.namedtuple("META_INFO", ("images", "annotations", "images_md5", "annotations_md5"))
     MD5 = ""
     SPLITS = {
@@ -40,34 +39,29 @@ class CaptionDataset(DatasetBuilder):
             os.path.join("coco", "images"),
             os.path.join("coco", "annotations/coco_karpathy_train.json"),
             "",
-            "aa31ac474cf6250ebb81d18348a07ed8",
+            "",
         ),
         "val": META_INFO(
             os.path.join("coco", "images"),
             os.path.join("coco", "annotations/coco_karpathy_val.json"),
             "",
-            "b273847456ef5580e33713b1f7de52a0",
+            "",
         ),
         "test": META_INFO(
             os.path.join("coco", "images"),
             os.path.join("coco", "annotations/coco_karpathy_test.json"),
             "",
-            "3ff34b0ef2db02d01c37399f6a2a6cd1",
+            "",
         ),
     }
 
     def _get_data(self, mode, **kwargs):
-        # default_root = '/paddle/wangguanzhong/blip-jinman/PaddleNLP/blip2'
         logger.info("default dataset root is {}".format(DATA_HOME))
         images, annotations, image_hash, anno_hash = self.SPLITS[mode]
         image_fullname = os.path.join(DATA_HOME, images)
         anno_fullname = os.path.join(DATA_HOME, annotations)
-        # if (
-        #     (not os.path.exists(src_fullname) or (src_data_hash and not md5file(src_fullname) == src_data_hash))
-        #     or (not os.path.exists(tgt_fullname) or (tgt_data_hash and not md5file(tgt_fullname) == tgt_data_hash))
-        #     or (not os.path.exists(vocab_fullname) or (vocab_hash and not md5file(vocab_fullname) == vocab_hash))
-        # ):
-        #     get_path_from_url(self.URL, default_root, self.MD5)
+        if not os.path.exists(image_fullname) or not os.path.exists(anno_fullname):
+            get_path_from_url(self.URL, DATA_HOME)
 
         return image_fullname, anno_fullname, mode
 

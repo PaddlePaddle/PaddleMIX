@@ -14,57 +14,54 @@
 
 import argparse
 import os
+import sys
 
-from paddlemix.utils.log import logger
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 
 import paddle
-import torch
 from paddlenlp.transformers import LlamaForCausalLM
 from paddlenlp.transformers.opt.modeling import OPTForCausalLM
+from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
+
+from paddlemix.utils.log import logger
 
 
 def merge(args):
     model_dict = {}
     # load the first item: vision_model
-    state_dict = paddle.load(args.blip2_path)
-    for n, p in state_dict.items():
-        if n.startswith("vision_model") or n.startswith("qformer") or n == "query_tokens":
+    visual_encoer_state_dict = paddle.load(args.vision_name_or_path)
+    for n, p in visual_encoer_state_dict.items():
+        if n.startswith("visual_encoder"):
             model_dict[n] = p
-    logger.info("[1/3] load ViT, qformer and query_tokens done!")
+        else:
+            model_dict["visual_encoer." + n] = p
+    logger.info("[1/2] load visual_encoder done!")
+    # load the second item: Qformer
+    visual_encoer_state_dict = paddle.load(args.vision_name_or_path)
+    for n, p in visual_encoer_state_dict.items():
+        if n.startswith("Qformer"):
+            model_dict[n] = p
+        else:
+            model_dict["Qformer." + n] = p
+    logger.info("[1/2] load Qformer done!")
+    if args.llm_path:
+        # load the second item: llm model
+        if "opt" in args.llm_path:
+            llm_model = OPTForCausalLM.from_pretrained(args.llm_path)
+        elif "llama" in args.llm_path:
+            llm_model = LlamaForCausalLM.from_pretrained(args.llm_path)
+        elif "t5" in args.llm_path:
+            llm_model = T5ForConditionalGeneration.from_pretrained(args.llm_path)
+        else:
+            ValueError(f"The LLM model {args.llm_path} is not supported.")
 
-    # load the second item: llm model
-    if "opt" in args.llm_name:
-        llm_model = OPTForCausalLM.from_pretrained(args.llm_path)
-    elif "llama" in args.llm_name:
-        llm_model = LlamaForCausalLM.from_pretrained(args.llm_path)
-    else:
-        ValueError(f"The LLM model {args.llm_name} is not supported.")
-
-    for n, p in llm_model.named_parameters():
-        new_name = "language_model." + n
-        model_dict[new_name] = p
-    logger.info("[2/3] load language_model done!")
-
-    # load the third item: blip2
-    llm_state_dict = torch.load(args.llm_path)
-    for n, p in llm_state_dict["model"].items():
-        if n.startswith(args.llm_name + "_model.model"):
-            new_name = n.replace(args.llm_name + "_model.model", "language_model." + args.llm_name)
-            new_p = paddle.to_tensor(p.cpu().numpy())
-            model_dict[new_name] = new_p
-
-        if n.startswith(args.llm_name + args.llm_name + "_proj"):
-            new_name = n.replace(args.llm_name + "_proj", "language_projection")
-            if n.endswith("weight"):
-                new_p = paddle.to_tensor(p.cpu().numpy()).transpose([1, 0])
-            else:
-                new_p = paddle.to_tensor(p.cpu().numpy())
-            model_dict[new_name] = new_p
-
-    logger.info("[3/3] load language_projection, some llm weights from blip2 done!")
+        for n, p in llm_model.named_parameters():
+            new_name = "language_model." + n
+            model_dict[new_name] = p
+    logger.info("load extra language_model done!")
 
     save_path = os.path.join(args.save_path, "model_state.pdparams")
     paddle.save(model_dict, save_path)
@@ -75,23 +72,22 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--blip2_path",
-        default="/blip2/dirname",
+        "--vision_name_or_path",
+        default="blip2-stage2/eva_vit_g/model_state.pdparams",
         type=str,
-        help="The dir name of blip2-flan-t5-xxl.",
+        help="The dir name of visual_encoder.",
     )
-    parser.add_argument("--llm_name", default="opt", type=str, help="Thename of llm model.")
+    parser.add_argument(
+        "--bridge_name_or_path",
+        default="blip2-stage2/Qformer/model_state.pdparams",
+        type=str,
+        help="The checkpoint path of Qformer.",
+    )
     parser.add_argument(
         "--llm_path",
-        default="/llm/dirname",
+        default=None,
         type=str,
-        help="The dir name of llm model.",
-    )
-    parser.add_argument(
-        "--blip2_path",
-        default="/blip2/prerained_blip2.pth",
-        type=str,
-        help="The checkpoint path of blip2.",
+        help="The checkpoint path of language model.",
     )
     parser.add_argument(
         "--save_path",
@@ -101,13 +97,11 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    args.blip2_path = os.path.join(args.blip2_path, "model_state.pdparams")
-    if not os.path.exists(args.blip2_path):
-        raise ValueError("Not found the file: {}".format(args.blip2_path))
-    if not os.path.isdir(args.llm_path):
-        raise ValueError("It is not a directory: {}".format(args.llm_path))
-    if not os.path.exists(args.llm_path):
-        raise ValueError("Not found the file: {}".format(args.llm_path))
+    args.vision_name_or_path = os.path.join(args.vision_name_or_path, "model_state.pdparams")
+    if not os.path.exists(args.vision_name_or_path):
+        raise ValueError("Not found the file: {}".format(args.vision_name_or_path))
+    if not os.path.isdir(args.bridge_name_or_path):
+        raise ValueError("It is not a directory: {}".format(args.bridge_name_or_path))
     if not os.path.exists(args.save_path):
         os.makedirs(args.save_path)
 

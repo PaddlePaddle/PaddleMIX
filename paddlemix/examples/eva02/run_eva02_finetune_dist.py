@@ -15,6 +15,9 @@
 import os
 import sys
 
+import numpy as np
+import paddle
+
 parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 4)))
 sys.path.insert(0, parent_path)
 import pprint
@@ -22,11 +25,10 @@ import socket
 from dataclasses import dataclass, field
 from typing import Optional
 
-import paddle
 from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 from paddlemix.checkpoint import load_model
-from paddlemix.datasets.imagenet.datasets_build import build_dataset
+from paddlemix.datasets.dataset import ImageFolder
 from paddlemix.models.eva02.modeling_finetune import (
     EVA02VisionTransformer,
     EVA02VisionTransformerConfig,
@@ -35,6 +37,10 @@ from paddlemix.models.eva02.optim_factory import (
     LayerDecayValueAssigner,
     cosine_scheduler,
     create_optimizer,
+)
+from paddlemix.processors.eva02_processing import (
+    EVA02FinetuneImageProcessor,
+    EVA02Processor,
 )
 from paddlemix.trainer.eva02_finetune_trainer import EVA02FinetuneTrainer
 from paddlemix.utils.env import setdistenv
@@ -49,58 +55,20 @@ class DataArguments:
     the command line.
     """
 
-    data_set: str = field(
-        default="IMNET",  # "image_folder"
-        metadata={"help": "ImageNet dataset path."},
-    )
     data_path: str = field(
-        default="/paddle/dataset/ILSVRC2012/train",
+        default="",
         metadata={"help": "The dataset path."},
     )
     eval_data_path: str = field(
-        default="/paddle/dataset/ILSVRC2012/val",
+        default="",
         metadata={"help": "ImageNet dataset path."},
     )
-    nb_classes: int = field(
-        default=1000,
-        metadata={"help": "ImageNet dataset path."},
-    )
-    imagenet_default_mean_and_std: bool = field(
-        default=False,
-        metadata={"help": "ImageNet dataset path."},
-    )
-
-    # Augmentation parameters
-    color_jitter: float = field(
-        default=0.4,
-        metadata={"help": "Color jitter factor (default: 0.4)"},
-    )
-    aa: str = field(
-        default="rand-m9-mstd0.5-inc1",
-        metadata={"help": 'Use AutoAugment policy. "v0" or "original". " + "(default: rand-m9-mstd0.5-inc1)'},
-    )
-    scale_low: float = field(
-        default=0.08,
-        metadata={"help": "[scale_low, 1.0]"},
-    )
-    train_interpolation: str = field(
-        default="bicubic",
-        metadata={"help": 'Training interpolation (random, bilinear, bicubic default: "bicubic")'},
-    )
-    no_aug: bool = field(default=False, metadata={"help": "no_aug"})
-    reprob: float = field(default=0.0, metadata={"help": "Random erase prob (default: 0.25)"})
-    remode: str = field(default="pixel", metadata={"help": 'Random erase mode (default: "pixel")'})
-    recount: int = field(default=1, metadata={"help": "Random erase count (default: 1)"})
-    resplit: bool = field(default=False, metadata={"help": "Do not random erase first (clean) augmentation split"})
-
-    # Evaluation parameters
-    crop_pct: float = field(default=1.0, metadata={"help": "Evaluation crop param for data aug."})
 
 
 @dataclass
 class ModelArguments:
     """
-    Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
+    Arguments pertaining to which model we are going to fine-tune from.
     """
 
     model: str = field(
@@ -112,7 +80,6 @@ class ModelArguments:
         metadata={"help": "image size for training"},
     )
 
-    layer_decay: float = field(default=0.9, metadata={"help": "layer_decay."})
     drop: float = field(
         default=0.0,
         metadata={"help": "Dropout rate (default: 0.)"},
@@ -129,9 +96,6 @@ class ModelArguments:
     model_ema: bool = field(default=False, metadata={"help": "enable ema training"})
     model_ema_decay: float = field(default=0.9999, metadata={"help": "ema decay"})
 
-    smoothing: float = field(default=0.1, metadata={"help": "Label smoothing (default: 0.1)"})
-    linear_probe: bool = field(default=False, metadata={"help": "linear_probe"})
-
 
 @dataclass
 class FinetuneArguments(TrainingArguments):
@@ -139,14 +103,17 @@ class FinetuneArguments(TrainingArguments):
     Arguments pertaining to what training options we are going to use during pretraining.
     """
 
-    pretrained_model_path: str = field(
+    pretrained_model_path: Optional[str] = field(
         default=None,
-        metadata={"help": "The path to pre-trained model that we will use for pretraining."},
+        metadata={"help": "Whether to use pretrained checkpoint weights."},
     )
     resume_from_checkpoint: Optional[str] = field(
         default=None,
         metadata={"help": "The path to a folder with a valid checkpoint for your model."},
     )
+
+    smoothing: float = field(default=0.1, metadata={"help": "Label smoothing (default: 0.1)"})
+    layer_decay: float = field(default=0.9, metadata={"help": "layer_decay."})
 
     optim: str = field(default="adamw", metadata={"help": "optimizer setting, [lamb/adamw]"})
     learning_rate: float = field(default=2e-4, metadata={"help": "The initial learning rate for AdamW."})
@@ -173,7 +140,7 @@ class FinetuneArguments(TrainingArguments):
     )
     logging_steps: int = field(default=10, metadata={"help": "logging_steps print frequency (default: 10)"})
 
-    do_train: bool = field(default=True, metadata={"help": "Whether to run training."})
+    do_train: bool = field(default=False, metadata={"help": "Whether to run training."})
     do_eval: bool = field(default=False, metadata={"help": "Whether to run eval on the dev set."})
     do_predict: bool = field(default=False, metadata={"help": "Whether to run predictions on the test set."})
     do_export: bool = field(default=False, metadata={"help": "Whether to export infernece model."})
@@ -330,14 +297,38 @@ class SelfTrainer(EVA02FinetuneTrainer):
         self.args.save_steps = num_training_steps_per_epoch * self.args.save_epochs
 
 
+class Collator:
+    """
+    Data collator that will dynamically pad the inputs to the longest sequence in the batch.
+    Args:
+        processor (`paddlemix.processors.ProcessorMixin`):
+            The processor used for pre-process the data.
+    """
+
+    def __init__(self, processor, mode="train"):
+        self.processor = processor
+        self.mode = mode
+
+    def __call__(self, data_list):
+        images = [sample[0] for sample in data_list]
+        labels = [sample[-1] for sample in data_list]
+        batch = self.processor(
+            images=images,
+            return_tensors="pd",
+            mode=self.mode,
+        )
+        batch.update(
+            {"labels": paddle.to_tensor(np.array(labels))},
+        )
+        return batch
+
+
 def main_worker(training_args, model_args, data_args):
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("bfloat16")
 
     model_config = EVA02VisionTransformerConfig.from_pretrained(model_args.model)
     model = EVA02VisionTransformer(model_config)
-
-    training_args.model = model_args.model
     if (
         training_args.pretrained_model_path
         and training_args.pretrained_model_path != "None"
@@ -345,17 +336,19 @@ def main_worker(training_args, model_args, data_args):
     ):
         load_model(training_args, model, ckpt_dir=training_args.pretrained_model_path)
 
-    data_args.input_size = model_args.input_size
-    data_args.linear_probe = model_args.linear_probe
-    train_dataset, data_args.nb_classes = build_dataset(is_train=True, args=data_args)
+    if training_args.bf16 and training_args.fp16_opt_level == "O2":
+        paddle.set_default_dtype("float32")
 
-    training_args.smoothing = model_args.smoothing
-    training_args.linear_probe = model_args.linear_probe
-    training_args.layer_decay = model_args.layer_decay
+    train_dataset = ImageFolder(root=f"{data_args.data_path}")
+    image_processor = EVA02FinetuneImageProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
+    processor = EVA02Processor(image_processor)
+    collator = Collator(processor, mode="train")
+
     trainer = SelfTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        data_collator=collator,
     )
 
     # Training
@@ -378,9 +371,7 @@ if __name__ == "__main__":
     pprint.pprint(training_args)
 
     training_args.gradient_accumulation_steps = training_args.accum_freq
-
     setdistenv(training_args)
-
     model_args.data_world_rank = training_args.data_world_rank
     model_args.data_world_size = training_args.data_world_size
     main_worker(training_args, model_args, data_args)

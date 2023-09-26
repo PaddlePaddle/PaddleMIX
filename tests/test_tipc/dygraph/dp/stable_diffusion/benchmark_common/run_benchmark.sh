@@ -158,7 +158,7 @@ function _train(){
 
     # 以下为通用执行命令，无特殊可不用修改
     case ${run_mode} in
-    DP) if [[ ${device_num} = "N1C1" ]];then
+    DP-recompute) if [[ ${device_num} = "N1C1" ]];then
             echo "run ${run_mode} "
             train_cmd="python -u ${train_cmd}" 
         else

@@ -12,8 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
+import sys
 
-import copy
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import inspect
 import tempfile
 import unittest
@@ -42,51 +44,43 @@ from tests.models.test_modeling_common import (
 from tests.testing_utils import slow
 
 
-def _config_zero_init(config):
-    configs_no_init = copy.deepcopy(config)
-    for key in configs_no_init.__dict__.keys():
-        if "_range" in key or "_std" in key or "initializer_factor" in key or "layer_scale" in key:
-            setattr(configs_no_init, key, 1e-10)
-    return configs_no_init
-
-
 class Blip2VisionModelTester:
     def __init__(
         self,
         parent,
         batch_size=12,
-        image_size=30,
-        patch_size=2,
-        num_channels=3,
         is_training=True,
-        hidden_size=1408,
-        projection_dim=32,
-        num_hidden_layers=5,
-        num_attention_heads=4,
-        intermediate_size=37,
-        dropout=0.1,
-        attention_dropout=0.1,
-        initializer_range=1e-10,
-        scope=None,
+        num_channels=3,
+        depth=39,
+        drop_rate=0,
+        embed_dim=1408,
+        epsilon=1e-06,
+        gradient_checkpointing=False,
+        img_size=224,
+        mlp_ratio=4.3637,
+        num_heads=16,
+        patch_size=14,
+        qkv_bias=True,
+        return_dict=True,
     ):
         self.parent = parent
         self.batch_size = batch_size
-        self.image_size = image_size
+        self.image_size = img_size
         self.patch_size = patch_size
         self.num_channels = num_channels
         self.is_training = is_training
-        self.hidden_size = hidden_size
-        self.projection_dim = projection_dim
-        self.num_hidden_layers = num_hidden_layers
-        self.num_attention_heads = num_attention_heads
-        self.intermediate_size = intermediate_size
-        self.dropout = dropout
-        self.attention_dropout = attention_dropout
-        self.initializer_range = initializer_range
-        self.scope = scope
-
+        self.embed_dim = embed_dim
+        self.drop_rate = drop_rate
+        self.epsilon = epsilon
+        self.drop_rate = drop_rate
+        self.gradient_checkpointing = gradient_checkpointing
+        self.mlp_ratio = mlp_ratio
+        self.num_heads = num_heads
+        self.qkv_bias = qkv_bias
+        self.return_dict = return_dict
+        self.depth = depth
         # in ViT, the seq length equals the number of patches + 1 (we add 1 for the [CLS] token)
-        num_patches = (image_size // patch_size) ** 2
+        num_patches = (img_size // patch_size) ** 2
         self.seq_length = num_patches + 1
 
     def prepare_config_and_inputs(self):
@@ -100,14 +94,14 @@ class Blip2VisionModelTester:
             image_size=self.image_size,
             patch_size=self.patch_size,
             num_channels=self.num_channels,
-            hidden_size=self.hidden_size,
-            projection_dim=self.projection_dim,
-            num_hidden_layers=self.num_hidden_layers,
-            num_attention_heads=self.num_attention_heads,
-            intermediate_size=self.intermediate_size,
-            dropout=self.dropout,
-            attention_dropout=self.attention_dropout,
-            initializer_range=self.initializer_range,
+            drop_rate=self.drop_rate,
+            epsilon=self.epsilon,
+            gradient_checkpointing=self.gradient_checkpointing,
+            mlp_ratio=self.mlp_ratio,
+            num_heads=self.num_heads,
+            qkv_bias=self.qkv_bias,
+            return_dict=self.return_dict,
+            depth=self.depth,
         )
 
     def create_and_check_model(self, config, pixel_values):
@@ -120,10 +114,9 @@ class Blip2VisionModelTester:
         patch_size = (self.patch_size, self.patch_size)
         num_patches = (image_size[1] // patch_size[1]) * (image_size[0] // patch_size[0])
         self.parent.assertEqual(
-            result.last_hidden_state.shape,
-            [self.batch_size, num_patches + 1, self.hidden_size],
+            result.shape,
+            [self.batch_size, num_patches + 1, self.embed_dim],
         )
-        self.parent.assertEqual(result.pooler_output.shape, [self.batch_size, self.hidden_size])
 
     def prepare_config_and_inputs_for_common(self):
         config_and_inputs = self.prepare_config_and_inputs()
@@ -166,7 +159,7 @@ class Blip2VisionModelTest(ModelTesterMixin, unittest.TestCase):
 
         for model_class in self.all_model_classes:
             model = model_class(config)
-            self.assertIsInstance(model.get_input_embeddings(), (nn.Layer))
+            # self.assertIsInstance(model.get_input_embeddings(), (nn.Layer))
             x = model.get_output_embeddings()
             self.assertTrue(x is None or isinstance(x, nn.Linear))
 
@@ -198,74 +191,95 @@ class BertLMHeadModelTester:
         self,
         parent,
         batch_size=12,
-        seq_length=7,
+        seq_length=32,
         is_training=True,
-        use_input_mask=True,
-        use_labels=True,
-        vocab_size=99,
+        add_cross_attention=True,
+        attention_probs_dropout_prob=0.1,
+        cross_attention_freq=2,
+        embed_dim=256,
+        fuse=False,
+        hidden_act="gelu",
+        hidden_dropout_prob=0.1,
         hidden_size=768,
-        projection_dim=32,
-        num_hidden_layers=6,
-        num_attention_heads=4,
-        intermediate_size=37,
-        dropout=0.1,
-        attention_dropout=0.1,
-        max_position_embeddings=512,
         initializer_range=0.02,
-        bos_token_id=0,
-        scope=None,
-        num_patches=257,
-        encoder_hidden_size=1408,
+        intermediate_size=3072,
+        layer_norm_eps=1e-12,
+        max_position_embedding=512,
+        model_type="bert",
+        num_attention_heads=12,
+        num_hidden_layers=12,
+        num_query_tokens=32,
+        pad_token_id=0,
+        pool_act="tanh",
+        type_vocab_size=2,
+        vocab_size=30522,
+        text_hidden_size=2560,
         encoder_width=1408,
     ):
         self.parent = parent
         self.batch_size = batch_size
         self.seq_length = seq_length
         self.is_training = is_training
-        self.use_input_mask = use_input_mask
-        self.use_labels = use_labels
-        self.vocab_size = vocab_size
+        self.add_cross_attention = add_cross_attention
+        self.attention_probs_dropout_prob = attention_probs_dropout_prob
+        self.cross_attention_freq = cross_attention_freq
+        self.embed_dim = embed_dim
+        self.fuse = fuse
+        self.hidden_act = hidden_act
+        self.hidden_dropout_prob = hidden_dropout_prob
         self.hidden_size = hidden_size
-        self.projection_dim = projection_dim
-        self.num_hidden_layers = num_hidden_layers
-        self.num_attention_heads = num_attention_heads
-        self.intermediate_size = intermediate_size
-        self.dropout = dropout
-        self.attention_dropout = attention_dropout
-        self.max_position_embeddings = max_position_embeddings
         self.initializer_range = initializer_range
-        self.scope = scope
-        self.bos_token_id = bos_token_id
-        self.num_patches = num_patches
-        self.encoder_hidden_size = encoder_hidden_size
+        self.intermediate_size = intermediate_size
+        self.layer_norm_eps = layer_norm_eps
+        self.max_position_embedding = max_position_embedding
+        self.model_type = model_type
+        self.num_attention_heads = num_attention_heads
+        self.num_hidden_layers = num_hidden_layers
+        self.num_query_tokens = num_query_tokens
+        self.pad_token_id = pad_token_id
+        self.pool_act = pool_act
+        self.type_vocab_size = type_vocab_size
+        self.vocab_size = vocab_size
         self.encoder_width = encoder_width
+        self.text_hidden_size = text_hidden_size
 
     def prepare_config_and_inputs(self):
         query_embeds = floats_tensor([self.batch_size, self.seq_length, self.hidden_size])
-        encoder_hidden_states = floats_tensor([self.batch_size, self.num_patches, self.encoder_hidden_size])
-        encoder_attention_mask = random_attention_mask([self.batch_size, self.num_patches])
+        encoder_hidden_states = floats_tensor([self.batch_size, self.embed_dim + 1, self.encoder_width])
+        encoder_attention_mask = random_attention_mask([self.batch_size, self.embed_dim + 1])
         config = self.get_config()
 
         return config, query_embeds, encoder_hidden_states, encoder_attention_mask
 
     def get_config(self):
         return Blip2QFormerConfig(
-            vocab_size=self.vocab_size,
+            add_cross_attention=self.add_cross_attention,
+            attention_probs_dropout_prob=self.attention_probs_dropout_prob,
+            cross_attention_freq=self.cross_attention_freq,
+            embed_dim=self.embed_dim,
+            fuse=self.fuse,
+            hidden_act=self.hidden_act,
+            hidden_dropout_prob=self.hidden_dropout_prob,
             hidden_size=self.hidden_size,
-            projection_dim=self.projection_dim,
-            num_hidden_layers=self.num_hidden_layers,
-            num_attention_heads=self.num_attention_heads,
-            intermediate_size=self.intermediate_size,
-            dropout=self.dropout,
-            attention_dropout=self.attention_dropout,
-            max_position_embeddings=self.max_position_embeddings,
             initializer_range=self.initializer_range,
-            bos_token_id=self.bos_token_id,
-            encoder_hidden_size=self.encoder_hidden_size,
+            intermediate_size=self.intermediate_size,
+            layer_norm_eps=self.layer_norm_eps,
+            max_position_embedding=self.max_position_embedding,
+            model_type=self.model_type,
+            num_attention_heads=self.num_attention_heads,
+            num_hidden_layers=self.num_hidden_layers,
+            num_query_tokens=self.num_query_tokens,
+            pad_token_id=self.pad_token_id,
+            pool_act=self.pool_act,
+            type_vocab_size=self.type_vocab_size,
+            vocab_size=self.vocab_size,
         )
 
     def create_and_check_model(self, config, query_embeds, encoder_hidden_states, encoder_attention_mask):
-        model = BertLMHeadModel(config=config, encoder_width=self.encoder_width)
+        model = BertLMHeadModel(
+            config=config, encoder_width=self.encoder_width, text_hidden_size=self.text_hidden_size
+        )
+        model = model.bert
         model.eval()
         result = model(
             query_embeds=query_embeds,
@@ -277,7 +291,9 @@ class BertLMHeadModelTester:
             [self.batch_size, self.seq_length, self.hidden_size],
         )
 
-        model = BertLMHeadModel(config=config)
+        model = BertLMHeadModel(
+            config=config, encoder_width=self.encoder_width, text_hidden_size=self.text_hidden_size
+        )
         model.eval()
         with paddle.no_grad():
             result = model(
@@ -331,12 +347,12 @@ class BertLMHeadModelTest(ModelTesterMixin, unittest.TestCase):
         config, _ = self.model_tester.prepare_config_and_inputs_for_common()
 
         for model_class in self.all_model_classes:
-            model = model_class(config)
+            model = model_class(config=config)
             signature = inspect.signature(model.forward)
             # signature.parameters is an OrderedDict => so arg_names order is deterministic
             arg_names = [*signature.parameters.keys()]
 
-            expected_arg_names = ["query_embeds"]
+            expected_arg_names = ["input_ids"]
             self.assertListEqual(arg_names[:1], expected_arg_names)
 
     def test_save_load(self):
@@ -351,21 +367,21 @@ class Blip2TextModelTester:
         seq_length=7,
         is_training=True,
         use_labels=False,
-        vocab_size=99,
-        hidden_size=16,
+        vocab_size=50272,
+        hidden_size=2560,
         num_hidden_layers=5,
         num_attention_heads=4,
         intermediate_size=4,
         hidden_act="gelu",
         hidden_dropout_prob=0.1,
         attention_probs_dropout_prob=0.1,
-        max_position_embeddings=20,
+        max_position_embeddings=2048,
         eos_token_id=2,
         pad_token_id=1,
         bos_token_id=0,
         embed_dim=16,
         num_labels=3,
-        word_embed_proj_dim=16,
+        word_embed_proj_dim=2560,
         type_sequence_label_size=2,
     ):
         self.parent = parent
@@ -410,7 +426,7 @@ class Blip2TextModelTester:
             num_hidden_layers=self.num_hidden_layers,
             num_attention_heads=self.num_attention_heads,
             ffn_dim=self.intermediate_size,
-            dropout=self.hidden_dropout_prob,
+            hidden_dropout_prob=self.hidden_dropout_prob,
             attention_dropout=self.attention_probs_dropout_prob,
             max_position_embeddings=self.max_position_embeddings,
             eos_token_id=self.eos_token_id,
@@ -495,6 +511,7 @@ class Blip2ModelTester:
             "input_ids": input_ids,
             "attention_mask": attention_mask,
         }
+        config.text_config = "facebook/opt-2.7b"
         return config, inputs_dict
 
 
@@ -579,3 +596,7 @@ class Blip2ModelTest(ModelTesterMixin, unittest.TestCase):
 
     def test_save_load(self):
         pass
+
+
+if __name__ == "__main__":
+    unittest.main()

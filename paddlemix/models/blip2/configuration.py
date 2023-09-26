@@ -29,51 +29,30 @@ __all__ = [
 
 class Blip2VisionConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`Blip2VisionModel`]. It is used to instantiate a
-    BLIP-2 vision encoder according to the specified arguments, defining the model architecture. Instantiating a
-    configuration defaults will yield a similar configuration to that of the BLIP-2
-    [Salesforce/blip2-opt-2.7b](https://huggingface.co/Salesforce/blip2-opt-2.7b) architecture.
+    This is the configuration class to store the configuration of a [`VisionTransformer`]. It is used to instantiate a
+    BLIP-2 vvisual encoder according to the specified arguments, defining the model architecture.
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
     documentation from [`PretrainedConfig`] for more information.
     Args:
-        hidden_size (`int`, *optional*, defaults to 1408):
-            Dimensionality of the encoder layers and the pooler layer.
-        intermediate_size (`int`, *optional*, defaults to 6144):
-            Dimensionality of the "intermediate" (i.e., feed-forward) layer in the Transformer encoder.
-        num_hidden_layers (`int`, *optional*, defaults to 39):
-            Number of hidden layers in the Transformer encoder.
-        num_attention_heads (`int`, *optional*, defaults to 16):
-            Number of attention heads for each attention layer in the Transformer encoder.
         image_size (`int`, *optional*, defaults to 224):
             The size (resolution) of each image.
+        embed_dim (`int`, *optional*, defaults to 1408):
+            Dimensionality of the encoder layers and the pooler layer.
+        depth (`int`, *optional*, defaults to 39):
+            Number of hidden layers in the Transformer encoder.
+        num_heads (`int`, *optional*, defaults to 16):
+            Number of attention heads for each attention layer in the Transformer encoder.
         patch_size (`int`, *optional*, defaults to 14):
             The size (resolution) of each patch.
-        hidden_act (`str` or `function`, *optional*, defaults to `"gelu"`):
-            The non-linear activation function (function or string) in the encoder and pooler. If string, `"gelu"`,
-            `"relu"`, `"selu"` and `"gelu_new"` ``"gelu"` are supported. layer_norm_eps (`float`, *optional*, defaults
-            to 1e-5): The epsilon used by the layer normalization layers.
-        dropout (`float`, *optional*, defaults to 0.0):
-            The dropout probabilitiy for all fully connected layers in the embeddings, encoder, and pooler.
-        attention_dropout (`float`, *optional*, defaults to 0.0):
-            The dropout ratio for the attention probabilities.
-        initializer_range (`float`, *optional*, defaults to 0.02):
-            The standard deviation of the truncated_normal_initializer for initializing all weight matrices.
-        initializer_factor (`float``, *optional*, defaults to 1):
-            A factor for initializing all weight matrices (should be kept to 1, used internally for initialization
-            testing).
         qkv_bias (`bool`, *optional*, defaults to `True`):
             Whether to add a bias to the queries and values in the self-attention layers.
-    Example:
-    ```python
-    >>> from paddlenlp.transformers import Blip2VisionConfig, Blip2VisionModel
-    >>> # Initializing a Blip2VisionConfig with Salesforce/blip2-opt-2.7b style configuration
-    >>> configuration = Blip2VisionConfig()
-    >>> # Initializing a Blip2VisionModel (with random weights) from the Salesforce/blip2-opt-2.7b style configuration
-    >>> model = Blip2VisionModel(configuration)
-    >>> # Accessing the model configuration
-    >>> configuration = model.config
+        mlp_ratio (`int`, *optional*, defaults to 14):
+            The ratio of mlp hidden dim
+        epsilon (`float`, *optional*, defaults to 1e-6):
+            epsilon for nn.LayerNorm
+        drop_rate (`float`, *optional*, defaults to 0):
+            dropout rate for nn.Dropout
     ```"""
-
     model_type = "blip_2_vision_model"
 
     def __init__(
@@ -107,7 +86,7 @@ class Blip2VisionConfig(PretrainedConfig):
         self.in_chans = kwargs.get("in_chans", 3)
         self.class_num = kwargs.get("class_num", 1000)
         self.qk_scale = kwargs.get("qk_scale", None)
-        self.attn_drop_rate = kwargs.get("attn_drop_rate=", 0.0)
+        self.attn_drop_rate = kwargs.get("attn_drop_rate", 0.0)
         self.drop_path_rate = kwargs.get("drop_path_rate", 0.0)
         self.norm_layer = kwargs.get("norm_layer", "nn.LayerNorm")
 
@@ -175,16 +154,7 @@ class Blip2QFormerConfig(PretrainedConfig):
             The frequency of adding cross-attention to the Transformer layers.
         encoder_hidden_size (`int`, *optional*, defaults to 1408):
             The hidden size of the hidden states for cross-attention.
-    Examples:
-    ```python
-    >>> from paddlenlp.transformers import Blip2QFormerConfig, Blip2QFormerModel
-    >>> # Initializing a BLIP-2 Salesforce/blip2-opt-2.7b style configuration
-    >>> configuration = Blip2QFormerConfig()
-    >>> # Initializing a model (with random weights) from the Salesforce/blip2-opt-2.7b style configuration
-    >>> model = Blip2QFormerModel(configuration)
-    >>> # Accessing the model configuration
-    >>> configuration = model.config
-    ```"""
+    """
     model_type = "blip_2_qformer"
 
     def __init__(
@@ -225,6 +195,7 @@ class Blip2QFormerConfig(PretrainedConfig):
         self.classifier_dropout = classifier_dropout
         self.cross_attention_frequency = cross_attention_frequency
         self.encoder_hidden_size = encoder_hidden_size
+        self.dropout = kwargs.pop("dropout", None)
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
@@ -256,34 +227,11 @@ class Blip2Config(PretrainedConfig):
             Dictionary of configuration options used to initialize [`Blip2VisionConfig`].
         qformer_config (`dict`, *optional*):
             Dictionary of configuration options used to initialize [`Blip2QFormerConfig`].
-        text_config (`dict`, *optional*):
-            Dictionary of configuration options used to initialize any [`PretrainedConfig`].
-        num_query_tokens (`int`, *optional*, defaults to 32):
-            The number of query tokens passed through the Transformer.
+        text_config (`str`, *optional*):
+            the name or path of language model
         kwargs (*optional*):
             Dictionary of keyword arguments.
-    Example:
-    ```python
-    >>> from paddlenlp.transformers import (
-    ...     Blip2VisionConfig,
-    ...     Blip2QFormerConfig,
-    ...     OPTConfig,
-    ...     Blip2Config,
-    ...     Blip2ForConditionalGeneration,
-    ... )
-    >>> # Initializing a Blip2Config with Salesforce/blip2-opt-2.7b style configuration
-    >>> configuration = Blip2Config()
-    >>> # Initializing a Blip2ForConditionalGeneration (with random weights) from the Salesforce/blip2-opt-2.7b style configuration
-    >>> model = Blip2ForConditionalGeneration(configuration)
-    >>> # Accessing the model configuration
-    >>> configuration = model.config
-    >>> # We can also initialize a Blip2Config from a Blip2VisionConfig, Blip2QFormerConfig and any PretrainedConfig
-    >>> # Initializing BLIP-2 vision, BLIP-2 Q-Former and language model configurations
-    >>> vision_config = Blip2VisionConfig()
-    >>> qformer_config = Blip2QFormerConfig()
-    >>> text_config = OPTConfig()
-    >>> config = Blip2Config.from_text_vision_configs(vision_config, qformer_config, text_config)
-    ```"""
+    """
 
     model_type = "blip-2"
     is_composition = True
@@ -293,7 +241,6 @@ class Blip2Config(PretrainedConfig):
         vision_config=None,
         qformer_config=None,
         text_config=None,
-        num_query_tokens=32,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -309,18 +256,14 @@ class Blip2Config(PretrainedConfig):
         if text_config is None:
             text_config = {}
             logger.info("text_config is None. Initializing the text config with default values (`OPTConfig`).")
-        self.vision_config = vision_config
-        self.qformer_config = qformer_config
+        self.vision_config = Blip2VisionConfig(**vision_config)
+        self.qformer_config = Blip2QFormerConfig(**qformer_config)
         self.text_config = text_config
-
-        # self.use_decoder_only_language_model = (
-        #     self.text_config.model_type in MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
-        # )
-        # CONFIGURATION_MODEL_MAPPING = get_init_configurations()
-        # self.use_decoder_only_language_model = self.text_config.model_type in CONFIGURATION_MODEL_MAPPING
         self.initializer_factor = 1.0
         self.initializer_range = 0.02
         self.freeze_vit = kwargs.get("freeze_vit", True)
+        self.mp_degree = kwargs.get("mp_gree", 1)
+        self.use_decoder_only_language_model = kwargs.get("use_decoder_only_language_model", True)
 
     @classmethod
     def from_vision_qformer_text_configs(
@@ -338,9 +281,9 @@ class Blip2Config(PretrainedConfig):
         """
 
         return cls(
-            vision_config=vision_config,
-            qformer_config=qformer_config,
-            text_config=text_config,
+            vision_config=vision_config.to_dict(),
+            qformer_config=qformer_config.to_dict(),
+            text_config=text_config.to_dict(),
             **kwargs,
         )
 
@@ -351,8 +294,8 @@ class Blip2Config(PretrainedConfig):
             `Dict[str, any]`: Dictionary of all the attributes that make up this configuration instance,
         """
         output = copy.deepcopy(self.__dict__)
-        output["vision_config"] = self.vision_config
-        output["qformer_config"] = self.qformer_config
+        output["vision_config"] = self.vision_config.to_dict()
+        output["qformer_config"] = self.qformer_config.to_dict()
         output["text_config"] = self.text_config
         output["model_type"] = self.__class__.model_type
         return output
