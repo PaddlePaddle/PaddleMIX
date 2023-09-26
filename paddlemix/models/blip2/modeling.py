@@ -50,6 +50,10 @@ import struct
 
 import numpy as np
 
+BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST = [
+    "Salesforce/blip2-flan-t5-xl",
+    "Salesforce/blip2-opt-2.7b",
+]
 
 def deserialize_from_file(fp):
     x_type = fp.read(1)
