@@ -209,10 +209,10 @@ class BLIP2Trainer(Trainer):
         lr_sched_func = getattr(paddlemix.optimization, self.args.lr_scheduler_name)
         lr_sched = lr_sched_func(
             learning_rate=self.args.learning_rate,
-            epochs=self.args.num_train_epochs,
+            total_steps=self.args.num_train_epochs * num_training_steps,
             warmup_start_lr=self.args.warmup_start_lr,
             eta_min=self.args.eta_min,
-            warmup_steps=self.args.warmup_steps,
+            warmup=self.args.warmup_steps,
             step_each_epoch=num_training_steps,
         )
         return lr_sched
