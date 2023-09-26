@@ -509,6 +509,46 @@ imageio.mimsave("text_to_video_generation-synth-result-astronaut_riding_a_horse.
 <img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/246780441-8242a955-490b-4326-8415-84264a54a938.gif">
 </div>
 
+#### text_to_video_generation-synth with zeroscope_v2_576w
+
+```python
+import imageio
+
+from ppdiffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
+
+# from ppdiffusers.utils import export_to_video
+
+pipe = TextToVideoSDPipeline.from_pretrained("cerspense/zeroscope_v2_576w")
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+
+prompt = "An astronaut riding a horse."
+video_frames = pipe(prompt, num_inference_steps=50, height=320, width=576, num_frames=24).frames
+imageio.mimsave("text_to_video_generation-synth-result-astronaut_riding_a_horse.mp4", video_frames, fps=8)
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/0347b61a-cf7e-4cbb-b684-485055a3e516">
+</div>
+
+#### text_to_video_generation-synth with zeroscope_v2_XL
+
+```python
+import imageio
+
+from ppdiffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
+
+# from ppdiffusers.utils import export_to_video
+
+pipe = TextToVideoSDPipeline.from_pretrained("cerspense/zeroscope_v2_XL")
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+
+prompt = "An astronaut riding a horse."
+video_frames = pipe(prompt, num_inference_steps=50, height=320, width=576, num_frames=24).frames
+imageio.mimsave("text_to_video_generation-synth-result-astronaut_riding_a_horse.mp4", video_frames, fps=8)
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/43ebbca0-9f07-458b-809a-acf296a2539b">
+</div>
+
 #### text_to_video_generation-zero
 
 ```python
@@ -534,7 +574,7 @@ imageio.mimsave("text_to_video_generation-zero-result-panda.mp4", result, fps=4)
 </details>
 
 ### 文本音频多模
-<details open>
+<details>
 <summary>&emsp;文本条件的音频生成（Text-to-Audio Generation）</summary>
 
 #### text_to_audio_generation-audio_ldm
@@ -693,7 +733,7 @@ image.save("versatile-diffusion-car_variation.png")
 
 
 ### 音频
-<details open>
+<details>
 <summary>&emsp;无条件音频生成（Unconditional Audio Generation）</summary>
 
 #### unconditional_audio_generation-audio_diffusion
