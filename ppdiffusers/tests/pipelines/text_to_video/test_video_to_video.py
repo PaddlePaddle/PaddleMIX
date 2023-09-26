@@ -36,14 +36,6 @@ from ..test_pipelines_common import PipelineTesterMixin
 
 enable_full_determinism()
 
-def to_np(tensor):
-    if isinstance(tensor, paddle.Tensor):
-        tensor = tensor.detach().cpu().numpy()
-
-    if isinstance(tensor, (list, tuple)):
-        tensor = np.array(tensor)
-
-    return tensor
 
 def to_np(tensor):
     if isinstance(tensor, paddle.Tensor):
