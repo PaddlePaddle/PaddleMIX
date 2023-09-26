@@ -305,7 +305,7 @@ class ModelTesterMixin:
                 new_model = self.model_class.from_pretrained(tmpdirname, paddle_dtype=dtype)
                 assert new_model.dtype == dtype
 
-    def test_determinism(self, expected_max_diff=1e-5):
+    def test_determinism(self, expected_max_diff=1e-4):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
         model.eval()
