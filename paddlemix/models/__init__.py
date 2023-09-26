@@ -19,4 +19,4 @@ from .minigpt4.modeling import *
 from .visualglm.configuration import *
 from .visualglm.modeling import *
 from .imagebind.modeling import *
-from .imagebind.multimodal_modules import *
+from .imagebind.multimodal_preprocessors import *
