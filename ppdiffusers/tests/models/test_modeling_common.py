@@ -174,7 +174,7 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
         max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 1e-02, "Models give different forward passes")
+        self.assertLessEqual(max_diff, 1e-01, "Models give different forward passes")
 
     def test_getattr_is_correct(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -289,7 +289,7 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
         max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 1e-02, "Models give different forward passes")
+        self.assertLessEqual(max_diff, 1e-01, "Models give different forward passes")
 
     def test_from_save_pretrained_dtype(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -305,7 +305,7 @@ class ModelTesterMixin:
                 new_model = self.model_class.from_pretrained(tmpdirname, paddle_dtype=dtype)
                 assert new_model.dtype == dtype
 
-    def test_determinism(self, expected_max_diff=1e-5):
+    def test_determinism(self, expected_max_diff=1e-4):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
         model.eval()

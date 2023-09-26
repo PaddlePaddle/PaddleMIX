@@ -275,19 +275,16 @@ image = pipe(prompt, guidance_scale=7.5).images[0]
 image.save("astronaut_rides_horse.png")
 ```
 
-当然，我们也可以使用训练好的模型在`coco en 1k`数据集上生成图片。
-首先我们需要下载`mscoco.en.1k`文件。
-```bash
-wget https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/mscoco.en.1k
+当然，我们也可以使用训练好的模型在`coco 1k`数据集上生成图片。
 ```
 然后可以`generate_images.py`文件生成对应的图片。
 ```bash
 python generate_images.py \
     --model_name_or_path ./ldm_pipelines \
-    --file ./mscoco.en.1k \
+    --file coco1k \
     --batch_size 16 \
     --save_path ./outputs \
-    --guidance_scales 3 4 5 6 7 8 \
+    --guidance_scales 3 \
     --seed 42 \
     --scheduler_type ddim \
     --height 256 \
@@ -297,7 +294,7 @@ python generate_images.py \
 ```
 `generate_images.py`代码可传入的参数解释如下：
 > * `--model_name_or_path`: 我们需要评估的模型名称或地址，这里我们使用上一步生成的`ldm_pipelines`。
-> * `--file`: 需要评估的文件，我们可以从[这里](https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/mscoco.en.1k)下载。
+> * `--file`: 需要评估的文件，可以从["coco1k", "coco10k", "coco30k"]中选择。
 > * `--batch_size`: 生成图片所使用的batch_size。
 > * `--save_path`: 生成的图片所要保存的路径。
 > * `--guidance_scales`: guidance_scales值，我们可以输入3 4 5 6 7 8。

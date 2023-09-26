@@ -22,7 +22,7 @@ pip install -r requirements.txt
 请自行按照`adapter/data_preprocess.py`的数据处理逻辑准备好数据，并且将文件放置于`/data`目录，数据中需包含原图像、控制文本、控制图像等信息。
 
 Tips: 我们可以选择下载demo数据并替换掉`/data`目录
-- 下载demo数据`wget https://paddlenlp.bj.bcebos.com/models/community/westfish/t2i-adapter/t2i-adapter-data-demo.zip`；
+- 下载demo数据`wget https://paddlenlp.bj.bcebos.com/models/community/westfish/t2i-adapter/openpose_data_demo.tar.gz`，然后解压该数据`tar -zxvf openpose_data_demo.tar.gz`。
 
 ### 单机单卡训练
 ```bash
@@ -121,7 +121,7 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_t2i_adapte
 ```python
 from ppdiffusers import StableDiffusionAdapterPipeline, T2IAdapter
 from ppdiffusers.utils import load_image
-adapter = T2IAdapter.from_pretrained("./sd15_control/checkpoint-12000/adapter")
+adapter = T2IAdapter.from_pretrained("./sd15_openpose/checkpoint-12000/adapter")
 pipe = StableDiffusionAdapterPipeline.from_pretrained("runwayml/stable-diffusion-v1-5", adapter = adapter, safety_checker=None)
 pose_image = load_image("https://paddlenlp.bj.bcebos.com/models/community/westfish/t2i-adapter/test/man-openpose.png")
 img = pipe(prompt="a beautiful girl", image=pose_image, guidance_scale=9, num_inference_steps=50).images[0]

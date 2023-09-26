@@ -1197,11 +1197,11 @@ def main():
                         if args.train_text_encoder:
                             text_encoder_one = unwrap_model(text_encoder_one)
                             text_encoder_lora_layers = text_encoder_lora_state_dict(
-                                text_encoder_one.to(paddle.float32)
+                                text_encoder_one.to(dtype=paddle.float32)
                             )
                             text_encoder_two = unwrap_model(text_encoder_two)
                             text_encoder_2_lora_layers = text_encoder_lora_state_dict(
-                                text_encoder_two.to(paddle.float32)
+                                text_encoder_two.to(dtype=paddle.float32)
                             )
                         else:
                             text_encoder_lora_layers = None
@@ -1301,14 +1301,14 @@ def main():
     # Save the lora layers
     if is_main_process:
         unet = unwrap_model(unet)
-        unet = unet.to(paddle.float32)
+        unet = unet.to(dtype=paddle.float32)
         unet_lora_layers = unet_attn_processors_state_dict(unet)
 
         if args.train_text_encoder:
             text_encoder_one = unwrap_model(text_encoder_one)
-            text_encoder_lora_layers = text_encoder_lora_state_dict(text_encoder_one.to(paddle.float32))
+            text_encoder_lora_layers = text_encoder_lora_state_dict(text_encoder_one.to(dtype=paddle.float32))
             text_encoder_two = unwrap_model(text_encoder_two)
-            text_encoder_2_lora_layers = text_encoder_lora_state_dict(text_encoder_two.to(paddle.float32))
+            text_encoder_2_lora_layers = text_encoder_lora_state_dict(text_encoder_two.to(dtype=paddle.float32))
         else:
             text_encoder_lora_layers = None
             text_encoder_2_lora_layers = None
