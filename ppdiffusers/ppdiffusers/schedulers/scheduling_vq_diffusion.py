@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import paddle
@@ -165,16 +165,8 @@ class VQDiffusionScheduler(SchedulerMixin, ConfigMixin):
         # By convention, the index for the mask class is the last class index
         self.mask_class = self.num_embed - 1
 
-        at, att = alpha_schedules(
-            num_train_timesteps,
-            alpha_cum_start=alpha_cum_start,
-            alpha_cum_end=alpha_cum_end,
-        )
-        ct, ctt = gamma_schedules(
-            num_train_timesteps,
-            gamma_cum_start=gamma_cum_start,
-            gamma_cum_end=gamma_cum_end,
-        )
+        at, att = alpha_schedules(num_train_timesteps, alpha_cum_start=alpha_cum_start, alpha_cum_end=alpha_cum_end)
+        ct, ctt = gamma_schedules(num_train_timesteps, gamma_cum_start=gamma_cum_start, gamma_cum_end=gamma_cum_end)
 
         num_non_mask_classes = self.num_embed - 1
         bt = (1 - at - ct) / num_non_mask_classes
@@ -222,7 +214,7 @@ class VQDiffusionScheduler(SchedulerMixin, ConfigMixin):
         model_output: paddle.Tensor,
         timestep: paddle.Tensor,
         sample: paddle.Tensor,
-        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        generator: Optional[paddle.Generator] = None,
         return_dict: bool = True,
     ) -> Union[VQDiffusionSchedulerOutput, Tuple]:
         """

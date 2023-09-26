@@ -109,13 +109,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         r"[" + "#®•©™&@·º½¾¿¡§~" + "\)" + "\(" + "\]" + "\[" + "\}" + "\{" + "\|" + "\\" + "\/" + "\*" + r"]{1,}"
     )  # noqa
 
-    _optional_components = [
-        "tokenizer",
-        "text_encoder",
-        "safety_checker",
-        "feature_extractor",
-        "watermarker",
-    ]
+    _optional_components = ["tokenizer", "text_encoder", "safety_checker", "feature_extractor", "watermarker"]
 
     def __init__(
         self,
@@ -608,8 +602,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                 prompt.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [diffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                `self.processor` in ppdiffusers.cross_attention.
 
         Examples:
 
@@ -621,13 +614,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
             or watermarked content, according to the `safety_checker`.
         """
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(
-            prompt,
-            callback_steps,
-            negative_prompt,
-            prompt_embeds,
-            negative_prompt_embeds,
-        )
+        self.check_inputs(prompt, callback_steps, negative_prompt, prompt_embeds, negative_prompt_embeds)
 
         # 2. Define call parameters
         height = height or self.unet.config.sample_size
@@ -703,40 +690,21 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred_uncond, _ = noise_pred_uncond.split(
-                        [
-                            model_input.shape[1],
-                            noise_pred_uncond.shape[1] - model_input.shape[1],
-                        ],
-                        axis=1,
+                        [model_input.shape[1], noise_pred_uncond.shape[1] - model_input.shape[1]], axis=1
                     )
                     noise_pred_text, predicted_variance = noise_pred_text.split(
-                        [
-                            model_input.shape[1],
-                            noise_pred_text.shape[1] - model_input.shape[1],
-                        ],
-                        axis=1,
+                        [model_input.shape[1], noise_pred_text.shape[1] - model_input.shape[1]], axis=1
                     )
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
                     noise_pred = paddle.concat([noise_pred, predicted_variance], axis=1)
-                if self.scheduler.config.variance_type not in [
-                    "learned",
-                    "learned_range",
-                ]:
+                if self.scheduler.config.variance_type not in ["learned", "learned_range"]:
                     noise_pred, _ = noise_pred.split(
-                        [
-                            model_input.shape[1],
-                            noise_pred_uncond.shape[1] - model_input.shape[1],
-                        ],
-                        axis=1,
+                        [model_input.shape[1], noise_pred_uncond.shape[1] - model_input.shape[1]], axis=1
                     )
 
                 # compute the previous noisy sample x_t -> x_t-1
                 intermediate_images = self.scheduler.step(
-                    noise_pred,
-                    t,
-                    intermediate_images,
-                    **extra_step_kwargs,
-                    return_dict=False,
+                    noise_pred, t, intermediate_images, **extra_step_kwargs, return_dict=False
                 )[0]
 
                 # call the callback, if provided
@@ -776,8 +744,4 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         if not return_dict:
             return (image, nsfw_detected, watermark_detected)
 
-        return IFPipelineOutput(
-            images=image,
-            nsfw_detected=nsfw_detected,
-            watermark_detected=watermark_detected,
-        )
+        return IFPipelineOutput(images=image, nsfw_detected=nsfw_detected, watermark_detected=watermark_detected)

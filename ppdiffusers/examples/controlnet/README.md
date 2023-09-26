@@ -15,7 +15,6 @@ python setup.py install
 pip install -r requirements.txt
 ```
 
-
 # ControlNet with Stable Diffusion预训练模型
 除文本提示外，ControlNet还需要一个控制图作为控制条件。每个预训练模型使用不同的控制方法进行训练，其中每种方法对应一种不同的控制图。例如，Canny to Image要求控制图像是Canny边缘检测的输出图像，而Pose to Image要求控制图是OpenPose骨骼姿态检测图像。目前我们支持如下控制方式及预训练模型。
 ## Canny to Image
@@ -48,7 +47,7 @@ python gradio_seg2image_segmenter.py
 ![image](https://user-images.githubusercontent.com/20476674/222131908-b0c52512-ef42-4e4b-8fde-62c12c600ff2.png)
 
 ## Depth to Image
-采用Depth深度检测图片作为控制条件。
+采用Depth深度检测图片作为控制条件。注意执行该任务需要paddlepaddle-gpu==2.4.2。
 ```
 python gradio_depth2image.py
 ```

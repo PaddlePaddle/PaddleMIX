@@ -56,10 +56,7 @@ class DiagonalGaussianDistribution(object):
         if self.deterministic:
             return paddle.to_tensor(data=[0.0], dtype="float32")
         elif other is None:
-            return 0.5 * paddle.sum(
-                x=paddle.pow(x=self.mean, y=2) + self.var - 1.0 - self.logvar,
-                axis=[1, 2, 3],
-            )
+            return 0.5 * paddle.sum(x=paddle.pow(x=self.mean, y=2) + self.var - 1.0 - self.logvar, axis=[1, 2, 3])
         else:
             return 0.5 * paddle.sum(
                 x=paddle.pow(x=self.mean - other.mean, y=2) / other.var
@@ -74,10 +71,7 @@ class DiagonalGaussianDistribution(object):
         if self.deterministic:
             return paddle.to_tensor(data=[0.0], dtype="float32")
         logtwopi = np.log(2.0 * np.pi)
-        return 0.5 * paddle.sum(
-            x=logtwopi + self.logvar + paddle.pow(x=sample - self.mean, y=2) / self.var,
-            axis=dims,
-        )
+        return 0.5 * paddle.sum(x=logtwopi + self.logvar + paddle.pow(x=sample - self.mean, y=2) / self.var, axis=dims)
 
     def mode(self):
         return self.mean

@@ -40,8 +40,7 @@ class SafeStableDiffusionSafetyChecker(CLIPPretrainedModel):
         self.clip = CLIPVisionModel(config)
 
         self.vision_projection = paddle.create_parameter(
-            (config.hidden_size, config.projection_dim),
-            dtype=paddle.get_default_dtype(),
+            (config.hidden_size, config.projection_dim), dtype=paddle.get_default_dtype()
         )
 
         self.register_buffer("concept_embeds", paddle.ones([17, config.projection_dim]))
@@ -62,12 +61,7 @@ class SafeStableDiffusionSafetyChecker(CLIPPretrainedModel):
         result = []
         batch_size = image_embeds.shape[0]
         for i in range(batch_size):
-            result_img = {
-                "special_scores": {},
-                "special_care": [],
-                "concept_scores": {},
-                "bad_concepts": [],
-            }
+            result_img = {"special_scores": {}, "special_care": [], "concept_scores": {}, "bad_concepts": []}
 
             # increase this value to create a stronger `nfsw` filter
             # at the cost of increasing the possibility of filtering benign images

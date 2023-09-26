@@ -92,6 +92,7 @@ PADDLE_INDEX_FILE = "model_state.pdparams"
 CUSTOM_PIPELINE_FILE_NAME = "pipeline.py"
 DUMMY_MODULES_FOLDER = "ppdiffusers.utils"
 PADDLENLP_DUMMY_MODULES_FOLDER = "paddlenlp.transformers.utils"
+CONNECTED_PIPES_KEYS = ["prior"]
 
 logger = logging.get_logger(__name__)
 
@@ -164,7 +165,7 @@ def is_safetensors_compatible(filenames, variant=None, passed_components=None) -
       files to know which safetensors files are needed.
     - The model is safetensors compatible only if there is a matching safetensors file for every default pytorch file.
     Converting default pytorch serialized filenames to safetensors serialized filenames:
-    - For models from the diffusers library, just replace the ".bin" extension with ".safetensors"
+    - For models from the ppdiffusers library, just replace the ".bin" extension with ".safetensors"
     - For models from the transformers library, the filename changes from "pytorch_model" to "model", and the ".bin"
       extension is replaced with ".safetensors"
     """
@@ -283,24 +284,18 @@ def warn_deprecated_model_variant(pretrained_model_name_or_path, use_auth_token,
 
     if set(comp_model_filenames) == set(model_filenames):
         warnings.warn(
-            f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'` even though you can load it via `variant=`{revision}`. Loading model variants via `revision='{revision}'` is deprecated and will be removed in diffusers v1. Please use `variant='{revision}'` instead.",
+            f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'` even though you can load it via `variant=`{revision}`. Loading model variants via `revision='{revision}'` is deprecated and will be removed in ppdiffusers v1. Please use `variant='{revision}'` instead.",
             FutureWarning,
         )
     else:
         warnings.warn(
-            f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'`. This behavior is deprecated and will be removed in diffusers v1. One should use `variant='{revision}'` instead. However, it appears that {pretrained_model_name_or_path} currently does not have the required variant filenames in the 'main' branch. \n The Diffusers team and community would be very grateful if you could open an issue: https://github.com/huggingface/diffusers/issues/new with the title '{pretrained_model_name_or_path} is missing {revision} files' so that the correct variant file can be added.",
+            f"You are loading the variant {revision} from {pretrained_model_name_or_path} via `revision='{revision}'`. This behavior is deprecated and will be removed in ppdiffusers v1. One should use `variant='{revision}'` instead. However, it appears that {pretrained_model_name_or_path} currently does not have the required variant filenames in the 'main' branch. \n The ppdiffusers team and community would be very grateful if you could open an issue with the title '{pretrained_model_name_or_path} is missing {revision} files' so that the correct variant file can be added.",
             FutureWarning,
         )
 
 
 def maybe_raise_or_warn(
-    library_name,
-    library,
-    class_name,
-    importable_classes,
-    passed_class_obj,
-    name,
-    is_pipeline_module,
+    library_name, library, class_name, importable_classes, passed_class_obj, name, is_pipeline_module
 ):
     """Simple helper method to raise or warn in case incorrect module has been passed"""
     if not is_pipeline_module:
@@ -357,10 +352,7 @@ def _get_pipeline_class(class_obj, config, custom_pipeline=None, cache_dir=None,
             file_name = CUSTOM_PIPELINE_FILE_NAME
 
         return get_class_from_dynamic_module(
-            custom_pipeline,
-            module_file=file_name,
-            cache_dir=cache_dir,
-            revision=revision,
+            custom_pipeline, module_file=file_name, cache_dir=cache_dir, revision=revision
         )
 
     if class_obj != DiffusionPipeline:
@@ -466,9 +458,7 @@ def load_sub_model(
         cache_dir = kwargs["cache_dir"]
         if not local_files_only and not is_local_dir and not from_hf_hub:
             loaded_sub_model = load_method(
-                pretrained_model_name_or_path + "/" + name,
-                cache_dir=cache_dir,
-                **loading_kwargs,
+                pretrained_model_name_or_path + "/" + name, cache_dir=cache_dir, **loading_kwargs
             )
         if loaded_sub_model is None:
             raise ValueError(f"We cant load '{name}' from {pretrained_model_name_or_path} or {cached_folder}! \n {e} ")
@@ -483,7 +473,7 @@ class DiffusionPipeline(ConfigMixin):
     [`DiffusionPipeline`] takes care of storing all components (models, schedulers, processors) for diffusion pipelines
     and handles methods for loading, downloading and saving models as well as a few methods common to all pipelines to:
 
-        - move all PyTorch modules to the device of your choice
+        - move all modules to the device of your choice
         - enabling/disabling the progress bar for the denoising iteration
 
     Class attributes:
@@ -554,10 +544,7 @@ class DiffusionPipeline(ConfigMixin):
             # We need to overwrite the config if name exists in config
             if isinstance(getattr(self.config, name), (tuple, list)):
                 if value is not None and self.config[name][0] is not None:
-                    class_library_tuple = (
-                        value.__module__.split(".")[0],
-                        value.__class__.__name__,
-                    )
+                    class_library_tuple = (value.__module__.split(".")[0], value.__class__.__name__)
                 else:
                     class_library_tuple = (None, None)
 
@@ -876,9 +863,9 @@ class DiffusionPipeline(ConfigMixin):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id, since we use a
                 git-based system for storing models and other artifacts on huggingface.co, so `revision` can be any
                 identifier allowed by git.
-            custom_revision (`str`, *optional*, defaults to `"main"` when loading from the Hub and to local version of `diffusers` when loading from GitHub):
+            custom_revision (`str`, *optional*, defaults to `"main"` when loading from the Hub and to local version of `ppdiffusers` when loading from GitHub):
                 The specific model version to use. It can be a branch name, a tag name, or a commit id similar to
-                `revision` when loading a custom pipeline from the Hub. It can be a diffusers version when loading a
+                `revision` when loading a custom pipeline from the Hub. It can be a ppdiffusers version when loading a
                 custom pipeline from GitHub.
             mirror (`str`, *optional*):
                 Mirror source to accelerate downloads in China. If you are from China and have an accessibility
@@ -1010,11 +997,7 @@ class DiffusionPipeline(ConfigMixin):
         # 3. Load the pipeline class, if using custom module then load it from the hub
         # if we load from explicit class, let's use it
         pipeline_class = _get_pipeline_class(
-            cls,
-            config_dict,
-            custom_pipeline=custom_pipeline,
-            cache_dir=cache_dir,
-            revision=custom_revision,
+            cls, config_dict, custom_pipeline=custom_pipeline, cache_dir=cache_dir, revision=custom_revision
         )
 
         # DEPRECATED: To be removed in 1.0.0
@@ -1042,12 +1025,7 @@ class DiffusionPipeline(ConfigMixin):
                 " https://huggingface.co/runwayml/stable-diffusion-inpainting. Note that we do not actively maintain"
                 f" the {StableDiffusionInpaintPipelineLegacy} class and will likely remove it in version 1.0.0."
             )
-            deprecate(
-                "StableDiffusionInpaintPipelineLegacy",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False,
-            )
+            deprecate("StableDiffusionInpaintPipelineLegacy", "1.0.0", deprecation_message, standard_warn=False)
 
         # 4. Define expected modules given pipeline signature
         # and define non-None initialized modules (=`init_kwargs`)
@@ -1270,7 +1248,7 @@ class DiffusionPipeline(ConfigMixin):
 
         if from_diffusers and use_safetensors and not is_safetensors_available():
             raise ValueError(
-                "`use_safetensors`=True but safetensors is not installed. Please install safetensors with `pip install safetenstors"
+                "`use_safetensors`=True but safetensors is not installed. Please install safetensors with `pip install safetensors"
             )
         allow_pickle = False
         if use_safetensors is None:
@@ -1337,11 +1315,7 @@ class DiffusionPipeline(ConfigMixin):
                     version.parse(__version__).base_version
                 ) >= version.parse("0.17.0"):
                     warn_deprecated_model_variant(
-                        pretrained_model_name,
-                        use_auth_token,
-                        variant,
-                        revision,
-                        model_filenames,
+                        pretrained_model_name, use_auth_token, variant, revision, model_filenames
                     )
 
                 model_folder_names = {os.path.split(f)[0] for f in model_filenames}
@@ -1364,11 +1338,7 @@ class DiffusionPipeline(ConfigMixin):
 
                 # retrieve passed components that should not be downloaded
                 pipeline_class = _get_pipeline_class(
-                    cls,
-                    config_dict,
-                    custom_pipeline=custom_pipeline,
-                    cache_dir=cache_dir,
-                    revision=custom_revision,
+                    cls, config_dict, custom_pipeline=custom_pipeline, cache_dir=cache_dir, revision=custom_revision
                 )
                 expected_components, _ = cls._get_signature_keys(pipeline_class)
                 passed_components = [k for k in expected_components if k in kwargs]
@@ -1377,18 +1347,14 @@ class DiffusionPipeline(ConfigMixin):
                     use_safetensors
                     and not allow_pickle
                     and not is_safetensors_compatible(
-                        model_filenames,
-                        variant=variant,
-                        passed_components=passed_components,
+                        model_filenames, variant=variant, passed_components=passed_components
                     )
                 ):
                     raise EnvironmentError(
                         f"Could not found the necessary `safetensors` weights in {model_filenames} (variant={variant})"
                     )
                 elif use_safetensors and is_safetensors_compatible(
-                    model_filenames,
-                    variant=variant,
-                    passed_components=passed_components,
+                    model_filenames, variant=variant, passed_components=passed_components
                 ):
                     ignore_patterns = [
                         "*.msgpack",

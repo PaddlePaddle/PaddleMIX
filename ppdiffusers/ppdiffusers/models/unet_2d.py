@@ -17,10 +17,10 @@ from typing import Optional, Tuple, Union
 
 import paddle
 import paddle.nn as nn
-import paddle.nn.functional as F
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import BaseOutput
+from .activations import get_activation
 from .embeddings import GaussianFourierProjection, TimestepEmbedding, Timesteps
 from .modeling_utils import ModelMixin
 from .unet_2d_blocks import UNetMidBlock2D, get_down_block, get_up_block
@@ -29,9 +29,11 @@ from .unet_2d_blocks import UNetMidBlock2D, get_down_block, get_up_block
 @dataclass
 class UNet2DOutput(BaseOutput):
     """
+    The output of [`UNet2DModel`].
+
     Args:
         sample (`paddle.Tensor` of shape `(batch_size, num_channels, height, width)`):
-            Hidden states output. Output of last layer of model.
+            The hidden states output from the last layer of the model.
     """
 
     sample: paddle.Tensor
@@ -39,46 +41,49 @@ class UNet2DOutput(BaseOutput):
 
 class UNet2DModel(ModelMixin, ConfigMixin):
     r"""
-    UNet2DModel is a 2D UNet model that takes in a noisy sample and a timestep and returns sample shaped output.
+    A 2D UNet model that takes a noisy sample and a timestep and returns a sample shaped output.
 
-    This model inherits from [`ModelMixin`]. Check the superclass documentation for the generic methods the library
-    implements for all the model (such as downloading or saving, etc.)
+    This model inherits from [`ModelMixin`]. Check the superclass documentation for it's generic methods implemented
+    for all models (such as downloading or saving).
 
     Parameters:
         sample_size (`int` or `Tuple[int, int]`, *optional*, defaults to `None`):
             Height and width of input/output sample. Dimensions must be a multiple of `2 ** (len(block_out_channels) -
             1)`.
-        in_channels (`int`, *optional*, defaults to 3): Number of channels in the input image.
+        in_channels (`int`, *optional*, defaults to 3): Number of channels in the input sample.
         out_channels (`int`, *optional*, defaults to 3): Number of channels in the output.
         center_input_sample (`bool`, *optional*, defaults to `False`): Whether to center the input sample.
         time_embedding_type (`str`, *optional*, defaults to `"positional"`): Type of time embedding to use.
-        freq_shift (`int`, *optional*, defaults to 0): Frequency shift for fourier time embedding.
-        flip_sin_to_cos (`bool`, *optional*, defaults to :
-            obj:`True`): Whether to flip sin to cos for fourier time embedding.
-        down_block_types (`Tuple[str]`, *optional*, defaults to :
-            obj:`("DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D")`): Tuple of downsample block
-            types.
+        freq_shift (`int`, *optional*, defaults to 0): Frequency shift for Fourier time embedding.
+        flip_sin_to_cos (`bool`, *optional*, defaults to `True`):
+            Whether to flip sin to cos for Fourier time embedding.
+        down_block_types (`Tuple[str]`, *optional*, defaults to `("DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D")`):
+            Tuple of downsample block types.
         mid_block_type (`str`, *optional*, defaults to `"UNetMidBlock2D"`):
-            The mid block type. Choose from `UNetMidBlock2D` or `UnCLIPUNetMidBlock2D`.
-        up_block_types (`Tuple[str]`, *optional*, defaults to :
-            obj:`("AttnUpBlock2D", "AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D")`): Tuple of upsample block types.
-        block_out_channels (`Tuple[int]`, *optional*, defaults to :
-            obj:`(224, 448, 672, 896)`): Tuple of block output channels.
+            Block type for middle of UNet, it can be either `UNetMidBlock2D` or `UnCLIPUNetMidBlock2D`.
+        up_block_types (`Tuple[str]`, *optional*, defaults to `("AttnUpBlock2D", "AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D")`):
+            Tuple of upsample block types.
+        block_out_channels (`Tuple[int]`, *optional*, defaults to `(224, 448, 672, 896)`):
+            Tuple of block output channels.
         layers_per_block (`int`, *optional*, defaults to `2`): The number of layers per block.
         mid_block_scale_factor (`float`, *optional*, defaults to `1`): The scale factor for the mid block.
         downsample_padding (`int`, *optional*, defaults to `1`): The padding for the downsample convolution.
+        downsample_type (`str`, *optional*, defaults to `conv`):
+            The downsample type for downsampling layers. Choose between "conv" and "resnet"
+        upsample_type (`str`, *optional*, defaults to `conv`):
+            The upsample type for upsampling layers. Choose between "conv" and "resnet"
         act_fn (`str`, *optional*, defaults to `"silu"`): The activation function to use.
         attention_head_dim (`int`, *optional*, defaults to `8`): The attention head dimension.
-        norm_num_groups (`int`, *optional*, defaults to `32`): The number of groups for the normalization.
-        norm_eps (`float`, *optional*, defaults to `1e-5`): The epsilon for the normalization.
+        norm_num_groups (`int`, *optional*, defaults to `32`): The number of groups for normalization.
+        norm_eps (`float`, *optional*, defaults to `1e-5`): The epsilon for normalization.
         resnet_time_scale_shift (`str`, *optional*, defaults to `"default"`): Time scale shift config
-            for resnet blocks, see [`~models.resnet.ResnetBlock2D`]. Choose from `default` or `scale_shift`.
-        class_embed_type (`str`, *optional*, defaults to None):
+            for ResNet blocks (see [`~models.resnet.ResnetBlock2D`]). Choose from `default` or `scale_shift`.
+        class_embed_type (`str`, *optional*, defaults to `None`):
             The type of class embedding to use which is ultimately summed with the time embeddings. Choose from `None`,
             `"timestep"`, or `"identity"`.
-        num_class_embeds (`int`, *optional*, defaults to None):
-            Input dimension of the learnable embedding matrix to be projected to `time_embed_dim`, when performing
-            class conditioning with `class_embed_type` equal to `None`.
+        num_class_embeds (`int`, *optional*, defaults to `None`):
+            Input dimension of the learnable embedding matrix to be projected to `time_embed_dim` when performing class
+            conditioning with `class_embed_type` equal to `None`.
     """
 
     @register_to_config
@@ -91,22 +96,14 @@ class UNet2DModel(ModelMixin, ConfigMixin):
         time_embedding_type: str = "positional",
         freq_shift: int = 0,
         flip_sin_to_cos: bool = True,
-        down_block_types: Tuple[str] = (
-            "DownBlock2D",
-            "AttnDownBlock2D",
-            "AttnDownBlock2D",
-            "AttnDownBlock2D",
-        ),
-        up_block_types: Tuple[str] = (
-            "AttnUpBlock2D",
-            "AttnUpBlock2D",
-            "AttnUpBlock2D",
-            "UpBlock2D",
-        ),
+        down_block_types: Tuple[str] = ("DownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D", "AttnDownBlock2D"),
+        up_block_types: Tuple[str] = ("AttnUpBlock2D", "AttnUpBlock2D", "AttnUpBlock2D", "UpBlock2D"),
         block_out_channels: Tuple[int] = (224, 448, 672, 896),
         layers_per_block: int = 2,
         mid_block_scale_factor: float = 1,
         downsample_padding: int = 1,
+        downsample_type: str = "conv",
+        upsample_type: str = "conv",
         act_fn: str = "silu",
         attention_head_dim: Optional[int] = 8,
         norm_num_groups: int = 32,
@@ -163,14 +160,7 @@ class UNet2DModel(ModelMixin, ConfigMixin):
         # pre_temb_act_fun opt
         self.resnet_pre_temb_non_linearity = resnet_pre_temb_non_linearity
         if resnet_pre_temb_non_linearity:
-            if act_fn == "swish":
-                self.down_resnet_temb_nonlinearity = lambda x: F.silu(x)
-            elif act_fn == "mish":
-                self.down_resnet_temb_nonlinearity = nn.Mish()
-            elif act_fn == "silu":
-                self.down_resnet_temb_nonlinearity = nn.Silu()
-            elif act_fn == "gelu":
-                self.down_resnet_temb_nonlinearity = nn.GELU()
+            self.down_resnet_temb_nonlinearity = get_activation(act_fn)
 
         # down
         output_channel = block_out_channels[0]
@@ -189,9 +179,10 @@ class UNet2DModel(ModelMixin, ConfigMixin):
                 resnet_eps=norm_eps,
                 resnet_act_fn=act_fn,
                 resnet_groups=norm_num_groups,
-                attn_num_head_channels=attention_head_dim,
+                attention_head_dim=attention_head_dim if attention_head_dim is not None else output_channel,
                 downsample_padding=downsample_padding,
                 resnet_time_scale_shift=resnet_time_scale_shift,
+                downsample_type=downsample_type,
                 resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
             self.down_blocks.append(down_block)
@@ -204,7 +195,7 @@ class UNet2DModel(ModelMixin, ConfigMixin):
             resnet_act_fn=act_fn,
             output_scale_factor=mid_block_scale_factor,
             resnet_time_scale_shift=resnet_time_scale_shift,
-            attn_num_head_channels=attention_head_dim,
+            attention_head_dim=attention_head_dim if attention_head_dim is not None else block_out_channels[-1],
             resnet_groups=norm_num_groups,
             add_attention=add_attention,
             resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
@@ -231,8 +222,9 @@ class UNet2DModel(ModelMixin, ConfigMixin):
                 resnet_eps=norm_eps,
                 resnet_act_fn=act_fn,
                 resnet_groups=norm_num_groups,
-                attn_num_head_channels=attention_head_dim,
+                attention_head_dim=attention_head_dim if attention_head_dim is not None else output_channel,
                 resnet_time_scale_shift=resnet_time_scale_shift,
+                upsample_type=upsample_type,
                 resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
             self.up_blocks.append(up_block)
@@ -241,9 +233,7 @@ class UNet2DModel(ModelMixin, ConfigMixin):
         # out
         num_groups_out = norm_num_groups if norm_num_groups is not None else min(block_out_channels[0] // 4, 32)
         self.conv_norm_out = nn.GroupNorm(
-            num_channels=block_out_channels[0],
-            num_groups=num_groups_out,
-            epsilon=norm_eps,
+            num_channels=block_out_channels[0], num_groups=num_groups_out, epsilon=norm_eps
         )
         self.conv_act = nn.Silu()
         self.conv_out = nn.Conv2D(block_out_channels[0], out_channels, kernel_size=3, padding=1)
@@ -256,17 +246,21 @@ class UNet2DModel(ModelMixin, ConfigMixin):
         return_dict: bool = True,
     ) -> Union[UNet2DOutput, Tuple]:
         r"""
+        The [`UNet2DModel`] forward method.
+
         Args:
-            sample (`paddle.Tensor`): (batch, channel, height, width) noisy inputs tensor
-            timestep (`paddle.Tensor` or `float` or `int): (batch) timesteps
+            sample (`paddle.Tensor`):
+                The noisy input tensor with the following shape `(batch, channel, height, width)`.
+            timestep (`paddle.Tensor` or `float` or `int`): The number of timesteps to denoise an input.
             class_labels (`paddle.Tensor`, *optional*, defaults to `None`):
                 Optional class labels for conditioning. Their embeddings will be summed with the timestep embeddings.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~models.unet_2d.UNet2DOutput`] instead of a plain tuple.
 
         Returns:
-            [`~models.unet_2d.UNet2DOutput`] or `tuple`: [`~models.unet_2d.UNet2DOutput`] if `return_dict` is True,
-            otherwise a `tuple`. When returning a tuple, the first element is the sample tensor.
+            [`~models.unet_2d.UNet2DOutput`] or `tuple`:
+                If `return_dict` is True, an [`~models.unet_2d.UNet2DOutput`] is returned, otherwise a `tuple` is
+                returned where the first element is the sample tensor.
         """
         # TODO junnyu, add this to support pure fp16
         sample = sample.cast(self.dtype)
@@ -294,21 +288,21 @@ class UNet2DModel(ModelMixin, ConfigMixin):
         # timesteps does not contain any weights and will always return f32 tensors
         # but time_embedding might actually be running in fp16. so we need to cast here.
         # there might be better ways to encapsulate this.
-        t_emb = t_emb.cast(self.dtype)
+        t_emb = t_emb.cast(sample.dtype)
         emb = self.time_embedding(t_emb)
 
         if self.class_embedding is not None:
             if class_labels is None:
                 raise ValueError("class_labels should be provided when doing class conditioning")
 
-            class_labels = class_labels.cast(self.dtype)
+            class_labels = class_labels.cast(sample.dtype)
 
             if self.config.class_embed_type == "timestep":
                 class_labels = self.time_proj(class_labels)
 
             if isinstance(self.class_embedding, nn.Embedding):
                 class_labels = class_labels.cast(paddle.int64)
-            class_emb = self.class_embedding(class_labels).cast(self.dtype)
+            class_emb = self.class_embedding(class_labels).cast(sample.dtype)
             emb = emb + class_emb
 
         # 2. pre-process

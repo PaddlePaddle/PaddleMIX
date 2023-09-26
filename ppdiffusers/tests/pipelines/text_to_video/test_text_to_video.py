@@ -26,7 +26,7 @@ from ppdiffusers import (
     TextToVideoSDPipeline,
     UNet3DConditionModel,
 )
-from ppdiffusers.utils import load_numpy, slow
+from ppdiffusers.utils import is_ppxformers_available, load_numpy, slow
 
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
@@ -37,14 +37,7 @@ class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
     required_optional_params = frozenset(
-        [
-            "num_inference_steps",
-            "generator",
-            "latents",
-            "return_dict",
-            "callback",
-            "callback_steps",
-        ]
+        ["num_inference_steps", "generator", "latents", "return_dict", "callback", "callback_steps"]
     )
 
     def get_dummy_components(self):
@@ -55,18 +48,8 @@ class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             sample_size=32,
             in_channels=4,
             out_channels=4,
-            down_block_types=(
-                "CrossAttnDownBlock3D",
-                "CrossAttnDownBlock3D",
-                "CrossAttnDownBlock3D",
-                "DownBlock3D",
-            ),
-            up_block_types=(
-                "UpBlock3D",
-                "CrossAttnUpBlock3D",
-                "CrossAttnUpBlock3D",
-                "CrossAttnUpBlock3D",
-            ),
+            down_block_types=("CrossAttnDownBlock3D", "CrossAttnDownBlock3D", "CrossAttnDownBlock3D", "DownBlock3D"),
+            up_block_types=("UpBlock3D", "CrossAttnUpBlock3D", "CrossAttnUpBlock3D", "CrossAttnUpBlock3D"),
             cross_attention_dim=32,
             attention_head_dim=4,
         )
@@ -138,11 +121,15 @@ class TextToVideoSDPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
-    def test_xformers_attention_forwardGenerator_pass(self):
-        self._test_xformers_attention_forwardGenerator_pass(test_mean_pixel_difference=False)
-
     def test_attention_slicing_forward_pass(self):
-        self._test_attention_slicing_forward_pass(test_mean_pixel_difference=False)
+        self._test_attention_slicing_forward_pass(test_mean_pixel_difference=False, expected_max_diff=3e-3)
+
+    @unittest.skipIf(
+        not is_ppxformers_available(),
+        reason="XFormers attention is only available with CUDA and `xformers` installed",
+    )
+    def test_xformers_attention_forwardGenerator_pass(self):
+        self._test_xformers_attention_forwardGenerator_pass(test_mean_pixel_difference=False, expected_max_diff=1e-2)
 
     @unittest.skip(reason="Batching needs to be properly figured out first for this pipeline.")
     def test_inference_batch_consistent(self):
@@ -163,11 +150,9 @@ class TextToVideoSDPipelineSlowTests(unittest.TestCase):
         expected_video = load_numpy(
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/text_to_video/video.npy"
         )
-        pipe = TextToVideoSDPipeline.from_pretrained(
-            "damo-vilab/text-to-video-ms-1.7b", from_hf_hub=True, from_diffusers=True
-        )
+        pipe = TextToVideoSDPipeline.from_pretrained("damo-vilab/text-to-video-ms-1.7b")
         pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-        pipe = pipe
+
         prompt = "Spiderman is surfing"
         generator = paddle.Generator().manual_seed(0)
         video_frames = pipe(prompt, generator=generator, num_inference_steps=25, output_type="pd").frames

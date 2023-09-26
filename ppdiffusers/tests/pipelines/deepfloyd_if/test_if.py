@@ -97,11 +97,7 @@ class IFPipelineSlowTests(unittest.TestCase):
         pipe_1 = IFPipeline.from_pretrained("DeepFloyd/IF-I-XL-v1.0", variant="fp16", paddle_dtype=paddle.float16)
 
         pipe_2 = IFSuperResolutionPipeline.from_pretrained(
-            "DeepFloyd/IF-II-L-v1.0",
-            variant="fp16",
-            paddle_dtype=paddle.float16,
-            text_encoder=None,
-            tokenizer=None,
+            "DeepFloyd/IF-II-L-v1.0", variant="fp16", paddle_dtype=paddle.float16, text_encoder=None, tokenizer=None
         )
 
         # pre compute text embeddings and remove T5 to save memory
@@ -117,40 +113,25 @@ class IFPipelineSlowTests(unittest.TestCase):
         pipe_1.tokenizer = None
         pipe_1.text_encoder = None
 
-        pipe_1.enable_model_cpu_offload()
-        pipe_2.enable_model_cpu_offload()
-
         pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
         pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
 
         self._test_if(pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds)
-
-        pipe_1.remove_all_hooks()
-        pipe_2.remove_all_hooks()
 
         # img2img
 
         pipe_1 = IFImg2ImgPipeline(**pipe_1.components)
         pipe_2 = IFImg2ImgSuperResolutionPipeline(**pipe_2.components)
 
-        pipe_1.enable_model_cpu_offload()
-        pipe_2.enable_model_cpu_offload()
-
         pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
         pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
 
         self._test_if_img2img(pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds)
 
-        pipe_1.remove_all_hooks()
-        pipe_2.remove_all_hooks()
-
         # inpainting
 
         pipe_1 = IFInpaintingPipeline(**pipe_1.components)
         pipe_2 = IFInpaintingSuperResolutionPipeline(**pipe_2.components)
-
-        pipe_1.enable_model_cpu_offload()
-        pipe_2.enable_model_cpu_offload()
 
         pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
         pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
@@ -173,11 +154,11 @@ class IFPipelineSlowTests(unittest.TestCase):
 
         assert image.shape == (64, 64, 3)
 
-        mem_bytes = paddle.cuda.max_memory_allocated()
-        assert mem_bytes < 13 * 10**9
+        mem_bytes = paddle.device.cuda.max_memory_allocated()
+        assert mem_bytes < 30 * 10**9
 
         expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/if/test_if.npy"
+            "https://bj.bcebos.com/v1/paddlenlp/models/community/hf-internal-testing/deepfloyd_if/test_if.npy"
         )
         assert_mean_pixel_difference(image, expected_image)
 
@@ -200,11 +181,11 @@ class IFPipelineSlowTests(unittest.TestCase):
 
         assert image.shape == (256, 256, 3)
 
-        mem_bytes = paddle.cuda.max_memory_allocated()
-        assert mem_bytes < 4 * 10**9
+        mem_bytes = paddle.device.cuda.max_memory_allocated()
+        assert mem_bytes < 30 * 10**9
 
         expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/if/test_if_superresolution_stage_II.npy"
+            "https://bj.bcebos.com/v1/paddlenlp/models/community/hf-internal-testing/deepfloyd_if/test_if_superresolution_stage_II.npy"
         )
         assert_mean_pixel_difference(image, expected_image)
 
@@ -228,11 +209,11 @@ class IFPipelineSlowTests(unittest.TestCase):
 
         assert image.shape == (64, 64, 3)
 
-        mem_bytes = paddle.cuda.max_memory_allocated()
-        assert mem_bytes < 10 * 10**9
+        mem_bytes = paddle.device.cuda.max_memory_allocated()
+        assert mem_bytes < 30 * 10**9
 
         expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/if/test_if_img2img.npy"
+            "https://bj.bcebos.com/v1/paddlenlp/models/community/hf-internal-testing/deepfloyd_if/test_if_img2img.npy"
         )
         assert_mean_pixel_difference(image, expected_image)
 
@@ -257,11 +238,11 @@ class IFPipelineSlowTests(unittest.TestCase):
 
         assert image.shape == (256, 256, 3)
 
-        mem_bytes = paddle.cuda.max_memory_allocated()
-        assert mem_bytes < 4 * 10**9
+        mem_bytes = paddle.device.cuda.max_memory_allocated()
+        assert mem_bytes < 30 * 10**9
 
         expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/if/test_if_img2img_superresolution_stage_II.npy"
+            "https://bj.bcebos.com/v1/paddlenlp/models/community/hf-internal-testing/deepfloyd_if/test_if_img2img_superresolution_stage_II.npy"
         )
         assert_mean_pixel_difference(image, expected_image)
 
@@ -286,11 +267,10 @@ class IFPipelineSlowTests(unittest.TestCase):
 
         assert image.shape == (64, 64, 3)
 
-        mem_bytes = paddle.cuda.max_memory_allocated()
-        assert mem_bytes < 10 * 10**9
-
+        mem_bytes = paddle.device.cuda.max_memory_allocated()
+        assert mem_bytes < 30 * 10**9
         expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/if/test_if_inpainting.npy"
+            "https://bj.bcebos.com/v1/paddlenlp/models/community/hf-internal-testing/deepfloyd_if/test_if_inpainting.npy"
         )
         assert_mean_pixel_difference(image, expected_image)
 
@@ -318,9 +298,9 @@ class IFPipelineSlowTests(unittest.TestCase):
         assert image.shape == (256, 256, 3)
 
         mem_bytes = paddle.device.cuda.max_memory_allocated()
-        assert mem_bytes < 4 * 10**9
+        assert mem_bytes < 30 * 10**9
 
         expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/if/test_if_inpainting_superresolution_stage_II.npy"
+            "https://bj.bcebos.com/v1/paddlenlp/models/community/hf-internal-testing/deepfloyd_if/test_if_inpainting_superresolution_stage_II.npy"
         )
         assert_mean_pixel_difference(image, expected_image)

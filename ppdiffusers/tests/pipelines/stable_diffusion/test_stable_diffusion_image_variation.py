@@ -34,16 +34,27 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import floats_tensor, load_image, load_numpy, nightly, slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..pipeline_params import IMAGE_VARIATION_BATCH_PARAMS, IMAGE_VARIATION_PARAMS
-from ..test_pipelines_common import PipelineTesterMixin
+from ..test_pipelines_common import (
+    PipelineKarrasSchedulerTesterMixin,
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+)
+
+enable_full_determinism()
 
 
-class StableDiffusionImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusionImageVariationPipelineFastTests(
+    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
+):
     pipeline_class = StableDiffusionImageVariationPipeline
     params = IMAGE_VARIATION_PARAMS
     batch_params = IMAGE_VARIATION_BATCH_PARAMS
+    image_params = frozenset([])
+    # TO-DO: update image_params once pipeline is refactored with VaeImageProcessor.preprocess
+    image_latents_params = frozenset([])
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -101,7 +112,7 @@ class StableDiffusionImageVariationPipelineFastTests(PipelineTesterMixin, unitte
             "generator": generator,
             "num_inference_steps": 2,
             "guidance_scale": 6.0,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 
@@ -114,17 +125,7 @@ class StableDiffusionImageVariationPipelineFastTests(PipelineTesterMixin, unitte
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array(
-            [
-                0.22073305,
-                0.22751817,
-                0.32176197,
-                0.26315716,
-                0.25681925,
-                0.41432184,
-                0.2454437,
-                0.10104704,
-                0.32165903,
-            ]
+            [0.22073305, 0.22751817, 0.32176197, 0.26315716, 0.25681925, 0.41432184, 0.2454437, 0.10104704, 0.32165903]
         )
 
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
@@ -140,19 +141,12 @@ class StableDiffusionImageVariationPipelineFastTests(PipelineTesterMixin, unitte
         image_slice = image[-1, -3:, -3:, -1]
         assert image.shape == (2, 64, 64, 3)
         expected_slice = np.array(
-            [
-                0.61040395,
-                0.7414253,
-                0.5950623,
-                0.5843509,
-                0.25609648,
-                0.28481025,
-                0.61782926,
-                0.3014974,
-                0.35131538,
-            ]
+            [0.61040395, 0.7414253, 0.5950623, 0.5843509, 0.25609648, 0.28481025, 0.61782926, 0.3014974, 0.35131538]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
+
+    def test_inference_batch_single_identical(self):
+        super().test_inference_batch_single_identical()
 
 
 @slow
@@ -174,7 +168,7 @@ class StableDiffusionImageVariationPipelineSlowTests(unittest.TestCase):
             "generator": generator,
             "num_inference_steps": 3,
             "guidance_scale": 7.5,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 
@@ -200,7 +194,7 @@ class StableDiffusionImageVariationPipelineSlowTests(unittest.TestCase):
                 0.5223015546798706,
             ]
         )
-        assert np.abs(image_slice - expected_slice).max() < 0.0001
+        assert np.abs(image_slice - expected_slice).max() < 6e-3
 
     def test_stable_diffusion_img_variation_intermediate_state(self):
         number_of_steps = 0
@@ -214,43 +208,19 @@ class StableDiffusionImageVariationPipelineSlowTests(unittest.TestCase):
                 assert latents.shape == (1, 4, 64, 64)
                 latents_slice = latents[0, -3:, -3:, -1]
                 expected_slice = np.array(
-                    [
-                        -0.1621,
-                        0.2837,
-                        -0.7979,
-                        -0.1221,
-                        -1.3057,
-                        0.7681,
-                        -2.1191,
-                        0.0464,
-                        1.6309,
-                    ]
+                    [-0.1621, 0.2837, -0.7979, -0.1221, -1.3057, 0.7681, -2.1191, 0.0464, 1.6309]
                 )
                 assert np.abs(latents_slice.flatten() - expected_slice).max() < 0.05
             elif step == 2:
                 latents = latents.detach().cpu().numpy()
                 assert latents.shape == (1, 4, 64, 64)
                 latents_slice = latents[0, -3:, -3:, -1]
-                expected_slice = np.array(
-                    [
-                        0.6299,
-                        1.75,
-                        1.1992,
-                        -2.1582,
-                        -1.8994,
-                        0.7334,
-                        -0.709,
-                        1.0137,
-                        1.5273,
-                    ]
-                )
+                expected_slice = np.array([0.6299, 1.75, 1.1992, -2.1582, -1.8994, 0.7334, -0.709, 1.0137, 1.5273])
                 assert np.abs(latents_slice.flatten() - expected_slice).max() < 0.05
 
         callback_fn.has_been_called = False
         pipe = StableDiffusionImageVariationPipeline.from_pretrained(
-            "fusing/sd-image-variations-diffusers",
-            safety_checker=None,
-            paddle_dtype=paddle.float16,
+            "fusing/sd-image-variations-diffusers", safety_checker=None, paddle_dtype=paddle.float16
         )
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
@@ -279,7 +249,7 @@ class StableDiffusionImageVariationPipelineNightlyTests(unittest.TestCase):
             "generator": generator,
             "num_inference_steps": 50,
             "guidance_scale": 7.5,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 

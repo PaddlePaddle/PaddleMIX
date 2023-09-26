@@ -56,13 +56,7 @@ class T5FilmDecoder(ModelMixin, ConfigMixin):
         self.decoders = nn.LayerList()
         for lyr_num in range(num_layers):
             # FiLM conditional T5 decoder
-            lyr = DecoderLayer(
-                d_model=d_model,
-                d_kv=d_kv,
-                num_heads=num_heads,
-                d_ff=d_ff,
-                dropout_rate=dropout_rate,
-            )
+            lyr = DecoderLayer(d_model=d_model, d_kv=d_kv, num_heads=num_heads, d_ff=d_ff, dropout_rate=dropout_rate)
             self.decoders.append(lyr)
 
         self.decoder_norm = T5LayerNorm(d_model)
@@ -137,12 +131,7 @@ class DecoderLayer(nn.Layer):
 
         # cond self attention: layer 0
         self.layer.append(
-            T5LayerSelfAttentionCond(
-                d_model=d_model,
-                d_kv=d_kv,
-                num_heads=num_heads,
-                dropout_rate=dropout_rate,
-            )
+            T5LayerSelfAttentionCond(d_model=d_model, d_kv=d_kv, num_heads=num_heads, dropout_rate=dropout_rate)
         )
 
         # cross attention: layer 1
@@ -158,12 +147,7 @@ class DecoderLayer(nn.Layer):
 
         # Film Cond MLP + dropout: last layer
         self.layer.append(
-            T5LayerFFCond(
-                d_model=d_model,
-                d_ff=d_ff,
-                dropout_rate=dropout_rate,
-                layer_norm_epsilon=layer_norm_epsilon,
-            )
+            T5LayerFFCond(d_model=d_model, d_ff=d_ff, dropout_rate=dropout_rate, layer_norm_epsilon=layer_norm_epsilon)
         )
 
     def forward(
@@ -203,13 +187,7 @@ class T5LayerSelfAttentionCond(nn.Layer):
         super().__init__()
         self.layer_norm = T5LayerNorm(d_model)
         self.FiLMLayer = T5FiLMLayer(in_features=d_model * 4, out_features=d_model)
-        self.attention = Attention(
-            query_dim=d_model,
-            heads=num_heads,
-            dim_head=d_kv,
-            out_bias=False,
-            scale_qk=False,
-        )
+        self.attention = Attention(query_dim=d_model, heads=num_heads, dim_head=d_kv, out_bias=False, scale_qk=False)
         self.dropout = nn.Dropout(dropout_rate)
 
     def forward(
@@ -235,13 +213,7 @@ class T5LayerSelfAttentionCond(nn.Layer):
 class T5LayerCrossAttention(nn.Layer):
     def __init__(self, d_model, d_kv, num_heads, dropout_rate, layer_norm_epsilon):
         super().__init__()
-        self.attention = Attention(
-            query_dim=d_model,
-            heads=num_heads,
-            dim_head=d_kv,
-            out_bias=False,
-            scale_qk=False,
-        )
+        self.attention = Attention(query_dim=d_model, heads=num_heads, dim_head=d_kv, out_bias=False, scale_qk=False)
         self.layer_norm = T5LayerNorm(d_model, eps=layer_norm_epsilon)
         self.dropout = nn.Dropout(dropout_rate)
 

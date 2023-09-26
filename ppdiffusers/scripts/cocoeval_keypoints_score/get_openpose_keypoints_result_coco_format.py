@@ -49,11 +49,7 @@ def keypoint_to_openpose_kpts(coco_keypoints_list):
 
     neck_keypoint_y = int((l_shoulder_keypoint[1] + r_shoulder_keypoint[1]) / 2.0)
     neck_keypoint_x = int((l_shoulder_keypoint[0] + r_shoulder_keypoint[0]) / 2.0)
-    neck_keypoint = [
-        neck_keypoint_x,
-        neck_keypoint_y,
-        min(l_shoulder_keypoint[2], r_shoulder_keypoint[2]),
-    ]
+    neck_keypoint = [neck_keypoint_x, neck_keypoint_y, min(l_shoulder_keypoint[2], r_shoulder_keypoint[2])]
     open_pose_neck_index = 1
     openpose_kpts.insert(open_pose_neck_index, neck_keypoint)
 
@@ -76,14 +72,7 @@ class PPDetDetector:
             canvas.fill(0)
             canvas = self.body_estimation.draw_pose(canvas, result["candidate"], result["subset"])
 
-            return (
-                canvas,
-                dict(
-                    candidate=result["candidate"].tolist(),
-                    subset=result["subset"].tolist(),
-                ),
-                poseres,
-            )
+            return canvas, dict(candidate=result["candidate"].tolist(), subset=result["subset"].tolist()), poseres
 
     def ppdetpose_pred(self, image, kpt_threshold=0.3):
         poseres = self.ppdetpose.ppdet_hrnet_infer(image)
@@ -139,11 +128,7 @@ def resize_image(input_image, resolution):
     W *= k
     H = int(np.round(H / 64.0)) * 64
     W = int(np.round(W / 64.0)) * 64
-    img = cv2.resize(
-        input_image,
-        (W, H),
-        interpolation=cv2.INTER_LANCZOS4 if k > 1 else cv2.INTER_AREA,
-    )
+    img = cv2.resize(input_image, (W, H), interpolation=cv2.INTER_LANCZOS4 if k > 1 else cv2.INTER_AREA)
     return img
 
 
@@ -268,10 +253,7 @@ def get_keypoints_result_coco_format(paths, detector, do_gt):
 parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument("--do_gt", action="store_true", help="whether to predict unseen future data")
 parser.add_argument(
-    "path",
-    type=str,
-    nargs=3,
-    help=("Paths to the input images dir, output json file, and output openpose images dir"),
+    "path", type=str, nargs=3, help=("Paths to the input images dir, output json file, and output openpose images dir")
 )
 
 IMAGE_EXTENSIONS = {"bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"}

@@ -21,6 +21,7 @@ import paddle.nn as nn
 from paddle.distributed.fleet.utils import recompute
 
 from ..utils import BaseOutput, randn_tensor
+from .attention_processor import SpatialNorm
 from .unet_2d_blocks import UNetMidBlock2D, get_down_block, get_up_block
 
 try:
@@ -45,7 +46,7 @@ class DecoderOutput(BaseOutput):
 
     Args:
         sample (`paddle.Tensor` of shape `(batch_size, num_channels, height, width)`):
-            Decoded output sample of the model. Output of the last layer of the model.
+            The decoded output sample from the last layer of the model.
     """
 
     sample: paddle.Tensor
@@ -88,7 +89,7 @@ class Encoder(nn.Layer):
                 downsample_padding=0,
                 resnet_act_fn=act_fn,
                 resnet_groups=norm_num_groups,
-                attn_num_head_channels=None,
+                attention_head_dim=output_channel,
                 temb_channels=None,
             )
             self.down_blocks.append(down_block)
@@ -100,16 +101,14 @@ class Encoder(nn.Layer):
             resnet_act_fn=act_fn,
             output_scale_factor=1,
             resnet_time_scale_shift="default",
-            attn_num_head_channels=None,
+            attention_head_dim=block_out_channels[-1],
             resnet_groups=norm_num_groups,
             temb_channels=None,
         )
 
         # out
         self.conv_norm_out = nn.GroupNorm(
-            num_channels=block_out_channels[-1],
-            num_groups=norm_num_groups,
-            epsilon=1e-6,
+            num_channels=block_out_channels[-1], num_groups=norm_num_groups, epsilon=1e-6
         )
         self.conv_act = nn.Silu()
 
@@ -162,6 +161,7 @@ class Decoder(nn.Layer):
         layers_per_block=2,
         norm_num_groups=32,
         act_fn="silu",
+        norm_type="group",  # group, spatial
     ):
         super().__init__()
         self.layers_per_block = layers_per_block
@@ -170,6 +170,7 @@ class Decoder(nn.Layer):
 
         self.mid_block = None
         self.up_blocks = nn.LayerList([])
+        temb_channels = in_channels if norm_type == "spatial" else None
 
         # mid
         self.mid_block = UNetMidBlock2D(
@@ -177,10 +178,10 @@ class Decoder(nn.Layer):
             resnet_eps=1e-6,
             resnet_act_fn=act_fn,
             output_scale_factor=1,
-            resnet_time_scale_shift="default",
-            attn_num_head_channels=None,
+            resnet_time_scale_shift="default" if norm_type == "group" else norm_type,
+            attention_head_dim=block_out_channels[-1],
             resnet_groups=norm_num_groups,
-            temb_channels=None,
+            temb_channels=temb_channels,
         )
 
         # up
@@ -202,19 +203,25 @@ class Decoder(nn.Layer):
                 resnet_eps=1e-6,
                 resnet_act_fn=act_fn,
                 resnet_groups=norm_num_groups,
-                attn_num_head_channels=None,
-                temb_channels=None,
+                attention_head_dim=output_channel,
+                temb_channels=temb_channels,
+                resnet_time_scale_shift=norm_type,
             )
             self.up_blocks.append(up_block)
             prev_output_channel = output_channel
 
         # out
-        self.conv_norm_out = nn.GroupNorm(num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=1e-6)
+        if norm_type == "spatial":
+            self.conv_norm_out = SpatialNorm(block_out_channels[0], temb_channels)
+        else:
+            self.conv_norm_out = nn.GroupNorm(
+                num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=1e-6
+            )
         self.conv_act = nn.Silu()
         self.conv_out = nn.Conv2D(block_out_channels[0], out_channels, 3, padding=1)
         self.gradient_checkpointing = False
 
-    def forward(self, z):
+    def forward(self, z, latent_embeds=None):
         sample = z
         sample = self.conv_in(sample)
 
@@ -228,22 +235,22 @@ class Decoder(nn.Layer):
                 return custom_forward
 
             # middle
-            sample = recompute(create_custom_forward(self.mid_block), sample)
+            sample = recompute(create_custom_forward(self.mid_block), sample, latent_embeds)
             if upscale_dtype != sample.dtype:
                 sample = sample.cast(upscale_dtype)
 
             # up
             for up_block in self.up_blocks:
-                sample = recompute(create_custom_forward(up_block), sample)
+                sample = recompute(create_custom_forward(up_block), sample, latent_embeds)
         else:
             # middle
-            sample = self.mid_block(sample)
+            sample = self.mid_block(sample, latent_embeds)
             if upscale_dtype != sample.dtype:
                 sample = sample.cast(upscale_dtype)
 
             # up
             for up_block in self.up_blocks:
-                sample = up_block(sample)
+                sample = up_block(sample, latent_embeds)
 
         # (TODO, junnyu) check nan
         # clamp inf values to enable fp16 training
@@ -252,7 +259,229 @@ class Decoder(nn.Layer):
             sample = paddle.clip(sample, min=-clamp_value, max=clamp_value)
 
         # post-process
-        sample = self.conv_norm_out(sample)
+        if latent_embeds is None:
+            sample = self.conv_norm_out(sample)
+        else:
+            sample = self.conv_norm_out(sample, latent_embeds)
+        sample = self.conv_act(sample)
+        sample = self.conv_out(sample)
+
+        return sample
+
+
+class UpSample(nn.Layer):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+    ) -> None:
+        super().__init__()
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.deconv = nn.Conv2DTranspose(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
+
+    def forward(self, x: paddle.Tensor) -> paddle.Tensor:
+        x = paddle.nn.functional.relu(x)
+        x = self.deconv(x)
+        return x
+
+
+class MaskConditionEncoder(nn.Layer):
+    """
+    used in AsymmetricAutoencoderKL
+    """
+
+    def __init__(
+        self,
+        in_ch: int,
+        out_ch: int = 192,
+        res_ch: int = 768,
+        stride: int = 16,
+    ) -> None:
+        super().__init__()
+
+        channels = []
+        while stride > 1:
+            stride = stride // 2
+            in_ch_ = out_ch * 2
+            if out_ch > res_ch:
+                out_ch = res_ch
+            if stride == 1:
+                in_ch_ = res_ch
+            channels.append((in_ch_, out_ch))
+            out_ch *= 2
+
+        out_channels = []
+        for _in_ch, _out_ch in channels:
+            out_channels.append(_out_ch)
+        out_channels.append(channels[-1][0])
+
+        layers = []
+        in_ch_ = in_ch
+        for l in range(len(out_channels)):
+            out_ch_ = out_channels[l]
+            if l == 0 or l == 1:
+                layers.append(nn.Conv2D(in_ch_, out_ch_, kernel_size=3, stride=1, padding=1))
+            else:
+                layers.append(nn.Conv2D(in_ch_, out_ch_, kernel_size=4, stride=2, padding=1))
+            in_ch_ = out_ch_
+
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x: paddle.Tensor, mask=None) -> paddle.Tensor:
+        out = {}
+        for l in range(len(self.layers)):
+            layer = self.layers[l]
+            x = layer(x)
+            out[str(tuple(x.shape))] = x
+            x = paddle.nn.functional.relu(x)
+        return out
+
+
+class MaskConditionDecoder(nn.Layer):
+    """The `MaskConditionDecoder` should be used in combination with [`AsymmetricAutoencoderKL`] to enhance the model's
+    decoder with a conditioner on the mask and masked image."""
+
+    def __init__(
+        self,
+        in_channels=3,
+        out_channels=3,
+        up_block_types=("UpDecoderBlock2D",),
+        block_out_channels=(64,),
+        layers_per_block=2,
+        norm_num_groups=32,
+        act_fn="silu",
+        norm_type="group",  # group, spatial
+    ):
+        super().__init__()
+        self.layers_per_block = layers_per_block
+
+        self.conv_in = nn.Conv2D(
+            in_channels,
+            block_out_channels[-1],
+            kernel_size=3,
+            stride=1,
+            padding=1,
+        )
+
+        self.mid_block = None
+        self.up_blocks = nn.LayerList([])
+
+        temb_channels = in_channels if norm_type == "spatial" else None
+
+        # mid
+        self.mid_block = UNetMidBlock2D(
+            in_channels=block_out_channels[-1],
+            resnet_eps=1e-6,
+            resnet_act_fn=act_fn,
+            output_scale_factor=1,
+            resnet_time_scale_shift="default" if norm_type == "group" else norm_type,
+            attention_head_dim=block_out_channels[-1],
+            resnet_groups=norm_num_groups,
+            temb_channels=temb_channels,
+        )
+
+        # up
+        reversed_block_out_channels = list(reversed(block_out_channels))
+        output_channel = reversed_block_out_channels[0]
+        for i, up_block_type in enumerate(up_block_types):
+            prev_output_channel = output_channel
+            output_channel = reversed_block_out_channels[i]
+
+            is_final_block = i == len(block_out_channels) - 1
+
+            up_block = get_up_block(
+                up_block_type,
+                num_layers=self.layers_per_block + 1,
+                in_channels=prev_output_channel,
+                out_channels=output_channel,
+                prev_output_channel=None,
+                add_upsample=not is_final_block,
+                resnet_eps=1e-6,
+                resnet_act_fn=act_fn,
+                resnet_groups=norm_num_groups,
+                attention_head_dim=output_channel,
+                temb_channels=temb_channels,
+                resnet_time_scale_shift=norm_type,
+            )
+            self.up_blocks.append(up_block)
+            prev_output_channel = output_channel
+
+        # condition encoder
+        self.condition_encoder = MaskConditionEncoder(
+            in_ch=out_channels,
+            out_ch=block_out_channels[0],
+            res_ch=block_out_channels[-1],
+        )
+
+        # out
+        if norm_type == "spatial":
+            self.conv_norm_out = SpatialNorm(block_out_channels[0], temb_channels)
+        else:
+            self.conv_norm_out = nn.GroupNorm(
+                num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=1e-6
+            )
+        self.conv_act = nn.Silu()
+        self.conv_out = nn.Conv2D(block_out_channels[0], out_channels, 3, padding=1)
+
+        self.gradient_checkpointing = False
+
+    def forward(self, z, image=None, mask=None, latent_embeds=None):
+        sample = z
+        sample = self.conv_in(sample)
+
+        upscale_dtype = self.up_blocks.dtype
+        if self.training and self.gradient_checkpointing:
+
+            def create_custom_forward(module):
+                def custom_forward(*inputs):
+                    return module(*inputs)
+
+                return custom_forward
+
+            # middle
+            sample = recompute(create_custom_forward(self.mid_block), sample, latent_embeds)
+            sample = sample.cast(upscale_dtype)
+
+            # condition encoder
+            if image is not None and mask is not None:
+                masked_image = (1 - mask) * image
+                im_x = recompute(create_custom_forward(self.condition_encoder), masked_image, mask)
+
+            # up
+            for up_block in self.up_blocks:
+                if image is not None and mask is not None:
+                    sample_ = im_x[str(tuple(sample.shape))]
+                    mask_ = nn.functional.interpolate(mask, size=sample.shape[-2:], mode="nearest")
+                    sample = sample * mask_ + sample_ * (1 - mask_)
+                sample = recompute(create_custom_forward(up_block), sample, latent_embeds)
+            if image is not None and mask is not None:
+                sample = sample * mask + im_x[str(tuple(sample.shape))] * (1 - mask)
+        else:
+            # middle
+            sample = self.mid_block(sample, latent_embeds)
+            sample = sample.cast(upscale_dtype)
+
+            # condition encoder
+            if image is not None and mask is not None:
+                masked_image = (1 - mask) * image
+                im_x = self.condition_encoder(masked_image, mask)
+
+            # up
+            for up_block in self.up_blocks:
+                if image is not None and mask is not None:
+                    sample_ = im_x[str(tuple(sample.shape))]
+                    mask_ = nn.functional.interpolate(mask, size=sample.shape[-2:], mode="nearest")
+                    sample = sample * mask_ + sample_ * (1 - mask_)
+                sample = up_block(sample, latent_embeds)
+            if image is not None and mask is not None:
+                sample = sample * mask + im_x[str(tuple(sample.shape))] * (1 - mask)
+
+        # post-process
+        if latent_embeds is None:
+            sample = self.conv_norm_out(sample)
+        else:
+            sample = self.conv_norm_out(sample, latent_embeds)
         sample = self.conv_act(sample)
         sample = self.conv_out(sample)
 
@@ -269,14 +498,7 @@ class VectorQuantizer(nn.Layer):
     # backwards compatibility we use the buggy version by default, but you can
     # specify legacy=False to fix it.
     def __init__(
-        self,
-        n_e,
-        vq_embed_dim,
-        beta,
-        remap=None,
-        unknown_index="random",
-        sane_index_shape=False,
-        legacy=True,
+        self, n_e, vq_embed_dim, beta, remap=None, unknown_index="random", sane_index_shape=False, legacy=True
     ):
         super().__init__()
         self.n_e = n_e
@@ -285,9 +507,7 @@ class VectorQuantizer(nn.Layer):
         self.legacy = legacy
 
         self.embedding = nn.Embedding(
-            self.n_e,
-            self.vq_embed_dim,
-            weight_attr=nn.initializer.Uniform(-1.0 / self.n_e, 1.0 / self.n_e),
+            self.n_e, self.vq_embed_dim, weight_attr=nn.initializer.Uniform(-1.0 / self.n_e, 1.0 / self.n_e)
         )
 
         self.remap = remap
@@ -414,10 +634,7 @@ class DiagonalGaussianDistribution(object):
             return paddle.to_tensor([0.0])
         else:
             if other is None:
-                return 0.5 * paddle.sum(
-                    paddle.pow(self.mean, 2) + self.var - 1.0 - self.logvar,
-                    axis=[1, 2, 3],
-                )
+                return 0.5 * paddle.sum(paddle.pow(self.mean, 2) + self.var - 1.0 - self.logvar, axis=[1, 2, 3])
             else:
                 return 0.5 * paddle.sum(
                     paddle.pow(self.mean - other.mean, 2) / other.var
@@ -432,10 +649,7 @@ class DiagonalGaussianDistribution(object):
         if self.deterministic:
             return paddle.to_tensor([0.0])
         logtwopi = np.log(2.0 * np.pi)
-        return 0.5 * paddle.sum(
-            logtwopi + self.logvar + paddle.pow(sample - self.mean, 2) / self.var,
-            axis=axis,
-        )
+        return 0.5 * paddle.sum(logtwopi + self.logvar + paddle.pow(sample - self.mean, 2) / self.var, axis=axis)
 
     def mode(self):
         return self.mean

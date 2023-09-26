@@ -35,12 +35,7 @@ class IPNDMSchedulerTest(SchedulerCommonTest):
         num_inference_steps = kwargs.pop("num_inference_steps", None)
         sample = self.dummy_sample
         residual = 0.1 * sample
-        dummy_past_residuals = [
-            residual + 0.2,
-            residual + 0.15,
-            residual + 0.1,
-            residual + 0.05,
-        ]
+        dummy_past_residuals = [residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05]
 
         for scheduler_class in self.scheduler_classes:
             scheduler_config = self.get_scheduler_config(**config)
@@ -77,12 +72,7 @@ class IPNDMSchedulerTest(SchedulerCommonTest):
         num_inference_steps = kwargs.pop("num_inference_steps", None)
         sample = self.dummy_sample
         residual = 0.1 * sample
-        dummy_past_residuals = [
-            residual + 0.2,
-            residual + 0.15,
-            residual + 0.1,
-            residual + 0.05,
-        ]
+        dummy_past_residuals = [residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05]
 
         for scheduler_class in self.scheduler_classes:
             scheduler_config = self.get_scheduler_config()
@@ -152,12 +142,7 @@ class IPNDMSchedulerTest(SchedulerCommonTest):
                 kwargs["num_inference_steps"] = num_inference_steps
 
             # copy over dummy past residuals (must be done after set_timesteps)
-            dummy_past_residuals = [
-                residual + 0.2,
-                residual + 0.15,
-                residual + 0.1,
-                residual + 0.05,
-            ]
+            dummy_past_residuals = [residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05]
             scheduler.ets = dummy_past_residuals[:]
 
             time_step_0 = scheduler.timesteps[5]

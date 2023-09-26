@@ -27,17 +27,24 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
-from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
-from ..test_pipelines_common import PipelineTesterMixin
+from ..pipeline_params import (
+    TEXT_TO_IMAGE_BATCH_PARAMS,
+    TEXT_TO_IMAGE_IMAGE_PARAMS,
+    TEXT_TO_IMAGE_PARAMS,
+)
+from ..test_pipelines_common import PipelineLatentTesterMixin, PipelineTesterMixin
+
+enable_full_determinism()
 
 
-class StableDiffusionSAGPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusionSAGPipelineFastTests(PipelineLatentTesterMixin, PipelineTesterMixin, unittest.TestCase):
     pipeline_class = StableDiffusionSAGPipeline
-    test_cpu_offload = False
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
+    image_params = TEXT_TO_IMAGE_IMAGE_PARAMS
+    image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -101,9 +108,12 @@ class StableDiffusionSAGPipelineFastTests(PipelineTesterMixin, unittest.TestCase
             "num_inference_steps": 2,
             "guidance_scale": 1.0,
             "sag_scale": 1.0,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
+
+    def test_inference_batch_single_identical(self):
+        super().test_inference_batch_single_identical()
 
 
 @slow
@@ -120,28 +130,13 @@ class StableDiffusionPipelineIntegrationTests(unittest.TestCase):
         prompt = "."
         generator = paddle.Generator().manual_seed(0)
         output = sag_pipe(
-            [prompt],
-            generator=generator,
-            guidance_scale=7.5,
-            sag_scale=1.0,
-            num_inference_steps=20,
-            output_type="np",
+            [prompt], generator=generator, guidance_scale=7.5, sag_scale=1.0, num_inference_steps=20, output_type="np"
         )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 512, 512, 3)
         expected_slice = np.array(
-            [
-                0.7477613,
-                0.76045597,
-                0.7464366,
-                0.778965,
-                0.75718963,
-                0.7487634,
-                0.77530396,
-                0.77426934,
-                0.7749926,
-            ]
+            [0.7477613, 0.76045597, 0.7464366, 0.778965, 0.75718963, 0.7487634, 0.77530396, 0.77426934, 0.7749926]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05
 
@@ -151,27 +146,12 @@ class StableDiffusionPipelineIntegrationTests(unittest.TestCase):
         prompt = "."
         generator = paddle.Generator().manual_seed(0)
         output = sag_pipe(
-            [prompt],
-            generator=generator,
-            guidance_scale=7.5,
-            sag_scale=1.0,
-            num_inference_steps=20,
-            output_type="np",
+            [prompt], generator=generator, guidance_scale=7.5, sag_scale=1.0, num_inference_steps=20, output_type="np"
         )
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 512, 512, 3)
         expected_slice = np.array(
-            [
-                0.8771595,
-                0.8521123,
-                0.8644101,
-                0.8680052,
-                0.8700466,
-                0.8897612,
-                0.87766427,
-                0.8636212,
-                0.86829203,
-            ]
+            [0.8771595, 0.8521123, 0.8644101, 0.8680052, 0.8700466, 0.8897612, 0.87766427, 0.8636212, 0.86829203]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05

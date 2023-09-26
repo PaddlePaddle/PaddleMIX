@@ -25,10 +25,15 @@ import paddle
 
 import ppdiffusers
 from ppdiffusers import (
+    CMStochasticIterativeScheduler,
+    DDIMScheduler,
+    DEISMultistepScheduler,
+    DiffusionPipeline,
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
     IPNDMScheduler,
     LMSDiscreteScheduler,
+    UniPCMultistepScheduler,
     VQDiffusionScheduler,
     logging,
 )
@@ -199,6 +204,44 @@ class SchedulerBaseTests(unittest.TestCase):
         assert cap_logger_2.out == "{'f'} was not found in config. Values will be initialized to default values.\n"
         assert cap_logger_3.out == "{'f'} was not found in config. Values will be initialized to default values.\n"
 
+    def test_default_arguments_not_in_config(self):
+        pipe = DiffusionPipeline.from_pretrained(
+            "hf-internal-testing/tiny-stable-diffusion-pipe", paddle_dtype=paddle.float16
+        )
+        assert pipe.scheduler.__class__ == DDIMScheduler
+
+        # Default for DDIMScheduler
+        assert pipe.scheduler.config.timestep_spacing == "leading"
+
+        # # Switch to a different one, verify we use the default for that class
+        # pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config)
+        # assert pipe.scheduler.config.timestep_spacing == "linspace"
+
+        # Override with kwargs
+        pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config, timestep_spacing="trailing")
+        assert pipe.scheduler.config.timestep_spacing == "trailing"
+
+        # Verify overridden kwargs stick
+        pipe.scheduler = LMSDiscreteScheduler.from_config(pipe.scheduler.config)
+        assert pipe.scheduler.config.timestep_spacing == "trailing"
+
+        # And stick
+        pipe.scheduler = LMSDiscreteScheduler.from_config(pipe.scheduler.config)
+        assert pipe.scheduler.config.timestep_spacing == "trailing"
+
+    def test_default_solver_type_after_switch(self):
+        pipe = DiffusionPipeline.from_pretrained(
+            "hf-internal-testing/tiny-stable-diffusion-pipe", paddle_dtype=paddle.float16
+        )
+        assert pipe.scheduler.__class__ == DDIMScheduler
+
+        pipe.scheduler = DEISMultistepScheduler.from_config(pipe.scheduler.config)
+        assert pipe.scheduler.config.solver_type == "logrho"
+
+        # Switch to UniPC, verify the solver is the default
+        pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)
+        assert pipe.scheduler.config.solver_type == "bh2"
+
 
 class SchedulerCommonTest(unittest.TestCase):
     scheduler_classes = ()
@@ -235,6 +278,12 @@ class SchedulerCommonTest(unittest.TestCase):
 
     def dummy_model(self):
         def model(sample, t, *args):
+            # if t is a tensor, match the number of dimensions of sample
+            if isinstance(t, paddle.Tensor):
+                num_dims = len(sample.shape)
+                # pad t with 1s to match num_dims
+                t = t.reshape([-1, *(1,) * (num_dims - 1)]).cast(sample.dtype)
+
             return sample * t / (t + 1)
 
         return model
@@ -246,15 +295,16 @@ class SchedulerCommonTest(unittest.TestCase):
 
         for scheduler_class in self.scheduler_classes:
             # TODO(Suraj) - delete the following two lines once DDPM, DDIM, and PNDM have timesteps casted to float by default
-            if scheduler_class in (
-                EulerAncestralDiscreteScheduler,
-                EulerDiscreteScheduler,
-                LMSDiscreteScheduler,
-            ):
+            if scheduler_class in (EulerAncestralDiscreteScheduler, EulerDiscreteScheduler, LMSDiscreteScheduler):
                 time_step = float(time_step)
 
             scheduler_config = self.get_scheduler_config(**config)
             scheduler = scheduler_class(**scheduler_config)
+
+            if scheduler_class == CMStochasticIterativeScheduler:
+                # Get valid timestep based on sigma_max, which should always be in timestep schedule.
+                scaled_sigma_max = scheduler.sigma_to_t(scheduler.config.sigma_max)
+                time_step = scaled_sigma_max
 
             if scheduler_class == VQDiffusionScheduler:
                 num_vec_classes = scheduler_config["num_vec_classes"]
@@ -276,7 +326,11 @@ class SchedulerCommonTest(unittest.TestCase):
                 kwargs["num_inference_steps"] = num_inference_steps
 
             # Make sure `scale_model_input` is invoked to prevent a warning
-            if scheduler_class != VQDiffusionScheduler:
+            if scheduler_class == CMStochasticIterativeScheduler:
+                # Get valid timestep based on sigma_max, which should always be in timestep schedule.
+                _ = scheduler.scale_model_input(sample, scaled_sigma_max)
+                _ = new_scheduler.scale_model_input(sample, scaled_sigma_max)
+            elif scheduler_class != VQDiffusionScheduler:
                 _ = scheduler.scale_model_input(sample, 0)
                 _ = new_scheduler.scale_model_input(sample, 0)
 
@@ -298,11 +352,7 @@ class SchedulerCommonTest(unittest.TestCase):
         num_inference_steps = kwargs.pop("num_inference_steps", None)
 
         for scheduler_class in self.scheduler_classes:
-            if scheduler_class in (
-                EulerAncestralDiscreteScheduler,
-                EulerDiscreteScheduler,
-                LMSDiscreteScheduler,
-            ):
+            if scheduler_class in (EulerAncestralDiscreteScheduler, EulerDiscreteScheduler, LMSDiscreteScheduler):
                 time_step = float(time_step)
 
             scheduler_config = self.get_scheduler_config()
@@ -344,15 +394,15 @@ class SchedulerCommonTest(unittest.TestCase):
 
         for scheduler_class in self.scheduler_classes:
             timestep = 1
-            if scheduler_class in (
-                EulerAncestralDiscreteScheduler,
-                EulerDiscreteScheduler,
-                LMSDiscreteScheduler,
-            ):
+            if scheduler_class in (EulerAncestralDiscreteScheduler, EulerDiscreteScheduler, LMSDiscreteScheduler):
                 timestep = float(timestep)
 
             scheduler_config = self.get_scheduler_config()
             scheduler = scheduler_class(**scheduler_config)
+
+            if scheduler_class == CMStochasticIterativeScheduler:
+                # Get valid timestep based on sigma_max, which should always be in timestep schedule.
+                timestep = scheduler.sigma_to_t(scheduler.config.sigma_max)
 
             if scheduler_class == VQDiffusionScheduler:
                 num_vec_classes = scheduler_config["num_vec_classes"]
@@ -417,7 +467,11 @@ class SchedulerCommonTest(unittest.TestCase):
                 scheduler.save_pretrained(tmpdirname)
                 new_scheduler = scheduler_class.from_pretrained(tmpdirname)
 
-            assert scheduler.config == new_scheduler.config
+            # `_use_default_values` should not exist for just saved & loaded scheduler
+            scheduler_config = dict(scheduler.config)
+            del scheduler_config["_use_default_values"]
+
+            assert scheduler_config == new_scheduler.config
 
     def test_step_shape(self):
         kwargs = dict(self.forward_default_kwargs)
@@ -428,11 +482,7 @@ class SchedulerCommonTest(unittest.TestCase):
         timestep_1 = 1
 
         for scheduler_class in self.scheduler_classes:
-            if scheduler_class in (
-                EulerAncestralDiscreteScheduler,
-                EulerDiscreteScheduler,
-                LMSDiscreteScheduler,
-            ):
+            if scheduler_class in (EulerAncestralDiscreteScheduler, EulerDiscreteScheduler, LMSDiscreteScheduler):
                 timestep_0 = float(timestep_0)
                 timestep_1 = float(timestep_1)
 
@@ -461,8 +511,7 @@ class SchedulerCommonTest(unittest.TestCase):
 
     def test_scheduler_outputs_equivalence(self):
         def set_nan_tensor_to_zero(t):
-            zeros = paddle.zeros_like(t)
-            t = paddle.where(t == float("inf"), zeros, t)
+            t[t != t] = 0
             return t
 
         def recursive_check(tuple_object, dict_object):
@@ -497,15 +546,15 @@ class SchedulerCommonTest(unittest.TestCase):
             timestep = 1
 
         for scheduler_class in self.scheduler_classes:
-            if scheduler_class in (
-                EulerAncestralDiscreteScheduler,
-                EulerDiscreteScheduler,
-                LMSDiscreteScheduler,
-            ):
+            if scheduler_class in (EulerAncestralDiscreteScheduler, EulerDiscreteScheduler, LMSDiscreteScheduler):
                 timestep = float(timestep)
 
             scheduler_config = self.get_scheduler_config()
             scheduler = scheduler_class(**scheduler_config)
+
+            if scheduler_class == CMStochasticIterativeScheduler:
+                # Get valid timestep based on sigma_max, which should always be in timestep schedule.
+                timestep = scheduler.sigma_to_t(scheduler.config.sigma_max)
 
             if scheduler_class == VQDiffusionScheduler:
                 num_vec_classes = scheduler_config["num_vec_classes"]
@@ -562,7 +611,12 @@ class SchedulerCommonTest(unittest.TestCase):
 
             if scheduler_class != VQDiffusionScheduler:
                 sample = self.dummy_sample
-                scaled_sample = scheduler.scale_model_input(sample, 0.0)
+                if scheduler_class == CMStochasticIterativeScheduler:
+                    # Get valid timestep based on sigma_max, which should always be in timestep schedule.
+                    scaled_sigma_max = scheduler.sigma_to_t(scheduler.config.sigma_max)
+                    scaled_sample = scheduler.scale_model_input(sample, scaled_sigma_max)
+                else:
+                    scaled_sample = scheduler.scale_model_input(sample, 0.0)
                 self.assertEqual(sample.shape, scaled_sample.shape)
 
     def test_add_noise_device(self):
@@ -574,10 +628,15 @@ class SchedulerCommonTest(unittest.TestCase):
             scheduler.set_timesteps(100)
 
             sample = self.dummy_sample
-            scaled_sample = scheduler.scale_model_input(sample, 0.0)
+            if scheduler_class == CMStochasticIterativeScheduler:
+                # Get valid timestep based on sigma_max, which should always be in timestep schedule.
+                scaled_sigma_max = scheduler.sigma_to_t(scheduler.config.sigma_max)
+                scaled_sample = scheduler.scale_model_input(sample, scaled_sigma_max)
+            else:
+                scaled_sample = scheduler.scale_model_input(sample, 0.0)
             self.assertEqual(sample.shape, scaled_sample.shape)
 
-            noise = paddle.randn(scaled_sample.shape, dtype=scaled_sample.dtype)
+            noise = paddle.randn_like(scaled_sample)
             t = scheduler.timesteps[5][None]
             noised = scheduler.add_noise(scaled_sample, noise, t)
             self.assertEqual(noised.shape, scaled_sample.shape)
@@ -605,7 +664,7 @@ class SchedulerCommonTest(unittest.TestCase):
 
     def test_trained_betas(self):
         for scheduler_class in self.scheduler_classes:
-            if scheduler_class == VQDiffusionScheduler:
+            if scheduler_class in (VQDiffusionScheduler, CMStochasticIterativeScheduler):
                 continue
 
             scheduler_config = self.get_scheduler_config()

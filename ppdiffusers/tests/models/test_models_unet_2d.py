@@ -21,14 +21,18 @@ import paddle
 
 from ppdiffusers import UNet2DModel
 from ppdiffusers.utils import floats_tensor, logging, paddle_all_close, slow
+from ppdiffusers.utils.testing_utils import enable_full_determinism
 
-from .test_modeling_common import ModelTesterMixin
+from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
 
 logger = logging.get_logger(__name__)
 
+enable_full_determinism()
 
-class Unet2DModelTests(ModelTesterMixin, unittest.TestCase):
+
+class Unet2DModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
     model_class = UNet2DModel
+    main_input_name = "sample"
 
     @property
     def dummy_input(self):
@@ -52,7 +56,7 @@ class Unet2DModelTests(ModelTesterMixin, unittest.TestCase):
             "block_out_channels": (32, 64),
             "down_block_types": ("DownBlock2D", "AttnDownBlock2D"),
             "up_block_types": ("AttnUpBlock2D", "UpBlock2D"),
-            "attention_head_dim": None,
+            "attention_head_dim": 3,
             "out_channels": 3,
             "in_channels": 3,
             "layers_per_block": 2,
@@ -62,8 +66,9 @@ class Unet2DModelTests(ModelTesterMixin, unittest.TestCase):
         return init_dict, inputs_dict
 
 
-class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
+class UNetLDMModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
     model_class = UNet2DModel
+    main_input_name = "sample"
 
     @property
     def dummy_input(self):
@@ -110,7 +115,6 @@ class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
 
     def test_from_pretrained_accelerate_wont_change_results(self):
         model_accelerate, _ = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update", output_loading_info=True)
-        model_accelerate
         model_accelerate.eval()
         noise = paddle.randn(
             shape=[
@@ -138,12 +142,7 @@ class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
         model = UNet2DModel.from_pretrained("fusing/unet-ldm-dummy-update")
         model.eval()
         noise = paddle.randn(
-            shape=[
-                1,
-                model.config.in_channels,
-                model.config.sample_size,
-                model.config.sample_size,
-            ],
+            shape=[1, model.config.in_channels, model.config.sample_size, model.config.sample_size],
             generator=paddle.Generator().manual_seed(0),
         )
         time_step = paddle.to_tensor([10] * noise.shape[0])
@@ -166,8 +165,9 @@ class UNetLDMModelTests(ModelTesterMixin, unittest.TestCase):
         self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.001))
 
 
-class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
+class NCSNppModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
     model_class = UNet2DModel
+    main_input_name = "sample"
 
     @property
     def dummy_input(self, sizes=(32, 32)):
@@ -195,18 +195,8 @@ class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
             "norm_eps": 1e-06,
             "mid_block_scale_factor": math.sqrt(2.0),
             "norm_num_groups": None,
-            "down_block_types": [
-                "SkipDownBlock2D",
-                "AttnSkipDownBlock2D",
-                "SkipDownBlock2D",
-                "SkipDownBlock2D",
-            ],
-            "up_block_types": [
-                "SkipUpBlock2D",
-                "SkipUpBlock2D",
-                "AttnSkipUpBlock2D",
-                "SkipUpBlock2D",
-            ],
+            "down_block_types": ["SkipDownBlock2D", "AttnSkipDownBlock2D", "SkipDownBlock2D", "SkipDownBlock2D"],
+            "up_block_types": ["SkipUpBlock2D", "SkipUpBlock2D", "AttnSkipUpBlock2D", "SkipUpBlock2D"],
         }
         inputs_dict = self.dummy_input
         return init_dict, inputs_dict
@@ -235,17 +225,7 @@ class NCSNppModelTests(ModelTesterMixin, unittest.TestCase):
             output = model(noise, time_step).sample
         output_slice = output[0, -3:, -3:, -1].flatten().cpu()
         expected_output_slice = paddle.to_tensor(
-            [
-                -4836.2231,
-                -6487.1387,
-                -3816.7969,
-                -7964.9253,
-                -10966.2842,
-                -20043.6016,
-                8137.0571,
-                2340.3499,
-                544.6114,
-            ]
+            [-4836.2231, -6487.1387, -3816.7969, -7964.9253, -10966.2842, -20043.6016, 8137.0571, 2340.3499, 544.6114]
         )
         self.assertTrue(paddle_all_close(output_slice, expected_output_slice, rtol=0.01))
 

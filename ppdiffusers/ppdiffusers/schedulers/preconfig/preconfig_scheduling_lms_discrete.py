@@ -122,13 +122,7 @@ class PreconfigLMSDiscreteScheduler(SchedulerMixin, ConfigMixin):
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
             self.betas = (
-                paddle.linspace(
-                    beta_start**0.5,
-                    beta_end**0.5,
-                    num_train_timesteps,
-                    dtype=paddle.float32,
-                )
-                ** 2
+                paddle.linspace(beta_start**0.5, beta_end**0.5, num_train_timesteps, dtype=paddle.float32) ** 2
             )
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
@@ -236,7 +230,7 @@ class PreconfigLMSDiscreteScheduler(SchedulerMixin, ConfigMixin):
         sample: paddle.Tensor,
         order: int = 4,
         return_dict: bool = True,
-        **kwargs,
+        **kwargs
     ) -> Union[PreconfigLMSDiscreteSchedulerOutput, Tuple]:
         """
         Predict the sample at the previous timestep by reversing the SDE. Core function to propagate the diffusion

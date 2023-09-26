@@ -27,6 +27,7 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
     load_numpy,
     nightly,
     require_paddle_gpu,
@@ -35,6 +36,8 @@ from ppdiffusers.utils.testing_utils import (
 
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
+
+enable_full_determinism()
 
 
 class LDMTextToImagePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
@@ -51,7 +54,6 @@ class LDMTextToImagePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         "callback_steps",
     }
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
-    test_cpu_offload = False
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -95,13 +97,7 @@ class LDMTextToImagePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         )
         text_encoder = CLIPTextModel(text_encoder_config).eval()
         tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
-        components = {
-            "unet": unet,
-            "scheduler": scheduler,
-            "vqvae": vae,
-            "bert": text_encoder,
-            "tokenizer": tokenizer,
-        }
+        components = {"unet": unet, "scheduler": scheduler, "vqvae": vae, "bert": text_encoder, "tokenizer": tokenizer}
         return components
 
     def get_dummy_inputs(self, seed=0):
@@ -125,17 +121,7 @@ class LDMTextToImagePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         assert image.shape == (1, 64, 64, 3)
         image_slice = image[0, -3:, -3:, -1]
         expected_slice = np.array(
-            [
-                0.28524342,
-                0.23806289,
-                0.38151595,
-                0.21939021,
-                0.26112252,
-                0.5172909,
-                0.25647423,
-                0.25049314,
-                0.47979864,
-            ]
+            [0.28524342, 0.23806289, 0.38151595, 0.21939021, 0.26112252, 0.5172909, 0.25647423, 0.25049314, 0.47979864]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
@@ -169,19 +155,7 @@ class LDMTextToImagePipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 256, 256, 3)
-        expected_slice = np.array(
-            [
-                0.51825,
-                0.5285,
-                0.52543,
-                0.54258,
-                0.52304,
-                0.52569,
-                0.54363,
-                0.55276,
-                0.56878,
-            ]
-        )
+        expected_slice = np.array([0.3991, 0.4100, 0.3996, 0.4110, 0.3848, 0.4048, 0.4042, 0.3979, 0.4282])
         max_diff = np.abs(expected_slice - image_slice).max()
         assert max_diff < 0.02
 

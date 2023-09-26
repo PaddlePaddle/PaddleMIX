@@ -30,7 +30,9 @@ from ppdiffusers import (
     UNet2DModel,
 )
 from ppdiffusers.utils import slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+
+enable_full_determinism()
 
 
 class PipelineFastTests(unittest.TestCase):
@@ -93,7 +95,7 @@ class PipelineFastTests(unittest.TestCase):
         return vqvae, unet
 
     def test_audio_diffusion(self):
-        mel = Mel()
+        mel = Mel(x_res=self.dummy_unet.config.sample_size[1], y_res=self.dummy_unet.config.sample_size[0])
         scheduler = DDPMScheduler()
         pipe = AudioDiffusionPipeline(vqvae=None, unet=self.dummy_unet, mel=mel, scheduler=scheduler)
         pipe.set_progress_bar_config(disable=None)
@@ -104,10 +106,7 @@ class PipelineFastTests(unittest.TestCase):
         generator = paddle.Generator().manual_seed(42)
         output = pipe(generator=generator, steps=4, return_dict=False)
         image_from_tuple = output[0][0]
-        assert audio.shape == (
-            1,
-            (self.dummy_unet.config.sample_size[1] - 1) * mel.hop_length,
-        )
+        assert audio.shape == (1, (self.dummy_unet.config.sample_size[1] - 1) * mel.hop_length)
         assert (
             image.height == self.dummy_unet.config.sample_size[0]
             and image.width == self.dummy_unet.config.sample_size[1]
@@ -117,21 +116,18 @@ class PipelineFastTests(unittest.TestCase):
         expected_slice = np.array([0, 252, 0, 160, 144, 1, 0, 211, 99, 3])
         assert np.abs(image_slice.flatten() - expected_slice).max() == 0
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() <= 5
+        mel = Mel(
+            x_res=self.dummy_vqvae_and_unet[0].config.sample_size[1],
+            y_res=self.dummy_vqvae_and_unet[0].config.sample_size[0],
+        )
         scheduler = DDIMScheduler()
         dummy_vqvae_and_unet = self.dummy_vqvae_and_unet
         pipe = AudioDiffusionPipeline(
-            vqvae=self.dummy_vqvae_and_unet[0],
-            unet=dummy_vqvae_and_unet[1],
-            mel=mel,
-            scheduler=scheduler,
+            vqvae=self.dummy_vqvae_and_unet[0], unet=dummy_vqvae_and_unet[1], mel=mel, scheduler=scheduler
         )
         pipe.set_progress_bar_config(disable=None)
         np.random.seed(0)
-        raw_audio = np.random.uniform(
-            -1,
-            1,
-            ((dummy_vqvae_and_unet[0].config.sample_size[1] - 1) * mel.hop_length,),
-        )
+        raw_audio = np.random.uniform(-1, 1, ((dummy_vqvae_and_unet[0].config.sample_size[1] - 1) * mel.hop_length,))
         generator = paddle.Generator().manual_seed(42)
         output = pipe(raw_audio=raw_audio, generator=generator, start_step=5, steps=10)
         image = output.images[0]
@@ -141,14 +137,14 @@ class PipelineFastTests(unittest.TestCase):
         )
         image_slice = np.frombuffer(image.tobytes(), dtype="uint8")[:10]
         expected_slice = np.array([128, 100, 153, 95, 92, 77, 130, 121, 81, 166])
+
         assert np.abs(image_slice.flatten() - expected_slice).max() <= 5
         dummy_unet_condition = self.dummy_unet_condition
         pipe = AudioDiffusionPipeline(
-            vqvae=self.dummy_vqvae_and_unet[0],
-            unet=dummy_unet_condition,
-            mel=mel,
-            scheduler=scheduler,
+            vqvae=self.dummy_vqvae_and_unet[0], unet=dummy_unet_condition, mel=mel, scheduler=scheduler
         )
+
+        pipe.set_progress_bar_config(disable=None)
         np.random.seed(0)
         encoding = paddle.rand(shape=(1, 1, 10))
         output = pipe(generator=generator, encoding=encoding)
@@ -173,10 +169,7 @@ class PipelineIntegrationTests(unittest.TestCase):
         output = pipe(generator=generator)
         audio = output.audios[0]
         image = output.images[0]
-        assert audio.shape == (
-            1,
-            (pipe.unet.config.sample_size[1] - 1) * pipe.mel.hop_length,
-        )
+        assert audio.shape == (1, (pipe.unet.config.sample_size[1] - 1) * pipe.mel.hop_length)
         assert image.height == pipe.unet.config.sample_size[0] and image.width == pipe.unet.config.sample_size[1]
         image_slice = np.frombuffer(image.tobytes(), dtype="uint8")[:10]
         expected_slice = np.array([151, 167, 154, 144, 122, 134, 121, 105, 70, 26])

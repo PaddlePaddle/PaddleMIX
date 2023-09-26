@@ -34,16 +34,31 @@ from ppdiffusers import (
 from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer import (
     StableUnCLIPImageNormalizer,
 )
+from ppdiffusers.utils.testing_utils import enable_full_determinism
 
-from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
-from ..test_pipelines_common import PipelineTesterMixin
+from ..pipeline_params import (
+    TEXT_TO_IMAGE_BATCH_PARAMS,
+    TEXT_TO_IMAGE_IMAGE_PARAMS,
+    TEXT_TO_IMAGE_PARAMS,
+)
+from ..test_pipelines_common import (
+    PipelineKarrasSchedulerTesterMixin,
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+)
+
+enable_full_determinism()
 
 
-class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableUnCLIPPipelineFastTests(
+    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
+):
     pipeline_class = StableUnCLIPPipeline
     test_xformers_attention = False
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS
+    image_params = TEXT_TO_IMAGE_IMAGE_PARAMS
+    image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         embedder_hidden_size = 32
@@ -67,10 +82,7 @@ class StableUnCLIPPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         )
         paddle.seed(0)
         prior = PriorTransformer(
-            num_attention_heads=2,
-            attention_head_dim=12,
-            embedding_dim=embedder_projection_dim,
-            num_layers=1,
+            num_attention_heads=2, attention_head_dim=12, embedding_dim=embedder_projection_dim, num_layers=1
         )
         paddle.seed(0)
         prior_scheduler = DDPMScheduler(

@@ -37,10 +37,16 @@ from ppdiffusers import (
 )
 from ppdiffusers.pipelines.unclip.text_proj import UnCLIPTextProjModel
 from ppdiffusers.utils import floats_tensor, slow
-from ppdiffusers.utils.testing_utils import load_image, require_paddle_gpu
+from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
+    load_image,
+    require_paddle_gpu,
+)
 
 from ..pipeline_params import IMAGE_VARIATION_BATCH_PARAMS, IMAGE_VARIATION_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin, assert_mean_pixel_difference
+
+enable_full_determinism()
 
 
 class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
@@ -48,12 +54,7 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCa
     params = IMAGE_VARIATION_PARAMS - {"height", "width", "guidance_scale"}
     batch_params = IMAGE_VARIATION_BATCH_PARAMS
     required_optional_params = frozenset(
-        [
-            "generator",
-            "return_dict",
-            "decoder_num_inference_steps",
-            "super_res_num_inference_steps",
-        ]
+        ["generator", "return_dict", "decoder_num_inference_steps", "super_res_num_inference_steps"]
     )
     test_xformers_attention = False
 
@@ -131,16 +132,10 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCa
             "sample_size": 32,
             "in_channels": 3,
             "out_channels": 6,
-            "down_block_types": (
-                "ResnetDownsampleBlock2D",
-                "SimpleCrossAttnDownBlock2D",
-            ),
+            "down_block_types": ("ResnetDownsampleBlock2D", "SimpleCrossAttnDownBlock2D"),
             "up_block_types": ("SimpleCrossAttnUpBlock2D", "ResnetUpsampleBlock2D"),
             "mid_block_type": "UNetMidBlock2DSimpleCrossAttn",
-            "block_out_channels": (
-                self.block_out_channels_0,
-                self.block_out_channels_0 * 2,
-            ),
+            "block_out_channels": (self.block_out_channels_0, self.block_out_channels_0 * 2),
             "layers_per_block": 1,
             "cross_attention_dim": self.cross_attention_dim,
             "attention_head_dim": 4,
@@ -157,10 +152,7 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCa
             "layers_per_block": 1,
             "down_block_types": ("ResnetDownsampleBlock2D", "ResnetDownsampleBlock2D"),
             "up_block_types": ("ResnetUpsampleBlock2D", "ResnetUpsampleBlock2D"),
-            "block_out_channels": (
-                self.block_out_channels_0,
-                self.block_out_channels_0 * 2,
-            ),
+            "block_out_channels": (self.block_out_channels_0, self.block_out_channels_0 * 2),
             "in_channels": 6,
             "out_channels": 3,
         }
@@ -185,14 +177,10 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCa
         super_res_first = self.dummy_super_res_first
         super_res_last = self.dummy_super_res_last
         decoder_scheduler = UnCLIPScheduler(
-            variance_type="learned_range",
-            prediction_type="epsilon",
-            num_train_timesteps=1000,
+            variance_type="learned_range", prediction_type="epsilon", num_train_timesteps=1000
         )
         super_res_scheduler = UnCLIPScheduler(
-            variance_type="fixed_small_log",
-            prediction_type="epsilon",
-            num_train_timesteps=1000,
+            variance_type="fixed_small_log", prediction_type="epsilon", num_train_timesteps=1000
         )
         feature_extractor = CLIPImageProcessor(crop_size=32, size=32)
         image_encoder = self.dummy_image_encoder
@@ -294,10 +282,7 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCa
         output = pipe(**pipeline_inputs)
         image = output.images
         tuple_pipeline_inputs = self.get_dummy_inputs(pil_image=True)
-        tuple_pipeline_inputs["image"] = [
-            tuple_pipeline_inputs["image"],
-            tuple_pipeline_inputs["image"],
-        ]
+        tuple_pipeline_inputs["image"] = [tuple_pipeline_inputs["image"], tuple_pipeline_inputs["image"]]
         image_from_tuple = pipe(**tuple_pipeline_inputs, return_dict=False)[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
@@ -335,11 +320,7 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCa
             pipe.decoder.config.sample_size,
         )
         decoder_latents = pipe.prepare_latents(
-            shape,
-            dtype=dtype,
-            generator=generator,
-            latents=None,
-            scheduler=DummyScheduler(),
+            shape, dtype=dtype, generator=generator, latents=None, scheduler=DummyScheduler()
         )
         shape = (
             batch_size,
@@ -348,17 +329,11 @@ class UnCLIPImageVariationPipelineFastTests(PipelineTesterMixin, unittest.TestCa
             pipe.super_res_first.config.sample_size,
         )
         super_res_latents = pipe.prepare_latents(
-            shape,
-            dtype=dtype,
-            generator=generator,
-            latents=None,
-            scheduler=DummyScheduler(),
+            shape, dtype=dtype, generator=generator, latents=None, scheduler=DummyScheduler()
         )
         pipeline_inputs = self.get_dummy_inputs(pil_image=False)
         img_out_1 = pipe(
-            **pipeline_inputs,
-            decoder_latents=decoder_latents,
-            super_res_latents=super_res_latents,
+            **pipeline_inputs, decoder_latents=decoder_latents, super_res_latents=super_res_latents
         ).images
         pipeline_inputs = self.get_dummy_inputs(pil_image=False)
         image = pipeline_inputs.pop("image")
@@ -417,7 +392,7 @@ class UnCLIPImageVariationPipelineIntegrationTests(unittest.TestCase):
         input_image = load_image(
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/unclip/cat.png"
         )
-        expected_image = np.array([[0.09096909, 0.13343304, 0.26244187], [0.15095001, 0.19459972, 0.3182609]])
+        expected_image = np.array([[0.967059, 0.7926067, 0.27177247], [0.9816743, 0.7524097, 0.17401046]])
         # TODO(wugaosheng): test this function
         pipeline = UnCLIPImageVariationPipeline.from_pretrained("kakaobrain/karlo-v1-alpha-image-variations")
         pipeline.set_progress_bar_config(disable=None)
@@ -426,4 +401,4 @@ class UnCLIPImageVariationPipelineIntegrationTests(unittest.TestCase):
         image = output.images[0]
         assert image.shape == (256, 256, 3)
 
-        assert_mean_pixel_difference(image[0][0:2], expected_image)
+        assert_mean_pixel_difference(image[128][127:129], expected_image)

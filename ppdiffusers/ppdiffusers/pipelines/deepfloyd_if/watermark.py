@@ -27,10 +27,7 @@ class IFWatermarker(ModelMixin, ConfigMixin):
     def __init__(self):
         super().__init__()
 
-        self.register_buffer(
-            "watermark_image",
-            paddle.zeros((62, 62, 4), dtype=paddle.get_default_dtype()),
-        )
+        self.register_buffer("watermark_image", paddle.zeros((62, 62, 4), dtype=paddle.get_default_dtype()))
         self.watermark_image_as_pil = None
 
     def apply_watermark(self, images: List[PIL.Image.Image], sample_size=None):
@@ -58,10 +55,6 @@ class IFWatermarker(ModelMixin, ConfigMixin):
         )
 
         for pil_img in images:
-            pil_img.paste(
-                wm_img,
-                box=(wm_x - wm_size, wm_y - wm_size, wm_x, wm_y),
-                mask=wm_img.split()[-1],
-            )
+            pil_img.paste(wm_img, box=(wm_x - wm_size, wm_y - wm_size, wm_x, wm_y), mask=wm_img.split()[-1])
 
         return images

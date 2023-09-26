@@ -127,10 +127,7 @@ class AudioDiffusionPipeline(DiffusionPipeline):
         step_generator = step_generator or generator
         # For backwards compatibility
         if type(self.unet.config.sample_size) == int:
-            self.unet.config.sample_size = (
-                self.unet.config.sample_size,
-                self.unet.config.sample_size,
-            )
+            self.unet.config.sample_size = (self.unet.config.sample_size, self.unet.config.sample_size)
         input_dims = self.get_input_dims()
         self.mel.set_resolution(x_res=input_dims[1], y_res=input_dims[0])
         if noise is None:
@@ -170,9 +167,7 @@ class AudioDiffusionPipeline(DiffusionPipeline):
             mask_start = int(mask_start_secs * pixels_per_second)
             mask_end = int(mask_end_secs * pixels_per_second)
             mask = self.scheduler.add_noise(
-                input_images,
-                noise,
-                paddle.to_tensor(self.scheduler.timesteps[start_step:]),
+                input_images, noise, paddle.to_tensor(self.scheduler.timesteps[start_step:])
             )
 
         for step, t in enumerate(self.progress_bar(self.scheduler.timesteps[start_step:])):

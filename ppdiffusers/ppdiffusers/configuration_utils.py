@@ -85,10 +85,9 @@ class FrozenDict(OrderedDict):
 
 class ConfigMixin:
     r"""
-    Base class for all configuration classes. Stores all configuration parameters under `self.config` Also handles all
-    methods for loading/downloading/saving classes inheriting from [`ConfigMixin`] with
-        - [`~ConfigMixin.from_config`]
-        - [`~ConfigMixin.save_config`]
+    Base class for all configuration classes. All configuration parameters are stored under `self.config`. Also
+    provides the [`~ConfigMixin.from_config`] and [`~ConfigMixin.save_config`] methods for loading, downloading, and
+    saving classes that inherit from [`ConfigMixin`].
 
     Class attributes:
         - **config_name** (`str`) -- A filename under which the config should stored when calling
@@ -96,7 +95,7 @@ class ConfigMixin:
         - **ignore_for_config** (`List[str]`) -- A list of attributes that should not be saved in the config (should be
           overridden by subclass).
         - **has_compatibles** (`bool`) -- Whether the class has compatible classes (should be overridden by subclass).
-        - **_deprecated_kwargs** (`List[str]`) -- Keyword arguments that are deprecated. Note that the init function
+        - **_deprecated_kwargs** (`List[str]`) -- Keyword arguments that are deprecated. Note that the `init` function
           should only have a `kwargs` argument if at least one argument is deprecated (should be overridden by
           subclass).
     """
@@ -135,30 +134,21 @@ class ConfigMixin:
 
         if is_in_config and not is_attribute:
             deprecation_message = f"Accessing config attribute `{name}` directly via '{type(self).__name__}' object attribute is deprecated. Please access '{name}' over '{type(self).__name__}'s config object instead, e.g. 'scheduler.config.{name}'."
-            deprecate(
-                "direct config name access",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False,
-            )
+            deprecate("direct config name access", "1.0.0", deprecation_message, standard_warn=False)
             return self._internal_dict[name]
 
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def save_config(
-        self,
-        save_directory: Union[str, os.PathLike],
-        push_to_hub: bool = False,
-        to_diffusers=False,
-        **kwargs,
+        self, save_directory: Union[str, os.PathLike], push_to_hub: bool = False, to_diffusers=False, **kwargs
     ):
         """
-        Save a configuration object to the directory `save_directory`, so that it can be re-loaded using the
+        Save a configuration object to the directory specified in `save_directory` so that it can be reloaded using the
         [`~ConfigMixin.from_config`] class method.
 
         Args:
             save_directory (`str` or `os.PathLike`):
-                Directory where the configuration JSON file will be saved (will be created if it does not exist).
+                Directory where the configuration JSON file is saved (will be created if it does not exist).
         """
         if os.path.isfile(save_directory):
             raise AssertionError(f"Provided path ({save_directory}) should be a directory, not a file")
@@ -172,26 +162,24 @@ class ConfigMixin:
         logger.info(f"Configuration saved in {output_config_file}")
 
     @classmethod
-    def from_config(
-        cls,
-        config: Union[FrozenDict, Dict[str, Any]] = None,
-        return_unused_kwargs=False,
-        **kwargs,
-    ):
+    def from_config(cls, config: Union[FrozenDict, Dict[str, Any]] = None, return_unused_kwargs=False, **kwargs):
         r"""
-        Instantiate a Python class from a config dictionary
+        Instantiate a Python class from a config dictionary.
 
         Parameters:
             config (`Dict[str, Any]`):
-                A config dictionary from which the Python class will be instantiated. Make sure to only load
-                configuration files of compatible classes.
+                A config dictionary from which the Python class is instantiated. Make sure to only load configuration
+                files of compatible classes.
             return_unused_kwargs (`bool`, *optional*, defaults to `False`):
                 Whether kwargs that are not consumed by the Python class should be returned or not.
 
             kwargs (remaining dictionary of keyword arguments, *optional*):
-                Can be used to update the configuration object (after it being loaded) and initiate the Python class.
-                `**kwargs` will be directly passed to the underlying scheduler/model's `__init__` method and eventually
-                overwrite same named arguments of `config`.
+                Can be used to update the configuration object (after it is loaded) and initiate the Python class.
+                `**kwargs` are passed directly to the underlying scheduler/model's `__init__` method and eventually
+                overwrite the same named arguments in `config`.
+        Returns:
+            [`ModelMixin`] or [`SchedulerMixin`]:
+                A model or scheduler object instantiated from a config dictionary.
 
         Examples:
 
@@ -231,17 +219,8 @@ class ConfigMixin:
                     f" {cls}.from_config(...) instead. Otherwise, please make sure to pass a configuration dictionary"
                     " instead. This functionality will be removed in v1.0.0."
                 )
-            deprecate(
-                "config-passed-as-path",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False,
-            )
-            config, kwargs = cls.load_config(
-                pretrained_model_name_or_path=config,
-                return_unused_kwargs=True,
-                **kwargs,
-            )
+            deprecate("config-passed-as-path", "1.0.0", deprecation_message, standard_warn=False)
+            config, kwargs = cls.load_config(pretrained_model_name_or_path=config, return_unused_kwargs=True, **kwargs)
 
         init_dict, unused_kwargs, hidden_dict = cls.extract_init_dict(config, **kwargs)
 
@@ -286,62 +265,46 @@ class ConfigMixin:
         **kwargs,
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         r"""
-        Instantiate a Python class from a config dictionary
-
+        Load a model or scheduler configuration.
         Parameters:
             pretrained_model_name_or_path (`str` or `os.PathLike`, *optional*):
                 Can be either:
-
-                    - A string, the *model id* of a model repo on huggingface.co. Valid model ids should have an
-                      organization name, like `google/ddpm-celebahq-256`.
-                    - A path to a *directory* containing model weights saved using [`~ConfigMixin.save_config`], e.g.,
-                      `./my_model_directory/`.
-
+                    - A string, the *model id* (for example `google/ddpm-celebahq-256`) of a pretrained model hosted on
+                      the Hub.
+                    - A path to a *directory* (for example `./my_model_directory`) containing model weights saved with
+                      [`~ConfigMixin.save_config`].
             cache_dir (`Union[str, os.PathLike]`, *optional*):
-                Path to a directory in which a downloaded pretrained model configuration should be cached if the
-                standard cache should not be used.
+                Path to a directory where a downloaded pretrained model configuration is cached if the standard cache
+                is not used.
             force_download (`bool`, *optional*, defaults to `False`):
                 Whether or not to force the (re-)download of the model weights and configuration files, overriding the
                 cached versions if they exist.
             resume_download (`bool`, *optional*, defaults to `False`):
-                Whether or not to delete incompletely received files. Will attempt to resume the download if such a
-                file exists.
+                Whether or not to resume downloading the model weights and configuration files. If set to `False`, any
+                incompletely downloaded files are deleted.
             proxies (`Dict[str, str]`, *optional*):
-                A dictionary of proxy servers to use by protocol or endpoint, e.g., `{'http': 'foo.bar:3128',
+                A dictionary of proxy servers to use by protocol or endpoint, for example, `{'http': 'foo.bar:3128',
                 'http://hostname': 'foo.bar:4012'}`. The proxies are used on each request.
             output_loading_info(`bool`, *optional*, defaults to `False`):
                 Whether or not to also return a dictionary containing missing keys, unexpected keys and error messages.
-            local_files_only(`bool`, *optional*, defaults to `False`):
-                Whether or not to only look at local files (i.e., do not try to download the model).
+            local_files_only (`bool`, *optional*, defaults to `False`):
+                Whether to only load local model weights and configuration files or not. If set to `True`, the model
+                won't be downloaded from the Hub.
             use_auth_token (`str` or *bool*, *optional*):
-                The token to use as HTTP bearer authorization for remote files. If `True`, will use the token generated
-                when running `transformers-cli login` (stored in `~/.huggingface`).
+                The token to use as HTTP bearer authorization for remote files. If `True`, the token generated from
+                `diffusers-cli login` (stored in `~/.huggingface`) is used.
             revision (`str`, *optional*, defaults to `"main"`):
-                The specific model version to use. It can be a branch name, a tag name, or a commit id, since we use a
-                git-based system for storing models and other artifacts on huggingface.co, so `revision` can be any
-                identifier allowed by git.
+                The specific model version to use. It can be a branch name, a tag name, a commit id, or any identifier
+                allowed by Git.
             subfolder (`str`, *optional*, defaults to `""`):
-                In case the relevant files are located inside a subfolder of the model repo (either remote in
-                huggingface.co or downloaded locally), you can specify the folder name here.
+                The subfolder location of a model file within a larger model repository on the Hub or locally.
             return_unused_kwargs (`bool`, *optional*, defaults to `False):
-                Whether unused keyword arguments of the config shall be returned.
+                Whether unused keyword arguments of the config are returned.
             return_commit_hash (`bool`, *optional*, defaults to `False):
-                Whether the commit_hash of the loaded configuration shall be returned.
-            from_hf_hub (bool, *optional*):
-                Whether to load from Hugging Face Hub. Defaults to False
-        <Tip>
-
-         It is required to be logged in (`huggingface-cli login`) when you want to use private or [gated
-         models](https://huggingface.co/docs/hub/models-gated#gated-models).
-
-        </Tip>
-
-        <Tip>
-
-        Activate the special ["offline-mode"](https://huggingface.co/transformers/installation.html#offline-mode) to
-        use this method in a firewalled environment.
-
-        </Tip>
+                Whether the `commit_hash` of the loaded configuration are returned.
+        Returns:
+            `dict`:
+                A dictionary of all the parameters stored in a JSON configuration file.
         """
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
         cache_dir = (
@@ -428,6 +391,10 @@ class ConfigMixin:
 
     @classmethod
     def extract_init_dict(cls, config_dict, **kwargs):
+        # Skip keys that were not present in the original config, so default __init__ values were used
+        used_defaults = config_dict.get("_use_default_values", [])
+        config_dict = {k: v for k, v in config_dict.items() if k not in used_defaults and k != "_use_default_values"}
+
         # 0. Copy origin config dict
         original_dict = dict(config_dict.items())
 
@@ -541,10 +508,10 @@ class ConfigMixin:
 
     def to_json_string(self, to_diffusers=False) -> str:
         """
-        Serializes this instance to a JSON string.
-
+        Serializes the configuration instance to a JSON string.
         Returns:
-            `str`: String containing all the attributes that make up this configuration instance in JSON format.
+            `str`:
+                String containing all the attributes that make up the configuration instance in JSON format.
         """
         config_dict = self._internal_dict if hasattr(self, "_internal_dict") else {}
         config_dict["_class_name"] = self.__class__.__name__
@@ -569,8 +536,10 @@ class ConfigMixin:
             config_dict.pop("_ppdiffusers_version", None)
         else:
             config_dict.pop("_diffusers_version", None)
-        # Don't save "_ignore_files"
+        # Don't save "_ignore_files" or "_use_default_values"
         config_dict.pop("_ignore_files", None)
+        config_dict.pop("_use_default_values", None)
+
         json_string = json.dumps(config_dict, indent=2, sort_keys=True) + "\n"
         if to_diffusers:
             json_string = json_string.replace('"ppdiffusers"', '"diffusers"').replace(
@@ -580,11 +549,10 @@ class ConfigMixin:
 
     def to_json_file(self, json_file_path: Union[str, os.PathLike], to_diffusers=False):
         """
-        Save this instance to a JSON file.
-
+        Save the configuration instance's parameters to a JSON file.
         Args:
             json_file_path (`str` or `os.PathLike`):
-                Path to the JSON file in which this configuration instance's parameters will be saved.
+                Path to the JSON file to save a configuration instance's parameters.
         """
         with open(json_file_path, "w", encoding="utf-8") as writer:
             writer.write(self.to_json_string(to_diffusers=to_diffusers))
@@ -628,6 +596,11 @@ def register_to_config(init):
                 if k not in ignore and k not in new_kwargs
             }
         )
+
+        # Take note of the parameters that were not present in the loaded config
+        if len(set(new_kwargs.keys()) - set(init_kwargs)) > 0:
+            new_kwargs["_use_default_values"] = list(set(new_kwargs.keys()) - set(init_kwargs))
+
         new_kwargs = {**config_init_kwargs, **new_kwargs}
         getattr(self, "register_to_config")(**new_kwargs)
         init(self, *args, **init_kwargs)
@@ -659,10 +632,7 @@ class ModuleUtilsMixin:
     """
 
     def get_extended_attention_mask(
-        self,
-        attention_mask: paddle.Tensor,
-        input_shape: Tuple[int],
-        dtype: paddle.float32 = None,
+        self, attention_mask: paddle.Tensor, input_shape: Tuple[int], dtype: paddle.float32 = None
     ) -> paddle.Tensor:
         """
         Makes broadcastable attention and causal masks so that future and masked tokens are ignored.

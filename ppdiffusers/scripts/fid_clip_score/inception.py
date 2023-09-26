@@ -271,58 +271,30 @@ class InceptionA(nn.Layer):
     def __init__(self, num_channels, pool_features):
         super().__init__()
         self.branch1x1 = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=64,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=64, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
 
         self.branch5x5_1 = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=48,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=48, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
         self.branch5x5_2 = ConvNormActivation(
-            in_channels=48,
-            out_channels=64,
-            kernel_size=5,
-            padding=2,
-            activation_layer=nn.ReLU,
+            in_channels=48, out_channels=64, kernel_size=5, padding=2, activation_layer=nn.ReLU
         )
 
         self.branch3x3dbl_1 = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=64,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=64, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
         self.branch3x3dbl_2 = ConvNormActivation(
-            in_channels=64,
-            out_channels=96,
-            kernel_size=3,
-            padding=1,
-            activation_layer=nn.ReLU,
+            in_channels=64, out_channels=96, kernel_size=3, padding=1, activation_layer=nn.ReLU
         )
         self.branch3x3dbl_3 = ConvNormActivation(
-            in_channels=96,
-            out_channels=96,
-            kernel_size=3,
-            padding=1,
-            activation_layer=nn.ReLU,
+            in_channels=96, out_channels=96, kernel_size=3, padding=1, activation_layer=nn.ReLU
         )
         # Patch: Tensorflow's average pool does not use the padded zero's in
         # its average calculation
         self.branch_pool = nn.AvgPool2D(kernel_size=3, stride=1, padding=1, exclusive=True)
         self.branch_pool_conv = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=pool_features,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=pool_features, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
 
     def forward(self, x):
@@ -344,11 +316,7 @@ class InceptionC(nn.Layer):
     def __init__(self, num_channels, channels_7x7):
         super().__init__()
         self.branch1x1 = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=192,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=192, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
 
         self.branch7x7_1 = ConvNormActivation(
@@ -377,11 +345,7 @@ class InceptionC(nn.Layer):
         )
 
         self.branch7x7dbl_1 = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=channels_7x7,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=channels_7x7, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
         self.branch7x7dbl_2 = ConvNormActivation(
             in_channels=channels_7x7,
@@ -405,21 +369,13 @@ class InceptionC(nn.Layer):
             activation_layer=nn.ReLU,
         )
         self.branch7x7dbl_5 = ConvNormActivation(
-            in_channels=channels_7x7,
-            out_channels=192,
-            kernel_size=(1, 7),
-            padding=(0, 3),
-            activation_layer=nn.ReLU,
+            in_channels=channels_7x7, out_channels=192, kernel_size=(1, 7), padding=(0, 3), activation_layer=nn.ReLU
         )
         # Patch: Tensorflow's average pool does not use the padded zero's in
         # its average calculation
         self.branch_pool = nn.AvgPool2D(kernel_size=3, stride=1, padding=1, exclusive=True)
         self.branch_pool_conv = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=192,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=192, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
 
     def forward(self, x):
@@ -447,72 +403,36 @@ class InceptionE_1(nn.Layer):
     def __init__(self, num_channels):
         super().__init__()
         self.branch1x1 = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=320,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=320, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
         self.branch3x3_1 = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=384,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=384, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
         self.branch3x3_2a = ConvNormActivation(
-            in_channels=384,
-            out_channels=384,
-            kernel_size=(1, 3),
-            padding=(0, 1),
-            activation_layer=nn.ReLU,
+            in_channels=384, out_channels=384, kernel_size=(1, 3), padding=(0, 1), activation_layer=nn.ReLU
         )
         self.branch3x3_2b = ConvNormActivation(
-            in_channels=384,
-            out_channels=384,
-            kernel_size=(3, 1),
-            padding=(1, 0),
-            activation_layer=nn.ReLU,
+            in_channels=384, out_channels=384, kernel_size=(3, 1), padding=(1, 0), activation_layer=nn.ReLU
         )
 
         self.branch3x3dbl_1 = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=448,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=448, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
         self.branch3x3dbl_2 = ConvNormActivation(
-            in_channels=448,
-            out_channels=384,
-            kernel_size=3,
-            padding=1,
-            activation_layer=nn.ReLU,
+            in_channels=448, out_channels=384, kernel_size=3, padding=1, activation_layer=nn.ReLU
         )
         self.branch3x3dbl_3a = ConvNormActivation(
-            in_channels=384,
-            out_channels=384,
-            kernel_size=(1, 3),
-            padding=(0, 1),
-            activation_layer=nn.ReLU,
+            in_channels=384, out_channels=384, kernel_size=(1, 3), padding=(0, 1), activation_layer=nn.ReLU
         )
         self.branch3x3dbl_3b = ConvNormActivation(
-            in_channels=384,
-            out_channels=384,
-            kernel_size=(3, 1),
-            padding=(1, 0),
-            activation_layer=nn.ReLU,
+            in_channels=384, out_channels=384, kernel_size=(3, 1), padding=(1, 0), activation_layer=nn.ReLU
         )
 
         # Patch: Tensorflow's average pool does not use the padded zero's in
         # its average calculation
         self.branch_pool = nn.AvgPool2D(kernel_size=3, stride=1, padding=1, exclusive=True)
         self.branch_pool_conv = ConvNormActivation(
-            in_channels=num_channels,
-            out_channels=192,
-            kernel_size=1,
-            padding=0,
-            activation_layer=nn.ReLU,
+            in_channels=num_channels, out_channels=192, kernel_size=1, padding=0, activation_layer=nn.ReLU
         )
 
     def forward(self, x):

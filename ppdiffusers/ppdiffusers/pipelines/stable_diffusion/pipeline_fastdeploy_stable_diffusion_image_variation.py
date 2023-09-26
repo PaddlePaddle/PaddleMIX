@@ -292,12 +292,7 @@ class FastDeployStableDiffusionImageVariationPipeline(DiffusionPipeline, FastDep
                 # compute the previous noisy sample x_t -> x_t-1
                 if is_scheduler_support_step_index:
                     scheduler_output = self.scheduler.step(
-                        noise_pred,
-                        t,
-                        latents,
-                        step_index=i,
-                        return_pred_original_sample=False,
-                        **extra_step_kwargs,
+                        noise_pred, t, latents, step_index=i, return_pred_original_sample=False, **extra_step_kwargs
                     )
                 else:
                     scheduler_output = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)
@@ -314,8 +309,7 @@ class FastDeployStableDiffusionImageVariationPipeline(DiffusionPipeline, FastDep
 
         # 8. Post-processing
         image = self._decode_vae_latents(
-            latents / self.vae_scaling_factor,
-            infer_op=infer_op_dict.get("vae_decoder", None),
+            latents / self.vae_scaling_factor, infer_op=infer_op_dict.get("vae_decoder", None)
         )
 
         # 9. Run safety checker

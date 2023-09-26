@@ -22,9 +22,9 @@ import paddle
 
 from ...configuration_utils import FrozenDict
 from ...models import LVDMAutoencoderKL, LVDMUNet3DModel
-from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
 from ...utils import deprecate, logging, randn_tensor
+from ..pipeline_utils import DiffusionPipeline
 from . import VideoPipelineOutput
 from .video_save import save_results
 
@@ -266,7 +266,7 @@ class LVDMUncondPipeline(DiffusionPipeline):
             videos_frames.append(video_frames)
 
         if not save_name:
-            save_name = "default_video"
+            save_name = "defaul_video"
         if not save_dir:
             save_dir = "."
         os.makedirs(save_dir, exist_ok=True)

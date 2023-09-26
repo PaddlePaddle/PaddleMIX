@@ -30,7 +30,9 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import floats_tensor, load_image, slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+
+enable_full_determinism()
 
 
 class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
@@ -56,11 +58,7 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             sample_size=32,
             in_channels=7,
             out_channels=4,
-            down_block_types=(
-                "DownBlock2D",
-                "CrossAttnDownBlock2D",
-                "CrossAttnDownBlock2D",
-            ),
+            down_block_types=("DownBlock2D", "CrossAttnDownBlock2D", "CrossAttnDownBlock2D"),
             up_block_types=("CrossAttnUpBlock2D", "CrossAttnUpBlock2D", "UpBlock2D"),
             cross_attention_dim=32,
             # SD2-specific config below
@@ -78,11 +76,7 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
             block_out_channels=[32, 32, 64],
             in_channels=3,
             out_channels=3,
-            down_block_types=[
-                "DownEncoderBlock2D",
-                "DownEncoderBlock2D",
-                "DownEncoderBlock2D",
-            ],
+            down_block_types=["DownEncoderBlock2D", "DownEncoderBlock2D", "DownEncoderBlock2D"],
             up_block_types=["UpDecoderBlock2D", "UpDecoderBlock2D", "UpDecoderBlock2D"],
             latent_channels=4,
         )
@@ -154,17 +148,7 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
         expected_height_width = low_res_image.size[0] * 4
         assert image.shape == (1, expected_height_width, expected_height_width, 3)
         expected_slice = np.array(
-            [
-                0.0,
-                0.0,
-                0.3616839,
-                0.0,
-                0.04877859,
-                0.59195685,
-                0.23902711,
-                0.00838843,
-                0.5172206,
-            ]
+            [0.0, 0.0, 0.3616839, 0.0, 0.04877859, 0.59195685, 0.23902711, 0.00838843, 0.5172206]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
@@ -213,6 +197,57 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
         image = output.images
         assert image.shape[0] == 2
 
+    def test_stable_diffusion_upscale_prompt_embeds(self):
+        unet = self.dummy_cond_unet_upscale
+        low_res_scheduler = DDPMScheduler()
+        scheduler = DDIMScheduler(prediction_type="v_prediction")
+        vae = self.dummy_vae
+        text_encoder = self.dummy_text_encoder
+        tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
+        image = self.dummy_image.cpu().transpose(perm=[0, 2, 3, 1])[0]
+        low_res_image = Image.fromarray(np.uint8(image)).convert("RGB").resize((64, 64))
+        sd_pipe = StableDiffusionUpscalePipeline(
+            unet=unet,
+            low_res_scheduler=low_res_scheduler,
+            scheduler=scheduler,
+            vae=vae,
+            text_encoder=text_encoder,
+            tokenizer=tokenizer,
+            max_noise_level=350,
+        )
+        sd_pipe.set_progress_bar_config(disable=None)
+        prompt = "A painting of a squirrel eating a burger"
+        generator = paddle.Generator().manual_seed(seed=0)
+        output = sd_pipe(
+            [prompt],
+            image=low_res_image,
+            generator=generator,
+            guidance_scale=6.0,
+            noise_level=20,
+            num_inference_steps=2,
+            output_type="np",
+        )
+        image = output.images
+        generator = paddle.Generator().manual_seed(seed=0)
+        prompt_embeds = sd_pipe._encode_prompt(prompt, 1, False)
+        image_from_prompt_embeds = sd_pipe(
+            prompt_embeds=prompt_embeds,
+            image=[low_res_image],
+            generator=generator,
+            guidance_scale=6.0,
+            noise_level=20,
+            num_inference_steps=2,
+            output_type="np",
+            return_dict=False,
+        )[0]
+        image_slice = image[(0), -3:, -3:, (-1)]
+        image_from_prompt_embeds_slice = image_from_prompt_embeds[(0), -3:, -3:, (-1)]
+        expected_height_width = low_res_image.size[0] * 4
+        assert image.shape == (1, expected_height_width, expected_height_width, 3)
+        expected_slice = np.array([0.0, 0.0, 0.3617, 0.0, 0.0488, 0.592, 0.239, 0.0084, 0.5172])
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
+        assert np.abs(image_from_prompt_embeds_slice.flatten() - expected_slice).max() < 0.01
+
     def test_stable_diffusion_upscale_fp16(self):
         """Test that stable diffusion upscale works with fp16"""
         unet = self.dummy_cond_unet_upscale
@@ -238,11 +273,7 @@ class StableDiffusionUpscalePipelineFastTests(unittest.TestCase):
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
         image = sd_pipe(
-            [prompt],
-            image=low_res_image,
-            generator=generator,
-            num_inference_steps=2,
-            output_type="np",
+            [prompt], image=low_res_image, generator=generator, num_inference_steps=2, output_type="np"
         ).images
         expected_height_width = low_res_image.size[0] * 4
         assert image.shape == (1, expected_height_width, expected_height_width, 3)
@@ -258,11 +289,11 @@ class StableDiffusionUpscalePipelineIntegrationTests(unittest.TestCase):
 
     def test_stable_diffusion_upscale_pipeline(self):
         image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/low_res_cat.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/low_res_cat.png"
         )
         # invalid expected_image
         # expected_image = load_numpy(
-        #     'https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/upsampled_cat.npy'
+        #     'https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-upscale/upsampled_cat.npy'
         #     )
         model_id = "stabilityai/stable-diffusion-x4-upscaler"
         pipe = StableDiffusionUpscalePipeline.from_pretrained(model_id)

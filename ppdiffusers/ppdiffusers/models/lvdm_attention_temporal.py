@@ -62,17 +62,12 @@ class FeedForward(paddle.nn.Layer):
         inner_dim = int(dim * mult)
         dim_out = default(dim_out, dim)
         project_in = (
-            paddle.nn.Sequential(
-                paddle.nn.Linear(in_features=dim, out_features=inner_dim),
-                paddle.nn.GELU(),
-            )
+            paddle.nn.Sequential(paddle.nn.Linear(in_features=dim, out_features=inner_dim), paddle.nn.GELU())
             if not glu
             else GEGLU(dim, inner_dim)
         )
         self.net = paddle.nn.Sequential(
-            project_in,
-            paddle.nn.Dropout(p=dropout),
-            paddle.nn.Linear(in_features=inner_dim, out_features=dim_out),
+            project_in, paddle.nn.Dropout(p=dropout), paddle.nn.Linear(in_features=inner_dim, out_features=dim_out)
         )
 
     def forward(self, x):
@@ -90,14 +85,11 @@ class RelativePosition(paddle.nn.Layer):
         xavier_uniform_(self.embeddings_table)
 
     def forward(self, length_q, length_k):
-        # device = self.embeddings_table.place
         range_vec_q = paddle.arange(end=length_q)
         range_vec_k = paddle.arange(end=length_k)
         distance_mat = range_vec_k[(None), :] - range_vec_q[:, (None)]
         distance_mat_clipped = paddle.clip(
-            x=distance_mat,
-            min=-self.max_relative_position,
-            max=self.max_relative_position,
+            x=distance_mat, min=-self.max_relative_position, max=self.max_relative_position
         )
         final_mat = distance_mat_clipped + self.max_relative_position
         final_mat = final_mat.astype(dtype="int64")
@@ -115,7 +107,7 @@ class TemporalCrossAttention(paddle.nn.Layer):
         dropout=0.0,
         use_relative_position=False,
         temporal_length=None,
-        **kwargs,
+        **kwargs
     ):
         super().__init__()
         inner_dim = dim_head * heads
@@ -129,8 +121,7 @@ class TemporalCrossAttention(paddle.nn.Layer):
         self.to_k = paddle.nn.Linear(in_features=context_dim, out_features=inner_dim, bias_attr=False)
         self.to_v = paddle.nn.Linear(in_features=context_dim, out_features=inner_dim, bias_attr=False)
         self.to_out = paddle.nn.Sequential(
-            paddle.nn.Linear(in_features=inner_dim, out_features=query_dim),
-            paddle.nn.Dropout(p=dropout),
+            paddle.nn.Linear(in_features=inner_dim, out_features=query_dim), paddle.nn.Dropout(p=dropout)
         )
         if use_relative_position:
             assert temporal_length is not None
@@ -180,8 +171,7 @@ class CrossAttention(paddle.nn.Layer):
         self.to_k = paddle.nn.Linear(in_features=context_dim, out_features=inner_dim, bias_attr=False)
         self.to_v = paddle.nn.Linear(in_features=context_dim, out_features=inner_dim, bias_attr=False)
         self.to_out = paddle.nn.Sequential(
-            paddle.nn.Linear(in_features=inner_dim, out_features=query_dim),
-            paddle.nn.Dropout(p=dropout),
+            paddle.nn.Linear(in_features=inner_dim, out_features=query_dim), paddle.nn.Dropout(p=dropout)
         )
 
     def forward(self, x, context=None, mask=None):
@@ -218,8 +208,7 @@ class MemoryEfficientCrossAttention(paddle.nn.Layer):
         self.to_k = paddle.nn.Linear(in_features=context_dim, out_features=inner_dim, bias_attr=False)
         self.to_v = paddle.nn.Linear(in_features=context_dim, out_features=inner_dim, bias_attr=False)
         self.to_out = paddle.nn.Sequential(
-            paddle.nn.Linear(in_features=inner_dim, out_features=query_dim),
-            paddle.nn.Dropout(p=dropout),
+            paddle.nn.Linear(in_features=inner_dim, out_features=query_dim), paddle.nn.Dropout(p=dropout)
         )
         self.attention_op = "cutlass"
 
@@ -261,7 +250,7 @@ class BasicTransformerBlockST(paddle.nn.Layer):
         checkpoint=True,
         temporal_length=None,
         use_relative_position=True,
-        **kwargs,
+        **kwargs
     ):
         super().__init__()
         if _ppxformers_available:
@@ -269,22 +258,12 @@ class BasicTransformerBlockST(paddle.nn.Layer):
                 query_dim=dim, heads=n_heads, dim_head=d_head, dropout=dropout, **kwargs
             )
             self.attn2 = MemoryEfficientCrossAttention(
-                query_dim=dim,
-                context_dim=context_dim,
-                heads=n_heads,
-                dim_head=d_head,
-                dropout=dropout,
-                **kwargs,
+                query_dim=dim, context_dim=context_dim, heads=n_heads, dim_head=d_head, dropout=dropout, **kwargs
             )
         else:
             self.attn1 = CrossAttention(query_dim=dim, heads=n_heads, dim_head=d_head, dropout=dropout, **kwargs)
             self.attn2 = CrossAttention(
-                query_dim=dim,
-                context_dim=context_dim,
-                heads=n_heads,
-                dim_head=d_head,
-                dropout=dropout,
-                **kwargs,
+                query_dim=dim, context_dim=context_dim, heads=n_heads, dim_head=d_head, dropout=dropout, **kwargs
             )
 
         self.ff = FeedForward(dim, dropout=dropout, glu=gated_ff)
@@ -364,18 +343,14 @@ class SpatialTemporalTransformer(paddle.nn.Layer):
         context_dim=None,
         temporal_length=None,
         use_relative_position=True,
-        **kwargs,
+        **kwargs
     ):
         super().__init__()
         self.in_channels = in_channels
         inner_dim = n_heads * d_head
         self.norm = Normalize(in_channels)
         self.proj_in = paddle.nn.Conv3D(
-            in_channels=in_channels,
-            out_channels=inner_dim,
-            kernel_size=1,
-            stride=1,
-            padding=0,
+            in_channels=in_channels, out_channels=inner_dim, kernel_size=1, stride=1, padding=0
         )
         self.transformer_blocks = paddle.nn.LayerList(
             sublayers=[
@@ -393,13 +368,7 @@ class SpatialTemporalTransformer(paddle.nn.Layer):
             ]
         )
         self.proj_out = zero_module(
-            paddle.nn.Conv3D(
-                in_channels=inner_dim,
-                out_channels=in_channels,
-                kernel_size=1,
-                stride=1,
-                padding=0,
-            )
+            paddle.nn.Conv3D(in_channels=inner_dim, out_channels=in_channels, kernel_size=1, stride=1, padding=0)
         )
 
     def forward(self, x, context=None, **kwargs):
@@ -442,12 +411,10 @@ class STAttentionBlock(paddle.nn.Layer):
         self.attention_t = QKVAttention(self.num_heads)
         if use_relative_position:
             self.relative_position_k = RelativePosition(
-                num_units=channels // self.num_heads,
-                max_relative_position=temporal_length,
+                num_units=channels // self.num_heads, max_relative_position=temporal_length
             )
             self.relative_position_v = RelativePosition(
-                num_units=channels // self.num_heads,
-                max_relative_position=temporal_length,
+                num_units=channels // self.num_heads, max_relative_position=temporal_length
             )
         self.proj_out_s = zero_module(conv_nd(1, channels, channels, 1))
         self.proj_out_t = zero_module(conv_nd(1, channels, channels, 1))
@@ -493,11 +460,7 @@ class QKVAttention(paddle.nn.Layer):
         )
         if rp is not None:
             k_rp, v_rp = rp
-            weight2 = paddle.einsum(
-                "bct,tsc->bst",
-                (q * scale).reshape([bs * self.n_heads, ch, length]),
-                k_rp,
-            )
+            weight2 = paddle.einsum("bct,tsc->bst", (q * scale).reshape([bs * self.n_heads, ch, length]), k_rp)
             weight += weight2
         if mask is not None:
             INF = -100000000.0

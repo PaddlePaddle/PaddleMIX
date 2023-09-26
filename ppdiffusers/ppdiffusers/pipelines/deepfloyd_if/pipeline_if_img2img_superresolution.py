@@ -24,6 +24,7 @@ import paddle.nn.functional as F
 import PIL
 from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
 
+from ...loaders import LoraLoaderMixin
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
 from ...utils import (
@@ -120,7 +121,7 @@ EXAMPLE_DOC_STRING = """
 """
 
 
-class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
+class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline, LoraLoaderMixin):
     tokenizer: T5Tokenizer
     text_encoder: T5EncoderModel
 
@@ -137,12 +138,7 @@ class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
         r"[" + "#®•©™&@·º½¾¿¡§~" + "\)" + "\(" + "\]" + "\[" + "\}" + "\{" + "\|" + "\\" + "\/" + "\*" + r"]{1,}"
     )  # noqa
 
-    _optional_components = [
-        "tokenizer",
-        "text_encoder",
-        "safety_checker",
-        "feature_extractor",
-    ]
+    _optional_components = ["tokenizer", "text_encoder", "safety_checker", "feature_extractor"]
 
     def __init__(
         self,
@@ -162,7 +158,7 @@ class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
             logger.warning(
                 f"You have disabled the safety checker for {self.__class__} by passing `safety_checker=None`. Ensure"
                 " that you abide to the conditions of the IF license and do not expose unfiltered"
-                " results in services or applications open to the public. Both the diffusers team and Hugging Face"
+                " results in services or applications open to the public. Both the ppdiffusers team and Hugging Face"
                 " strongly recommend to keep the safety filter enabled in all public facing circumstances, disabling"
                 " it only for use-cases that involve analyzing network behavior or auditing its results. For more"
                 " information, please have a look at https://github.com/huggingface/diffusers/pull/254 ."
@@ -661,7 +657,7 @@ class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
             image = [image]
 
         if isinstance(image[0], PIL.Image.Image):
-            image = [np.array(i).astype(np.float32) / 255.0 for i in image]
+            image = [np.array(i).astype(np.float32) / 127.5 - 1.0 for i in image]
 
             image = np.stack(image, axis=0)  # to np
             image = paddle.to_tensor(image.transpose(0, 3, 1, 2))
@@ -724,12 +720,7 @@ class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
         self,
         image: Union[PIL.Image.Image, np.ndarray, paddle.Tensor],
         original_image: Union[
-            PIL.Image.Image,
-            paddle.Tensor,
-            np.ndarray,
-            List[PIL.Image.Image],
-            List[paddle.Tensor],
-            List[np.ndarray],
+            PIL.Image.Image, paddle.Tensor, np.ndarray, List[PIL.Image.Image], List[paddle.Tensor], List[np.ndarray]
         ] = None,
         strength: float = 0.8,
         prompt: Union[str, List[str]] = None,
@@ -811,8 +802,7 @@ class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
                 called at every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [diffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                `self.processor` in ppdiffusers.cross_attention.
             noise_level (`int`, *optional*, defaults to 250):
                 The amount of noise to add to the upscaled image. Must be in the range `[0, 1000)`
             clean_caption (`bool`, *optional*, defaults to `True`):
@@ -920,10 +910,7 @@ class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-                model_input = paddle.concat(
-                    [intermediate_images, upscaled.cast(intermediate_images.dtype)],
-                    axis=1,
-                )
+                model_input = paddle.concat([intermediate_images, upscaled.cast(intermediate_images.dtype)], axis=1)
 
                 model_input = paddle.concat([model_input] * 2) if do_classifier_free_guidance else model_input
                 model_input = self.scheduler.scale_model_input(model_input, t)
@@ -935,32 +922,27 @@ class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
                     encoder_hidden_states=prompt_embeds,
                     class_labels=noise_level,
                     cross_attention_kwargs=cross_attention_kwargs,
-                ).sample
+                    return_dict=False,
+                )[0]
 
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred_uncond, _ = noise_pred_uncond.split(
-                        [
-                            model_input.shape[1] // 2,
-                            noise_pred_uncond.shape[1] - model_input.shape[1] // 2,
-                        ],
-                        axis=1,
+                        [model_input.shape[1] // 2, noise_pred_uncond.shape[1] - model_input.shape[1] // 2], axis=1
                     )
                     noise_pred_text, predicted_variance = noise_pred_text.split(
-                        [
-                            model_input.shape[1] // 2,
-                            noise_pred_text.shape[1] - model_input.shape[1] // 2,
-                        ],
-                        axis=1,
+                        [model_input.shape[1] // 2, noise_pred_text.shape[1] - model_input.shape[1] // 2], axis=1
                     )
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
                     noise_pred = paddle.concat([noise_pred, predicted_variance], axis=1)
+                if self.scheduler.config.variance_type not in ["learned", "learned_range"]:
+                    noise_pred, _ = noise_pred.split(noise_pred.shape[1] // intermediate_images.shape[1], axis=1)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 intermediate_images = self.scheduler.step(
-                    noise_pred, t, intermediate_images, **extra_step_kwargs
-                ).prev_sample
+                    noise_pred, t, intermediate_images, **extra_step_kwargs, return_dict=False
+                )[0]
 
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
@@ -998,8 +980,4 @@ class IFImg2ImgSuperResolutionPipeline(DiffusionPipeline):
         if not return_dict:
             return (image, nsfw_detected, watermark_detected)
 
-        return IFPipelineOutput(
-            images=image,
-            nsfw_detected=nsfw_detected,
-            watermark_detected=watermark_detected,
-        )
+        return IFPipelineOutput(images=image, nsfw_detected=nsfw_detected, watermark_detected=watermark_detected)

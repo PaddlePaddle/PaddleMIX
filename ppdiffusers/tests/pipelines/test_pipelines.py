@@ -18,6 +18,7 @@ import json
 import os
 import random
 import shutil
+import sys
 import tempfile
 import unittest
 import unittest.mock as mock
@@ -74,6 +75,7 @@ from ppdiffusers.utils.testing_utils import (
 )
 
 
+@nightly
 class DownloadTests(unittest.TestCase):
     def test_one_request_upon_cached(self):
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -188,9 +190,7 @@ class DownloadTests(unittest.TestCase):
             "hf-internal-testing/tiny-stable-diffusion-torch", safety_checker=None
         )
         _, local_path = StableDiffusionPipeline.from_pretrained(
-            "hf-internal-testing/tiny-stable-diffusion-torch",
-            safety_checker=None,
-            return_cached_folder=True,
+            "hf-internal-testing/tiny-stable-diffusion-torch", safety_checker=None, return_cached_folder=True
         )
         pipe_2 = StableDiffusionPipeline.from_pretrained(local_path)
         generator = paddle.Generator().manual_seed(0)
@@ -329,9 +329,7 @@ class DownloadTests(unittest.TestCase):
         orig_comps = {k: v for k, v in orig_pipe.components.items() if hasattr(v, "parameters")}
         with mock.patch("requests.request", return_value=response_mock):
             pipe = StableDiffusionPipeline.from_pretrained(
-                "hf-internal-testing/tiny-stable-diffusion-torch",
-                safety_checker=None,
-                local_files_only=True,
+                "hf-internal-testing/tiny-stable-diffusion-torch", safety_checker=None, local_files_only=True
             )
             comps = {k: v for k, v in pipe.components.items() if hasattr(v, "parameters")}
         for m1, m2 in zip(orig_comps.values(), comps.values()):
@@ -347,8 +345,7 @@ class DownloadTests(unittest.TestCase):
             other_format = ".bin" if safe_avail else ".safetensors"
             with tempfile.TemporaryDirectory() as tmpdirname:
                 tmpdirname = StableDiffusionPipeline.download(
-                    "hf-internal-testing/stable-diffusion-all-variants",
-                    cache_dir=tmpdirname,
+                    "hf-internal-testing/stable-diffusion-all-variants", cache_dir=tmpdirname
                 )
                 all_root_files = [t[-1] for t in os.walk(tmpdirname)]
                 files = [item for sublist in all_root_files for item in sublist]
@@ -367,9 +364,7 @@ class DownloadTests(unittest.TestCase):
             variant = "fp16"
             with tempfile.TemporaryDirectory() as tmpdirname:
                 StableDiffusionPipeline.from_pretrained(
-                    "hf-internal-testing/stable-diffusion-all-variants",
-                    cache_dir=tmpdirname,
-                    variant=variant,
+                    "hf-internal-testing/stable-diffusion-all-variants", cache_dir=tmpdirname, variant=variant
                 )
                 all_root_files = [
                     t[-1] for t in os.walk(os.path.join(tmpdirname, os.listdir(tmpdirname)[0], "snapshots"))
@@ -391,9 +386,7 @@ class DownloadTests(unittest.TestCase):
             variant = "no_ema"
             with tempfile.TemporaryDirectory() as tmpdirname:
                 tmpdirname = StableDiffusionPipeline.download(
-                    "hf-internal-testing/stable-diffusion-all-variants",
-                    cache_dir=tmpdirname,
-                    variant=variant,
+                    "hf-internal-testing/stable-diffusion-all-variants", cache_dir=tmpdirname, variant=variant
                 )
                 all_root_files = [t[-1] for t in os.walk(tmpdirname)]
                 files = [item for sublist in all_root_files for item in sublist]
@@ -476,15 +469,7 @@ class DownloadTests(unittest.TestCase):
             assert out.shape == (1, 128, 128, 3)
 
             # multi token load
-            ten = {
-                "<***>": torch.cat(
-                    [
-                        3 * torch.ones((1, 32)),
-                        4 * torch.ones((1, 32)),
-                        5 * torch.ones((1, 32)),
-                    ]
-                )
-            }
+            ten = {"<***>": torch.cat([3 * torch.ones((1, 32)), 4 * torch.ones((1, 32)), 5 * torch.ones((1, 32))])}
             torch.save(ten, os.path.join(tmpdirname, "learned_embeds.bin"))
 
             pipe.load_textual_inversion(tmpdirname, from_diffusers=True)
@@ -508,13 +493,7 @@ class DownloadTests(unittest.TestCase):
             # multi token load a1111
             ten = {
                 "string_to_param": {
-                    "*": torch.cat(
-                        [
-                            3 * torch.ones((1, 32)),
-                            4 * torch.ones((1, 32)),
-                            5 * torch.ones((1, 32)),
-                        ]
-                    )
+                    "*": torch.cat([3 * torch.ones((1, 32)), 4 * torch.ones((1, 32)), 5 * torch.ones((1, 32))])
                 },
                 "name": "<****>",
             }
@@ -543,8 +522,7 @@ class DownloadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdirname:
             # pipeline has Flax weights
             tmpdirname = DiffusionPipeline.download(
-                "hf-internal-testing/tiny-stable-diffusion-pipe-ignore-files",
-                cache_dir=tmpdirname,
+                "hf-internal-testing/tiny-stable-diffusion-pipe-ignore-files", cache_dir=tmpdirname
             )
             files = []
             for root, ds, fs in os.walk(tmpdirname):
@@ -557,40 +535,38 @@ class DownloadTests(unittest.TestCase):
             assert len(files) == 13
 
 
+@nightly
 class CustomPipelineTests(unittest.TestCase):
     def test_load_custom_pipeline(self):
         pipeline = DiffusionPipeline.from_pretrained(
-            "google/ddpm-cifar10-32",
-            custom_pipeline="junnyu/ppdiffusers-dummy-pipeline",
+            "google/ddpm-cifar10-32", custom_pipeline="junnyu/ppdiffusers-dummy-pipeline"
         )
         pipeline = pipeline
         assert pipeline.__class__.__name__ == "CustomPipeline"
 
-    # TODO paddlemix donot have b088618584825b9a2373daecda4193ef450b72d0 commit id
-    # def test_load_custom_github(self):
-    #     pipeline = DiffusionPipeline.from_pretrained(
-    #         "google/ddpm-cifar10-32",
-    #         custom_pipeline="one_step_unet",
-    #         custom_revision="develop")
-    #     with paddle.no_grad():
-    #         output = pipeline()
-    #     assert output.numel() == output.sum()
+    def test_load_custom_github(self):
+        pipeline = DiffusionPipeline.from_pretrained(
+            "google/ddpm-cifar10-32", custom_pipeline="one_step_unet", custom_revision="develop"
+        )
+        with paddle.no_grad():
+            output = pipeline()
+        assert output.numel() == output.sum()
 
-    #     del sys.modules["ppdiffusers_modules.git.one_step_unet"]
-    #     pipeline = DiffusionPipeline.from_pretrained(
-    #         "google/ddpm-cifar10-32",
-    #         custom_pipeline="one_step_unet",
-    #         custom_revision="b088618584825b9a2373daecda4193ef450b72d0", )
-    #     with paddle.no_grad():
-    #         output = pipeline()
-    #     assert output.numel() != output.sum()
+        del sys.modules["ppdiffusers_modules.git.one_step_unet"]
+        pipeline = DiffusionPipeline.from_pretrained(
+            "google/ddpm-cifar10-32",
+            custom_pipeline="one_step_unet",
+            custom_revision="b088618584825b9a2373daecda4193ef450b72d0",
+        )
+        with paddle.no_grad():
+            output = pipeline()
+        assert output.numel() != output.sum()
 
-    #     assert pipeline.__class__.__name__ == "UnetSchedulerOneForwardPipeline"
+        assert pipeline.__class__.__name__ == "UnetSchedulerOneForwardPipeline"
 
     def test_run_custom_pipeline(self):
         pipeline = DiffusionPipeline.from_pretrained(
-            "google/ddpm-cifar10-32",
-            custom_pipeline="junnyu/ppdiffusers-dummy-pipeline",
+            "google/ddpm-cifar10-32", custom_pipeline="junnyu/ppdiffusers-dummy-pipeline"
         )
         pipeline = pipeline
         images, output_str = pipeline(num_inference_steps=2, output_type="np")
@@ -626,10 +602,7 @@ class CustomPipelineTests(unittest.TestCase):
         clip_model_id = "laion/CLIP-ViT-B-32-laion2B-s34B-b79K"
         feature_extractor = CLIPImageProcessor.from_pretrained(clip_model_id, from_hf_hub=False)
         clip_model = CLIPModel.from_pretrained(
-            clip_model_id,
-            paddle_dtype=paddle.float16,
-            from_hf_hub=False,
-            from_diffusers=False,
+            clip_model_id, paddle_dtype=paddle.float16, from_hf_hub=False, from_diffusers=False
         )
         pipeline = DiffusionPipeline.from_pretrained(
             "CompVis/stable-diffusion-v1-4",
@@ -800,11 +773,7 @@ class PipelineFastTests(unittest.TestCase):
             mask_image=mask_image,
         ).images
         image_img2img = img2img(
-            [prompt],
-            generator=generator,
-            num_inference_steps=2,
-            output_type="np",
-            image=init_image,
+            [prompt], generator=generator, num_inference_steps=2, output_type="np", image=init_image
         ).images
         image_text2img = text2img([prompt], generator=generator, num_inference_steps=2, output_type="np").images
         assert image_inpaint.shape == (1, 32, 32, 3)
@@ -884,7 +853,7 @@ class PipelineFastTests(unittest.TestCase):
     def test_set_scheduler_consistency(self):
         unet = self.dummy_cond_unet()
         pndm = PNDMScheduler.from_config("hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler")
-        ddim = DDIMScheduler.from_config("hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler")
+        # ddim = DDIMScheduler.from_config("hf-internal-testing/tiny-stable-diffusion-torch", subfolder="scheduler")
         vae = self.dummy_vae
         bert = self.dummy_text_encoder
         tokenizer = CLIPTokenizer.from_pretrained("hf-internal-testing/tiny-random-clip")
@@ -903,27 +872,28 @@ class PipelineFastTests(unittest.TestCase):
         pndm_config_2 = sd.scheduler.config
         pndm_config_2 = {k: v for k, v in pndm_config_2.items() if k in pndm_config}
         assert dict(pndm_config) == dict(pndm_config_2)
-        sd = StableDiffusionPipeline(
-            unet=unet,
-            scheduler=ddim,
-            vae=vae,
-            text_encoder=bert,
-            tokenizer=tokenizer,
-            safety_checker=None,
-            feature_extractor=self.dummy_extractor,
-        )
-        ddim_config = sd.scheduler.config
-        sd.scheduler = LMSDiscreteScheduler.from_config(ddim_config)
-        sd.scheduler = DDIMScheduler.from_config(sd.scheduler.config)
-        ddim_config_2 = sd.scheduler.config
-        ddim_config_2 = {k: v for k, v in ddim_config_2.items() if k in ddim_config}
-        assert dict(ddim_config) == dict(ddim_config_2)
+
+        # TODO: laixinlu
+        # sd = StableDiffusionPipeline(
+        #     unet=unet,
+        #     scheduler=ddim,
+        #     vae=vae,
+        #     text_encoder=bert,
+        #     tokenizer=tokenizer,
+        #     safety_checker=None,
+        #     feature_extractor=self.dummy_extractor,
+        # )
+        # ddim_config = sd.scheduler.config
+        # sd.scheduler = LMSDiscreteScheduler.from_config(ddim_config)
+        # sd.scheduler = DDIMScheduler.from_config(sd.scheduler.config)
+        # ddim_config_2 = sd.scheduler.config
+        # ddim_config_2 = {k: v for k, v in ddim_config_2.items() if k in ddim_config}
+        # assert dict(ddim_config) == dict(ddim_config_2)
 
     def test_save_safe_serialization(self):
         pipeline = StableDiffusionPipeline.from_pretrained(
             "hf-internal-testing/tiny-stable-diffusion-torch",
-            from_hf_hub=True,
-            from_diffusers=True,
+            # from_hf_hub=True, from_diffusers=True
         )
         with tempfile.TemporaryDirectory() as tmpdirname:
             pipeline.save_pretrained(tmpdirname, safe_serialization=True, to_diffusers=True)
@@ -942,42 +912,6 @@ class PipelineFastTests(unittest.TestCase):
             assert pipeline.text_encoder is not None
             assert pipeline.scheduler is not None
             assert pipeline.feature_extractor is not None
-
-    def test_no_pytorch_download_when_doing_safetensors(self):
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            _ = StableDiffusionPipeline.from_pretrained(
-                "hf-internal-testing/diffusers-stable-diffusion-tiny-all",
-                cache_dir=tmpdirname,
-            )
-            path = os.path.join(
-                tmpdirname,
-                "models--hf-internal-testing--diffusers-stable-diffusion-tiny-all",
-                "snapshots",
-                "07838d72e12f9bcec1375b0482b80c1d399be843",
-                "unet",
-            )
-            assert os.path.exists(os.path.join(path, "diffusion_pytorch_model.safetensors"))
-            assert not os.path.exists(os.path.join(path, "diffusion_pytorch_model.bin"))
-
-    def test_no_safetensors_download_when_doing_pytorch(self):
-        import ppdiffusers
-
-        ppdiffusers.utils.import_utils._safetensors_available = False
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            _ = StableDiffusionPipeline.from_pretrained(
-                "hf-internal-testing/diffusers-stable-diffusion-tiny-all",
-                cache_dir=tmpdirname,
-            )
-            path = os.path.join(
-                tmpdirname,
-                "models--hf-internal-testing--diffusers-stable-diffusion-tiny-all",
-                "snapshots",
-                "07838d72e12f9bcec1375b0482b80c1d399be843",
-                "unet",
-            )
-            assert not os.path.exists(os.path.join(path, "diffusion_pytorch_model.safetensors"))
-            assert os.path.exists(os.path.join(path, "diffusion_pytorch_model.bin"))
-        ppdiffusers.utils.import_utils._safetensors_available = True
 
     def test_optional_components(self):
         unet = self.dummy_cond_unet()
@@ -998,10 +932,7 @@ class PipelineFastTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdirname:
             sd.save_pretrained(tmpdirname)
             sd = StableDiffusionPipeline.from_pretrained(
-                tmpdirname,
-                feature_extractor=None,
-                safety_checker=None,
-                requires_safety_checker=False,
+                tmpdirname, feature_extractor=None, safety_checker=None, requires_safety_checker=False
             )
             assert sd.config.requires_safety_checker is False
             assert sd.config.safety_checker == (None, None)

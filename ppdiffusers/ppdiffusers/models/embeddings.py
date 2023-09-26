@@ -19,6 +19,8 @@ import numpy as np
 import paddle
 from paddle import nn
 
+from .activations import get_activation
+
 
 def get_timestep_embedding(
     timesteps: paddle.Tensor,
@@ -134,11 +136,7 @@ class PatchEmbed(nn.Layer):
         self.layer_norm = layer_norm
 
         self.proj = nn.Conv2D(
-            in_channels,
-            embed_dim,
-            kernel_size=(patch_size, patch_size),
-            stride=patch_size,
-            bias_attr=bias,
+            in_channels, embed_dim, kernel_size=(patch_size, patch_size), stride=patch_size, bias_attr=bias
         )
         if layer_norm:
             # elementwise_affine=False  -> weight_attr=False, bias_attr=False
@@ -150,9 +148,7 @@ class PatchEmbed(nn.Layer):
         if add_pos_embed:
             pos_embed = get_2d_sincos_pos_embed(embed_dim, int(num_patches**0.5))
             self.register_buffer(
-                "pos_embed",
-                paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0),
-                persistable=False,
+                "pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=False
             )
 
     def forward(self, latent):
@@ -186,14 +182,7 @@ class TimestepEmbedding(nn.Layer):
         else:
             self.cond_proj = None
 
-        if act_fn == "silu":
-            self.act = nn.Silu()
-        elif act_fn == "mish":
-            self.act = nn.Mish()
-        elif act_fn == "gelu":
-            self.act = nn.GELU()
-        else:
-            raise ValueError(f"{act_fn} does not exist. Make sure to define one of 'silu', 'mish', or 'gelu'")
+        self.act = get_activation(act_fn)
 
         if out_dim is not None:
             time_embed_dim_out = out_dim
@@ -203,14 +192,8 @@ class TimestepEmbedding(nn.Layer):
 
         if post_act_fn is None:
             self.post_act = None
-        elif post_act_fn == "silu":
-            self.post_act = nn.Silu()
-        elif post_act_fn == "mish":
-            self.post_act = nn.Mish()
-        elif post_act_fn == "gelu":
-            self.post_act = nn.GELU()
         else:
-            raise ValueError(f"{post_act_fn} does not exist. Make sure to define one of 'silu', 'mish', or 'gelu'")
+            self.post_act = get_activation(post_act_fn)
 
     def forward(self, sample, condition=None):
         if condition is not None:
@@ -248,12 +231,7 @@ class GaussianFourierProjection(nn.Layer):
     """Gaussian Fourier embeddings for noise levels."""
 
     def __init__(
-        self,
-        embedding_size: int = 256,
-        scale: float = 1.0,
-        set_W_to_weight=True,
-        log=True,
-        flip_sin_to_cos=False,
+        self, embedding_size: int = 256, scale: float = 1.0, set_W_to_weight=True, log=True, flip_sin_to_cos=False
     ):
         super().__init__()
         self.register_buffer("weight", paddle.randn((embedding_size,)) * scale)
@@ -387,6 +365,56 @@ class LabelEmbedding(nn.Layer):
         return embeddings
 
 
+class TextImageProjection(nn.Layer):
+    def __init__(
+        self,
+        text_embed_dim: int = 1024,
+        image_embed_dim: int = 768,
+        cross_attention_dim: int = 768,
+        num_image_text_embeds: int = 10,
+    ):
+        super().__init__()
+
+        self.num_image_text_embeds = num_image_text_embeds
+        self.image_embeds = nn.Linear(image_embed_dim, self.num_image_text_embeds * cross_attention_dim)
+        self.text_proj = nn.Linear(text_embed_dim, cross_attention_dim)
+
+    def forward(self, text_embeds: paddle.Tensor, image_embeds: paddle.Tensor):
+        batch_size = text_embeds.shape[0]
+
+        # image
+        image_text_embeds = self.image_embeds(image_embeds)
+        image_text_embeds = image_text_embeds.reshape([batch_size, self.num_image_text_embeds, -1])
+
+        # text
+        text_embeds = self.text_proj(text_embeds)
+
+        return paddle.concat([image_text_embeds, text_embeds], axis=1)
+
+
+class ImageProjection(nn.Layer):
+    def __init__(
+        self,
+        image_embed_dim: int = 768,
+        cross_attention_dim: int = 768,
+        num_image_text_embeds: int = 32,
+    ):
+        super().__init__()
+
+        self.num_image_text_embeds = num_image_text_embeds
+        self.image_embeds = nn.Linear(image_embed_dim, self.num_image_text_embeds * cross_attention_dim)
+        self.norm = nn.LayerNorm(cross_attention_dim)
+
+    def forward(self, image_embeds: paddle.Tensor):
+        batch_size = image_embeds.shape[0]
+
+        # image
+        image_embeds = self.image_embeds(image_embeds)
+        image_embeds = image_embeds.reshape([batch_size, self.num_image_text_embeds, -1])
+        image_embeds = self.norm(image_embeds)
+        return image_embeds
+
+
 class CombinedTimestepLabelEmbeddings(nn.Layer):
     def __init__(self, num_classes, embedding_dim, class_dropout_prob=0.1):
         super().__init__()
@@ -422,14 +450,75 @@ class TextTimeEmbedding(nn.Layer):
         return hidden_states
 
 
+class TextImageTimeEmbedding(nn.Layer):
+    def __init__(self, text_embed_dim: int = 768, image_embed_dim: int = 768, time_embed_dim: int = 1536):
+        super().__init__()
+        self.text_proj = nn.Linear(text_embed_dim, time_embed_dim)
+        self.text_norm = nn.LayerNorm(time_embed_dim)
+        self.image_proj = nn.Linear(image_embed_dim, time_embed_dim)
+
+    def forward(self, text_embeds: paddle.Tensor, image_embeds: paddle.Tensor):
+        # text
+        time_text_embeds = self.text_proj(text_embeds)
+        time_text_embeds = self.text_norm(time_text_embeds)
+
+        # image
+        time_image_embeds = self.image_proj(image_embeds)
+
+        return time_image_embeds + time_text_embeds
+
+
+class ImageTimeEmbedding(nn.Layer):
+    def __init__(self, image_embed_dim: int = 768, time_embed_dim: int = 1536):
+        super().__init__()
+        self.image_proj = nn.Linear(image_embed_dim, time_embed_dim)
+        self.image_norm = nn.LayerNorm(time_embed_dim)
+
+    def forward(self, image_embeds: paddle.Tensor):
+        # image
+        time_image_embeds = self.image_proj(image_embeds)
+        time_image_embeds = self.image_norm(time_image_embeds)
+        return time_image_embeds
+
+
+class ImageHintTimeEmbedding(nn.Layer):
+    def __init__(self, image_embed_dim: int = 768, time_embed_dim: int = 1536):
+        super().__init__()
+        self.image_proj = nn.Linear(image_embed_dim, time_embed_dim)
+        self.image_norm = nn.LayerNorm(time_embed_dim)
+        self.input_hint_block = nn.Sequential(
+            nn.Conv2D(3, 16, 3, padding=1),
+            nn.Silu(),
+            nn.Conv2D(16, 16, 3, padding=1),
+            nn.Silu(),
+            nn.Conv2D(16, 32, 3, padding=1, stride=2),
+            nn.Silu(),
+            nn.Conv2D(32, 32, 3, padding=1),
+            nn.Silu(),
+            nn.Conv2D(32, 96, 3, padding=1, stride=2),
+            nn.Silu(),
+            nn.Conv2D(96, 96, 3, padding=1),
+            nn.Silu(),
+            nn.Conv2D(96, 256, 3, padding=1, stride=2),
+            nn.Silu(),
+            nn.Conv2D(256, 4, 3, padding=1),
+        )
+
+    def forward(self, image_embeds: paddle.Tensor, hint: paddle.Tensor):
+        # image
+        time_image_embeds = self.image_proj(image_embeds)
+        time_image_embeds = self.image_norm(time_image_embeds)
+        hint = self.input_hint_block(hint)
+        return time_image_embeds, hint
+
+
 class AttentionPooling(nn.Layer):
     # Copied from https://github.com/deep-floyd/IF/blob/2f91391f27dd3c468bf174be5805b4cc92980c0b/deepfloyd_if/model/nn.py#L54
 
     def __init__(self, num_heads, embed_dim, dtype=None):
         super().__init__()
         self.positional_embedding = self.create_parameter(
-            (1, embed_dim),
-            default_initializer=nn.initializer.Assign(paddle.randn((1, embed_dim)) / embed_dim**0.5),
+            (1, embed_dim), default_initializer=nn.initializer.Assign(paddle.randn((1, embed_dim)) / embed_dim**0.5)
         )
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.q_proj = nn.Linear(embed_dim, embed_dim)

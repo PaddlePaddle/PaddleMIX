@@ -17,10 +17,10 @@ import paddle
 from ppdiffusers import IFInpaintingPipeline, IFInpaintingSuperResolutionPipeline
 from ppdiffusers.utils import load_image, pd_to_pil
 
-url = "https://huggingface.co/datasets/diffusers/docs-images/resolve/main/if/person.png"
+url = "https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-upgrade0193/if_person.png"
 original_image = load_image(url)
 
-url = "https://huggingface.co/datasets/diffusers/docs-images/resolve/main/if/glasses_mask.png"
+url = "https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-upgrade0193/if_glasses_mask.png"
 mask_image = load_image(url)
 
 pipe = IFInpaintingPipeline.from_pretrained("DeepFloyd/IF-I-XL-v1.0", variant="fp16", paddle_dtype=paddle.float16)
@@ -41,10 +41,7 @@ pil_image = pd_to_pil(image)
 pil_image[0].save("./text_guided_image_inpainting-deepfloyd_if-if_stage_I.png")
 
 super_res_1_pipe = IFInpaintingSuperResolutionPipeline.from_pretrained(
-    "DeepFloyd/IF-II-L-v1.0",
-    text_encoder=None,
-    variant="fp16",
-    paddle_dtype=paddle.float16,
+    "DeepFloyd/IF-II-L-v1.0", text_encoder=None, variant="fp16", paddle_dtype=paddle.float16
 )
 super_res_1_pipe.enable_xformers_memory_efficient_attention()
 

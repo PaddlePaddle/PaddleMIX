@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+set -x
 
 pip install -r requirements.txt
 pip uninstall ppdiffusers -y
@@ -51,8 +52,8 @@ cd -
 cd ../../examples/controlnet
 wget https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/fill50k.zip
 unzip -o fill50k.zip
-
 cd -
+
 cd ../../examples/t2i-adapter
 wget https://paddlenlp.bj.bcebos.com/models/community/westfish/t2i-adapter/openpose_data_demo.tar.gz
 tar -zxvf openpose_data_demo.tar.gz

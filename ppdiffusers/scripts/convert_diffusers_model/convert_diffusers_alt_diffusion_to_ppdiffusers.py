@@ -128,14 +128,8 @@ def convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(xlm_roberta, dtype="float32"):
     new_model_state = {}
     mappings = [
         ["embeddings.word_embeddings.weight", "embeddings.word_embeddings.weight"],
-        [
-            "embeddings.position_embeddings.weight",
-            "embeddings.position_embeddings.weight",
-        ],
-        [
-            "embeddings.token_type_embeddings.weight",
-            "embeddings.token_type_embeddings.weight",
-        ],
+        ["embeddings.position_embeddings.weight", "embeddings.position_embeddings.weight"],
+        ["embeddings.token_type_embeddings.weight", "embeddings.token_type_embeddings.weight"],
         ["embeddings.LayerNorm.weight", "embeddings.layer_norm.weight"],
         ["embeddings.LayerNorm.bias", "embeddings.layer_norm.bias"],
         ["pooler.dense.weight", "pooler.dense.weight", "transpose"],
@@ -194,27 +188,15 @@ def convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(xlm_roberta, dtype="float32"):
                 f"encoder.layers.{layer_index}.linear1.weight",
                 "transpose",
             ],
-            [
-                f"encoder.layer.{layer_index}.intermediate.dense.bias",
-                f"encoder.layers.{layer_index}.linear1.bias",
-            ],
+            [f"encoder.layer.{layer_index}.intermediate.dense.bias", f"encoder.layers.{layer_index}.linear1.bias"],
             [
                 f"encoder.layer.{layer_index}.output.dense.weight",
                 f"encoder.layers.{layer_index}.linear2.weight",
                 "transpose",
             ],
-            [
-                f"encoder.layer.{layer_index}.output.dense.bias",
-                f"encoder.layers.{layer_index}.linear2.bias",
-            ],
-            [
-                f"encoder.layer.{layer_index}.output.LayerNorm.weight",
-                f"encoder.layers.{layer_index}.norm2.weight",
-            ],
-            [
-                f"encoder.layer.{layer_index}.output.LayerNorm.bias",
-                f"encoder.layers.{layer_index}.norm2.bias",
-            ],
+            [f"encoder.layer.{layer_index}.output.dense.bias", f"encoder.layers.{layer_index}.linear2.bias"],
+            [f"encoder.layer.{layer_index}.output.LayerNorm.weight", f"encoder.layers.{layer_index}.norm2.weight"],
+            [f"encoder.layer.{layer_index}.output.LayerNorm.bias", f"encoder.layers.{layer_index}.norm2.bias"],
         ]
         mappings.extend(layer_mappings)
 
@@ -242,10 +224,9 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(pretrained_model_name_or_p
     diffusers_pipe = DiffusersAltDiffusionPipeline.from_pretrained(pretrained_model_name_or_path, use_auth_token=True)
     vae_state_dict = convert_to_ppdiffusers(diffusers_pipe.vae)
     unet_state_dict = convert_to_ppdiffusers(diffusers_pipe.unet)
-    (
-        text_encoder_state_dict,
-        text_encoder_config,
-    ) = convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(diffusers_pipe.text_encoder)
+    text_encoder_state_dict, text_encoder_config = convert_hf_xlm_roberta_to_ppnlp_xlm_roberta(
+        diffusers_pipe.text_encoder
+    )
     safety_checker_state_dict, safety_checker_config = convert_hf_clip_to_ppnlp_clip(
         diffusers_pipe.safety_checker, is_text_encoder=False
     )

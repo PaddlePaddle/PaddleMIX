@@ -39,19 +39,31 @@ from ppdiffusers.pipelines.stable_diffusion.stable_unclip_image_normalizer impor
     StableUnCLIPImageNormalizer,
 )
 from ppdiffusers.utils.import_utils import is_ppxformers_available
-from ppdiffusers.utils.testing_utils import floats_tensor
+from ppdiffusers.utils.testing_utils import enable_full_determinism, floats_tensor
 
 from ..pipeline_params import (
     TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
 )
-from ..test_pipelines_common import PipelineTesterMixin
+from ..test_pipelines_common import (
+    PipelineKarrasSchedulerTesterMixin,
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+)
+
+enable_full_determinism()
 
 
-class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableUnCLIPImg2ImgPipelineFastTests(
+    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
+):
     pipeline_class = StableUnCLIPImg2ImgPipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS
+    image_params = frozenset(
+        []
+    )  # TO-DO: update image_params once pipeline is refactored with VaeImageProcessor.preprocess
+    image_latents_params = frozenset([])
 
     def get_dummy_components(self):
         embedder_hidden_size = 32
@@ -140,17 +152,7 @@ class StableUnCLIPImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.TestCas
 
         assert image.shape == (1, 32, 32, 3)
         expected_slice = np.array(
-            [
-                0.40317363,
-                1.0,
-                0.5802471,
-                0.47334313,
-                0.39546987,
-                0.72409034,
-                0.15691131,
-                0.42981434,
-                0.72585064,
-            ]
+            [0.40331304, 1.0, 0.5697324, 0.4202084, 0.3751842, 0.82133186, 0.137209, 0.40518025, 0.7872809]
         )
 
         assert np.abs(image_slice.flatten() - expected_slice).max() < 1e-3

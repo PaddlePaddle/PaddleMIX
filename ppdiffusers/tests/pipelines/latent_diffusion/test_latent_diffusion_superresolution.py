@@ -21,7 +21,9 @@ import paddle
 
 from ppdiffusers import DDIMScheduler, LDMSuperResolutionPipeline, UNet2DModel, VQModel
 from ppdiffusers.utils import PIL_INTERPOLATION, floats_tensor, load_image, slow
-from ppdiffusers.utils.testing_utils import require_paddle
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle
+
+enable_full_determinism()
 
 
 class LDMSuperResolutionPipelineFastTests(unittest.TestCase):
@@ -68,26 +70,11 @@ class LDMSuperResolutionPipelineFastTests(unittest.TestCase):
         ldm.set_progress_bar_config(disable=None)
         init_image = self.dummy_image
         generator = paddle.Generator().manual_seed(0)
-        image = ldm(
-            image=init_image,
-            generator=generator,
-            num_inference_steps=2,
-            output_type="numpy",
-        ).images
+        image = ldm(image=init_image, generator=generator, num_inference_steps=2, output_type="numpy").images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array(
-            [
-                0.12982202,
-                0.8338444,
-                0.46506804,
-                0.5459576,
-                0.6662215,
-                0.38444045,
-                0.72195464,
-                0.5719301,
-                0.36579454,
-            ]
+            [0.12982202, 0.8338444, 0.46506804, 0.5459576, 0.6662215, 0.38444045, 0.72195464, 0.5719301, 0.36579454]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05
 
@@ -115,12 +102,7 @@ class LDMSuperResolutionPipelineIntegrationTests(unittest.TestCase):
         ldm = LDMSuperResolutionPipeline.from_pretrained("duongna/ldm-super-resolution")
         ldm.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(0)
-        image = ldm(
-            image=init_image,
-            generator=generator,
-            num_inference_steps=20,
-            output_type="numpy",
-        ).images
+        image = ldm(image=init_image, generator=generator, num_inference_steps=20, output_type="numpy").images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 256, 256, 3)
         expected_slice = np.array([0.7644, 0.7679, 0.7642, 0.7633, 0.7666, 0.756, 0.7425, 0.7257, 0.6907])

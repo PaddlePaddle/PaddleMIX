@@ -49,11 +49,7 @@ def Normalize(in_channels, norm_type="group"):
     assert norm_type in ["group", "batch"]
     if norm_type == "group":
         return paddle.nn.GroupNorm(
-            num_groups=32,
-            num_channels=in_channels,
-            epsilon=1e-06,
-            weight_attr=None,
-            bias_attr=None,
+            num_groups=32, num_channels=in_channels, epsilon=1e-06, weight_attr=None, bias_attr=None
         )
     elif norm_type == "batch":
         return paddle.nn.SyncBatchNorm(in_channels)
@@ -96,15 +92,7 @@ class ResBlock(paddle.nn.Layer):
 
 
 class SamePadConv3d(paddle.nn.Layer):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        bias=True,
-        padding_type="replicate",
-    ):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, bias=True, padding_type="replicate"):
         super().__init__()
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size,) * 3
@@ -134,15 +122,7 @@ class SamePadConv3d(paddle.nn.Layer):
 
 
 class SamePadConvTranspose3d(paddle.nn.Layer):
-    def __init__(
-        self,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        bias=True,
-        padding_type="replicate",
-    ):
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1, bias=True, padding_type="replicate"):
         super().__init__()
         if isinstance(kernel_size, int):
             kernel_size = (kernel_size,) * 3
@@ -172,14 +152,7 @@ class SamePadConvTranspose3d(paddle.nn.Layer):
 
 class Encoder(paddle.nn.Layer):
     def __init__(
-        self,
-        n_hiddens,
-        downsample,
-        z_channels,
-        double_z,
-        image_channel=3,
-        norm_type="group",
-        padding_type="replicate",
+        self, n_hiddens, downsample, z_channels, double_z, image_channel=3, norm_type="group", padding_type="replicate"
     ):
         super().__init__()
         n_times_downsample = np.array([int(math.log2(d)) for d in downsample])

@@ -34,13 +34,13 @@ from ppdiffusers import (
     PNDMScheduler,
     UNet2DConditionModel,
 )
-from ppdiffusers.training_utils import enable_full_determinism
 from ppdiffusers.utils import require_paddle_gpu, slow
+from ppdiffusers.utils.testing_utils import enable_full_determinism
 
 from ..pipeline_params import TEXT_TO_AUDIO_BATCH_PARAMS, TEXT_TO_AUDIO_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
 
-enable_full_determinism(42)
+enable_full_determinism()
 
 
 class AudioLDMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
@@ -155,18 +155,7 @@ class AudioLDMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 
         audio_slice = audio[:10]
         expected_slice = np.array(
-            [
-                -0.0050,
-                0.0050,
-                -0.0060,
-                0.0033,
-                -0.0026,
-                0.0033,
-                -0.0027,
-                0.0033,
-                -0.0028,
-                0.0033,
-            ]
+            [-0.0050, 0.0050, -0.0060, 0.0033, -0.0026, 0.0033, -0.0027, 0.0033, -0.0028, 0.0033]
         )
 
         assert np.abs(audio_slice - expected_slice).max() < 1e-2
@@ -273,18 +262,7 @@ class AudioLDMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 
         audio_slice = audio[:10]
         expected_slice = np.array(
-            [
-                -0.0051,
-                0.0050,
-                -0.0060,
-                0.0034,
-                -0.0026,
-                0.0033,
-                -0.0027,
-                0.0033,
-                -0.0028,
-                0.0032,
-            ]
+            [-0.0051, 0.0050, -0.0060, 0.0034, -0.0026, 0.0033, -0.0027, 0.0033, -0.0028, 0.0032]
         )
 
         assert np.abs(audio_slice - expected_slice).max() < 1e-2
@@ -309,20 +287,14 @@ class AudioLDMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 
         # test num_waveforms_per_prompt for single prompt
         num_waveforms_per_prompt = 2
-        audios = audioldm_pipe(
-            prompt,
-            num_inference_steps=2,
-            num_waveforms_per_prompt=num_waveforms_per_prompt,
-        ).audios
+        audios = audioldm_pipe(prompt, num_inference_steps=2, num_waveforms_per_prompt=num_waveforms_per_prompt).audios
 
         assert audios.shape == (num_waveforms_per_prompt, 256)
 
         # test num_waveforms_per_prompt for batch of prompts
         batch_size = 2
         audios = audioldm_pipe(
-            [prompt] * batch_size,
-            num_inference_steps=2,
-            num_waveforms_per_prompt=num_waveforms_per_prompt,
+            [prompt] * batch_size, num_inference_steps=2, num_waveforms_per_prompt=num_waveforms_per_prompt
         ).audios
 
         assert audios.shape == (batch_size * num_waveforms_per_prompt, 256)
@@ -370,6 +342,9 @@ class AudioLDMPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     def test_inference_batch_single_identical(self):
         self._test_inference_batch_single_identical(test_mean_pixel_difference=False)
 
+    def test_xformers_attention_forwardGenerator_pass(self):
+        self._test_xformers_attention_forwardGenerator_pass(test_mean_pixel_difference=False)
+
 
 @slow
 @require_paddle_gpu
@@ -405,18 +380,7 @@ class AudioLDMPipelineSlowTests(unittest.TestCase):
 
         audio_slice = audio[77230:77240]
         expected_slice = np.array(
-            [
-                -0.4884,
-                -0.4607,
-                0.0023,
-                0.5007,
-                0.5896,
-                0.5151,
-                0.3813,
-                -0.0208,
-                -0.3687,
-                -0.4315,
-            ]
+            [-0.4884, -0.4607, 0.0023, 0.5007, 0.5896, 0.5151, 0.3813, -0.0208, -0.3687, -0.4315]
         )
         max_diff = np.abs(expected_slice - audio_slice).max()
         assert max_diff < 1e-2
@@ -433,19 +397,6 @@ class AudioLDMPipelineSlowTests(unittest.TestCase):
         assert len(audio) == 81920
 
         audio_slice = audio[27780:27790]
-        expected_slice = np.array(
-            [
-                -0.2131,
-                -0.0873,
-                -0.0124,
-                -0.0189,
-                0.0569,
-                0.1373,
-                0.1883,
-                0.2886,
-                0.3297,
-                0.2212,
-            ]
-        )
+        expected_slice = np.array([-0.2131, -0.0873, -0.0124, -0.0189, 0.0569, 0.1373, 0.1883, 0.2886, 0.3297, 0.2212])
         max_diff = np.abs(expected_slice - audio_slice).max()
         assert max_diff < 3e-2

@@ -36,10 +36,7 @@ pipe.to(paddle_device="cpu")
 
 # Stage 2: super resolution stage1
 super_res_1_pipe = IFSuperResolutionPipeline.from_pretrained(
-    "DeepFloyd/IF-II-L-v1.0",
-    text_encoder=None,
-    variant="fp16",
-    paddle_dtype=paddle.float16,
+    "DeepFloyd/IF-II-L-v1.0", text_encoder=None, variant="fp16", paddle_dtype=paddle.float16
 )
 super_res_1_pipe.enable_xformers_memory_efficient_attention()
 
@@ -57,9 +54,9 @@ super_res_1_pipe.to(paddle_device="cpu")
 
 # Stage 3: super resolution stage2
 super_res_2_pipe = DiffusionPipeline.from_pretrained(
-    "stabilityai/stable-diffusion-x4-upscaler", paddle_dtype=paddle.float16
+    "stabilityai/stable-diffusion-x4-upscaler", paddle_dtype=paddle.float32
 )
-super_res_2_pipe.enable_xformers_memory_efficient_attention()
+# super_res_2_pipe.enable_xformers_memory_efficient_attention()
 
 image = super_res_2_pipe(
     prompt=prompt,

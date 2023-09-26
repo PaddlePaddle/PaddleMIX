@@ -26,6 +26,20 @@ from packaging.version import Version, parse
 
 from . import logging
 
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if not isinstance(v, str):
+        v = str(v)
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise ValueError("Not supported value: {}".format(v))
+
+
 # The package importlib_metadata is in a different place, depending on the python version.
 if sys.version_info < (3, 8):
     import importlib_metadata
@@ -40,14 +54,7 @@ ENV_VARS_TRUE_AND_AUTO_VALUES = ENV_VARS_TRUE_VALUES.union({"AUTO"})
 USE_PADDLE = os.environ.get("USE_PADDLE", "AUTO").upper()
 USE_SAFETENSORS = os.environ.get("USE_SAFETENSORS", "AUTO").upper()
 
-STR_OPERATION_TO_FUNC = {
-    ">": op.gt,
-    ">=": op.ge,
-    "==": op.eq,
-    "!=": op.ne,
-    "<=": op.le,
-    "<": op.lt,
-}
+STR_OPERATION_TO_FUNC = {">": op.gt, ">=": op.ge, "==": op.eq, "!=": op.ne, "<=": op.le, "<": op.lt}
 
 _paddle_version = "N/A"
 if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
@@ -254,6 +261,20 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _bs4_available = False
 
+_paddlesde_available = importlib.util.find_spec("paddlesde") is not None
+try:
+    _paddlesde_version = importlib_metadata.version("paddlesde")
+    logger.debug(f"Successfully imported paddlesde version {_paddlesde_version}")
+except importlib_metadata.PackageNotFoundError:
+    _paddlesde_available = False
+
+_invisible_watermark_available = importlib.util.find_spec("imwatermark") is not None
+try:
+    _invisible_watermark_version = importlib_metadata.version("invisible-watermark")
+    logger.debug(f"Successfully imported invisible-watermark version {_invisible_watermark_version}")
+except importlib_metadata.PackageNotFoundError:
+    _invisible_watermark_available = False
+
 
 def is_paddle_available():
     return _paddle_available
@@ -272,7 +293,11 @@ def is_fastdeploy_available():
 
 
 def is_ppxformers_available():
-    return _ppxformers_available
+    USE_PPXFORMERS = str2bool(os.getenv("USE_PPXFORMERS", True))
+    if USE_PPXFORMERS:
+        return _ppxformers_available
+    else:
+        False
 
 
 def is_torch_available():
@@ -341,6 +366,14 @@ def is_ftfy_available():
 
 def is_bs4_available():
     return _bs4_available
+
+
+def is_paddlesde_available():
+    return _paddlesde_available
+
+
+def is_invisible_watermark_available():
+    return _invisible_watermark_available
 
 
 # docstyle-ignore
@@ -475,6 +508,16 @@ installation section: https://github.com/rspeer/python-ftfy/tree/master#installi
 that match your environment. Please note that you may need to restart your runtime after installation.
 """
 
+# docstyle-ignore
+PADDLESDE_IMPORT_ERROR = """
+{0} requires the paddlesde library but it was not found in your environment. You can install it with pip: `pip install paddlesde`
+"""
+
+# docstyle-ignore
+INVISIBLE_WATERMARK_IMPORT_ERROR = """
+{0} requires the invisible-watermark library but it was not found in your environment. You can install it with pip: `pip install invisible-watermark>=0.2.0`
+"""
+
 BACKENDS_MAPPING = OrderedDict(
     [
         ("bs4", (is_bs4_available, BS4_IMPORT_ERROR)),
@@ -496,6 +539,8 @@ BACKENDS_MAPPING = OrderedDict(
         ("note_seq", (is_note_seq_available, NOTE_SEQ_IMPORT_ERROR)),
         ("compel", (is_compel_available, COMPEL_IMPORT_ERROR)),
         ("ftfy", (is_ftfy_available, FTFY_IMPORT_ERROR)),
+        ("paddlesde", (is_paddlesde_available, PADDLESDE_IMPORT_ERROR)),
+        ("invisible_watermark", (is_invisible_watermark_available, INVISIBLE_WATERMARK_IMPORT_ERROR)),
     ]
 )
 
@@ -538,7 +583,7 @@ class DummyObject(type):
     """
 
     def __getattr__(cls, key):
-        if key.startswith("_"):
+        if key.startswith("_") and key != "_load_connected_pipes":
             return super().__getattr__(cls, key)
         requires_backends(cls, cls._backends)
 

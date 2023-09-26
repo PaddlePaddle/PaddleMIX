@@ -21,6 +21,9 @@ import paddle
 
 from ppdiffusers import UNet2DConditionModel
 from ppdiffusers.training_utils import EMAModel
+from ppdiffusers.utils.testing_utils import enable_full_determinism
+
+enable_full_determinism()
 
 
 class EMAModelTests(unittest.TestCase):
@@ -34,28 +37,16 @@ class EMAModelTests(unittest.TestCase):
 
     def get_models(self, decay=0.9999):
         unet = UNet2DConditionModel.from_pretrained(self.model_id, subfolder="unet")
-        ema_unet = EMAModel(
-            unet.parameters(),
-            decay=decay,
-            model_cls=UNet2DConditionModel,
-            model_config=unet.config,
-        )
+        ema_unet = EMAModel(unet.parameters(), decay=decay, model_cls=UNet2DConditionModel, model_config=unet.config)
         return unet, ema_unet
 
     def get_dummy_inputs(self):
         noisy_latents = paddle.randn(
-            (
-                self.batch_size,
-                self.num_in_channels,
-                self.latent_height,
-                self.latent_width,
-            ),
-            generator=self.generator,
+            (self.batch_size, self.num_in_channels, self.latent_height, self.latent_width), generator=self.generator
         )
         timesteps = paddle.randint(0, 1000, shape=(self.batch_size,), generator=self.generator)
         encoder_hidden_states = paddle.randn(
-            (self.batch_size, self.prompt_length, self.text_encoder_hidden_dim),
-            generator=self.generator,
+            (self.batch_size, self.prompt_length, self.text_encoder_hidden_dim), generator=self.generator
         )
         return noisy_latents, timesteps, encoder_hidden_states
 

@@ -19,10 +19,10 @@ import paddle
 import PIL
 from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
 
-from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging
 from ..fastdeploy_utils import FastDeployDiffusionPipelineMixin, FastDeployRuntimeModel
+from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -292,12 +292,7 @@ class FastDeployStableDiffusionPipeline(DiffusionPipeline, FastDeployDiffusionPi
                 # compute the previous noisy sample x_t -> x_t-1
                 if is_scheduler_support_step_index:
                     scheduler_output = self.scheduler.step(
-                        noise_pred,
-                        t,
-                        latents,
-                        step_index=i,
-                        return_pred_original_sample=False,
-                        **extra_step_kwargs,
+                        noise_pred, t, latents, step_index=i, return_pred_original_sample=False, **extra_step_kwargs
                     )
                 else:
                     scheduler_output = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)
@@ -313,8 +308,7 @@ class FastDeployStableDiffusionPipeline(DiffusionPipeline, FastDeployDiffusionPi
 
         if not output_type == "latent":
             image = self._decode_vae_latents(
-                latents / self.vae_scaling_factor,
-                infer_op=infer_op_dict.get("vae_decoder", None),
+                latents / self.vae_scaling_factor, infer_op=infer_op_dict.get("vae_decoder", None)
             )
             image, has_nsfw_concept = self.run_safety_checker(image)
         else:

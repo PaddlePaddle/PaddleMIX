@@ -45,7 +45,7 @@ from ppdiffusers import (
 from ppdiffusers.configuration_utils import FrozenDict
 from ppdiffusers.image_processor import VaeImageProcessor
 from ppdiffusers.loaders import (
-    FromCkptMixin,
+    FromSingleFileMixin,
     LoraLoaderMixin,
     TextualInversionLoaderMixin,
 )
@@ -1147,7 +1147,7 @@ class CommonMixIn:
 class StableDiffusionMegaPipeline(
     DiffusionPipeline,
     CommonMixIn,
-    FromCkptMixin,
+    FromSingleFileMixin,
     LoraLoaderMixin,
     TextualInversionLoaderMixin,
 ):

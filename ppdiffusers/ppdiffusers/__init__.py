@@ -21,6 +21,7 @@ from .utils import (
     is_einops_available,
     is_fastdeploy_available,
     is_inflect_available,
+    is_invisible_watermark_available,
     is_k_diffusion_available,
     is_k_diffusion_version,
     is_librosa_available,
@@ -29,6 +30,7 @@ from .utils import (
     is_paddle_version,
     is_paddlenlp_available,
     is_paddlenlp_version,
+    is_paddlesde_available,
     is_ppxformers_available,
     is_safetensors_available,
     is_scipy_available,
@@ -54,6 +56,7 @@ except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_objects import *  # noqa F403
 else:
     from .models import (
+        AsymmetricAutoencoderKL,
         AutoencoderKL,
         ControlNetModel,
         LitEma,
@@ -82,6 +85,10 @@ else:
     )
     from .pipelines import (
         AudioPipelineOutput,
+        AutoPipelineForImage2Image,
+        AutoPipelineForInpainting,
+        AutoPipelineForText2Image,
+        ConsistencyModelPipeline,
         DanceDiffusionPipeline,
         DDIMPipeline,
         DDPMPipeline,
@@ -97,10 +104,14 @@ else:
         TextPipelineOutput,
     )
     from .schedulers import (
+        CMStochasticIterativeScheduler,
         DDIMInverseScheduler,
+        DDIMParallelScheduler,
         DDIMScheduler,
+        DDPMParallelScheduler,
         DDPMScheduler,
         DEISMultistepScheduler,
+        DPMSolverMultistepInverseScheduler,
         DPMSolverMultistepScheduler,
         DPMSolverSinglestepScheduler,
         DPMSolverUniDiffuserScheduler,
@@ -134,12 +145,21 @@ else:
     from .schedulers import LMSDiscreteScheduler
 
 try:
+    if not (is_paddle_available() and is_paddlesde_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from .utils.dummy_paddle_and_paddlesde_objects import *  # noqa F403
+else:
+    from .schedulers import DPMSolverSDEScheduler
+
+
+try:
     if not (is_paddle_available() and is_paddlenlp_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
 else:
-    from .pipelines import (
+    from .pipelines import (  # ImageTextPipelineOutput,
         AltDiffusionImg2ImgPipeline,
         AltDiffusionPipeline,
         AudioLDMPipeline,
@@ -150,30 +170,59 @@ else:
         IFInpaintingSuperResolutionPipeline,
         IFPipeline,
         IFSuperResolutionPipeline,
+        KandinskyCombinedPipeline,
+        KandinskyImg2ImgCombinedPipeline,
+        KandinskyImg2ImgPipeline,
+        KandinskyInpaintCombinedPipeline,
+        KandinskyInpaintPipeline,
+        KandinskyPipeline,
+        KandinskyPriorPipeline,
+        KandinskyV22CombinedPipeline,
+        KandinskyV22ControlnetImg2ImgPipeline,
+        KandinskyV22ControlnetPipeline,
+        KandinskyV22Img2ImgCombinedPipeline,
+        KandinskyV22Img2ImgPipeline,
+        KandinskyV22InpaintCombinedPipeline,
+        KandinskyV22InpaintPipeline,
+        KandinskyV22Pipeline,
+        KandinskyV22PriorEmb2EmbPipeline,
+        KandinskyV22PriorPipeline,
         LDMTextToImagePipeline,
         LVDMTextToVideoPipeline,
         LVDMUncondPipeline,
         PaintByExamplePipeline,
         SemanticStableDiffusionPipeline,
+        ShapEImg2ImgPipeline,
+        ShapEPipeline,
         StableDiffusionAdapterPipeline,
         StableDiffusionAttendAndExcitePipeline,
+        StableDiffusionControlNetImg2ImgPipeline,
+        StableDiffusionControlNetInpaintPipeline,
         StableDiffusionControlNetPipeline,
         StableDiffusionDepth2ImgPipeline,
+        StableDiffusionDiffEditPipeline,
         StableDiffusionImageVariationPipeline,
         StableDiffusionImg2ImgPipeline,
         StableDiffusionInpaintPipeline,
         StableDiffusionInpaintPipelineLegacy,
         StableDiffusionInstructPix2PixPipeline,
         StableDiffusionLatentUpscalePipeline,
+        StableDiffusionLDM3DPipeline,
         StableDiffusionMegaPipeline,
         StableDiffusionModelEditingPipeline,
         StableDiffusionPanoramaPipeline,
+        StableDiffusionParadigmsPipeline,
         StableDiffusionPipeline,
         StableDiffusionPipelineAllinOne,
         StableDiffusionPipelineSafe,
         StableDiffusionPix2PixZeroPipeline,
         StableDiffusionSAGPipeline,
         StableDiffusionUpscalePipeline,
+        StableDiffusionXLControlNetPipeline,
+        StableDiffusionXLImg2ImgPipeline,
+        StableDiffusionXLInpaintPipeline,
+        StableDiffusionXLInstructPix2PixPipeline,
+        StableDiffusionXLPipeline,
         StableUnCLIPImg2ImgPipeline,
         StableUnCLIPPipeline,
         TextToVideoSDPipeline,
@@ -185,10 +234,10 @@ else:
         VersatileDiffusionImageVariationPipeline,
         VersatileDiffusionPipeline,
         VersatileDiffusionTextToImagePipeline,
+        VideoToVideoSDPipeline,
         VQDiffusionPipeline,
     )
     from .pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertModel
-    from .pipelines.unidiffuser.caption_decoder import CaptionDecoder
 
 try:
     if not (is_paddle_available() and is_paddlenlp_available() and is_k_diffusion_available()):
@@ -246,7 +295,11 @@ try:
 except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_and_einops_objects import *  # noqa F403
 else:
-    from .models import UViTModel
+    from .pipelines.unidiffuser import (
+        UniDiffuserModel,
+        UniDiffuserPipeline,
+        UniDiffuserTextDecoder,
+    )
 
 try:
     if not (is_note_seq_available()):

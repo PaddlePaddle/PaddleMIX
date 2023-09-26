@@ -28,16 +28,19 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import floats_tensor, load_image, slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..pipeline_params import (
+    IMAGE_TO_IMAGE_IMAGE_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
 )
-from ..test_pipelines_common import PipelineTesterMixin
+from ..test_pipelines_common import PipelineLatentTesterMixin, PipelineTesterMixin
+
+enable_full_determinism()
 
 
-class CycleDiffusionPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class CycleDiffusionPipelineFastTests(PipelineLatentTesterMixin, PipelineTesterMixin, unittest.TestCase):
     pipeline_class = CycleDiffusionPipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS - {
         "negative_prompt",
@@ -47,6 +50,8 @@ class CycleDiffusionPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
     }
     required_optional_params = PipelineTesterMixin.required_optional_params - {"latents"}
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS.union({"source_prompt"})
+    image_params = IMAGE_TO_IMAGE_IMAGE_PARAMS
+    image_latents_params = IMAGE_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -104,6 +109,7 @@ class CycleDiffusionPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
 
     def get_dummy_inputs(self, seed=0):
         image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed))
+        image = image / 2 + 0.5
         generator = paddle.Generator().manual_seed(seed)
 
         inputs = {
@@ -116,7 +122,7 @@ class CycleDiffusionPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
             "strength": 0.8,
             "guidance_scale": 3,
             "source_guidance_scale": 1,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 
@@ -130,17 +136,7 @@ class CycleDiffusionPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image_slice = images[0, -3:, -3:, -1]
         assert images.shape == (1, 32, 32, 3)
         expected_slice = np.array(
-            [
-                0.04812625,
-                0.77983606,
-                0.71009433,
-                0.15924984,
-                0.9788434,
-                0.49732354,
-                0.362224,
-                0.6481595,
-                0.4530744,
-            ]
+            [0.04812625, 0.77983606, 0.71009433, 0.15924984, 0.9788434, 0.49732354, 0.362224, 0.6481595, 0.4530744]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
@@ -157,17 +153,7 @@ class CycleDiffusionPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
         image_slice = images[0, -3:, -3:, -1]
         assert images.shape == (1, 32, 32, 3)
         expected_slice = np.array(
-            [
-                0.05053711,
-                0.78125,
-                0.7114258,
-                0.15991211,
-                0.9785156,
-                0.49804688,
-                0.36279297,
-                0.6484375,
-                0.45361328,
-            ]
+            [0.05053711, 0.78125, 0.7114258, 0.15991211, 0.9785156, 0.49804688, 0.36279297, 0.6484375, 0.45361328]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
@@ -186,18 +172,14 @@ class CycleDiffusionPipelineIntegrationTests(unittest.TestCase):
 
     def test_cycle_diffusion_pipeline_fp16(self):
         init_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/cycle-diffusion/black_colored_car.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/cycle-diffusion/black_colored_car.png"
         )
         expected_image = np.array([[0.14477539, 0.20483398, 0.14135742], [0.10009766, 0.17602539, 0.11083984]])
         init_image = init_image.resize((512, 512))
         model_id = "CompVis/stable-diffusion-v1-4"
         scheduler = DDIMScheduler.from_pretrained(model_id, subfolder="scheduler")
         pipe = CycleDiffusionPipeline.from_pretrained(
-            model_id,
-            scheduler=scheduler,
-            safety_checker=None,
-            paddle_dtype=paddle.float16,
-            revision="fp16",
+            model_id, scheduler=scheduler, safety_checker=None, paddle_dtype=paddle.float16, revision="fp16"
         )
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
@@ -221,7 +203,7 @@ class CycleDiffusionPipelineIntegrationTests(unittest.TestCase):
 
     def test_cycle_diffusion_pipeline(self):
         init_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/cycle-diffusion/black_colored_car.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/cycle-diffusion/black_colored_car.png"
         )
         expected_image = np.array([[0.16294342, 0.20514232, 0.14554858], [0.11476257, 0.16831946, 0.11495486]])
         init_image = init_image.resize((512, 512))

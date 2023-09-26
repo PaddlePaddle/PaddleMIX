@@ -16,6 +16,7 @@
 Paddle utilities: Utilities related to Paddle
 """
 import contextlib
+import threading
 import time
 from contextlib import contextmanager
 from typing import List, Optional, Tuple, Union
@@ -25,43 +26,54 @@ from .logging import get_logger
 
 logger = get_logger(__name__)  # pylint: disable=invalid-name
 
+
+# dummpy decorator, we do not use it
+def maybe_allow_in_graph(cls):
+    return cls
+
+
 if is_paddle_available():
     import paddle
 
     class RNGStatesTracker:
         def __init__(self):
             self.states_ = {}
+            self.mutex = threading.Lock()
 
         def reset(self):
-            self.states_ = {}
+            with self.mutex:
+                self.states_ = {}
 
         def remove(self, generator_name=None):
-            if generator_name is not None:
-                del self.states_[generator_name]
+            with self.mutex:
+                if generator_name is not None:
+                    del self.states_[generator_name]
 
         def manual_seed(self, seed, generator_name=None):
-            if generator_name is None:
-                generator_name = str(time.time())
-            if generator_name in self.states_:
-                raise ValueError("state {} already exists".format(generator_name))
-            orig_rng_state = paddle.get_cuda_rng_state()
-            paddle.seed(seed)
-            self.states_[generator_name] = paddle.get_cuda_rng_state()
-            paddle.set_cuda_rng_state(orig_rng_state)
-            return generator_name
+            with self.mutex:
+                if generator_name is None:
+                    generator_name = str(time.time())
+                if generator_name in self.states_:
+                    raise ValueError("state {} already exists".format(generator_name))
+                orig_rng_state = paddle.get_cuda_rng_state()
+                paddle.seed(seed)
+                self.states_[generator_name] = paddle.get_cuda_rng_state()
+                paddle.set_cuda_rng_state(orig_rng_state)
+                return generator_name
 
         @contextlib.contextmanager
         def rng_state(self, generator_name=None):
             if generator_name is not None:
                 if generator_name not in self.states_:
                     raise ValueError("state {} does not exist".format(generator_name))
-                orig_cuda_rng_state = paddle.get_cuda_rng_state()
-                paddle.set_cuda_rng_state(self.states_[generator_name])
-                try:
-                    yield
-                finally:
-                    self.states_[generator_name] = paddle.get_cuda_rng_state()
-                    paddle.set_cuda_rng_state(orig_cuda_rng_state)
+                with self.mutex:
+                    orig_cuda_rng_state = paddle.get_cuda_rng_state()
+                    paddle.set_cuda_rng_state(self.states_[generator_name])
+                    try:
+                        yield
+                    finally:
+                        self.states_[generator_name] = paddle.get_cuda_rng_state()
+                        paddle.set_cuda_rng_state(orig_cuda_rng_state)
             else:
                 yield
 
@@ -129,10 +141,14 @@ if is_paddle_available():
         dtype: Optional["paddle.dtype"] = None,
         *kwargs,
     ):
-        """This is a helper function that allows to create random tensors on the desired `device` with the desired `dtype`. When
-        passing a list of generators one can seed each batched size individually. If CPU generators are passed the tensor
-        will always be created on CPU.
+        """A helper function to create random tensors with the desired `dtype`. When
+        passing a list of generators, you can seed each batch size individually. If CPU generators are passed, the tensor
+        is always created on the CPU.
         """
+        # make sure generator list of length 1 is treated like a non-list
+        if isinstance(generator, list) and len(generator) == 1:
+            generator = generator[0]
+
         if isinstance(generator, (list, tuple)):
             batch_size = shape[0]
             shape = (1,) + tuple(shape[1:])
