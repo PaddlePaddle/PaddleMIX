@@ -367,7 +367,6 @@ python -u train_txt2img_laion400m_trainer.py \
     --recompute True \
     --overwrite_output_dir \
     --benchmark True \
-    --bf16 True \
     --fp16_opt_level O2
 
 # CUDA version needs to be greater than 11.7.
@@ -395,7 +394,6 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_txt2img_laion400m_trai
     --recompute True \
     --overwrite_output_dir \
     --benchmark True \
-    --bf16 True \
     --fp16_opt_level O2
 
 cd -
