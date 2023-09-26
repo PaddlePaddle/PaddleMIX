@@ -18,6 +18,7 @@ import random
 
 import paddle
 import pandas as pd
+from paddle.utils.download import get_path_from_url
 from tqdm.auto import tqdm
 
 from ppdiffusers import (
@@ -27,6 +28,10 @@ from ppdiffusers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
 )
+from ppdiffusers.utils import DOWNLOAD_SERVER, PPDIFFUSERS_CACHE
+
+base_url = DOWNLOAD_SERVER + "/CompVis/data/"
+cache_path = os.path.join(PPDIFFUSERS_CACHE, "data")
 
 
 def batchify(data, batch_size=16):
@@ -95,6 +100,7 @@ def generate_images(
         new_save_path = os.path.join(save_path, f"mscoco.en_g{cfg}")
         os.makedirs(new_save_path, exist_ok=True)
         if seed is not None and seed > 0:
+            seed = seed + int(float(cfg))
             random.seed(seed)
         i = 0
         for batch_prompt in tqdm(batchify(all_prompt, batch_size=batch_size)):
@@ -125,7 +131,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--file",
-        default="./coco30k.tsv",
+        default="coco30k",
         type=str,
         help="eval file.",
     )
@@ -153,7 +159,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--guidance_scales",
-        default=[3, 4, 5, 6, 7, 8],
+        default=[1.5, 2, 3, 4, 5, 6, 7, 8],
         nargs="+",
         type=str,
         help="guidance_scales list.",
@@ -165,6 +171,13 @@ if __name__ == "__main__":
     for arg, value in sorted(vars(args).items()):
         print("%s: %s" % (arg, value))
     print("------------------------------------------------")
+
+    if not os.path.exists(args.file):
+        if args.file.replace(".tsv", "") in ["coco1k", "coco10k", "coco30k"]:
+            file = args.file.replace(".tsv", "")
+            args.file = get_path_from_url(base_url + file + ".tsv", cache_path)
+        else:
+            raise FileNotFoundError(f"{args.file} file doesn't exist!")
     generate_images(
         model_name_or_path=args.model_name_or_path,
         batch_size=args.batch_size,
