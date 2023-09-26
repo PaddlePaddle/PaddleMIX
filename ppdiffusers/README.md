@@ -20,6 +20,8 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
+* 🔥 **2023.09.26 发布 0.19.3 版本，新增[SDXL](#文本图像多模)，该模型生成效果相较SD有了比较大的提升，支持的权重包括sdxl-0.9、sdxl-1.0、对应的refiner，及各种派生，支持的任务或pipeline包含Text2Image、Img2Img、Inpainting、ControlNet、InstructPix2Pix，支持的训练包括DreamBooth with LoRA、ControlNet、InstructPix2Pix；增加[Kandinsky 2.2支持](#文本图像多模)，该模型集合了DALL-E 2和Latent Diffusion的优点；新增UniDiffuser，该模型通过一个统一的多模态的扩散过程可以支持文生图、图生文在内的多个任务；增加AutoPipeline API，支持的任务包括text-to-image、 image-to-image、 inpainting。**
+
 * 🔥 **2023.06.20 发布 0.16.1 版本，新增[T2I-Adapter](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/t2i-adapter)，支持训练与推理；ControlNet升级，支持[reference only推理](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#controlnet-reference-only)；新增[WebUIStableDiffusionPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#automatic1111-webui-stable-diffusion)，
 支持通过prompt的方式动态加载lora、textual_inversion权重；
 新增[StableDiffusionHiresFixPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#stable-diffusion-with-high-resolution-fixing)，支持高分辨率修复；
@@ -85,6 +87,115 @@ image.save("astronaut_rides_horse_sd.png")
 ```
 <div align="center">
 <img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/209322401-6ecfeaaa-6878-4302-b592-07a31de4e590.png">
+</div>
+
+#### text_to_image_generation-stable_diffusion_xl
+
+```python
+import paddle
+from ppdiffusers import StableDiffusionXLPipeline
+
+pipe = StableDiffusionXLPipeline.from_pretrained(
+     "stabilityai/stable-diffusion-xl-base-1.0",
+     paddle_dtype=paddle.float16,
+     variant="fp16"
+)
+prompt = "a photo of an astronaut riding a horse on mars"
+generator = paddle.Generator().manual_seed(42)
+image = pipe(prompt=prompt, generator=generator, num_inference_steps=50).images[0]
+image.save('sdxl_text2image.png')
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/d72729f9-8685-48f9-a238-e4ddf6d264f3">
+</div>
+
+#### text_to_image_generation-sdxl_base_with_refiner
+
+```python
+from ppdiffusers import DiffusionPipeline
+import paddle
+
+# load both base & refiner
+base = DiffusionPipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-base-1.0",
+)
+refiner = DiffusionPipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-refiner-1.0",
+    text_encoder_2=base.text_encoder_2,
+    vae=base.vae,
+    paddle_dtype=paddle.float16,
+    variant="fp16",
+)
+
+# Define how many steps and what % of steps to be run on each experts (80/20) here
+n_steps = 40
+high_noise_frac = 0.8
+
+prompt = "A majestic lion jumping from a big stone at night"
+prompt = "a photo of an astronaut riding a horse on mars"
+generator = paddle.Generator().manual_seed(42)
+
+# run both experts
+image = base(
+    prompt=prompt,
+    output_type="latent",
+    generator=generator,
+).images
+
+image = refiner(
+    prompt=prompt,
+    image=image,
+    generator=generator,
+).images[0]
+image.save('text_to_image_generation-sdxl-base-with-refiner-result.png')
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/8ef36826-ed94-4856-a356-af1677f60d1b">
+</div>
+
+#### text_to_image_generation-kandinsky2_2
+```python
+from ppdiffusers import KandinskyV22Pipeline, KandinskyV22PriorPipeline
+
+pipe_prior = KandinskyV22PriorPipeline.from_pretrained("kandinsky-community/kandinsky-2-2-prior")
+prompt = "red cat, 4k photo"
+out = pipe_prior(prompt)
+image_emb = out.image_embeds
+zero_image_emb = out.negative_image_embeds
+pipe = KandinskyV22Pipeline.from_pretrained("kandinsky-community/kandinsky-2-2-decoder")
+image = pipe(
+    image_embeds=image_emb,
+    negative_image_embeds=zero_image_emb,
+    height=768,
+    width=768,
+    num_inference_steps=50,
+).images
+image[0].save("text_to_image_generation-kandinsky2_2-result-cat.png")
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/188f76dd-4bd7-4a33-8f30-b893c7a9e249">
+</div>
+
+#### text_to_image_generation-unidiffuser
+```python
+import paddle
+from paddlenlp.trainer import set_seed
+
+from ppdiffusers import UniDiffuserPipeline
+
+model_id_or_path = "thu-ml/unidiffuser-v1"
+pipe = UniDiffuserPipeline.from_pretrained(model_id_or_path, paddle_dtype=paddle.float16)
+set_seed(42)
+
+# Text variation can be performed with a text-to-image generation followed by a image-to-text generation:
+# 1. Text-to-image generation
+prompt = "an elephant under the sea"
+sample = pipe(prompt=prompt, num_inference_steps=20, guidance_scale=8.0)
+t2i_image = sample.images[0]
+t2i_image.save("t2i_image.png")
+````
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/a6eb11d2-ad27-4263-8cb4-b0d8dd42b36c">
 </div>
 
 #### text_to_image_generation-deepfloyd_if
@@ -214,6 +325,46 @@ image.save("image_guided_image_inpainting-paint_by_example-result.png")
 
 <details><summary>&emsp;文本引导的图像变换（Image-to-Image Text-Guided Generation）</summary>
 
+#### text_guided_image_inpainting-kandinsky2_2
+```python
+import numpy as np
+import paddle
+
+from ppdiffusers import KandinskyV22InpaintPipeline, KandinskyV22PriorPipeline
+from ppdiffusers.utils import load_image
+
+pipe_prior = KandinskyV22PriorPipeline.from_pretrained(
+    "kandinsky-community/kandinsky-2-2-prior", paddle_dtype=paddle.float16
+)
+prompt = "a hat"
+image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
+pipe = KandinskyV22InpaintPipeline.from_pretrained(
+    "kandinsky-community/kandinsky-2-2-decoder-inpaint", paddle_dtype=paddle.float16
+)
+init_image = load_image(
+    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/cat.png"
+)
+mask = np.zeros((768, 768), dtype=np.float32)
+mask[:250, 250:-250] = 1
+out = pipe(
+    image=init_image,
+    mask_image=mask,
+    image_embeds=image_emb,
+    negative_image_embeds=zero_image_emb,
+    height=768,
+    width=768,
+    num_inference_steps=50,
+)
+image = out.images[0]
+image.save("text_guided_image_inpainting-kandinsky2_2-result-cat_with_hat.png")
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/64a943d5-167b-4433-91c3-3cf9279714db">
+<center>原图像</center>
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/f469c127-52f4-4173-a693-c06b92a052aa">
+<center>生成图像</center>
+</div>
+
 #### image_to_image_text_guided_generation-stable_diffusion
 ```python
 import paddle
@@ -242,6 +393,70 @@ image.save("fantasy_landscape.png")
 <img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/209325799-d9ff279b-0d57-435f-bda7-763e3323be23.png">
 <center>生成图像</center>
 </div>
+
+#### image_to_image_text_guided_generation-stable_diffusion_xl
+```python
+import paddle
+from ppdiffusers import StableDiffusionXLImg2ImgPipeline
+from ppdiffusers.utils import load_image
+
+pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-refiner-1.0",
+    paddle_dtype=paddle.float16,
+    # from_hf_hub=True,
+    # from_diffusers=True,
+    variant="fp16"
+)
+url = "https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-0-19-3/000000009.png"
+init_image = load_image(url).convert("RGB")
+prompt = "a photo of an astronaut riding a horse on mars"
+image = pipe(prompt, image=init_image).images[0]
+image.save('sdxl_image2image.png')
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/41bd9381-2799-4bed-a5e2-ba312a2f8da9">
+<center>原图像</center>
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/db672d03-2e3a-46ac-97fd-d80cca18dbbe">
+<center>生成图像</center>
+</div>
+
+#### image_to_image_text_guided_generation-kandinsky2_2
+```python
+import paddle
+
+from ppdiffusers import KandinskyV22Img2ImgPipeline, KandinskyV22PriorPipeline
+from ppdiffusers.utils import load_image
+
+pipe_prior = KandinskyV22PriorPipeline.from_pretrained(
+    "kandinsky-community/kandinsky-2-2-prior", paddle_dtype=paddle.float16
+)
+prompt = "A red cartoon frog, 4k"
+image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
+pipe = KandinskyV22Img2ImgPipeline.from_pretrained(
+    "kandinsky-community/kandinsky-2-2-decoder", paddle_dtype=paddle.float16
+)
+
+init_image = load_image(
+    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main" "/kandinsky/frog.png"
+)
+image = pipe(
+    image=init_image,
+    image_embeds=image_emb,
+    negative_image_embeds=zero_image_emb,
+    height=768,
+    width=768,
+    num_inference_steps=100,
+    strength=0.2,
+).images
+image[0].save("image_to_image_text_guided_generation-kandinsky2_2-result-red_frog.png")
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/aae57109-94ad-408e-ae75-8cce650cebe5">
+<center>原图像</center>
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/23cf2c4e-416f-4f21-82a6-e57de11b5e83">
+<center>生成图像</center>
+</div>
+
 </details>
 </details>
 
