@@ -20,6 +20,14 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
+* 🔥 **2023.09.27 发布 0.19.3 版本，新增[SDXL](#文本图像多模)，支持Text2Image、Img2Img、Inpainting、InstructPix2Pix等任务，支持DreamBooth Lora训练；
+新增[UniDiffuser](#文本图像多模)，通过统一的多模态扩散过程支持文生图、图生文等任务；
+新增文本条件视频生成模型[LVDM](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_video_lvdm)，支持训练与推理；
+新增文图生成模型[Kandinsky 2.2](#文本图像多模)，[Consistency models](#文本图像多模)；
+Stable Diffusion支持[BF16 O2训练](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/stable_diffusion)，效果对齐FP32；
+[LoRA加载升级](#加载HF-LoRA权重)，支持加载SDXL的LoRA权重；
+[Controlnet](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/ppdiffusers/pipelines/controlnet)升级，支持ControlNetImg2Img、ControlNetInpaint、StableDiffusionXLControlNet等。**
+
 * 🔥 **2023.06.20 发布 0.16.1 版本，新增[T2I-Adapter](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/t2i-adapter)，支持训练与推理；ControlNet升级，支持[reference only推理](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#controlnet-reference-only)；新增[WebUIStableDiffusionPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#automatic1111-webui-stable-diffusion)，
 支持通过prompt的方式动态加载lora、textual_inversion权重；
 新增[StableDiffusionHiresFixPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#stable-diffusion-with-high-resolution-fixing)，支持高分辨率修复；
@@ -37,7 +45,7 @@
 ## 特性
 #### 📦 SOTA扩散模型Pipelines集合
 我们提供**SOTA（State-of-the-Art）** 的扩散模型Pipelines集合。
-目前**PPDiffusers**已经集成了**50+Pipelines**，支持文图生成（Text-to-Image Generation）、文本引导的图像编辑（Text-Guided Image Inpainting）、文本引导的图像变换（Image-to-Image Text-Guided Generation）、文本条件视频生成（Text-to-Video Generation）、超分（Super Superresolution）在内的**10余项**任务，覆盖**文本、图像、视频、音频**等多种模态。
+目前**PPDiffusers**已经集成了**100+Pipelines**，支持文图生成（Text-to-Image Generation）、文本引导的图像编辑（Text-Guided Image Inpainting）、文本引导的图像变换（Image-to-Image Text-Guided Generation）、文本条件的视频生成（Text-to-Video Generation）、超分（Super Superresolution）、文本条件的音频生成（Text-to-Audio Generation）在内的**10余项**任务，覆盖**文本、图像、视频、音频**等多种模态。
 如果想要了解当前支持的所有**Pipelines**以及对应的来源信息，可以阅读[🔥 PPDiffusers Pipelines](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/pipelines/README.md)文档。
 
 
@@ -85,6 +93,115 @@ image.save("astronaut_rides_horse_sd.png")
 ```
 <div align="center">
 <img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/209322401-6ecfeaaa-6878-4302-b592-07a31de4e590.png">
+</div>
+
+#### text_to_image_generation-stable_diffusion_xl
+
+```python
+import paddle
+from ppdiffusers import StableDiffusionXLPipeline
+
+pipe = StableDiffusionXLPipeline.from_pretrained(
+     "stabilityai/stable-diffusion-xl-base-1.0",
+     paddle_dtype=paddle.float16,
+     variant="fp16"
+)
+prompt = "a photo of an astronaut riding a horse on mars"
+generator = paddle.Generator().manual_seed(42)
+image = pipe(prompt=prompt, generator=generator, num_inference_steps=50).images[0]
+image.save('sdxl_text2image.png')
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/d72729f9-8685-48f9-a238-e4ddf6d264f3">
+</div>
+
+#### text_to_image_generation-sdxl_base_with_refiner
+
+```python
+from ppdiffusers import DiffusionPipeline
+import paddle
+
+# load both base & refiner
+base = DiffusionPipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-base-1.0",
+)
+refiner = DiffusionPipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-refiner-1.0",
+    text_encoder_2=base.text_encoder_2,
+    vae=base.vae,
+    paddle_dtype=paddle.float16,
+    variant="fp16",
+)
+
+# Define how many steps and what % of steps to be run on each experts (80/20) here
+n_steps = 40
+high_noise_frac = 0.8
+
+prompt = "A majestic lion jumping from a big stone at night"
+prompt = "a photo of an astronaut riding a horse on mars"
+generator = paddle.Generator().manual_seed(42)
+
+# run both experts
+image = base(
+    prompt=prompt,
+    output_type="latent",
+    generator=generator,
+).images
+
+image = refiner(
+    prompt=prompt,
+    image=image,
+    generator=generator,
+).images[0]
+image.save('text_to_image_generation-sdxl-base-with-refiner-result.png')
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/8ef36826-ed94-4856-a356-af1677f60d1b">
+</div>
+
+#### text_to_image_generation-kandinsky2_2
+```python
+from ppdiffusers import KandinskyV22Pipeline, KandinskyV22PriorPipeline
+
+pipe_prior = KandinskyV22PriorPipeline.from_pretrained("kandinsky-community/kandinsky-2-2-prior")
+prompt = "red cat, 4k photo"
+out = pipe_prior(prompt)
+image_emb = out.image_embeds
+zero_image_emb = out.negative_image_embeds
+pipe = KandinskyV22Pipeline.from_pretrained("kandinsky-community/kandinsky-2-2-decoder")
+image = pipe(
+    image_embeds=image_emb,
+    negative_image_embeds=zero_image_emb,
+    height=768,
+    width=768,
+    num_inference_steps=50,
+).images
+image[0].save("text_to_image_generation-kandinsky2_2-result-cat.png")
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/188f76dd-4bd7-4a33-8f30-b893c7a9e249">
+</div>
+
+#### text_to_image_generation-unidiffuser
+```python
+import paddle
+from paddlenlp.trainer import set_seed
+
+from ppdiffusers import UniDiffuserPipeline
+
+model_id_or_path = "thu-ml/unidiffuser-v1"
+pipe = UniDiffuserPipeline.from_pretrained(model_id_or_path, paddle_dtype=paddle.float16)
+set_seed(42)
+
+# Text variation can be performed with a text-to-image generation followed by a image-to-text generation:
+# 1. Text-to-image generation
+prompt = "an elephant under the sea"
+sample = pipe(prompt=prompt, num_inference_steps=20, guidance_scale=8.0)
+t2i_image = sample.images[0]
+t2i_image.save("t2i_image.png")
+````
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/a6eb11d2-ad27-4263-8cb4-b0d8dd42b36c">
 </div>
 
 #### text_to_image_generation-deepfloyd_if
@@ -214,6 +331,46 @@ image.save("image_guided_image_inpainting-paint_by_example-result.png")
 
 <details><summary>&emsp;文本引导的图像变换（Image-to-Image Text-Guided Generation）</summary>
 
+#### text_guided_image_inpainting-kandinsky2_2
+```python
+import numpy as np
+import paddle
+
+from ppdiffusers import KandinskyV22InpaintPipeline, KandinskyV22PriorPipeline
+from ppdiffusers.utils import load_image
+
+pipe_prior = KandinskyV22PriorPipeline.from_pretrained(
+    "kandinsky-community/kandinsky-2-2-prior", paddle_dtype=paddle.float16
+)
+prompt = "a hat"
+image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
+pipe = KandinskyV22InpaintPipeline.from_pretrained(
+    "kandinsky-community/kandinsky-2-2-decoder-inpaint", paddle_dtype=paddle.float16
+)
+init_image = load_image(
+    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinsky/cat.png"
+)
+mask = np.zeros((768, 768), dtype=np.float32)
+mask[:250, 250:-250] = 1
+out = pipe(
+    image=init_image,
+    mask_image=mask,
+    image_embeds=image_emb,
+    negative_image_embeds=zero_image_emb,
+    height=768,
+    width=768,
+    num_inference_steps=50,
+)
+image = out.images[0]
+image.save("text_guided_image_inpainting-kandinsky2_2-result-cat_with_hat.png")
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/64a943d5-167b-4433-91c3-3cf9279714db">
+<center>原图像</center>
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/f469c127-52f4-4173-a693-c06b92a052aa">
+<center>生成图像</center>
+</div>
+
 #### image_to_image_text_guided_generation-stable_diffusion
 ```python
 import paddle
@@ -242,6 +399,70 @@ image.save("fantasy_landscape.png")
 <img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/209325799-d9ff279b-0d57-435f-bda7-763e3323be23.png">
 <center>生成图像</center>
 </div>
+
+#### image_to_image_text_guided_generation-stable_diffusion_xl
+```python
+import paddle
+from ppdiffusers import StableDiffusionXLImg2ImgPipeline
+from ppdiffusers.utils import load_image
+
+pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-refiner-1.0",
+    paddle_dtype=paddle.float16,
+    # from_hf_hub=True,
+    # from_diffusers=True,
+    variant="fp16"
+)
+url = "https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-0-19-3/000000009.png"
+init_image = load_image(url).convert("RGB")
+prompt = "a photo of an astronaut riding a horse on mars"
+image = pipe(prompt, image=init_image).images[0]
+image.save('sdxl_image2image.png')
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/41bd9381-2799-4bed-a5e2-ba312a2f8da9">
+<center>原图像</center>
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/db672d03-2e3a-46ac-97fd-d80cca18dbbe">
+<center>生成图像</center>
+</div>
+
+#### image_to_image_text_guided_generation-kandinsky2_2
+```python
+import paddle
+
+from ppdiffusers import KandinskyV22Img2ImgPipeline, KandinskyV22PriorPipeline
+from ppdiffusers.utils import load_image
+
+pipe_prior = KandinskyV22PriorPipeline.from_pretrained(
+    "kandinsky-community/kandinsky-2-2-prior", paddle_dtype=paddle.float16
+)
+prompt = "A red cartoon frog, 4k"
+image_emb, zero_image_emb = pipe_prior(prompt, return_dict=False)
+pipe = KandinskyV22Img2ImgPipeline.from_pretrained(
+    "kandinsky-community/kandinsky-2-2-decoder", paddle_dtype=paddle.float16
+)
+
+init_image = load_image(
+    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main" "/kandinsky/frog.png"
+)
+image = pipe(
+    image=init_image,
+    image_embeds=image_emb,
+    negative_image_embeds=zero_image_emb,
+    height=768,
+    width=768,
+    num_inference_steps=100,
+    strength=0.2,
+).images
+image[0].save("image_to_image_text_guided_generation-kandinsky2_2-result-red_frog.png")
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/aae57109-94ad-408e-ae75-8cce650cebe5">
+<center>原图像</center>
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/23cf2c4e-416f-4f21-82a6-e57de11b5e83">
+<center>生成图像</center>
+</div>
+
 </details>
 </details>
 
@@ -276,6 +497,39 @@ image.save("versatile-diffusion-red_car.png")
 <details open>
 <summary>&emsp;文本条件的视频生成（Text-to-Video Generation）</summary>
 
+#### text_to_video_generation-lvdm
+
+```python
+import paddle
+
+from ppdiffusers import LVDMTextToVideoPipeline
+
+# 加载模型和scheduler
+pipe = LVDMTextToVideoPipeline.from_pretrained("westfish/lvdm_text2video_orig_webvid_2m")
+
+# 执行pipeline进行推理
+seed = 2013
+generator = paddle.Generator().manual_seed(seed)
+samples = pipe(
+    prompt="cutting in kitchen",
+    num_frames=16,
+    height=256,
+    width=256,
+    num_inference_steps=50,
+    generator=generator,
+    guidance_scale=15,
+    eta=1,
+    save_dir=".",
+    save_name="text_to_video_generation-lvdm-result-ddim_lvdm_text_to_video_ucf",
+    encoder_type="2d",
+    scale_factor=0.18215,
+    shift_factor=0,
+)
+```
+<div align="center">
+<img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/270906907-2b9d53c1-0272-4c7a-81b2-cd962d23bbee.gif">
+</div>
+
 #### text_to_video_generation-synth
 
 ```python
@@ -292,6 +546,27 @@ imageio.mimsave("text_to_video_generation-synth-result-astronaut_riding_a_horse.
 ```
 <div align="center">
 <img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/246780441-8242a955-490b-4326-8415-84264a54a938.gif">
+</div>
+
+
+#### text_to_video_generation-synth with zeroscope_v2_XL
+
+```python
+import imageio
+
+from ppdiffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
+
+# from ppdiffusers.utils import export_to_video
+
+pipe = TextToVideoSDPipeline.from_pretrained("cerspense/zeroscope_v2_XL")
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+
+prompt = "An astronaut riding a horse."
+video_frames = pipe(prompt, num_inference_steps=50, height=320, width=576, num_frames=24).frames
+imageio.mimsave("text_to_video_generation-synth-result-astronaut_riding_a_horse.mp4", video_frames, fps=8)
+```
+<div align="center">
+<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/43ebbca0-9f07-458b-809a-acf296a2539b">
 </div>
 
 #### text_to_video_generation-zero
@@ -319,7 +594,7 @@ imageio.mimsave("text_to_video_generation-zero-result-panda.mp4", result, fps=4)
 </details>
 
 ### 文本音频多模
-<details open>
+<details>
 <summary>&emsp;文本条件的音频生成（Text-to-Audio Generation）</summary>
 
 #### text_to_audio_generation-audio_ldm
@@ -478,7 +753,7 @@ image.save("versatile-diffusion-car_variation.png")
 
 
 ### 音频
-<details open>
+<details>
 <summary>&emsp;无条件音频生成（Unconditional Audio Generation）</summary>
 
 #### unconditional_audio_generation-audio_diffusion
@@ -650,6 +925,17 @@ pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2",
 from ppdiffusers import StableDiffusionPipeline
 # 可输入网址 或 本地ckpt、safetensors文件
 pipe = StableDiffusionPipeline.from_pretrained_original_ckpt("https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/ppdiffusers/chilloutmix_NiPrunedFp32Fix.safetensors")
+```
+
+### 加载HF LoRA权重
+```python
+from ppdiffusers import DiffusionPipeline
+
+pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16)
+
+pipe.load_lora_weights("stabilityai/stable-diffusion-xl-base-1.0",
+    weight_name="sd_xl_offset_example-lora_1.0.safetensors",
+    from_diffusers=True)
 ```
 
 ### 加载Civitai社区的LoRA权重
