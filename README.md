@@ -35,6 +35,7 @@ PaddleMIX是基于飞桨的跨模态大模型开发套件，聚合图像、文�
 
 <video src="https://github.com/luyao-cv/file_download/blob/main/assets/PaddleMix.mp4" height = "350" controls> </video>
 
+![](https://github.com/luyao-cv/file_download/blob/main/assets/PaddleMix.mp4)
 
 
 1. 图像描述（Image Caption）
