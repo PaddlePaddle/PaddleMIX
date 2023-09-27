@@ -29,6 +29,12 @@ PaddleMIX是基于飞桨的跨模态大模型开发套件，聚合图像、文�
 
 ## 任务展示
 
+视频Demo展示（Vedio Demo）
+
+<video id="video" controls="" preload="none" poster="">
+      <source id="mp4" src="https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/PaddleMix.mp4" type="video/mp4" height = "300">
+</video>
+
 1. 图像描述（Image Caption）
 
   <div align="center">
