@@ -22,8 +22,9 @@
 ## News 📢
 * 🔥 **2023.09.27 发布 0.19.3 版本，新增[SDXL](#文本图像多模)，支持Text2Image、Img2Img、Inpainting、InstructPix2Pix等任务，支持DreamBooth Lora训练；
 新增[UniDiffuser](#文本图像多模)，通过统一的多模态扩散过程支持文生图、图生文等任务；
-新增文本条件视频生成模型[LVDM](#文本视频多模)，支持训练与推理；
+新增文本条件视频生成模型[LVDM](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_video_lvdm)，支持训练与推理；
 新增文图生成模型[Kandinsky 2.2](#文本图像多模)，[Consistency models](#文本图像多模)；
+Stable Diffusion支持[BF16 O2训练](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/stable_diffusion)，效果对齐FP32；
 [LoRA加载升级](#加载HF-LoRA权重)，支持加载SDXL的LoRA权重；
 [Controlnet](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/ppdiffusers/pipelines/controlnet)升级，支持ControlNetImg2Img、ControlNetInpaint、StableDiffusionXLControlNet等。**
 
