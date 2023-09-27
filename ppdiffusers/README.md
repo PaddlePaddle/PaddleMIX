@@ -20,7 +20,12 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
-* 🔥 **2023.09.26 发布 0.19.3 版本，新增[SDXL](#文本图像多模)，该模型生成效果相较SD有了比较大的提升，支持的权重包括sdxl-0.9、sdxl-1.0、对应的refiner，及各种派生，支持的任务或pipeline包含Text2Image、Img2Img、Inpainting、ControlNet、InstructPix2Pix，支持的训练包括DreamBooth with LoRA、ControlNet、InstructPix2Pix；增加[Kandinsky 2.2支持](#文本图像多模)，该模型集合了DALL-E 2和Latent Diffusion的优点；新增UniDiffuser，该模型通过一个统一的多模态的扩散过程可以支持文生图、图生文在内的多个任务；增加AutoPipeline API，支持的任务包括text-to-image、 image-to-image、 inpainting。**
+* 🔥 **2023.09.27 发布 0.19.3 版本，新增[SDXL](#文本图像多模)，支持Text2Image、Img2Img、Inpainting、InstructPix2Pix等任务，支持DreamBooth Lora训练；
+新增[UniDiffuser](#文本图像多模)，通过统一的多模态扩散过程支持文生图、图生文等任务；
+新增文本条件视频生成模型[LVDM](#文本视频多模)，支持训练与推理；
+新增文图生成模型[Kandinsky 2.2](#文本图像多模)，[Consistency models](#文本图像多模)；
+[LoRA加载升级](#加载HF-LoRA权重)，支持加载SDXL的LoRA权重；
+[Controlnet](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/ppdiffusers/pipelines/controlnet)升级，支持ControlNetImg2Img、ControlNetInpaint、StableDiffusionXLControlNet等。**
 
 * 🔥 **2023.06.20 发布 0.16.1 版本，新增[T2I-Adapter](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/t2i-adapter)，支持训练与推理；ControlNet升级，支持[reference only推理](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#controlnet-reference-only)；新增[WebUIStableDiffusionPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#automatic1111-webui-stable-diffusion)，
 支持通过prompt的方式动态加载lora、textual_inversion权重；
@@ -39,7 +44,7 @@
 ## 特性
 #### 📦 SOTA扩散模型Pipelines集合
 我们提供**SOTA（State-of-the-Art）** 的扩散模型Pipelines集合。
-目前**PPDiffusers**已经集成了**50+Pipelines**，支持文图生成（Text-to-Image Generation）、文本引导的图像编辑（Text-Guided Image Inpainting）、文本引导的图像变换（Image-to-Image Text-Guided Generation）、文本条件视频生成（Text-to-Video Generation）、超分（Super Superresolution）在内的**10余项**任务，覆盖**文本、图像、视频、音频**等多种模态。
+目前**PPDiffusers**已经集成了**100+Pipelines**，支持文图生成（Text-to-Image Generation）、文本引导的图像编辑（Text-Guided Image Inpainting）、文本引导的图像变换（Image-to-Image Text-Guided Generation）、文本条件的视频生成（Text-to-Video Generation）、超分（Super Superresolution）、文本条件的音频生成（Text-to-Audio Generation）在内的**10余项**任务，覆盖**文本、图像、视频、音频**等多种模态。
 如果想要了解当前支持的所有**Pipelines**以及对应的来源信息，可以阅读[🔥 PPDiffusers Pipelines](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/pipelines/README.md)文档。
 
 
@@ -491,6 +496,39 @@ image.save("versatile-diffusion-red_car.png")
 <details open>
 <summary>&emsp;文本条件的视频生成（Text-to-Video Generation）</summary>
 
+#### text_to_video_generation-lvdm
+
+```python
+import paddle
+
+from ppdiffusers import LVDMTextToVideoPipeline
+
+# 加载模型和scheduler
+pipe = LVDMTextToVideoPipeline.from_pretrained("westfish/lvdm_text2video_orig_webvid_2m")
+
+# 执行pipeline进行推理
+seed = 2013
+generator = paddle.Generator().manual_seed(seed)
+samples = pipe(
+    prompt="cutting in kitchen",
+    num_frames=16,
+    height=256,
+    width=256,
+    num_inference_steps=50,
+    generator=generator,
+    guidance_scale=15,
+    eta=1,
+    save_dir=".",
+    save_name="text_to_video_generation-lvdm-result-ddim_lvdm_text_to_video_ucf",
+    encoder_type="2d",
+    scale_factor=0.18215,
+    shift_factor=0,
+)
+```
+<div align="center">
+<img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/270906907-2b9d53c1-0272-4c7a-81b2-cd962d23bbee.gif">
+</div>
+
 #### text_to_video_generation-synth
 
 ```python
@@ -509,25 +547,6 @@ imageio.mimsave("text_to_video_generation-synth-result-astronaut_riding_a_horse.
 <img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/246780441-8242a955-490b-4326-8415-84264a54a938.gif">
 </div>
 
-#### text_to_video_generation-synth with zeroscope_v2_576w
-
-```python
-import imageio
-
-from ppdiffusers import DPMSolverMultistepScheduler, TextToVideoSDPipeline
-
-# from ppdiffusers.utils import export_to_video
-
-pipe = TextToVideoSDPipeline.from_pretrained("cerspense/zeroscope_v2_576w")
-pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
-
-prompt = "An astronaut riding a horse."
-video_frames = pipe(prompt, num_inference_steps=50, height=320, width=576, num_frames=24).frames
-imageio.mimsave("text_to_video_generation-synth-result-astronaut_riding_a_horse.mp4", video_frames, fps=8)
-```
-<div align="center">
-<img width="300" alt="image" src="https://github.com/PaddlePaddle/PaddleMIX/assets/35400185/0347b61a-cf7e-4cbb-b684-485055a3e516">
-</div>
 
 #### text_to_video_generation-synth with zeroscope_v2_XL
 
@@ -905,6 +924,17 @@ pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2",
 from ppdiffusers import StableDiffusionPipeline
 # 可输入网址 或 本地ckpt、safetensors文件
 pipe = StableDiffusionPipeline.from_pretrained_original_ckpt("https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/ppdiffusers/chilloutmix_NiPrunedFp32Fix.safetensors")
+```
+
+### 加载HF LoRA权重
+```python
+from ppdiffusers import DiffusionPipeline
+
+pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16)
+
+pipe.load_lora_weights("stabilityai/stable-diffusion-xl-base-1.0",
+    weight_name="sd_xl_offset_example-lora_1.0.safetensors",
+    from_diffusers=True)
 ```
 
 ### 加载Civitai社区的LoRA权重
