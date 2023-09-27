@@ -28,6 +28,9 @@ PaddleMIX是基于飞桨的跨模态大模型开发套件，聚合图像、文�
 - **超大规模训练支持:** 可训练千亿规模图文预训练模型，百亿规模文生图底座模型
 
 ## 任务展示
+<video src="https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/PaddleMix.MOV" height = "400" controls> </video>
+
+<!-- ![展示视频](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/PaddleMix.MOV) -->
 
 视频Demo展示（Vedio Demo）
 
