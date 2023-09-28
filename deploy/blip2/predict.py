@@ -13,26 +13,19 @@
 # limitations under the License.
 import argparse
 import os
-from paddlemix.utils.downloader import is_url
-os.environ["FLAGS_use_cuda_managed_memory"] = "true"
-
-
-import sys
-
-import paddle
-import requests
-from paddle import inference
-from PIL import Image
 
 import numpy as np
+import paddle
+import requests
+from PIL import Image
 
-from paddlemix.models.blip2.utils import load_real_time_tokens
-from paddlemix.models.blip2.utils import create_tokenizer
+from paddlemix.models.blip2.utils import create_tokenizer, load_real_time_tokens
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
     BlipImageProcessor,
     BlipTextProcessor,
 )
+from paddlemix.utils.downloader import is_url
 
 
 class Predictor(object):
@@ -41,13 +34,6 @@ class Predictor(object):
         self.first_predictor = self.create_predictor(args.first_model_path)
         self.second_predictor = self.create_predictor(args.second_model_path)
         tokenizer_class = create_tokenizer(args.text_model_name_or_path)
-        image_processor = BlipImageProcessor.from_pretrained(
-            os.path.join(args.model_name_or_path, "processor", "train")
-        )
-        text_processor_class = BlipTextProcessor.from_pretrained(
-            os.path.join(args.model_name_or_path, "processor", "train")
-        )
-        processor = Blip2Processor(image_processor, text_processor_class, tokenizer_class)
         image_processor_eval = BlipImageProcessor.from_pretrained(
             os.path.join(args.model_name_or_path, "processor", "eval")
         )
@@ -76,29 +62,10 @@ class Predictor(object):
             raise ValueError("not find params file path {}".format(params_file))
         config = paddle.inference.Config(model_file, params_file)
 
-        shape_range_file = model_file + "shape.txt"
-        # 第一次运行的时候需要收集shape信息，请打开下面的注释
-        # config.collect_shape_range_info(shape_range_file)
-
         config.switch_ir_optim(False)
-        # 第一个模型跑TRT
-        if model_file.find("opt") == -1:
-            self.args.use_tensorrt = False
-        else:
-            self.args.use_tensorrt = False
 
         if self.args.device == "gpu":
-            # set GPU configs accordingly
-            # such as initialize the gpu memory, enable tensorrt
             config.enable_use_gpu(100, 0)
-            precision_mode = inference.PrecisionType.Half
-            # breakpoint()
-            # 第一个模型是要跑TRT的
-            if self.args.use_tensorrt:
-                config.enable_tuned_tensorrt_dynamic_shape(shape_range_file, True)
-                config.enable_tensorrt_engine(
-                    max_batch_size=-1, min_subgraph_size=30, precision_mode=precision_mode, use_static=True
-                )
 
         config.switch_use_feed_fetch_ops(False)
         predictor = paddle.inference.create_predictor(config)
@@ -163,12 +130,11 @@ class Predictor(object):
         generate_ids = tokens.tolist()
 
         print(generate_ids[0])
-        # print(generate_ids[1])
 
         endtime = datetime.datetime.now()
         duringtime = endtime - starttime
         ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
-        print("读取磁盘时间，", ms)  # 单位是毫秒
+        print("读取磁盘时间，", ms)
         return generate_ids, None
 
     def pre_processing(self, images, text, prompt=None):
@@ -180,10 +146,6 @@ class Predictor(object):
         return msg
 
     def predict(self, images, prompt=None):
-        # processed_contents = self.pre_processing(images, text, prompt=prompt)
-
-        import numpy as np
-
         inputs = self.processor(
             images=image,
             text=prompt,
@@ -225,24 +187,7 @@ if __name__ == "__main__":
         type=str,
         help="",
     )
-    parser.add_argument(
-        "--prompt", default="a photo of ", type=str, help="The input prompt."
-    )
-    parser.add_argument("--use_tensorrt", action="store_true", help="Whether to use inference engin TensorRT.")
-    parser.add_argument(
-        "--precision", default="fp32", type=str, choices=["fp32", "fp16", "int8"], help="The tensorrt precision."
-    )
-    parser.add_argument(
-        "--device", default="gpu", choices=["gpu", "cpu", "xpu"], help="Device selected for inference."
-    )
-    parser.add_argument("--cpu_threads", default=10, type=int, help="Number of threads to predict when using cpu.")
-    parser.add_argument(
-        "--enable_mkldnn",
-        default=False,
-        type=eval,
-        choices=[True, False],
-        help="Enable to use mkldnn to speed up when using cpu.",
-    )
+    parser.add_argument("--prompt", default="a photo of ", type=str, help="The input prompt.")
     parser.add_argument(
         "--text_model_name_or_path",
         default="facebook/opt-2.7b",
