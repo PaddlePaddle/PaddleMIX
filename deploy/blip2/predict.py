@@ -14,8 +14,6 @@
 import argparse
 import os
 from paddlemix.utils.downloader import is_url
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 
 
@@ -26,7 +24,6 @@ import requests
 from paddle import inference
 from PIL import Image
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import numpy as np
 
 from paddlemix.models.blip2.utils import load_real_time_tokens
