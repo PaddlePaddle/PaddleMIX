@@ -3,6 +3,7 @@ from ppdiffusers.utils import load_image
 import paddle
 import cv2
 
+import os
 import json
 from zipfile import ZipFile
 import numpy as np
@@ -90,8 +91,24 @@ def al_file_fun(file_in, prompt):
             result = auto_label(image_pil, prompt)
             label_data = result2json(result, imgname.name.split("/")[-1])
             with open(imgname.name.split("/")[-1]+'.josn','w') as f:
-                json.dump(result, f, indent=4)
+                json.dump(label_data, f, indent=4)
             zipObj.write(imgname.name.split("/")[-1]+'.josn')
+    return "labeled.zip"
+
+def al_path_fun(path_in, prompt):
+    with ZipFile("labeled.zip", "w") as zipObj:
+        for root, _, files in os.walk(path_in, topdown=False):
+            for name in files:
+                if name.split('.')[-1] in ['jpg', 'png', 'jpeg', 'JPG', 'PNG', 'JPEG']:
+                    img_path = os.path.join(root, name)
+                    json_path = os.path.join(root, name+'.json')
+
+                    image_pil = load_image(img_path)
+                    result = auto_label(image_pil, prompt)
+                    label_data = result2json(result, img_path)
+                    with open(json_path,'w') as f:
+                        json.dump(label_data, f, indent=4)
+                    zipObj.write(json_path)
     return "labeled.zip"
 
 
@@ -105,12 +122,18 @@ with gr.Blocks() as demo:
         al_text_out = gr.Text(label = "标注信息")
         al_button = gr.Button()
         al_button.click(fn=al_fun, inputs = [al_image_in, al_text_in], outputs = [al_image_out, al_text_out])
-    with gr.Tab("批量标注"):
+    with gr.Tab("上传文件批量标注"):
         with gr.Row():
             al_file_in = gr.Files(label = "上传多张图片", file_types=['.jpg', '.png', '.jpeg', '.JPG', '.PNG', '.JPEG'])
             al_file_out = gr.File(label = "标注结果")
         al_file_text_in = gr.Text(label = "Prompt")
         al_file_button = gr.Button()
         al_file_button.click(fn=al_file_fun, inputs = [al_file_in, al_file_text_in], outputs = [al_file_out])
+    with gr.Tab("指定路径下批量标注"):
+        al_path_in = gr.Text(label = "待标注图片所在目录")
+        al_path_text_in = gr.Text(label = "Prompt")
+        al_path_out = gr.File(label = "标注结果")
+        al_path_button = gr.Button()
+        al_path_button.click(fn=al_path_fun, inputs = [al_path_in, al_path_text_in], outputs = [al_path_out])
 
 demo.launch()
