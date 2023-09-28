@@ -6,14 +6,14 @@
 
 
 ## 2. 示例
-提供两种方式方式转出语言模型:1.直接下载静态图推理所需语言模型;2.手动转出静态图推理所需语言模型 
-## 2.1（1）直接下载静态图推理所需语言模型 
+提供两种方式方式转出语言模型:1.直接下载静态图推理所需语言模型;2.手动转出静态图推理所需语言模型
+## 2.1（1）直接下载静态图推理所需语言模型
 ```bash
 
 bash prepare.sh
 
 ```
-## 2.1 （2）手动转出静态图推理所需语言模型 
+## 2.1（2）手动转出静态图推理所需语言模型
 用户可以去PaddleNLP的llm目录下执行此命令，即可获得第二部分的静态图
 ```python
 python export_model.py --model_name_or_path /root/.paddlenlp/models/facebook/opt-2.7b --output_path opt-2.7b-export --dtype float16 --inference_model --model_prefix=opt --model_type=opt-img2txt
