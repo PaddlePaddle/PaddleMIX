@@ -39,7 +39,7 @@ def result2json(result, filename):
             label = label[:spl_idx]
 
         # 增加bbox
-        rect = result['boxes'][i]
+        rect = result['boxes'][i].tolist()
         xmin, ymin, xmax, ymax = rect
         label_data['shapes'].append(
             {'label': label,
