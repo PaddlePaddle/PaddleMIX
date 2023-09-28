@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import argparse
 import os
 from paddlemix.utils.downloader import is_url
@@ -30,8 +29,8 @@ from PIL import Image
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import numpy as np
 
-from paddlemix.models.blip2.modeling import load_real_time_tokens
-from paddlemix.models.blip2.utils import BlipCollator, create_tokenizer, load_model
+from paddlemix.models.blip2.utils import load_real_time_tokens
+from paddlemix.models.blip2.utils import create_tokenizer
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
     BlipImageProcessor,
