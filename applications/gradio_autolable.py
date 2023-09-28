@@ -79,7 +79,7 @@ def al_fun(img, prompt):
     label_data = result2json(result, " ")
     # 绘制
     draw = ImageDraw.Draw(img)
-    for i in range(len(result)):
+    for i in range(len(result['boxes'])):
         rect = result['boxes'][i].tolist()
         draw.rectangle(rect)
     return img, label_data
