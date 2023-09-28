@@ -19,6 +19,10 @@ import os
 import re
 import sys
 import time
+import glob
+import os
+import struct
+import numpy as np
 
 import paddle
 from paddlenlp.transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
@@ -44,6 +48,51 @@ LLM_LIST = {
     "facebook/llama-65b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-65b/model_state.pdparams",
 }
 
+def deserialize_from_file(fp):
+    x_type = fp.read(1)
+    x_type_out = struct.unpack("c", x_type)[0]
+    # data
+    data_list = []
+    if x_type_out == b"0":
+        data = fp.read(4)
+        data_out = struct.unpack("f", data)[0]
+        while data:
+            data_out = struct.unpack("f", data)[0]
+            data_list.append(data_out)
+            data = fp.read(4)
+    elif x_type_out == b"1":
+        data = fp.read(8)
+        while data:
+            data_out = struct.unpack("l", data)[0]
+            data_list.append(data_out)
+            data = fp.read(8)
+    elif x_type_out == b"2":
+        data = fp.read(4)
+        while data:
+            data_out = struct.unpack("i", data)[0]
+            data_list.append(data_out)
+            data = fp.read(4)
+    else:
+        print("type error")
+    data_arr = np.array(data_list)
+    return data_arr
+
+
+def load_real_time_tokens():
+    tokens = []
+    files = glob.glob(os.path.join("./real_time_save.*"))
+    for j in range(1, len(files) + 1):
+        filename = "./real_time_save.temp_ids_rank_0_step_{}".format(j)
+        if not os.path.exists(filename):
+            break
+        fp = open(filename, "rb+")
+        fp.read(1)
+        data_list = deserialize_from_file(fp)
+        fp.close()
+        tokens.append(np.array(data_list).reshape(-1, 1))
+    os.system("rm -f ./real_time_save.temp_ids_rank_*")
+    tokens = np.concatenate(tokens, axis=1)
+    return tokens
 
 def create_tokenizer(text_model_name_or_path):
     if "opt" in text_model_name_or_path:

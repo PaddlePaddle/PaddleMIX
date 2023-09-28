@@ -530,7 +530,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             return_dict=True,
         )
         query_output = query_outputs[0]
-        return query_output
+        language_model_inputs = self.Qformer.language_projection(query_output)
+        return language_model_inputs
 
     @paddle.no_grad()
     def predict_answers(
