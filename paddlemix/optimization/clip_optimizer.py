@@ -14,15 +14,16 @@
 
 import json
 import logging
+import math
 import re
 
 import paddle
-from paddle.optimizer.lr import LRScheduler
-
 from paddle.distributed.fleet.utils.tensor_fusion_helper import (
     HOOK_ACTION,
     fused_parameters,
 )
+from paddle.optimizer.lr import LRScheduler
+
 from paddlemix.utils.log import logger
 
 __all__ = [
@@ -44,16 +45,7 @@ class CosineDecayWithWarmup(LRScheduler):
         last_epoch (int, optional):  The index of last epoch. Can be set to restart training. Default: -1, means initial learning rate.
     """
 
-    def __init__(
-        self,
-        learning_rate,
-        total_steps,
-        eta_min=0.0,
-        warmup_start_lr=0.0,
-        last_step=-1,
-        warmup=0,
-        **kwargs
-    ):
+    def __init__(self, learning_rate, total_steps, eta_min=0.0, warmup_start_lr=0.0, last_step=-1, warmup=0, **kwargs):
         self.start_lr = learning_rate
         self.eta_min = eta_min
         self.warmup_start_lr = warmup_start_lr
@@ -75,19 +67,17 @@ class CosineDecayWithWarmup(LRScheduler):
     def step(self):
         global_cur_step = self.last_step + 1
         if global_cur_step < self.warmup_steps:
-            self.last_lr = self.warmup_start_lr + (
-                self.start_lr - self.warmup_start_lr
-            ) * global_cur_step / max(self.warmup_steps, 1)
+            self.last_lr = self.warmup_start_lr + (self.start_lr - self.warmup_start_lr) * global_cur_step / max(
+                self.warmup_steps, 1
+            )
         else:
             self.last_lr = (self.start_lr - self.eta_min) * 0.5 * (
                 1.0 + math.cos(math.pi * global_cur_step / self.total_steps)
             ) + self.eta_min
         self.last_step += 1
-       
 
     def get_lr(self):
         return self.last_lr
-
 
 
 class FilterParamsName(object):
@@ -289,9 +279,7 @@ def print_optim(optimizer):
 
 class FusedAdamW(paddle.optimizer.AdamW):
     def __init__(self, learning_rate, parameters, **config):
-        self.parameters, self.buffers = fused_parameters(
-            parameters, act=HOOK_ACTION.ALL_REDUCE, comm_overlap=True, group_params=True
-        )
+        self.parameters, self.buffers = fused_parameters(parameters, act=HOOK_ACTION.ALL_REDUCE, group_params=True)
         self.all_parameters = []
         for pg in self.parameters:
             self.all_parameters.extend(pg["params"])
