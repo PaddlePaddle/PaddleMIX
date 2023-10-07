@@ -7,7 +7,7 @@
 Generate image from audio(w/ prompt or image) with [ImageBind](https://facebookresearch.github.io/ImageBind/paper)'s unified latent space and stable-diffusion-2-1-unclip.
 
 - No training is need.
-- Integration with [ppdiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers).
+- Integration with [ppdiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers).
 
 ----
 
@@ -31,7 +31,7 @@ Generate image from audio(w/ prompt or image) with [ImageBind](https://facebookr
 
 **Update**
 
-[2023/8/15]: 
+[2023/8/15]:
 - [v0.0]: Support fusing audio, text(prompt) and imnage in ImageBind latent space.
 
 
@@ -66,7 +66,7 @@ python audio2img_imagebind.py \
 ```
 #### 3.1.2 Result
 |  Input Audio | Output Image |
-| --- | --- | 
+| --- | --- |
 |[bird_audio.wav](https://github.com/luyao-cv/file_download/blob/main/assets/bird_audio.wav)| ![audio2img_output_bird](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/audio2img_output_bird.jpg)  |
 
 
@@ -83,7 +83,7 @@ python audio2img_imagebind.py \
 ```
 #### 3.2.2 Result
 |  Input Audio | Input Text | Output Image |
-| --- | --- |  --- | 
+| --- | --- |  --- |
 |[bird_audio.wav](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/bird_audio.wav) | 'A photo.' | ![audio_text_to_img_output_bird_a_photo](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/audio_text_to_img_output_bird_a_photo.jpg)
 
 
@@ -101,6 +101,5 @@ python audio2img_imagebind.py \
 
 #### 3.3.2 Result
 |  Input Audio | Input Image | Output Image |
-| --- | --- |  --- | 
+| --- | --- |  --- |
 |[wave.wav](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/wave.wav) | ![input_dog_image](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/dog_image.jpg) | ![audio_img_to_img_output_wave_dog](https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/audio_img_to_img_output_wave_dog.jpg)
-
