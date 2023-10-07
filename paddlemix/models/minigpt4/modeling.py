@@ -20,7 +20,6 @@ import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddle.distributed.fleet.utils import recompute
-from paddle.nn import CrossEntropyLoss
 from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutput,
@@ -222,7 +221,7 @@ class MiniGPT4VisionEmbeddings(nn.Layer):
     def forward(self, pixel_values: paddle.Tensor) -> paddle.Tensor:
         batch_size = pixel_values.shape[0]
         target_dtype = self.patch_embedding.weight.dtype
-        patch_embeds = self.patch_embedding(pixel_values)  # shape = [*, width, grid, grid]
+        patch_embeds = self.patch_embedding(pixel_values.cast(target_dtype))  # shape = [*, width, grid, grid]
         patch_embeds_shape = paddle.shape(patch_embeds)
         patch_embeds = paddle.reshape(
             patch_embeds, shape=[patch_embeds_shape[0], patch_embeds_shape[1], -1]
@@ -1456,7 +1455,9 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
 
         if labels is not None:
             # added bos in processor
-            empty_labels = paddle.full(shape=[attention_mask.shape[0], attention_mask.shape[1]], fill_value=-100, dtype=masked_labels.dtype)
+            empty_labels = paddle.full(
+                shape=[attention_mask.shape[0], attention_mask.shape[1]], fill_value=-100, dtype=masked_labels.dtype
+            )
             masked_labels = paddle.concat([empty_labels, masked_labels], axis=1)
             label_embeds = self.language_model.llama.embed_tokens(labels)
             inputs_embeds = paddle.concat([inputs_embeds, label_embeds], axis=1)
@@ -1464,11 +1465,13 @@ class MiniGPT4Model(MiniGPT4PretrainedModel):
                 label_attention_mask = paddle.ones(shape=labels.shape, dtype=attention_mask.dtype)
             attention_mask = paddle.concat([attention_mask, label_attention_mask], axis=1)
 
-        position_ids = paddle.arange(attention_mask.shape[-1]).expand(shape=[pixel_values.shape[0], attention_mask.shape[-1]])
+        position_ids = paddle.arange(attention_mask.shape[-1]).expand(
+            shape=[pixel_values.shape[0], attention_mask.shape[-1]]
+        )
         outputs = self.language_model(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            position_ids = position_ids,
+            position_ids=position_ids,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             labels=masked_labels,
@@ -1581,7 +1584,9 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
 
         if labels is not None:
             # added bos in processor
-            empty_labels = paddle.full(shape=[attention_mask.shape[0], attention_mask.shape[1]], fill_value=-100, dtype=masked_labels.dtype)
+            empty_labels = paddle.full(
+                shape=[attention_mask.shape[0], attention_mask.shape[1]], fill_value=-100, dtype=masked_labels.dtype
+            )
             masked_labels = paddle.concat([empty_labels, masked_labels], axis=1)
             label_embeds = self.language_model.llama.embed_tokens(labels)
             inputs_embeds = paddle.concat([inputs_embeds, label_embeds], axis=1)
@@ -1589,11 +1594,13 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
                 label_attention_mask = paddle.ones(shape=labels.shape, dtype=attention_mask.dtype)
             attention_mask = paddle.concat([attention_mask, label_attention_mask], axis=1)
 
-        position_ids = paddle.arange(attention_mask.shape[-1]).expand(shape=[pixel_values.shape[0], attention_mask.shape[-1]])
+        position_ids = paddle.arange(attention_mask.shape[-1]).expand(
+            shape=[pixel_values.shape[0], attention_mask.shape[-1]]
+        )
         outputs = self.language_model(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            position_ids = position_ids,
+            position_ids=position_ids,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             labels=masked_labels,
@@ -1696,11 +1703,13 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
             axis=1,
         )
 
-        position_ids = paddle.arange(attention_mask.shape[-1]).expand(shape=[pixel_values.shape[0], attention_mask.shape[-1]])
+        position_ids = paddle.arange(attention_mask.shape[-1]).expand(
+            shape=[pixel_values.shape[0], attention_mask.shape[-1]]
+        )
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            position_ids = position_ids,
+            position_ids=position_ids,
             **generate_kwargs,
         )
 
@@ -1818,11 +1827,13 @@ class MiniGPT4ForConditionalGeneration(MiniGPT4PretrainedModel):
 
         attention_mask = paddle.concat([first_attention_mask, image_attention_mask, second_attention_mask], axis=1)
 
-        position_ids = paddle.arange(attention_mask.shape[-1]).expand(shape=[image_features.shape[0], attention_mask.shape[-1]])
+        position_ids = paddle.arange(attention_mask.shape[-1]).expand(
+            shape=[image_features.shape[0], attention_mask.shape[-1]]
+        )
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,
             attention_mask=attention_mask,
-            position_ids = position_ids,
+            position_ids=position_ids,
             **generate_kwargs,
         )
 
