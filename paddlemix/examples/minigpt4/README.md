@@ -27,16 +27,16 @@ MiniGPT4 是一个具有图像理解能力的开源模型，其基于 Vicuna 大
 
 ```
 python run_predict.py \
-    -- pretrained_name_or_path "your minigpt4 path" \
-    -- image_path "you image path" \
-    -- decode_strategy "greedy_search" \
-    -- max_length 300 \
-    -- num_beams 1 \
-    -- top_p 1.0 \
-    -- top_k 0 \
-    -- repetition_penalty 1.0 \
-    -- length_penalty 0.0 \
-    -- temperature 1.0 
+    --pretrained_name_or_path "your minigpt4 path" \
+    --image_path "you image path" \
+    --decode_strategy "greedy_search" \
+    --max_length 300 \
+    --num_beams 1 \
+    --top_p 1.0 \
+    --top_k 0 \
+    --repetition_penalty 1.0 \
+    --length_penalty 0.0 \
+    --temperature 1.0
 ```
 
 你可以通过调整一些生成策略，来控制生成内容，例如一些常用的生成策略参数如下：
