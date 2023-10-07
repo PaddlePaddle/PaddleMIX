@@ -55,7 +55,7 @@ function build_and_install() {
   echo -e "${BLUE}[build]${NONE} building paddlemix wheel..."
   # add ppdiffusers as dependency to paddlemix
   cp requirements.txt requirements.bak
-  echo 'ppdiffusers==0.16.3' >> requirements.txt 
+  echo 'ppdiffusers==0.19.3' >> requirements.txt 
   python setup.py sdist bdist_wheel
   if [ $? -ne 0 ]; then
     echo -e "${RED}[FAIL]${NONE} build paddlemix wheel failed !"
