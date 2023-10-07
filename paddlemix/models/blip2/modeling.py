@@ -18,6 +18,7 @@ from typing import Optional, Tuple, Union
 import paddle
 import paddle.distributed as dist
 import paddle.nn as nn
+from paddlenlp.transformers.bloom.modeling import BloomForCausalLM
 from paddlenlp.transformers.llama.modeling import LlamaForCausalLM
 from paddlenlp.transformers.opt.modeling import OPTForCausalLM
 from paddlenlp.transformers.t5.modeling import T5ForConditionalGeneration
@@ -136,6 +137,17 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                         )
                     language_model.hidden_size = LlamaConfig.from_pretrained(config.text_config).hidden_size
                     language_model.pad_token_id = LlamaConfig.from_pretrained(config.text_config).pad_token_id
+                elif "bloom" in config.text_config:
+                    import paddle.distributed.fleet as fleet
+                    from paddlenlp.transformers.bloom.configuration import BloomConfig
+
+                    hcg = fleet.get_hybrid_communicate_group()
+                    llm_config = BloomConfig.from_pretrained("bigscience/bloom")
+                    llm_config.tensor_parallel_degree = config.mp_degree
+                    llm_config.dtype = "float16"
+                    language_model = BloomForCausalLM(llm_config)
+                    language_model.pad_token_id = llm_config.pad_token_id
+                    language_model.hidden_size = llm_config.hidden_size
                 else:
                     raise NotImplementedError
             else:

@@ -14,18 +14,22 @@
 
 import copy
 import datetime
+import glob
 import json
 import os
 import re
+import struct
 import sys
 import time
-import glob
-import os
-import struct
-import numpy as np
 
+import numpy as np
 import paddle
-from paddlenlp.transformers import AutoTokenizer, LlamaTokenizer, T5Tokenizer
+from paddlenlp.transformers import (
+    AutoTokenizer,
+    BloomTokenizer,
+    LlamaTokenizer,
+    T5Tokenizer,
+)
 from pycocoevalcap.eval import COCOEvalCap
 from pycocotools.coco import COCO
 
@@ -47,6 +51,7 @@ LLM_LIST = {
     "facebook/llama-30b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-30b/model_state.pdparams",
     "facebook/llama-65b": "https://bj.bcebos.com/paddlenlp/models/community/facebook/llama-65b/model_state.pdparams",
 }
+
 
 def deserialize_from_file(fp):
     x_type = fp.read(1)
@@ -94,6 +99,7 @@ def load_real_time_tokens():
     tokens = np.concatenate(tokens, axis=1)
     return tokens
 
+
 def create_tokenizer(text_model_name_or_path):
     if "opt" in text_model_name_or_path:
         tokenizer_class = AutoTokenizer.from_pretrained(text_model_name_or_path, use_fast=False)
@@ -101,6 +107,9 @@ def create_tokenizer(text_model_name_or_path):
         tokenizer_class = T5Tokenizer.from_pretrained(text_model_name_or_path, use_fast=False)
     elif "llama" in text_model_name_or_path:
         tokenizer_class = LlamaTokenizer.from_pretrained(text_model_name_or_path)
+        tokenizer_class.pad_token = tokenizer_class.eos_token
+    elif "bloom" in text_model_name_or_path:
+        tokenizer_class = BloomTokenizer.from_pretrained(text_model_name_or_path)
         tokenizer_class.pad_token = tokenizer_class.eos_token
     else:
         raise NotImplementedError
