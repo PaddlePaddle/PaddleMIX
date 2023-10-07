@@ -14,6 +14,30 @@ Enter audio and prompt words for question and answer.
 *****
 example:
 
+
+使用miniGPT4前，需要下载相应权重进行转换，具体可参考[miniGPT4](../../paddlemix/examples/minigpt4/README.md),在完成权重转换后，根据模型权重文件以及配置文件按下存放：
+```bash
+--PPMIX_HOME  #默认路径 /root/.paddlemix  可通过export PPMIX_HOME 设置
+  --models
+    --miniGPT4
+      --MiniGPT4-7B
+        config.json
+        model_state.pdparams
+        special_tokens_map.json
+        image_preprocessor_config.json
+        preprocessor_config.json
+        tokenizer_config.json
+        model_config.json
+        sentencepiece.bpe.model
+        tokenizer.json
+      --MiniGPT4-13B
+        ...
+        ...
+    ...
+
+```
+完成之后，可使用appflow 一键预测
+
 ```python
 #music generation
 from paddlemix.appflow import Appflow
