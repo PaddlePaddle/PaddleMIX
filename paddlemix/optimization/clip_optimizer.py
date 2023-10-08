@@ -290,11 +290,6 @@ class FusedAdamW(paddle.optimizer.AdamW):
             **config,
         )
 
-    def step(self):
-        for buffer in self.buffers:
-            buffer.scale_grads()
-        super().step()
-
 
 def create_optimizer(args, model, lr_scheduler=None, return_params=False):
     optimizer_args = dict(beta1=args.adam_beta1, beta2=args.adam_beta2)
