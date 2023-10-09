@@ -52,7 +52,7 @@ def _config_zero_init(config):
     return configs_no_init
 
 
-class Blip2VisionModelTester:
+class MiniGPT4VisionModelTester:
     def __init__(
         self,
         parent,
@@ -131,7 +131,7 @@ class Blip2VisionModelTester:
         return config, inputs_dict
 
 
-class Blip2VisionModelTest(ModelTesterMixin, unittest.TestCase):
+class MiniGPT4VisionModelTest(ModelTesterMixin, unittest.TestCase):
     """
     Here we also overwrite some of the tests of test_modeling_common.py, as BLIP-2's vision encoder does not use input_ids, inputs_embeds,
     attention_mask and seq_length.
@@ -145,7 +145,7 @@ class Blip2VisionModelTest(ModelTesterMixin, unittest.TestCase):
     use_test_model_name_list = False
 
     def setUp(self):
-        self.model_tester = Blip2VisionModelTester(self)
+        self.model_tester = MiniGPT4VisionModelTester(self)
         self.config_tester = ConfigTester(
             self, config_class=MiniGPT4VisionConfig, has_text_modality=False, hidden_size=37
         )
@@ -189,7 +189,7 @@ class Blip2VisionModelTest(ModelTesterMixin, unittest.TestCase):
             self.assertIsNotNone(model)
 
 
-class Blip2QFormerModelTester:
+class MiniGPT4QFormerModelTester:
     def __init__(
         self,
         parent,
@@ -290,7 +290,7 @@ class Blip2QFormerModelTester:
         return config, inputs_dict
 
 
-class Blip2QFormerModelTest(ModelTesterMixin, unittest.TestCase):
+class MiniGPT4QFormerModelTest(ModelTesterMixin, unittest.TestCase):
     all_model_classes = (MiniGPT4QFormerModel,)
     fx_compatible = False
     test_pruning = False
@@ -299,7 +299,7 @@ class Blip2QFormerModelTest(ModelTesterMixin, unittest.TestCase):
     use_test_model_name_list = False
 
     def setUp(self):
-        self.model_tester = Blip2QFormerModelTester(self)
+        self.model_tester = MiniGPT4QFormerModelTester(self)
         self.config_tester = ConfigTester(
             self, config_class=MiniGPT4QFormerConfig, has_text_modality=False, hidden_size=37
         )
@@ -323,7 +323,7 @@ class Blip2QFormerModelTest(ModelTesterMixin, unittest.TestCase):
         pass
 
 
-class Blip2TextModelTester:
+class MiniGPT4TextModelTester:
     def __init__(
         self,
         parent,
@@ -398,7 +398,7 @@ class Blip2TextModelTester:
         return LlamaConfig.from_pretrained("facebook/llama-7b")
 
 
-class Blip2ModelTester:
+class MiniGPT4ModelTester:
     def __init__(
         self, parent, vision_kwargs=None, qformer_kwargs=None, text_kwargs=None, is_training=True, num_query_tokens=10
     ):
@@ -410,9 +410,9 @@ class Blip2ModelTester:
             text_kwargs = {}
 
         self.parent = parent
-        self.vision_model_tester = Blip2VisionModelTester(parent, **vision_kwargs)
-        self.qformer_model_tester = Blip2QFormerModelTester(parent, **qformer_kwargs)
-        self.text_model_tester = Blip2TextModelTester(parent, **text_kwargs)
+        self.vision_model_tester = MiniGPT4VisionModelTester(parent, **vision_kwargs)
+        self.qformer_model_tester = MiniGPT4QFormerModelTester(parent, **qformer_kwargs)
+        self.text_model_tester = MiniGPT4TextModelTester(parent, **text_kwargs)
         self.is_training = is_training
         self.num_query_tokens = num_query_tokens
 
@@ -474,7 +474,7 @@ class Blip2ModelTester:
         return config, inputs_dict
 
 
-class Blip2ModelTest(ModelTesterMixin, unittest.TestCase):
+class MiniGPT4ModelTest(ModelTesterMixin, unittest.TestCase):
     all_model_classes = (MiniGPT4ForConditionalGeneration,)
     fx_compatible = False
     test_head_masking = False
@@ -485,7 +485,7 @@ class Blip2ModelTest(ModelTesterMixin, unittest.TestCase):
     use_test_inputs_embeds: bool = False
 
     def setUp(self):
-        self.model_tester = Blip2ModelTester(self)
+        self.model_tester = MiniGPT4ModelTester(self)
 
     def test_for_conditional_generation(self):
         config_and_inputs = self.model_tester.prepare_config_and_inputs()
@@ -546,13 +546,13 @@ class Blip2ModelTest(ModelTesterMixin, unittest.TestCase):
     def test_load_vision_qformer_text_config(self):
         config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
 
-        # Save Blip2Config and check if we can load Blip2VisionConfig from it
+        # Save MiniGPT4Config and check if we can load MiniGPT4VisionConfig from it
         with tempfile.TemporaryDirectory() as tmp_dir_name:
             config.save_pretrained(tmp_dir_name)
             vision_config = MiniGPT4VisionConfig.from_pretrained(tmp_dir_name)
             self.assertDictEqual(config.vision_config.to_dict(), vision_config.to_dict())
 
-        # Save Blip2Config and check if we can load Blip2QFormerConfig from it
+        # Save MiniGPT4Config and check if we can load MiniGPT4QFormerConfig from it
         with tempfile.TemporaryDirectory() as tmp_dir_name:
             config.save_pretrained(tmp_dir_name)
             qformer_config = MiniGPT4QFormerConfig.from_pretrained(tmp_dir_name)

@@ -200,6 +200,11 @@ if __name__ == "__main__":
         type=str,
         help="Path to pretrained model or model identifier.",
     )
+    parser.add_argument(
+        "--device",
+        default="gpu",
+        type=str,
+    )
     args = parser.parse_args()
 
     predictor = Predictor(args)
