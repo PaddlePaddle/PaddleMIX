@@ -15,7 +15,7 @@
 model_item=blip2-opt-2d7b_pretrain
 model=blip2
 bs_item=64
-fp_item=fp32
+fp_item=fp16
 run_mode=DP
 device_num=N1C1
 max_epochs=20
