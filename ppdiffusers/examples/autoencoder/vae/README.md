@@ -1,6 +1,6 @@
 ## AutoEncoderKL(VAE) 从零训练代码
 
-本教程带领大家如何开启[f8encoder_f16decoder](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/autoencoder/vae/config/f8encoder_f16decoder.yaml)架构的AutoEncoderKL (VAE) 模型。
+本教程带领大家如何开启[f8encoder_f16decoder](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/examples/autoencoder/vae/config/f8encoder_f16decoder.yaml)架构的AutoEncoderKL (VAE) 模型。
 
 
 ## 1 本地运行

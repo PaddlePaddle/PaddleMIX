@@ -752,7 +752,7 @@ class StableDiffusionControlNetPipeline(DiffusionPipeline, TextualInversionLoade
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
                 `self.processor` in
-                [ppdiffusers.cross_attention](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/models/cross_attention.py).
+                [ppdiffusers.cross_attention](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/models/cross_attention.py).
             controlnet_conditioning_scale (`float` or `List[float]`, *optional*, defaults to 1.0):
                 The outputs of the controlnet are multiplied by `controlnet_conditioning_scale` before they are added
                 to the residual in the original unet. If multiple ControlNets are specified in init, you can set the

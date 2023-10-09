@@ -1,9 +1,9 @@
 # Stable Diffusion模型转换教程（Pytorch -> Paddle）
 
-本教程支持将Huggingface的[Diffusers](https://github.com/huggingface/diffusers)版本的Stable Diffusion权重转换成[PPDiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers)版本的Stable Diffusion权重。
+本教程支持将Huggingface的[Diffusers](https://github.com/huggingface/diffusers)版本的Stable Diffusion权重转换成[PPDiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers)版本的Stable Diffusion权重。
 
 Tips：
-如果我们想要将原版的权重转换为[PPDiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers)的权重，我们可以首先使用
+如果我们想要将原版的权重转换为[PPDiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers)的权重，我们可以首先使用
 Huggingface提供的转换脚本[convert_original_stable_diffusion_to_diffusers.py](https://github.com/huggingface/diffusers/blob/main/scripts/convert_original_stable_diffusion_to_diffusers.py)将原版权重转换为[Diffusers](https://github.com/huggingface/diffusers)版本的权重。
 
 ## 1 Diffusers 权重转换为 PPDiffusers权重
@@ -147,7 +147,7 @@ python convert_original_stable_diffusion_to_diffusers.py --checkpoint_path v1-5-
 #### Step2 Diffusers权重转换为PPDiffusers权重
 由于我们已经得到了Huggingface的[Diffusers](https://github.com/huggingface/diffusers)版本的权重，因此我们可以参考第1部分进行权重转换。
 
-我们仅需要运行下面的代码即可成功转换[PPDiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers)版本的权重。
+我们仅需要运行下面的代码即可成功转换[PPDiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers)版本的权重。
 
 ```shell
 python convert_diffusers_stable_diffusion_to_ppdiffusers.py --pretrained_model_name_or_path stable-diffusion-v1-5-diffusers --output_path stable-diffusion-v1-5-ppdiffusers

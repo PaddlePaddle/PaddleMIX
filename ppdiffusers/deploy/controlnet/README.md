@@ -14,7 +14,7 @@
 
 ## 部署模型准备
 
-本示例需要使用训练模型导出后的部署模型，可参考[模型导出文档](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/deploy/controlnet/export.md)导出部署模型。
+本示例需要使用训练模型导出后的部署模型，可参考[模型导出文档](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/deploy/controlnet/export.md)导出部署模型。
 
 <a name="环境依赖"></a>
 

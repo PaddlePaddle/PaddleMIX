@@ -5,7 +5,7 @@
 <p align="center">
     <a href="https://pypi.org/project/ppdiffusers/"><img src="https://img.shields.io/pypi/pyversions/ppdiffusers"></a>
     <a href=""><img src="https://img.shields.io/badge/os-linux%2C%20win%2C%20mac-yellow.svg"></a>
-    <a href="https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
+    <a href="https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202-dfd.svg"></a>
 </p>
 
 <h4 align="center">
@@ -22,19 +22,19 @@
 ## News 📢
 * 🔥 **2023.09.27 发布 0.19.3 版本，新增[SDXL](#文本图像多模)，支持Text2Image、Img2Img、Inpainting、InstructPix2Pix等任务，支持DreamBooth Lora训练；
 新增[UniDiffuser](#文本图像多模)，通过统一的多模态扩散过程支持文生图、图生文等任务；
-新增文本条件视频生成模型[LVDM](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_video_lvdm)，支持训练与推理；
+新增文本条件视频生成模型[LVDM](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/text_to_video_lvdm)，支持训练与推理；
 新增文图生成模型[Kandinsky 2.2](#文本图像多模)，[Consistency models](#文本图像多模)；
-Stable Diffusion支持[BF16 O2训练](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/stable_diffusion)，效果对齐FP32；
+Stable Diffusion支持[BF16 O2训练](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/stable_diffusion)，效果对齐FP32；
 [LoRA加载升级](#加载HF-LoRA权重)，支持加载SDXL的LoRA权重；
-[Controlnet](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/ppdiffusers/pipelines/controlnet)升级，支持ControlNetImg2Img、ControlNetInpaint、StableDiffusionXLControlNet等。**
+[Controlnet](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/ppdiffusers/pipelines/controlnet)升级，支持ControlNetImg2Img、ControlNetInpaint、StableDiffusionXLControlNet等。**
 
-* 🔥 **2023.06.20 发布 0.16.1 版本，新增[T2I-Adapter](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/t2i-adapter)，支持训练与推理；ControlNet升级，支持[reference only推理](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#controlnet-reference-only)；新增[WebUIStableDiffusionPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#automatic1111-webui-stable-diffusion)，
+* 🔥 **2023.06.20 发布 0.16.1 版本，新增[T2I-Adapter](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/t2i-adapter)，支持训练与推理；ControlNet升级，支持[reference only推理](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/community#controlnet-reference-only)；新增[WebUIStableDiffusionPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/community#automatic1111-webui-stable-diffusion)，
 支持通过prompt的方式动态加载lora、textual_inversion权重；
-新增[StableDiffusionHiresFixPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/community#stable-diffusion-with-high-resolution-fixing)，支持高分辨率修复；
-新增关键点控制生成任务评价指标[COCOeval](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/scripts/cocoeval_keypoints_score)；
+新增[StableDiffusionHiresFixPipeline](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/community#stable-diffusion-with-high-resolution-fixing)，支持高分辨率修复；
+新增关键点控制生成任务评价指标[COCOeval](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/scripts/cocoeval_keypoints_score)；
 新增多种模态扩散模型Pipeline，包括视频生成（[Text-to-Video-Synth](#文本视频多模)、[Text-to-Video-Zero](#文本视频多模)）、音频生成（[AudioLDM](#文本音频多模)、[Spectrogram Diffusion](#音频)）；新增文图生成模型[IF](#文本图像多模)。**
 
-* 🔥 **2023.03.29 发布 0.14.0 版本，新增[LoRA](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/dreambooth)、[ControlNet](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/controlnet)，支持训练与推理；
+* 🔥 **2023.03.29 发布 0.14.0 版本，新增[LoRA](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/dreambooth)、[ControlNet](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/controlnet)，支持训练与推理；
 模型加载升级，[可直接加载HF Diffusers的权重](#加载HF-Diffusers权重)（safetensors和pt）或 [SD等原库的Lightning权重进行推理](#加载原库的Lightning权重)，[支持加载Civitai社区的LoRA权重](#加载Civitai社区的LoRA权重)；
 [支持xformers](#XFormers加速) 训练与推理；
 新增用于超高分辨率生成的VAE tiling；
@@ -46,23 +46,23 @@ Stable Diffusion支持[BF16 O2训练](https://github.com/PaddlePaddle/PaddleMIX/
 #### 📦 SOTA扩散模型Pipelines集合
 我们提供**SOTA（State-of-the-Art）** 的扩散模型Pipelines集合。
 目前**PPDiffusers**已经集成了**100+Pipelines**，支持文图生成（Text-to-Image Generation）、文本引导的图像编辑（Text-Guided Image Inpainting）、文本引导的图像变换（Image-to-Image Text-Guided Generation）、文本条件的视频生成（Text-to-Video Generation）、超分（Super Superresolution）、文本条件的音频生成（Text-to-Audio Generation）在内的**10余项**任务，覆盖**文本、图像、视频、音频**等多种模态。
-如果想要了解当前支持的所有**Pipelines**以及对应的来源信息，可以阅读[🔥 PPDiffusers Pipelines](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/pipelines/README.md)文档。
+如果想要了解当前支持的所有**Pipelines**以及对应的来源信息，可以阅读[🔥 PPDiffusers Pipelines](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/pipelines/README.md)文档。
 
 
 #### 🔊 提供丰富的Noise Scheduler
 我们提供了丰富的**噪声调度器（Noise Scheduler）**，可以对**速度**与**质量**进行权衡，用户可在推理时根据需求快速切换使用。
-当前**PPDiffusers**已经集成了**14+Scheduler**，不仅支持 [DDPM](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/schedulers/scheduling_ddpm.py)、[DDIM](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/schedulers/scheduling_ddim.py) 和 [PNDM](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/schedulers/scheduling_pndm.py)，还支持最新的 [🔥 DPMSolver](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/schedulers/scheduling_dpmsolver_multistep.py)！
+当前**PPDiffusers**已经集成了**14+Scheduler**，不仅支持 [DDPM](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/schedulers/scheduling_ddpm.py)、[DDIM](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/schedulers/scheduling_ddim.py) 和 [PNDM](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/schedulers/scheduling_pndm.py)，还支持最新的 [🔥 DPMSolver](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/schedulers/scheduling_dpmsolver_multistep.py)！
 
 #### 🎛️ 提供多种扩散模型组件
-我们提供了**多种扩散模型**组件，如[UNet1DModel](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/models/unet_1d.py)、[UNet2DModel](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/models/unet_2d.py)、[UNet2DConditionModel](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/models/unet_2d_condition.py)、[UNet3DConditionModel](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/models/unet_3d_condition.py)、[VQModel](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/models/vae.py)、[AutoencoderKL](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/models/vae.py)等。
+我们提供了**多种扩散模型**组件，如[UNet1DModel](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/models/unet_1d.py)、[UNet2DModel](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/models/unet_2d.py)、[UNet2DConditionModel](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/models/unet_2d_condition.py)、[UNet3DConditionModel](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/models/unet_3d_condition.py)、[VQModel](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/models/vae.py)、[AutoencoderKL](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/models/vae.py)等。
 
 
 #### 📖 提供丰富的训练和推理教程
-我们提供了丰富的训练教程，不仅支持扩散模型的二次开发微调，如基于[Textual Inversion](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/textual_inversion)和[DreamBooth](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/dreambooth)使用3-5张图定制化训练生成图像的风格或物体，还支持[🔥 Latent Diffusion Model](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_image_laion400m)、[🔥 ControlNet](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/controlnet)、[🔥 T2I-Adapter](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/t2i-adapter)  等扩散模型的训练！
-此外，我们还提供了丰富的[🔥 Pipelines推理样例](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/inference)。
+我们提供了丰富的训练教程，不仅支持扩散模型的二次开发微调，如基于[Textual Inversion](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/textual_inversion)和[DreamBooth](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/dreambooth)使用3-5张图定制化训练生成图像的风格或物体，还支持[🔥 Latent Diffusion Model](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/text_to_image_laion400m)、[🔥 ControlNet](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/controlnet)、[🔥 T2I-Adapter](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/t2i-adapter)  等扩散模型的训练！
+此外，我们还提供了丰富的[🔥 Pipelines推理样例](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/examples/inference)。
 
 #### 🚀 支持FastDeploy高性能部署
-我们提供基于[FastDeploy](https://github.com/PaddlePaddle/FastDeploy)的[🔥 高性能Stable Diffusion Pipeline](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/ppdiffusers/pipelines/stable_diffusion/pipeline_fastdeploy_stable_diffusion.py)，更多有关FastDeploy进行多推理引擎后端高性能部署的信息请参考[🔥 高性能FastDeploy推理教程](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/deploy)。
+我们提供基于[FastDeploy](https://github.com/PaddlePaddle/FastDeploy)的[🔥 高性能Stable Diffusion Pipeline](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/ppdiffusers/pipelines/stable_diffusion/pipeline_fastdeploy_stable_diffusion.py)，更多有关FastDeploy进行多推理引擎后端高性能部署的信息请参考[🔥 高性能FastDeploy推理教程](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers/deploy)。
 ```python
 from ppdiffusers import StableDiffusionPipeline, FastDeployStableDiffusionPipeline
 
@@ -1159,7 +1159,7 @@ image.save("ldm-super-resolution-image.png")
 </details>
 
 ## 模型推理部署
-除了**Paddle动态图**运行之外，很多模型还支持将模型导出并使用推理引擎运行。我们提供基于[FastDeploy](https://github.com/PaddlePaddle/FastDeploy)上的**StableDiffusion**模型部署示例，涵盖文生图、图生图、图像编辑等任务，用户可以按照我们提供[StableDiffusion模型导出教程](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/deploy/export.md)将模型导出，然后使用`FastDeployStableDiffusionMegaPipeline`进行高性能推理部署！
+除了**Paddle动态图**运行之外，很多模型还支持将模型导出并使用推理引擎运行。我们提供基于[FastDeploy](https://github.com/PaddlePaddle/FastDeploy)上的**StableDiffusion**模型部署示例，涵盖文生图、图生图、图像编辑等任务，用户可以按照我们提供[StableDiffusion模型导出教程](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/deploy/export.md)将模型导出，然后使用`FastDeployStableDiffusionMegaPipeline`进行高性能推理部署！
 
 <details><summary>&emsp; 已预先导出的FastDeploy版Stable Diffusion权重 </summary>
 
@@ -1246,7 +1246,7 @@ image_inpaint_legacy.save("image_inpaint_legacy.png")
 
 
 ## License
-PPDiffusers 遵循 [Apache-2.0开源协议](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/LICENSE)。
+PPDiffusers 遵循 [Apache-2.0开源协议](https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/LICENSE)。
 
 Stable Diffusion 遵循 [The CreativeML OpenRAIL M 开源协议](https://huggingface.co/spaces/CompVis/stable-diffusion-license)。
 > The CreativeML OpenRAIL M is an [Open RAIL M license](https://www.licenses.ai/blog/2022/8/18/naming-convention-of-responsible-ai-licenses), adapted from the work that [BigScience](https://bigscience.huggingface.co/) and [the RAIL Initiative](https://www.licenses.ai/) are jointly carrying in the area of responsible AI licensing. See also [the article about the BLOOM Open RAIL license](https://bigscience.huggingface.co/blog/the-bigscience-rail-license) on which this license is based.

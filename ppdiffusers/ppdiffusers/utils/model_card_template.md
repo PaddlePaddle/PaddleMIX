@@ -9,7 +9,7 @@ should probably proofread and complete it, then remove this comment. -->
 
 ## Model description
 
-This diffusion model is trained with the [PPDiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers) library
+This diffusion model is trained with the [PPDiffusers](https://github.com/PaddlePaddle/PaddleMIX/tree/release/1.0/ppdiffusers) library
 on the `{{ dataset_name }}` dataset.
 
 ## Intended uses & limitations

@@ -613,7 +613,7 @@ def main(args):
                 custom_pipeline="pipeline_fastdeploy_stable_diffusion_hires_fix",
             )
             # custom_pipeline
-            # https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/community/pipeline_fastdeploy_stable_diffusion_hires_fix.py
+            # https://github.com/PaddlePaddle/PaddleMIX/blob/release/1.0/ppdiffusers/examples/community/pipeline_fastdeploy_stable_diffusion_hires_fix.py
             hiresfix_pipe._progress_bar_config = pipe._progress_bar_config
             # hiresfix_control
             init_image = load_image(
