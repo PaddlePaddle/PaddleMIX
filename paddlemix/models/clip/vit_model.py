@@ -189,6 +189,7 @@ class Attention(paddle.nn.Layer):
         self.xattn_drop = config.attn_drop_rate
         self.xattn = config.xattn
         self.subln = config.subln
+        self.fuse_qv = config.fuse_qv
 
         self.num_heads = config.width // config.head_width
         head_dim = dim // self.num_heads
@@ -223,7 +224,7 @@ class Attention(paddle.nn.Layer):
             self.k_proj = FusedLinear(dim, all_head_dim, bias_attr=False)
             self.v_proj = FusedLinear(dim, all_head_dim, bias_attr=config.qkv_bias)
         else:
-            if False:
+            if self.fuse_qv:
                 self.qv_proj = paddle.nn.Linear(dim, 2 * all_head_dim, bias_attr=config.qkv_bias)
                 self.k_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=False)
             else:
@@ -279,7 +280,7 @@ class Attention(paddle.nn.Layer):
 
     def forward(self, x, rel_pos_bias=None, attn_mask=None):
         B, N, C = x.shape
-        if hasattr(self, "qv_proj"):
+        if self.fuse_qv:
             q, v = self.qv_proj(x).split(2, axis=-1)
             k = self.k_proj(x)
         else:
@@ -890,6 +891,7 @@ class VisionTransformerConfig(PretrainedConfig):
         output_tokens: bool = False,
         fusedlinear: bool = False,
         flash_attn: bool = False,
+        fuse_qv: bool = False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -911,6 +913,7 @@ class VisionTransformerConfig(PretrainedConfig):
         self.output_tokens = output_tokens
         self.fusedlinear = fusedlinear
         self.flash_attn = flash_attn
+        self.fuse_qv = fuse_qv
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
