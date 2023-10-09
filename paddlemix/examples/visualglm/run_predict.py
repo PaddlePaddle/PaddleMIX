@@ -22,6 +22,7 @@ import requests
 from PIL import Image
 
 from paddlemix import VisualGLMForConditionalGeneration, VisualGLMProcessor
+from paddlemix.utils.downloader import is_url
 
 
 def predict(args):
@@ -30,9 +31,11 @@ def predict(args):
     model.eval()
     processor = VisualGLMProcessor.from_pretrained(args.pretrained_name_or_path)
     print("load processor and model done!")
-
-    url = "https://paddlenlp.bj.bcebos.com/data/images/titanic.jpeg"
-    image = Image.open(requests.get(url, stream=True).raw)
+    image_path = args.image_path
+    if is_url(image_path):
+        image = Image.open(requests.get(image_path, stream=True).raw)
+    else:
+        image = Image.open(image_path)
     generate_kwargs = {
         "max_length": 1024,
         "min_length": 10,
@@ -70,6 +73,12 @@ if __name__ == "__main__":
         default="THUDM/visualglm-6b",
         type=str,
         help="The dir name of visualglm checkpoint.",
+    )
+    parser.add_argument(
+        "--image_path",
+        default="https://paddlenlp.bj.bcebos.com/data/images/mugs.png",
+        type=str,
+        help="",
     )
     args = parser.parse_args()
 
