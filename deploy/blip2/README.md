@@ -29,7 +29,7 @@ python export.py \
  python predict.py  \
  --first_model_path blip2_export/image_encoder \
  --second_model_path opt-2.7b-infer_static/opt \
- --input_image https://paddlenlp.bj.bcebos.com/data/images/mugs.png\
+ --image_path https://paddlenlp.bj.bcebos.com/data/images/mugs.png\
  --prompt "a photo of"
 
 ```
