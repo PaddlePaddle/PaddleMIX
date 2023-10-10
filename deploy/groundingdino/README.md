@@ -16,6 +16,8 @@ python setup_ms_deformable_attn_op.py install
 ```
 ## 2.2 静态图导出与预测
 ```bash
+cd deploy/groundingdino
+
 #静态图模型导出
 python export.py \
 --dino_type GroundingDino/groundingdino-swint-ogc
@@ -25,8 +27,8 @@ python export.py \
  python predict.py  \
  --text_encoder_type GroundingDino/groundingdino-swint-ogc \
  --model_path output_groundingdino/GroundingDino/groundingdino-swint-ogc \
- --input_image image_you_want_to_detect.jpg \
- -output_dir "dir you want to save the output" \
- -prompt "Detect Cat"
+ --input_image https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg \
+ --output_dir ./groundingdino_predict_output \
+ --prompt "bus"
 
 ```
