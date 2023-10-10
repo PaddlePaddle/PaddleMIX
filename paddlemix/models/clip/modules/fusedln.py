@@ -62,7 +62,8 @@ class FusedLayerNorm(OriginLayerNorm):
         check_normalized_shape(self._normalized_shape)
 
     def forward(self, input):
-        return fused_ln(input, self.weight, self.bias, self._epsilon)[0]
+        org_dtype = input.dtype
+        return fused_ln(input.cast(self.weight.dtype), self.weight, self.bias, self._epsilon)[0].cast(org_dtype)
 
 
 class FastLayerNorm(OriginLayerNorm):
