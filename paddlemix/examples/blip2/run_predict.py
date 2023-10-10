@@ -153,6 +153,10 @@ def main():
     model_args.mp_degree = training_args.tensor_parallel_degree
     model_args.gradient_checkpointing = training_args.gradient_checkpointing
     model = create_model(model_args)
+    decorated = paddle.amp.decorate(
+        models=[model.visual_encoder, model.language_model], optimizers=None, level="O2"
+    )
+    model.visual_encoder, model.language_model = decorated
     model.eval()
     if training_args.load_model_path is not None:
         load_model(training_args, model, ckpt_dir=os.path.join(training_args.load_model_path, "model_state.pdparams"))

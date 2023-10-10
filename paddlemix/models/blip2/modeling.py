@@ -482,13 +482,15 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             captions (list): A list of ids of length batch_size * num_captions.
         """
         batch_size = pixel_values.shape[0]
-        image_embeds = self.Qformer.ln_vision(self.visual_encoder(pixel_values))
+        image_embeds = self.Qformer.ln_vision(
+            self.visual_encoder(pixel_values.cast(self.visual_encoder.pos_embed.dtype))
+        )
         image_attention_mask = paddle.ones(image_embeds.shape[:-1], dtype="int64")
 
         query_tokens = self.Qformer.query_tokens.expand([image_embeds.shape[0], -1, -1])
         query_outputs = self.Qformer.bert(
             query_embeds=query_tokens,
-            encoder_hidden_states=image_embeds,
+            encoder_hidden_states=image_embeds.cast(query_tokens.dtype),
             encoder_attention_mask=image_attention_mask,
             return_dict=True,
         )
@@ -503,7 +505,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         attention_mask = paddle.concat([language_attention_mask, attention_mask], axis=1)
         # concatenate query embeddings with prompt embeddings
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
-        inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
+        inputs_embeds = paddle.concat([language_model_inputs.cast(inputs_embeds.dtype), inputs_embeds], axis=1)
 
         outputs = self.language_model.generate(
             inputs_embeds=inputs_embeds,

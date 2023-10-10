@@ -659,7 +659,7 @@ class BertLMPredictionHead(nn.Layer):
         # The output weights are the same as the input embeddings, but there is
         # an output-only bias for each token.
         if config.use_fusedlinear:
-            self.dense = paddle.incubate.nn.FusedLinear(config.hidden_size, config.vocab_size)
+            self.decoder = paddle.incubate.nn.FusedLinear(config.hidden_size, config.vocab_size)
         else:
             self.decoder = nn.Linear(config.hidden_size, config.vocab_size, bias_attr=False)
 
