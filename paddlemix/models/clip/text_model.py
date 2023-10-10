@@ -1026,7 +1026,8 @@ class ResidualAttentionBlock(paddle.nn.Layer):
             dtype = q_x.dtype.dtype
         else:
             dtype = attn_mask.dtype
-        attn_mask = attn_mask.cast(dtype) if attn_mask is not None and attn_mask.dtype != dtype else None
+        if attn_mask is not None and attn_mask.dtype != dtype:
+            attn_mask = attn_mask.cast(dtype)
         if self.xattn:
             return self.attn(q_x, attn_mask=attn_mask)
 
