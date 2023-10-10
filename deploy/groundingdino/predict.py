@@ -29,8 +29,8 @@ from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
 ms_deformable_attn = load(
     name="deformable_detr_ops",
     sources=[
-        "./paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cc",
-        "./paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cu",
+        "../../paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cc",
+        "../../paddlemix/models/groundingdino/csrc/ms_deformable_attn_op.cu",
     ],
 )
 
