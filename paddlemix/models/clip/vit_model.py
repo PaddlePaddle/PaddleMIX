@@ -530,6 +530,7 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         inner_attn_ln=True,  # false in eva-01 clip
         fusedlinear=False,
         flash_attn=False,
+        fuse_qv=False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -571,6 +572,7 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         self.inner_attn_ln = inner_attn_ln
         self.fusedlinear = fusedlinear
         self.flash_attn = flash_attn
+        self.fuse_qv = fuse_qv
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
