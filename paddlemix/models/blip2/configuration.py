@@ -89,7 +89,8 @@ class Blip2VisionConfig(PretrainedConfig):
         self.attn_drop_rate = kwargs.get("attn_drop_rate", 0.0)
         self.drop_path_rate = kwargs.get("drop_path_rate", 0.0)
         self.norm_layer = kwargs.get("norm_layer", "nn.LayerNorm")
-
+        self.use_fusedlinear = kwargs.get("use_fusedlinear", False)
+        self.use_flash_attn = kwargs.get("use_flash_attn", False)
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
         config_dict, kwargs = cls.get_config_dict(pretrained_model_name_or_path, **kwargs)
@@ -196,6 +197,8 @@ class Blip2QFormerConfig(PretrainedConfig):
         self.cross_attention_frequency = cross_attention_frequency
         self.encoder_hidden_size = encoder_hidden_size
         self.dropout = kwargs.pop("dropout", None)
+        self.use_fusedlinear = kwargs.get("use_fusedlinear", False)
+        self.use_flash_attn = kwargs.get("use_flash_attn", False)
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
