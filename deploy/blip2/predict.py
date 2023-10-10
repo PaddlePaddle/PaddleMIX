@@ -117,19 +117,17 @@ class Predictor(object):
         ]
         for i in range(32):
             tmp = paddle.rand(shape=[2, batch, 32, max_len, 80], dtype=dtype)
-            print(tmp.shape)
             inputs.append(tmp)
 
-        self.second_predictor.run(inputs)
+        outs = self.second_predictor.run(inputs)
 
         import datetime
 
         starttime = datetime.datetime.now()
 
-        tokens: np.ndarray = load_real_time_tokens()
-        generate_ids = tokens.tolist()
+        generate_ids = outs[0].numpy().tolist()
 
-        print(generate_ids[0])
+        print(generate_ids)
 
         endtime = datetime.datetime.now()
         duringtime = endtime - starttime
