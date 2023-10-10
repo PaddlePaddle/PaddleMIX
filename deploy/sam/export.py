@@ -75,7 +75,7 @@ def main(args):
     ]
     model.eval()
     model = paddle.jit.to_static(model, input_spec=input_spec)
-    save_path = args.save_dir + f"_{args.model_type}_{args.input_type}"
+    save_path = f"{args.model_type}_{args.input_type}"
     paddle.jit.save(model, os.path.join(save_path, "model"))
 
     # TODO add test config

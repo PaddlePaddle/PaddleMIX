@@ -18,18 +18,19 @@ python export.py --model_type Sam/SamVitH-1024 --input_type points  --save_dir s
 
 
 #bbox 提示词推理
-python predict.py
---input_image image_you_want_to_detect.jpg \
---box_prompt 548 372 593 429 443 374 482 418 \
+python predict.py \
+--input_image https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg \
+--box_prompt 112 118 513 382 \
 --input_type boxs \
 --model_name_or_path Sam/SamVitH-1024 \
---cfg sam_export_SamVitH_boxs/deploy.yaml
+--cfg Sam/SamVitH-1024_boxs/deploy.yaml
+
 
 #points 提示词推理
 python predict.py \
---input_image mage_you_want_to_detect.jpg \
+--input_image https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg \
 --points_prompt 548 372 \
 --input_type points \
 --model_name_or_path Sam/SamVitH-1024 \
---cfg sam_export_SamVitH_points/deploy.yaml
+--cfg Sam/SamVitH-1024_points/deploy.yaml
 ```
