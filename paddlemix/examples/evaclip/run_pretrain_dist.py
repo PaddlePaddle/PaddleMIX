@@ -123,6 +123,10 @@ class PreTrainingArguments(TrainingArguments):
         default=False,
         metadata={"help": "Whether to use cpu core bind."},
     )
+    fuse_ln: bool = field(
+        default=True,
+        metadata={"help": "Whether to use fused layer norm."},
+    )
     pretrained_text_model: str = field(default="openclip", metadata={"help": "the model to pre-extract text feats"})
 
 
@@ -198,6 +202,8 @@ def main_worker(training_args, model_args, data_args):
         paddle.set_default_dtype("bfloat16")
 
     config = EVACLIPConfig.from_pretrained(model_args.model)
+    config["text_config"]["fusedLN"] = training_args.fuse_ln
+    config["vision_config"]["fusedLN"] = training_args.fuse_ln
     model = EVACLIP(
         config,
         disable_text=False,
