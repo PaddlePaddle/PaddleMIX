@@ -23,6 +23,7 @@ import socket
 import paddle
 from paddlenlp.trainer import PdArgumentParser
 
+from paddlemix.checkpoint import load_model
 from paddlemix.datasets.dataset import ImageFolder
 from paddlemix.examples.eva02.run_eva02_finetune_dist import (
     Collator,
@@ -58,6 +59,13 @@ def main_worker(training_args, model_args, data_args):
         paddle.set_default_dtype("bfloat16")
     model = EVA02VisionTransformer.from_pretrained(model_args.model, ignore_mismatched_sizes=False)
     model.eval()
+
+    if (
+        training_args.pretrained_model_path
+        and training_args.pretrained_model_path != "None"
+        and training_args.resume_from_checkpoint is None
+    ):
+        load_model(training_args, model, ckpt_dir=training_args.pretrained_model_path)
 
     eval_dataset = ImageFolder(root=f"{data_args.eval_data_path}")
     image_processor = EVA02FinetuneImageProcessor.from_pretrained(os.path.join(model_args.model, "processor", "eval"))
