@@ -14,17 +14,27 @@
 
 import os
 from dataclasses import dataclass, field
-
-import paddle
-import requests
-from paddlenlp.trainer import PdArgumentParser
+from paddlemix.datasets import *
+from paddlemix import ImageBindModel, ImageBindProcessor
+from paddlemix.models import *
 from PIL import Image
+from paddlenlp.trainer import PdArgumentParser
 
 from paddlemix import ImageBindModel, ImageBindProcessor
 from paddlemix.datasets import *
-from paddlemix.models import ModalityType
 from paddlemix.utils.log import logger
+from ppdiffusers.utils import load_image
+from paddlemix.models.imagebind.utils import *
+from types import SimpleNamespace
 
+ModalityType = SimpleNamespace(
+    VISION="vision",
+    TEXT="text",
+    AUDIO="audio",
+    THERMAL="thermal",
+    DEPTH="depth",
+    IMU="imu",
+)
 
 class Predictor:
     def __init__(self, model_args):
@@ -44,21 +54,31 @@ def main(model_args, data_args):
     # bulid model
     logger.info("imagebind_model: {}".format(model_args.model_name_or_path))
 
-    url = data_args.input_image
+    url = (data_args.input_image)
     if os.path.isfile(url):
-        # read image
+        #read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     elif url:
-        image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
+        image_pil = load_image(url)
     else:
         image_pil = None
+
+    url = (data_args.input_audio)
+    if os.path.isfile(url):
+        #read image
+        input_audio = data_args.input_audio
+    elif url:
+        os.system("wget {}".format(url))
+        input_audio = os.path.basename(data_args.input_audio)
+    else:
+        input_audio = None
 
     predictor = Predictor(model_args)
 
     encoding = predictor.processor(
         images=image_pil,
         text=data_args.input_text,
-        audios=data_args.input_audio,
+        audios=input_audio,
         return_tensors="pd",
     )
     inputs = {}
@@ -69,7 +89,7 @@ def main(model_args, data_args):
     if image_pil:
         image_processor = encoding["pixel_values"]
         inputs.update({ModalityType.VISION: image_processor})
-    if data_args.input_audio:
+    if input_audio:
         audio_processor = encoding["audio_values"]
         inputs.update({ModalityType.AUDIO: audio_processor})
 
@@ -79,7 +99,7 @@ def main(model_args, data_args):
         logger.info("Generate text: {}".format(embeddings[ModalityType.TEXT]))
     if image_pil:
         logger.info("Generate vision: {}".format(embeddings[ModalityType.VISION]))
-    if data_args.input_audio:
+    if input_audio:
         logger.info("Generate audio: {}".format(embeddings[ModalityType.AUDIO]))
 
 
