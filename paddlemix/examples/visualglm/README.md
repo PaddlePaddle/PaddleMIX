@@ -13,7 +13,7 @@ VisualGLM-6B 依靠来自于 CogView 数据集的30M高质量中文图文对，�
 ```
 python run_predict.py \
     --pretrained_name_or_path "THUDM/visualglm-6b" \
-    --image_path "https://paddlenlp.bj.bcebos.com/data/images/mugs.png"
+    --image_path "https://paddlenlp.bj.bcebos.com/data/images/mugs.png
 
 ```
 
