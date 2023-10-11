@@ -18,8 +18,8 @@ example: Extract and compare features across modalities (e.g. Image, Text and Au
 cd paddlemix/examples/imagebind/
 
 python run_predict.py \
---model_name_or_path The dir name of imagebind checkpoint. \
---input_text "A dog."
---input_image an image file. \
---input_audio an audio file.  \
+--model_name_or_path imagebind-1.2b/ \
+--input_text "A dog." \
+--input_image https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/dog_image.jpg \
+--input_audio https://paddlenlp.bj.bcebos.com/models/community/paddlemix/audio-files/wave.wav \
 ```
