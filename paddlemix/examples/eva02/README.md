@@ -117,7 +117,7 @@ export $PATH=$PATH:$INSTALL_DIR
 
 1. 如果采用分布式策略，分布式并行关系有：`nnodes * nproc_per_node == tensor_parallel_degree * sharding_parallel_degree * dp_parallel_degree`，其中`dp_parallel_degree`参数根据其他几个值计算出来，因此需要保证`nnodes * nproc_per_node >= tensor_parallel_degree * sharding_parallel_degree`；
 2. `model_name` 可单独使用创建模型，如果更换teacher，则需自己改写`paddlemix/EVA/EVA02/eva02_Ti_for_pretrain`中config.json and model_config.json的teacher_config这个字段的内容，比如将默认的 `paddlemix/EVA/EVA01-CLIP-g-14` 改为 "paddlemix/EVA/EVA02-CLIP-bigE-14"。而student_config是dict，student模型本身是train from scratch的；
-3. 如果model_name=None，也可采用teacher_name 和 student_name来创建模型，但它们必须都各自具有config.json和model_state.pdparams，一般eval或加载全量权重debug时采用model_name=None的形式；
+3. 如果 model_name=None，也可采用 teacher_name 和 student_name 来创建模型，但它们必须都各自具有config.json和model_state.pdparams，一般eval或加载全量权重debug时采用 model_name=None 的形式；
 4. `TEA_PRETRAIN_CKPT`通常情况下设置为None，模型训练前已加载来自`teacher_name`中的对应teacher预训练权重。但是**如果设置 MP_DEGREE > 1**时，则必须再次设置`TEA_PRETRAIN_CKPT`的路径去加载，一般设置绝对路径，也可从对应的下载链接单独下载相应的`model_state.pdparams`并放置；
 
 
@@ -145,8 +145,8 @@ TRAINING_MODEL_RESUME="None"
 TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 
-TRAINERS_NUM=1 # machine num
-TRAINING_GPUS_PER_NODE=8
+TRAINERS_NUM=1 # nnodes, machine num
+TRAINING_GPUS_PER_NODE=8 # nproc_per_node
 DP_DEGREE=8 # dp_parallel_degree
 MP_DEGREE=1 # tensor_parallel_degree
 SHARDING_DEGREE=1 # sharding_parallel_degree
@@ -225,7 +225,7 @@ model_name="paddlemix/EVA/EVA02/eva02_Ti_for_pretrain" # should modify teacher_c
 teacher_name="paddlemix/EVA/EVA02-CLIP-bigE-14"
 student_name="paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_p14"
 
-TEA_PRETRAIN_CKPT=None # /root/.paddlenlp/models/paddlemix/EVA/EVA01-CLIP-bigE-14/model_state.pdparams # must add if MP_DEGREE > 1
+TEA_PRETRAIN_CKPT=None # /root/.paddlenlp/models/paddlemix/EVA/EVA02-CLIP-bigE-14/model_state.pdparams # must add if MP_DEGREE > 1
 STU_PRETRAIN_CKPT=None
 ```
 
@@ -275,8 +275,8 @@ TRAINING_MODEL_RESUME="None"
 TRAINER_INSTANCES='127.0.0.1'
 MASTER='127.0.0.1:8080'
 
-TRAINERS_NUM=1 # machine num
-TRAINING_GPUS_PER_NODE=8
+TRAINERS_NUM=1 # nnodes, machine num
+TRAINING_GPUS_PER_NODE=8 # nproc_per_node
 DP_DEGREE=8 # dp_parallel_degree
 MP_DEGREE=1 # tensor_parallel_degree
 SHARDING_DEGREE=1 # sharding_parallel_degree
