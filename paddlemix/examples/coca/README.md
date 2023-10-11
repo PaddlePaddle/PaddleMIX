@@ -42,14 +42,6 @@ python setup.py install --prefix=$INSTALL_DIR
 export $PATH=$PATH:$INSTALL_DIR
 ```
 
-4）安装paddlemix
-
-```
-git clone git@github.com:PaddlePaddle/PaddleMIX.git
-cd PaddleMix
-python setup.py install
-```
-
 ## 3. 数据准备
 
 1) coco数据
