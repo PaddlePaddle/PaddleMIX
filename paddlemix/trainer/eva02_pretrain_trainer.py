@@ -221,7 +221,7 @@ class EVA02PretrainTrainer(Trainer):
             unwraped_model = unwrap_model(self.model)
             logger.info(f"Saving eva02_vit checkpoint to {output_dir}/eva02_vit")
             unwraped_model.student.save_pretrained(
-                output_dir=os.path.join(output_dir, "eva02_vit"),
+                os.path.join(output_dir, "eva02_vit"),
                 merge_tensor_parallel=merge_tensor_parallel,
             )
         else:
