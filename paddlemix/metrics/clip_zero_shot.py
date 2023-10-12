@@ -114,7 +114,7 @@ class ClipZeroShot:
     def zero_shot_eval(self, evalres):
         results = {}
         print("Extract features done, starting zero-shot classification evaluation.")
-        predictions, labels = evalres.predictions, evalres.label_ids.cast("int32")
+        predictions, labels = evalres.predictions, evalres.label_ids
         n = predictions.shape[0]
         top1, top5 = 0.0, 0.0
 
