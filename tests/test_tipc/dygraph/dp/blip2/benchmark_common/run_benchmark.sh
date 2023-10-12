@@ -69,6 +69,7 @@ function _train(){
             --benchmark True
             --num_train_epochs=${max_epochs} \
             --save_strategy no
+            --per_device_train_batch_size ${base_batch_size}
             "
 
     # 以下为通用执行命令，无特殊可不用修改
