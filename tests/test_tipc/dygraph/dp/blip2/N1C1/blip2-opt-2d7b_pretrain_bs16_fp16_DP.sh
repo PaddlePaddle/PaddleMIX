@@ -14,7 +14,7 @@
 
 model_item=blip2-opt-2d7b_pretrain
 model=blip2
-bs_item=128
+bs_item=16
 fp_item=fp16
 run_mode=DP
 device_num=N1C1
