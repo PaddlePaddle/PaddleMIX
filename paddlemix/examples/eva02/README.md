@@ -100,7 +100,7 @@ export $PATH=$PATH:$INSTALL_DIR
 ```
 
 
-## 2. 数据集和预训练权重
+## 3. 数据集和预训练权重
 
 1) ImageNet-1k数据
 
@@ -244,7 +244,7 @@ STU_PRETRAIN_CKPT=None
 
 1. 如果采用分布式策略，分布式并行关系有：`nnodes * nproc_per_node == tensor_parallel_degree * sharding_parallel_degree * dp_parallel_degree`，其中`dp_parallel_degree`参数根据其他几个值计算出来，因此需要保证`nnodes * nproc_per_node >= tensor_parallel_degree * sharding_parallel_degree`；
 
-2. 如果训练`paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_ft_in1k_p14`， 则必须加载**其对应的预训练权重**`paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_p14`，然后设置预训练权重的`model_state.pdparams`的绝对路径，或单独从[这个链接](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_ft_in1k_p14/model_state.pdparams)下载并放置。
+2. 如果训练`paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_ft_in1k_p14`， 则必须加载**其对应的预训练权重**`paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_p14`，然后设置预训练权重的`model_state.pdparams`的绝对路径，或单独从[这个链接](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_p14/model_state.pdparams)下载并放置。
 
 3. tiny/s是336尺度训练，B/L是448尺度训练，而它们的预训练权重均是224尺度训练得到的。
 
@@ -282,7 +282,8 @@ MP_DEGREE=1 # tensor_parallel_degree
 SHARDING_DEGREE=1 # sharding_parallel_degree
 
 MODEL_NAME="paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_ft_in1k_p14"
-PRETRAIN_CKPT=/root/.paddlenlp/models/paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_p14/model_state.pdparams # pretrained model, input_size is 224
+PRETRAIN_CKPT=/root/.paddlenlp/models/paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_p14/model_state.pdparams # must be added, pretrained model, input_size is 224
+# wget https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_p14/model_state.pdparams
 
 OUTPUT_DIR=./output/eva02_Ti_pt_in21k_ft_in1k_p14
 
@@ -348,7 +349,7 @@ ${TRAINING_PYTHON} paddlemix/examples/eva02/run_eva02_finetune_dist.py \
 
 注意：
 
-1. 默认加载的是下载的`paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_ft_in1k_p14`里的训好的权重，所以PRETRAIN_CKPT=None，如果是本地新训好的权重，则可设置PRETRAIN_CKPT的具体路径去加载和评估；
+1. 默认加载的是下载的`paddlemix/EVA/EVA02/eva02_Ti_pt_in21k_ft_in1k_p14`里的训好的权重，所以PRETRAIN_CKPT=None，**如果是本地新训好的权重**，则可设置PRETRAIN_CKPT的具体路径去加载和评估；
 
 
 ```shell
@@ -360,7 +361,7 @@ input_size=336
 batch_size=128
 num_workers=10
 
-PRETRAIN_CKPT=None # output/eva02_Ti_pt_in21k_ft_in1k_p14/checkpoint-best/model_state.pdparams
+PRETRAIN_CKPT=None # output/eva02_Ti_pt_in21k_ft_in1k_p14/checkpoint-xxx/model_state.pdparams
 
 CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/eva02/run_eva02_finetune_eval.py \
         --do_eval \
