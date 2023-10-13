@@ -55,7 +55,8 @@ def predict(args):
     generate_ids, _ = model.generate(**inputs, **generate_kwargs)
     responses = processor.get_responses(generate_ids)
     history.append([query, responses[0]])
-    print(responses)
+    print("query->", query)
+    print("responses->", responses)
 
     # Epoch 2
     query = "这部电影的导演是谁？"
@@ -63,7 +64,9 @@ def predict(args):
     generate_ids, _ = model.generate(**inputs, **generate_kwargs)
     responses = processor.get_responses(generate_ids)
     history.append([query, responses[0]])
-    print(responses)
+    print("query->", query)
+    print("responses->", responses)
+    # print(responses)
 
 
 if __name__ == "__main__":
