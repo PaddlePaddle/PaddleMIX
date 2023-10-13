@@ -256,7 +256,7 @@ def valid_coco_panoptic_annotations(annotations: Iterable[Dict[str, Union[List, 
     return all(is_valid_annotation_coco_panoptic(ann) for ann in annotations)
 
 
-def load_image(image: Union[str, "PIL.Image.Image"]) -> "PIL.Image.Image":
+def load_image(image: Union[str, "PIL.Image.Image"], convert_to_rgb: bool = True) -> "PIL.Image.Image":
     """
     Loads `image` to a PIL Image.
 
@@ -285,7 +285,8 @@ def load_image(image: Union[str, "PIL.Image.Image"]) -> "PIL.Image.Image":
             "Incorrect format used for image. Should be an url linking to an image, a local path, or a PIL image."
         )
     image = PIL.ImageOps.exif_transpose(image)
-    # image = image.convert("RGB") #
+    if convert_to_rgb:
+        image = image.convert("RGB")
     return image
 
 

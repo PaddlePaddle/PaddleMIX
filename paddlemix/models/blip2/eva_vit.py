@@ -86,8 +86,9 @@ class Mlp(nn.Layer):
                 self.use_fusedlinear = True
                 self.fc1 = paddle.incubate.nn.FusedLinear(in_features, hidden_features)
                 self.fc2 = paddle.incubate.nn.FusedLinear(hidden_features, out_features)
-            self.fc1 = nn.Linear(in_features, hidden_features)
-            self.fc2 = nn.Linear(hidden_features, out_features)
+            else:
+                self.fc1 = nn.Linear(in_features, hidden_features)
+                self.fc2 = nn.Linear(hidden_features, out_features)
         self.mp_degree = mp_degree
         self.act = act_layer()
         self.drop = nn.Dropout(drop)
@@ -180,7 +181,10 @@ class Attention(nn.Layer):
 
     def forward(self, x, rel_pos_bias=None):
         N, C = x.shape[1:]
-        qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C // self.num_heads)).transpose((2, 0, 3, 1, 4))
+        if self.use_flash_attn:
+            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //self.num_heads)).transpose((2, 0, 1, 3, 4))
+        else:
+            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //self.num_heads)).transpose((2, 0, 3, 1, 4))
         q, k, v = qkv[0], qkv[1], qkv[2]
         if self.use_flash_attn:
             x, _ = flash_attention(q, k, v, dropout=self.proj_drop.p, causal=False, return_softmax=False)
@@ -205,7 +209,6 @@ class Attention(nn.Layer):
 
             x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
 
-        x = (attn.matmul(v)).transpose((0, 2, 1, 3)).reshape((-1, N, C))
         x = self.proj(x)
         if self.mp_degree > 1:
             with get_rng_state_tracker().rng_state("global_seed"):
@@ -475,7 +478,7 @@ def interpolate_pos_embed(model, checkpoint_model):
         num_patches = (
             model.visual_encoder.patch_embed.num_patches
             if hasattr(model, "visual_encoder")
-            else model.visual_encoder.patch_embed.num_patches
+            else model.patch_embed.num_patches
         )
         num_extra_tokens = (
             model.visual_encoder.pos_embed.shape[-2] - num_patches

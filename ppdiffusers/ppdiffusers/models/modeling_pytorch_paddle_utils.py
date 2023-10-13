@@ -14,9 +14,6 @@
 # limitations under the License.
 """ PyTorch - Paddle general utilities."""
 import paddle.nn as nn
-from packaging import version
-
-from ..version import VERSION
 
 #####################
 # PyTorch => Paddle #
@@ -39,36 +36,8 @@ def convert_pytorch_state_dict_to_paddle(pt_state_dict, paddle_model: nn.Layer, 
         ".running_var": "._variance",
         ".running_mean": "._mean",
     }
-    # TODO (junnyu): we will remove this, when ppdiffusers>=0.19.3
-    vae_new_name2old_name = None
-    if version.parse(version.parse(VERSION).base_version) <= version.parse("0.16.3"):
-        # support old ppdiffusers when load new diffusers weight
-        vae_new_name2old_name = {
-            "decoder.mid_block.attentions.0.to_k.bias": "decoder.mid_block.attentions.0.key.bias",
-            "decoder.mid_block.attentions.0.to_k.weight": "decoder.mid_block.attentions.0.key.weight",
-            "decoder.mid_block.attentions.0.to_out.0.bias": "decoder.mid_block.attentions.0.proj_attn.bias",
-            "decoder.mid_block.attentions.0.to_out.0.weight": "decoder.mid_block.attentions.0.proj_attn.weight",
-            "decoder.mid_block.attentions.0.to_q.bias": "decoder.mid_block.attentions.0.query.bias",
-            "decoder.mid_block.attentions.0.to_q.weight": "decoder.mid_block.attentions.0.query.weight",
-            "decoder.mid_block.attentions.0.to_v.bias": "decoder.mid_block.attentions.0.value.bias",
-            "decoder.mid_block.attentions.0.to_v.weight": "decoder.mid_block.attentions.0.value.weight",
-            "encoder.mid_block.attentions.0.to_k.bias": "encoder.mid_block.attentions.0.key.bias",
-            "encoder.mid_block.attentions.0.to_k.weight": "encoder.mid_block.attentions.0.key.weight",
-            "encoder.mid_block.attentions.0.to_out.0.bias": "encoder.mid_block.attentions.0.proj_attn.bias",
-            "encoder.mid_block.attentions.0.to_out.0.weight": "encoder.mid_block.attentions.0.proj_attn.weight",
-            "encoder.mid_block.attentions.0.to_q.bias": "encoder.mid_block.attentions.0.query.bias",
-            "encoder.mid_block.attentions.0.to_q.weight": "encoder.mid_block.attentions.0.query.weight",
-            "encoder.mid_block.attentions.0.to_v.bias": "encoder.mid_block.attentions.0.value.bias",
-            "encoder.mid_block.attentions.0.to_v.weight": "encoder.mid_block.attentions.0.value.weight",
-        }
-
     # Need to change some parameters name to match paddle names
     for pt_key, pt_tensor in pt_state_dict.items():
-        # TODO (junnyu): we will remove this, when ppdiffusers>=0.19.3
-        if vae_new_name2old_name is not None:
-            # convert new vae name to old vae name
-            pt_key = vae_new_name2old_name.get(pt_key, pt_key)
-
         # only convert sub_layer state dict
         if sub_layer is not None and sub_layer not in pt_key:
             continue

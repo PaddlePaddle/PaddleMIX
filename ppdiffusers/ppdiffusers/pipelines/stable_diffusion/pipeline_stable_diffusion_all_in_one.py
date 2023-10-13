@@ -28,9 +28,8 @@ from packaging import version
 from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 from ...configuration_utils import FrozenDict
-from ...loaders import FromCkptMixin, LoraLoaderMixin, TextualInversionLoaderMixin
+from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
-from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import (
     DDIMScheduler,
     DPMSolverMultistepScheduler,
@@ -41,6 +40,7 @@ from ...schedulers import (
 )
 from ...utils import PIL_INTERPOLATION, deprecate, logging
 from ...utils.testing_utils import load_image
+from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 from .safety_checker import StableDiffusionSafetyChecker
 
@@ -244,10 +244,7 @@ def pad_tokens_and_weights(tokens, weights, max_length, bos, eos, pad, no_boseos
 
 
 def get_unweighted_text_embeddings(
-    pipe: DiffusionPipeline,
-    text_input: paddle.Tensor,
-    chunk_length: int,
-    no_boseos_middle: Optional[bool] = True,
+    pipe: DiffusionPipeline, text_input: paddle.Tensor, chunk_length: int, no_boseos_middle: Optional[bool] = True
 ):
     """
     When the length of tokens is a multiple of the capacity of the text encoder,
@@ -292,7 +289,7 @@ def get_weighted_text_embeddings(
     no_boseos_middle: Optional[bool] = False,
     skip_parsing: Optional[bool] = False,
     skip_weighting: Optional[bool] = False,
-    **kwargs,
+    **kwargs
 ):
     r"""
     Prompts can be assigned with local weights using brackets. For example,
@@ -349,8 +346,7 @@ def get_weighted_text_embeddings(
         max_length = max(max_length, max([len(token) for token in uncond_tokens]))
 
     max_embeddings_multiples = min(
-        max_embeddings_multiples,
-        (max_length - 1) // (pipe.tokenizer.model_max_length - 2) + 1,
+        max_embeddings_multiples, (max_length - 1) // (pipe.tokenizer.model_max_length - 2) + 1
     )
     max_embeddings_multiples = max(1, max_embeddings_multiples)
     max_length = (pipe.tokenizer.model_max_length - 2) * max_embeddings_multiples + 2
@@ -440,7 +436,9 @@ def preprocess_mask(mask, scale_factor=8):
     return mask
 
 
-class StableDiffusionPipelineAllinOne(DiffusionPipeline, TextualInversionLoaderMixin, LoraLoaderMixin, FromCkptMixin):
+class StableDiffusionPipelineAllinOne(
+    DiffusionPipeline, TextualInversionLoaderMixin, LoraLoaderMixin, FromSingleFileMixin
+):
     r"""
     Pipeline for text-to-image image-to-image inpainting generation using Stable Diffusion.
 
@@ -565,11 +563,7 @@ class StableDiffusionPipelineAllinOne(DiffusionPipeline, TextualInversionLoaderM
 
     def __init__additional__(self):
         if not hasattr(self, "vae_scale_factor"):
-            setattr(
-                self,
-                "vae_scale_factor",
-                2 ** (len(self.vae.config.block_out_channels) - 1),
-            )
+            setattr(self, "vae_scale_factor", 2 ** (len(self.vae.config.block_out_channels) - 1))
 
     def __call__(self, *args, **kwargs):
         return self.text2image(*args, **kwargs)

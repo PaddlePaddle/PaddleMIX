@@ -45,9 +45,14 @@ def zero_shot_classifier(model, classnames_filename, templates_filename, args, t
 
 
 def accuracy(output, target, topk=(1,)):
-    pred = output.topk(max(topk), 1, True, True)[1].t()
-    correct = pred.equal(target.reshape([1, -1]).expand_as(pred))
-    return [float(correct[:k].reshape([-1]).astype(paddle.float32).sum(0, keepdim=True).numpy()) for k in topk]
+    """Computes the accuracy over the k top predictions for the specified values of k"""
+    maxk = min(max(topk), output.shape[1])
+    pred = output.topk(maxk, 1, True, True)[1].t()
+    correct = pred == target.reshape([1, -1]).expand_as(pred)
+    return [
+        float(correct[: min(k, maxk)].reshape([-1]).astype(paddle.float32).sum(0, keepdim=True).numpy() * 100.0)
+        for k in topk
+    ]
 
 
 class DummyAutocast:

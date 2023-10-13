@@ -18,11 +18,10 @@ import numpy as np
 import paddle
 import PIL
 
-from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import DDPMScheduler
 from ...utils import logging
 from ..fastdeploy_utils import FastDeployDiffusionPipelineMixin, FastDeployRuntimeModel
-from ..pipeline_utils import ImagePipelineOutput
+from ..pipeline_utils import DiffusionPipeline, ImagePipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -283,12 +282,7 @@ class FastDeployStableDiffusionUpscalePipeline(DiffusionPipeline, FastDeployDiff
                 # compute the previous noisy sample x_t -> x_t-1
                 if is_scheduler_support_step_index:
                     scheduler_output = self.scheduler.step(
-                        noise_pred,
-                        t,
-                        latents,
-                        step_index=i,
-                        return_pred_original_sample=False,
-                        **extra_step_kwargs,
+                        noise_pred, t, latents, step_index=i, return_pred_original_sample=False, **extra_step_kwargs
                     )
                 else:
                     scheduler_output = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs)
@@ -305,8 +299,7 @@ class FastDeployStableDiffusionUpscalePipeline(DiffusionPipeline, FastDeployDiff
 
         if not output_type == "latent":
             image = self._decode_vae_latents(
-                latents / self.vae_scaling_factor,
-                infer_op=infer_op_dict.get("vae_decoder", None),
+                latents / self.vae_scaling_factor, infer_op=infer_op_dict.get("vae_decoder", None)
             )
         else:
             image = latents

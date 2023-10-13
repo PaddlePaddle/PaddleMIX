@@ -42,18 +42,10 @@ BLIP-2：使用冻结图像编码器和大型语言模型的语言图像预训�
 </div>
 
 ## 2. 环境准备
-
-1. 安装PaddleNLP develop版本
-
-```
-pip install --pre --upgrade paddlenlp -f https://www.paddlepaddle.org.cn/whl/paddlenlp.html
-```
-
-2. 安装环境依赖包
-
-```
-pip install -r requirements.txt
-```
+  ```
+  cd PaddleMIX
+  pip install -r requirements.txt
+  ```
 
 ## 3. 数据准备
 
@@ -70,26 +62,24 @@ pip install -r requirements.txt
   ```
   >更多可参考数据集中的`annotations/coco_karpathy_train.json`文件。
 
-3) 多数据集联合训练
-
-  >指定参数名 task_name 载入指定数据集:
-  >例如 `--task_name coco_cation` 则使用coco_caption数据格式下的数据集训练
+  >在准备好自定义数据集以后, 我们可以使用 ``load_dataset()`` 来加载数据.
+  ```python
+  from lavis.datasets.builders import load_dataset
+  coco_dataset = load_dataset("coco_caption", data_files=[[TRAIN_IMAGE_LOCAL_PATH,TRAIN_ANN_LOCAL_PATH,MODE]])
+  '''
+  for example:
+  lcoco_dataset = oad_dataset("coco_caption", data_files=[['/root/.paddlemix/datasets/coco/images/','/root/.paddlemix/datasets/coco/annotations/coco_karpathy_train.json',"train"]])[0]
+  print(coco_dataset[0])
+  '''
+  # {'image':
+  # '/root/.paddlemix/datasets/coco/images/val2014/COCO_val2014_000000522418.jpg',
+  # 'image_id': 0,
+  # 'text_input':'A woman wearing a net on her head cutting a cake. '}
   ```
-    fleetrun --gpus=0,1,2,3 paddlemix/examples/blip2/run_pretrain_stage2.py  --task_name coco_cation
-  ```
-  >可以在 `paddlemix/datasets/caption_dataset.py` 中 `class CaptionDataset` 自行配置`coco_cation`数据路径
-  >例如 `--task_name [coco_cation,vg_caption]` 则使用coco_caption和vg_caption数据格式下的多个数据集训练模型
-  ```
-    fleetrun --gpus=0,1,2,3 paddlemix/examples/blip2/run_pretrain_stage2.py  -task_name [coco_cation,vg_caption]
-  ```
-  >可以在 `paddlemix/datasets/vg_caption.py` 中 `class VGCaption` 自行配置`vg_cation`数据路径
-
 
 ## 4. 使用说明
 
 我们在Paddle中实现了`BLIP-2`系列模型，目前包括`BLIP-2-OPT`、`BLIP-2-FlanT5`
-
-
 
 ### 4.1 训练
 
@@ -107,7 +97,6 @@ fleetrun --master '127.0.0.1' --nnodes 1 --nproc_per_node 8 --ips '127.0.0.1:808
     --num_train_epochs 10 \
     --tensor_parallel_degree 1 \
     --sharding_parallel_degree 1 \
-    --sharding "stage1" \
     --output_dir "./output" \
     --logging_steps 50 \
     --do_train \
@@ -148,7 +137,7 @@ fleetrun --gpus=0,1,2,3 paddlemix/examples/blip2/run_pretrain_stage2.py
 
 #### task_vqa
 ```
-fleetrun --gpus=0,1,2,3 paddlemix/examples/blip2/run_eval_vqa2_zeroshot.py
+fleetrun --gpus=0,1,2,3 paddlemix/examples/blip2/run_eval_vqav2_zeroshot.py
 ```
 #### task_caption
 ```
@@ -187,8 +176,8 @@ CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/blip2/run_predict.py
       "Blip2ForConditionalGeneration"
     ],
     "vision_name_or_path":"paddlemix/blip2-stage2/eva_vit_g",
-    "bridge_name_or_path":"blip2-stage2/Qformer",
-    "model_name_or_path":"blip2-caption-opt2.7b",
+    "bridge_name_or_path":"paddlemix/blip2-stage2/Qformer",
+    "vision_and_bridge_name_or_path":"paddlemix/blip2-caption-opt2.7b",
     "text_config": "facebook/opt-2.7b",
     "freeze_vit": true,
     "initializer_factor": 1.0,
@@ -241,7 +230,7 @@ CUDA_VISIBLE_DEVICES=0 python paddlemix/examples/blip2/run_predict.py
   可配置参数说明：
   * `vision_name_or_path`: 指定visual encoder的模型路径,默认已经提供
   * `bridge_name_or_path` : 指定Qformer的模型路径,默认已经提供
-  * `model_name_or_path` : 指定visual encoder和Qformer拼接好后的模型路径，如果已经指定该路径，可不配置`vision_name_or_path`,`bridge_name_or_path`
+  * `vision_and_bridge_name_or_path` : 指定visual encoder和Qformer拼接好后的模型路径，如果已经指定该路径，可不配置`vision_name_or_path`,`bridge_name_or_path`
   * `freeze_vit` :设置是否冻结visual encoder参数。
   * `qformer_config` :指定Qformer的config配置。
   * `vision_config` :指定visual encoder的config配置。

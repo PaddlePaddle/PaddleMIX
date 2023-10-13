@@ -1,4 +1,6 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2022 The Music Spectrogram Diffusion Authors.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,6 +32,21 @@ TARGET_FEATURE_LENGTH = 256
 
 
 class SpectrogramDiffusionPipeline(DiffusionPipeline):
+    r"""
+    Pipeline for unconditional audio generation.
+
+    This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
+    implemented for all pipelines (downloading, saving, running on a particular device, etc.).
+
+    Args:
+        notes_encoder ([`SpectrogramNotesEncoder`]):
+        continuous_encoder ([`SpectrogramContEncoder`]):
+        decoder ([`T5FilmDecoder`]):
+            A [`T5FilmDecoder`] to denoise the encoded audio latents.
+        scheduler ([`DDPMScheduler`]):
+            A scheduler to be used in combination with `decoder` to denoise the encoded audio latents.
+        melgan ([`OnnxRuntimeModel`]):
+    """
     _optional_components = ["melgan"]
 
     def __init__(
@@ -79,36 +96,20 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
             encoder_input_tokens=input_tokens, encoder_inputs_mask=tokens_mask
         )
         continuous_encoded, continuous_mask = self.continuous_encoder(
-            encoder_inputs=continuous_inputs.cast(self.continuous_encoder.dtype),
-            encoder_inputs_mask=continuous_mask,
+            encoder_inputs=continuous_inputs.cast(self.continuous_encoder.dtype), encoder_inputs_mask=continuous_mask
         )
         return [(tokens_encoded, tokens_mask), (continuous_encoded, continuous_mask)]
 
     def decode(self, encodings_and_masks, input_tokens, noise_time):
         timesteps = noise_time
         if not paddle.is_tensor(x=timesteps):
-            timesteps = paddle.to_tensor(data=[timesteps], dtype="int64", place=input_tokens.place)
+            timesteps = paddle.to_tensor(data=[timesteps], dtype="int64")
         elif paddle.is_tensor(x=timesteps) and len(timesteps.shape) == 0:
-            if isinstance(input_tokens.place, paddle.dtype):
-                dtype = input_tokens.place
-            elif isinstance(input_tokens.place, str) and input_tokens.place not in [
-                "cpu",
-                "cuda",
-                "ipu",
-                "xpu",
-            ]:
-                dtype = input_tokens.place
-            elif isinstance(input_tokens.place, paddle.Tensor):
-                dtype = input_tokens.place.dtype
-            else:
-                dtype = timesteps[None].dtype
-            timesteps = timesteps[None].cast(dtype)
+            timesteps = timesteps[None]
         # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
         timesteps = timesteps * paddle.ones(shape=input_tokens.shape[0], dtype=timesteps.dtype)
         logits = self.decoder(
-            encodings_and_masks=encodings_and_masks,
-            decoder_input_tokens=input_tokens,
-            decoder_noise_time=timesteps,
+            encodings_and_masks=encodings_and_masks, decoder_input_tokens=input_tokens, decoder_noise_time=timesteps
         )
         return logits
 
@@ -131,6 +132,48 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
             raise ValueError(
                 f"`callback_steps` has to be a positive integer but is {callback_steps} of type {type(callback_steps)}."
             )
+        r"""
+        The call function to the pipeline for generation.
+
+        Args:
+            input_tokens (`List[List[int]]`):
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
+                generation deterministic.
+            num_inference_steps (`int`, *optional*, defaults to 100):
+                The number of denoising steps. More denoising steps usually lead to a higher quality audio at the
+                expense of slower inference.
+            return_dict (`bool`, *optional*, defaults to `True`):
+                Whether or not to return a [`~pipelines.AudioPipelineOutput`] instead of a plain tuple.
+            output_type (`str`, *optional*, defaults to `"numpy"`):
+                The output format of the generated audio.
+            callback (`Callable`, *optional*):
+                A function that calls every `callback_steps` steps during inference. The function is called with the
+                following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
+            callback_steps (`int`, *optional*, defaults to 1):
+                The frequency at which the `callback` function is called. If not specified, the callback is called at
+                every step.
+
+        Example:
+
+        ```py
+        >>> from ppdiffusers import SpectrogramDiffusionPipeline, MidiProcessor
+
+        >>> pipe = SpectrogramDiffusionPipeline.from_pretrained("google/music-spectrogram-diffusion")
+        >>> processor = MidiProcessor()
+
+        >>> # Download MIDI from: wget http://www.piano-midi.de/midis/beethoven/beethoven_hammerklavier_2.mid
+        >>> output = pipe(processor("beethoven_hammerklavier_2.mid"))
+
+        >>> audio = output.audios[0]
+        ```
+
+        Returns:
+            [`pipelines.AudioPipelineOutput`] or `tuple`:
+                If `return_dict` is `True`, [`pipelines.AudioPipelineOutput`] is returned, otherwise a `tuple` is
+                returned where the first element is a list with the generated audio.
+        """
+
         pred_mel = np.zeros([1, TARGET_FEATURE_LENGTH, self.n_dims], dtype=np.float32)
         full_pred_mel = np.zeros([1, 0, self.n_dims], np.float32)
         ones = paddle.ones(shape=(1, TARGET_FEATURE_LENGTH), dtype=bool)
@@ -154,11 +197,7 @@ class SpectrogramDiffusionPipeline(DiffusionPipeline):
                 continuous_mask=encoder_continuous_mask,
             )
             # Sample encoder_continuous_inputs shaped gaussian noise to begin loop
-            x = randn_tensor(
-                shape=encoder_continuous_inputs.shape,
-                generator=generator,
-                dtype=self.decoder.dtype,
-            )
+            x = randn_tensor(shape=encoder_continuous_inputs.shape, generator=generator, dtype=self.decoder.dtype)
             # set step values
             self.scheduler.set_timesteps(num_inference_steps)
             # Denoising diffusion loop

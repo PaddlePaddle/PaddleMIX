@@ -19,12 +19,16 @@ import paddle
 
 from ppdiffusers import VQModel
 from ppdiffusers.utils import floats_tensor
+from ppdiffusers.utils.testing_utils import enable_full_determinism
 
-from .test_modeling_common import ModelTesterMixin
+from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
+
+enable_full_determinism()
 
 
-class VQModelTests(ModelTesterMixin, unittest.TestCase):
+class VQModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
     model_class = VQModel
+    main_input_name = "sample"
 
     @property
     def dummy_input(self, sizes=(32, 32)):
@@ -70,14 +74,7 @@ class VQModelTests(ModelTesterMixin, unittest.TestCase):
         model = VQModel.from_pretrained("fusing/vqgan-dummy")
         model.eval()
         paddle.seed(0)
-        image = paddle.randn(
-            shape=[
-                1,
-                model.config.in_channels,
-                model.config.sample_size,
-                model.config.sample_size,
-            ]
-        )
+        image = paddle.randn(shape=[1, model.config.in_channels, model.config.sample_size, model.config.sample_size])
         with paddle.no_grad():
             output = model(image).sample
         output_slice = output[0, -1, -3:, -3:].flatten().cpu()

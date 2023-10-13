@@ -78,12 +78,7 @@ class AudioLDMPipeline(DiffusionPipeline):
     ):
         super().__init__()
         self.register_modules(
-            vae=vae,
-            text_encoder=text_encoder,
-            tokenizer=tokenizer,
-            unet=unet,
-            scheduler=scheduler,
-            vocoder=vocoder,
+            vae=vae, text_encoder=text_encoder, tokenizer=tokenizer, unet=unet, scheduler=scheduler, vocoder=vocoder
         )
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
 
@@ -145,10 +140,7 @@ class AudioLDMPipeline(DiffusionPipeline):
             text_input_ids = text_inputs.input_ids
             attention_mask = text_inputs.attention_mask
             untruncated_ids = self.tokenizer(
-                prompt,
-                padding="longest",
-                return_tensors="pd",
-                return_attention_mask=True,
+                prompt, padding="longest", return_tensors="pd", return_attention_mask=True
             ).input_ids
             if (
                 untruncated_ids.shape[-1] >= text_input_ids.shape[-1]

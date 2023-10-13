@@ -15,7 +15,7 @@
 
 import math
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import paddle
@@ -45,7 +45,11 @@ class RePaintSchedulerOutput(BaseOutput):
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
-def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
+def betas_for_alpha_bar(
+    num_diffusion_timesteps,
+    max_beta=0.999,
+    alpha_transform_type="cosine",
+):
     """
     Create a beta schedule that discretizes the given alpha_t_bar function, which defines the cumulative product of
     (1-beta) over time from t = [0,1].
@@ -58,19 +62,30 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
         num_diffusion_timesteps (`int`): the number of betas to produce.
         max_beta (`float`): the maximum beta to use; use values lower than 1 to
                      prevent singularities.
+        alpha_transform_type (`str`, *optional*, default to `cosine`): the type of noise schedule for alpha_bar.
+                     Choose from `cosine` or `exp`
 
     Returns:
         betas (`np.ndarray`): the betas used by the scheduler to step the model outputs
     """
+    if alpha_transform_type == "cosine":
 
-    def alpha_bar(time_step):
-        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2) ** 2
+        def alpha_bar_fn(t):
+            return math.cos((t + 0.008) / 1.008 * math.pi / 2) ** 2
+
+    elif alpha_transform_type == "exp":
+
+        def alpha_bar_fn(t):
+            return math.exp(t * -12.0)
+
+    else:
+        raise ValueError(f"Unsupported alpha_tranform_type: {alpha_transform_type}")
 
     betas = []
     for i in range(num_diffusion_timesteps):
         t1 = i / num_diffusion_timesteps
         t2 = (i + 1) / num_diffusion_timesteps
-        betas.append(min(1 - alpha_bar(t2) / alpha_bar(t1), max_beta))
+        betas.append(min(1 - alpha_bar_fn(t2) / alpha_bar_fn(t1), max_beta))
     return paddle.to_tensor(betas, dtype=paddle.float32)
 
 
@@ -91,7 +106,7 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
         beta_end (`float`): the final `beta` value.
         beta_schedule (`str`):
             the beta schedule, a mapping from a beta range to a sequence of betas for stepping the model. Choose from
-            `linear`, `scaled_linear`, or `squaredcos_cap_v2`.
+            `linear`, `scaled_linear`, `squaredcos_cap_v2` or `sigmoid`.
         eta (`float`):
             The weight of noise for added noise in a diffusion step. Its value is between 0.0 and 1.0 -0.0 is DDIM and
             1.0 is DDPM scheduler respectively.
@@ -125,13 +140,7 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
             self.betas = (
-                paddle.linspace(
-                    beta_start**0.5,
-                    beta_end**0.5,
-                    num_train_timesteps,
-                    dtype=paddle.float32,
-                )
-                ** 2
+                paddle.linspace(beta_start**0.5, beta_end**0.5, num_train_timesteps, dtype=paddle.float32) ** 2
             )
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
@@ -227,7 +236,7 @@ class RePaintScheduler(SchedulerMixin, ConfigMixin):
         sample: paddle.Tensor,
         original_image: paddle.Tensor,
         mask: paddle.Tensor,
-        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        generator: Optional[paddle.Generator] = None,
         return_dict: bool = True,
     ) -> Union[RePaintSchedulerOutput, Tuple]:
         """

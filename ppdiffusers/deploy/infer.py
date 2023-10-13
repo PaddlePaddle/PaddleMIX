@@ -671,8 +671,7 @@ def main(args):
             )
             images[0].save(f"{folder}/cycle_diffusion.png")
 
-        if args.task_name in ["mixture_tiling", "all"]:
-            print("mixture_tiling yes yes yes")
+        if args.task_name in ["mixture_tiling"]:
             mixture_tiling_pipe = DiffusionPipeline.from_pretrained(
                 args.model_dir,
                 vae_encoder=pipe.vae_encoder,
@@ -695,8 +694,8 @@ def main(args):
                 prompt=[
                     [
                         "A charming house in the countryside, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-                        "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
-                        "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                        # "A dirt road in the countryside crossing pastures, by jakub rozalski, sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
+                        # "An old and rusty giant robot lying on a dirt road, by jakub rozalski, dark sunset lighting, elegant, highly detailed, smooth, sharp focus, artstation, stunning masterpiece",
                     ]
                 ],
                 tile_height=512,
@@ -735,7 +734,7 @@ def main(args):
                 f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
                 f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
             )
-            images[0].save("mixture_tiling.png")
+            images[0].save(f"{folder}/mixture_tiling.png")
 
 
 if __name__ == "__main__":

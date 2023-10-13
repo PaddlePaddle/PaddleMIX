@@ -29,7 +29,9 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
+
+enable_full_determinism()
 
 
 class StableDiffusion2VPredictionPipelineFastTests(unittest.TestCase):
@@ -113,13 +115,7 @@ class StableDiffusion2VPredictionPipelineFastTests(unittest.TestCase):
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
-        output = sd_pipe(
-            [prompt],
-            generator=generator,
-            guidance_scale=6.0,
-            num_inference_steps=2,
-            output_type="np",
-        )
+        output = sd_pipe([prompt], generator=generator, guidance_scale=6.0, num_inference_steps=2, output_type="np")
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = sd_pipe(
@@ -134,17 +130,7 @@ class StableDiffusion2VPredictionPipelineFastTests(unittest.TestCase):
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array(
-            [
-                0.36126757,
-                0.40778637,
-                0.36956796,
-                0.14816678,
-                0.25735706,
-                0.36562037,
-                0.1229952,
-                0.22826642,
-                0.4154452,
-            ]
+            [0.36126757, 0.40778637, 0.36956796, 0.14816678, 0.25735706, 0.36562037, 0.1229952, 0.22826642, 0.4154452]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
@@ -152,10 +138,7 @@ class StableDiffusion2VPredictionPipelineFastTests(unittest.TestCase):
     def test_stable_diffusion_v_pred_k_euler(self):
         unet = self.dummy_cond_unet
         scheduler = EulerDiscreteScheduler(
-            beta_start=0.00085,
-            beta_end=0.012,
-            beta_schedule="scaled_linear",
-            prediction_type="v_prediction",
+            beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", prediction_type="v_prediction"
         )
         vae = self.dummy_vae
         bert = self.dummy_text_encoder
@@ -173,13 +156,7 @@ class StableDiffusion2VPredictionPipelineFastTests(unittest.TestCase):
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
-        output = sd_pipe(
-            [prompt],
-            generator=generator,
-            guidance_scale=6.0,
-            num_inference_steps=2,
-            output_type="np",
-        )
+        output = sd_pipe([prompt], generator=generator, guidance_scale=6.0, num_inference_steps=2, output_type="np")
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = sd_pipe(
@@ -194,17 +171,7 @@ class StableDiffusion2VPredictionPipelineFastTests(unittest.TestCase):
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array(
-            [
-                0.39991996,
-                0.45191997,
-                0.34044766,
-                0.2136086,
-                0.2758901,
-                0.31222183,
-                0.21658134,
-                0.34479994,
-                0.43742967,
-            ]
+            [0.39991996, 0.45191997, 0.34044766, 0.2136086, 0.2758901, 0.31222183, 0.21658134, 0.34479994, 0.43742967]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
@@ -257,28 +224,12 @@ class StableDiffusion2VPredictionPipelineIntegrationTests(unittest.TestCase):
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
-        output = sd_pipe(
-            [prompt],
-            generator=generator,
-            guidance_scale=7.5,
-            num_inference_steps=20,
-            output_type="np",
-        )
+        output = sd_pipe([prompt], generator=generator, guidance_scale=7.5, num_inference_steps=20, output_type="np")
         image = output.images
         image_slice = image[0, 253:256, 253:256, -1]
         assert image.shape == (1, 768, 768, 3)
         expected_slice = np.array(
-            [
-                0.05667132,
-                0.05700234,
-                0.04156408,
-                0.04631725,
-                0.04327643,
-                0.06003231,
-                0.05165312,
-                0.05258191,
-                0.0865913,
-            ]
+            [0.05667132, 0.05700234, 0.04156408, 0.04631725, 0.04327643, 0.06003231, 0.05165312, 0.05258191, 0.0865913]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
@@ -290,29 +241,13 @@ class StableDiffusion2VPredictionPipelineIntegrationTests(unittest.TestCase):
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
-        output = sd_pipe(
-            [prompt],
-            generator=generator,
-            guidance_scale=7.5,
-            num_inference_steps=20,
-            output_type="np",
-        )
+        output = sd_pipe([prompt], generator=generator, guidance_scale=7.5, num_inference_steps=20, output_type="np")
         image = output.images
         image_slice = image[0, 253:256, 253:256, -1]
         assert image.shape == (1, 768, 768, 3)
 
         expected_slice = np.array(
-            [
-                0.04541016,
-                0.04516602,
-                0.05493164,
-                0.05078125,
-                0.04296875,
-                0.07275391,
-                0.06567383,
-                0.0534668,
-                0.04833984,
-            ]
+            [0.04541016, 0.04516602, 0.05493164, 0.05078125, 0.04296875, 0.07275391, 0.06567383, 0.0534668, 0.04833984]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05
 
@@ -323,7 +258,7 @@ class StableDiffusion2VPredictionPipelineIntegrationTests(unittest.TestCase):
         sd_pipe.set_progress_bar_config(disable=None)
         prompt = "A painting of a squirrel eating a burger"
         generator = paddle.Generator().manual_seed(0)
-        output = sd_pipe([prompt], generator=generator, num_inference_steps=5, output_type="numpy")
+        output = sd_pipe([prompt], generator=generator, num_inference_steps=5, output_type="np")
         image = output.images
         image_slice = image[0, 253:256, 253:256, -1]
         assert image.shape == (1, 768, 768, 3)
@@ -355,26 +290,12 @@ class StableDiffusion2VPredictionPipelineIntegrationTests(unittest.TestCase):
         prompt = "a photograph of an astronaut riding a horse"
         generator = paddle.Generator().manual_seed(0)
         image = sd_pipe(
-            [prompt],
-            generator=generator,
-            guidance_scale=7.5,
-            num_inference_steps=5,
-            output_type="numpy",
+            [prompt], generator=generator, guidance_scale=7.5, num_inference_steps=5, output_type="np"
         ).images
         image_slice = image[0, 253:256, 253:256, -1]
         assert image.shape == (1, 768, 768, 3)
         expected_slice = np.array(
-            [
-                0.20492354,
-                0.2115368,
-                0.2323401,
-                0.2415919,
-                0.25598443,
-                0.24843931,
-                0.25171167,
-                0.23580211,
-                0.23604062,
-            ]
+            [0.20492354, 0.2115368, 0.2323401, 0.2415919, 0.25598443, 0.24843931, 0.25171167, 0.23580211, 0.23604062]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
@@ -403,7 +324,7 @@ class StableDiffusion2VPredictionPipelineIntegrationTests(unittest.TestCase):
     def test_stable_diffusion_text2img_pipeline_v_pred_default(self):
         # invalid expected_image
         # expected_image = load_numpy(
-        #     'https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-text2img/astronaut_riding_a_horse_v_pred.npy'
+        #     'https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-text2img/astronaut_riding_a_horse_v_pred.npy'
         #     )
         pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2")
         pipe.enable_attention_slicing()
@@ -414,25 +335,36 @@ class StableDiffusion2VPredictionPipelineIntegrationTests(unittest.TestCase):
         image = output.images[0]
         assert image.shape == (768, 768, 3)
         expected_image = np.array(
-            [
-                0.26713198,
-                0.2630347,
-                0.25486767,
-                0.23375505,
-                0.24399692,
-                0.22363415,
-                0.24688962,
-                0.21346492,
-                0.23014635,
-            ]
+            [0.26713198, 0.2630347, 0.25486767, 0.23375505, 0.24399692, 0.22363415, 0.24688962, 0.21346492, 0.23014635]
         )
         image = image[-3:, -3:, -1].flatten()
         assert np.abs(expected_image - image).max() < 0.075
 
+    def test_stable_diffusion_text2img_pipeline_unflawed(self):
+        # expected_image = load_numpy(
+        #     "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-text2img/lion_galaxy.npy"
+        # )
+        pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1")
+        pipe.scheduler = DDIMScheduler.from_config(
+            pipe.scheduler.config, timestep_spacing="trailing", rescale_betas_zero_snr=True
+        )
+        pipe.enable_attention_slicing()
+        pipe.set_progress_bar_config(disable=None)
+        prompt = "A lion in galaxies, spirals, nebulae, stars, smoke, iridescent, intricate detail, octane render, 8k"
+        generator = paddle.Generator().manual_seed(seed=0)
+        output = pipe(prompt=prompt, guidance_scale=7.5, guidance_rescale=0.7, generator=generator, output_type="np")
+        image = output.images[0]
+        assert image.shape == (768, 768, 3)
+        expected_image = np.array(
+            [0.33854762, 0.2892024, 0.24805409, 0.3537666, 0.3158779, 0.26081967, 0.3637334, 0.3303557, 0.3098219]
+        )
+        image = image[-3:, -3:, -1].flatten()
+        assert np.abs(expected_image - image).max() < 0.001
+
     def test_stable_diffusion_text2img_pipeline_v_pred_fp16(self):
         # invalid expected_image
         # expected_image = load_numpy(
-        #     'https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-text2img/astronaut_riding_a_horse_v_pred_fp16.npy'
+        #     'https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-text2img/astronaut_riding_a_horse_v_pred_fp16.npy'
         #     )
         pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2", paddle_dtype=paddle.float16)
         pipe.set_progress_bar_config(disable=None)
@@ -442,17 +374,7 @@ class StableDiffusion2VPredictionPipelineIntegrationTests(unittest.TestCase):
         image = output.images[0]
         assert image.shape == (768, 768, 3)
         expected_image = np.array(
-            [
-                0.26220703,
-                0.25195312,
-                0.2434082,
-                0.22753906,
-                0.23632812,
-                0.21777344,
-                0.23901367,
-                0.20629883,
-                0.22192383,
-            ]
+            [0.26220703, 0.25195312, 0.2434082, 0.22753906, 0.23632812, 0.21777344, 0.23901367, 0.20629883, 0.22192383]
         )
         image = image[-3:, -3:, -1].flatten()
         assert np.abs(expected_image - image).max() < 0.75
@@ -468,36 +390,14 @@ class StableDiffusion2VPredictionPipelineIntegrationTests(unittest.TestCase):
                 latents = latents.detach().cpu().numpy()
                 assert latents.shape == (1, 4, 96, 96)
                 latents_slice = latents[0, -3:, -3:, -1]
-                expected_slice = np.array(
-                    [
-                        -0.2542,
-                        -1.276,
-                        0.426,
-                        -0.956,
-                        -1.173,
-                        -0.5884,
-                        2.416,
-                        0.1553,
-                        -1.21,
-                    ]
-                )
+                expected_slice = np.array([-0.2542, -1.276, 0.426, -0.956, -1.173, -0.5884, 2.416, 0.1553, -1.21])
                 assert np.abs(latents_slice.flatten() - expected_slice).max() < 0.05
             elif step == 19:
                 latents = latents.detach().cpu().numpy()
                 assert latents.shape == (1, 4, 96, 96)
                 latents_slice = latents[0, -3:, -3:, -1]
                 expected_slice = np.array(
-                    [
-                        -0.959,
-                        -0.964,
-                        -0.614,
-                        0.0977,
-                        -0.6953,
-                        -0.2343,
-                        1.551,
-                        -0.03357,
-                        -0.11395,
-                    ]
+                    [-0.959, -0.964, -0.614, 0.0977, -0.6953, -0.2343, 1.551, -0.03357, -0.11395]
                 )
                 assert np.abs(latents_slice.flatten() - expected_slice).max() < 0.05
 

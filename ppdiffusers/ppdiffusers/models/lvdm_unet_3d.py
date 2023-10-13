@@ -92,15 +92,7 @@ class Upsample(paddle.nn.Layer):
                  upsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(
-        self,
-        channels,
-        use_conv,
-        dims=2,
-        out_channels=None,
-        kernel_size_t=3,
-        padding_t=1,
-    ):
+    def __init__(self, channels, use_conv, dims=2, out_channels=None, kernel_size_t=3, padding_t=1):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -108,21 +100,14 @@ class Upsample(paddle.nn.Layer):
         self.dims = dims
         if use_conv:
             self.conv = conv_nd(
-                dims,
-                self.channels,
-                self.out_channels,
-                (kernel_size_t, 3, 3),
-                padding=(padding_t, 1, 1),
+                dims, self.channels, self.out_channels, (kernel_size_t, 3, 3), padding=(padding_t, 1, 1)
             )
 
     def forward(self, x):
         assert x.shape[1] == self.channels
         if self.dims == 3:
             x = paddle.nn.functional.interpolate(
-                x=x,
-                size=(x.shape[2], x.shape[3] * 2, x.shape[4] * 2),
-                mode="nearest",
-                data_format="NCDHW",
+                x=x, size=(x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest", data_format="NCDHW"
             )
         else:
             x = paddle.nn.functional.interpolate(x=x, scale_factor=2, mode="nearest")
@@ -140,15 +125,7 @@ class Downsample(paddle.nn.Layer):
                  downsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(
-        self,
-        channels,
-        use_conv,
-        dims=2,
-        out_channels=None,
-        kernel_size_t=3,
-        padding_t=1,
-    ):
+    def __init__(self, channels, use_conv, dims=2, out_channels=None, kernel_size_t=3, padding_t=1):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -157,12 +134,7 @@ class Downsample(paddle.nn.Layer):
         stride = 2 if dims != 3 else (1, 2, 2)
         if use_conv:
             self.op = conv_nd(
-                dims,
-                self.channels,
-                self.out_channels,
-                (kernel_size_t, 3, 3),
-                stride=stride,
-                padding=(padding_t, 1, 1),
+                dims, self.channels, self.out_channels, (kernel_size_t, 3, 3), stride=stride, padding=(padding_t, 1, 1)
             )
         else:
             assert self.channels == self.out_channels
@@ -218,13 +190,7 @@ class ResBlock(TimestepBlock):
         self.in_layers = paddle.nn.Sequential(
             normalization(channels),
             nonlinearity(nonlinearity_type),
-            conv_nd(
-                dims,
-                channels,
-                self.out_channels,
-                (kernel_size_t, 3, 3),
-                padding=(padding_t, 1, 1),
-            ),
+            conv_nd(dims, channels, self.out_channels, (kernel_size_t, 3, 3), padding=(padding_t, 1, 1)),
         )
         self.updown = up or down
         if up:
@@ -237,34 +203,21 @@ class ResBlock(TimestepBlock):
             self.h_upd = self.x_upd = paddle.nn.Identity()
         self.emb_layers = paddle.nn.Sequential(
             nonlinearity(nonlinearity_type),
-            linear(
-                emb_channels,
-                2 * self.out_channels if use_scale_shift_norm else self.out_channels,
-            ),
+            linear(emb_channels, 2 * self.out_channels if use_scale_shift_norm else self.out_channels),
         )
         self.out_layers = paddle.nn.Sequential(
             normalization(self.out_channels),
             nonlinearity(nonlinearity_type),
             paddle.nn.Dropout(p=dropout),
             zero_module(
-                conv_nd(
-                    dims,
-                    self.out_channels,
-                    self.out_channels,
-                    (kernel_size_t, 3, 3),
-                    padding=(padding_t, 1, 1),
-                )
+                conv_nd(dims, self.out_channels, self.out_channels, (kernel_size_t, 3, 3), padding=(padding_t, 1, 1))
             ),
         )
         if self.out_channels == channels:
             self.skip_connection = paddle.nn.Identity()
         elif use_conv:
             self.skip_connection = conv_nd(
-                dims,
-                channels,
-                self.out_channels,
-                (kernel_size_t, 3, 3),
-                padding=(padding_t, 1, 1),
+                dims, channels, self.out_channels, (kernel_size_t, 3, 3), padding=(padding_t, 1, 1)
             )
         else:
             self.skip_connection = conv_nd(dims, channels, self.out_channels, 1)
@@ -437,13 +390,7 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
         self.input_blocks = paddle.nn.LayerList(
             sublayers=[
                 TimestepEmbedSequential(
-                    conv_nd(
-                        dims,
-                        in_channels,
-                        model_channels,
-                        (kernel_size_t, 3, 3),
-                        padding=(padding_t, 1, 1),
-                    )
+                    conv_nd(dims, in_channels, model_channels, (kernel_size_t, 3, 3), padding=(padding_t, 1, 1))
                 )
             ]
         )
@@ -669,15 +616,7 @@ class LVDMUNet3DModel(ModelMixin, ConfigMixin):
         self.out = paddle.nn.Sequential(
             normalization(ch),
             nonlinearity(nonlinearity_type),
-            zero_module(
-                conv_nd(
-                    dims,
-                    model_channels,
-                    out_channels,
-                    (kernel_size_t, 3, 3),
-                    padding=(padding_t, 1, 1),
-                )
-            ),
+            zero_module(conv_nd(dims, model_channels, out_channels, (kernel_size_t, 3, 3), padding=(padding_t, 1, 1))),
         )
 
     def convert_to_fp16(self):

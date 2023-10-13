@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-nohup sh train.sh 1> train.log 2>&1 &
+nohup sh train.sh 1> train2.log 2>&1 &

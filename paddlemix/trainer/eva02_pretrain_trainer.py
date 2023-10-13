@@ -17,11 +17,11 @@ import os
 import paddle
 from paddle.io import DataLoader
 from paddlenlp.trainer.trainer import Trainer
+from paddlenlp.transformers.model_utils import unwrap_model
 from paddlenlp.utils.log import logger
 from tensorboardX import SummaryWriter
 
 from paddlemix.models.eva02.optim_factory import get_grad_norm_and_clip
-from ppdiffusers.training_utils import unwrap_model
 
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
 TRAINING_ARGS_NAME = "training_args.bin"
@@ -30,7 +30,7 @@ TRAINING_ARGS_NAME = "training_args.bin"
 class EVA02PretrainTrainer(Trainer):
     def __init__(self, **kwargs):
         """
-        Implementation of an `Trainer` suitable for EVA-CLIP
+        Implementation of an `Trainer` suitable for EVA-02 Pretrain
         1、selfdefine optimizer for sharding which can't create by passing by args
         2、support for accum_freq
 
@@ -44,7 +44,7 @@ class EVA02PretrainTrainer(Trainer):
         self.beit_like = True
         if self.args.accum_freq > 1:
             self.accum_samples = []
-            self.accum_images = []
+            self.accum_image = []
             self.accum_bool_masked_pos = []
             self.accu_step = 0
 
@@ -86,9 +86,6 @@ class EVA02PretrainTrainer(Trainer):
                         param.optimize_attr["learning_rate"] = self.lr_schedule_values[it] * param_group["lr_scale"]
                 if self.wd_schedule_values is not None and param_group["weight_decay"] > 0:
                     param_group["weight_decay"] = self.wd_schedule_values[it]
-
-        samples, images, bool_masked_pos = inputs[0]
-        inputs = {"samples": samples, "images": images, "bool_masked_pos": bool_masked_pos}
 
         if self.args.pipeline_parallel_degree > 1:
             return self.training_pipeline_step(model, inputs)
@@ -133,7 +130,7 @@ class EVA02PretrainTrainer(Trainer):
 
     def training_step_accumfreq(self, model, inputs) -> paddle.Tensor:
         self.accum_samples.append(inputs["samples"])
-        self.accum_images.append(inputs["images"])
+        self.accum_image.append(inputs["image"])
         self.accum_bool_masked_pos.append(inputs["bool_masked_pos"])
         self.accu_step += 1
 
@@ -150,7 +147,7 @@ class EVA02PretrainTrainer(Trainer):
             with self.autocast_smart_context_manager():
                 inputs_j = {
                     "samples": self.accum_samples[j],
-                    "images": self.accum_images[j],
+                    "image": self.accum_image[j],
                     "bool_masked_pos": self.accum_bool_masked_pos[j],
                 }
                 loss = self.compute_loss(model, inputs_j)
@@ -162,7 +159,7 @@ class EVA02PretrainTrainer(Trainer):
 
         # clear for next accu batches
         self.accum_samples.clear()
-        self.accum_images.clear()
+        self.accum_image.clear()
         self.accum_bool_masked_pos.clear()
         self.accu_step = 0
 
@@ -206,6 +203,7 @@ class EVA02PretrainTrainer(Trainer):
             self.train_dataset,
             batch_sampler=sampler_train,
             num_workers=self.args.dataloader_num_workers,
+            collate_fn=self.data_collator,
             use_shared_memory=True,
         )
 
@@ -223,7 +221,7 @@ class EVA02PretrainTrainer(Trainer):
             unwraped_model = unwrap_model(self.model)
             logger.info(f"Saving eva02_vit checkpoint to {output_dir}/eva02_vit")
             unwraped_model.student.save_pretrained(
-                output_dir=os.path.join(output_dir, "eva02_vit"),
+                os.path.join(output_dir, "eva02_vit"),
                 merge_tensor_parallel=merge_tensor_parallel,
             )
         else:

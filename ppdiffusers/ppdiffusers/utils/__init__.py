@@ -71,6 +71,7 @@ from .import_utils import (
     is_fastdeploy_available,
     is_ftfy_available,
     is_inflect_available,
+    is_invisible_watermark_available,
     is_k_diffusion_available,
     is_k_diffusion_version,
     is_librosa_available,
@@ -80,6 +81,7 @@ from .import_utils import (
     is_paddle_version,
     is_paddlenlp_available,
     is_paddlenlp_version,
+    is_paddlesde_available,
     is_ppxformers_available,
     is_safetensors_available,
     is_scipy_available,
@@ -96,10 +98,15 @@ from .import_utils import (
 from .load_utils import is_torch_file, safetensors_load, smart_load, torch_load
 from .logging import get_logger
 from .outputs import BaseOutput
-from .paddle_utils import rand_tensor, randint_tensor, randn_tensor
 from .pil_utils import PIL_INTERPOLATION, numpy_to_pil, pd_to_pil, pt_to_pil
 
 if is_paddle_available():
+    from .paddle_utils import (
+        maybe_allow_in_graph,
+        rand_tensor,
+        randint_tensor,
+        randn_tensor,
+    )
     from .testing_utils import (
         floats_tensor,
         image_grid,
@@ -127,7 +134,7 @@ def apply_forward_hook(method):
     return method
 
 
-from .testing_utils import export_to_video
+from .testing_utils import export_to_gif, export_to_obj, export_to_ply, export_to_video
 
 
 def check_min_version(min_version):

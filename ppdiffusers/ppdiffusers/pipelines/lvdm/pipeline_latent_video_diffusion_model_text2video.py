@@ -34,10 +34,11 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> import paddle
-        >>> from ppdiffusers import LVDMTextToVideoPipeline
-         >>>  seed = 2013
-         >>>  generator = paddle.Generator().manual_seed(seed)
+         >>> import paddle
+         >>> from ppdiffusers import LVDMTextToVideoPipeline
+         >>> pipe = LVDMTextToVideoPipeline.from_pretrained("westfish/lvdm_text2video_orig_webvid_2m")
+         >>> seed = 2013
+         >>> generator = paddle.Generator().manual_seed(seed)
          >>> samples = pipe(
                     prompt="cutting in kitchen",
                     num_frames=16,
@@ -45,7 +46,7 @@ EXAMPLE_DOC_STRING = """
                     width=256,
                     num_inference_steps=50,
                     generator=generator,
-                    guidance_scale=15,
+                    guidance_scale=15
                     eta=1,
                     save_dir='.',
                     save_name='ddim_lvdm_text_to_video_ucf',
@@ -211,7 +212,7 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         decode_single_video_allframes=False,
         max_z_t=None,
         overlapped_length=0,
-        **kwargs,
+        **kwargs
     ):
         b, _, t, _, _ = z.shape
         if kwargs["encoder_type"] == "2d" and z.dim() == 5:
@@ -468,15 +469,7 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                 )
 
     def prepare_latents(
-        self,
-        batch_size,
-        num_channels_latents,
-        num_frames,
-        height,
-        width,
-        dtype,
-        generator,
-        latents=None,
+        self, batch_size, num_channels_latents, num_frames, height, width, dtype, generator, latents=None
     ):
         shape = [batch_size, num_channels_latents, num_frames, height // 8, width // 8]
         if isinstance(generator, list) and len(generator) != batch_size:
@@ -599,13 +592,7 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
 
         # 1. Check inputs. Raise error if not correct
         self.check_inputs(
-            prompt,
-            height,
-            width,
-            callback_steps,
-            negative_prompt,
-            prompt_embeds,
-            negative_prompt_embeds,
+            prompt, height, width, callback_steps, negative_prompt, prompt_embeds, negative_prompt_embeds
         )
 
         # 2. Define call parameters

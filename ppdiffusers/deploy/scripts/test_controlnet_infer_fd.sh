@@ -14,6 +14,7 @@
 
 cd ../controlnet
 # export LD_LIBRARY_PATH=/usr/local/cuda-11.7/targets/x86_64-linux/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+export USE_PPXFORMERS=False
 
 # test control_sd15_canny
 python export_model.py \

@@ -19,7 +19,13 @@ import numpy as np
 import paddle
 
 from ppdiffusers import ScoreSdeVePipeline, ScoreSdeVeScheduler, UNet2DModel
-from ppdiffusers.utils.testing_utils import require_paddle, slow
+from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
+    require_paddle,
+    slow,
+)
+
+enable_full_determinism()
 
 
 class ScoreSdeVeipelineFastTests(unittest.TestCase):
@@ -45,12 +51,9 @@ class ScoreSdeVeipelineFastTests(unittest.TestCase):
         generator = paddle.Generator().manual_seed(0)
         image = sde_ve(num_inference_steps=2, output_type="numpy", generator=generator).images
         generator = paddle.Generator().manual_seed(0)
-        image_from_tuple = sde_ve(
-            num_inference_steps=2,
-            output_type="numpy",
-            generator=generator,
-            return_dict=False,
-        )[0]
+        image_from_tuple = sde_ve(num_inference_steps=2, output_type="numpy", generator=generator, return_dict=False)[
+            0
+        ]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)

@@ -47,7 +47,11 @@ class EulerDiscreteSchedulerOutput(BaseOutput):
 
 
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.betas_for_alpha_bar
-def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
+def betas_for_alpha_bar(
+    num_diffusion_timesteps,
+    max_beta=0.999,
+    alpha_transform_type="cosine",
+):
     """
     Create a beta schedule that discretizes the given alpha_t_bar function, which defines the cumulative product of
     (1-beta) over time from t = [0,1].
@@ -60,19 +64,30 @@ def betas_for_alpha_bar(num_diffusion_timesteps, max_beta=0.999):
         num_diffusion_timesteps (`int`): the number of betas to produce.
         max_beta (`float`): the maximum beta to use; use values lower than 1 to
                      prevent singularities.
+        alpha_transform_type (`str`, *optional*, default to `cosine`): the type of noise schedule for alpha_bar.
+                     Choose from `cosine` or `exp`
 
     Returns:
         betas (`np.ndarray`): the betas used by the scheduler to step the model outputs
     """
+    if alpha_transform_type == "cosine":
 
-    def alpha_bar(time_step):
-        return math.cos((time_step + 0.008) / 1.008 * math.pi / 2) ** 2
+        def alpha_bar_fn(t):
+            return math.cos((t + 0.008) / 1.008 * math.pi / 2) ** 2
+
+    elif alpha_transform_type == "exp":
+
+        def alpha_bar_fn(t):
+            return math.exp(t * -12.0)
+
+    else:
+        raise ValueError(f"Unsupported alpha_tranform_type: {alpha_transform_type}")
 
     betas = []
     for i in range(num_diffusion_timesteps):
         t1 = i / num_diffusion_timesteps
         t2 = (i + 1) / num_diffusion_timesteps
-        betas.append(min(1 - alpha_bar(t2) / alpha_bar(t1), max_beta))
+        betas.append(min(1 - alpha_bar_fn(t2) / alpha_bar_fn(t1), max_beta))
     return paddle.to_tensor(betas, dtype=paddle.float32)
 
 
@@ -107,6 +122,13 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
              This parameter controls whether to use Karras sigmas (Karras et al. (2022) scheme) for step sizes in the
              noise schedule during the sampling process. If True, the sigmas will be determined according to a sequence
              of noise levels {σi} as defined in Equation (5) of the paper https://arxiv.org/pdf/2206.00364.pdf.
+        timestep_spacing (`str`, default `"linspace"`):
+            The way the timesteps should be scaled. Refer to Table 2. of [Common Diffusion Noise Schedules and Sample
+            Steps are Flawed](https://arxiv.org/abs/2305.08891) for more information.
+        steps_offset (`int`, default `0`):
+            an offset added to the inference steps. You can use a combination of `offset=1` and
+            `set_alpha_to_one=False`, to make the last step use step 0 for the previous alpha product, as done in
+            stable diffusion.
     """
 
     _compatibles = [e.name for e in KarrasDiffusionSchedulers]
@@ -123,6 +145,8 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         prediction_type: str = "epsilon",
         interpolation_type: str = "linear",
         use_karras_sigmas: Optional[bool] = False,
+        timestep_spacing: str = "linspace",
+        steps_offset: int = 0,
     ):
         if trained_betas is not None:
             self.betas = paddle.to_tensor(trained_betas, dtype=paddle.float32)
@@ -131,13 +155,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         elif beta_schedule == "scaled_linear":
             # this schedule is very specific to the latent diffusion model.
             self.betas = (
-                paddle.linspace(
-                    beta_start**0.5,
-                    beta_end**0.5,
-                    num_train_timesteps,
-                    dtype=paddle.float32,
-                )
-                ** 2
+                paddle.linspace(beta_start**0.5, beta_end**0.5, num_train_timesteps, dtype=paddle.float32) ** 2
             )
         elif beta_schedule == "squaredcos_cap_v2":
             # Glide cosine schedule
@@ -152,15 +170,20 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         sigmas = np.concatenate([sigmas[::-1], [0.0]]).astype(np.float32)
         self.sigmas = paddle.to_tensor(sigmas)
 
-        # standard deviation of the initial noise distribution
-        self.init_noise_sigma = self.sigmas.max()
-
         # setable values
         self.num_inference_steps = None
         timesteps = np.linspace(0, num_train_timesteps - 1, num_train_timesteps, dtype=float)[::-1].copy()
         self.timesteps = paddle.to_tensor(timesteps, dtype=paddle.float32)
         self.is_scale_input_called = False
         self.use_karras_sigmas = use_karras_sigmas
+
+    @property
+    def init_noise_sigma(self):
+        # standard deviation of the initial noise distribution
+        if self.config.timestep_spacing in ["linspace", "trailing"]:
+            return self.sigmas.max()
+
+        return (self.sigmas.max() ** 2 + 1) ** 0.5
 
     def scale_model_input(self, sample: paddle.Tensor, timestep: Union[float, paddle.Tensor]) -> paddle.Tensor:
         """
@@ -191,7 +214,28 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         """
         self.num_inference_steps = num_inference_steps
 
-        timesteps = np.linspace(0, self.config.num_train_timesteps - 1, num_inference_steps, dtype=float)[::-1].copy()
+        # "linspace", "leading", "trailing" corresponds to annotation of Table 2. of https://arxiv.org/abs/2305.08891
+        if self.config.timestep_spacing == "linspace":
+            timesteps = np.linspace(0, self.config.num_train_timesteps - 1, num_inference_steps, dtype=float)[
+                ::-1
+            ].copy()
+        elif self.config.timestep_spacing == "leading":
+            step_ratio = self.config.num_train_timesteps // self.num_inference_steps
+            # creates integer timesteps by multiplying by ratio
+            # casting to int to avoid issues when num_inference_step is power of 3
+            timesteps = (np.arange(0, num_inference_steps) * step_ratio).round()[::-1].copy().astype(float)
+            timesteps += self.config.steps_offset
+        elif self.config.timestep_spacing == "trailing":
+            step_ratio = self.config.num_train_timesteps / self.num_inference_steps
+            # creates integer timesteps by multiplying by ratio
+            # casting to int to avoid issues when num_inference_step is power of 3
+            timesteps = (np.arange(self.config.num_train_timesteps, 0, -step_ratio)).round().copy().astype(float)
+            timesteps -= 1
+        else:
+            raise ValueError(
+                f"{self.config.timestep_spacing} is not supported. Please make sure to choose one of 'linspace', 'leading' or 'trailing'."
+            )
+
         sigmas = np.array(((1 - self.alphas_cumprod) / self.alphas_cumprod) ** 0.5)
         log_sigmas = np.log(sigmas)
 
@@ -236,11 +280,12 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         t = t.reshape(sigma.shape)
         return t
 
+    # Copied from https://github.com/crowsonkb/k-diffusion/blob/686dbad0f39640ea25c8a8c6a6e56bb40eacefa2/k_diffusion/sampling.py#L17
     def _convert_to_karras(self, in_sigmas: paddle.Tensor, num_inference_steps) -> paddle.Tensor:
         """Constructs the noise schedule of Karras et al. (2022)."""
 
-        sigma_min = in_sigmas[-1].item()
-        sigma_max = in_sigmas[0].item()
+        sigma_min: float = in_sigmas[-1].item()
+        sigma_max: float = in_sigmas[0].item()
 
         rho = 7.0  # 7.0 is the value used in the paper
         ramp = np.linspace(0, 1, num_inference_steps)
@@ -258,7 +303,7 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
         s_tmin: float = 0.0,
         s_tmax: float = float("inf"),
         s_noise: float = 1.0,
-        generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
+        generator: Optional[paddle.Generator] = None,
         return_dict: bool = True,
     ) -> Union[EulerDiscreteSchedulerOutput, Tuple]:
         """
@@ -283,6 +328,14 @@ class EulerDiscreteScheduler(SchedulerMixin, ConfigMixin):
             `tuple`. When returning a tuple, the first element is the sample tensor.
 
         """
+        if isinstance(timestep, int) or (isinstance(timestep, paddle.Tensor) and "int" in str(timestep.dtype)):
+            raise ValueError(
+                (
+                    "Passing integer indices (e.g. from `enumerate(timesteps)`) as timesteps to"
+                    " `EulerDiscreteScheduler.step()` is not supported. Make sure to pass"
+                    " one of the `scheduler.timesteps` as a timestep."
+                ),
+            )
 
         if not self.is_scale_input_called:
             logger.warning(

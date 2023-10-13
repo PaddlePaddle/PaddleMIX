@@ -101,7 +101,7 @@ class AltDiffusionImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
     In addition the pipeline inherits the following loading methods:
         - *Textual-Inversion*: [`loaders.TextualInversionLoaderMixin.load_textual_inversion`]
         - *LoRA*: [`loaders.LoraLoaderMixin.load_lora_weights`]
-        - *Ckpt*: [`loaders.FromCkptMixin.from_ckpt`]
+        - *Ckpt*: [`loaders.FromSingleFileMixin.from_ckpt`]
     as well as the following saving methods:
         - *LoRA*: [`loaders.LoraLoaderMixin.save_lora_weights`]
 
@@ -171,7 +171,7 @@ class AltDiffusionImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
             logger.warning(
                 f"You have disabled the safety checker for {self.__class__} by passing `safety_checker=None`. Ensure"
                 " that you abide to the conditions of the Alt Diffusion license and do not expose unfiltered"
-                " results in services or applications open to the public. PaddleNLP team, diffusers team and Hugging Face"
+                " results in services or applications open to the public. PaddleNLP team, ppdiffusers team and Hugging Face"
                 " strongly recommend to keep the safety filter enabled in all public facing circumstances, disabling"
                 " it only for use-cases that involve analyzing network behavior or auditing its results. For more"
                 " information, please have a look at https://github.com/huggingface/diffusers/pull/254 ."
@@ -372,8 +372,7 @@ class AltDiffusionImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
                 feature_extractor_input = self.image_processor.numpy_to_pil(image)
             safety_checker_input = self.feature_extractor(feature_extractor_input, return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image,
-                clip_input=paddle.cast(safety_checker_input.pixel_values, dtype),
+                images=image, clip_input=paddle.cast(safety_checker_input.pixel_values, dtype)
             )
         return image, has_nsfw_concept
 
@@ -401,13 +400,7 @@ class AltDiffusionImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
         return extra_step_kwargs
 
     def check_inputs(
-        self,
-        prompt,
-        strength,
-        callback_steps,
-        negative_prompt=None,
-        prompt_embeds=None,
-        negative_prompt_embeds=None,
+        self, prompt, strength, callback_steps, negative_prompt=None, prompt_embeds=None, negative_prompt_embeds=None
     ):
         if strength < 0 or strength > 1:
             raise ValueError(f"The value of strength should in [0.0, 1.0] but is {strength}")
@@ -488,12 +481,7 @@ class AltDiffusionImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
                 " that this behavior is deprecated and will be removed in a version 1.0.0. Please make sure to update"
                 " your script to pass as many initial images as text prompts to suppress this warning."
             )
-            deprecate(
-                "len(prompt) != len(image)",
-                "1.0.0",
-                deprecation_message,
-                standard_warn=False,
-            )
+            deprecate("len(prompt) != len(image)", "1.0.0", deprecation_message, standard_warn=False)
             additional_image_per_prompt = batch_size // init_latents.shape[0]
             init_latents = paddle.concat([init_latents] * additional_image_per_prompt, axis=0)
         elif batch_size > init_latents.shape[0] and batch_size % init_latents.shape[0] != 0:
@@ -590,8 +578,7 @@ class AltDiffusionImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
                 called at every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [diffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                `self.processor` in ppdiffusers.cross_attention.
         Examples:
 
         Returns:
@@ -603,14 +590,7 @@ class AltDiffusionImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
         """
 
         # 1. Check inputs. Raise error if not correct
-        self.check_inputs(
-            prompt,
-            strength,
-            callback_steps,
-            negative_prompt,
-            prompt_embeds,
-            negative_prompt_embeds,
-        )
+        self.check_inputs(prompt, strength, callback_steps, negative_prompt, prompt_embeds, negative_prompt_embeds)
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -644,12 +624,7 @@ class AltDiffusionImg2ImgPipeline(DiffusionPipeline, TextualInversionLoaderMixin
 
         # 6. Prepare latent variables
         latents = self.prepare_latents(
-            image,
-            latent_timestep,
-            batch_size,
-            num_images_per_prompt,
-            prompt_embeds.dtype,
-            generator,
+            image, latent_timestep, batch_size, num_images_per_prompt, prompt_embeds.dtype, generator
         )
 
         # 7. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline

@@ -21,13 +21,12 @@ from ppdiffusers.utils.download_utils import ppdiffusers_url_download
 
 # Download MIDI from: wget https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/beethoven_hammerklavier_2.mid
 mid_file_path = ppdiffusers_url_download(
-    "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/beethoven_hammerklavier_2.mid",
-    cache_dir=".",
+    "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/beethoven_hammerklavier_2.mid", cache_dir="."
 )
 pipe = SpectrogramDiffusionPipeline.from_pretrained("google/music-spectrogram-diffusion", paddle_dtype=paddle.float16)
 processor = MidiProcessor()
-output = pipe(processor(mid_file_path))
-audio = output.audios[0]
+output = pipe(processor(mid_file_path), num_inference_steps=150)
+audio = output.audios[0].numpy()
 
 output_path = "unconditional_audio_generation-spectrogram_diffusion-result-beethoven_hammerklavier_2.wav"
 # save the audio sample as a .wav file

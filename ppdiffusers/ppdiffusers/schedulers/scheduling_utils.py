@@ -24,12 +24,11 @@ from ..utils import BaseOutput
 
 SCHEDULER_CONFIG_NAME = "scheduler_config.json"
 
+
 # NOTE: We make this type an enum because it simplifies usage in docs and prevents
 # circular imports when used for `_compatibles` within the schedulers module.
 # When it's used as a type in pipelines, it really is a Union because the actual
 # scheduler instance is passed in.
-
-
 class KarrasDiffusionSchedulers(Enum):
     DDIMScheduler = 1
     DDPMScheduler = 2
@@ -44,6 +43,7 @@ class KarrasDiffusionSchedulers(Enum):
     KDPM2AncestralDiscreteScheduler = 11
     DEISMultistepScheduler = 12
     UniPCMultistepScheduler = 13
+    DPMSolverSDEScheduler = 14
 
 
 @dataclass
@@ -147,12 +147,7 @@ class SchedulerMixin:
         )
         return cls.from_config(config, return_unused_kwargs=return_unused_kwargs, **kwargs)
 
-    def save_pretrained(
-        self,
-        save_directory: Union[str, os.PathLike],
-        push_to_hub: bool = False,
-        **kwargs,
-    ):
+    def save_pretrained(self, save_directory: Union[str, os.PathLike], push_to_hub: bool = False, **kwargs):
         """
         Save a scheduler configuration object to the directory `save_directory`, so that it can be re-loaded using the
         [`~SchedulerMixin.from_pretrained`] class method.

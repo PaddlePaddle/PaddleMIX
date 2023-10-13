@@ -471,9 +471,7 @@ class FastDeployDiffusionPipelineMixin:
 
         self.image_processor = VaeImageProcessor(vae_scale_factor=vae_scale_factor, do_convert_rgb=True)
         self.control_image_processor = VaeImageProcessor(
-            vae_scale_factor=self.vae_scale_factor,
-            do_convert_rgb=True,
-            do_normalize=False,
+            vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
         )
         self.dtype = dtype
         self.supported_scheduler = [
@@ -517,12 +515,11 @@ class FastDeployDiffusionPipelineMixin:
 
     @property
     def text_encoder_hidden_states_dim(self):
-        if self.text_encoder is None:
+        if not hasattr(self, "text_encoder") or self.text_encoder is None:
             return 768
-        dim = self.text_encoder.model.get_output_info(0).shape[2]
-        return 768 if dim == -1 else dim
+        return self.text_encoder.model.get_output_info(0).shape[2]
 
-    def change_scheduler(self, scheduler_type="ddim", inplace=True):
+    def change_scheduler(self, scheduler_type="ddim"):
         scheduler_type = scheduler_type.lower()
         if scheduler_type == "pndm":
             scheduler = PNDMScheduler.from_config(self.orginal_scheduler_config, skip_prk_steps=True)
@@ -567,9 +564,7 @@ class FastDeployDiffusionPipelineMixin:
             raise ValueError(
                 f"Scheduler of type {scheduler_type} doesn't exist! Please choose in {self.supported_scheduler}!"
             )
-        if inplace:
-            self.scheduler = scheduler
-        return scheduler
+        self.scheduler = scheduler
 
     def get_timesteps(self, num_inference_steps, strength=1.0):
         if strength >= 1:
@@ -851,7 +846,7 @@ class FastDeployDiffusionPipelineMixin:
                 prompt_embeds=prompt_embeds,
                 negative_prompt_embeds=negative_prompt_embeds,
                 max_embeddings_multiples=max_embeddings_multiples,
-                infer_op="raw",  # NOTE: we can't use zero copy!
+                infer_op=infer_op,
                 **kwargs,
             )
         elif parse_prompt_type == "raw":
@@ -929,7 +924,7 @@ class FastDeployDiffusionPipelineMixin:
                 prompt=prompt,
                 uncond_prompt=uncond_tokens,
                 max_embeddings_multiples=max_embeddings_multiples,
-                infer_op=infer_op,
+                infer_op="raw",  # NOTE: we can't use zero copy!
                 **kwargs,
             )
 
@@ -1143,13 +1138,7 @@ class FastDeployRuntimeModel:
         else:
             return False
 
-    def zero_copy_infer(
-        self,
-        prebinded_inputs: dict,
-        prebinded_outputs: dict,
-        share_with_raw_ptr=True,
-        **kwargs,
-    ):
+    def zero_copy_infer(self, prebinded_inputs: dict, prebinded_outputs: dict, share_with_raw_ptr=True, **kwargs):
         """
         Execute inference without copying data from cpu to gpu.
 
@@ -1179,8 +1168,6 @@ class FastDeployRuntimeModel:
 
         inputs = {}
         for k, v in kwargs.items():
-            if v is None:
-                continue
             if k == "timestep":
                 v = v.astype("float32")
             inputs[k] = v
@@ -1247,7 +1234,7 @@ class FastDeployRuntimeModel:
         save_directory: Union[str, Path],
         model_file_name: Optional[str] = None,
         params_file_name: Optional[str] = None,
-        **kwargs,
+        **kwargs
     ):
         """
         Save a model and its configuration file to a directory, so that it can be re-loaded using the

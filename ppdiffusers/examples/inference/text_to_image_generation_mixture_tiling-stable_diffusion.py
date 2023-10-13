@@ -11,22 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import os
 
 from ppdiffusers import DiffusionPipeline, LMSDiscreteScheduler
 
 # Creater scheduler and model (similar to StableDiffusionPipeline)
 scheduler = LMSDiscreteScheduler(
-    beta_start=0.00085,
-    beta_end=0.012,
-    beta_schedule="scaled_linear",
-    num_train_timesteps=1000,
+    beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", num_train_timesteps=1000
 )
 pipeline = DiffusionPipeline.from_pretrained(
     "CompVis/stable-diffusion-v1-4",
     scheduler=scheduler,
-    custom_pipeline="mixture_tiling.py",
+    custom_pipeline=os.path.abspath(os.path.join(os.getcwd(), "..", "community/mixture_tiling.py")),
 )
-pipeline
 
 # Mixture of Diffusers generation
 image = pipeline(
@@ -45,4 +42,4 @@ image = pipeline(
     seed=7178915308,
     num_inference_steps=50,
 )["images"][0]
-image.save("mixture_tiling" + ".png")
+image.save("text_to_image_generation_mixture_tiling-stable_diffusion-mixture_tiling" + ".png")

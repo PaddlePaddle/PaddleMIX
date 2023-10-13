@@ -53,8 +53,7 @@ def compute_clip_score(model, processor, texts, images_path, batch_size=64):
     all_text_embeds = []
     all_image_embeds = []
     for text, image_path in tqdm(
-        zip(batchify(texts, batch_size), batchify(images_path, batch_size)),
-        total=math.ceil(len(texts) / batch_size),
+        zip(batchify(texts, batch_size), batchify(images_path, batch_size)), total=math.ceil(len(texts) / batch_size)
     ):
         assert len(text) == len(image_path)
         batch_inputs = processor(
@@ -81,12 +80,7 @@ def compute_clip_score(model, processor, texts, images_path, batch_size=64):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--image_path", default=None, nargs="+", type=str, help="image_path")
-    parser.add_argument(
-        "--output_file",
-        default="statistic_results.json",
-        type=str,
-        help="output file name",
-    )
+    parser.add_argument("--output_file", default="statistic_results.json", type=str, help="output file name")
     parser.add_argument(
         "--text_file_name",
         default="coco30k",
@@ -95,10 +89,7 @@ if __name__ == "__main__":
         help="text file.",
     )
     parser.add_argument(
-        "--clip_model_name_or_path",
-        default="openai/clip-vit-base-patch32",
-        type=str,
-        help="clip_model_name_or_path",
+        "--clip_model_name_or_path", default="openai/clip-vit-base-patch32", type=str, help="clip_model_name_or_path"
     )
     parser.add_argument("--fid_batch_size", default=32, type=int, help="fid_batch_size")
     parser.add_argument("--clip_batch_size", default=64, type=int, help="clip_batch_size")

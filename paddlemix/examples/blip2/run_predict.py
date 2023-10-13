@@ -14,28 +14,27 @@
 import os
 import random
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
 from dataclasses import dataclass, field
 
 import numpy as np
 import paddle
 import paddle.distributed as dist
+import requests
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
-
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../.."))
-
-import requests
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 from PIL import Image
 
-from paddlemix.examples.blip2.utils import create_tokenizer, load_model
 from paddlemix.models.blip2.modeling import Blip2ForConditionalGeneration
+from paddlemix.models.blip2.utils import create_tokenizer, load_model
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
     BlipImageProcessor,
     BlipTextProcessor,
 )
 from paddlemix.utils.log import logger
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 
 @dataclass
@@ -154,6 +153,10 @@ def main():
     model_args.mp_degree = training_args.tensor_parallel_degree
     model_args.gradient_checkpointing = training_args.gradient_checkpointing
     model = create_model(model_args)
+    decorated = paddle.amp.decorate(
+        models=[model.visual_encoder, model.language_model], optimizers=None, level="O2"
+    )
+    model.visual_encoder, model.language_model = decorated
     model.eval()
     if training_args.load_model_path is not None:
         load_model(training_args, model, ckpt_dir=os.path.join(training_args.load_model_path, "model_state.pdparams"))

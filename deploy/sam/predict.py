@@ -244,7 +244,7 @@ class ModelArguments:
     """
 
     model_name_or_path: str = field(
-        default="Sam/SamVitH",
+        default="Sam/SamVitH-1024",
         metadata={"help": "Path to pretrained model or model identifier"},
     )
     input_type: str = field(
@@ -302,7 +302,7 @@ def main(model_args, data_args):
     url = data_args.input_image
     # read image
     if os.path.isfile(url):
-        # read image
+
         image_pil = Image.open(data_args.input_image).convert("RGB")
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
@@ -318,7 +318,6 @@ def main(model_args, data_args):
 
     predictor = Predictor(model_args)
 
-    image_pil = Image.open(data_args.input_image).convert("RGB")
     seg_masks = predictor.run(image_pil, {"points": data_args.points_prompt, "boxs": data_args.box_prompt})
 
     if model_args.visual:

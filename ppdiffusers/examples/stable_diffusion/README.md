@@ -11,7 +11,9 @@
 pip install -r requirements.txt
 ```
 
-### 1.2 准备数据
+### 1.2 准备工作
+
+#### 1.2.1 准备数据
 
 #### laion400m_en.filelist文件内部格式如下所示
 自己准备好处理后的数据，并且将文件放置于`/data/laion400m/`目录，其中里面的每个part的前三列为`caption文本描述, 占位符空, base64编码的图片`，`caption, _, img_b64 = vec[:3]`。
@@ -39,6 +41,17 @@ Tips: 我们可以选择下载demo数据
 - 下载demo数据`wget https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/laion400m_demo_data.tar.gz`；
 - 解压demo数据`tar -zxvf laion400m_demo_data.tar.gz`
 
+#### 1.2.2 准备权重
+#### 使用预先处理好的随机权重文件
+这里我们将使用预先处理好的本地权重文件进行训练，该权重是基于sd1-4处理得到，由于是要进行预训练，我们将`unet`部分替换成了随机初始化的权重。
+```sh
+# 下载权重
+wget https://bj.bcebos.com/paddlenlp/models/community/CompVis/CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
+# 解压
+tar -zxvf CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
+```
+
+
 ### 1.3 使用trainner开启训练
 #### 1.3.1 硬件要求
 Tips：
@@ -46,6 +59,7 @@ Tips：
 
 #### 1.3.2 单机单卡训练
 ```bash
+export FLAG_FUSED_LINEAR=0
 export FLAGS_conv_workspace_size_limit=4096
 # 是否开启ema
 export FLAG_USE_EMA=0
@@ -122,6 +136,7 @@ python -u train_txt2img_laion400m_trainer.py \
 
 #### 1.3.3 单机多卡训练 (多机多卡训练，仅需在 paddle.distributed.launch 后加个 --ips IP1,IP2,IP3,IP4)
 ```bash
+export FLAG_FUSED_LINEAR=0
 export FLAGS_conv_workspace_size_limit=4096
 # 是否开启ema
 export FLAG_USE_EMA=0
@@ -161,8 +176,9 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_txt2img_la
 
 ```python
 from ppdiffusers import StableDiffusionPipeline, UNet2DConditionModel
+# 加载上面我们训练好的unet权重
 unet_model_name_or_path = "./output/checkpoint-5000/unet"
-unet = UNet2DConditionModel.from_pretrained(unet_model_name_or_path
+unet = UNet2DConditionModel.from_pretrained(unet_model_name_or_path)
 pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", safety_checker=None, unet=unet)
 prompt = "a photo of an astronaut riding a horse on mars"
 image = pipe(prompt, guidance_scale=7.5, width=256, height=256).images[0]

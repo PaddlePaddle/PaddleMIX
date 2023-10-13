@@ -23,6 +23,7 @@ import paddle
 import PIL
 from paddlenlp.transformers import CLIPImageProcessor, T5EncoderModel, T5Tokenizer
 
+from ...loaders import LoraLoaderMixin
 from ...models import UNet2DConditionModel
 from ...schedulers import DDPMScheduler
 from ...utils import (
@@ -121,7 +122,7 @@ EXAMPLE_DOC_STRING = """
 """
 
 
-class IFInpaintingPipeline(DiffusionPipeline):
+class IFInpaintingPipeline(DiffusionPipeline, LoraLoaderMixin):
     tokenizer: T5Tokenizer
     text_encoder: T5EncoderModel
 
@@ -137,13 +138,7 @@ class IFInpaintingPipeline(DiffusionPipeline):
         r"[" + "#®•©™&@·º½¾¿¡§~" + "\)" + "\(" + "\]" + "\[" + "\}" + "\{" + "\|" + "\\" + "\/" + "\*" + r"]{1,}"
     )  # noqa
 
-    _optional_components = [
-        "tokenizer",
-        "text_encoder",
-        "safety_checker",
-        "feature_extractor",
-        "watermarker",
-    ]
+    _optional_components = ["tokenizer", "text_encoder", "safety_checker", "feature_extractor", "watermarker"]
 
     def __init__(
         self,
@@ -712,14 +707,7 @@ class IFInpaintingPipeline(DiffusionPipeline):
         return timesteps, num_inference_steps - t_start
 
     def prepare_intermediate_images(
-        self,
-        image,
-        timestep,
-        batch_size,
-        num_images_per_prompt,
-        dtype,
-        mask_image,
-        generator=None,
+        self, image, timestep, batch_size, num_images_per_prompt, dtype, mask_image, generator=None
     ):
         image_batch_size, channels, height, width = image.shape
 
@@ -748,20 +736,10 @@ class IFInpaintingPipeline(DiffusionPipeline):
         self,
         prompt: Union[str, List[str]] = None,
         image: Union[
-            PIL.Image.Image,
-            paddle.Tensor,
-            np.ndarray,
-            List[PIL.Image.Image],
-            List[paddle.Tensor],
-            List[np.ndarray],
+            PIL.Image.Image, paddle.Tensor, np.ndarray, List[PIL.Image.Image], List[paddle.Tensor], List[np.ndarray]
         ] = None,
         mask_image: Union[
-            PIL.Image.Image,
-            paddle.Tensor,
-            np.ndarray,
-            List[PIL.Image.Image],
-            List[paddle.Tensor],
-            List[np.ndarray],
+            PIL.Image.Image, paddle.Tensor, np.ndarray, List[PIL.Image.Image], List[paddle.Tensor], List[np.ndarray]
         ] = None,
         strength: float = 1.0,
         num_inference_steps: int = 50,
@@ -848,8 +826,7 @@ class IFInpaintingPipeline(DiffusionPipeline):
                 prompt.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [diffusers.cross_attention](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/cross_attention.py).
+                `self.processor` in ppdiffusers.cross_attention.
 
         Examples:
 
@@ -927,13 +904,7 @@ class IFInpaintingPipeline(DiffusionPipeline):
         noise_timestep = noise_timestep.tile((batch_size * num_images_per_prompt,))
 
         intermediate_images = self.prepare_intermediate_images(
-            image,
-            noise_timestep,
-            batch_size,
-            num_images_per_prompt,
-            dtype,
-            mask_image,
-            generator,
+            image, noise_timestep, batch_size, num_images_per_prompt, dtype, mask_image, generator
         )
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
@@ -954,34 +925,30 @@ class IFInpaintingPipeline(DiffusionPipeline):
                     t,
                     encoder_hidden_states=prompt_embeds,
                     cross_attention_kwargs=cross_attention_kwargs,
-                ).sample
+                    return_dict=False,
+                )[0]
 
                 # perform guidance
                 if do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                     noise_pred_uncond, _ = noise_pred_uncond.split(
-                        [
-                            model_input.shape[1],
-                            noise_pred_uncond.shape[1] - model_input.shape[1],
-                        ],
-                        axis=1,
+                        [model_input.shape[1], noise_pred_uncond.shape[1] - model_input.shape[1]], axis=1
                     )
                     noise_pred_text, predicted_variance = noise_pred_text.split(
-                        [
-                            model_input.shape[1],
-                            noise_pred_text.shape[1] - model_input.shape[1],
-                        ],
-                        axis=1,
+                        [model_input.shape[1], noise_pred_text.shape[1] - model_input.shape[1]], axis=1
                     )
                     noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
                     noise_pred = paddle.concat([noise_pred, predicted_variance], axis=1)
+
+                if self.scheduler.config.variance_type not in ["learned", "learned_range"]:
+                    noise_pred, _ = noise_pred.split(noise_pred.shape[1] // model_input.shape[1], axis=1)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 prev_intermediate_images = intermediate_images
 
                 intermediate_images = self.scheduler.step(
-                    noise_pred, t, intermediate_images, **extra_step_kwargs
-                ).prev_sample
+                    noise_pred, t, intermediate_images, **extra_step_kwargs, return_dict=False
+                )[0]
 
                 intermediate_images = (1 - mask_image) * prev_intermediate_images + mask_image * intermediate_images
 
@@ -1022,8 +989,4 @@ class IFInpaintingPipeline(DiffusionPipeline):
         if not return_dict:
             return (image, nsfw_detected, watermark_detected)
 
-        return IFPipelineOutput(
-            images=image,
-            nsfw_detected=nsfw_detected,
-            watermark_detected=watermark_detected,
-        )
+        return IFPipelineOutput(images=image, nsfw_detected=nsfw_detected, watermark_detected=watermark_detected)

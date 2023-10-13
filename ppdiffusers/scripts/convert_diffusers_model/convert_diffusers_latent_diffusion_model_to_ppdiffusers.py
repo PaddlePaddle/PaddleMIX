@@ -144,11 +144,7 @@ def convert_diffusers_stable_diffusion_to_ppdiffusers(pretrained_model_name_or_p
 
         # 6. create ppdiffusers pipe
         paddle_pipe = PPDiffusersLDMTextToImagePipeline(
-            vqvae=pp_vqvae,
-            bert=pp_bert,
-            tokenizer=pp_tokenizer,
-            unet=pp_unet,
-            scheduler=pp_scheduler,
+            vqvae=pp_vqvae, bert=pp_bert, tokenizer=pp_tokenizer, unet=pp_unet, scheduler=pp_scheduler
         )
 
         # 7. save_pretrained

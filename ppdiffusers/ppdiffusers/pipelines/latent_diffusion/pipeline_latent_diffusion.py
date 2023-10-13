@@ -308,22 +308,8 @@ class LDMTextToImagePipeline(DiffusionPipeline):
                     f" {negative_prompt_embeds.shape}."
                 )
 
-    def prepare_latents(
-        self,
-        batch_size,
-        num_channels_latents,
-        height,
-        width,
-        dtype,
-        generator,
-        latents=None,
-    ):
-        shape = [
-            batch_size,
-            num_channels_latents,
-            height // self.vae_scale_factor,
-            width // self.vae_scale_factor,
-        ]
+    def prepare_latents(self, batch_size, num_channels_latents, height, width, dtype, generator, latents=None):
+        shape = [batch_size, num_channels_latents, height // self.vae_scale_factor, width // self.vae_scale_factor]
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
@@ -427,13 +413,7 @@ class LDMTextToImagePipeline(DiffusionPipeline):
 
         # 1. Check inputs. Raise error if not correct
         self.check_inputs(
-            prompt,
-            height,
-            width,
-            callback_steps,
-            negative_prompt,
-            prompt_embeds,
-            negative_prompt_embeds,
+            prompt, height, width, callback_steps, negative_prompt, prompt_embeds, negative_prompt_embeds
         )
 
         # 2. Define call parameters
@@ -535,10 +515,7 @@ class LDMTextToImagePipeline(DiffusionPipeline):
 class LDMBertConfig(PretrainedConfig):
     model_type = "ldmbert"
     keys_to_ignore_at_inference = ["past_key_values"]
-    attribute_map = {
-        "num_attention_heads": "encoder_attention_heads",
-        "hidden_size": "d_model",
-    }
+    attribute_map = {"num_attention_heads": "encoder_attention_heads", "hidden_size": "d_model"}
 
     def __init__(
         self,
@@ -637,13 +614,7 @@ class LDMBertPretrainedModel(PretrainedModel):
 
 
 class LDMBertEmbeddings(nn.Layer):
-    def __init__(
-        self,
-        vocab_size,
-        hidden_size=768,
-        hidden_dropout_prob=0.0,
-        max_position_embeddings=512,
-    ):
+    def __init__(self, vocab_size, hidden_size=768, hidden_dropout_prob=0.0, max_position_embeddings=512):
         super().__init__()
         self.word_embeddings = nn.Embedding(vocab_size, hidden_size)
         self.position_embeddings = nn.Embedding(max_position_embeddings, hidden_size)
@@ -693,12 +664,7 @@ class TransformerEncoderLayer(nn.TransformerEncoderLayer):
         )
         # update self attn
         self.self_attn = LDMBertAttention(
-            d_model,
-            head_dim,
-            nhead,
-            dropout=attn_dropout,
-            weight_attr=weight_attr,
-            bias_attr=False,
+            d_model, head_dim, nhead, dropout=attn_dropout, weight_attr=weight_attr, bias_attr=False
         )
 
 
@@ -709,10 +675,7 @@ class LDMBertModel(LDMBertPretrainedModel):
     def __init__(self, config: LDMBertConfig):
         super().__init__(config)
         self.embeddings = LDMBertEmbeddings(
-            config.vocab_size,
-            config.d_model,
-            config.dropout,
-            config.max_position_embeddings,
+            config.vocab_size, config.d_model, config.dropout, config.max_position_embeddings
         )
         encoder_layer = TransformerEncoderLayer(
             config.d_model,
@@ -789,16 +752,7 @@ class LDMBertAttention(nn.MultiHeadAttention):
         weight_attr=None,
         bias_attr=None,
     ):
-        super().__init__(
-            embed_dim,
-            num_heads,
-            dropout,
-            kdim,
-            vdim,
-            need_weights,
-            weight_attr,
-            bias_attr,
-        )
+        super().__init__(embed_dim, num_heads, dropout, kdim, vdim, need_weights, weight_attr, bias_attr)
         assert embed_dim > 0, "Expected embed_dim to be greater than 0, " "but received {}".format(embed_dim)
         assert num_heads > 0, "Expected num_heads to be greater than 0, " "but received {}".format(num_heads)
 

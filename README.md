@@ -16,8 +16,13 @@ PaddleMIX是基于飞桨的跨模态大模型开发套件，聚合图像、文�
 
 ## 最新进展
 
+**2023.10.7 发布 PaddleMIX v1.0**
+* 新增图文预训练模型分布式训练能力，BLIP-2支持千亿规模训练
+* 新增跨模态应用流水线[AppFlow](./applications/README.md)，一键支持自动标注，图像编辑，音生图等11种跨模态应用
+* [PPDiffusers](./ppdiffusers/README.md)发布 0.19.3 版本，新增SDXL及相关任务
+
 **2023.7.31 发布 PaddleMIX v0.1**
-* 首次发布PaddleMIX跨模态大模型开发套件，融合PPdiffusers多模态扩散模型工具箱，广泛支持PaddleNLP大语言模型
+* 首次发布PaddleMIX跨模态大模型开发套件，融合PPDiffusers多模态扩散模型工具箱，广泛支持PaddleNLP大语言模型
 * 新增EVA-CLIP，BLIP-2，miniGPT-4，Stable Diffusion，ControlNet等12个跨模态大模型
 
 ## 主要特性
@@ -29,19 +34,10 @@ PaddleMIX是基于飞桨的跨模态大模型开发套件，聚合图像、文�
 
 ## 任务展示
 
-1. 图像描述（Image Caption）
+- 视频Demo展示（video Demo）
 
-  <div align="center">
-  <img src="./docs/demo/caption.png"  height = "300" caption='' />
-  <p></p>
-  </div>
+https://github.com/PaddlePaddle/PaddleMIX/assets/29787866/8d32722a-e307-46cb-a8c0-be8acd93d2c8
 
-2. 文图生成（Text-to-Image Generation）
-
-  <div align="center">
-  <img src="./docs/demo/text2img.png"  height = "300" caption='' />
-  <p></p>
-  </div>
 
 
 ## 安装
@@ -102,6 +98,8 @@ pip install -e .
           <li><b>图文预训练</b></li>
         <ul>
             <li><a href="paddlemix/examples/evaclip">EVA-CLIP</a></li>
+            <li><a href="paddlemix/examples/coca">CoCa</a></li>
+            <li><a href="paddlemix/examples/clip">CLIP</a></li>
             <li><a href="paddlemix/examples/blip2">BLIP-2</a></li>
             <li><a href="paddlemix/examples/minigpt4">miniGPT-4</a></li>
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
@@ -111,6 +109,11 @@ pip install -e .
         <ul>
             <li><a href="paddlemix/examples/groundingdino">Grounding DINO</a></li>
             <li><a href="paddlemix/examples/Sam">SAM</a></li>
+      </ul>
+      </ul>
+          <li><b>更多模态预训练模型</b></li>
+        <ul>
+            <li><a href="paddlemix/examples/imagebind">ImageBind</a></li>
       </ul>
       </td>
       <td>
@@ -127,6 +130,11 @@ pip install -e .
           <li><b>文生视频</b></li>
         <ul>
            <li><a href="ppdiffusers/ppdiffusers/pipelines/lvdm">LVDM</a></li>
+        </ul>
+        </ul>
+          <li><b>音频生成</b></li>
+        <ul>
+           <li><a href="ppdiffusers/ppdiffusers/pipelines/audioldm">AudioLDM</a></li>
         </ul>
       </td>
     </tr>

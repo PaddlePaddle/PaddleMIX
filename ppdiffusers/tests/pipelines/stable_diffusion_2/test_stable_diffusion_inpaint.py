@@ -29,19 +29,35 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.utils import floats_tensor, load_image
-from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
+from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
+    require_paddle_gpu,
+    slow,
+)
 
 from ..pipeline_params import (
     TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_INPAINTING_PARAMS,
 )
-from ..test_pipelines_common import PipelineTesterMixin
+from ..test_pipelines_common import (
+    PipelineKarrasSchedulerTesterMixin,
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+)
+
+enable_full_determinism()
 
 
-class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusion2InpaintPipelineFastTests(
+    PipelineKarrasSchedulerTesterMixin, PipelineLatentTesterMixin, PipelineTesterMixin, unittest.TestCase
+):
     pipeline_class = StableDiffusionInpaintPipeline
     params = TEXT_GUIDED_IMAGE_INPAINTING_PARAMS
     batch_params = TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS
+    image_params = frozenset(
+        []
+    )  # TO-DO: update image_params once pipeline is refactored with VaeImageProcessor.preprocess
+    image_latents_params = frozenset([])
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -109,7 +125,7 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin, unittest.Tes
             "generator": generator,
             "num_inference_steps": 2,
             "guidance_scale": 6.0,
-            "output_type": "numpy",
+            "output_type": "np",
         }
         return inputs
 
@@ -122,19 +138,12 @@ class StableDiffusion2InpaintPipelineFastTests(PipelineTesterMixin, unittest.Tes
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 64, 64, 3)
         expected_slice = np.array(
-            [
-                0.58470726,
-                0.49302375,
-                0.3954028,
-                0.4068969,
-                0.33668613,
-                0.50350493,
-                0.34411103,
-                0.25261122,
-                0.4531455,
-            ]
+            [0.58470726, 0.49302375, 0.3954028, 0.4068969, 0.33668613, 0.50350493, 0.34411103, 0.25261122, 0.4531455]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
+
+    def test_inference_batch_single_identical(self):
+        super().test_inference_batch_single_identical()
 
 
 @slow
@@ -147,14 +156,14 @@ class StableDiffusionInpaintPipelineIntegrationTests(unittest.TestCase):
 
     def test_stable_diffusion_inpaint_pipeline(self):
         init_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/init_image.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/init_image.png"
         )
         mask_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/mask.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/mask.png"
         )
         # invalid expected_image
         # expected_image = load_numpy(
-        #     'https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/yellow_cat_sitting_on_a_park_bench.npy'
+        #     'https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/yellow_cat_sitting_on_a_park_bench.npy'
         #     )
         model_id = "stabilityai/stable-diffusion-2-inpainting"
         pipe = StableDiffusionInpaintPipeline.from_pretrained(model_id, safety_checker=None)
@@ -162,33 +171,27 @@ class StableDiffusionInpaintPipelineIntegrationTests(unittest.TestCase):
         pipe.enable_attention_slicing()
         prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
         generator = paddle.Generator().manual_seed(0)
-        output = pipe(
-            prompt=prompt,
-            image=init_image,
-            mask_image=mask_image,
-            generator=generator,
-            output_type="np",
-        )
+        output = pipe(prompt=prompt, image=init_image, mask_image=mask_image, generator=generator, output_type="np")
         image = output.images[0]
         assert image.shape == (512, 512, 3)
         image = image[-3:, -3:, -1]
         expected_image = [
-            [[0.47980508], [0.49545538], [0.501472]],
-            [[0.36860222], [0.5465546], [0.54940426]],
-            [[0.44748512], [0.45160148], [0.48374733]],
+            [0.41752315, 0.42328316, 0.43213594],
+            [0.31269372, 0.4829683, 0.48503327],
+            [0.38568723, 0.38494325, 0.42138067],
         ]
         assert np.abs(expected_image - image).max() < 0.001
 
     def test_stable_diffusion_inpaint_pipeline_fp16(self):
         init_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/init_image.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/init_image.png"
         )
         mask_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/mask.png"
+            "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/mask.png"
         )
         # invalid expected_image
         # expected_image = load_numpy(
-        #     'https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/yellow_cat_sitting_on_a_park_bench_fp16.npy'
+        #     'https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/sd2-inpaint/yellow_cat_sitting_on_a_park_bench_fp16.npy'
         #     )
         model_id = "stabilityai/stable-diffusion-2-inpainting"
         pipe = StableDiffusionInpaintPipeline.from_pretrained(
@@ -198,19 +201,13 @@ class StableDiffusionInpaintPipelineIntegrationTests(unittest.TestCase):
         pipe.enable_attention_slicing()
         prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
         generator = paddle.Generator().manual_seed(0)
-        output = pipe(
-            prompt=prompt,
-            image=init_image,
-            mask_image=mask_image,
-            generator=generator,
-            output_type="np",
-        )
+        output = pipe(prompt=prompt, image=init_image, mask_image=mask_image, generator=generator, output_type="np")
         image = output.images[0]
         assert image.shape == (512, 512, 3)
         image = image[-3:, -3:, -1]
         expected_image = [
-            [[0.47851562], [0.4951172], [0.50097656]],
-            [[0.36865234], [0.546875], [0.5493164]],
-            [[0.44726562], [0.45141602], [0.48388672]],
+            [0.47851562, 0.4951172, 0.49],
+            [0.36865234, 0.49, 0.49],
+            [0.44726562, 0.45141602, 0.48388672],
         ]
         assert np.abs(expected_image - image).max() < 0.5

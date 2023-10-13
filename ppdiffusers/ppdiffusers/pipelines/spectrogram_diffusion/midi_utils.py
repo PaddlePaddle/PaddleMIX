@@ -156,12 +156,7 @@ class Codec:
     and specified separately.
     """
 
-    def __init__(
-        self,
-        max_shift_steps: int,
-        steps_per_second: float,
-        event_ranges: List[EventRange],
-    ):
+    def __init__(self, max_shift_steps: int, steps_per_second: float, event_ranges: List[EventRange]):
         """Define Codec.
 
         Args:
@@ -249,14 +244,10 @@ PROGRAM_GRANULARITIES = {
     "flat": ProgramGranularity(tokens_map_fn=drop_programs, program_map_fn=lambda program: 0),
     # map each program to the first program in its MIDI class
     "midi_class": ProgramGranularity(
-        tokens_map_fn=programs_to_midi_classes,
-        program_map_fn=lambda program: 8 * (program // 8),
+        tokens_map_fn=programs_to_midi_classes, program_map_fn=lambda program: 8 * (program // 8)
     ),
     # leave programs as is
-    "full": ProgramGranularity(
-        tokens_map_fn=lambda tokens, codec: tokens,
-        program_map_fn=lambda program: program,
-    ),
+    "full": ProgramGranularity(tokens_map_fn=lambda tokens, codec: tokens, program_map_fn=lambda program: program),
 }
 
 
@@ -310,10 +301,7 @@ def audio_to_frames(samples, hop_size: int, frame_rate: int) -> Tuple[Sequence[S
 
     # Split audio into frames.
     frames = frame(
-        paddle.to_tensor(data=samples).unsqueeze(axis=0),
-        frame_length=frame_size,
-        frame_step=frame_size,
-        pad_end=False,
+        paddle.to_tensor(data=samples).unsqueeze(axis=0), frame_length=frame_size, frame_step=frame_size, pad_end=False
     )
     num_frames = len(samples) // frame_size
     times = np.arange(num_frames) / frame_rate
@@ -344,12 +332,7 @@ def note_sequence_to_onsets_and_offsets_and_programs(
         for note in notes
         if not note.is_drum
     ] + [
-        NoteEventData(
-            pitch=note.pitch,
-            velocity=note.velocity,
-            program=note.program,
-            is_drum=note.is_drum,
-        )
+        NoteEventData(pitch=note.pitch, velocity=note.velocity, program=note.program, is_drum=note.is_drum)
         for note in notes
     ]
     return times, values
@@ -395,11 +378,7 @@ def note_event_data_to_events(
             # program + velocity + pitch
             if state is not None:
                 state.active_pitches[value.pitch, value.program] = velocity_bin
-            return [
-                Event("program", value.program),
-                Event("velocity", velocity_bin),
-                Event("pitch", value.pitch),
-            ]
+            return [Event("program", value.program), Event("velocity", velocity_bin), Event("pitch", value.pitch)]
 
 
 def note_encoding_state_to_events(state: NoteEncodingState) -> Sequence[Event]:
@@ -413,13 +392,7 @@ def note_encoding_state_to_events(state: NoteEncodingState) -> Sequence[Event]:
 
 
 def encode_and_index_events(
-    state,
-    event_times,
-    event_values,
-    codec,
-    frame_times,
-    encode_event_fn,
-    encoding_state_to_events_fn=None,
+    state, event_times, event_values, codec, frame_times, encode_event_fn, encoding_state_to_events_fn=None
 ):
     """Encode a sequence of timed events and index to audio frame times.
 
@@ -533,11 +506,7 @@ def extract_sequence_with_indices(features, state_events_end_token=None, feature
         while features["state_events"][state_event_end_idx - 1] != state_events_end_token:
             state_event_end_idx += 1
         features[feature_key] = np.concatenate(
-            [
-                features["state_events"][state_event_start_idx:state_event_end_idx],
-                features[feature_key],
-            ],
-            axis=0,
+            [features["state_events"][state_event_start_idx:state_event_end_idx], features[feature_key]], axis=0
         )
     return features
 
@@ -552,10 +521,7 @@ def map_midi_programs(
 
 
 def run_length_encode_shifts_fn(
-    features,
-    codec: Codec,
-    feature_key: str = "inputs",
-    state_change_event_types: Sequence[str] = (),
+    features, codec: Codec, feature_key: str = "inputs", state_change_event_types: Sequence[str] = ()
 ) -> Callable[[Mapping[str, Any]], Mapping[str, Any]]:
     """Return a function that run-length encodes shifts for a given codec.
 

@@ -14,9 +14,18 @@
 # limitations under the License.
 # flake8: noqa
 
-from ...utils import is_paddle_available, is_paddlenlp_available
+from ...utils import (
+    OptionalDependencyNotAvailable,
+    is_paddle_available,
+    is_paddlenlp_available,
+)
 
-if is_paddle_available() and is_paddlenlp_available():
+try:
+    if not (is_paddlenlp_available() and is_paddle_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from ...utils.dummy_paddle_and_paddlenlp_objects import *
+else:
     from .pipeline_vq_diffusion import (
         LearnedClassifierFreeSamplingEmbeddings,
         VQDiffusionPipeline,

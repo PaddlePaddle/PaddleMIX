@@ -115,24 +115,7 @@ class SpectrogramDiffusionPipelineFastTests(PipelineTesterMixin, unittest.TestCa
         generator = paddle.Generator().manual_seed(seed)
         inputs = {
             "input_tokens": [
-                [
-                    1134,
-                    90,
-                    1135,
-                    1133,
-                    1080,
-                    112,
-                    1132,
-                    1080,
-                    1133,
-                    1079,
-                    133,
-                    1132,
-                    1079,
-                    1133,
-                    1,
-                ]
-                + [0] * 2033
+                [1134, 90, 1135, 1133, 1080, 112, 1132, 1080, 1133, 1079, 133, 1132, 1079, 1133, 1] + [0] * 2033
             ],
             "generator": generator,
             "num_inference_steps": 4,
@@ -154,17 +137,7 @@ class SpectrogramDiffusionPipelineFastTests(PipelineTesterMixin, unittest.TestCa
 
         assert mel_slice.shape == (3, 3)
         expected_slice = np.array(
-            [
-                -11.46511,
-                4.0,
-                -8.506372,
-                -11.512925,
-                -11.512925,
-                -10.417862,
-                -8.077912,
-                3.7985802,
-                4.0,
-            ]
+            [-11.46511, 4.0, -8.506372, -11.512925, -11.512925, -10.417862, -8.077912, 3.7985802, 4.0]
         )
         assert np.abs(mel_slice.flatten() - expected_slice).max() < 1e-2
 
@@ -220,13 +193,7 @@ class PipelineIntegrationTests(unittest.TestCase):
 
         input_tokens = input_tokens[:3]
         generator = paddle.Generator().manual_seed(0)
-        pipe(
-            input_tokens,
-            num_inference_steps=5,
-            generator=generator,
-            callback=callback,
-            output_type="mel",
-        )
+        pipe(input_tokens, num_inference_steps=5, generator=generator, callback=callback, output_type="mel")
 
     def test_spectrogram_fast(self):
 

@@ -19,12 +19,12 @@
 # Adapted from https://github.com/dbolya/tomesd
 
 import math
-from typing import Any, Callable, Dict, Tuple, Type, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
 import paddle
 import paddle.nn as nn
 
-from ..models.transformer_2d import BasicTransformerBlock
+from ..models.attention import BasicTransformerBlock
 from ..pipelines.pipeline_utils import DiffusionPipeline
 from .ppnlp_patch_utils import patch_to
 
@@ -248,25 +248,24 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
 
         def forward(
             self: BasicTransformerBlock,
-            hidden_states,
-            attention_mask=None,
-            encoder_hidden_states=None,
-            encoder_attention_mask=None,
-            timestep=None,
-            cross_attention_kwargs=None,
-            class_labels=None,
-        ) -> paddle.Tensor:
+            hidden_states: paddle.Tensor,
+            attention_mask: Optional[paddle.Tensor] = None,
+            encoder_hidden_states: Optional[paddle.Tensor] = None,
+            encoder_attention_mask: Optional[paddle.Tensor] = None,
+            timestep: Optional[paddle.Tensor] = None,
+            cross_attention_kwargs: Dict[str, Any] = None,
+            class_labels: Optional[paddle.Tensor] = None,
+        ):
             # (1) ToMe
             m_a, m_c, m_m, u_a, u_c, u_m = compute_merge(hidden_states, self._tome_info)
 
+            # Notice that normalization is always applied before the real computation in the following blocks.
+            # 1. Self-Attention
             if self.use_ada_layer_norm:
                 norm_hidden_states = self.norm1(hidden_states, timestep)
             elif self.use_ada_layer_norm_zero:
-                (norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp,) = self.norm1(
-                    hidden_states,
-                    timestep,
-                    class_labels,
-                    hidden_dtype=hidden_states.dtype,
+                norm_hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.norm1(
+                    hidden_states, timestep, class_labels, hidden_dtype=hidden_states.dtype
                 )
             else:
                 norm_hidden_states = self.norm1(hidden_states)
@@ -274,7 +273,6 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
             # (2) ToMe m_a
             norm_hidden_states = m_a(norm_hidden_states)
 
-            # 1. Self-Attention
             cross_attention_kwargs = cross_attention_kwargs if cross_attention_kwargs is not None else {}
             attn_output = self.attn1(
                 norm_hidden_states,
@@ -314,7 +312,20 @@ def make_tome_block(block_class: Type[nn.Layer]) -> Type[nn.Layer]:
             # (6) ToMe m_m
             norm_hidden_states = m_m(norm_hidden_states)
 
-            ff_output = self.ff(norm_hidden_states)
+            if self._chunk_size is not None:
+                # "feed_forward_chunk_size" can be used to save memory
+                if norm_hidden_states.shape[self._chunk_dim] % self._chunk_size != 0:
+                    raise ValueError(
+                        f"`hidden_states` dimension to be chunked: {norm_hidden_states.shape[self._chunk_dim]} has to be divisible by chunk size: {self._chunk_size}. Make sure to set an appropriate `chunk_size` when calling `unet.enable_forward_chunking`."
+                    )
+
+                num_chunks = norm_hidden_states.shape[self._chunk_dim] // self._chunk_size
+                ff_output = paddle.concat(
+                    [self.ff(hid_slice) for hid_slice in norm_hidden_states.chunk(num_chunks, axis=self._chunk_dim)],
+                    axis=self._chunk_dim,
+                )
+            else:
+                ff_output = self.ff(norm_hidden_states)
 
             if self.use_ada_layer_norm_zero:
                 ff_output = gate_mlp.unsqueeze(1) * ff_output

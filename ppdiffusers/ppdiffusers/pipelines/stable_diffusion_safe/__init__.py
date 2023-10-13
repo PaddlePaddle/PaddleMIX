@@ -12,14 +12,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from dataclasses import dataclass
+from enum import Enum
 from typing import List, Optional, Union
 
 import numpy as np
-import PIL.Image
+import PIL
+from PIL import Image
 
-from ...utils import BaseOutput, is_paddle_available, is_paddlenlp_available
+from ...utils import (
+    BaseOutput,
+    OptionalDependencyNotAvailable,
+    is_paddle_available,
+    is_paddlenlp_available,
+)
 
 
 @dataclass
@@ -79,6 +85,11 @@ class StableDiffusionSafePipelineOutput(BaseOutput):
     applied_safety_concept: Optional[str]
 
 
-if is_paddle_available() and is_paddlenlp_available():
+try:
+    if not (is_paddlenlp_available() and is_paddle_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from ...utils.dummy_paddle_and_paddlenlp_objects import *
+else:
     from .pipeline_stable_diffusion_safe import StableDiffusionPipelineSafe
     from .safety_checker import SafeStableDiffusionSafetyChecker

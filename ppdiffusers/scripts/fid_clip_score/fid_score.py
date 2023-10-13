@@ -70,9 +70,7 @@ parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
 parser.add_argument("--batch-size", type=int, default=50, help="Batch size to use")
 parser.add_argument("--resolution", type=int, default=None, help="The resolution to resize.")
 parser.add_argument(
-    "--num-workers",
-    type=int,
-    help=("Number of processes to use for data loading. " "Defaults to `min(8, num_cpus)`"),
+    "--num-workers", type=int, help=("Number of processes to use for data loading. " "Defaults to `min(8, num_cpus)`")
 )
 parser.add_argument("--device", type=str, default=None, help="Device to use. Like cuda, cuda:0 or cpu")
 parser.add_argument(
@@ -90,12 +88,7 @@ parser.add_argument(
         "The first path is used as input and the second as output."
     ),
 )
-parser.add_argument(
-    "path",
-    type=str,
-    nargs=2,
-    help=("Paths to the generated images or " "to .npz statistic files"),
-)
+parser.add_argument("path", type=str, nargs=2, help=("Paths to the generated images or " "to .npz statistic files"))
 
 IMAGE_EXTENSIONS = {"bmp", "jpg", "jpeg", "pgm", "png", "ppm", "tif", "tiff", "webp"}
 
@@ -325,13 +318,7 @@ def main():
         num_workers = args.num_workers
 
     if args.save_stats:
-        save_fid_stats(
-            args.path,
-            args.batch_size,
-            args.dims,
-            num_workers,
-            resolution=args.resolution,
-        )
+        save_fid_stats(args.path, args.batch_size, args.dims, num_workers, resolution=args.resolution)
         return
 
     fid_value = calculate_fid_given_paths(

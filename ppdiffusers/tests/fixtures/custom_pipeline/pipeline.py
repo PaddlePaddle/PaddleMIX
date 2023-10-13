@@ -71,12 +71,7 @@ class CustomLocalPipeline(DiffusionPipeline):
 
         # Sample gaussian noise to begin loop
         image = paddle.randn(
-            (
-                batch_size,
-                self.unet.config.in_channels,
-                self.unet.config.sample_size,
-                self.unet.config.sample_size,
-            ),
+            (batch_size, self.unet.config.in_channels, self.unet.config.sample_size, self.unet.config.sample_size),
             generator=generator,
         )
 

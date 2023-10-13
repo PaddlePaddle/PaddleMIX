@@ -320,12 +320,7 @@ def renew_vae_attention_paths(old_list, n_shave_prefix_segments=0):
 
 
 def assign_to_checkpoint(
-    paths,
-    checkpoint,
-    old_checkpoint,
-    attention_paths_to_split=None,
-    additional_replacements=None,
-    config=None,
+    paths, checkpoint, old_checkpoint, attention_paths_to_split=None, additional_replacements=None, config=None
 ):
     """
     This does the final conversion step: take locally converted weights and apply a global renaming
@@ -559,30 +554,16 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
             )
 
         paths = renew_resnet_paths(resnets)
-        meta_path = {
-            "old": f"input_blocks.{i}.0",
-            "new": f"down_blocks.{block_id}.resnets.{layer_in_block_id}",
-        }
+        meta_path = {"old": f"input_blocks.{i}.0", "new": f"down_blocks.{block_id}.resnets.{layer_in_block_id}"}
         assign_to_checkpoint(
-            paths,
-            new_checkpoint,
-            unet_state_dict,
-            additional_replacements=[meta_path],
-            config=config,
+            paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
         )
 
         if len(attentions):
             paths = renew_attention_paths(attentions)
-            meta_path = {
-                "old": f"input_blocks.{i}.1",
-                "new": f"down_blocks.{block_id}.attentions.{layer_in_block_id}",
-            }
+            meta_path = {"old": f"input_blocks.{i}.1", "new": f"down_blocks.{block_id}.attentions.{layer_in_block_id}"}
             assign_to_checkpoint(
-                paths,
-                new_checkpoint,
-                unet_state_dict,
-                additional_replacements=[meta_path],
-                config=config,
+                paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
             )
 
     resnet_0 = middle_blocks[0]
@@ -598,11 +579,7 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
     attentions_paths = renew_attention_paths(attentions)
     meta_path = {"old": "middle_block.1", "new": "mid_block.attentions.0"}
     assign_to_checkpoint(
-        attentions_paths,
-        new_checkpoint,
-        unet_state_dict,
-        additional_replacements=[meta_path],
-        config=config,
+        attentions_paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
     )
 
     for i in range(num_output_blocks):
@@ -625,16 +602,9 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
             resnet_0_paths = renew_resnet_paths(resnets)
             paths = renew_resnet_paths(resnets)
 
-            meta_path = {
-                "old": f"output_blocks.{i}.0",
-                "new": f"up_blocks.{block_id}.resnets.{layer_in_block_id}",
-            }
+            meta_path = {"old": f"output_blocks.{i}.0", "new": f"up_blocks.{block_id}.resnets.{layer_in_block_id}"}
             assign_to_checkpoint(
-                paths,
-                new_checkpoint,
-                unet_state_dict,
-                additional_replacements=[meta_path],
-                config=config,
+                paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
             )
 
             if ["conv.weight", "conv.bias"] in output_block_list.values():
@@ -670,25 +640,13 @@ def convert_ldm_unet_checkpoint(checkpoint, config, path=None, extract_ema=False
                     "new": f"up_blocks.{block_id}.attentions.{layer_in_block_id}",
                 }
                 assign_to_checkpoint(
-                    paths,
-                    new_checkpoint,
-                    unet_state_dict,
-                    additional_replacements=[meta_path],
-                    config=config,
+                    paths, new_checkpoint, unet_state_dict, additional_replacements=[meta_path], config=config
                 )
         else:
             resnet_0_paths = renew_resnet_paths(output_block_layers, n_shave_prefix_segments=1)
             for path in resnet_0_paths:
                 old_path = ".".join(["output_blocks", str(i), path["old"]])
-                new_path = ".".join(
-                    [
-                        "up_blocks",
-                        str(block_id),
-                        "resnets",
-                        str(layer_in_block_id),
-                        path["new"],
-                    ]
-                )
+                new_path = ".".join(["up_blocks", str(block_id), "resnets", str(layer_in_block_id), path["new"]])
 
                 new_checkpoint[new_path] = unet_state_dict[old_path]
 
@@ -750,13 +708,7 @@ def convert_ldm_vae_checkpoint(checkpoint, config):
 
         paths = renew_vae_resnet_paths(resnets)
         meta_path = {"old": f"down.{i}.block", "new": f"down_blocks.{i}.resnets"}
-        assign_to_checkpoint(
-            paths,
-            new_checkpoint,
-            vae_state_dict,
-            additional_replacements=[meta_path],
-            config=config,
-        )
+        assign_to_checkpoint(paths, new_checkpoint, vae_state_dict, additional_replacements=[meta_path], config=config)
 
     mid_resnets = [key for key in vae_state_dict if "encoder.mid.block" in key]
     num_mid_res_blocks = 2
@@ -765,24 +717,12 @@ def convert_ldm_vae_checkpoint(checkpoint, config):
 
         paths = renew_vae_resnet_paths(resnets)
         meta_path = {"old": f"mid.block_{i}", "new": f"mid_block.resnets.{i - 1}"}
-        assign_to_checkpoint(
-            paths,
-            new_checkpoint,
-            vae_state_dict,
-            additional_replacements=[meta_path],
-            config=config,
-        )
+        assign_to_checkpoint(paths, new_checkpoint, vae_state_dict, additional_replacements=[meta_path], config=config)
 
     mid_attentions = [key for key in vae_state_dict if "encoder.mid.attn" in key]
     paths = renew_vae_attention_paths(mid_attentions)
     meta_path = {"old": "mid.attn_1", "new": "mid_block.attentions.0"}
-    assign_to_checkpoint(
-        paths,
-        new_checkpoint,
-        vae_state_dict,
-        additional_replacements=[meta_path],
-        config=config,
-    )
+    assign_to_checkpoint(paths, new_checkpoint, vae_state_dict, additional_replacements=[meta_path], config=config)
     conv_attn_to_linear(new_checkpoint)
 
     for i in range(num_up_blocks):
@@ -801,13 +741,7 @@ def convert_ldm_vae_checkpoint(checkpoint, config):
 
         paths = renew_vae_resnet_paths(resnets)
         meta_path = {"old": f"up.{block_id}.block", "new": f"up_blocks.{i}.resnets"}
-        assign_to_checkpoint(
-            paths,
-            new_checkpoint,
-            vae_state_dict,
-            additional_replacements=[meta_path],
-            config=config,
-        )
+        assign_to_checkpoint(paths, new_checkpoint, vae_state_dict, additional_replacements=[meta_path], config=config)
 
     mid_resnets = [key for key in vae_state_dict if "decoder.mid.block" in key]
     num_mid_res_blocks = 2
@@ -816,24 +750,12 @@ def convert_ldm_vae_checkpoint(checkpoint, config):
 
         paths = renew_vae_resnet_paths(resnets)
         meta_path = {"old": f"mid.block_{i}", "new": f"mid_block.resnets.{i - 1}"}
-        assign_to_checkpoint(
-            paths,
-            new_checkpoint,
-            vae_state_dict,
-            additional_replacements=[meta_path],
-            config=config,
-        )
+        assign_to_checkpoint(paths, new_checkpoint, vae_state_dict, additional_replacements=[meta_path], config=config)
 
     mid_attentions = [key for key in vae_state_dict if "decoder.mid.attn" in key]
     paths = renew_vae_attention_paths(mid_attentions)
     meta_path = {"old": "mid.attn_1", "new": "mid_block.attentions.0"}
-    assign_to_checkpoint(
-        paths,
-        new_checkpoint,
-        vae_state_dict,
-        additional_replacements=[meta_path],
-        config=config,
-    )
+    assign_to_checkpoint(paths, new_checkpoint, vae_state_dict, additional_replacements=[meta_path], config=config)
     conv_attn_to_linear(new_checkpoint)
     return new_checkpoint
 
@@ -928,11 +850,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--checkpoint_path",
-        default=None,
-        type=str,
-        required=True,
-        help="Path to the checkpoint to convert.",
+        "--checkpoint_path", default=None, type=str, required=True, help="Path to the checkpoint to convert."
     )
     parser.add_argument(
         "--original_config_file",
@@ -961,13 +879,7 @@ if __name__ == "__main__":
             " higher quality images for inference. Non-EMA weights are usually better to continue fine-tuning."
         ),
     )
-    parser.add_argument(
-        "--dump_path",
-        default=None,
-        type=str,
-        required=True,
-        help="Path to the output model.",
-    )
+    parser.add_argument("--dump_path", default=None, type=str, required=True, help="Path to the output model.")
     args = parser.parse_args()
 
     image_size = 512
@@ -1024,10 +936,7 @@ if __name__ == "__main__":
     # 1. Convert the UNet2DConditionModel model.
     diffusers_unet_config = create_unet_diffusers_config(original_config, image_size=image_size)
     diffusers_unet_checkpoint = convert_ldm_unet_checkpoint(
-        checkpoint,
-        diffusers_unet_config,
-        path=args.checkpoint_path,
-        extract_ema=args.extract_ema,
+        checkpoint, diffusers_unet_config, path=args.checkpoint_path, extract_ema=args.extract_ema
     )
     unet = UNet2DConditionModel.from_config(diffusers_unet_config)
     ppdiffusers_unet_checkpoint = convert_diffusers_vae_unet_to_ppdiffusers(unet, diffusers_unet_checkpoint)

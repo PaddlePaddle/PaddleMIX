@@ -42,14 +42,7 @@ def make_interp_mask_with_framestride(t, device, frame_stride):
 
 
 def random_temporal_masking(
-    input_shape,
-    p_interp,
-    p_pred,
-    device,
-    n_interp1=1,
-    n_interp2=1,
-    n_prevs=[1],
-    interp_frame_stride=None,
+    input_shape, p_interp, p_pred, device, n_interp1=1, n_interp2=1, n_prevs=[1], interp_frame_stride=None
 ):
     """return mask for masking input, where 1 indicates given real image as condition,
     0 indicates noisy samples.
@@ -206,11 +199,7 @@ def normalization(channels):
 
 def Normalize(in_channels):
     return paddle.nn.GroupNorm(
-        num_groups=32,
-        num_channels=in_channels,
-        epsilon=1e-06,
-        weight_attr=None,
-        bias_attr=None,
+        num_groups=32, num_channels=in_channels, epsilon=1e-06, weight_attr=None, bias_attr=None
     )
 
 

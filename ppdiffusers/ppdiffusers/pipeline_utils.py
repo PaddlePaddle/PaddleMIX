@@ -17,5 +17,17 @@
 # NOTE: This file is deprecated and will be removed in a future version.
 # It only exists so that temporarely `from diffusers.pipelines import DiffusionPipeline` works
 
-from .pipelines import ImagePipelineOutput  # noqa: F401
-from .pipelines import DiffusionPipeline, TextPipelineOutput  # noqa: F401
+from .pipelines import (  # noqa: F401
+    DiffusionPipeline,
+    ImagePipelineOutput,
+    TextPipelineOutput,
+)
+from .utils import deprecate
+
+deprecate(
+    "pipelines_utils",
+    "0.22.0",
+    "Importing `DiffusionPipeline` or `ImagePipelineOutput` from ppdiffusers.pipeline_utils is deprecated. Please import from ppdiffusers.pipelines.pipeline_utils instead.",
+    standard_warn=False,
+    stacklevel=3,
+)

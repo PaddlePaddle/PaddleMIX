@@ -30,22 +30,32 @@ from ppdiffusers import (
     StableDiffusionImg2ImgPipeline,
     UNet2DConditionModel,
 )
-from ppdiffusers.image_processor import VaeImageProcessor
 from ppdiffusers.utils import floats_tensor, load_image, load_numpy, nightly, slow
-from ppdiffusers.utils.testing_utils import require_paddle_gpu
+from ppdiffusers.utils.testing_utils import enable_full_determinism, require_paddle_gpu
 
 from ..pipeline_params import (
+    IMAGE_TO_IMAGE_IMAGE_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_VARIATION_PARAMS,
 )
-from ..test_pipelines_common import PipelineTesterMixin
+from ..test_pipelines_common import (
+    PipelineKarrasSchedulerTesterMixin,
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+)
+
+enable_full_determinism()
 
 
-class StableDiffusionImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusionImg2ImgPipelineFastTests(
+    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
+):
     pipeline_class = StableDiffusionImg2ImgPipeline
     params = TEXT_GUIDED_IMAGE_VARIATION_PARAMS - {"height", "width"}
     required_optional_params = PipelineTesterMixin.required_optional_params - {"latents"}
     batch_params = TEXT_GUIDED_IMAGE_VARIATION_BATCH_PARAMS
+    image_params = IMAGE_TO_IMAGE_IMAGE_PARAMS
+    image_latents_params = IMAGE_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -94,30 +104,18 @@ class StableDiffusionImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.Test
         }
         return components
 
-    def get_dummy_inputs(self, seed=0, input_image_type="pd", output_type="np"):
+    def get_dummy_inputs(self, seed=0):
         image = floats_tensor((1, 3, 32, 32), rng=random.Random(seed))
+        image = image / 2 + 0.5
         generator = paddle.Generator().manual_seed(seed)
-
-        if input_image_type == "pd":
-            input_image = image
-        elif input_image_type == "np":
-            input_image = image.numpy().transpose(0, 2, 3, 1)
-        elif input_image_type == "pil":
-            input_image = image.numpy().transpose(0, 2, 3, 1)
-            input_image = VaeImageProcessor.numpy_to_pil(input_image)
-        else:
-            raise ValueError(f"unsupported input_image_type {input_image_type}.")
-
-        if output_type not in ["pd", "np", "pil"]:
-            raise ValueError(f"unsupported output_type {output_type}")
 
         inputs = {
             "prompt": "A painting of a squirrel eating a burger",
-            "image": input_image,
+            "image": image,
             "generator": generator,
             "num_inference_steps": 2,
             "guidance_scale": 6.0,
-            "output_type": output_type,
+            "output_type": "np",
         }
         return inputs
 
@@ -129,25 +127,12 @@ class StableDiffusionImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.Test
         image = sd_pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        expected_slice = np.array(
-            [
-                0.50082374,
-                0.49329656,
-                0.4963757,
-                0.46307105,
-                0.44599247,
-                0.4877512,
-                0.560709,
-                0.56884044,
-                0.5738671,
-            ]
-        )
+        expected_slice = np.array([1.000, 0.6866, 0.6297, 0.6039, 0.4147, 0.5347, 0.7396, 0.6176, 0.6515])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_stable_diffusion_img2img_negative_prompt(self):
         components = self.get_dummy_components()
         sd_pipe = StableDiffusionImg2ImgPipeline(**components)
-        # sd_pipe.image_processor = VaeImageProcessor(vae_scale_factor=sd_pipe.vae_scale_factor, do_normalize=True)
         sd_pipe.set_progress_bar_config(disable=None)
         inputs = self.get_dummy_inputs()
         negative_prompt = "french fries"
@@ -155,25 +140,12 @@ class StableDiffusionImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.Test
         image = output.images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        expected_slice = np.array(
-            [
-                0.48659712,
-                0.4004616,
-                0.4762491,
-                0.49117112,
-                0.5414775,
-                0.58218545,
-                0.5550886,
-                0.52305603,
-                0.61624044,
-            ]
-        )
+        expected_slice = np.array([0.8129, 0.6052, 0.5828, 0.4865, 0.505, 0.5728, 0.5985, 0.5965, 0.6619])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_stable_diffusion_img2img_multiple_init_images(self):
         components = self.get_dummy_components()
         sd_pipe = StableDiffusionImg2ImgPipeline(**components)
-        # sd_pipe.image_processor = VaeImageProcessor(vae_scale_factor=sd_pipe.vae_scale_factor, do_normalize=True)
         sd_pipe.set_progress_bar_config(disable=None)
         inputs = self.get_dummy_inputs()
         inputs["prompt"] = [inputs["prompt"]] * 2
@@ -181,19 +153,7 @@ class StableDiffusionImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.Test
         image = sd_pipe(**inputs).images
         image_slice = image[-1, -3:, -3:, -1]
         assert image.shape == (2, 32, 32, 3)
-        expected_slice = np.array(
-            [
-                0.49016288,
-                0.23989454,
-                0.4229045,
-                0.56873804,
-                0.467226,
-                0.5793949,
-                0.6967555,
-                0.7027658,
-                0.5809763,
-            ]
-        )
+        expected_slice = np.array([0.4915, 0.2387, 0.6499, 0.7189, 0.3702, 0.5765, 0.7953, 0.6532, 0.6312])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
     def test_stable_diffusion_img2img_k_lms(self):
@@ -207,43 +167,25 @@ class StableDiffusionImg2ImgPipelineFastTests(PipelineTesterMixin, unittest.Test
         image = sd_pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
-        expected_slice = np.array(
-            [
-                0.29999942,
-                0.5206376,
-                0.37915814,
-                0.4033721,
-                0.7630579,
-                0.4642547,
-                0.5823178,
-                0.6936951,
-                0.48969278,
-            ]
-        )
+        expected_slice = np.array([0.1131, 0.7903, 0.67949, 0.1962, 0.8975, 0.4891, 0.4096, 0.6387, 0.4599])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.001
 
-    def test_pt_np_pil_outputs_equivalent(self):
+    def test_inference_batch_single_identical(self):
+        super().test_inference_batch_single_identical()
+
+    def test_pd_np_pil_inputs_equivalent(self):
+        if len(self.image_params) == 0:
+            return
         components = self.get_dummy_components()
-        sd_pipe = StableDiffusionImg2ImgPipeline(**components)
-        sd_pipe.set_progress_bar_config(disable=None)
-
-        output_pt = sd_pipe(**self.get_dummy_inputs(output_type="pd"))[0]
-        output_np = sd_pipe(**self.get_dummy_inputs(output_type="np"))[0]
-        output_pil = sd_pipe(**self.get_dummy_inputs(output_type="pil"))[0]
-
-        assert np.abs(output_pt.numpy().transpose(0, 2, 3, 1) - output_np).max() <= 1e-4
-        assert np.abs(np.array(output_pil[0]) - (output_np * 255).round()).max() <= 1e-4
-
-    def test_image_types_consistent(self):
-        components = self.get_dummy_components()
-        sd_pipe = StableDiffusionImg2ImgPipeline(**components)
-        sd_pipe.set_progress_bar_config(disable=None)
-        output_pt = sd_pipe(**self.get_dummy_inputs(input_image_type="pd"))[0]
-        output_np = sd_pipe(**self.get_dummy_inputs(input_image_type="np"))[0]
-        output_pil = sd_pipe(**self.get_dummy_inputs(input_image_type="pil"))[0]
-
-        assert np.abs(output_pt - output_np).max() <= 1e-4
-        assert np.abs(output_pil - output_np).max() <= 2e-2
+        pipe = self.pipeline_class(**components)
+        pipe.set_progress_bar_config(disable=None)
+        out_input_pd = pipe(**self.get_dummy_inputs_by_type(input_image_type="pd"))[0]
+        out_input_np = pipe(**self.get_dummy_inputs_by_type(input_image_type="np"))[0]
+        out_input_pil = pipe(**self.get_dummy_inputs_by_type(input_image_type="pil"))[0]
+        max_diff = np.abs(out_input_pd - out_input_np).max()
+        self.assertLess(max_diff, 0.0001, "`input_type=='pd'` generate different result from `input_type=='np'`")
+        max_diff = np.abs(out_input_pil - out_input_np).max()
+        self.assertLess(max_diff, 0.04, "`input_type=='pd'` generate different result from `input_type=='np'`")
 
 
 @slow
@@ -302,19 +244,7 @@ class StableDiffusionImg2ImgPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 768, 3)
-        expected_slice = np.array(
-            [
-                0.27150,
-                0.14849,
-                0.15605,
-                0.26740,
-                0.16954,
-                0.18204,
-                0.31470,
-                0.26311,
-                0.24525,
-            ]
-        )
+        expected_slice = np.array([0.27150, 0.14849, 0.15605, 0.26740, 0.16954, 0.18204, 0.31470, 0.26311, 0.24525])
         assert np.abs(expected_slice - image_slice).max() < 0.001
 
     # def test_img2img_safety_checker_works(self):
@@ -340,19 +270,7 @@ class StableDiffusionImg2ImgPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 768, 3)
-        expected_slice = np.array(
-            [
-                0.04890,
-                0.04862,
-                0.06422,
-                0.04655,
-                0.05108,
-                0.05307,
-                0.05926,
-                0.08759,
-                0.06852,
-            ]
-        )
+        expected_slice = np.array([0.04890, 0.04862, 0.06422, 0.04655, 0.05108, 0.05307, 0.05926, 0.08759, 0.06852])
         assert np.abs(expected_slice - image_slice).max() < 0.001
 
     def test_stable_diffusion_img2img_ddim(self):
@@ -364,19 +282,7 @@ class StableDiffusionImg2ImgPipelineSlowTests(unittest.TestCase):
         image = pipe(**inputs).images
         image_slice = image[0, -3:, -3:, -1].flatten()
         assert image.shape == (1, 512, 768, 3)
-        expected_slice = np.array(
-            [
-                0.06069,
-                0.05703,
-                0.08054,
-                0.05797,
-                0.06286,
-                0.06234,
-                0.08438,
-                0.11151,
-                0.08068,
-            ]
-        )
+        expected_slice = np.array([0.06069, 0.05703, 0.08054, 0.05797, 0.06286, 0.06234, 0.08438, 0.11151, 0.08068])
         assert np.abs(expected_slice - image_slice).max() < 0.001
 
     def test_stable_diffusion_img2img_intermediate_state(self):
@@ -425,9 +331,7 @@ class StableDiffusionImg2ImgPipelineSlowTests(unittest.TestCase):
 
         callback_fn.has_been_called = False
         pipe = StableDiffusionImg2ImgPipeline.from_pretrained(
-            "CompVis/stable-diffusion-v1-4",
-            safety_checker=None,
-            paddle_dtype=paddle.float16,
+            "CompVis/stable-diffusion-v1-4", safety_checker=None, paddle_dtype=paddle.float16
         )
         pipe.set_progress_bar_config(disable=None)
         pipe.enable_attention_slicing()
@@ -446,29 +350,12 @@ class StableDiffusionImg2ImgPipelineSlowTests(unittest.TestCase):
         prompt = "A fantasy landscape, trending on artstation"
         generator = paddle.Generator().manual_seed(0)
         output = pipe(
-            prompt=prompt,
-            image=init_image,
-            strength=0.75,
-            guidance_scale=7.5,
-            generator=generator,
-            output_type="np",
+            prompt=prompt, image=init_image, strength=0.75, guidance_scale=7.5, generator=generator, output_type="np"
         )
         image = output.images[0]
         image_slice = image[255:258, 383:386, -1]
         assert image.shape == (504, 760, 3)
-        expected_slice = np.array(
-            [
-                0.71240354,
-                0.71053374,
-                0.69922864,
-                0.7139934,
-                0.7106118,
-                0.69451976,
-                0.71982634,
-                0.71717453,
-                0.70306426,
-            ]
-        )
+        expected_slice = np.array([0.7286, 0.7218, 0.7078, 0.7278, 0.7201, 0.7027, 0.7305, 0.7267, 0.7097])
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
 
 

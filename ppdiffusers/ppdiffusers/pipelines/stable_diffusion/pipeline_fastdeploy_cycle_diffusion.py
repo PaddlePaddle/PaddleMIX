@@ -19,10 +19,10 @@ import paddle
 import PIL
 from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
 
-from ...pipeline_utils import DiffusionPipeline
 from ...schedulers import DDIMScheduler
 from ...utils import logging, randn_tensor
 from ..fastdeploy_utils import FastDeployDiffusionPipelineMixin, FastDeployRuntimeModel
+from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionPipelineOutput
 
 logger = logging.get_logger(__name__)
@@ -390,21 +390,11 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline, FastDeployDiffusionPip
 
                 # Sample source_latents from the posterior distribution.
                 prev_source_latents = posterior_sample(
-                    self.scheduler,
-                    source_latents,
-                    t,
-                    clean_latents,
-                    generator=generator,
-                    **extra_step_kwargs,
+                    self.scheduler, source_latents, t, clean_latents, generator=generator, **extra_step_kwargs
                 )
                 # Compute noise.
                 noise = compute_noise(
-                    self.scheduler,
-                    prev_source_latents,
-                    source_latents,
-                    t,
-                    source_noise_pred,
-                    **extra_step_kwargs,
+                    self.scheduler, prev_source_latents, source_latents, t, source_noise_pred, **extra_step_kwargs
                 )
                 source_latents = prev_source_latents
 
@@ -423,8 +413,7 @@ class FastDeployCycleDiffusionPipeline(DiffusionPipeline, FastDeployDiffusionPip
 
         if not output_type == "latent":
             image = self._decode_vae_latents(
-                latents / self.vae_scaling_factor,
-                infer_op=infer_op_dict.get("vae_decoder", None),
+                latents / self.vae_scaling_factor, infer_op=infer_op_dict.get("vae_decoder", None)
             )
             image, has_nsfw_concept = self.run_safety_checker(image)
         else:

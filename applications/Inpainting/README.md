@@ -5,13 +5,15 @@
 `Grounded-SAM-Inpainting` 示例:
 
 ```python
-from paddlemix import Appflow
-from PIL import Image
+from paddlemix.appflow import Appflow
+from ppdiffusers.utils import load_image
+import paddle
 task = Appflow(app="inpainting",
                models=["GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024","stabilityai/stable-diffusion-2-inpainting"]
                )
 paddle.seed(1024)
-image_pil = Image.open("bus.png").convert("RGB")
+url = "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"
+image_pil =  load_image(url)
 result = task(image=image_pil,prompt="bus",inpaint_prompt="a yellow van")
 ```
 <div align="center">
@@ -27,14 +29,21 @@ result = task(image=image_pil,prompt="bus",inpaint_prompt="a yellow van")
 `Grounded-SAM-chatglm` 示例:
 
 ```python
-from paddlemix import Appflow
-from PIL import Image
+import paddle
+from paddlemix.appflow import Appflow
+from ppdiffusers.utils import load_image
 task = Appflow(app="inpainting",
                models=["THUDM/chatglm-6b","GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024","stabilityai/stable-diffusion-2-inpainting"]
                )
 paddle.seed(1024)
-image_pil = Image.open("bus.png").convert("RGB")
-result = task(image=image_pil,inpaint_prompt="bus is changed to A school bus parked on the roadside")
+url = "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"
+image_pil =  load_image(url)
+inpaint_prompt = "bus is changed to A school bus parked on the roadside"
+prompt = "Given caption,extract the main object to be replaced and marked it as 'main_object'," \
+         + "Extract the remaining part as 'other prompt', " \
+         + "Return main_object, other prompt in English" \
+         + "Given caption: {}.".format(inpaint_prompt)
+result = task(image=image_pil,prompt=prompt)
 ```
 
 一些效果展示
@@ -50,7 +59,8 @@ result = task(image=image_pil,inpaint_prompt="bus is changed to A school bus par
 ### 文本引导的图像编辑（Text-Guided Image Inpainting)
 
 ```python
-from paddlemix import Appflow
+import paddle
+from paddlemix.appflow import Appflow
 from PIL import Image
 from ppdiffusers.utils import load_image
 img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
@@ -75,6 +85,3 @@ image.save("a_yellow_cat.png")
 | ![overture-creations](https://github.com/LokeZhou/PaddleMIX/assets/13300429/fe13b5f6-e773-41c2-9660-3b2747575fc1) | Face of a yellow cat, high resolution, sitting on a park bench|![overture-creations-mask](https://github.com/LokeZhou/PaddleMIX/assets/13300429/8c3dbb3a-5a32-4c22-b66e-7b82fcd18b77) |![a_yellow_cat](https://github.com/LokeZhou/PaddleMIX/assets/13300429/094ba90a-35c0-4a50-ac1f-6e0ce91ea931) |
 
 </div>
-
-
-

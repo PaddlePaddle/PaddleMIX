@@ -46,7 +46,10 @@ def _no_grad_uniform_(tensor, a, b):
 
 def _no_grad_normal_(tensor, mean=0.0, std=1.0):
     with paddle.no_grad():
+        # try:
         tensor.copy_(paddle.normal(mean=mean, std=std, shape=tensor.shape), True)
+        # except:
+        # breakpoint()
     return tensor
 
 
@@ -193,15 +196,7 @@ def _calculate_correct_fan(tensor, mode, reverse=False):
 
 
 def _calculate_gain(nonlinearity, param=None):
-    linear_fns = [
-        "linear",
-        "conv1d",
-        "conv2d",
-        "conv3d",
-        "conv_transpose1d",
-        "conv_transpose2d",
-        "conv_transpose3d",
-    ]
+    linear_fns = ["linear", "conv1d", "conv2d", "conv3d", "conv_transpose1d", "conv_transpose2d", "conv_transpose3d"]
     if nonlinearity in linear_fns or nonlinearity == "sigmoid":
         return 1
     elif nonlinearity == "tanh":

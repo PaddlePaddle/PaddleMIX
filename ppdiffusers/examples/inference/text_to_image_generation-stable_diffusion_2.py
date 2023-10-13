@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ppdiffusers import StableDiffusionPipeline
+import paddle
 
-# 加载模型和scheduler
-pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2")
-# 执行pipeline进行推理
-prompt = "a photo of an astronaut riding a horse on mars"
-image = pipe(prompt).images[0]
+from ppdiffusers import DiffusionPipeline, DPMSolverMultistepScheduler
 
-# 保存图片
-image.save("text_to_image_generation-stable_diffusion_2-result.png")
+repo_id = "stabilityai/stable-diffusion-2-base"
+pipe = DiffusionPipeline.from_pretrained(repo_id, paddle_dtype=paddle.float16)
+
+pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+
+prompt = "High quality photo of an astronaut riding a horse in space"
+image = pipe(prompt, num_inference_steps=25).images[0]
+image.save("text_to_image_generation-stable_diffusion_2-result-astronaut.png")

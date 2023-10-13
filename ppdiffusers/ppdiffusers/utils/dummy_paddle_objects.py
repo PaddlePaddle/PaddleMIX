@@ -17,6 +17,21 @@
 from . import DummyObject, requires_backends
 
 
+class AsymmetricAutoencoderKL(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+
 class AutoencoderKL(metaclass=DummyObject):
     _backends = ["paddle"]
 
@@ -255,6 +270,66 @@ class AudioPipelineOutput(metaclass=DummyObject):
         requires_backends(cls, ["paddle"])
 
 
+class AutoPipelineForImage2Image(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+
+class AutoPipelineForInpainting(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+
+class AutoPipelineForText2Image(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+
+class ConsistencyModelPipeline(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+
 class DanceDiffusionPipeline(metaclass=DummyObject):
     _backends = ["paddle"]
 
@@ -435,6 +510,21 @@ class ScoreSdeVePipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle"])
 
 
+class CMStochasticIterativeScheduler(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+
 class DDIMInverseScheduler(metaclass=DummyObject):
     _backends = ["paddle"]
 
@@ -465,6 +555,21 @@ class DDIMScheduler(metaclass=DummyObject):
         requires_backends(cls, ["paddle"])
 
 
+class DDIMParallelScheduler(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+
 class DDPMScheduler(metaclass=DummyObject):
     _backends = ["paddle"]
 
@@ -481,6 +586,21 @@ class DDPMScheduler(metaclass=DummyObject):
 
 
 class DEISMultistepScheduler(metaclass=DummyObject):
+    _backends = ["paddle"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle"])
+
+
+class DPMSolverMultistepInverseScheduler(metaclass=DummyObject):
     _backends = ["paddle"]
 
     def __init__(self, *args, **kwargs):

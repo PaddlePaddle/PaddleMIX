@@ -14,11 +14,14 @@
 
 cd ..
 # export LD_LIBRARY_PATH=/usr/local/cuda-11.7/targets/x86_64-linux/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+# export GLOG_v=4
+export USE_PPXFORMERS=False
 
 # test stable-diffusion-v1-5
 python export_model.py \
     --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 \
     --output_path stable-diffusion-v1-5
+
 
 python infer.py --model_dir stable-diffusion-v1-5/ \
     --scheduler preconfig-euler-ancestral \
@@ -37,6 +40,31 @@ python infer.py --model_dir stable-diffusion-v1-5/ \
     --device gpu \
     --device_id 0 \
     --task_name all \
+    --infer_op raw \
+    --benchmark_steps 10 --parse_prompt_type lpw
+
+# test mixture_tiling
+python export_model.py \
+    --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 \
+    --output_path stable-diffusion-v1-5-mixture_tiling
+
+python infer.py --model_dir stable-diffusion-v1-5-mixture_tiling/ \
+    --scheduler preconfig-euler-ancestral \
+    --backend paddle_tensorrt \
+    --use_fp16 True \
+    --device gpu \
+    --device_id 0 \
+    --task_name mixture_tiling \
+    --infer_op zero_copy_infer \
+    --benchmark_steps 10 --parse_prompt_type lpw
+
+python infer.py --model_dir stable-diffusion-v1-5-mixture_tiling/ \
+    --scheduler preconfig-euler-ancestral \
+    --backend paddle_tensorrt \
+    --use_fp16 True \
+    --device gpu \
+    --device_id 0 \
+    --task_name mixture_tiling \
     --infer_op raw \
     --benchmark_steps 10 --parse_prompt_type lpw
 

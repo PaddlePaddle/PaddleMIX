@@ -45,12 +45,7 @@ class DDPMPipelineFastTests(unittest.TestCase):
         generator = paddle.Generator().manual_seed(0)
         image = ddpm(generator=generator, num_inference_steps=2, output_type="numpy").images
         generator = paddle.Generator().manual_seed(0)
-        image_from_tuple = ddpm(
-            generator=generator,
-            num_inference_steps=2,
-            output_type="numpy",
-            return_dict=False,
-        )[0]
+        image_from_tuple = ddpm(generator=generator, num_inference_steps=2, output_type="numpy", return_dict=False)[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
@@ -67,7 +62,7 @@ class DDPMPipelineFastTests(unittest.TestCase):
                 0.6665917634963989,
             ]
         )
-        print(image_slice.flatten().tolist())
+
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
 

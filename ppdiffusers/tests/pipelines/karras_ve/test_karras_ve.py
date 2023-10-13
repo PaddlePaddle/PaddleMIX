@@ -19,7 +19,13 @@ import numpy as np
 import paddle
 
 from ppdiffusers import KarrasVePipeline, KarrasVeScheduler, UNet2DModel
-from ppdiffusers.utils.testing_utils import require_paddle, slow
+from ppdiffusers.utils.testing_utils import (
+    enable_full_determinism,
+    require_paddle,
+    slow,
+)
+
+enable_full_determinism()
 
 
 class KarrasVePipelineFastTests(unittest.TestCase):
@@ -45,12 +51,7 @@ class KarrasVePipelineFastTests(unittest.TestCase):
         generator = paddle.Generator().manual_seed(0)
         image = pipe(num_inference_steps=2, generator=generator, output_type="numpy").images
         generator = paddle.Generator().manual_seed(0)
-        image_from_tuple = pipe(
-            num_inference_steps=2,
-            generator=generator,
-            output_type="numpy",
-            return_dict=False,
-        )[0]
+        image_from_tuple = pipe(num_inference_steps=2, generator=generator, output_type="numpy", return_dict=False)[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 32, 32, 3)
@@ -73,16 +74,6 @@ class KarrasVePipelineIntegrationTests(unittest.TestCase):
         image_slice = image[0, -3:, -3:, -1]
         assert image.shape == (1, 256, 256, 3)
         expected_slice = np.array(
-            [
-                0.7528239,
-                0.7529462,
-                0.76014197,
-                0.75482357,
-                0.75692874,
-                0.7577723,
-                0.760527,
-                0.758951,
-                0.7599246,
-            ]
+            [0.7528239, 0.7529462, 0.76014197, 0.75482357, 0.75692874, 0.7577723, 0.760527, 0.758951, 0.7599246]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01

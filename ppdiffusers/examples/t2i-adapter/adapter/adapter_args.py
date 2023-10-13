@@ -23,7 +23,7 @@ class ModelArguments:
     """
 
     adapter_config_file: Optional[str] = field(
-        default="./config/openpose_adapter.json",
+        default="./config/adapter.json",
         metadata={"help": "adapter_config_file"},
     )
     vae_name_or_path: Optional[str] = field(default=None, metadata={"help": "pretrained_vae_name_or_path"})

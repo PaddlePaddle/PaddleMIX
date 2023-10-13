@@ -94,10 +94,7 @@ class TorchLinear(nn.Layer):
         self.in_features = in_features
         self.out_features = out_features
         self.weight = self.create_parameter(
-            shape=[
-                out_features,
-                in_features,
-            ],  # regular linear has shape [in_features, out_features]
+            shape=[out_features, in_features],  # regular linear has shape [in_features, out_features]
             attr=self._weight_attr,
             dtype=self._dtype,
             is_bias=False,
@@ -288,9 +285,7 @@ class HFCLIPVisionEmbeddings(nn.Layer):
         self.num_positions = self.num_patches + 1
         self.position_embedding = nn.Embedding(self.num_positions, self.embed_dim)
         self.register_buffer(
-            "position_ids",
-            paddle.arange(self.num_positions).expand((1, -1), dtype="int64"),
-            persistable=False,
+            "position_ids", paddle.arange(self.num_positions).expand((1, -1), dtype="int64"), persistable=False
         )
 
     def forward(self, pixel_values: paddle.Tensor) -> paddle.Tensor:
@@ -529,14 +524,8 @@ class HFCLIPPretrainedModel(PretrainedModel):
         elif isinstance(module, HFCLIPVisionEmbeddings):
             factor = self.config.initializer_factor
             normal_(module.class_embedding, mean=0.0, std=module.embed_dim**-0.5 * factor)
-            normal_(
-                module.patch_embedding.weight,
-                std=module.config.initializer_range * factor,
-            )
-            normal_(
-                module.position_embedding.weight,
-                std=module.config.initializer_range * factor,
-            )
+            normal_(module.patch_embedding.weight, std=module.config.initializer_range * factor)
+            normal_(module.position_embedding.weight, std=module.config.initializer_range * factor)
         elif isinstance(module, HFCLIPAttention):
             factor = self.config.initializer_factor
             in_proj_std = (module.embed_dim**-0.5) * ((2 * module.config.num_hidden_layers) ** -0.5) * factor
@@ -742,9 +731,7 @@ class HFCLIPEncoder(nn.Layer):
         if not return_dict:
             return tuple(v for v in [hidden_states, encoder_states, all_attentions] if v is not None)
         return BaseModelOutput(
-            last_hidden_state=hidden_states,
-            hidden_states=encoder_states,
-            attentions=all_attentions,
+            last_hidden_state=hidden_states, hidden_states=encoder_states, attentions=all_attentions
         )
 
 
@@ -838,10 +825,7 @@ class HFCLIPTextTransformer(nn.Layer):
             # casting to paddle.int32 for onnx compatibility: argmax doesn't support int64 inputs with opset 14
             pooled_output = last_hidden_state.gather_nd(
                 paddle.stack(
-                    [
-                        paddle.arange(last_hidden_state.shape[0], dtype="int32"),
-                        input_ids.argmax(-1, dtype="int32"),
-                    ],
+                    [paddle.arange(last_hidden_state.shape[0], dtype="int32"), input_ids.argmax(-1, dtype="int32")],
                     axis=-1,
                 )
             )
@@ -1247,14 +1231,7 @@ class HFCLIPModel(HFCLIPPretrainedModel):
             loss = clip_loss(logits_per_text)
 
         if not return_dict:
-            output = (
-                logits_per_image,
-                logits_per_text,
-                text_embeds,
-                image_embeds,
-                text_outputs,
-                vision_outputs,
-            )
+            output = (logits_per_image, logits_per_text, text_embeds, image_embeds, text_outputs, vision_outputs)
             return ((loss,) + output) if loss is not None else output
 
         return HFCLIPOutput(

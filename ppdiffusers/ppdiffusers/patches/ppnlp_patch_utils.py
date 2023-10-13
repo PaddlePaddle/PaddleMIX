@@ -229,11 +229,7 @@ if is_paddle_available():
     nn.Layer.eval = eval
 
     def Parameter(data: paddle.Tensor, requires_grad=True):
-        tensor = paddle.create_parameter(
-            data.shape,
-            dtype=data.dtype,
-            default_initializer=nn.initializer.Assign(data),
-        )
+        tensor = paddle.create_parameter(data.shape, dtype=data.dtype, default_initializer=nn.initializer.Assign(data))
         if not requires_grad:
             tensor.stop_gradient = True
         return tensor
@@ -384,10 +380,7 @@ if is_paddle_available() and is_paddlenlp_available():
             if attention_op in [None, "auto"]:
                 head_dim = query.shape[-1]
                 attention_op = "cutlass"
-                if is_support_flash_attention and query.dtype in [
-                    paddle.float16,
-                    paddle.bfloat16,
-                ]:
+                if is_support_flash_attention and query.dtype not in [paddle.float32]:
                     if flash_attn_version == 1:
                         if head_dim <= 128:
                             attention_op = "flash"
@@ -432,14 +425,9 @@ if is_paddle_available() and is_paddlenlp_available():
                     training=True,
                 )  # make sure we use training=True
             elif attention_op == "flash":
-                output = flash_attention(
-                    query,
-                    key,
-                    value,
-                    dropout=dropout_p,
-                    causal=is_causal,
-                    return_softmax=False,
-                )[0]
+                output = flash_attention(query, key, value, dropout=dropout_p, causal=is_causal, return_softmax=False)[
+                    0
+                ]
             else:
                 raise ValueError("ppxformers's attention_op shoulde be in ['cutlass', 'flash', 'math']")
             return output
@@ -508,7 +496,7 @@ if is_paddle_available() and is_paddlenlp_available():
                 pad_token="<pad>",
                 mask_token="<mask>",
                 sp_model_kwargs: Optional[Dict[str, Any]] = None,
-                **kwargs,
+                **kwargs
             ) -> None:
                 # Mask token behave like a normal word, i.e. include the space before it
                 mask_token = (
@@ -540,12 +528,7 @@ if is_paddle_available() and is_paddlenlp_available():
                 # spm      | '<unk>' | '<s>'   | '</s>' | ','     | '.' | '▁' | 's' | '▁de' | '-'   | '▁a'
 
                 # Mimic fairseq token-to-id alignment for the first 4 token
-                self.fairseq_tokens_to_ids = {
-                    "<s>": 0,
-                    "<pad>": 1,
-                    "</s>": 2,
-                    "<unk>": 3,
-                }
+                self.fairseq_tokens_to_ids = {"<s>": 0, "<pad>": 1, "</s>": 2, "<unk>": 3}
 
                 # The first "real" token "," has position 4 in the original fairseq vocab and position 3 in the spm vocab
                 self.fairseq_offset = 1
@@ -614,9 +597,7 @@ if is_paddle_available() and is_paddlenlp_available():
 
                 if already_has_special_tokens:
                     return super().get_special_tokens_mask(
-                        token_ids_0=token_ids_0,
-                        token_ids_1=token_ids_1,
-                        already_has_special_tokens=True,
+                        token_ids_0=token_ids_0, token_ids_1=token_ids_1, already_has_special_tokens=True
                     )
 
                 if token_ids_1 is None:
@@ -891,7 +872,7 @@ if is_paddle_available() and is_paddlenlp_available():
 
         loaded_state_dict_keys = list(state_dict.keys())
 
-        (model, missing_keys, unexpected_keys, mismatched_keys,) = cls._load_pretrained_model_old(
+        model, missing_keys, unexpected_keys, mismatched_keys = cls._load_pretrained_model_old(
             model=model,
             state_dict=state_dict,
             loaded_keys=loaded_state_dict_keys,
@@ -1035,11 +1016,7 @@ if is_paddle_available() and is_paddlenlp_available():
                         and state_dict[checkpoint_key].shape != model_state_dict[model_key].shape
                     ):
                         mismatched_keys.append(
-                            (
-                                checkpoint_key,
-                                state_dict[checkpoint_key].shape,
-                                model_state_dict[model_key].shape,
-                            )
+                            (checkpoint_key, state_dict[checkpoint_key].shape, model_state_dict[model_key].shape)
                         )
                         del state_dict[checkpoint_key]
             return mismatched_keys
@@ -1154,7 +1131,7 @@ if is_paddle_available() and is_paddlenlp_available():
         paddle_dtype=None,
         from_diffusers=None,
         variant=None,
-        **kwargs,
+        **kwargs
     ):
         try:
             if cls.constructed_from_pretrained_config() and (
@@ -1365,12 +1342,7 @@ if is_paddle_available() and is_paddlenlp_available():
         else:
             name_mapping_dict.update({".vision_model.": "."})
 
-        donot_transpose = [
-            "embeddings",
-            "norm",
-            "concept_embeds",
-            "special_care_embeds",
-        ]
+        donot_transpose = ["embeddings", "norm", "concept_embeds", "special_care_embeds"]
         if not hasattr(cls, "paddle_torch_name_mapping"):
             cls.paddle_torch_name_mapping = {}
         for name, value in state_dict.items():
@@ -1388,10 +1360,7 @@ if is_paddle_available() and is_paddlenlp_available():
             if name == "logit_scale" and value.ndim == 1:
                 value = value.reshape((1,))
             # step5: safety_checker need prefix "clip."
-            if "vision_model" in name and cls in [
-                StableDiffusionSafetyChecker,
-                SafeStableDiffusionSafetyChecker,
-            ]:
+            if "vision_model" in name and cls in [StableDiffusionSafetyChecker, SafeStableDiffusionSafetyChecker]:
                 name = "clip." + name
             new_model_state[name] = value
 

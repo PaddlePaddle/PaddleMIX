@@ -128,27 +128,13 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = pipe(
-            [prompt],
-            generator=generator,
-            output_type="np",
-            return_dict=False,
-            num_inference_steps=2,
+            [prompt], generator=generator, output_type="np", return_dict=False, num_inference_steps=2
         )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 24, 24, 3)
         expected_slice = np.array(
-            [
-                0.5900591,
-                0.83443725,
-                0.4418438,
-                0.604656,
-                0.89781034,
-                0.40088692,
-                0.6107253,
-                0.87849474,
-                0.64088374,
-            ]
+            [0.5900591, 0.83443725, 0.4418438, 0.604656, 0.89781034, 0.40088692, 0.6107253, 0.87849474, 0.64088374]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
@@ -160,9 +146,7 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
         transformer = self.dummy_transformer
         scheduler = VQDiffusionScheduler(self.num_embed)
         learned_classifier_free_sampling_embeddings = LearnedClassifierFreeSamplingEmbeddings(
-            learnable=True,
-            hidden_size=self.text_embedder_hidden_size,
-            length=tokenizer.model_max_length,
+            learnable=True, hidden_size=self.text_embedder_hidden_size, length=tokenizer.model_max_length
         )
         pipe = VQDiffusionPipeline(
             vqvae=vqvae,
@@ -179,27 +163,13 @@ class VQDiffusionPipelineFastTests(unittest.TestCase):
         image = output.images
         generator = paddle.Generator().manual_seed(0)
         image_from_tuple = pipe(
-            [prompt],
-            generator=generator,
-            output_type="np",
-            return_dict=False,
-            num_inference_steps=2,
+            [prompt], generator=generator, output_type="np", return_dict=False, num_inference_steps=2
         )[0]
         image_slice = image[0, -3:, -3:, -1]
         image_from_tuple_slice = image_from_tuple[0, -3:, -3:, -1]
         assert image.shape == (1, 24, 24, 3)
         expected_slice = np.array(
-            [
-                0.61711097,
-                0.8419658,
-                0.5493732,
-                0.64064896,
-                0.97944254,
-                0.5611503,
-                0.6145399,
-                0.7063037,
-                0.54406035,
-            ]
+            [0.61711097, 0.8419658, 0.5493732, 0.64064896, 0.97944254, 0.5611503, 0.6145399, 0.7063037, 0.54406035]
         )
         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
         assert np.abs(image_from_tuple_slice.flatten() - expected_slice).max() < 0.01
@@ -222,10 +192,7 @@ class VQDiffusionPipelineIntegrationTests(unittest.TestCase):
         pipeline.set_progress_bar_config(disable=None)
         generator = paddle.Generator().manual_seed(0)
         output = pipeline(
-            "teddy bear playing in the pool",
-            num_images_per_prompt=1,
-            generator=generator,
-            output_type="np",
+            "teddy bear playing in the pool", num_images_per_prompt=1, generator=generator, output_type="np"
         )
         image = output.images[0]
         assert image.shape == (256, 256, 3)

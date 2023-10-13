@@ -14,7 +14,26 @@
 
 import numpy as np
 import paddle
+import paddle.nn as nn
 
+
+def disabled_train(mode="train"):
+    return
+
+
+def freeze_parameters(params, enable_eval=False):
+    if (not isinstance(params, nn.Layer)) and (not isinstance(params, paddle.Tensor)):
+        raise TypeError("An instance of Paddle.nn.Layer or paddle.Tensor expected, but acceived: {}".format(type(model)))
+
+    if isinstance(params, paddle.Tensor):
+        params.stop_gradient = True
+    else:
+        if enable_eval:
+            params.eval()
+            params.train = disabled_train
+
+        for name, param in params.named_parameters():
+            param.stop_gradient = True
 
 def transfer_param(p, is_bias=False, dtype="float16", restore_data=False):
     param_shape = p.shape
@@ -23,19 +42,7 @@ def transfer_param(p, is_bias=False, dtype="float16", restore_data=False):
     if str(p.dtype)[-len(dtype) :] == dtype and ("gpu" in str(p.place).lower() or "cuda" in str(p.place).lower()):
         return p
     if restore_data:
-        if (
-            getattr(paddle.fluid.framework, "_in_eager_mode_", False)
-            and getattr(paddle.fluid.framework, "_dygraph_tracer_", None) is not None
-        ) or (
-            hasattr(paddle.fluid.framework, "global_var")
-            and getattr(paddle.fluid.framework.global_var, "_in_eager_mode_", False)
-            and getattr(paddle.fluid.framework.global_var, "_dygraph_tracer_", None) is not None
-        ):
-            param_data = p.numpy()
-            new_p = paddle.create_parameter(shape=param_shape, dtype=dtype, is_bias=is_bias)
-            new_p.set_value(param_data.astype(dtype))
-            return new_p
-        elif paddle.in_dynamic_mode():
+        if paddle.in_dynamic_mode():
             param_data = p.numpy()
             # Creating parameters with Assign initializer is too slow. Maybe we
             # can cast to fp16 directly and get a tensor, while we do it more

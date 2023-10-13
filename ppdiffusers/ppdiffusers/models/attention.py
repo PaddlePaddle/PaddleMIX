@@ -13,15 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
 
 from ..utils import is_ppxformers_available
+from .activations import get_activation
 from .attention_processor import Attention
 from .embeddings import CombinedTimestepLabelEmbeddings
+from .lora import LoRACompatibleLinear
 
 
 def drop_path(input, drop_prob: float = 0.0, training: bool = False):
@@ -59,14 +61,7 @@ class DropPath(nn.Layer):
 
 
 class Mlp(nn.Layer):
-    def __init__(
-        self,
-        in_features,
-        hidden_features=None,
-        out_features=None,
-        act_layer=nn.GELU,
-        drop=0.0,
-    ):
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.0):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -154,9 +149,7 @@ class AttentionBlock(nn.Layer):
         return tensor
 
     def set_use_memory_efficient_attention_xformers(
-        self,
-        use_memory_efficient_attention_xformers: bool,
-        attention_op: Optional[str] = None,
+        self, use_memory_efficient_attention_xformers: bool, attention_op: Optional[str] = None
     ):
         # remove this PR: https://github.com/PaddlePaddle/Paddle/pull/56045
         # if self.head_size > 128 and attention_op == "flash":
@@ -331,22 +324,26 @@ class BasicTransformerBlock(nn.Layer):
 
         # 3. Feed-forward
         self.norm3 = nn.LayerNorm(dim, **norm_kwargs)
-        self.ff = FeedForward(
-            dim,
-            dropout=dropout,
-            activation_fn=activation_fn,
-            final_dropout=final_dropout,
-        )
+        self.ff = FeedForward(dim, dropout=dropout, activation_fn=activation_fn, final_dropout=final_dropout)
+
+        # let chunk size default to None
+        self._chunk_size = None
+        self._chunk_dim = 0
+
+    def set_chunk_feed_forward(self, chunk_size: Optional[int], dim: int):
+        # Sets chunk feed-forward
+        self._chunk_size = chunk_size
+        self._chunk_dim = dim
 
     def forward(
         self,
-        hidden_states,
-        attention_mask=None,
-        encoder_hidden_states=None,
-        encoder_attention_mask=None,
-        timestep=None,
-        cross_attention_kwargs=None,
-        class_labels=None,
+        hidden_states: paddle.Tensor,
+        attention_mask: Optional[paddle.Tensor] = None,
+        encoder_hidden_states: Optional[paddle.Tensor] = None,
+        encoder_attention_mask: Optional[paddle.Tensor] = None,
+        timestep: Optional[paddle.Tensor] = None,
+        cross_attention_kwargs: Dict[str, Any] = None,
+        class_labels: Optional[paddle.Tensor] = None,
     ):
         # Notice that normalization is always applied before the real computation in the following blocks.
         # 1. Self-Attention
@@ -374,8 +371,6 @@ class BasicTransformerBlock(nn.Layer):
             norm_hidden_states = (
                 self.norm2(hidden_states, timestep) if self.use_ada_layer_norm else self.norm2(hidden_states)
             )
-            # TODO (Birch-San): Here we should prepare the encoder_attention mask correctly
-            # prepare attention mask here
 
             # 2. Cross-Attention
             attn_output = self.attn2(
@@ -392,7 +387,20 @@ class BasicTransformerBlock(nn.Layer):
         if self.use_ada_layer_norm_zero:
             norm_hidden_states = norm_hidden_states * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
 
-        ff_output = self.ff(norm_hidden_states)
+        if self._chunk_size is not None:
+            # "feed_forward_chunk_size" can be used to save memory
+            if norm_hidden_states.shape[self._chunk_dim] % self._chunk_size != 0:
+                raise ValueError(
+                    f"`hidden_states` dimension to be chunked: {norm_hidden_states.shape[self._chunk_dim]} has to be divisible by chunk size: {self._chunk_size}. Make sure to set an appropriate `chunk_size` when calling `unet.enable_forward_chunking`."
+                )
+
+            num_chunks = norm_hidden_states.shape[self._chunk_dim] // self._chunk_size
+            ff_output = paddle.concat(
+                [self.ff(hid_slice) for hid_slice in norm_hidden_states.chunk(num_chunks, axis=self._chunk_dim)],
+                axis=self._chunk_dim,
+            )
+        else:
+            ff_output = self.ff(norm_hidden_states)
 
         if self.use_ada_layer_norm_zero:
             ff_output = gate_mlp.unsqueeze(1) * ff_output
@@ -443,7 +451,7 @@ class FeedForward(nn.Layer):
         # project dropout
         self.net.append(nn.Dropout(dropout))
         # project out
-        self.net.append(nn.Linear(inner_dim, dim_out))
+        self.net.append(LoRACompatibleLinear(inner_dim, dim_out))
         # FF as used in Vision Transformer, MLP-Mixer, etc. have a final dropout
         if final_dropout:
             self.net.append(nn.Dropout(dropout))
@@ -461,7 +469,7 @@ class GELU(nn.Layer):
 
     def __init__(self, dim_in: int, dim_out: int, approximate: str = "none"):
         super().__init__()
-        self.proj = nn.Linear(dim_in, dim_out)
+        self.proj = LoRACompatibleLinear(dim_in, dim_out)
         self.approximate = approximate
         self.approximate_bool = approximate == "tanh"
 
@@ -482,7 +490,7 @@ class GEGLU(nn.Layer):
 
     def __init__(self, dim_in: int, dim_out: int):
         super().__init__()
-        self.proj = nn.Linear(dim_in, dim_out * 2)
+        self.proj = LoRACompatibleLinear(dim_in, dim_out * 2)
 
     def forward(self, hidden_states):
         hidden_states, gate = self.proj(hidden_states).chunk(2, axis=-1)
@@ -556,25 +564,15 @@ class AdaGroupNorm(nn.Layer):
     """
 
     def __init__(
-        self,
-        embedding_dim: int,
-        out_dim: int,
-        num_groups: int,
-        act_fn: Optional[str] = None,
-        eps: float = 1e-5,
+        self, embedding_dim: int, out_dim: int, num_groups: int, act_fn: Optional[str] = None, eps: float = 1e-5
     ):
         super().__init__()
         self.num_groups = num_groups
         self.eps = eps
-        self.act = None
-        if act_fn == "swish":
-            self.act = lambda x: F.silu(x)
-        elif act_fn == "mish":
-            self.act = nn.Mish()
-        elif act_fn == "silu":
-            self.act = nn.Silu()
-        elif act_fn == "gelu":
-            self.act = nn.GELU()
+        if act_fn is None:
+            self.act = None
+        else:
+            self.act = get_activation(act_fn)
 
         self.linear = nn.Linear(embedding_dim, out_dim * 2)
         # elementwise_affine=False

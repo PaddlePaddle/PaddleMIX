@@ -68,13 +68,7 @@ class PaintByExampleMapper(nn.Layer):
         num_heads = 1
         self.blocks = nn.LayerList(
             [
-                BasicTransformerBlock(
-                    hid_size,
-                    num_heads,
-                    hid_size,
-                    activation_fn="gelu",
-                    attention_bias=True,
-                )
+                BasicTransformerBlock(hid_size, num_heads, hid_size, activation_fn="gelu", attention_bias=True)
                 for _ in range(num_layers)
             ]
         )

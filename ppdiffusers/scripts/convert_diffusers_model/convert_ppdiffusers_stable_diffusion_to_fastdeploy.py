@@ -59,9 +59,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(model_path: str, output_
             paddle.static.InputSpec(shape=[None, unet_channels, None, None], dtype="float32", name="sample"),  # sample
             paddle.static.InputSpec(shape=[1], dtype="int64", name="timestep"),  # timestep
             paddle.static.InputSpec(
-                shape=[None, None, cross_attention_dim],
-                dtype="float32",
-                name="encoder_hidden_states",
+                shape=[None, None, cross_attention_dim], dtype="float32", name="encoder_hidden_states"
             ),  # encoder_hidden_states
         ],
     )
@@ -87,9 +85,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(model_path: str, output_
         vae_encoder,
         input_spec=[
             paddle.static.InputSpec(
-                shape=[None, vae_in_channels, None, None],
-                dtype="float32",
-                name="sample",  # N, C, H, W
+                shape=[None, vae_in_channels, None, None], dtype="float32", name="sample"  # N, C, H, W
             ),  # latent
         ],
     )
@@ -109,9 +105,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(model_path: str, output_
         vae_decoder,
         input_spec=[
             paddle.static.InputSpec(
-                shape=[None, vae_latent_channels, None, None],
-                dtype="float32",
-                name="latent_sample",
+                shape=[None, vae_latent_channels, None, None], dtype="float32", name="latent_sample"
             ),  # latent_sample
         ],
     )
@@ -169,12 +163,7 @@ if __name__ == "__main__":
         help="Path to the `ppdiffusers` checkpoint to convert (either a local directory or on the bos).",
     )
     parser.add_argument("--output_path", type=str, required=True, help="Path to the output model.")
-    parser.add_argument(
-        "--mode",
-        action="store_true",
-        default=False,
-        help="Export the vae encoder in mode or sample",
-    )
+    parser.add_argument("--mode", action="store_true", default=False, help="Export the vae encoder in mode or sample")
     args = parser.parse_args()
 
     convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(args.model_path, args.output_path, args.mode)

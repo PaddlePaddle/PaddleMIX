@@ -11,15 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+set -uex
+
+# test dreambooth
+cd ../../examples/dreambooth
 
 export FLAGS_conv_workspace_size_limit=4096
 export INSTANCE_DIR="./dogs"
 export MODEL_NAME="runwayml/stable-diffusion-v1-5"
 export OUTPUT_DIR="dreambooth_danka"
-export FLAG_FUSED_LINEAR=1
+export FLAG_FUSED_LINEAR=0
 export FLAG_XFORMERS_ATTENTION_OP=auto
-
-cd ../../examples/dreambooth
 
 python -u train_dreambooth.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
@@ -38,8 +40,7 @@ python -u train_dreambooth.py \
   --enable_xformers_memory_efficient_attention 
   
   
-export OUTPUT_DIR="dreambooth_duoka"
-
+# export OUTPUT_DIR="dreambooth_duoka"
 python -u -m paddle.distributed.launch --gpus "0,1" train_dreambooth.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
   --instance_data_dir=$INSTANCE_DIR \
@@ -57,8 +58,7 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_dreambooth.py \
   --enable_xformers_memory_efficient_attention 
 
 
-
-export OUTPUT_DIR="dreambooth_lora_danka"
+# export OUTPUT_DIR="dreambooth_lora_danka"
 python train_dreambooth_lora.py \
   --pretrained_model_name_or_path=$MODEL_NAME  \
   --instance_data_dir=$INSTANCE_DIR \
@@ -82,9 +82,9 @@ python train_dreambooth_lora.py \
   --noise_offset=1 \
   --train_text_encoder \
   --enable_xformers_memory_efficient_attention 
+
   
-  
-export OUTPUT_DIR="dreambooth_lora_duoka"
+# export OUTPUT_DIR="dreambooth_lora_duoka"
 python -u -m paddle.distributed.launch --gpus "0,1" train_dreambooth_lora.py \
   --pretrained_model_name_or_path=$MODEL_NAME  \
   --instance_data_dir=$INSTANCE_DIR \
@@ -108,12 +108,35 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_dreambooth_lora.py \
   --noise_offset=1 \
   --train_text_encoder \
   --enable_xformers_memory_efficient_attention 
-  
-  
+
+export OUTPUT_DIR="dreambooth_lora_sdxl_danka"
+export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
+
+python -u -m paddle.distributed.launch --gpus "0" train_dreambooth_lora_sdxl.py \
+  --pretrained_model_name_or_path=$MODEL_NAME  \
+  --instance_data_dir=$INSTANCE_DIR \
+  --output_dir=$OUTPUT_DIR \
+  --instance_prompt="a photo of sks dog" \
+  --height=512 \
+  --width=512 \
+  --train_batch_size=1 \
+  --gradient_accumulation_steps=4 \
+  --learning_rate=1e-4 \
+  --report_to="visualdl" \
+  --lr_scheduler="constant" \
+  --lr_warmup_steps=0 \
+  --max_train_steps=500 \
+  --validation_prompt="A photo of sks dog in a bucket" \
+  --validation_epochs=25 \
+  --seed="0" \
+  --checkpointing_steps=100 \
+  --enable_xformers_memory_efficient_attention
+
 cd -
 
-
+# test text_to_image
 cd ../../examples/text_to_image
+export MODEL_NAME="runwayml/stable-diffusion-v1-5"
 export DATASET_NAME="lambdalabs/pokemon-blip-captions"
 export OUTPUT_DIR="sd-pokemon-model"
 
@@ -131,10 +154,10 @@ python -u train_text_to_image.py \
   --enable_xformers_memory_efficient_attention \
   --lr_scheduler="constant" --lr_warmup_steps=0 \
   --noise_offset=1 \
-  --output_dir=${OUTPUT_DIR} 
+  --output_dir=${OUTPUT_DIR}
+
 
 export OUTPUT_DIR="sd-pokemon-model-duoka"
-
 python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
   --dataset_name=$DATASET_NAME \
@@ -151,7 +174,7 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image.py \
   --noise_offset=1 \
   --output_dir=${OUTPUT_DIR}
   
-  
+
 export OUTPUT_DIR="sd-pokemon-model-lora"
 python train_text_to_image_lora.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
@@ -173,12 +196,10 @@ python train_text_to_image_lora.py \
   --lora_rank=4 \
   --seed=1337 \
   --noise_offset=1 \
-  --train_text_encoder \
   --validation_epochs 1 \
   --enable_xformers_memory_efficient_attention
 
 export OUTPUT_DIR="sd-pokemon-model-lora-duoka"
-
 python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image_lora.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
   --dataset_name=$DATASET_NAME \
@@ -199,12 +220,12 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image_lora.py 
   --lora_rank=4 \
   --seed=1337 \
   --noise_offset=1 \
-  --train_text_encoder \
   --validation_epochs 1 \
   --enable_xformers_memory_efficient_attention
   
 cd -
 
+# test textual_inversion
 cd ../../examples/textual_inversion
 export DATA_DIR="cat-toy"
 
@@ -229,7 +250,7 @@ python -u train_textual_inversion.py \
   --validation_prompt "A <cat-toy> backpack" \
   --validation_epochs 1 \
   --noise_offset 1 \
-  --output_dir=${OUTPUT_DIR} 
+  --output_dir=${OUTPUT_DIR}
 
 
 export OUTPUT_DIR="textual_inversion_cat_duoka"
@@ -257,6 +278,7 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_textual_inversion.py \
   
 cd -
 
+# test text_to_image_laion400m
 cd ../../examples/text_to_image_laion400m
 python -u train_txt2img_laion400m_trainer.py \
     --do_train \
@@ -286,6 +308,7 @@ python -u train_txt2img_laion400m_trainer.py \
     --overwrite_output_dir \
     --benchmark True
 
+
 python -u -m paddle.distributed.launch --gpus "0,1" train_txt2img_laion400m_trainer.py \
     --do_train \
     --output_dir ./laion400m_pretrain_output_trainer \
@@ -316,7 +339,10 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_txt2img_laion400m_trai
 
 
 cd -
+
+# test stable_diffusion
 cd ../../examples/stable_diffusion
+# CUDA version needs to be greater than 11.7.
 python -u train_txt2img_laion400m_trainer.py \
     --do_train \
     --output_dir ./laion400m_pretrain_output_trainer \
@@ -341,9 +367,9 @@ python -u train_txt2img_laion400m_trainer.py \
     --recompute True \
     --overwrite_output_dir \
     --benchmark True \
-    --bf16 True \
     --fp16_opt_level O2
 
+# CUDA version needs to be greater than 11.7.
 python -u -m paddle.distributed.launch --gpus "0,1" train_txt2img_laion400m_trainer.py \
     --do_train \
     --output_dir ./laion400m_pretrain_output_trainer \
@@ -368,11 +394,12 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_txt2img_laion400m_trai
     --recompute True \
     --overwrite_output_dir \
     --benchmark True \
-    --bf16 True \
     --fp16_opt_level O2
 
 cd -
 
+
+# test autoencoder
 cd ../../examples/autoencoder/vae
 
 python train_vae.py \
@@ -417,6 +444,8 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_vae.py \
 
 cd -
 
+
+# test controlnet
 cd ../../examples/controlnet
 
 
@@ -469,9 +498,11 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_txt2img_control_traine
 
 cd -
 
+
+# test t2i-adapter
 cd ../../examples/t2i-adapter
 
-python -u -m train_t2i_adapter_trainer.py \
+python -u train_t2i_adapter_trainer.py \
     --do_train \
     --output_dir ./sd15_openpose_danka \
     --per_device_train_batch_size 1 \

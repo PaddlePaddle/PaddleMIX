@@ -36,46 +36,53 @@ class CosineDecayWithWarmup(LRScheduler):
         warmup_start_lr(float): Initial learning rate of warm up. Default: 0.0.
         last_epoch (int, optional):  The index of last epoch. Can be set to restart training. Default: -1, means initial learning rate.
     """
-
+    
     def __init__(
         self,
         learning_rate,
-        epochs,
+        total_steps,
         eta_min=0.0,
-        warmup_steps=0,
         warmup_start_lr=0.0,
-        last_epoch=-1,
-        step_each_epoch=1,
-        **kwargs,
+        last_step=-1,
+        warmup=0,
+        **kwargs
     ):
         self.start_lr = learning_rate
-        self.T_max = epochs
         self.eta_min = eta_min
-        self.last_epoch = last_epoch
-        self.warmup_steps = warmup_steps
         self.warmup_start_lr = warmup_start_lr
         self.last_lr = self.start_lr
-        self.cur_step = 0
-        self.last_epoch = last_epoch
-        self.step_each_epoch = step_each_epoch
+        self.last_step = last_step
+        self.total_steps = total_steps
+
+        if isinstance(warmup, int):
+            self.warmup_steps = warmup
+        elif isinstance(warmup, float):
+            self.warmup_steps = int(warmup * total_steps)
+        else:
+            raise ValueError("Warmup expected a int or float number, but recevied: {}".format(type(warmup)))
+        self.step_each_epoch = kwargs.get("step_each_epoch",None)           
         if self.warmup_steps > 0:
             self.last_lr = self.warmup_start_lr
-        super().__init__(learning_rate=self.last_lr, last_epoch=self.last_epoch)
-
+        super().__init__(learning_rate=self.last_lr, last_epoch=self.last_step)
+ 
     def step(self):
-        self.cur_step += 1
-        cur_step_in_epoch = (self.cur_step - 2) % self.step_each_epoch
-        cur_epoch = (self.cur_step - 2) // self.step_each_epoch
-        if self.cur_step < self.warmup_steps and cur_epoch == 0:
-            self.last_lr = self.warmup_start_lr + (self.start_lr - self.warmup_start_lr) * cur_step_in_epoch / max(
-                self.warmup_steps, 1
-            )
+        global_cur_step = self.last_step + 1
+        if global_cur_step < self.warmup_steps:
+            self.last_lr = self.warmup_start_lr + (
+                self.start_lr - self.warmup_start_lr
+            ) * global_cur_step / max(self.warmup_steps, 1)
         else:
-            self.last_lr = (self.start_lr - self.eta_min) * 0.5 * (
-                1.0 + math.cos(math.pi * cur_epoch / self.T_max)
-            ) + self.eta_min
-        self.last_epoch = cur_epoch
-
+            if self.step_each_epoch:
+                self.last_lr = (self.start_lr - self.eta_min) * 0.5 * (
+                    1.0 + math.cos(math.pi * global_cur_step // self.total_steps)
+                ) + self.eta_min
+            else:
+                self.last_lr = (self.start_lr - self.eta_min) * 0.5 * (
+                    1.0 + math.cos(math.pi * global_cur_step / self.total_steps)
+                ) + self.eta_min 
+        self.last_step += 1
+        
+       
     def get_lr(self):
         return self.last_lr
 

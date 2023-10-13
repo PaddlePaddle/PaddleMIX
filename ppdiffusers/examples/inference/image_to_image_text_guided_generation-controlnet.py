@@ -26,7 +26,7 @@ pipe.set_progress_bar_config(disable=None)
 generator = paddle.Generator().manual_seed(0)
 prompt = "bird"
 image = load_image(
-    "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/sd_controlnet/bird_canny.png"
+    "https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-upgrade0193/sd_controlnet_bird_canny.png.png"
 )
 
 output = pipe(prompt, image, generator=generator)

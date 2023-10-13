@@ -39,9 +39,7 @@ class UnCLIPTextProjModel(ModelMixin, ConfigMixin):
         super().__init__()
 
         self.learned_classifier_free_guidance_embeddings = self.create_parameter(
-            (clip_embeddings_dim,),
-            dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0),
+            (clip_embeddings_dim,), dtype=paddle.get_default_dtype(), default_initializer=nn.initializer.Constant(0.0)
         )
 
         # parameters for additional clip time embeddings
@@ -56,14 +54,7 @@ class UnCLIPTextProjModel(ModelMixin, ConfigMixin):
         self.encoder_hidden_states_proj = nn.Linear(clip_embeddings_dim, cross_attention_dim)
         self.text_encoder_hidden_states_norm = nn.LayerNorm(cross_attention_dim)
 
-    def forward(
-        self,
-        *,
-        image_embeddings,
-        prompt_embeds,
-        text_encoder_hidden_states,
-        do_classifier_free_guidance,
-    ):
+    def forward(self, *, image_embeddings, prompt_embeds, text_encoder_hidden_states, do_classifier_free_guidance):
 
         image_embeddings = image_embeddings.cast(self.dtype)
 

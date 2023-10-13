@@ -41,12 +41,7 @@ class PNDMSchedulerTest(SchedulerCommonTest):
         num_inference_steps = kwargs.pop("num_inference_steps", None)
         sample = self.dummy_sample
         residual = 0.1 * sample
-        dummy_past_residuals = [
-            residual + 0.2,
-            residual + 0.15,
-            residual + 0.1,
-            residual + 0.05,
-        ]
+        dummy_past_residuals = [residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05]
 
         for scheduler_class in self.scheduler_classes:
             scheduler_config = self.get_scheduler_config(**config)
@@ -80,12 +75,7 @@ class PNDMSchedulerTest(SchedulerCommonTest):
         num_inference_steps = kwargs.pop("num_inference_steps", None)
         sample = self.dummy_sample
         residual = 0.1 * sample
-        dummy_past_residuals = [
-            residual + 0.2,
-            residual + 0.15,
-            residual + 0.1,
-            residual + 0.05,
-        ]
+        dummy_past_residuals = [residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05]
 
         for scheduler_class in self.scheduler_classes:
             scheduler_config = self.get_scheduler_config()
@@ -152,12 +142,7 @@ class PNDMSchedulerTest(SchedulerCommonTest):
                 kwargs["num_inference_steps"] = num_inference_steps
 
             # copy over dummy past residuals (must be done after set_timesteps)
-            dummy_past_residuals = [
-                residual + 0.2,
-                residual + 0.15,
-                residual + 0.1,
-                residual + 0.05,
-            ]
+            dummy_past_residuals = [residual + 0.2, residual + 0.15, residual + 0.1, residual + 0.05]
             scheduler.ets = dummy_past_residuals[:]
 
             output_0 = scheduler.step_prk(residual, 0, sample, **kwargs).prev_sample
@@ -187,27 +172,7 @@ class PNDMSchedulerTest(SchedulerCommonTest):
         assert paddle.equal_all(
             scheduler.timesteps,
             paddle.to_tensor(
-                [
-                    901,
-                    851,
-                    851,
-                    801,
-                    801,
-                    751,
-                    751,
-                    701,
-                    701,
-                    651,
-                    651,
-                    601,
-                    601,
-                    501,
-                    401,
-                    301,
-                    201,
-                    101,
-                    1,
-                ]
+                [901, 851, 851, 801, 801, 751, 751, 701, 701, 651, 651, 601, 601, 501, 401, 301, 201, 101, 1]
             ),
         )
 

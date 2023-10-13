@@ -9,7 +9,7 @@ PaddleMIX基于Paddle Inference，提供了python的部署方案。
 ### 1.1 示例
 
 ```python
->>> from paddlemix import Appflow
+>>> from paddlemix.appflow import Appflow
 >>> from PIL import Image
 
 >>> task = Appflow(app="openset_det_sam",
@@ -45,19 +45,21 @@ Python端预测部署主要包含两个步骤：
 ### 2.1 导出预测模型
 
 ```bash
+cd deploy/groundingdino
 # 导出groundingdino模型
-python deploy/groundingdino/export.py -dt "GroundingDino/groundingdino-swint-ogc" --output_dir=./output
+python export.py \
+--dino_type GroundingDino/groundingdino-swint-ogc
 ```
 导出后目录下，包括 `model_state.pdiparams`,  `model_state.pdiparams.info`, `model_state.pdmodel`等文件。
 
 ### 2.2 基于python的预测
 
 ```bash
- python deploy/groundingdino/predict.py  \
- --text_encoder_type GroundingDino/groundingdino-swint-ogc
- --model_path output_groundingdino \
- --input_image image_you_want_to_detect.jpg \
- -output_dir "dir you want to save the output" \
- -prompt "Detect Cat"
+ python predict.py  \
+ --text_encoder_type GroundingDino/groundingdino-swint-ogc \
+ --model_path output_groundingdino/GroundingDino/groundingdino-swint-ogc \
+ --input_image https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg \
+ --output_dir ./groundingdino_predict_output \
+ --prompt "bus"
 
 ```

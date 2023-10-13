@@ -14,5 +14,5 @@
 
 from ppdiffusers import DiffusionPipeline
 
-# CompVis/stable-diffusion-v1-4
+# CompVis/stable-diffusion-v1-5
 p = DiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5")

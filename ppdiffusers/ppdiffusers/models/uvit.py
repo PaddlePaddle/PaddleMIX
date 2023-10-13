@@ -42,15 +42,7 @@ def interpolate_pos_emb(pos_emb, old_shape, new_shape):
 
 
 class Attention(nn.Layer):
-    def __init__(
-        self,
-        dim,
-        num_heads=8,
-        qkv_bias=False,
-        qk_scale=None,
-        attn_drop=0.0,
-        proj_drop=0.0,
-    ):
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0.0, proj_drop=0.0):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -77,9 +69,7 @@ class Attention(nn.Layer):
         return tensor
 
     def set_use_memory_efficient_attention_xformers(
-        self,
-        use_memory_efficient_attention_xformers: bool,
-        attention_op: Optional[str] = None,
+        self, use_memory_efficient_attention_xformers: bool, attention_op: Optional[str] = None
     ):
         # remove this PR: https://github.com/PaddlePaddle/Paddle/pull/56045
         # if self.head_size > 128 and attention_op == "flash":
@@ -163,22 +153,12 @@ class Block(nn.Layer):
         self.norm2 = norm_layer(dim)
 
         self.attn = Attention(
-            dim,
-            num_heads=num_heads,
-            qkv_bias=qkv_bias,
-            qk_scale=qk_scale,
-            attn_drop=attn_drop,
-            proj_drop=drop,
+            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop
         )
         self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
         self.norm3 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(
-            in_features=dim,
-            hidden_features=mlp_hidden_dim,
-            act_layer=act_layer,
-            drop=drop,
-        )
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
         self.skip_linear = nn.Linear(2 * dim, dim) if skip else None
 
     def forward(self, x, skip=None):
@@ -360,12 +340,7 @@ class UViTModel(ModelMixin, ConfigMixin):
         num_text_tokens, num_img_tokens = text.shape[1], img.shape[1]
 
         pos_embed = paddle.concat(
-            [
-                self.pos_embed[:, : 1 + 1, :],
-                self.pos_embed_token,
-                self.pos_embed[:, 1 + 1 :, :],
-            ],
-            axis=1,
+            [self.pos_embed[:, : 1 + 1, :], self.pos_embed_token, self.pos_embed[:, 1 + 1 :, :]], axis=1
         )
 
         if H == self.img_size[0] and W == self.img_size[1]:
@@ -377,10 +352,7 @@ class UViTModel(ModelMixin, ConfigMixin):
             )
             pos_embed_patches = interpolate_pos_emb(
                 pos_embed_patches,
-                (
-                    self.img_size[0] // self.patch_size,
-                    self.img_size[1] // self.patch_size,
-                ),
+                (self.img_size[0] // self.patch_size, self.img_size[1] // self.patch_size),
                 (H // self.patch_size, W // self.patch_size),
             )
             pos_embed = paddle.concat((pos_embed_others, pos_embed_patches), axis=1)
@@ -400,14 +372,9 @@ class UViTModel(ModelMixin, ConfigMixin):
 
         x = self.norm(x)
 
-        (
-            t_img_token_out,
-            t_text_token_out,
-            token_embed_out,
-            text_out,
-            clip_img_out,
-            img_out,
-        ) = x.split((1, 1, 1, num_text_tokens, 1, num_img_tokens), axis=1)
+        t_img_token_out, t_text_token_out, token_embed_out, text_out, clip_img_out, img_out = x.split(
+            (1, 1, 1, num_text_tokens, 1, num_img_tokens), axis=1
+        )
 
         img_out = self.decoder_pred(img_out)
         sample_img = unpatchify(img_out, self.in_channels)
@@ -417,8 +384,4 @@ class UViTModel(ModelMixin, ConfigMixin):
         if not return_dict:
             return (sample_img, sample_clip_img, sample_text)
 
-        return UViTModelOutput(
-            sample_img=sample_img,
-            sample_clip_img=sample_clip_img,
-            sample_text=sample_text,
-        )
+        return UViTModelOutput(sample_img=sample_img, sample_clip_img=sample_clip_img, sample_text=sample_text)

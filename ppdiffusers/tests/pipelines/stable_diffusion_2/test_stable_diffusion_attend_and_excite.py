@@ -26,18 +26,30 @@ from ppdiffusers import (
     StableDiffusionAttendAndExcitePipeline,
     UNet2DConditionModel,
 )
-from ppdiffusers.utils import load_numpy, slow
+from ppdiffusers.utils import slow
 from ppdiffusers.utils.testing_utils import require_paddle_gpu
 
-from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
-from ..test_pipelines_common import PipelineTesterMixin
+from ..pipeline_params import (
+    TEXT_TO_IMAGE_BATCH_PARAMS,
+    TEXT_TO_IMAGE_IMAGE_PARAMS,
+    TEXT_TO_IMAGE_PARAMS,
+)
+from ..test_pipelines_common import (
+    PipelineKarrasSchedulerTesterMixin,
+    PipelineLatentTesterMixin,
+    PipelineTesterMixin,
+)
 
 
-class StableDiffusionAttendAndExcitePipelineFastTests(PipelineTesterMixin, unittest.TestCase):
+class StableDiffusionAttendAndExcitePipelineFastTests(
+    PipelineLatentTesterMixin, PipelineKarrasSchedulerTesterMixin, PipelineTesterMixin, unittest.TestCase
+):
     pipeline_class = StableDiffusionAttendAndExcitePipeline
     test_attention_slicing = False
     params = TEXT_TO_IMAGE_PARAMS
     batch_params = TEXT_TO_IMAGE_BATCH_PARAMS.union({"token_indices"})
+    image_params = TEXT_TO_IMAGE_IMAGE_PARAMS
+    image_latents_params = TEXT_TO_IMAGE_IMAGE_PARAMS
 
     def get_dummy_components(self):
         paddle.seed(0)
@@ -99,14 +111,13 @@ class StableDiffusionAttendAndExcitePipelineFastTests(PipelineTesterMixin, unitt
 
     def get_dummy_inputs(self, seed=0):
         generator = paddle.Generator().manual_seed(seed)
-
         inputs = inputs = {
             "prompt": "a cat and a frog",
             "token_indices": [2, 5],
             "generator": generator,
             "num_inference_steps": 2,
             "guidance_scale": 6.0,
-            "output_type": "numpy",
+            "output_type": "np",
             "max_iter_to_alter": 2,
             "thresholds": {(0): 0.7},
         }
@@ -140,6 +151,21 @@ class StableDiffusionAttendAndExcitePipelineFastTests(PipelineTesterMixin, unitt
         # NOTE: Larger batch sizes cause this test to timeout, only test on smaller batches
         self._test_inference_batch_consistent(batch_sizes=[2, 4])
 
+    def test_inference_batch_single_identical(self):
+        self._test_inference_batch_single_identical(batch_size=2)
+
+    def test_dict_tuple_outputs_equivalent(self):
+        super().test_dict_tuple_outputs_equivalent()
+
+    def test_pd_np_pil_outputs_equivalent(self):
+        super().test_pd_np_pil_outputs_equivalent(expected_max_diff=0.0005)
+
+    def test_save_load_local(self):
+        super().test_save_load_local()
+
+    def test_save_load_optional_components(self):
+        super().test_save_load_optional_components()
+
 
 @require_paddle_gpu
 @slow
@@ -152,9 +178,7 @@ class StableDiffusionAttendAndExcitePipelineIntegrationTests(unittest.TestCase):
     def test_attend_and_excite_fp16(self):
         generator = paddle.Generator().manual_seed(seed=51)
         pipe = StableDiffusionAttendAndExcitePipeline.from_pretrained(
-            "CompVis/stable-diffusion-v1-4",
-            safety_checker=None,
-            paddle_dtype=paddle.float16,
+            "CompVis/stable-diffusion-v1-4", safety_checker=None, paddle_dtype=paddle.float16
         )
 
         prompt = "a painting of an elephant with glasses"
@@ -166,9 +190,13 @@ class StableDiffusionAttendAndExcitePipelineIntegrationTests(unittest.TestCase):
             generator=generator,
             num_inference_steps=5,
             max_iter_to_alter=5,
-            output_type="numpy",
+            output_type="np",
         ).images[0]
-        expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/attend-and-excite/elephant_glasses.npy"
+        # expected_image = load_numpy(
+        #     "https://bj.bcebos.com/v1/paddlenlp/datasets/hf-internal-testing/diffusers-images/resolve/main/attend-and-excite/elephant_glasses.npy"
+        # )
+        expected_image = np.array(
+            [0.33854762, 0.2892024, 0.24805409, 0.3537666, 0.3158779, 0.26081967, 0.3637334, 0.3303557, 0.3098219]
         )
+        image = image[-3:, -3:, -1].flatten()
         assert np.abs((expected_image - image).max()) < 0.5

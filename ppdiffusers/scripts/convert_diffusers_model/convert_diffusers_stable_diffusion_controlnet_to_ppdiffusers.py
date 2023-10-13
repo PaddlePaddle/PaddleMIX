@@ -198,10 +198,9 @@ def convert_diffusers_stable_diffusion_controlnet_to_ppdiffusers(pretrained_mode
                 "CompVis/stable-diffusion-v1-4/feature_extractor"
             )
             # 8. safety_checker
-            (
-                safety_checker_state_dict,
-                safety_checker_config,
-            ) = convert_hf_clip_to_ppnlp_clip(diffusers_pipe.safety_checker, is_text_encoder=False)
+            safety_checker_state_dict, safety_checker_config = convert_hf_clip_to_ppnlp_clip(
+                diffusers_pipe.safety_checker, is_text_encoder=False
+            )
             pp_safety_checker = StableDiffusionSafetyChecker(CLIPVisionConfig.from_dict(safety_checker_config))
             pp_safety_checker.set_dict(safety_checker_state_dict)
             # 9. create ppdiffusers pipe
