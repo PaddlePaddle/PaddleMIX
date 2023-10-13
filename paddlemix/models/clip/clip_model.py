@@ -24,10 +24,10 @@ import os
 from typing import Union
 
 import numpy as np
-
-from paddlemix.models.model_utils import MixPretrainedModel
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlenlp.utils.log import logger
+
+from paddlemix.models.model_utils import MixPretrainedModel
 
 from .loss import ClipLoss
 from .text_model import TextTransformer, TextTransformerConfig
@@ -146,7 +146,7 @@ class CLIPPretrainedModel(MixPretrainedModel):
         pretrained_vismodel_name_or_path=None,
         pretrained_textmodel_name_or_path=None,
         from_hf_hub: bool = False,
-        subfolder: str = None,
+        subfolder: str = "",
         *args,
         **kwargs,
     ):
