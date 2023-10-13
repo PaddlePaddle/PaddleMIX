@@ -66,9 +66,10 @@ function _train(){
     train_cmd="../paddlemix/examples/blip2/run_pretrain_stage2.py \
             --output_dir ./outputs \
             --logging_steps=5 \
-            --benchmark True
+            --benchmark True \
             --num_train_epochs=${max_epochs} \
-            --save_strategy no
+            --save_strategy no \
+            --per_device_train_batch_size ${base_batch_size}
             "
 
     # 以下为通用执行命令，无特殊可不用修改
