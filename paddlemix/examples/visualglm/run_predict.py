@@ -51,12 +51,12 @@ def predict(args):
     # Epoch 1
     query = "写诗描述一下这个场景"
     history = []
-    inputs = processor(image, query)
+    inputs = processor(image, query, max_length=1024)
+
     generate_ids, _ = model.generate(**inputs, **generate_kwargs)
     responses = processor.get_responses(generate_ids)
     history.append([query, responses[0]])
-    print("query->", query)
-    print("responses->", responses)
+    print(responses)
 
     # Epoch 2
     query = "这部电影的导演是谁？"
@@ -64,9 +64,7 @@ def predict(args):
     generate_ids, _ = model.generate(**inputs, **generate_kwargs)
     responses = processor.get_responses(generate_ids)
     history.append([query, responses[0]])
-    print("query->", query)
-    print("responses->", responses)
-    # print(responses)
+    print(responses)
 
 
 if __name__ == "__main__":

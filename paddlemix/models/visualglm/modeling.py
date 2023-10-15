@@ -1445,6 +1445,19 @@ class ChatGLMForConditionalGenerationWithImage(ChatGLMForCausalLM):
         super(ChatGLMForConditionalGenerationWithImage, self).__init__(config)
         self.config = config
 
+    def get_masks(self, input_ids):
+
+        batch_size, seq_length = input_ids.shape
+        context_lengths = []
+        for seq in input_ids:
+            context_lengths.append(paddle.where(seq == self.config.bos_token_id)[0][0])
+        attention_mask = paddle.tril(paddle.ones([batch_size, seq_length, seq_length]))
+        for i, context_length in enumerate(context_lengths):
+            attention_mask[i, :, :context_length] = 1
+        attention_mask = attention_mask.unsqueeze(1)
+        attention_mask = (attention_mask > 0.5).astype("int64")
+        return attention_mask
+
     def prepare_inputs_for_generation(
         self, input_ids, position_ids=None, attention_mask=None, past_key_values=None, cache=None, **kwargs
     ):
@@ -1624,6 +1637,7 @@ class VisualGLMForConditionalGeneration(VisualGLMPretrainedModel):
         """
 
         image_features = self.encode_images(pixel_values)
+        attention_mask = self.language_model.get_masks(input_ids)
 
         outputs = self.language_model.generate(
             input_ids=input_ids,
