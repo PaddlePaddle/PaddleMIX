@@ -1445,6 +1445,77 @@ class ChatGLMForConditionalGenerationWithImage(ChatGLMForCausalLM):
         super(ChatGLMForConditionalGenerationWithImage, self).__init__(config)
         self.config = config
 
+    def get_masks(self, input_ids):
+
+        batch_size, seq_length = input_ids.shape
+        context_lengths = []
+        for seq in input_ids:
+            context_lengths.append(paddle.where(seq == self.config.bos_token_id)[0][0])
+        attention_mask = paddle.tril(paddle.ones([batch_size, seq_length, seq_length]))
+        for i, context_length in enumerate(context_lengths):
+            attention_mask[i, :, :context_length] = 1
+        attention_mask = attention_mask.unsqueeze(1)
+        attention_mask = (attention_mask > 0.5).astype("int64")
+        return attention_mask
+
+    def prepare_inputs_for_generation(
+        self, input_ids, position_ids=None, attention_mask=None, past_key_values=None, cache=None, **kwargs
+    ):
+        batch_size, seq_length = input_ids.shape
+        MASK, gMASK = self.config.mask_token_id, self.config.gmask_token_id
+        use_gmasks = []
+        mask_positions = []
+        for seq in input_ids:
+            mask_token = gMASK if gMASK in seq else MASK
+            use_gmask = mask_token == gMASK
+            use_gmasks.append(use_gmask)
+            mask_positions.append(paddle.where(seq == mask_token)[0][0])
+
+        if cache is not None or past_key_values is not None:
+            last_token = input_ids[:, -1].unsqueeze(-1)
+
+            attention_mask = attention_mask[:, :, -1:]
+
+            if position_ids is not None:
+                position_ids = position_ids[..., -1:]
+            else:
+                if self.position_encoding_2d:
+                    context_lengths = []
+                    for seq in input_ids:
+                        context_lengths.append(paddle.where(seq == self.config.bos_token_id)[0][0])
+
+                    context_lengths = paddle.to_tensor(context_lengths, dtype="int64")
+                    block_position_ids = seq_length - context_lengths
+                    position_ids = paddle.concat(
+                        [paddle.to_tensor(mask_positions, dtype="int64"), block_position_ids], axis=1
+                    ).unsqueeze(-1)
+                else:
+                    position_ids = paddle.to_tensor(mask_positions, dtype="int64").unsqueeze(-1)
+
+            if cache is None:
+                cache = past_key_values
+
+            return {
+                "input_ids": last_token,
+                "cache": cache[-1],
+                "position_ids": position_ids,
+                "use_cache": True,
+                "attention_mask": attention_mask,
+                **kwargs,
+            }
+        else:
+            if position_ids is None:
+                position_ids = self.get_position_ids(input_ids, mask_positions=mask_positions, use_gmasks=use_gmasks)
+
+            return {
+                "input_ids": input_ids,
+                "cache": cache,
+                "position_ids": position_ids,
+                "use_cache": True,
+                "attention_mask": attention_mask,
+                **kwargs,
+            }
+
     def forward(
         self,
         image_features: paddle.Tensor,
@@ -1566,6 +1637,7 @@ class VisualGLMForConditionalGeneration(VisualGLMPretrainedModel):
         """
 
         image_features = self.encode_images(pixel_values)
+        attention_mask = self.language_model.get_masks(input_ids)
 
         outputs = self.language_model.generate(
             input_ids=input_ids,
