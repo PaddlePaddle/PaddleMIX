@@ -51,7 +51,7 @@ def predict(args):
     # Epoch 1
     query = "写诗描述一下这个场景"
     history = []
-    inputs = processor(image, query, max_length=1024)
+    inputs = processor(image, query)
 
     generate_ids, _ = model.generate(**inputs, **generate_kwargs)
     responses = processor.get_responses(generate_ids)
