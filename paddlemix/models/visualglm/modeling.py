@@ -1445,13 +1445,86 @@ class ChatGLMForConditionalGenerationWithImage(ChatGLMForCausalLM):
         super(ChatGLMForConditionalGenerationWithImage, self).__init__(config)
         self.config = config
 
+    def generate_inputs_position_ids(self, input_ids):
+
+        MASK, gMASK = self.config.mask_token_id, self.config.gmask_token_id
+        use_gmasks = []
+        mask_positions = []
+        for seq in input_ids:
+            mask_token = gMASK if gMASK in seq else MASK
+            use_gmask = mask_token == gMASK
+            use_gmasks.append(use_gmask)
+            mask_positions.append(paddle.where(seq == mask_token)[0][0])
+
+        position_ids = self.get_position_ids(input_ids, mask_positions=mask_positions, use_gmasks=use_gmasks)
+        return position_ids
+
+    def get_masks(self, input_ids):
+
+        batch_size, seq_length = input_ids.shape
+        context_lengths = []
+        for seq in input_ids:
+            context_lengths.append(paddle.where(seq == self.config.bos_token_id)[0][0])
+        attention_mask = paddle.tril(paddle.ones([batch_size, seq_length, seq_length]))
+        for i, context_length in enumerate(context_lengths):
+            attention_mask[i, :, :context_length] = 1
+        attention_mask = attention_mask.unsqueeze(1)
+        attention_mask = (attention_mask > 0.5).astype("int64")
+        return attention_mask
+
+    def prepare_inputs_for_generation(
+        self,
+        input_ids,
+        position_ids=None,
+        attention_mask=None,
+        past_key_values=None,
+        cache=None,
+        inputs_embeds=None,
+        **kwargs
+    ):
+
+        if cache is None and inputs_embeds is not None and past_key_values is None:
+            model_inputs = {"inputs_embeds": inputs_embeds}
+        else:
+            model_inputs = {"input_ids": input_ids}
+
+        if cache is not None or past_key_values is not None:
+            last_token = input_ids[:, -1].unsqueeze(-1)
+            attention_mask = attention_mask[:, :, -1:]
+            position_ids = position_ids[..., -1:]
+
+            if cache is None:
+                cache = past_key_values
+
+            model_inputs.update(
+                {
+                    "input_ids": last_token,
+                    "cache": cache[-1],
+                    "position_ids": position_ids,
+                    "use_cache": True,
+                    "attention_mask": attention_mask,
+                }
+            )
+
+            return model_inputs
+        else:
+
+            model_inputs.update(
+                {
+                    "cache": cache,
+                    "position_ids": position_ids,
+                    "use_cache": True,
+                    "attention_mask": attention_mask,
+                }
+            )
+
+            return model_inputs
+
     def forward(
         self,
-        image_features: paddle.Tensor,
-        input_ids: paddle.Tensor,
+        input_ids: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
         attention_mask: Optional[paddle.Tensor] = None,
-        pre_image_length: Optional[int] = None,
         cache: Optional[Tuple[paddle.Tensor]] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         labels: Optional[paddle.Tensor] = None,
@@ -1459,12 +1532,6 @@ class ChatGLMForConditionalGenerationWithImage(ChatGLMForCausalLM):
         return_dict: Optional[bool] = None,
     ):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
-        if inputs_embeds is None and cache is None and image_features is not None:
-            pre_ids, pad_ids, post_ids = paddle.split(input_ids, num_or_sections=[pre_image_length, 32, -1], axis=1)
-            pre_txt_emb = self.chatglm.transformer.word_embeddings(pre_ids)
-            post_txt_emb = self.chatglm.transformer.word_embeddings(post_ids)
-            inputs_embeds = paddle.concat([pre_txt_emb, image_features, post_txt_emb], axis=1)
 
         outputs = super().forward(
             input_ids=input_ids,
@@ -1566,11 +1633,17 @@ class VisualGLMForConditionalGeneration(VisualGLMPretrainedModel):
         """
 
         image_features = self.encode_images(pixel_values)
+        attention_mask = self.language_model.get_masks(input_ids)
+        position_ids = self.language_model.generate_inputs_position_ids(input_ids)
+        if image_features is not None:
+            pre_ids, pad_ids, post_ids = paddle.split(input_ids, num_or_sections=[pre_image_length, 32, -1], axis=1)
+            pre_txt_emb = self.language_model.chatglm.transformer.word_embeddings(pre_ids)
+            post_txt_emb = self.language_model.chatglm.transformer.word_embeddings(post_ids)
+            inputs_embeds = paddle.concat([pre_txt_emb, image_features, post_txt_emb], axis=1)
 
         outputs = self.language_model.generate(
-            input_ids=input_ids,
-            image_features=image_features,
-            pre_image_length=pre_image_length,
+            inputs_embeds=inputs_embeds,
+            position_ids=position_ids,
             attention_mask=attention_mask,
             **generate_kwargs,
         )
