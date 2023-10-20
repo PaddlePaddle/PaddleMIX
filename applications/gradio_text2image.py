@@ -21,13 +21,6 @@ def tge_fun(image, prompt_pos, prompt_neg):
     image = app(prompt=prompt_pos,negative_prompt=prompt_neg,image=image)['result']
     return image
 
-# dual_text_and_image_guided_generation
-def dge_fun(image, prompt):
-    image = Image.fromarray(image.astype('uint8')).convert('RGB')
-    app = Appflow(app='dual_text_and_image_guided_generation',models=['shi-labs/versatile-diffusion'])
-    image = app(prompt=prompt,image=image)['result']
-    return image
-
 # video_generation
 def vge_fun(prompt):
     app = Appflow(app='text_to_video_generation',models=['damo-vilab/text-to-video-ms-1.7b'])
