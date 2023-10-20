@@ -52,13 +52,6 @@ with gr.Blocks() as demo:
         tge_text_neg_in = gr.Text(label = "Negative Prompt")
         tge_button = gr.Button()
         tge_button.click(fn=tge_fun, inputs = [tge_image_in, tge_text_pos_in, tge_text_neg_in], outputs = [tge_image_out])
-    with gr.Tab("文本图像双引导图像生成"):
-        with gr.Row():
-            dge_image_in = gr.Image(label = "输入图片")
-            dge_image_out = gr.Image(label = "输出图片")
-        dge_text_in = gr.Text(label = "Prompt")
-        dge_button = gr.Button()
-        dge_button.click(fn=dge_fun, inputs = [dge_image_in, dge_text_in], outputs = [dge_image_out])
     with gr.Tab("文本条件的视频生成"):
         vge_text_in = gr.Text(label = "Prompt")
         vge_video_out = gr.Video(label = "输出视频")
