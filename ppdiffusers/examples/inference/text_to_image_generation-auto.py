@@ -27,5 +27,5 @@ image.save("text_to_image_generation-auto-result1.png")
 from ppdiffusers import AutoPipelineForImage2Image
 
 pipe_i2i = AutoPipelineForImage2Image.from_pipe(pipe_t2i)
-image = pipe_i2i("sunrise in snowy mountains", image).images[0]
+image = pipe_i2i("sunrise in snowy mountains, 4k", image).images[0]
 image.save("text_to_image_generation-auto-result2.png")
