@@ -112,6 +112,7 @@ class ModelArguments:
         metadata={"help": "The type of text model to use (OPT, T5)."},
     )
     image_size: int = field(default=224, metadata={"help": " Image size for training. (default:224)"})
+    qformer_tokenizer_name: str = field(default=None, metadata={"help": "qformer tokenizer name"})
 
 
 @dataclass
@@ -179,6 +180,8 @@ def create_model(config, training_args=None):
     blip2_config = Blip2Config.from_pretrained(config.model_name_or_path)
     blip2_config.mp_degree = config.mp_degree
     blip2_config.gradient_checkpointing = config.gradient_checkpointing
+    blip2_config.qformer_config.tokenizer_name = config.qformer_tokenizer_name
+
     model = Blip2ForConditionalGeneration(blip2_config)
     model.load_pretrained(
         vision_and_bridge_name_or_path=getattr(config, "vision_and_bridge_name_or_path", None),
