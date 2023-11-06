@@ -63,7 +63,10 @@ class FusedLayerNorm(OriginLayerNorm):
 
     def forward(self, input):
         org_dtype = input.dtype
-        return fused_ln(input.cast(self.weight.dtype), self.weight, self.bias, self._epsilon)[0].cast(org_dtype)
+        if org_dtype != self.weight.dtype:
+            return fused_ln(input.cast(self.weight.dtype), self.weight, self.bias, self._epsilon)[0].cast(org_dtype)
+        else:
+            return fused_ln(input, self.weight, self.bias, self._epsilon)[0]
 
 
 class FastLayerNorm(OriginLayerNorm):
