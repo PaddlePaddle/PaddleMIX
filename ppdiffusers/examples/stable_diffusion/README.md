@@ -8,17 +8,29 @@
 在运行这个训练代码前，我们需要安装下面的训练依赖。
 ```bash
 # paddlepaddle-gpu>=2.5.0rc1
-pip install -r requirements.txt
+pip install -r requirements.txt  # 如果提示权限不够，请在最后增加 --user 选项
 ```
+
+* 注：本模型需要依赖CUDA 11.2 及以上，如果本地机器不符合要求，建议前往AIStudio进行模型训练、推理。
 
 ### 1.2 准备工作
 
 #### 1.2.1 准备数据
+Stable Diffusion原本使用Laion数据集，需要自行下载和处理，如果只需要跑通训练步骤，也可以使用我们提供的demo数据集。
 
-#### laion400m_en.filelist文件内部格式如下所示
-自己准备好处理后的数据，并且将文件放置于`/data/laion400m/`目录，其中里面的每个part的前三列为`caption文本描述, 占位符空, base64编码的图片`，`caption, _, img_b64 = vec[:3]`。
+#### 1.2.1.1 Demo数据集
+通过下面的步骤下载demo数据：
+- 删除当前目录下的`data`;
+- 下载demo数据`wget https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/laion400m_demo_data.tar.gz`；
+- 解压demo数据`tar -zxvf laion400m_demo_data.tar.gz`
 
-注意，当前`laion400m_en.filelist`只存放了10条数据路径，如果想要更多数据的话，请运行`python write_filelist.py`代码，运行后会生成6万条数据路径。
+#### 1.2.1.2 laion400m数据集
+下载好Laion400m数据集之后，需要：
+1. 将文件放置于`data/laion400m/`目录，其中里面的每个part的前三列为`caption文本描述, 占位符空, base64编码的图片`，`caption, _, img_b64 = vec[:3]`。
+2. 配合我们提供的`data/filelist/laion400m_en.filelist`使用，或者自定准备其他`filelist`。
+3. 运行`python write_filelist.py`代码，生成完备的具有6万条数据路径的`laion400m_en.filelist`。（当前`laion400m_en.filelist`只存放了10条数据路径）
+
+`laion400m_en.filelist`为数据索引文件，内部内容如下所示：
 ```
 /data/laion400m/part-00000.gz
 /data/laion400m/part-00001.gz
@@ -31,15 +43,6 @@ pip install -r requirements.txt
 /data/laion400m/part-00008.gz
 /data/laion400m/part-00009.gz
 ```
-#### train.filelist.list训练文件内部格式如下所示
-我们提供了`laion400m_en.filelist`，当然也可以存放其他`filelist`
-```
-./data/filelist/laion400m_en.filelist
-```
-Tips: 我们可以选择下载demo数据
-- 删除当前目录下的`data`;
-- 下载demo数据`wget https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/laion400m_demo_data.tar.gz`；
-- 解压demo数据`tar -zxvf laion400m_demo_data.tar.gz`
 
 #### 1.2.2 准备权重
 #### 使用预先处理好的随机权重文件
@@ -56,6 +59,8 @@ tar -zxvf CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
 #### 1.3.1 硬件要求
 Tips：
 - FP32 和 BF16 在 40GB 的显卡上可正常训练。
+- 如果显存不够，请使用AIStudio上32G显存的GPU，并修改 --per_device_train_batch_size 为 32。
+- bf16仅在A100上支持，如使用V100不可打开，即V100上修改需要 --bf16 False
 
 #### 1.3.2 单机单卡训练
 ```bash
@@ -89,7 +94,7 @@ python -u train_txt2img_laion400m_trainer.py \
     --model_max_length 77 \
     --max_grad_norm -1 \
     --disable_tqdm True \
-    --bf16 True
+    --bf16 True  
 ```
 
 
@@ -172,7 +177,25 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_txt2img_la
 
 
 ## 2 模型推理
-待模型训练完毕，会在`output_dir`保存训练好的模型权重.
+请将下面的代码保存到eval.py中，并运行。
+
+### 2.1 直接加载模型参数推理
+未经完整训练，直接加载模型进行推理。
+
+```python
+from ppdiffusers import StableDiffusionPipeline, UNet2DConditionModel
+# 加载上面我们训练好的unet权重
+unet_model_name_or_path = "CompVis/stable-diffusion-v1-4/unet"
+unet = UNet2DConditionModel.from_pretrained(unet_model_name_or_path)
+pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", safety_checker=None, unet=unet)
+prompt = "a photo of an astronaut riding a horse on mars"  # or a little girl dances in the cherry blossom rain
+image = pipe(prompt, guidance_scale=7.5, width=512, height=512).images[0]
+image.save("astronaut_rides_horse.png")
+```
+
+
+### 2.2 使用训练的模型参数进行推理
+待模型训练完毕，会在`output_dir`保存训练好的模型权重，下面使用自行训练后生成的模型参数进行推理. 
 
 ```python
 from ppdiffusers import StableDiffusionPipeline, UNet2DConditionModel
@@ -184,3 +207,4 @@ prompt = "a photo of an astronaut riding a horse on mars"
 image = pipe(prompt, guidance_scale=7.5, width=256, height=256).images[0]
 image.save("astronaut_rides_horse.png")
 ```
+。
