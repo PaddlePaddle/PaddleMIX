@@ -8,7 +8,7 @@
 在运行这个训练代码前，我们需要安装下面的训练依赖。
 ```bash
 # paddlepaddle-gpu>=2.5.0rc1
-pip install -r requirements.txt
+pip install -r requirements.txt  # 如果提示权限不够，请在最后增加 --user 选项
 ```
 
 * 注：本模型需要依赖CUDA 11.2 及以上，如果本地机器不符合要求，建议前往AIStudio进行模型训练、推理。
