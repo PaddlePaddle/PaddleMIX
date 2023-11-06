@@ -175,7 +175,7 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_txt2img_la
 
 
 ## 2 模型推理
-待模型训练完毕，会在`output_dir`保存训练好的模型权重.
+待模型训练完毕，会在`output_dir`保存训练好的模型权重. 请将下面的代码保存到eval.py中，并运行。
 
 ```python
 from ppdiffusers import StableDiffusionPipeline, UNet2DConditionModel
@@ -183,7 +183,7 @@ from ppdiffusers import StableDiffusionPipeline, UNet2DConditionModel
 unet_model_name_or_path = "./output/checkpoint-5000/unet" # 直接推理时，需要替换./output/checkpoint-5000/unet 为 CompVis/stable-diffusion-v1-4/unet。
 unet = UNet2DConditionModel.from_pretrained(unet_model_name_or_path)
 pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", safety_checker=None, unet=unet)
-prompt = "a photo of an astronaut riding a horse on mars"
+prompt = "a photo of an astronaut riding a horse on mars"  # or a little girl dances in the cherry blossom rain
 image = pipe(prompt, guidance_scale=7.5, width=512, height=512).images[0]
 image.save("astronaut_rides_horse.png")
 ```
