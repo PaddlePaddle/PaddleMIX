@@ -48,6 +48,7 @@ pip install -r requirements.txt
 ```
 
 关于PaddlePaddle安装的详细教程请查看[Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html)。
+如果希望使用**bf16**训练推理，请使用支持**bf16**的GPU，如A100。
 
 2. 手动安装
 ```
