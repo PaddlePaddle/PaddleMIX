@@ -58,7 +58,7 @@ tar -zxvf CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
 ### 1.3 使用trainner开启训练
 #### 1.3.1 硬件要求
 Tips：
-- FP32 和 BF16 在 40GB 的显卡上可正常训练。如果显存不够，请修改 --per_device_train_batch_size 为32或以下。
+- FP32 和 BF16 在 40GB 的显卡上可正常训练。如果显存不够，请使用AIStudio上32G显存的GPU，并修改 --per_device_train_batch_size 为2。
 
 #### 1.3.2 单机单卡训练
 ```bash
