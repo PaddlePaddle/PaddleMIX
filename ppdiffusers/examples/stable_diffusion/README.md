@@ -11,6 +11,8 @@
 pip install -r requirements.txt
 ```
 
+* 注：本模型需要依赖CUDA 11.7，如果本地机器不符合要求，建议前往AIStudio进行模型训练、推理。
+
 ### 1.2 准备工作
 
 #### 1.2.1 准备数据
@@ -177,10 +179,11 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_txt2img_la
 ```python
 from ppdiffusers import StableDiffusionPipeline, UNet2DConditionModel
 # 加载上面我们训练好的unet权重
-unet_model_name_or_path = "./output/checkpoint-5000/unet"
+unet_model_name_or_path = "./output/checkpoint-5000/unet" # 直接推理时，需要替换./output/checkpoint-5000/unet 为 CompVis/stable-diffusion-v1-4/unet。
 unet = UNet2DConditionModel.from_pretrained(unet_model_name_or_path)
 pipe = StableDiffusionPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", safety_checker=None, unet=unet)
 prompt = "a photo of an astronaut riding a horse on mars"
-image = pipe(prompt, guidance_scale=7.5, width=256, height=256).images[0]
+image = pipe(prompt, guidance_scale=7.5, width=512, height=512).images[0]
 image.save("astronaut_rides_horse.png")
 ```
+。
