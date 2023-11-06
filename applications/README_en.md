@@ -16,7 +16,7 @@
   <a href=#quick-start> Quick Start </a> |
 </h4>
 
-**PaddleMIX** application example is developed based on Paddlevlp, ppdiffusers, and Paddlenlp，which is **simple** and **easy** to use  and **powerful**. Aggregating industry high-quality pre trained models and providing out of the box development experience, covering cross modal and multi scenario model library matching, can meet the needs of developers flexible customization .
+**PaddleMIX** application example is developed based on paddlemix, ppdiffusers, and Paddlenlp，which is **simple** and **easy** to use  and **powerful**. Aggregating industry high-quality pre trained models and providing out of the box development experience, covering cross modal and multi scenario model library matching, can meet the needs of developers flexible customization .
 
 
 ## Features
