@@ -92,7 +92,7 @@ python -u train_txt2img_laion400m_trainer.py \
     --model_max_length 77 \
     --max_grad_norm -1 \
     --disable_tqdm True \
-    --bf16 False
+    --bf16 False  # bf16仅在A100上支持，如使用V100不可打开
 ```
 
 
