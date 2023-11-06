@@ -44,9 +44,10 @@ try:
 except:
     print("Warning: import memory_efficient_attention error")
 
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
+
 from paddlemix.models.model_utils import MixPretrainedModel
 from paddlemix.utils.log import logger
-from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 
 def _convert_attention_mask(attn_mask, dtype):
@@ -393,7 +394,10 @@ class LayerNorm(paddle.nn.LayerNorm):
             dtype = orig_type.dtype
         else:
             dtype = x.dtype
-        return x.cast(dtype)
+        if x.dtype != dtype:
+            return x.cast(dtype)
+        else:
+            return x
 
 
 class QuickGELU(paddle.nn.Layer):
@@ -1022,7 +1026,8 @@ class ResidualAttentionBlock(paddle.nn.Layer):
             dtype = q_x.dtype.dtype
         else:
             dtype = attn_mask.dtype
-        attn_mask = attn_mask.cast(dtype) if attn_mask is not None else None
+        if attn_mask is not None and attn_mask.dtype != dtype:
+            attn_mask = attn_mask.cast(dtype)
         if self.xattn:
             return self.attn(q_x, attn_mask=attn_mask)
 

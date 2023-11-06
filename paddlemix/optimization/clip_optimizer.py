@@ -14,9 +14,14 @@
 
 import json
 import logging
+import math
 import re
 
 import paddle
+from paddle.distributed.fleet.utils.tensor_fusion_helper import (
+    HOOK_ACTION,
+    fused_parameters,
+)
 from paddle.optimizer.lr import LRScheduler
 
 from paddlemix.utils.log import logger
@@ -40,16 +45,7 @@ class CosineDecayWithWarmup(LRScheduler):
         last_epoch (int, optional):  The index of last epoch. Can be set to restart training. Default: -1, means initial learning rate.
     """
 
-    def __init__(
-        self,
-        learning_rate,
-        total_steps,
-        eta_min=0.0,
-        warmup_start_lr=0.0,
-        last_step=-1,
-        warmup=0,
-        **kwargs
-    ):
+    def __init__(self, learning_rate, total_steps, eta_min=0.0, warmup_start_lr=0.0, last_step=-1, warmup=0, **kwargs):
         self.start_lr = learning_rate
         self.eta_min = eta_min
         self.warmup_start_lr = warmup_start_lr
@@ -71,19 +67,17 @@ class CosineDecayWithWarmup(LRScheduler):
     def step(self):
         global_cur_step = self.last_step + 1
         if global_cur_step < self.warmup_steps:
-            self.last_lr = self.warmup_start_lr + (
-                self.start_lr - self.warmup_start_lr
-            ) * global_cur_step / max(self.warmup_steps, 1)
+            self.last_lr = self.warmup_start_lr + (self.start_lr - self.warmup_start_lr) * global_cur_step / max(
+                self.warmup_steps, 1
+            )
         else:
             self.last_lr = (self.start_lr - self.eta_min) * 0.5 * (
                 1.0 + math.cos(math.pi * global_cur_step / self.total_steps)
             ) + self.eta_min
         self.last_step += 1
-       
 
     def get_lr(self):
         return self.last_lr
-
 
 
 class FilterParamsName(object):
@@ -283,6 +277,20 @@ def print_optim(optimizer):
         print(param_group["group"], param_group["learning_rate"], param_group["lr_scale"])
 
 
+class FusedAdamW(paddle.optimizer.AdamW):
+    def __init__(self, learning_rate, parameters, **config):
+        self.parameters, self.buffers = fused_parameters(parameters, act=HOOK_ACTION.ALL_REDUCE, group_params=True)
+        self.all_parameters = []
+        for pg in self.parameters:
+            self.all_parameters.extend(pg["params"])
+
+        super().__init__(
+            learning_rate=learning_rate,
+            parameters=self.parameters,
+            **config,
+        )
+
+
 def create_optimizer(args, model, lr_scheduler=None, return_params=False):
     optimizer_args = dict(beta1=args.adam_beta1, beta2=args.adam_beta2)
     if lr_scheduler is not None:
@@ -297,6 +305,8 @@ def create_optimizer(args, model, lr_scheduler=None, return_params=False):
     else:
         optimizer_args["learning_rate"] = learning_rate
         base_optimizer = paddle.optimizer.AdamW
+        if args.tensor_fusion:
+            base_optimizer = FusedAdamW
     if args.fp16_opt_level == "O2":
         optimizer_args["multi_precision"] = True
     # if args.max_grad_norm:
@@ -304,7 +314,10 @@ def create_optimizer(args, model, lr_scheduler=None, return_params=False):
     #         clip_norm=args.max_grad_norm)
     #     optimizer_args['grad_clip'] = grad_clip
     parameters = get_all_parameters(args, model)
-    optimizer = base_optimizer(parameters=parameters, **optimizer_args)
+    if args.tensor_fusion:
+        optimizer = FusedAdamW(learning_rate, parameters)
+    else:
+        optimizer = base_optimizer(parameters=parameters, **optimizer_args)
     if is_master(args):
         print(f"Optimizer: {args.optimizer}")
         print(f"Optimizer config: {optimizer_args}")

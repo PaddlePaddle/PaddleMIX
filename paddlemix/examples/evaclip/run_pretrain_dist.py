@@ -18,6 +18,7 @@ import os
 import sys
 
 import numpy as np
+import psutil
 
 parent_path = os.path.abspath(os.path.join(__file__, *([".."] * 4)))
 sys.path.insert(0, parent_path)
@@ -26,6 +27,7 @@ import socket
 from dataclasses import dataclass, field
 
 import paddle
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 from paddlemix.datasets import load_dataset
 from paddlemix.datasets.dataset import ImageFolder
@@ -40,7 +42,6 @@ from paddlemix.processors.clip_processing import (
 from paddlemix.processors.tokenizer import SimpleTokenizer
 from paddlemix.trainer import CLIPTrainer
 from paddlemix.utils.env import setdistenv
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 
 @dataclass
@@ -113,6 +114,18 @@ class PreTrainingArguments(TrainingArguments):
     tensorboard: bool = field(
         default=False,
         metadata={"help": "Whether to use tensorboard to record loss."},
+    )
+    tensor_fusion: bool = field(
+        default=False,
+        metadata={"help": "Whether to use tensor fusion."},
+    )
+    cpu_core_bind: bool = field(
+        default=False,
+        metadata={"help": "Whether to use cpu core bind."},
+    )
+    fuse_ln: bool = field(
+        default=True,
+        metadata={"help": "Whether to use fused layer norm."},
     )
     pretrained_text_model: str = field(default="openclip", metadata={"help": "the model to pre-extract text feats"})
 
@@ -189,6 +202,8 @@ def main_worker(training_args, model_args, data_args):
         paddle.set_default_dtype("bfloat16")
 
     config = EVACLIPConfig.from_pretrained(model_args.model)
+    config["text_config"]["fusedLN"] = training_args.fuse_ln
+    config["vision_config"]["fusedLN"] = training_args.fuse_ln
     model = EVACLIP(
         config,
         disable_text=False,
@@ -226,6 +241,11 @@ def main_worker(training_args, model_args, data_args):
     checkpoint = None
     if training_args.resume_from_checkpoint is not None:
         checkpoint = training_args.resume_from_checkpoint
+
+    if training_args.cpu_core_bind:
+        p = psutil.Process()
+        start_rank = paddle.distributed.get_rank() * 3
+        p.cpu_affinity([start_rank, start_rank + 1, start_rank + 2])
 
     if training_args.do_train:
         trainer.train(resume_from_checkpoint=checkpoint)

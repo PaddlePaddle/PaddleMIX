@@ -33,10 +33,10 @@ except:
 from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
 from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 from paddlemix.models.model_utils import MixPretrainedModel
 from paddlemix.utils.log import logger
-from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 from .utils import is_model_parrallel, to_2tuple, trunc_normal_
 
@@ -189,6 +189,7 @@ class Attention(paddle.nn.Layer):
         self.xattn_drop = config.attn_drop_rate
         self.xattn = config.xattn
         self.subln = config.subln
+        self.fuse_qv = config.fuse_qv
 
         self.num_heads = config.width // config.head_width
         head_dim = dim // self.num_heads
@@ -219,13 +220,21 @@ class Attention(paddle.nn.Layer):
                 gather_output=True,
             )
         elif config.fusedlinear:
-            self.q_proj = FusedLinear(dim, all_head_dim, bias_attr=config.qkv_bias)
-            self.k_proj = FusedLinear(dim, all_head_dim, bias_attr=False)
-            self.v_proj = FusedLinear(dim, all_head_dim, bias_attr=config.qkv_bias)
+            if self.fuse_qv:
+                self.qv_proj = FusedLinear(dim, 2 * all_head_dim, bias_attr=config.qkv_bias)
+                self.k_proj = FusedLinear(dim, all_head_dim, bias_attr=False)
+            else:
+                self.q_proj = FusedLinear(dim, all_head_dim, bias_attr=config.qkv_bias)
+                self.k_proj = FusedLinear(dim, all_head_dim, bias_attr=False)
+                self.v_proj = FusedLinear(dim, all_head_dim, bias_attr=config.qkv_bias)
         else:
-            self.q_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=config.qkv_bias)
-            self.k_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=False)
-            self.v_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=config.qkv_bias)
+            if self.fuse_qv:
+                self.qv_proj = paddle.nn.Linear(dim, 2 * all_head_dim, bias_attr=config.qkv_bias)
+                self.k_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=False)
+            else:
+                self.q_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=config.qkv_bias)
+                self.k_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=False)
+                self.v_proj = paddle.nn.Linear(dim, all_head_dim, bias_attr=config.qkv_bias)
 
         if window_size:
             self.window_size = window_size
@@ -275,20 +284,24 @@ class Attention(paddle.nn.Layer):
 
     def forward(self, x, rel_pos_bias=None, attn_mask=None):
         B, N, C = x.shape
-        q = self.q_proj(x)
-        k = self.k_proj(x)
-        v = self.v_proj(x)
+        if self.fuse_qv:
+            q, v = self.qv_proj(x).split(2, axis=-1)
+            k = self.k_proj(x)
+        else:
+            q = self.q_proj(x)
+            k = self.k_proj(x)
+            v = self.v_proj(x)
         q = q.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
         k = k.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
         v = v.reshape((B, N, self.num_heads, -1)).transpose(perm=[0, 2, 1, 3])
 
         if self.rope:
-            q_t = q[:, :, 1:, :]
+            q_f, q_t = paddle.split(q, [1, q.shape[2] - 1], axis=2)
             ro_q_t = self.rope(q_t)
-            q = paddle.concat(x=(q[:, :, :1, :], ro_q_t), axis=-2).astype(dtype=v.dtype)
-            k_t = k[:, :, 1:, :]
+            q = paddle.concat(x=(q_f, ro_q_t), axis=-2).astype(dtype=v.dtype)
+            k_f, k_t = paddle.split(k, [1, q.shape[2] - 1], axis=2)
             ro_k_t = self.rope(k_t)
-            k = paddle.concat(x=(k[:, :, :1, :], ro_k_t), axis=-2).astype(dtype=v.dtype)
+            k = paddle.concat(x=(k_f, ro_k_t), axis=-2).astype(dtype=v.dtype)
         if self.xattn:
             q = q.transpose(perm=[0, 2, 1, 3])
             k = k.transpose(perm=[0, 2, 1, 3])
@@ -517,6 +530,7 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         inner_attn_ln=True,  # false in eva-01 clip
         fusedlinear=False,
         flash_attn=False,
+        fuse_qv=False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -558,6 +572,7 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         self.inner_attn_ln = inner_attn_ln
         self.fusedlinear = fusedlinear
         self.flash_attn = flash_attn
+        self.fuse_qv = fuse_qv
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
@@ -878,6 +893,7 @@ class VisionTransformerConfig(PretrainedConfig):
         output_tokens: bool = False,
         fusedlinear: bool = False,
         flash_attn: bool = False,
+        fuse_qv: bool = False,
         **kwargs,
     ):
         kwargs["return_dict"] = kwargs.pop("return_dict", True)
@@ -899,6 +915,7 @@ class VisionTransformerConfig(PretrainedConfig):
         self.output_tokens = output_tokens
         self.fusedlinear = fusedlinear
         self.flash_attn = flash_attn
+        self.fuse_qv = fuse_qv
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Union[str, os.PathLike], **kwargs) -> "PretrainedConfig":
