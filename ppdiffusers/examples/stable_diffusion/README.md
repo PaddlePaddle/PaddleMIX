@@ -16,11 +16,21 @@ pip install -r requirements.txt
 ### 1.2 准备工作
 
 #### 1.2.1 准备数据
+Stable Diffusion原本使用Laion数据集，需要自行下载和处理，如果只需要跑通训练步骤，也可以使用我们提供的demo数据集。
 
-#### laion400m_en.filelist文件内部格式如下所示
-自己准备好处理后的数据，并且将文件放置于`/data/laion400m/`目录，其中里面的每个part的前三列为`caption文本描述, 占位符空, base64编码的图片`，`caption, _, img_b64 = vec[:3]`。
+#### 1.2.1.1 Demo数据集
+通过下面的步骤下载demo数据：
+- 删除当前目录下的`data`;
+- 下载demo数据`wget https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/laion400m_demo_data.tar.gz`；
+- 解压demo数据`tar -zxvf laion400m_demo_data.tar.gz`
 
-注意，当前`laion400m_en.filelist`只存放了10条数据路径，如果想要更多数据的话，请运行`python write_filelist.py`代码，运行后会生成6万条数据路径。
+#### 1.2.1.2 laion400m数据集
+下载好Laion400m数据集之后，需要：
+1. 将文件放置于`data/laion400m/`目录，其中里面的每个part的前三列为`caption文本描述, 占位符空, base64编码的图片`，`caption, _, img_b64 = vec[:3]`。
+2. 配合我们提供的`data/filelist/laion400m_en.filelist`使用，或者自定准备其他`filelist`。
+3. 运行`python write_filelist.py`代码，生成完备的具有6万条数据路径的`laion400m_en.filelist`。（当前`laion400m_en.filelist`只存放了10条数据路径）
+
+`laion400m_en.filelist`为数据索引文件，内部内容如下所示：
 ```
 /data/laion400m/part-00000.gz
 /data/laion400m/part-00001.gz
@@ -33,15 +43,6 @@ pip install -r requirements.txt
 /data/laion400m/part-00008.gz
 /data/laion400m/part-00009.gz
 ```
-#### train.filelist.list训练文件内部格式如下所示
-我们提供了`laion400m_en.filelist`，当然也可以存放其他`filelist`
-```
-./data/filelist/laion400m_en.filelist
-```
-Tips: 我们可以选择下载demo数据
-- 删除当前目录下的`data`;
-- 下载demo数据`wget https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/laion400m_demo_data.tar.gz`；
-- 解压demo数据`tar -zxvf laion400m_demo_data.tar.gz`
 
 #### 1.2.2 准备权重
 #### 使用预先处理好的随机权重文件
