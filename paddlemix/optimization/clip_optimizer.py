@@ -18,13 +18,22 @@ import math
 import re
 
 import paddle
-from paddle.distributed.fleet.utils.tensor_fusion_helper import (
-    HOOK_ACTION,
-    fused_parameters,
-)
 from paddle.optimizer.lr import LRScheduler
 
 from paddlemix.utils.log import logger
+
+try:
+    from paddle.distributed.fleet.utils.tensor_fusion_helper import (
+        HOOK_ACTION,
+        fused_parameters,
+    )
+except:
+    HOOK_ACTION = None
+    fused_parameters = None
+    logger.warning(
+        "Can't import paddle.distributed.fleet.utils.tensor_fusion_helper, HOOK_ACTION set None,fused_parameters set None"
+    )
+
 
 __all__ = [
     "CosineDecayWithWarmup",
@@ -305,7 +314,7 @@ def create_optimizer(args, model, lr_scheduler=None, return_params=False):
     else:
         optimizer_args["learning_rate"] = learning_rate
         base_optimizer = paddle.optimizer.AdamW
-        if args.tensor_fusion:
+        if args.tensor_fusion and fused_parameters is not None:
             base_optimizer = FusedAdamW
     if args.fp16_opt_level == "O2":
         optimizer_args["multi_precision"] = True
@@ -314,7 +323,7 @@ def create_optimizer(args, model, lr_scheduler=None, return_params=False):
     #         clip_norm=args.max_grad_norm)
     #     optimizer_args['grad_clip'] = grad_clip
     parameters = get_all_parameters(args, model)
-    if args.tensor_fusion:
+    if args.tensor_fusion and fused_parameters is not None:
         optimizer = FusedAdamW(learning_rate, parameters)
     else:
         optimizer = base_optimizer(parameters=parameters, **optimizer_args)
