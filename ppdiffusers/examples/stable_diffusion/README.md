@@ -10,9 +10,7 @@
 ```bash
 # paddlepaddle-gpu>=2.5.0rc1
 git clone https://github.com/PaddlePaddle/PaddleMIX
-cd PaddleMIX
-pip install -r requirements.txt  # 如果提示权限不够，请在最后增加 --user 选项
-cd /ppdiffusers/examples/stable_diffusion
+cd PaddleMIX/ppdiffusers/examples/stable_diffusion
 pip install -r requirements.txt  # 如果提示权限不够，请在最后增加 --user 选项
 ```
 
