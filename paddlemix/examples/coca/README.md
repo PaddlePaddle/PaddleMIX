@@ -15,9 +15,19 @@ CoCa: 在CLIP基础上增加decoder形成编码、解码结构，并结合使用
 注：图片引用自[CoCa-pytorch](https://github.com/lucidrains/CoCa-pytorch).
 
 
-### COCA Model zoo
+### CoCa Model zoo
 
-(待补充)
+<div align="center">
+
+| model name                      | pretrained          | total #params     | IN-1K zero-shot top-1 | weight(bf16) |
+|:--------------------------------|:--------------------|:-----------------:|:---------------------:|:------------:|
+| `coca_ViT-B-32`                 | `laion2b_s13b_b90k` |         253M      | **75.7** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CoCa/coca_ViT-B-32/model_state.pdparams) |
+| `coca_ViT-L-14`                 | `laion2b_s13b_b90k` |         638M      | **63.6** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CoCa/coca_ViT-L-14/model_state.pdparams) |
+| `mscoco_finetuned_coca_ViT-B-32`| `mscoco_finetuned_laion2b_s13b_b90k` | 253M | - | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CoCa/mscoco_finetuned_coca_ViT-B-32/model_state.pdparams) |
+| `mscoco_finetuned_coca_ViT-L-14`| `mscoco_finetuned_laion2b_s13b_b90k` | 638M | - | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CoCa/mscoco_finetuned_coca_ViT-L-14/model_state.pdparams) |
+
+</div>
+
 
 ## 2. 环境准备
 
@@ -60,7 +70,7 @@ export $PATH=$PATH:$INSTALL_DIR
 
 ## 4. 使用说明
 
-我们在Paddle中实现了`CoCA`系列模型.
+我们在Paddle中实现了`CoCa`系列模型，包括`coca_ViT-B-32`、`coca_ViT-L-14`、`mscoco_finetuned_coca_ViT-B-321`、`mscoco_finetuned_coca_ViT-L-14`。
 
 ### 4.1 训练
 
@@ -73,7 +83,7 @@ export $PATH=$PATH:$INSTALL_DIR
 注意如果采用分布式策略，分布式并行关系有：`nnodes * nproc_per_node == tensor_parallel_degree * sharding_parallel_degree * dp_parallel_degree`，其中`dp_parallel_degree`参数根据其他几个值计算出来，因此需要保证`nnodes * nproc_per_node >= tensor_parallel_degree * sharding_parallel_degree`。
 
 ```
-MODEL_NAME="paddlemix/CoCa/coca_Vit-L-14/"
+MODEL_NAME="paddlemix/CoCa/coca_ViT-L-14/"
 IN_1K_DIR=[YOUR ImageNet1K val data path]
 
 python -m paddle.distributed.launch --nproc_per_node 8 run_pretrain_dist.py \
@@ -109,7 +119,7 @@ python -m paddle.distributed.launch --nproc_per_node 8 run_pretrain_dist.py \
 ```
 # 参数说明
 
---model #设置实际使用的模型,示例'paddlemix/CoCa/coca_Vit-L-14/'
+--model #设置实际使用的模型，示例'paddlemix/CoCa/coca_ViT-L-14'，也可替换为'paddlemix/CoCa/coca_ViT-B-32'
 
 --dataloader_num_workers #数据加载线程数量
 
@@ -149,7 +159,7 @@ python -m paddle.distributed.launch --nproc_per_node 8 run_pretrain_dist.py \
 
 --gather_with_grad true #loss中是否打开gather_with_grad
 
---pretrained_text_model coca_Vit-L-14 #预提取text features的模型
+--pretrained_text_model coca_ViT-L-14 #预提取text features的模型
 
 --classification_eval ${IN_1K_DIR} #IN_1K测试数据路径
 ```
@@ -161,7 +171,7 @@ python -m paddle.distributed.launch --nproc_per_node 8 run_pretrain_dist.py \
 评估命令及参数配置示例：
 
 ```
-MODEL_NAME="paddlemix/CoCa/coca_Vit-L-14"
+MODEL_NAME="paddlemix/CoCa/coca_ViT-L-14"
 
 IN_1K_DIR=[YOUR ImageNet1K val data path]
 
@@ -170,16 +180,16 @@ python paddlemix/examples/coca/run_zero_shot_eval.py \
     --dataloader_num_workers=2 \
     --model ${MODEL_NAME}  \
     --fp16 False \
-    --pretrained_text_model coca_Vit-L-14 \
+    --pretrained_text_model coca_ViT-L-14 \
     --classification_eval ${IN_1K_DIR} \
     --output_dir "output" \
-    --disable_tqdm True \
+    --disable_tqdm False \
 ```
 
 ```
 # 参数说明
 
---model #设置实际使用的模型,示例'paddlemix/CoCa/coca_Vit-L-14'
+--model #设置实际使用的模型,示例'paddlemix/CoCa/coca_ViT-L-14'
 
 --dataloader_num_workers #数据加载线程数量
 
@@ -187,11 +197,11 @@ python paddlemix/examples/coca/run_zero_shot_eval.py \
 
 --fp16 False #是否开启fp16推理
 
---pretrained_text_model coca_Vit-L-14 #预提取text features的模型
+--pretrained_text_model coca_ViT-L-14 #预提取text features的模型
 
 --classification_eval ${IN_1K_DIR} #IN_1K测试数据路径
 
 --output_dir "output" #模型输出文件路径
 
---disable_tqdm True #是否关闭tqdm进度条
+--disable_tqdm False #是否关闭tqdm进度条
 ```
