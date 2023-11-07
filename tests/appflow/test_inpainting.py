@@ -12,11 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import sys
 import unittest
 
 import numpy as np
 import paddle
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from paddlemix.appflow import Appflow
 from ppdiffusers.utils import load_image, load_numpy
 from tests.testing_utils import slow
