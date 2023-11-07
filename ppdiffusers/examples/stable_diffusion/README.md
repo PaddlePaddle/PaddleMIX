@@ -12,6 +12,8 @@
 git clone https://github.com/PaddlePaddle/PaddleMIX
 cd PaddleMIX
 pip install -r requirements.txt  # 如果提示权限不够，请在最后增加 --user 选项
+cd /ppdiffusers/examples/stable_diffusion
+pip install -r requirements.txt  # 如果提示权限不够，请在最后增加 --user 选项
 ```
 
 > 注：本模型训练与推理需要依赖 CUDA 11.2 及以上版本，如果本地机器不符合要求，建议前往 [AI Studio](https://aistudio.baidu.com/index) 进行模型训练、推理任务。
@@ -89,7 +91,7 @@ tar -zxvf CompVis-stable-diffusion-v1-4-paddle-init-pd.tar.gz
 
 
 
-## 2. 使用 trainer 开启训练
+## 2. 开启训练
 ### 2.1 硬件要求
 
 示例脚本配置在显存 ≥40GB 的显卡上可正常训练，如显存不满足要求，可通过修改参数的方式运行脚本：
