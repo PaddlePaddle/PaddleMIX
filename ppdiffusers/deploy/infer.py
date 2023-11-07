@@ -160,11 +160,12 @@ def create_paddle_inference_runtime(
     disable_paddle_trt_ops=[],
     disable_paddle_pass=[],
     paddle_stream=None,
-    workspace=None,
+    workspace=(2<<31) * 4,
 ):
     assert not use_fp16 or not use_bf16, "use_fp16 and use_bf16 are mutually exclusive"
     option = fd.RuntimeOption()
     option.use_paddle_backend()
+    # option.enable_paddle_log_info()
     if device_id == -1:
         option.use_cpu()
     else:
@@ -178,6 +179,7 @@ def create_paddle_inference_runtime(
     if use_trt:
         option.paddle_infer_option.disable_trt_ops(disable_paddle_trt_ops)
         option.paddle_infer_option.enable_trt = True
+        print(f"##### workspace {workspace}")
         if workspace is not None:
             option.set_trt_max_workspace_size(workspace)
         if use_fp16:
@@ -378,6 +380,15 @@ def main(args):
     elif args.backend == "paddle" or args.backend == "paddle_tensorrt":
         args.use_trt = args.backend == "paddle_tensorrt"
         runtime_options = dict(
+            unet=create_paddle_inference_runtime(
+                use_trt=args.use_trt,
+                dynamic_shape=unet_dynamic_shape,
+                use_fp16=args.use_fp16,
+                use_bf16=args.use_bf16,
+                device_id=args.device_id,
+                paddle_stream=paddle_stream,
+                workspace=20*1024*1024*1024
+            ),
             text_encoder=create_paddle_inference_runtime(
                 use_trt=args.use_trt,
                 dynamic_shape=text_encoder_dynamic_shape,
@@ -398,14 +409,6 @@ def main(args):
             vae_decoder=create_paddle_inference_runtime(
                 use_trt=args.use_trt,
                 dynamic_shape=vae_decoder_dynamic_shape,
-                use_fp16=args.use_fp16,
-                use_bf16=args.use_bf16,
-                device_id=args.device_id,
-                paddle_stream=paddle_stream,
-            ),
-            unet=create_paddle_inference_runtime(
-                use_trt=args.use_trt,
-                dynamic_shape=unet_dynamic_shape,
                 use_fp16=args.use_fp16,
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
