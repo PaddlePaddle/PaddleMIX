@@ -1122,17 +1122,7 @@ if is_paddle_available() and is_paddlenlp_available():
     raw_save_pretrained = PretrainedModel.save_pretrained
 
     @classmethod
-    def from_pretrained(
-        cls,
-        pretrained_model_name_or_path,
-        *args,
-        from_hf_hub=False,
-        subfolder=None,
-        paddle_dtype=None,
-        from_diffusers=None,
-        variant=None,
-        **kwargs
-    ):
+    def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
         try:
             if cls.constructed_from_pretrained_config() and (
                 hasattr(cls, "smart_convert") or hasattr(cls, "register_load_torch_hook")
@@ -1141,26 +1131,22 @@ if is_paddle_available() and is_paddlenlp_available():
                     cls,
                     pretrained_model_name_or_path,
                     *args,
-                    from_hf_hub=from_hf_hub,
-                    subfolder=subfolder,
-                    paddle_dtype=paddle_dtype,
-                    from_diffusers=from_diffusers,
-                    variant=variant,
                     **kwargs,
                 )
         except Exception:
             pass
-
-        dtype = kwargs.pop("dtype", paddle_dtype)
+        # pop `from_diffusers`
+        kwargs.pop("from_diffusers", None)
+        # pop `paddle_dtype`
+        dtype = kwargs.pop("dtype", kwargs.pop("paddle_dtype", None))
         if isinstance(dtype, paddle.dtype):
             dtype = str(dtype).replace("paddle.", "")
+        if dtype is not None:
+            kwargs["dtype"] = dtype
         return raw_from_pretrained(
             cls,
             pretrained_model_name_or_path,
             *args,
-            from_hf_hub=from_hf_hub,
-            subfolder=subfolder,
-            dtype=dtype,
             **kwargs,
         )
 
