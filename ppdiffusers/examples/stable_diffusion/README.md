@@ -164,7 +164,7 @@ Stable Diffusion 模型包含 3 个组成部分：vae、text_encoder、unet，�
 
 ### 4.2 单机单卡训练
 
-> 注意，我们当前训练的分辨率是 `256x256` ，如果需要训练 `512x512` 分辨率，需要修改`--resolution 512` 并且降低`--per_device_train_batch_size` 参数，否则会报显存不足的错误。
+> 注意，我们当前训练的分辨率是 `256x256` ，如果需要训练 `512x512` 分辨率，请修改 `--resolution` 为 512 并且降低`--per_device_train_batch_size` 参数，否则会报显存不足的错误。
 
 单机单卡训练启动脚本如下，建议保存为 `train.sh` 后执行命令 `sh train.sh`：
 
