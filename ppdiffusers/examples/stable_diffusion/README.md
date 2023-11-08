@@ -2,7 +2,7 @@
 
 ## 1. 模型简介
 
-Stable Diffusion 是一个基于 Latent Diffusion Models（潜在扩散模型，LDMs）的文图生成（text-to-image）模型。具体来说，得益于[Stability AI](https://stability.ai/)的计算资源支持和[LAION](https://laion.ai/)的数据资源支持，Stable Diffusion在[LAION-5B](https://laion.ai/blog/laion-5b/)的一个子集上训练了一个Latent Diffusion Models，该模型专门用于文图生成。Latent Diffusion Models 通过在一个潜在表示空间中迭代“去噪”数据来生成图像，然后将表示结果解码为完整的图像，让文图生成能够在消费级GPU上，在10秒级别时间生成图片，大大降低了落地门槛，也带来了文图生成领域的大火。所以，如果你想了解 Stable Diffusion 的背后原理，可以先深入解读一下其背后的论文 [High-Resolution Image Synthesis with Latent Diffusion Models](https://ommer-lab.com/research/latent-diffusion-models/)。如果你想了解更多关于 Stable Diffusion 模型的信息，你可以查看由🤗Huggingface团队撰写的相关[博客](https://huggingface.co/blog/stable_diffusion)。
+Stable Diffusion 是一个基于 Latent Diffusion Models（潜在扩散模型，LDMs）的文图生成（text-to-image）模型。具体来说，得益于 [Stability AI](https://stability.ai/) 的计算资源支持和 [LAION](https://laion.ai/) 的数据资源支持，Stable Diffusion 在 [LAION-5B](https://laion.ai/blog/laion-5b/) 的一个子集上训练了一个 Latent Diffusion Models，该模型专门用于文图生成。Latent Diffusion Models 通过在一个潜在表示空间中迭代“去噪”数据来生成图像，然后将表示结果解码为完整的图像，让文图生成能够在消费级 GPU 上，在10秒级别时间生成图片，大大降低了落地门槛，也带来了文图生成领域的大火。所以，如果你想了解 Stable Diffusion 的背后原理，可以先深入解读一下其背后的论文 [High-Resolution Image Synthesis with Latent Diffusion Models](https://ommer-lab.com/research/latent-diffusion-models/)。如果你想了解更多关于 Stable Diffusion 模型的信息，你可以查看由 🤗Huggingface 团队撰写的相关[博客](https://huggingface.co/blog/stable_diffusion)。
 
 
 <p align="center">
@@ -52,7 +52,7 @@ pip install -r requirements.txt
 
 ## 3. 数据准备
 
-预训练 Stable Diffusion 使用 Laion400M 数据集，需要自行下载和处理，处理步骤详见 3.1自定义训练数据。本教程为了方便大家 **体验跑通训练流程**，提供了一组假数据 laion400m_demo，可直接下载获取，详见 3.2。
+预训练 Stable Diffusion 使用 Laion400M 数据集，需要自行下载和处理，处理步骤详见 3.1自定义训练数据。本教程为了方便大家 **体验跑通训练流程**，本教程提供了处理后的 Laion400M 部分数据集，可直接下载获取，详见 3.2。
 
 
 ### 3.1 自定义训练数据
@@ -95,7 +95,7 @@ processed_data
 |   └── part-000001.gz
 ```
 
-`processed_data/custom_dataset.filelist` 为数据索引文件，一共有100行数据（请确保该文件的行数数量要足够多，防止训练过程中会卡住），内容如下所示：
+`processed_data/custom_dataset.filelist` 是数据索引文件，包含100行数据，每行都代表一个数据文件的路径。请确保该文件的行数足够多，以防止在训练过程中出现卡顿，内容如下所示：
 ```
 processed_data/laion400m_format_data/part-000001.gz
 processed_data/laion400m_format_data/part-000001.gz
@@ -116,7 +116,7 @@ processed_data/filelist/custom_dataset.filelist
 每一行以`"\t"`进行分割，第一列为 `caption文本描述`, 第二列为 `占位符空`, 第三列为 `base64编码的图片`，示例：`caption, _, img_b64 = vec[:3]`
 
 
-### 3.2 Laion400M Demo 数据集（假数据，仅供验证跑通训练）
+### 3.2 Laion400M Demo 数据集（部分数据，约1000条，仅供验证跑通训练）
 
 demo 数据可通过如下命令下载与解压：
 
@@ -137,10 +137,10 @@ data
 |   └── laion400m_en.filelist
 ├── laion400m_new
 |   └── part-00001.gz
-└── laion400m_demo_data.tar.gz
+└── laion400m_demo_data.tar.gz # 多余的压缩包，可以删除
 ```
 
-`laion400m_en.filelist` 为数据索引文件（假数据），内容如下所示：
+`laion400m_en.filelist` 是数据索引文件，包含了6000行数据文件的路径（part-00001.gz 仅为部分数据），内容如下所示：
 ```
 ./data/laion400m_new/part-00001.gz
 ./data/laion400m_new/part-00001.gz
@@ -154,7 +154,7 @@ data
 
 ## 4. 训练
 
-Stable Diffusion 模型包含 3 个组成部分：vae、text_encoder、unet，其中预训练仅需随机初始化 unet 部分，其余部分可直接加载预训练权重，本教程中我们加载`CompVis/stable-diffusion-v1-4`中的预训练好的`vae`以及`text_encoder`权重，随机初始化了`unet`模型权重。
+Stable Diffusion 模型包含 3 个组成部分：vae、text_encoder、unet，其中预训练仅需随机初始化 unet 部分，其余部分可直接加载预训练权重，本教程中我们加载 `CompVis/stable-diffusion-v1-4` 中的预训练好的 `vae` 以及`text_encoder` 权重，随机初始化了 `unet` 模型权重。
 
 ### 4.1 硬件要求
 
