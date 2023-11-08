@@ -91,8 +91,8 @@ processed_data
 ├── filelist
 |   ├── custom_dataset.filelist.list
 |   └── custom_dataset.filelist
-├── laion400m_format_data
-|   └── part-000001.gz
+└── laion400m_format_data
+    └── part-000001.gz
 ```
 
 `processed_data/custom_dataset.filelist` 是数据索引文件，包含100行数据，每行都代表一个数据文件的路径。请确保该文件的行数足够多，以防止在训练过程中出现卡顿，内容如下所示：
