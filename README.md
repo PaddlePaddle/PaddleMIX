@@ -48,18 +48,25 @@ pip install -r requirements.txt
 ```
 
 关于PaddlePaddle安装的详细教程请查看[Installation](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/develop/install/pip/linux-pip.html)。
-如果希望使用**bf16**训练推理，请使用支持**bf16**的GPU，如A100。
+
+> 注：ppdiffusers部分模型需要依赖 CUDA 11.2 及以上版本，如果本地机器不符合要求，建议前往 [AI Studio](https://aistudio.baidu.com/index) 进行模型训练、推理任务。
+
+> 如果希望使用**bf16**训练推理，请使用支持**bf16**的GPU，如A100。
 
 2. 手动安装
 ```
 git clone https://github.com/PaddlePaddle/PaddleMIX
 cd PaddleMIX
 pip install -e .
+
+#ppdiffusers 安装
+cd ppdiffusers
+pip install -e .
 ```
 
 ## 教程
 
-- [快速开始](applications/README.md)
+- [快速开始](applications/README.md/#快速开始)
 - [训练微调](docs/train_tutorial.md)
 - [推理部署](deploy/README.md)
 

@@ -1,5 +1,6 @@
 numpy==1.23.5
 nltk
+opencc==1.1.6
 paddlenlp>=2.6.0rc0
 paddlespeech
 opencc==1.1.6
