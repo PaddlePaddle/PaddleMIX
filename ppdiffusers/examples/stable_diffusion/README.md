@@ -62,7 +62,7 @@ pip install -r requirements.txt
 {"caption": "A woman wearing a net on her head cutting a cake. ", "image": "val2014/COCO_val2014_000000522418.jpg", "image_id": "coco_522418"}
 ```
 
-在准备好自定义数据集以后, 我们可以使用 `create_pretraining_data.py` 生成我们需要的数据。
+在准备好自定义数据集以后，我们可以使用 `create_pretraining_data.py` 生成我们需要的数据。
 
 ```bash
 python create_pretraining_data.py \
