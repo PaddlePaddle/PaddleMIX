@@ -76,7 +76,7 @@ python create_pretraining_data.py \
 ```
 
 [create_pretraining_data.py](https://github.com/PaddlePaddle/PaddleMIX/blob/develop/ppdiffusers/examples/stable_diffusion/create_pretraining_data.py) 可传入的参数解释如下：
-* `--input_path`: 输入的jsonl文件路径，我们可以查看`coco_data`文件夹的组织结构，自定义我们自己的数据。
+* `--input_path`: 输入的 jsonl 文件路径，可以查看 `coco_data` 文件夹的组织结构，自定义我们自己的数据。
 * `--output_path`: 处理后的数据保存路径。
 * `--output_name`: 输出文件的名称，默认为`custom_dataset`。
 * `--caption_key`: jsonl文件中，每一行数据表示文本的 key 值，默认为`caption`。
