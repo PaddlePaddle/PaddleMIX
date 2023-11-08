@@ -81,8 +81,6 @@ pip install --upgrade ppdiffusers
 ### 手动安装
 ```shell
 git clone https://github.com/PaddlePaddle/PaddleMIX
-# 注意：如果clone仓库非常慢的话，可以考虑使用镜像版本
-# git clone https://gitee.com/paddlepaddle/PaddleMIX
 cd PaddleMIX/ppdiffusers
 python setup.py install
 ```
