@@ -70,7 +70,8 @@ python create_pretraining_data.py \
     --output_path ./processed_data \
     --caption_key "caption" \
     --image_key "image" \
-    --per_part_file_num 2000 \
+    --per_part_file_num 1000 \
+    --num_repeat 100 \
     --save_gzip_file
 ```
 
@@ -80,8 +81,9 @@ python create_pretraining_data.py \
 * `--output_name`: 输出文件的名称，默认为`custom_dataset`。
 * `--caption_key`: jsonl文件中，每一行数据表示文本的 key 值，默认为`caption`。
 * `--image_key`: jsonl文件中，每一行数据表示图片的 key 值，默认为`image`。
-* `--per_part_file_num`: 每个part文件保存的数据数量，默认为`2000`。
-* `--save_gzip_file`: 是否将文件保存为gzip的格式，默认为`False`。
+* `--per_part_file_num`: 每个part文件保存的数据数量，默认为`1000`。
+* `--save_gzip_file`: 是否将文件保存为`gzip`的格式，默认为`False`。
+* `--num_repeat`: `custom_dataset.filelist`文件中`part数据`的重复次数，默认为`1`。当前我们设置成`100`是为了能够制造更多的`part数据`，可以防止程序运行时会卡住，如果用户有很多数据的时候，可以无修改该默认值。
 
 运行上述命令后，会生成 `./processed_data` 文件夹。
 ```
@@ -93,9 +95,17 @@ processed_data
 |   └── part-000001.gz
 ```
 
-`processed_data/custom_dataset.filelist` 为数据索引文件，内容如下所示：
+`processed_data/custom_dataset.filelist` 为数据索引文件，一共有100行数据（请确保该文件的行数数量要足够多，防止训练过程中会卡住），内容如下所示：
 ```
-processed_data/laion400m_format_data/part-000001
+processed_data/laion400m_format_data/part-000001.gz
+processed_data/laion400m_format_data/part-000001.gz
+processed_data/laion400m_format_data/part-000001.gz
+processed_data/laion400m_format_data/part-000001.gz
+processed_data/laion400m_format_data/part-000001.gz
+processed_data/laion400m_format_data/part-000001.gz
+processed_data/laion400m_format_data/part-000001.gz
+processed_data/laion400m_format_data/part-000001.gz
+...
 ```
 `processed_data/custom_dataset.filelist.list` 为filelist索引文件，内容如下所示：
 ```
@@ -189,7 +199,7 @@ python -u train_txt2img_laion400m_trainer.py \
     --save_steps 10000 \
     --save_total_limit 20 \
     --seed 23 \
-    --dataloader_num_workers 8 \
+    --dataloader_num_workers 4 \
     --vae_name_or_path CompVis/stable-diffusion-v1-4/vae \
     --text_encoder_name_or_path CompVis/stable-diffusion-v1-4/text_encoder \
     --unet_name_or_path ./sd/unet_config.json \
@@ -225,7 +235,7 @@ python -u train_txt2img_laion400m_trainer.py \
 * `--logging_steps`: logging 日志的步数，默认为 `50` 步。
 * `--output_dir`: 模型保存路径。
 * `--seed`: 随机种子，为了可以复现训练结果，Tips：当前 paddle 设置该随机种子后仍无法完美复现。
-* `--dataloader_num_workers`: Dataloader 所使用的 `num_workers` 参数。
+* `--dataloader_num_workers`: Dataloader 所使用的 `num_workers` 参数，请确保处理后的`part文件`数量要大于等于`dataloader_num_workers` * `num_gpus`，否则程序会卡住，例如：`dataloader_num_workers=4`、`num_gpus=2`时候，请确保切分后的`part文件`数量要大于等于`8`。
 * `--file_list`: file_list 文件地址。
 * `--num_inference_steps`: 推理预测时候使用的步数。
 * `--model_max_length`: `tokenizer` 中的 `model_max_length` 参数，超过该长度将会被截断。
@@ -273,7 +283,7 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_txt2img_la
     --save_steps 10000 \
     --save_total_limit 20 \
     --seed 23 \
-    --dataloader_num_workers 8 \
+    --dataloader_num_workers 4 \
     --vae_name_or_path CompVis/stable-diffusion-v1-4/vae \
     --text_encoder_name_or_path CompVis/stable-diffusion-v1-4/text_encoder \
     --unet_name_or_path ./unet_config.json \

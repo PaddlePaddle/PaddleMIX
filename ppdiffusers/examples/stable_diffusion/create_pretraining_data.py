@@ -44,12 +44,13 @@ def parse_args():
     parser.add_argument(
         "--per_part_file_num",
         type=int,
-        default=2000,
-        help="The number of files contained in each part file. Defaults to 2000.",
+        default=1000,
+        help="The number of files contained in each part file. Defaults to `1000`.",
     )
     parser.add_argument(
         "--save_gzip_file", action="store_true", help="Whehter to save gzip file. Defaults to `False`."
     )
+    parser.add_argument("--num_repeat", type=int, default=1, help="Defaults to `1`.")
     args = parser.parse_args()
     return args
 
@@ -113,6 +114,8 @@ def main(args):
         jobs.append(p)
         p.start()
         filelist_data.append(str(Path(output_file).absolute().relative_to(file_abs_path)))
+
+    filelist_data = filelist_data * args.num_repeat
     filelist_path.write_text("\n".join(filelist_data), encoding="utf-8")
     filelistlist_path.write_text(str(filelist_path.absolute().relative_to(file_abs_path)) + "\n", encoding="utf-8")
 
