@@ -949,7 +949,7 @@ video_frames = pipe(prompt, num_inference_steps=25).frames
 imageio.mimsave("text_to_video_generation-synth-result-astronaut_riding_a_horse.mp4", video_frames, fps=8)
 ```
 <div align="center">
-<img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/246780441-8242a955-490b-4326-8415-84264a54a938.gif">
+<img width="300" alt="image" src="https://user-images.githubusercontent.com/20476674/281259277-0ebe29a3-4eba-48ee-a98b-292e60de3c98.gif">
 </div>
 
 
