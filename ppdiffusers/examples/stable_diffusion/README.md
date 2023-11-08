@@ -27,7 +27,7 @@ Stable Diffusion 是一个基于 Latent Diffusion Models（潜在扩散模型，
 </div>
 
 - 当前页面仅支持上述基础模型的预训练，后续将陆续支持更多的Stable Diffusion模型。
-- 模型下载地址：TODO，后续将提供aistudio上预训练模型下载地址。
+- 模型下载地址：TODO，后续将提供 AI Studio 上预训练模型下载地址。
 
 
 
