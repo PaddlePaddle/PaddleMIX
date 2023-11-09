@@ -91,7 +91,8 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             logger.info("freeze vision encoder")
         if config.get("train_mode", None) == "stage1":
             self.train_stage1 = True
-            self.tokenizer = self.init_tokenizer()
+            tokenizer_name = config.qformer_config.tokenizer_name or "bert-base-uncased"
+            self.tokenizer = self.init_tokenizer(tokenizer_name)
             self.Qformer = BertLMHeadModel(
                 config=config.qformer_config,
                 encoder_width=self.visual_encoder.num_features,

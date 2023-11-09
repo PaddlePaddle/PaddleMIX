@@ -32,7 +32,7 @@ from paddlenlp.transformers.model_outputs import (
     CausalLMOutputWithCrossAttentions,
     MaskedLMOutput,
 )
-
+from paddlenlp.transformers import AutoTokenizer
 
 class CrossEntropyLoss(nn.Layer):
     """
@@ -84,10 +84,18 @@ class BertEmbeddings(nn.Layer):
     """
     Include embeddings from word, position and token_type embeddings
     """
-
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
-        self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size, padding_idx=config.pad_token_id)
+
+        if config.tokenizer_name is not None:
+            tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
+            vocab_size = tokenizer.vocab_size
+            pad_token_id = tokenizer.pad_token_id
+        else:
+            vocab_size = config.vocab_size
+            pad_token_id = config.pad_token_id
+
+        self.word_embeddings = nn.Embedding(vocab_size, config.hidden_size, padding_idx=pad_token_id)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
