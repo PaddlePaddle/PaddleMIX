@@ -371,6 +371,8 @@ class QWenLMHeadModel(QWenPretrainedModel):
         loss = None
         if labels is not None:
             shift_logits = lm_logits[(...), :-1, :]
+            if shift_logits.dtype == paddle.bfloat16:
+                shift_logits = paddle.cast(shift_logits, paddle.float32)
             shift_labels = labels[(...), 1:]
             loss_fct = paddle.nn.CrossEntropyLoss()
             loss = loss_fct(shift_logits.reshape([-1, shift_logits.shape[-1]]), shift_labels.reshape([-1]))
