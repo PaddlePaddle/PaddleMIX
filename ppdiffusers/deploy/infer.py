@@ -160,12 +160,14 @@ def create_paddle_inference_runtime(
     disable_paddle_trt_ops=[],
     disable_paddle_pass=[],
     paddle_stream=None,
-    workspace=(2<<31) * 4,
+    workspace=None,
+    show_log=False
 ):
     assert not use_fp16 or not use_bf16, "use_fp16 and use_bf16 are mutually exclusive"
     option = fd.RuntimeOption()
     option.use_paddle_backend()
-    # option.enable_paddle_log_info()
+    if show_log:
+        option.enable_paddle_log_info()
     if device_id == -1:
         option.use_cpu()
     else:
@@ -387,7 +389,7 @@ def main(args):
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
                 paddle_stream=paddle_stream,
-                workspace=20*1024*1024*1024
+                workspace=10*1024*1024*1024
             ),
             text_encoder=create_paddle_inference_runtime(
                 use_trt=args.use_trt,
@@ -397,6 +399,7 @@ def main(args):
                 device_id=args.device_id,
                 disable_paddle_trt_ops=["arg_max", "range", "lookup_table_v2"],
                 paddle_stream=paddle_stream,
+                workspace=10*1024*1024*1024
             ),
             vae_encoder=create_paddle_inference_runtime(
                 use_trt=args.use_trt,
@@ -405,6 +408,7 @@ def main(args):
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
                 paddle_stream=paddle_stream,
+                workspace=10*1024*1024*1024
             ),
             vae_decoder=create_paddle_inference_runtime(
                 use_trt=args.use_trt,
@@ -413,6 +417,7 @@ def main(args):
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
                 paddle_stream=paddle_stream,
+                workspace=10*1024*1024*1024
             ),
         )
     pipe = FastDeployStableDiffusionMegaPipeline.from_pretrained(
