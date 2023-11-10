@@ -341,7 +341,7 @@ class QWenLMHeadModel(QWenPretrainedModel):
                     image = image[: image.index(self.config.visual["image_start_id"] + 2)]
                     images.append(bytes(image).decode("utf-8"))
 
-                images = self.visual.encode(images)
+                images = self.visual.prepare(images)
 
             images = self.visual(images)
 

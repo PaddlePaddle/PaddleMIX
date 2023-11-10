@@ -15,15 +15,10 @@
 import base64
 import os
 import unicodedata
-from typing import Any, Callable, Collection, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Collection, Dict, List, Set, Tuple, Union
 
-import matplotlib.colors as mcolors
-import numpy as np
-import requests
 import tiktoken
-from matplotlib.font_manager import FontProperties
 from paddlenlp.transformers import AddedToken, PretrainedTokenizer
-from PIL import Image
 
 VOCAB_FILES_NAMES = {"vocab_file": "qwen.tiktoken", "ttf": "SimSun.ttf"}
 PAT_STR = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"
@@ -386,126 +381,3 @@ class QWenTokenizer(PretrainedTokenizer):
                 if i > 0 and "ref" in list_format[i - 1]:
                     output[-1]["ref"] = list_format[i - 1]["ref"].strip()
         return output
-
-    def draw_bbox_on_latest_picture(self, response, history=None) -> Optional[Image.Image]:
-        image = self._fetch_latest_picture(response, history)
-        if image is None:
-            return None
-        if image.startswith("http://") or image.startswith("https://"):
-            image = Image.open(requests.get(image, stream=True).raw).convert("RGB")
-            h, w = image.height, image.width
-        else:
-            image = np.asarray(Image.open(image).convert("RGB"))
-            h, w = image.shape[0], image.shape[1]
-        visualizer = Visualizer(image)
-        boxes = self._fetch_all_box_with_ref(response)
-        if not boxes:
-            return None
-        color = random.choice([_ for _ in mcolors.TABLEAU_COLORS.keys()])
-        for box in boxes:
-            if "ref" in box:
-                color = random.choice([_ for _ in mcolors.TABLEAU_COLORS.keys()])
-            x1, y1, x2, y2 = box["box"]
-            x1, y1, x2, y2 = int(x1 / 1000 * w), int(y1 / 1000 * h), int(x2 / 1000 * w), int(y2 / 1000 * h)
-            visualizer.draw_box((x1, y1, x2, y2), alpha=1, edge_color=color)
-            if "ref" in box:
-                visualizer.draw_text(box["ref"], (x1, y1), color=color, horizontal_alignment="left")
-        return visualizer.output
-
-
-import logging
-import random
-
-import matplotlib as mpl
-import matplotlib.colors as mplc
-import matplotlib.figure as mplfigure
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-from PIL import Image
-
-logger = logging.getLogger(__name__)
-
-
-class VisImage:
-    def __init__(self, img, scale=1.0):
-        self.img = img
-        self.scale = scale
-        self.width, self.height = img.shape[1], img.shape[0]
-        self._setup_figure(img)
-
-    def _setup_figure(self, img):
-        fig = mplfigure.Figure(frameon=False)
-        self.dpi = fig.get_dpi()
-        fig.set_size_inches((self.width * self.scale + 0.01) / self.dpi, (self.height * self.scale + 0.01) / self.dpi)
-        self.canvas = FigureCanvasAgg(fig)
-        ax = fig.add_axes([0.0, 0.0, 1.0, 1.0])
-        ax.axis("off")
-        self.fig = fig
-        self.ax = ax
-        self.reset_image(img)
-
-    def reset_image(self, img):
-        img = img.astype("uint8")
-        self.ax.imshow(img, extent=(0, self.width, self.height, 0), interpolation="nearest")
-
-    def save(self, filepath):
-        self.fig.savefig(filepath)
-
-    def get_image(self):
-        canvas = self.canvas
-        s, (width, height) = canvas.print_to_buffer()
-        buffer = np.frombuffer(s, dtype="uint8")
-        img_rgba = buffer.reshape(height, width, 4)
-        rgb, alpha = np.split(img_rgba, [3], axis=2)
-        return rgb.astype("uint8")
-
-
-class Visualizer:
-    def __init__(self, img_rgb, metadata=None, scale=1.0):
-        self.img = np.asarray(img_rgb).clip(0, 255).astype(np.uint8)
-        self.font_path = FONT_PATH
-        self.output = VisImage(self.img, scale=scale)
-        self.cpu_device = str("cpu").replace("cuda", "gpu")
-        self._default_font_size = max(np.sqrt(self.output.height * self.output.width) // 30, 15 // scale)
-
-    def draw_text(self, text, position, *, font_size=None, color="g", horizontal_alignment="center", rotation=0):
-        if not font_size:
-            font_size = self._default_font_size
-        color = np.maximum(list(mplc.to_rgb(color)), 0.2)
-        color[np.argmax(color)] = max(0.8, np.max(color))
-        x, y = position
-        self.output.ax.text(
-            x,
-            y,
-            text,
-            size=font_size * self.output.scale,
-            fontproperties=FontProperties(fname=self.font_path),
-            bbox={"facecolor": "black", "alpha": 0.8, "pad": 0.7, "edgecolor": "none"},
-            verticalalignment="top",
-            horizontalalignment=horizontal_alignment,
-            color=color,
-            zorder=10,
-            rotation=rotation,
-        )
-        return self.output
-
-    def draw_box(self, box_coord, alpha=0.5, edge_color="g", line_style="-"):
-        x0, y0, x1, y1 = box_coord
-        width = x1 - x0
-        height = y1 - y0
-        linewidth = max(self._default_font_size / 4, 1)
-        self.output.ax.add_patch(
-            mpl.patches.Rectangle(
-                (x0, y0),
-                width,
-                height,
-                fill=False,
-                edgecolor=edge_color,
-                linewidth=linewidth * self.output.scale,
-                alpha=alpha,
-                linestyle=line_style,
-            )
-        )
-        return self.output
-
-    def get_output(self):
-        return self.output

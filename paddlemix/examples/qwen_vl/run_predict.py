@@ -106,7 +106,7 @@ class ModelArguments:
     )
     dtype: str = field(
         default="float32",
-        metadata={"help": "output directory."},
+        metadata={"help": "dtype,support float32/float16/bfloat16."},
     )
 
 
@@ -133,11 +133,10 @@ def main():
         raise ValueError("prompt or image must be input ")
 
     if data_args.input_image is not None:
-        # read image
         url = data_args.input_image
+
         # read image
         if os.path.isfile(url):
-            # read image
             image_pil = Image.open(data_args.input_image).convert("RGB")
         else:
             image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")

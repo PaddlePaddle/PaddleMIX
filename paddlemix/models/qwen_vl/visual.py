@@ -411,7 +411,7 @@ class VisionTransformer(paddle.nn.Layer):
 
         return x
 
-    def encode(self, image_paths: List[str]):
+    def prepare(self, image_paths: List[str]):
         images = []
         for image_path in image_paths:
             if image_path.startswith("http://") or image_path.startswith("https://"):
