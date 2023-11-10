@@ -83,7 +83,7 @@ python create_pretraining_data.py \
 * `--image_key`: jsonl文件中，每一行数据表示图片的 key 值，默认为`image`。
 * `--per_part_file_num`: 每个part文件保存的数据数量，默认为`1000`。
 * `--save_gzip_file`: 是否将文件保存为`gzip`的格式，默认为`False`。
-* `--num_repeat`: `custom_dataset.filelist`文件中`part数据`的重复次数，默认为`1`。当前我们设置成`100`是为了能够制造更多的`part数据`，可以防止程序运行时会卡住，如果用户有很多数据的时候，可以无修改该默认值。
+* `--num_repeat`: `custom_dataset.filelist`文件中`part数据`的重复次数，默认为`1`。当前我们设置成`100`是为了能够制造更多的`part数据`，可以防止程序运行时会卡住，如果用户有很多数据的时候，无需修改该默认值。
 
 运行上述命令后，会生成 `./processed_data` 文件夹。
 ```
