@@ -12,11 +12,46 @@
 
 <h4 align="center">
   <a href=#特性> 特性 </a> |
-  <a href=#安装> 安装 </a> |
-  <a href=#快速开始> 快速开始 </a> |
+  <a href=#快速开始> 快速开始 </a>
 </h4>
 
 **PaddleMIX**应用示例基于paddlemix、ppdiffusers和paddlenlp开发，**简单易用**且**功能强大**。聚合业界**优质预训练模型**并提供**开箱即用**的开发体验，覆盖跨模态和多场景的模型库搭配，可满足开发者**灵活定制**的需求。
+
+
+## 快速开始
+
+请先确认是否已安装 [PaddleMIX](../README.md/#安装) 和 [ppdiffusers](../README.md/#安装)
+
+### 1. appflow 依赖安装
+```shell
+pip install -r paddlemix/appflow/requirements.txt
+```
+
+
+### 2.一键预测
+
+PaddleMIX提供一键预测功能，无需训练，这里以开放世界检测分割为例。直接在终端运行如下命令，即可完成模型推理。
+
+```python
+>>> python
+>>> from paddlemix.appflow import Appflow
+>>> from ppdiffusers.utils import load_image
+
+>>> task = Appflow(task="openset_det_sam",
+                   models=["GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024"],
+                   static_mode=False) #如果开启静态图推理，设置为True,默认动态图
+>>> url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+>>> image_pil = load_image(url)
+>>> result = task(image=image_pil,prompt="dog")
+```
+
+参数说明
+| 参数 | 是否必须| 含义                                                                                          |
+|-------|-------|---------------------------------------------------------------------------------------------|
+| --app | Yes| 应用名称                                                                                   |
+| --models | Yes | 需要使用的模型，可以是单个模型，也可以多个组合                                                                                     |
+| --static_mode  | Option | 是否静态图推理，默认False                                                                                 |
+| --precision | Option | 当 static_mode == True 时使用，默认fp32,可选择trt_fp32、trt_fp16                                                                                    |
 
 
 ## 特性
@@ -30,16 +65,9 @@
 ### 开箱即用的工具集
 
 Appflow提供丰富的开箱即用工具集，覆盖跨模态多场景应用，提供产业级的效果与极致的推理性能。
-```python
-from paddlemix.appflow import Appflow
 
-paddle.seed(1024)
-task = Appflow(app="text2image_generation",
-               models=["stabilityai/stable-diffusion-v1-5"]
-               )
-prompt = "a photo of an astronaut riding a horse on mars."
-result = task(prompt=prompt)['result']
-```
+![appflow](https://github.com/LokeZhou/PaddleMIX/assets/13300429/f80a7aa0-4cd5-4f86-90d6-2fc6da3eb42f)
+
 
 
 ### 跨模态多场景应用
@@ -61,50 +89,3 @@ result = task(prompt=prompt)['result']
 
 
 更多应用持续开发中......
-
-
-## 安装
-
-### 环境依赖
-
-```
-pip install -r requirements.txt
-```
-更多关于PaddlePaddle和PaddleNLP安装的详细教程请查看 [Installation](https://github.com/PaddlePaddle/PaddleNLP/blob/develop/docs/get_started/installation.rst)。
-
-### 源码安装
-
-```shell
-git clone https://github.com/PaddlePaddle/PaddleMIX
-pip install -e .
-
-#appflow 依赖包安装
-pip install -r paddlemix/appflow/requirements.txt
-```
-## 快速开始
-
-这里以开放世界检测分割为例:
-
-### 一键预测
-
-PaddleMIX提供一键预测功能，无需训练，直接输入数据即可输出结果：
-
-```python
->>> from paddlemix.appflow import Appflow
->>> from ppdiffusers.utils import load_image
-
->>> task = Appflow(task="openset_det_sam",
-                   models=["GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024"],
-                   static_mode=False) #如果开启静态图推理，设置为True,默认动态图
->>> url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
->>> image_pil = load_image(url)
->>> result = task(image=image_pil,prompt="dog")
-```
-
-参数说明
-| 参数 | 是否必须| 含义                                                                                          |
-|-------|-------|---------------------------------------------------------------------------------------------|
-| --app | Yes| 应用名称                                                                                   |
-| --models | Yes | 需要使用的模型，可以是单个模型，也可以多个组合                                                                                     |
-| --static_mode  | Option | 是否静态图推理，默认False                                                                                 |
-| --precision | Option | 当 static_mode == True 时使用，默认fp32,可选择trt_fp32、trt_fp16                                                                                    |

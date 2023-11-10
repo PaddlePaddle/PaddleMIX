@@ -1,8 +1,12 @@
 # PaddleMIX推理部署
 
-PaddleMIX基于Paddle Inference，提供了python的部署方案。
+PaddleMIX基于Paddle Inference，提供了python的部署方案。部署方式分为两种：
+- 通过 **APPflow** ,设置static_mode = True 变量开启静态图推理，同时可配合trt加速推理；该方式部分模型不支持静态图以及trt，具体模型可参考[跨模态多场景应用](../applications/README.md/#跨模态多场景应用)；
 
-## 1.一键预测部署
+- 单模型部署
+
+
+## 1.APPflow部署
 
 在使用 PaddleMIX 一键预测 **APPflow** 时，可通过设置 static_mode = True 变量开启静态图推理，同时可配合trt加速推理。
 
@@ -29,16 +33,20 @@ PaddleMIX基于Paddle Inference，提供了python的部署方案。
 | --precision | Option | 当 static_mode == True 时使用，默认fp32,可选择trt_fp32、trt_fp16                                                                                    |
 
 说明：
-- 部分模型不支持静态图以及trt，具体可参考[跨模态多场景应用
-](../applications/README.md)
+- 部分模型不支持静态图以及trt，具体可参考[跨模态多场景应用](../applications/README.md)
 - 生成的静态图将在模型名字对应的文件夹下 如:GroundingDino/groundingdino-swint-ogc/
 
 
-## 2. Python端单模型预测部署
+## 2. 单模型预测部署
 
 Python端预测部署主要包含两个步骤：
 - 导出预测模型
 - 基于Python进行预测
+
+当前支持模型：
+- [blip2](./blip2/README.md)
+- [groundingdino](./groundingdino/README.md)
+- [sam](./sam/README.md)
 
 以 groundingdino 为例子。
 
