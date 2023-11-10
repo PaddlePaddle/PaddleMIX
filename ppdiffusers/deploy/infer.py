@@ -181,7 +181,6 @@ def create_paddle_inference_runtime(
     if use_trt:
         option.paddle_infer_option.disable_trt_ops(disable_paddle_trt_ops)
         option.paddle_infer_option.enable_trt = True
-        print(f"##### workspace {workspace}")
         if workspace is not None:
             option.set_trt_max_workspace_size(workspace)
         if use_fp16:
