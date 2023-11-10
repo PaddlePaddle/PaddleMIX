@@ -14,9 +14,10 @@
 # limitations under the license.
 
 from .blip2.modeling import *
-from .minigpt4.configuration import *
-from .minigpt4.modeling import *
-from .visualglm.configuration import *
-from .visualglm.modeling import *
 from .imagebind.modeling import *
 from .imagebind.multimodal_preprocessors import *
+from .minigpt4.configuration import *
+from .minigpt4.modeling import *
+from .qwen_vl import *
+from .visualglm.configuration import *
+from .visualglm.modeling import *
