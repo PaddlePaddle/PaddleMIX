@@ -38,7 +38,8 @@
 |:------------------------------------|:------------------|:---------------------:|:------------:|
 | `CLIP-ViT-L-14-DataComp.XL-s13B-b90K`|       427.62     | **79.2** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-L-14-DataComp.XL-s13B-b90K/model_state.pdparams) |
 | `CLIP-ViT-B-16-DataComp.XL-s13B-b90K`|         149.62   | **73.5** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/model_state.pdparams) |
-| `CLIP-ViT-B-32-256x256-DataComp-s34B-b86K`|    151.28   | **69.2** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-B-32-256x256-DataComp-s34B-b86K/model_state.pdparams) |
+| `CLIP-ViT-B-32-DataComp.XL-s13B-b90K`|         151.28   | **69.2** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-B-32-DataComp.XL-s13B-b90K/model_state.pdparams) |
+| `CLIP-ViT-B-32-256x256-DataComp-s34B-b86K`|    151.28   | **72.8** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-B-32-256x256-DataComp-s34B-b86K/model_state.pdparams) |
 
 </div>
 
