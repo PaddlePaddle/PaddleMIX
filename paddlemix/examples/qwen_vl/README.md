@@ -22,7 +22,7 @@ python paddlemix/examples/qwen_vl/run_predict.py \
 --input_image "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg" \
 --prompt "Generate the caption in English with grounding:" \
 --dtype "float32"
-
+```
 可配置参数说明：
   * `model_name_or_path`: 指定qwen_vl系列的模型名字或权重路径，默认 qwen-vl/qwen-vl-7b
   * `seed` :指定随机种子，默认1234。
@@ -34,5 +34,6 @@ python paddlemix/examples/qwen_vl/run_predict.py \
 
 
 # qwen-vl-chat demo
+```bash
 python paddlemix/examples/qwen_vl/chat_demo.py
 ```
