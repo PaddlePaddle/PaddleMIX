@@ -23,14 +23,14 @@ python paddlemix/examples/qwen_vl/run_predict.py \
 --model_name_or_path "qwen-vl/qwen-vl-7b" \
 --input_image "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg" \
 --prompt "Generate the caption in English with grounding:" \
---dtype "float32"
+--dtype "bfloat16"
 ```
 可配置参数说明：
   * `model_name_or_path`: 指定qwen_vl系列的模型名字或权重路径，默认 qwen-vl/qwen-vl-7b
   * `seed` :指定随机种子，默认1234。
   * `visual:` :设置是否可视化结果，默认True。
   * `output_dir` :指定可视化图片保存路径。
-  * `dtype` :设置数据类型，默认float32,支持float32、bfloat16、float16。
+  * `dtype` :设置数据类型，默认bfloat16,支持float32、bfloat16、float16。
   * `input_image` :输入图片路径或url，默认None。
   * `prompt` :输入prompt。
 

@@ -105,7 +105,7 @@ class ModelArguments:
         metadata={"help": "save visual image."},
     )
     dtype: str = field(
-        default="float32",
+        default="bfloat16",
         metadata={"help": "dtype,support float32/float16/bfloat16."},
     )
 
