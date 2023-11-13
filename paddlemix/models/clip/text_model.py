@@ -1129,6 +1129,7 @@ class TextTransformerConfig(PretrainedConfig):
         self.heads = heads
         self.layers = layers
         self.ls_init_value = ls_init_value
+        self.embed_dim = embed_dim
         self.output_dim = embed_dim
         self.xattn = xattn
         self.attn_mask = attn_mask

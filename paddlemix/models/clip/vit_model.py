@@ -538,6 +538,7 @@ class EVAVisionTransformerConfig(PretrainedConfig):
         self.image_size = image_size
         self.patch_size = patch_size
         self.in_chans = in_chans
+        self.embed_dim = embed_dim
         self.output_dim = embed_dim
         self.width = width
         self.layers = layers
@@ -910,6 +911,7 @@ class VisionTransformerConfig(PretrainedConfig):
         self.attentional_pool = attentional_pool
         self.n_queries = n_queries
         self.attn_pooler_heads = attn_pooler_heads
+        self.embed_dim = embed_dim
         self.output_dim = embed_dim
         self.xattn = xattn
         self.output_tokens = output_tokens
