@@ -8,8 +8,8 @@
 ## 2. Demo
 
 ## 2.1 环境准备
-- tiktoken        #要求 python3.8 及以上
-- python >= 3.8
+- **python >= 3.8**
+- tiktoken
 - paddlepaddle-gpu >= 2.5.1
 - paddlenlp >= 2.6.1
 
