@@ -1,5 +1,4 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The Salesforce Team Authors and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,15 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .blip_processing import *
-from .clip_processing import *
-from .eva02_processing import *
-from .groundingdino_processing import *
-from .imagebind_processing import *
-from .minigpt4_image_processing import *
-from .minigpt4_processing import *
-from .qwen_vl_processing import *
-from .sam_processing import *
-from .tokenizer import SimpleTokenizer, tokenize
-from .visualglm_image_processing import *
-from .visualglm_processing import *
+from .modeling import *
+from .tokenization import *
