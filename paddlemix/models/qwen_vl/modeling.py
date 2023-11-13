@@ -33,7 +33,7 @@ from .generation_utils import (
     get_stop_words_ids,
     make_context,
 )
-from .visual import VisionTransformer
+from .visual import Vision
 
 _CHECKPOINT_FOR_DOC = "qwen"
 _CONFIG_FOR_DOC = "QWenConfig"
@@ -241,7 +241,7 @@ class QWenLMHeadModel(QWenPretrainedModel):
     def __init__(self, config):
         super().__init__(config)
 
-        self.visual = VisionTransformer(**config.visual)
+        self.visual = Vision(config.visual)
         self.transformer = QWen(config)
         self.lm_head = paddle.nn.Linear(
             in_features=config.hidden_size, out_features=config.vocab_size, bias_attr=False

@@ -41,12 +41,13 @@ query1 = tokenizer.from_list_format(
 
 response, history = model.chat(tokenizer, query=query1, history=None)
 print("answer1:", response)
-# 这张图片展示了一辆红色的 Beacon Bus 正在行驶，它是一辆公共汽车。车身上有黑色的字母，表明其服务线路。
-# 在公共汽车上，乘客可以使用数字板获取信息和目的地。公共汽车前方是一辆银色的汽车，它们都正在行驶在道路上。
-# 另外，还有一些人可以被看到在公共汽车附近。在背景中，一个标志牌也被看到
+# 这张图片展示了一辆红色的 Beacon Bus 正在行驶，它在道路上与其它车辆共同行驶。
+# bus 上的数字显示它正在前往特定地点，可能是一个公共汽车 stop。
+# 在场景中还可以看到一辆汽车和另一辆巴士，它们位于不同的位置上。人们周围走动，其中一些人甚至在斑马线上行走。
+# 这场景描绘了繁忙的交通和运输在城市中的重要性。
 
 # 第二轮对话
 query2 = "框出图中公交车的位置"
 response, history = model.chat(tokenizer, query2, history=history)
 print("answer2:", response)
-# <ref>公交车</ref><box>(178,280),(802,894)</box>
+# <ref>公交车</ref><box>(178,279),(806,884)</box>

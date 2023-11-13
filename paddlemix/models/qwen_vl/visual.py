@@ -14,7 +14,7 @@
 
 import math
 from functools import partial
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import numpy as np
 import paddle
@@ -24,26 +24,7 @@ from paddlenlp.utils.initializer import normal_
 from PIL import Image
 
 from ..groundingdino.layers import MultiHeadAttention
-
-
-def get_abs_pos(abs_pos, tgt_size):
-    src_size = int(math.sqrt(abs_pos.shape[0]))
-    tgt_size = int(math.sqrt(tgt_size))
-    dtype = abs_pos.dtype
-    if src_size != tgt_size:
-        return (
-            paddle.nn.functional.interpolate(
-                x=abs_pos.astype(dtype="float32").reshape([1, src_size, src_size, -1]).transpose(perm=[0, 3, 1, 2]),
-                size=(tgt_size, tgt_size),
-                mode="bicubic",
-                align_corners=False,
-            )
-            .transpose(perm=[0, 2, 3, 1])
-            .flatten(start_axis=0, stop_axis=2)
-            .astype(dtype=dtype)
-        )
-    else:
-        return abs_pos
+from .qwen_vit import VisionTransformer, VisionTransformerConfig, get_abs_pos
 
 
 def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False):
@@ -325,55 +306,35 @@ class TransformerBlock(paddle.nn.Layer):
         return x
 
 
-class VisionTransformer(paddle.nn.Layer):
+class Vision(paddle.nn.Layer):
     def __init__(
         self,
-        image_size: int,
-        patch_size: int,
-        width: int,
-        layers: int,
-        heads: int,
-        mlp_ratio: float,
+        config: Dict[str, int],
         n_queries: int = 256,
-        output_dim: int = 512,
-        **kwargs
     ):
         super().__init__()
-        image_height, image_width = self.image_size = image_size, image_size
-        patch_height, patch_width = self.patch_size = patch_size, patch_size
+        image_height, image_width = self.image_size = config["image_size"], config["image_size"]
+        patch_height, patch_width = self.patch_size = config["patch_size"], config["patch_size"]
         self.grid_size = (image_height // patch_height, image_width // patch_width)
-        self.output_dim = output_dim
+        self.output_dim = config["output_dim"]
 
-        self.conv1 = paddle.nn.Conv2D(
-            in_channels=3, out_channels=width, kernel_size=patch_size, stride=patch_size, bias_attr=False
-        )
-        scale = width**-0.5
-        out_4 = paddle.create_parameter(
-            shape=(scale * paddle.randn(shape=[256, width])).shape,
-            dtype=(scale * paddle.randn(shape=[256, width])).numpy().dtype,
-            default_initializer=paddle.nn.initializer.Assign(scale * paddle.randn(shape=[256, width])),
-        )
-        out_4.stop_gradient = not True
-        self.positional_embedding = out_4
+        vit_config = VisionTransformerConfig(**config)
+        self.vit = VisionTransformer(vit_config)
         norm_layer = partial(paddle.nn.LayerNorm, epsilon=1e-06)
-        act_layer = paddle.nn.GELU
-        self.ln_pre = norm_layer(width)
-        self.transformer = TransformerBlock(
-            width, layers, heads, mlp_ratio, act_layer=act_layer, norm_layer=norm_layer
-        )
+
         self.attn_pool = Resampler(
             grid_size=int(math.sqrt(n_queries)),
-            embed_dim=output_dim,
-            num_heads=output_dim // 128,
-            kv_dim=width,
+            embed_dim=self.output_dim,
+            num_heads=self.output_dim // 128,
+            kv_dim=config["width"],
             norm_layer=norm_layer,
         )
-        self.ln_post = norm_layer(output_dim)
+        self.ln_post = norm_layer(self.output_dim)
         self.proj = paddle.create_parameter(
-            shape=[output_dim, output_dim],
+            shape=[self.output_dim, self.output_dim],
             dtype=paddle.get_default_dtype(),
             default_initializer=paddle.nn.initializer.Assign(
-                output_dim**-0.5 * paddle.randn(shape=[output_dim, output_dim])
+                self.output_dim**-0.5 * paddle.randn(shape=[self.output_dim, self.output_dim])
             ),
         )
         self.proj.stop_gradient = not True
@@ -390,19 +351,7 @@ class VisionTransformer(paddle.nn.Layer):
         return image
 
     def forward(self, x: paddle.Tensor):
-        x = x.astype(dtype=self.conv1.weight.dtype)
-
-        x = self.conv1(x)
-
-        x = x.reshape([x.shape[0], x.shape[1], self.grid_size[0] * self.grid_size[1]])
-        x = x.transpose(perm=[0, 2, 1])
-        x = x + get_abs_pos(self.positional_embedding, x.shape[1])
-
-        x = self.ln_pre(x)
-        x = x.transpose(perm=[1, 0, 2])
-
-        x = self.transformer(x)
-        x = x.transpose(perm=[1, 0, 2])
+        x = self.vit(x)
 
         x = self.attn_pool(x)
 

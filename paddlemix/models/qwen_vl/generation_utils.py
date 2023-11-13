@@ -21,59 +21,6 @@ from paddlenlp.transformers import PretrainedTokenizer
 
 HistoryType = List[Tuple[str, str]]
 TokensType = List[int]
-BatchTokensType = List[List[int]]
-
-
-def pad_batch(batch: BatchTokensType, pad_id: int, seq_length: int) -> BatchTokensType:
-    for tokens in batch:
-        context_length = len(tokens)
-        if context_length < seq_length:
-            tokens.extend([pad_id] * (seq_length - context_length))
-    return batch
-
-
-def get_ltor_masks_and_position_ids(data, eod_token, reset_position_ids, reset_attention_mask, eod_mask_loss):
-    """Build masks and position id for left to right model."""
-    micro_batch_size, seq_length = data.shape
-    if reset_attention_mask:
-        att_mask_batch = micro_batch_size
-    else:
-        att_mask_batch = 1
-
-    attention_mask = paddle.tril(x=paddle.ones(shape=(att_mask_batch, seq_length, seq_length))).reshape(
-        [att_mask_batch, 1, seq_length, seq_length]
-    )
-    loss_mask = paddle.ones(shape=data.shape, dtype="float32")
-    if eod_mask_loss:
-        loss_mask[data == eod_token] = 0.0
-    position_ids = paddle.arange(dtype="int64", end=seq_length)
-    position_ids = position_ids.unsqueeze(axis=0).expand_as(y=data)
-    if reset_position_ids:
-        position_ids = position_ids.clone()
-    if reset_position_ids or reset_attention_mask:
-        for b in range(micro_batch_size):
-            eod_index = position_ids[b, data[b] == eod_token]
-            if reset_position_ids:
-                eod_index = eod_index.clone()
-            prev_index = 0
-            for j in range(eod_index.shape[0]):
-                i = eod_index[j]
-                if reset_attention_mask:
-                    attention_mask[(b), (0), i + 1 :, : i + 1] = 0
-                if reset_position_ids:
-                    position_ids[(b), i + 1 :] -= i + 1 - prev_index
-                    prev_index = i + 1
-    attention_mask = attention_mask < 0.5
-    return attention_mask, loss_mask, position_ids
-
-
-def get_batch(context_tokens: paddle.Tensor, eod_id: int):
-    """Generate batch from context tokens."""
-    tokens = context_tokens.to(context_tokens.place)
-    attention_mask, _, position_ids = get_ltor_masks_and_position_ids(
-        tokens, eod_id, reset_position_ids=False, reset_attention_mask=False, eod_mask_loss=False
-    )
-    return tokens, attention_mask, position_ids
 
 
 def get_stop_words_ids(chat_format, tokenizer):
@@ -316,30 +263,3 @@ class StopWordsLogitsProcessor(LogitsProcessor):
                     break
             stopped_samples.append(match)
         return stopped_samples
-
-
-def top_k_logits(logits, top_k=0, top_p=0.0, filter_value=-float("Inf")):
-    """This function has been mostly taken from huggingface conversational
-    ai code at
-        https://medium.com/huggingface/how-to-build-a-state-of-the-art-
-             conversational-ai-with-transfer-learning-2d818ac26313"""
-    if top_k > 0:
-        indices_to_remove = logits < paddle.topk(k=top_k, x=logits)[0][..., -1, None]
-        logits[indices_to_remove] = filter_value
-    if top_p > 0.0:
-        sorted_logits, sorted_indices = paddle.sort(descending=True, x=logits, axis=-1), paddle.argsort(
-            descending=True, x=logits, axis=-1
-        )
-        cumulative_probs = paddle.cumsum(x=paddle.nn.functional.softmax(x=sorted_logits, axis=-1), axis=-1)
-        sorted_indices_to_remove = cumulative_probs > top_p
-        sorted_indices_to_remove[(...), 1:] = sorted_indices_to_remove[(...), :-1].clone()
-        sorted_indices_to_remove[..., 0] = 0
-        for i in range(sorted_indices.shape[0]):
-            indices_to_remove = sorted_indices[i][sorted_indices_to_remove[i]]
-            logits[i][indices_to_remove] = filter_value
-    return logits
-
-
-def switch(val1, val2, boolean):
-    boolean = boolean.astype(dtype=val1.dtype)
-    return (1 - boolean) * val1 + boolean * val2
