@@ -10,6 +10,7 @@
 ## 2.1 环境准备
 - **python >= 3.8**
 - tiktoken
+> 注：tiktoken 要求python >= 3.8
 - paddlepaddle-gpu >= 2.5.1
 - paddlenlp >= 2.6.1
 
