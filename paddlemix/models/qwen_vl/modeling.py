@@ -21,7 +21,12 @@ from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPast,
     CausalLMOutputWithPast,
 )
-from paddlenlp.transformers.qwen.modeling import QWenModel, QWenPretrainedModel
+from paddlenlp.transformers.qwen.modeling import QWenModel
+
+try:
+    from paddlenlp.transformers.qwen.modeling import QWenPretrainedModel
+except:
+    from paddlenlp.transformers.qwen.modeling import QWenPreTrainedModel as QWenPretrainedModel
 
 from paddlemix.utils.log import logger
 
