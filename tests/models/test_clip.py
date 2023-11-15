@@ -69,6 +69,7 @@ class VisionTransformerModelTester:
         self.attentional_pool = attentional_pool
         self.n_queries = n_queries
         self.attn_pooler_heads = attn_pooler_heads
+        self.embed_dim = embed_dim
         self.output_dim = embed_dim
         self.xattn = xattn
         self.output_tokens = output_tokens
