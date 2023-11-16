@@ -101,7 +101,7 @@ python paddlemix/examples/qwen_vl/chat_demo.py
 对话中的检测框可以表示为`<box>(x1,y1),(x2,y2)</box>`，其中 `(x1, y1)` 和`(x2, y2)`分别对应左上角和右下角的坐标，并且被归一化到`[0, 1000)`的范围内. 检测框对应的文本描述也可以通过`<ref>text_caption</ref>`表示。
 
 ### 2.3.2 训练
-训练时使用`paddlemix/examples/qwen_vl/finetune.py`程序进行训练，**训练前请先检查数据集路径,如果使用url，请确保环境网络正常**。
+训练时使用`paddlemix/examples/qwen_vl/finetune.py`程序进行训练，**训练前请先检查数据集路径,如果使用url，请确保环境网络正常**。推荐使用A100训练。
 
 训练命令及参数配置示例：
 ```
@@ -109,7 +109,7 @@ MODEL_NAME="qwen-vl/qwen-vl-chat-7b"
 MASTER='127.0.0.1:8080'
 DATA="train.json"
 
-python3.8 -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node 8 \
+python -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node 8 \
 paddlemix/examples/qwen_vl/finetune.py \
     --model_name_or_path ${MODEL_NAME} \
     --data_path ${DATA} \
@@ -145,7 +145,7 @@ paddlemix/examples/qwen_vl/finetune.py \
 
 --data_path #数据 json文件路径
 
---bf16.    #是否使用bf16,默认True
+--dtype    #数据类型，默认‘bfloat16’
 
 --fix_vit #训练时是否固定visual vit的参数，默认True
 
