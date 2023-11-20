@@ -173,7 +173,7 @@ image = pipeline(prompt, guidance_rescale=0.7).images[0]
 
 ## DEISMultistepScheduler
 
-[《快速采样扩散模型的指数积分器采样器（DEIS）》](https://huggingface.co/papers/2204.13902)一文中，张勤胜和陈永新提出了DEIS（Diffusion Exponential Integrator Sampler）。DEISMultistepScheduler是扩散常微分方程（ODE）的一种快速高阶求解器。
+[《快速采样扩散模型的指数积分器采样器（DEIS）》](https://huggingface.co/papers/2204.13902)一文中，Qinsheng Zhang和Yongxin Chen提出了DEIS（Diffusion Exponential Integrator Sampler）。DEISMultistepScheduler是扩散常微分方程（ODE）的一种快速高阶求解器。
 
 这个实现修改了DEIS论文中原始线性t空间的多项式拟合公式，在对数-密度空间中进行了修改。这种修改利用了指数多步更新的封闭形式系数，而不是依赖于数值求解器。
 
