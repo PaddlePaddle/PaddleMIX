@@ -299,15 +299,15 @@ ScoreSdeVpScheduler是一个保持方差的随机微分方程（SDE）调度器�
 
 ## UniPCMultistepScheduler
 
-UniPCMultistepScheduler是一个无需训练的框架，旨在快速采样扩散模型。它是由赵文亮、白璐佳、饶永明、周杰、陆继文在[UniPC: A Unified Predictor-Corrector Framework for Fast Sampling of Diffusion Models](https://huggingface.co/papers/2302.04867)中引入的。
+UniPCMultistepScheduler是一个无需训练的框架，旨在快速采样扩散模型。它是由赵文亮、白璐佳、饶永明、周杰、陆继文在[UniPC: A Unified Predictor-Corrector Framework for Fast Sampling of Diffusion Models](https://huggingface.co/papers/2302.04867) 中引入的。
 
 该框架由一个校正器（UniC）和一个预测器（UniP）组成，它们共享统一的分析形式并支持任意阶数。UniPC是为任何模型设计的，支持像素空间/潜空间DPMs的无条件/条件采样。它还可以应用于噪声预测模型和数据预测模型。校正器UniC也可以应用于任何现成的求解器之后，以提高准确度。
 
 论文摘要如下：
 
-扩散概率模型（DPMs）在高分辨率图像合成方面展示出非常有前景的能力。然而，从预训练的DPM中采样通常需要数百次模型评估，计算成本很高。尽管近年来在设计DPM的高阶求解器方面取得了进展，但仍有进一步加速的空间，特别是在非常少的步骤（例如5~10步）中。受ODE求解器的预测校正方法的启发，我们开发了一个统一的校正器（UniC），可以在任何现有的DPM采样器之后应用，以提高准确度，而无需额外的模型评估，并推导出一个支持任意阶数的统一预测器（UniP）作为副产品。结合UniP和UniC，我们提出了一种统一的预测校正框架，称为UniPC，用于快速采样DPMs，它对任何阶数都具有统一的分析形式，并且可以显著提高采样质量。我们通过广泛的实验评估了我们的方法，包括使用像素空间和潜空间DPMs的无条件和条件采样。我们的UniPC在CIFAR10（无条件）上可以达到3.87 FID，在ImageNet 256x256（条件）上可以达到7.51 FID，仅需10次函数评估。代码可在https://github.com/wl-zhao/UniPC找到。
+扩散概率模型（DPMs）在高分辨率图像合成方面展示出非常有前景的能力。然而，从预训练的DPM中采样通常需要数百次模型评估，计算成本很高。尽管近年来在设计DPM的高阶求解器方面取得了进展，但仍有进一步加速的空间，特别是在非常少的步骤（例如5~10步）中。受ODE求解器的预测校正方法的启发，我们开发了一个统一的校正器（UniC），可以在任何现有的DPM采样器之后应用，以提高准确度，而无需额外的模型评估，并推导出一个支持任意阶数的统一预测器（UniP）作为副产品。结合UniP和UniC，我们提出了一种统一的预测校正框架，称为UniPC，用于快速采样DPMs，它对任何阶数都具有统一的分析形式，并且可以显著提高采样质量。我们通过广泛的实验评估了我们的方法，包括使用像素空间和潜空间DPMs的无条件和条件采样。我们的UniPC在CIFAR10（无条件）上可以达到3.87 FID，在ImageNet 256x256（条件）上可以达到7.51 FID，仅需10次函数评估。代码可在https://github.com/wl-zhao/UniPC 找到。
 
-原始代码库可在[wl-zhao/UniPC](https://github.com/wl-zhao/UniPC)中找到。
+原始代码库可在[wl-zhao/UniPC](https://github.com/wl-zhao/UniPC) 中找到。
 
 提示：
 对于引导采样，建议将solver_order设置为2，对于无条件采样，将solver_order设置为3。
