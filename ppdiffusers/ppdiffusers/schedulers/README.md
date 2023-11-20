@@ -66,7 +66,6 @@ from_pretrained(pretrained_model_name_or_path: Union[str, os.PathLike, None] = N
 - `proxies`（Dict[str, str]，可选） - 代理服务器字典，用于每个协议或端点，例如`{'http': 'foo.bar:3128', 'http://hostname': 'foo.bar:4012'}`。代理服务器将在每个请求上使用。
 - `output_loading_info`（bool，可选，默认为`False`） - 是否同时返回一个包含丢失的键、意外的键和错误消息的字典。
 - `local_files_only`（bool，可选，默认为`False`） - 是否仅加载本地模型权重和配置文件。如果设置为`True`，则不会从Hub下载模型。
-- `use_auth_token`（str或bool，可选） - 用作远程文件的HTTP Bearer授权的令牌。如果为`True`，则使用从diffusers-cli login生成的令牌（存储在~/.huggingface中）。
 - `revision`（str，可选，默认为`"main"`） - 要使用的特定模型版本。可以是分支名称、标签名称、提交ID或Git允许的任何标识符。
 
 #### save_pretrained
