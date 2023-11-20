@@ -97,3 +97,26 @@ save_pretrained(save_directory: Union[str, os.PathLike], push_to_hub: bool = Fal
 [`KarrasDiffusionSchedulers`]是PPDiffusers中调度器的广义概括。该类中的调度器在高层次上通过其噪声采样策略、网络和缩放类型、训练策略以及损失加权方式进行区分。
 
 根据常微分方程（ODE）求解器类型的不同，该类中的不同调度器属于上述分类，并为PPDiffusers中实现的主要调度器的设计提供了良好的抽象。该类中的调度器在[这里](https://github.com/huggingface/diffusers/blob/a69754bb879ed55b9b6dc9dd0b3cf4fa4124c765/src/diffusers/schedulers/scheduling_utils.py#L32)给出。
+
+## CMStochasticIterativeScheduler
+
+《一步生成高质量样本的一致性模型》是由杨松、普拉法拉·达里瓦尔、马克·陈和伊利亚·苏茨克弗所提出的一种多步和一步调度器（算法1），能够在一步或少量步骤中生成优质样本。
+
+论文摘要如下：
+
+扩散模型在图像、音频和视频生成方面取得了重大突破，但它们依赖于迭代生成过程，导致采样速度慢，限制了其在实时应用中的潜力。为了克服这个限制，我们提出了一致性模型，这是一种新的生成模型系列，可以在不进行对抗训练的情况下实现高质量样本。它们通过设计支持快速的一步生成，同时仍然允许少量步骤的采样以在计算和样本质量之间进行权衡。它们还支持零样本数据编辑，如图像修复、上色和超分辨率，而无需对这些任务进行显式训练。一致性模型可以作为提炼预训练扩散模型的一种方法进行训练，也可以作为独立的生成模型进行训练。通过大量实验证明，它们在一步和少量步骤生成方面优于现有的扩散模型提炼技术。例如，在CIFAR-10上实现了新的FID最佳成绩3.55，在ImageNet 64x64上实现了6.20的FID最佳成绩。当作为独立的生成模型进行训练时，一致性模型还在CIFAR-10、ImageNet 64x64和LSUN 256x256等标准基准测试中优于单步非对抗生成模型。
+
+原始代码可在[openai/consistency_models](https://github.com/openai/consistency_models)找到。
+
+## ConsistencyDecoderScheduler
+
+这个调度器是ConsistencyDecoderPipeline的一部分，在[DALL-E 3](https://openai.com/dall-e-3)中引入。
+
+原始代码可在[openai/consistency_models](https://github.com/openai/consistency_models)找到。
+
+## DDIMInverseScheduler
+
+`DDIMInverseScheduler`是根据Jiaming Song、Chenlin Meng和Stefano Ermon的[去噪扩散隐式模型（DDIM）](https://huggingface.co/papers/2010.02502)中的倒置调度器而设计的。该实现主要基于使用引导扩散模型进行真实图像编辑的[无文本倒置定义中的DDIM倒置](https://huggingface.co/papers/2211.09794.pdf)。
+
+## DDIMScheduler
+
