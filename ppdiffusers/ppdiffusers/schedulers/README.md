@@ -129,7 +129,7 @@ Denoising diffusion probabilistic models (DDPMs)在没有对抗训练的情况�
 该论文的原始代码可以在ermongroup/ddim找到，您可以在tsong.me上联系作者。
 
 提示：
-论文《Common Diffusion Noise Schedules and Sample Steps are Flawed》声称训练和推断设置之间的不匹配导致了Stable Diffusion的推断生成结果不佳。为了解决这个问题，作者提出了以下方法：
+论文Common Diffusion Noise Schedules and Sample Steps are Flawed声称训练和推断设置之间的不匹配导致了Stable Diffusion的推断生成结果不佳。为了解决这个问题，作者提出了以下方法：
 
 🧪 这是一个实验性的功能！
 
@@ -164,7 +164,7 @@ image = pipeline(prompt, guidance_rescale=0.7).images[0]
 
 ## DDPMScheduler
 
-[《Denoising Diffusion Probabilistic Models（DDPM）》](https://huggingface.co/papers/2006.11239)是由Jonathan Ho、Ajay Jain和Pieter Abbeel提出的一种基于扩散的模型。在PPDiffusers库中，DDPM指的是论文中的离散去噪调度器以及整个流程。
+[Denoising Diffusion Probabilistic Models（DDPM）](https://huggingface.co/papers/2006.11239)是由Jonathan Ho、Ajay Jain和Pieter Abbeel提出的一种基于扩散的模型。在PPDiffusers库中，DDPM指的是论文中的离散去噪调度器以及整个流程。
 
 论文的摘要如下：
 
@@ -172,7 +172,7 @@ image = pipeline(prompt, guidance_rescale=0.7).images[0]
 
 ## DEISMultistepScheduler
 
-[《Fast Sampling of Diffusion Models with Exponential Integrator 》](https://huggingface.co/papers/2204.13902)一文中，Qinsheng Zhang和Yongxin Chen提出了DEIS（Diffusion Exponential Integrator Sampler）。DEISMultistepScheduler是扩散常微分方程（ODE）的一种快速高阶求解器。
+[Fast Sampling of Diffusion Models with Exponential Integrator ](https://huggingface.co/papers/2204.13902)一文中，Qinsheng Zhang和Yongxin Chen提出了DEIS（Diffusion Exponential Integrator Sampler）。DEISMultistepScheduler是扩散常微分方程（ODE）的一种快速高阶求解器。
 
 这个实现修改了DEIS论文中原始线性t空间的多项式拟合公式，在对数-密度空间中进行了修改。这种修改利用了指数多步更新的封闭形式系数，而不是依赖于数值求解器。
 
@@ -189,12 +189,12 @@ image = pipeline(prompt, guidance_rescale=0.7).images[0]
 
 ## DPMSolverMultistepInverse
 
-**DPMSolverMultistepInverse** 是来自 [ DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps)[https://huggingface.co/papers/2206.00927]，大约需要 10 步，并且还有 [DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models](https://huggingface.co/papers/2211.01095)，作者是 Cheng Lu、Yuhao Zhou、Fan Bao、Jianfei Chen、Chongxuan Li 和 Jun Zhu。
+**DPMSolverMultistepInverse** 是来自 [DPM-Solver: A Fast ODE Solver for Diffusion Probabilistic Model Sampling in Around 10 Steps](https://huggingface.co/papers/2206.00927) 和 [DPM-Solver++: Fast Solver for Guided Sampling of Diffusion Probabilistic Models](https://huggingface.co/papers/2211.01095)，作者是 Cheng Lu、Yuhao Zhou、Fan Bao、Jianfei Chen、Chongxuan Li 和 Jun Zhu。
 
 该实现主要基于 DDIM 反演定义的 [Null-text Inversion for Editing Real Images using Guided Diffusion Models](https://huggingface.co/papers/2211.09794.pdf) 以及 [Xiang-cd/DiffEdit-stable-diffusion](https://github.com/Xiang-cd/DiffEdit-stable-diffusion/blob/main/diffedit.ipynb) 的 DiffEdit 潜空间反演的笔记本实现。
 
 提示
-支持来自 Imagen 的动态阈值化（https://huggingface.co/papers/2205.11487），对于像素空间的扩散模型，您可以将 algorithm_type="dpmsolver++" 和 thresholding=True 同时设置为使用动态阈值化。这种阈值化方法不适用于稳定扩散等潜空间扩散模型。
+支持来自 Imagen 的动态阈值化（https://huggingface.co/papers/2205.11487 ），对于像素空间的扩散模型，您可以将 algorithm_type="dpmsolver++" 和 thresholding=True 同时设置为使用动态阈值化。这种阈值化方法不适用于稳定扩散等潜空间扩散模型。
 
 ## DPMSolverMultistepScheduler
 
@@ -205,13 +205,13 @@ DPMSolver（和改进版本DPMSolver++）是一种快速的专用高阶求解器
 提示
 建议在引导采样时将solver_order设置为2，无条件采样时设置为solver_order=3。
 
-支持来自Imagen的动态阈值设置（https://huggingface.co/papers/2205.11487），对于像素空间的扩散模型，您可以同时设置algorithm_type="dpmsolver++"和thresholding=True来使用动态阈值设置。这种阈值设置方法不适用于稳定扩散等潜在空间扩散模型。
+支持来自Imagen的动态阈值设置（https://huggingface.co/papers/2205.11487 ），对于像素空间的扩散模型，您可以同时设置algorithm_type="dpmsolver++"和thresholding=True来使用动态阈值设置。这种阈值设置方法不适用于稳定扩散等潜在空间扩散模型。
 
 DPMSolver和DPM-Solver++也支持SDE变体，但仅适用于一阶和二阶求解器。这是一种用于反向扩散SDE的快速求解器。建议使用二阶sde-dpmsolver++。
 
 ## DPMSolverSDEScheduler
 
-DPMSolverSDEScheduler是受到[《Elucidating the Design Space of Diffusion-Based Generative Models》](https://huggingface.co/papers/2206.00364)论文中的随机采样器的启发，调度器是由[Katherine Crowson](https://github.com/crowsonkb/)移植和创建的。
+DPMSolverSDEScheduler是受到[Elucidating the Design Space of Diffusion-Based Generative Models](https://huggingface.co/papers/2206.00364)论文中的随机采样器的启发，调度器是由[Katherine Crowson](https://github.com/crowsonkb/)移植和创建的。
 
 ## DPMSolverSinglestepScheduler
 
@@ -224,7 +224,7 @@ DPMSolver（以及改进版本 DPMSolver++）是一个快速的专用高阶求�
 提示
 建议在引导采样中将 solver_order 设置为2，而在无条件采样中将 solver_order 设置为3。
 
-支持来自 Imagen 的动态阈值方法（https://huggingface.co/papers/2205.11487），对于像素空间扩散模型，您可以设置 algorithm_type="dpmsolver++" 和 thresholding=True 来使用动态阈值方法。这种阈值方法不适用于稳定扩散等潜在空间扩散模型。
+支持来自 Imagen 的动态阈值方法（https://huggingface.co/papers/2205.11487 ），对于像素空间扩散模型，您可以设置 algorithm_type="dpmsolver++" 和 thresholding=True 来使用动态阈值方法。这种阈值方法不适用于稳定扩散等潜在空间扩散模型。
 
 ## EulerAncestralDiscreteScheduler
 
@@ -232,11 +232,11 @@ DPMSolver（以及改进版本 DPMSolver++）是一个快速的专用高阶求�
 
 ## EulerDiscreteScheduler
 
-Euler调度器（算法2）来自Karras等人的[《 Elucidating the Design Space of Diffusion-Based Generative Models》](https://huggingface.co/papers/2206.00364)论文。这是一个快速调度器，通常可以在20-30步内生成良好的输出。该调度器基于Katherine Crowson的原始k-diffusion实现。
+Euler调度器（算法2）来自Karras等人的[ Elucidating the Design Space of Diffusion-Based Generative Models](https://huggingface.co/papers/2206.00364)论文。这是一个快速调度器，通常可以在20-30步内生成良好的输出。该调度器基于Katherine Crowson的原始k-diffusion实现。
 
 ## HeunDiscreteScheduler
 
-Heun调度器（算法1）来自Karras等人的[《 Elucidating the Design Space of Diffusion-Based Generative Models》](https://huggingface.co/papers/2206.00364)论文。该调度器是由Katherine Crowson从k-diffusion库移植而来的。
+Heun调度器（算法1）来自Karras等人的[ Elucidating the Design Space of Diffusion-Based Generative Models](https://huggingface.co/papers/2206.00364)论文。该调度器是由Katherine Crowson从k-diffusion库移植而来的。
 
 ## IPNDMScheduler
 
@@ -244,23 +244,23 @@ IPNDMScheduler是一个四阶改进的伪线性多步调度器。原始实现可
 
 ## KarrasVeScheduler
 
-KarrasVeScheduler是一个针对方差扩展（VE）模型的随机采样器。它基于[《Elucidating the Design Space of Diffusion-Based Generative Models 》](https://huggingface.co/papers/2206.00364)和[《Score-based generative modeling through stochastic differential equations》](https://huggingface.co/papers/2011.13456)这两篇论文。
+KarrasVeScheduler是一个针对方差扩展（VE）模型的随机采样器。它基于[Elucidating the Design Space of Diffusion-Based Generative Models ](https://huggingface.co/papers/2206.00364)和[Score-based generative modeling through stochastic differential equations](https://huggingface.co/papers/2011.13456)这两篇论文。
 
 ## KDPM2AncestralDiscreteScheduler
 
-`KDPM2DiscreteScheduler`是受到[《Elucidating the Design Space of Diffusion-Based Generative Models》](https://huggingface.co/papers/2206.00364)一文的启发，并且采用了祖先抽样方法。该调度程序是由Katherine Crowson移植和创建的。
+`KDPM2DiscreteScheduler`是受到[Elucidating the Design Space of Diffusion-Based Generative Models](https://huggingface.co/papers/2206.00364)一文的启发，并且采用了祖先抽样方法。该调度程序是由Katherine Crowson移植和创建的。
 
 原始代码库可以在[crowsonkb/k-diffusion](https://github.com/crowsonkb/k-diffusion)找到。
 
 ## KDPM2DiscreteScheduler
 
-`KDPM2DiscreteScheduler`是受到[《Elucidating the Design Space of Diffusion-Based Generative Models》](https://huggingface.co/papers/2206.00364)论文的启发而创建的，调度器是由Katherine Crowson进行移植和创建的。
+`KDPM2DiscreteScheduler`是受到[Elucidating the Design Space of Diffusion-Based Generative Models](https://huggingface.co/papers/2206.00364)论文的启发而创建的，调度器是由Katherine Crowson进行移植和创建的。
 
 原始代码库可以在[crowsonkb/k-diffusion](https://github.com/crowsonkb/k-diffusion)找到。
 
 ## Latent Consistency Model Multistep Scheduler
 
-在[《 Latent Consistency Models: Synthesizing High-Resolution Images with Few-Step Inference》](https://arxiv.org/abs/2310.04378)一文中，Simian Luo、Yiqin Tan、Longbo Huang、Jian Li和Hang Zhao引入了多步和单步调度器（算法3），并与潜在一致性模型一起使用。该调度器能够在1-8步内从LatentConsistencyModelPipeline生成良好的样本。
+在[ Latent Consistency Models: Synthesizing High-Resolution Images with Few-Step Inference](https://arxiv.org/abs/2310.04378)一文中，Simian Luo、Yiqin Tan、Longbo Huang、Jian Li和Hang Zhao引入了多步和单步调度器（算法3），并与潜在一致性模型一起使用。该调度器能够在1-8步内从LatentConsistencyModelPipeline生成良好的样本。
 
 ## LMSDiscreteScheduler
 
@@ -272,7 +272,7 @@ PNDMScheduler（伪数值方法调度器）是一种用于扩散模型的高级�
 
 ## RePaintScheduler
 
-RePaintScheduler是一种基于DDPM的自动修复调度器，用于无监督修复具有极端遮罩的图像。它设计用于与RePaintPipeline配合使用，并基于Andreas Lugmayr等人的论文[《 RePaint: Inpainting using Denoising Diffusion Probabilistic Models》](https://huggingface.co/papers/2201.09865)。
+RePaintScheduler是一种基于DDPM的自动修复调度器，用于无监督修复具有极端遮罩的图像。它设计用于与RePaintPipeline配合使用，并基于Andreas Lugmayr等人的论文[ RePaint: Inpainting using Denoising Diffusion Probabilistic Models](https://huggingface.co/papers/2201.09865)。
 
 论文摘要如下：
 
@@ -282,7 +282,7 @@ RePaintScheduler是一种基于DDPM的自动修复调度器，用于无监督修
 
 ## ScoreSdeVeScheduler
 
-ScoreSdeVeScheduler 是一个方差爆炸的随机微分方程调度器。它是由Yang Song, Jascha Sohl-Dickstein, Diederik P. Kingma, Abhishek Kumar, Stefano Ermon, Ben Poole在[《 Score-Based Generative Modeling through Stochastic Differential Equations 》](https://huggingface.co/papers/2011.13456)论文中提出的。
+ScoreSdeVeScheduler 是一个方差爆炸的随机微分方程调度器。它是由Yang Song, Jascha Sohl-Dickstein, Diederik P. Kingma, Abhishek Kumar, Stefano Ermon, Ben Poole在[ Score-Based Generative Modeling through Stochastic Differential Equations ](https://huggingface.co/papers/2011.13456)论文中提出的。
 
 论文摘要如下：
 
@@ -290,7 +290,7 @@ ScoreSdeVeScheduler 是一个方差爆炸的随机微分方程调度器。它是
 
 ## ScoreSdeVpScheduler
 
-ScoreSdeVpScheduler是一个保持方差的随机微分方程（SDE）调度器。它在Yang Song、Jascha Sohl-Dickstein、Diederik P. Kingma、Abhishek Kumar、Stefano Ermon、Ben Poole的论文[《 Score-Based Generative Modeling through Stochastic Differential Equations 》](https://huggingface.co/papers/2011.13456)中首次提出。
+ScoreSdeVpScheduler是一个保持方差的随机微分方程（SDE）调度器。它在Yang Song、Jascha Sohl-Dickstein、Diederik P. Kingma、Abhishek Kumar、Stefano Ermon、Ben Poole的论文[ Score-Based Generative Modeling through Stochastic Differential Equations ](https://huggingface.co/papers/2011.13456)中首次提出。
 
 论文摘要如下：
 
@@ -311,12 +311,12 @@ UniPCMultistepScheduler是一个无需训练的框架，旨在快速采样扩散
 提示：
 对于引导采样，建议将solver_order设置为2，对于无条件采样，将solver_order设置为3。
 
-支持来自Imagen（https://huggingface.co/papers/2205.11487）的动态阈值设置，对于像素空间扩散模型，您可以将predict_x0和thresholding都设置为True以使用动态阈值。对于稳定扩散等潜空间扩散模型，此阈值方法不适用。
+支持来自Imagen（https://huggingface.co/papers/2205.11487 ）的动态阈值设置，对于像素空间扩散模型，您可以将predict_x0和thresholding都设置为True以使用动态阈值。对于稳定扩散等潜空间扩散模型，此阈值方法不适用。
 
 
 ## VQDiffusionScheduler
 
-VQDiffusionScheduler是将转换器模型的输出转化为上一个扩散时间步长中无噪声图像的样本。它是由Shuyang Gu、Dong Chen、Jianmin Bao、Fang Wen、Bo Zhang、Dongdong Chen、Lu Yuan和Baining Guo在[《 Vector Quantized Diffusion Model for Text-to-Image Synthesis 》](https://huggingface.co/papers/2111.14822)一文中引入的。
+VQDiffusionScheduler是将转换器模型的输出转化为上一个扩散时间步长中无噪声图像的样本。它是由Shuyang Gu、Dong Chen、Jianmin Bao、Fang Wen、Bo Zhang、Dongdong Chen、Lu Yuan和Baining Guo在[ Vector Quantized Diffusion Model for Text-to-Image Synthesis ](https://huggingface.co/papers/2111.14822)一文中引入的。
 
 该论文的摘要如下：
 
