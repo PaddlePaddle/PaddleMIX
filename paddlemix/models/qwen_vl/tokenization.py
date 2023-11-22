@@ -17,7 +17,11 @@ import os
 import unicodedata
 from typing import Any, Callable, Collection, Dict, List, Set, Tuple, Union
 
-import tiktoken
+try:
+    import tiktoken
+except:
+    pass
+
 from paddlenlp.transformers import AddedToken, PretrainedTokenizer
 
 VOCAB_FILES_NAMES = {"vocab_file": "qwen.tiktoken", "ttf": "SimSun.ttf"}
