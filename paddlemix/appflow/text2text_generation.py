@@ -31,21 +31,21 @@ class ChatGlmTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = Taskflow("text2text_generation", model=model)
 
         self._model = model_instance
 
     def _preprocess(self, inputs):
         """ """
-        #e.g.
+        # e.g.
         # prompt = (
         #     "Given caption,extract the main object to be replaced and marked it as 'main_object', "
         #     + "Extract the remaining part as 'other prompt', "
         #     + "Return main_object, other prompt in English"
         #     + "Given caption: {}.".format(prompt)
         # )
-        
+
         prompt = inputs.get("prompt")
         assert prompt is not None, "The prompt is None"
 

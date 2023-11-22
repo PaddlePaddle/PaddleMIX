@@ -120,9 +120,9 @@ def main():
         logger.warning("bfloat16 is not supported on your device,change to float32")
         model_args.dtype = "float32"
 
-    # bulid tokenizer
+    # build tokenizer
     tokenizer = QWenTokenizer.from_pretrained(model_args.model_name_or_path, dtype=model_args.dtype)
-    # bulid model
+    # build model
     logger.info("model: {},dtypes: {}".format(model_args.model_name_or_path, model_args.dtype))
     model = QWenLMHeadModel.from_pretrained(model_args.model_name_or_path, dtype=model_args.dtype)
     model.eval()
