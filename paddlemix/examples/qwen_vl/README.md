@@ -43,7 +43,7 @@ python paddlemix/examples/qwen_vl/chat_demo.py
 ## 2.3 stage3 微调
 我们提供 `finetune.py` 脚本，用于 stage3 微调模型。
 ### 2.3.1 数据准备
-将自己的数据放到一个列表中并存入json文件中，示例如下：
+将自己的数据放到一个列表中并存入json文件中，示例如下,或参考[sft_examples](https://bj.bcebos.com/v1/paddlenlp/models/community/qwen-vl/sft_examples.json)：
 ```json
 [
   {

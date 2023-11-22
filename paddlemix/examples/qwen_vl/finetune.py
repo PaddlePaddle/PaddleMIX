@@ -152,7 +152,12 @@ def make_supervised_data_module(tokenizer: PretrainedTokenizer, data_args, max_l
     train_json = json.load(open(data_args.data_path, "r"))
     train_dataset = dataset_cls(train_json, tokenizer=tokenizer, max_len=max_len)
 
-    eval_dataset = None
+    if data_args.eval_data_path:
+        eval_json = json.load(open(data_args.eval_data_path, "r"))
+        eval_dataset = dataset_cls(eval_json, tokenizer=tokenizer, max_len=max_len)
+    else:
+        eval_dataset = None
+
     return dict(train_dataset=train_dataset, eval_dataset=eval_dataset)
 
 
