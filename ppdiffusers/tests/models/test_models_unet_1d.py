@@ -59,6 +59,9 @@ class UNet1DModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
     def test_from_save_pretrained(self):
         super().test_from_save_pretrained()
 
+    def test_from_save_pretrained_variant(self):
+        super().test_from_save_pretrained_variant()
+
     def test_model_from_pretrained(self):
         super().test_model_from_pretrained()
 

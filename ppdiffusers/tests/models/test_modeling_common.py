@@ -155,7 +155,7 @@ class ModelTesterMixin:
     main_input_name = None  # overwrite in model specific tester class
     base_precision = 1e-3
 
-    def test_from_save_pretrained(self):
+    def test_from_save_pretrained(self, expected_max_diff=1e-01):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
         if hasattr(model, "set_default_attn_processor"):
@@ -174,7 +174,7 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
         max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 1e-01, "Models give different forward passes")
+        self.assertLessEqual(max_diff, expected_max_diff, "Models give different forward passes")
 
     def test_getattr_is_correct(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -259,7 +259,7 @@ class ModelTesterMixin:
         assert paddle.allclose(x=output_2, y=output_5, atol=self.base_precision).item()
         assert paddle.allclose(x=output_2, y=output_6, atol=self.base_precision).item()
 
-    def test_from_save_pretrained_variant(self):
+    def test_from_save_pretrained_variant(self, expected_max_diff=1e-01):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
         if hasattr(model, "set_default_attn_processor"):
@@ -289,7 +289,7 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
         max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, 1e-01, "Models give different forward passes")
+        self.assertLessEqual(max_diff, expected_max_diff, "Models give different forward passes")
 
     def test_from_save_pretrained_dtype(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()

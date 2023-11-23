@@ -238,6 +238,8 @@ class UNet3DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             )
             self.up_blocks.append(up_block)
             prev_output_channel = output_channel
+
+        # out
         if norm_num_groups is not None:
             self.conv_norm_out = nn.GroupNorm(
                 num_channels=block_out_channels[0],
