@@ -377,8 +377,9 @@ def is_paddlesde_available():
     return _paddlesde_available
 
 
+# This is pytorch packge
 def is_invisible_watermark_available():
-    return _invisible_watermark_available
+    return False  # _invisible_watermark_available
 
 
 # docstyle-ignore
