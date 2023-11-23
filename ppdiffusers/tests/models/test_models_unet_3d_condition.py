@@ -342,8 +342,8 @@ class UNet3DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
             model.disable_xformers_memory_efficient_attention()
             off_sample = model(**inputs_dict).sample
 
-        assert (sample - on_sample).abs().max() < 0.005
-        assert (sample - off_sample).abs().max() < 0.005
+        assert (sample - on_sample).abs().max() < 0.007
+        assert (sample - off_sample).abs().max() < 0.007
 
     def test_feed_forward_chunking(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()

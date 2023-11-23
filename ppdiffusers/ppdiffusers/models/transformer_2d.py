@@ -282,7 +282,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
         # 1. Input
         if self.is_input_continuous:
-            _, _, height, width = hidden_states.shape
+            batch, _, height, width = hidden_states.shape
             residual = hidden_states
             hidden_states = self.norm(hidden_states)
             if not self.use_linear_projection:
@@ -311,7 +311,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         if self.is_input_continuous:
             if self.use_linear_projection:
                 hidden_states = self.proj_out(hidden_states, scale=lora_scale)
-            hidden_states = hidden_states.reshape([-1, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
+            hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
             if not self.use_linear_projection:
                 hidden_states = self.proj_out(hidden_states, scale=lora_scale)
             output = hidden_states + residual

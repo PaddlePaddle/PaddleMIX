@@ -709,15 +709,36 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
         lora_scale = cross_attention_kwargs.get("scale", 1.0) if cross_attention_kwargs is not None else 1.0
         hidden_states = self.resnets[0](hidden_states, temb)
         for attn, resnet in zip(self.attentions, self.resnets[1:]):
-            hidden_states = attn(
-                hidden_states,
-                encoder_hidden_states=encoder_hidden_states,
-                cross_attention_kwargs=cross_attention_kwargs,
-                attention_mask=attention_mask,
-                encoder_attention_mask=encoder_attention_mask,
-                return_dict=False,
-            )[0]
-            hidden_states = resnet(hidden_states, temb, scale=lora_scale)
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+
+                def create_custom_forward(module, return_dict=None):
+                    def custom_forward(*inputs):
+                        if return_dict is not None:
+                            return module(*inputs, return_dict=return_dict)[0]  # move [0] when paddlepaddle <= 2.4.1
+                        else:
+                            return module(*inputs)
+
+                    return custom_forward
+
+                hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb)
+                hidden_states = recompute(
+                    create_custom_forward(attn, return_dict=False),
+                    hidden_states,
+                    encoder_hidden_states,
+                    cross_attention_kwargs,
+                    attention_mask,
+                    encoder_attention_mask,
+                )  # [0]
+            else:
+                hidden_states = attn(
+                    hidden_states,
+                    encoder_hidden_states=encoder_hidden_states,
+                    cross_attention_kwargs=cross_attention_kwargs,
+                    attention_mask=attention_mask,
+                    encoder_attention_mask=encoder_attention_mask,
+                    return_dict=False,
+                )[0]
+                hidden_states = resnet(hidden_states, temb, scale=lora_scale)
 
         return hidden_states
 

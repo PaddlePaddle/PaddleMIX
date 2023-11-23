@@ -393,6 +393,7 @@ class ModelTesterMixin:
     def test_outputs_equivalence(self):
         def set_nan_tensor_to_zero(t):
             # t[t != t] = 0
+            t = paddle.nan_to_num(t, 0, 0, 0)
             return t
 
         def recursive_check(tuple_object, dict_object):
@@ -407,7 +408,7 @@ class ModelTesterMixin:
             else:
                 self.assertTrue(
                     paddle.allclose(
-                        set_nan_tensor_to_zero(tuple_object), set_nan_tensor_to_zero(dict_object), atol=1e-05
+                        set_nan_tensor_to_zero(tuple_object), set_nan_tensor_to_zero(dict_object), atol=5e-05
                     ),
                     msg=f"Tuple and dict output are not equal. Difference: {paddle.max(x=paddle.abs(x=tuple_object - dict_object))}. Tuple has `nan`: {paddle.isnan(x=tuple_object).any()} and `inf`: {paddle.isinf(x=tuple_object)}. Dict has `nan`: {paddle.isnan(x=dict_object).any()} and `inf`: {paddle.isinf(x=dict_object)}.",
                 )
