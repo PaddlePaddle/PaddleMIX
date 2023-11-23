@@ -89,9 +89,11 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         num_embeds_ada_norm: Optional[int] = None,
         use_linear_projection: bool = False,
         only_cross_attention: bool = False,
+        double_self_attention: bool = False,
         upcast_attention: bool = False,
         norm_type: str = "layer_norm",
         norm_elementwise_affine: bool = True,
+        attention_type: str = "default",
     ):
         super().__init__()
         self.use_linear_projection = use_linear_projection
@@ -181,6 +183,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     num_embeds_ada_norm=num_embeds_ada_norm,
                     attention_bias=attention_bias,
                     only_cross_attention=only_cross_attention,
+                    double_self_attention=double_self_attention,
                     upcast_attention=upcast_attention,
                     norm_type=norm_type,
                     norm_elementwise_affine=norm_elementwise_affine,
@@ -206,6 +209,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             self.norm_out = nn.LayerNorm(inner_dim, epsilon=1e-6, **norm_kwargs)
             self.proj_out_1 = nn.Linear(inner_dim, 2 * inner_dim)
             self.proj_out_2 = nn.Linear(inner_dim, patch_size * patch_size * self.out_channels)
+
+        self.gradient_checkpointing = False
 
     def forward(
         self,
@@ -272,16 +277,19 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_attention_mask = (1 - encoder_attention_mask.cast(hidden_states.dtype)) * -10000.0
             encoder_attention_mask = encoder_attention_mask.unsqueeze(1)
 
+        # Retrieve lora scale.
+        lora_scale = cross_attention_kwargs.get("scale", 1.0) if cross_attention_kwargs is not None else 1.0
+
         # 1. Input
         if self.is_input_continuous:
-            _, _, height, width = hidden_states.shape
+            batch, _, height, width = hidden_states.shape
             residual = hidden_states
             hidden_states = self.norm(hidden_states)
             if not self.use_linear_projection:
-                hidden_states = self.proj_in(hidden_states)
+                hidden_states = self.proj_in(hidden_states, scale=lora_scale)
             hidden_states = hidden_states.transpose([0, 2, 3, 1]).flatten(1, 2)
             if self.use_linear_projection:
-                hidden_states = self.proj_in(hidden_states)
+                hidden_states = self.proj_in(hidden_states, scale=lora_scale)
         elif self.is_input_vectorized:
             hidden_states = self.latent_image_embedding(hidden_states.cast("int64"))
         elif self.is_input_patches:
@@ -302,10 +310,10 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         # 3. Output
         if self.is_input_continuous:
             if self.use_linear_projection:
-                hidden_states = self.proj_out(hidden_states)
-            hidden_states = hidden_states.reshape([-1, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
+                hidden_states = self.proj_out(hidden_states, scale=lora_scale)
+            hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
             if not self.use_linear_projection:
-                hidden_states = self.proj_out(hidden_states)
+                hidden_states = self.proj_out(hidden_states, scale=lora_scale)
             output = hidden_states + residual
         elif self.is_input_vectorized:
             hidden_states = self.norm_out(hidden_states)
