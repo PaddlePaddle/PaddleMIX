@@ -141,7 +141,7 @@ class VersatileDiffusionDualGuidedPipeline(DiffusionPipeline):
         Revert the image_unet `DualTransformer2DModel` blocks back to `Transformer2DModel` with image_unet weights Call
         this function if you reuse `image_unet` in another pipeline, e.g. `VersatileDiffusionPipeline`
         """
-        for name, module in self.image_unet.named_modules():
+        for name, module in self.image_unet.named_sublayers():
             if isinstance(module, DualTransformer2DModel):
                 parent_name, index = name.rsplit(".", 1)
                 index = int(index)

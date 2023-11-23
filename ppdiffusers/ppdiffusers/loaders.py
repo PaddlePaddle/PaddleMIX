@@ -2148,9 +2148,15 @@ class FromSingleFileMixin:
             "https://"
         ):
             # HF Hub models
-            if any(p in pretrained_model_link_or_path for p in ["huggingface.co", "hf.co"]):
+            if any(p in pretrained_model_link_or_path for p in ["huggingface.co", "hf.co", "hf-mirror.com"]):
                 # remove huggingface url
-                for prefix in ["https://huggingface.co/", "huggingface.co/", "hf.co/", "https://hf.co/"]:
+                for prefix in [
+                    "https://huggingface.co/",
+                    "huggingface.co/",
+                    "hf.co/",
+                    "https://hf.co/",
+                    "https://hf-mirror.com",
+                ]:
                     if pretrained_model_link_or_path.startswith(prefix):
                         pretrained_model_link_or_path = pretrained_model_link_or_path[len(prefix) :]
 
@@ -2290,6 +2296,7 @@ class FromOriginalVAEMixin:
 
         # import here to avoid circular dependency
         from .pipelines.stable_diffusion.convert_from_ckpt import (
+            convert_diffusers_vae_unet_to_ppdiffusers,
             convert_ldm_vae_checkpoint,
             create_vae_diffusers_config,
         )
@@ -2323,9 +2330,15 @@ class FromOriginalVAEMixin:
             "https://"
         ):
             # download hf models
-            if any(p in pretrained_model_link_or_path for p in ["huggingface.co", "hf.co"]):
+            if any(p in pretrained_model_link_or_path for p in ["huggingface.co", "hf.co", "hf-mirror.com"]):
                 # remove huggingface url
-                for prefix in ["https://huggingface.co/", "huggingface.co/", "hf.co/", "https://hf.co/"]:
+                for prefix in [
+                    "https://huggingface.co/",
+                    "huggingface.co/",
+                    "hf.co/",
+                    "https://hf.co/",
+                    "https://hf-mirror.com",
+                ]:
                     if pretrained_model_link_or_path.startswith(prefix):
                         pretrained_model_link_or_path = pretrained_model_link_or_path[len(prefix) :]
 
@@ -2370,7 +2383,7 @@ class FromOriginalVAEMixin:
             checkpoint = checkpoint["state_dict"]
 
         if config_file is None:
-            config_url = "https://raw.githubusercontent.com/CompVis/stable-diffusion/main/configs/stable-diffusion/v1-inference.yaml"
+            config_url = "https://paddlenlp.bj.bcebos.com/models/community/junnyu/develop/v1-inference.yaml"
             config_file = BytesIO(requests.get(config_url).content)
 
         original_config = OmegaConf.load(config_file)
@@ -2395,7 +2408,8 @@ class FromOriginalVAEMixin:
 
         vae = AutoencoderKL(**vae_config)
 
-        vae.load_dict(converted_vae_checkpoint)
+        # we must transpose linear layer
+        vae.load_dict(convert_diffusers_vae_unet_to_ppdiffusers(vae, converted_vae_checkpoint))
 
         if paddle_dtype is not None:
             vae.to(paddle_dtype=paddle_dtype)
@@ -2497,9 +2511,15 @@ class FromOriginalControlnetMixin:
             "https://"
         ):
             # HF Hub models
-            if any(p in pretrained_model_link_or_path for p in ["huggingface.co", "hf.co"]):
+            if any(p in pretrained_model_link_or_path for p in ["huggingface.co", "hf.co", "hf-mirror.com"]):
                 # remove huggingface url
-                for prefix in ["https://huggingface.co/", "huggingface.co/", "hf.co/", "https://hf.co/"]:
+                for prefix in [
+                    "https://huggingface.co/",
+                    "huggingface.co/",
+                    "hf.co/",
+                    "https://hf.co/",
+                    "https://hf-mirror.com",
+                ]:
                     if pretrained_model_link_or_path.startswith(prefix):
                         pretrained_model_link_or_path = pretrained_model_link_or_path[len(prefix) :]
 
