@@ -56,6 +56,7 @@ image = pipe(
     negative_prompt=negative_prompt,
     liked=liked,
     num_inference_steps=20,
+    generator=paddle.Generator().manual_seed(0),
 ).images[0]
 
 image.save("black_to_blue.png")

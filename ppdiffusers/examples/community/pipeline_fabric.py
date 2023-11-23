@@ -695,7 +695,8 @@ class FabricPipeline(DiffusionPipeline):
                 neg_ws = (weight_factor * neg_scale, weight_factor * neg_scale * neg_bottleneck_scale)
 
                 if z_ref.shape[0] > 0 and weight_factor > 0:
-                    noise = paddle.randn(shape=z_ref.shape, dtype=z_ref.dtype)
+                    noise = randn_tensor(shape=z_ref.shape, dtype=z_ref.dtype, generator=generator)
+
                     if isinstance(self.scheduler, EulerAncestralDiscreteScheduler):
                         z_ref_noised = (alpha_hat**0.5 * z_ref + (1 - alpha_hat) ** 0.5 * noise).type(dtype)
                     else:
