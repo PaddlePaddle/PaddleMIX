@@ -75,10 +75,21 @@ TO_DIFFUSERS = str2bool(os.getenv("TO_DIFFUSERS", False))
 # FOR tests
 if bool(os.getenv("PATCH_ALLCLOSE", False)):
     import paddle
+    import numpy
+    from pprint import pprint
+    numpy.set_printoptions(precision=4)
 
-    raw_all_close = paddle.allclose
+    paddle_raw_all_close = paddle.allclose
+    
+    def allclose_pd(x, y, rtol=1e-05, atol=1e-08, equal_nan=False, name=None):
+        pprint(x.numpy())
+        pprint(y.numpy())
+        return paddle_raw_all_close(x, y, rtol=rtol, atol=atol, equal_nan=equal_nan, name=name)
+    paddle.allclose = allclose_pd
 
-    def allclose(x, y, rtol=1e-05, atol=1e-08, equal_nan=False, name=None):
-        print(x.tolist())
-        print(y.tolist())
-        return raw_all_close(x, y, rtol=rtol, atol=atol, equal_nan=equal_nan, name=name)
+    numpy_raw_all_close = numpy.allclose
+    def allclose_np(a, b, rtol=1e-05, atol=1e-08, equal_nan=False, ):
+        pprint(a)
+        pprint(b)
+        return numpy_raw_all_close(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
+    numpy.allclose = allclose_np

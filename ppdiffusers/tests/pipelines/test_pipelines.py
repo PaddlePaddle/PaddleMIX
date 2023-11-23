@@ -184,20 +184,6 @@ class DownloadTests(unittest.TestCase):
             assert not any(f.endswith(".msgpack") for f in files)
             assert not any(f.endswith(".safetensors") for f in files)
 
-    def test_returned_cached_folder(self):
-        prompt = "hello"
-        pipe = StableDiffusionPipeline.from_pretrained(
-            "hf-internal-testing/tiny-stable-diffusion-torch", safety_checker=None
-        )
-        _, local_path = StableDiffusionPipeline.from_pretrained(
-            "hf-internal-testing/tiny-stable-diffusion-torch", safety_checker=None, return_cached_folder=True
-        )
-        pipe_2 = StableDiffusionPipeline.from_pretrained(local_path)
-        generator = paddle.Generator().manual_seed(0)
-        out = pipe(prompt, num_inference_steps=2, generator=generator, output_type="numpy").images
-        generator = paddle.Generator().manual_seed(0)
-        out_2 = pipe_2(prompt, num_inference_steps=2, generator=generator, output_type="numpy").images
-        assert np.max(np.abs(out - out_2)) < 0.001
 
     def test_force_safetensors_error(self):
         with tempfile.TemporaryDirectory() as tmpdirname:

@@ -49,9 +49,12 @@ from ppdiffusers.models.attention_processor import (
     LoRAXFormersAttnProcessor,
     XFormersAttnProcessor,
 )
-from ppdiffusers.utils import floats_tensor
+from ppdiffusers.utils import floats_tensor, str2bool
 from ppdiffusers.utils.testing_utils import require_paddle_gpu, slow
 
+from ppdiffusers.loaders import TORCH_LORA_WEIGHT_NAME, PADDLE_LORA_WEIGHT_NAME
+
+lora_weights_name = TORCH_LORA_WEIGHT_NAME if str2bool(os.getenv("TO_DIFFUSERS", False)) else PADDLE_LORA_WEIGHT_NAME
 
 def create_unet_lora_layers(unet: paddle.nn.Layer):
     lora_attn_procs = {}
@@ -110,7 +113,7 @@ def set_lora_weights(lora_attn_parameters, randn_weight=False):
 
 class LoraLoaderMixinTests(unittest.TestCase):
     def get_dummy_components(self):
-        paddle.Generator().manual_seed(0)
+        paddle.seed(0)
         unet = UNet2DConditionModel(
             block_out_channels=(32, 64),
             layers_per_block=2,
@@ -129,7 +132,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
             set_alpha_to_one=False,
             steps_offset=1,
         )
-        paddle.Generator().manual_seed(0)
+        paddle.seed(0)
         vae = AutoencoderKL(
             block_out_channels=[32, 64],
             in_channels=3,
@@ -201,7 +204,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
             unet_lora_layers=lora_components["unet_lora_layers"],
             text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
         )
-        self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+        self.assertTrue(os.path.isfile(os.path.join(tmpdirname, lora_weights_name)))
 
     def test_lora_save_load(self):
         pipeline_components, lora_components = self.get_dummy_components()
@@ -216,7 +219,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
                 unet_lora_layers=lora_components["unet_lora_layers"],
                 text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, lora_weights_name)))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -265,7 +268,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
             unet = sd_pipe.unet
             unet.set_attn_processor(unet_lora_attn_procs)
             unet.save_attn_procs(tmpdirname)
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, lora_weights_name)))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -341,7 +344,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
                 unet_lora_layers=lora_components["unet_lora_layers"],
                 text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, lora_weights_name)))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -391,7 +394,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
                 unet_lora_layers=lora_components["unet_lora_layers"],
                 text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, lora_weights_name)))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -449,7 +452,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
                 unet_lora_layers=lora_components["unet_lora_layers"],
                 text_encoder_lora_layers=lora_components["text_encoder_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, lora_weights_name)))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -463,7 +466,7 @@ class LoraLoaderMixinTests(unittest.TestCase):
 
 class SDXLLoraLoaderMixinTests(unittest.TestCase):
     def get_dummy_components(self):
-        paddle.Generator().manual_seed(0)
+        paddle.seed(0)
         unet = UNet2DConditionModel(
             block_out_channels=(32, 64),
             layers_per_block=2,
@@ -488,7 +491,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
             beta_schedule="scaled_linear",
             timestep_spacing="leading",
         )
-        paddle.Generator().manual_seed(0)
+        paddle.seed(0)
         vae = AutoencoderKL(
             block_out_channels=[32, 64],
             in_channels=3,
@@ -498,7 +501,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
             latent_channels=4,
             sample_size=128,
         )
-        paddle.Generator().manual_seed(0)
+        paddle.seed(0)
         text_encoder_config = CLIPTextConfig(
             bos_token_id=0,
             eos_token_id=2,
@@ -569,7 +572,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
                 text_encoder_lora_layers=lora_components["text_encoder_one_lora_layers"],
                 text_encoder_2_lora_layers=lora_components["text_encoder_two_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, lora_weights_name)))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -597,7 +600,7 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
                 text_encoder_lora_layers=lora_components["text_encoder_one_lora_layers"],
                 text_encoder_2_lora_layers=lora_components["text_encoder_two_lora_layers"],
             )
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, lora_weights_name)))
             sd_pipe.load_lora_weights(tmpdirname)
         lora_images = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
         lora_image_slice = lora_images[0, -3:, -3:, -1]
@@ -620,60 +623,66 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
 @require_paddle_gpu
 class LoraIntegrationTests(unittest.TestCase):
     def test_dreambooth_old_format(self):
-        generator = paddle.Generator().manual_seed().manual_seed(0)
+        generator = paddle.Generator().manual_seed(0)
         lora_model_id = "hf-internal-testing/lora_dreambooth_dog_example"
         card = RepoCard.load(lora_model_id)
         base_model_id = card.data.to_dict()["base_model"]
         pipe = StableDiffusionPipeline.from_pretrained(base_model_id, safety_checker=None)
         pipe.load_lora_weights(lora_model_id)
         images = pipe(
-            "A photo of a sks dog floating in the river", output_type="np", generator=generator, num_inference_steps=2
+            "A photo of a sks dog floating in the river", output_type="np", generator=generator, num_inference_steps=5
         ).images
         images = images[0, -3:, -3:, -1].flatten()
-        expected = np.array([0.7207, 0.6787, 0.601, 0.7478, 0.6838, 0.6064, 0.6984, 0.6443, 0.5785])
+        expected = np.array([0.8065, 0.8114, 0.7948, 0.822 , 0.8092, 0.8031, 0.8052, 0.8012,
+       0.7677])
         self.assertTrue(np.allclose(images, expected, atol=0.0001))
 
     def test_dreambooth_text_encoder_new_format(self):
-        generator = paddle.Generator().manual_seed().manual_seed(0)
+        generator = paddle.Generator().manual_seed(0)
         lora_model_id = "hf-internal-testing/lora-trained"
         card = RepoCard.load(lora_model_id)
         base_model_id = card.data.to_dict()["base_model"]
         pipe = StableDiffusionPipeline.from_pretrained(base_model_id, safety_checker=None)
         pipe.load_lora_weights(lora_model_id)
-        images = pipe("A photo of a sks dog", output_type="np", generator=generator, num_inference_steps=2).images
+        images = pipe("A photo of a sks dog", output_type="np", generator=generator, num_inference_steps=5).images
         images = images[0, -3:, -3:, -1].flatten()
-        expected = np.array([0.6628, 0.6138, 0.539, 0.6625, 0.613, 0.5463, 0.6166, 0.5788, 0.5359])
+        expected = np.array([0.3782, 0.367 , 0.3792, 0.3758, 0.3719, 0.3851, 0.382 , 0.3842,
+       0.4009])
         self.assertTrue(np.allclose(images, expected, atol=0.0001))
 
     def test_a1111(self):
-        generator = paddle.Generator().manual_seed().manual_seed(0)
-        pipe = StableDiffusionPipeline.from_pretrained("hf-internal-testing/Counterfeit-V2.5", safety_checker=None)
+        generator = paddle.Generator().manual_seed(0)
+        # hf-internal-testing/Counterfeit-V2.5 -> gsdf/Counterfeit-V2.5
+        pipe = StableDiffusionPipeline.from_pretrained("gsdf/Counterfeit-V2.5", safety_checker=None)
         lora_model_id = "hf-internal-testing/civitai-light-shadow-lora"
         lora_filename = "light_and_shadow.safetensors"
-        pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
+        pipe.load_lora_weights(lora_model_id, weight_name=lora_filename, from_diffusers=True)
         images = pipe(
             "masterpiece, best quality, mountain", output_type="np", generator=generator, num_inference_steps=2
         ).images
         images = images[0, -3:, -3:, -1].flatten()
-        expected = np.array([0.3725, 0.3767, 0.3761, 0.3796, 0.3827, 0.3763, 0.3831, 0.3809, 0.3392])
+        expected = np.array([0.5849, 0.5824, 0.5898, 0.5802, 0.5676, 0.5974, 0.5921, 0.5987,
+        0.6081], )
+        
         self.assertTrue(np.allclose(images, expected, atol=0.0001))
 
     def test_vanilla_funetuning(self):
-        generator = paddle.Generator().manual_seed().manual_seed(0)
+        generator = paddle.Generator().manual_seed(0)
         lora_model_id = "hf-internal-testing/sd-model-finetuned-lora-t4"
         card = RepoCard.load(lora_model_id)
         base_model_id = card.data.to_dict()["base_model"]
         pipe = StableDiffusionPipeline.from_pretrained(base_model_id, safety_checker=None)
-        pipe.load_lora_weights(lora_model_id)
-        images = pipe("A pokemon with blue eyes.", output_type="np", generator=generator, num_inference_steps=2).images
+        pipe.load_lora_weights(lora_model_id, from_diffusers=True)
+        images = pipe("A pokemon with blue eyes.", output_type="np", generator=generator, num_inference_steps=5).images
         images = images[0, -3:, -3:, -1].flatten()
-        expected = np.array([0.7406, 0.699, 0.5963, 0.7493, 0.7045, 0.6096, 0.6886, 0.6388, 0.583])
+        expected = np.array([0.719 , 0.716 , 0.6854, 0.7449, 0.7188, 0.7124, 0.7403, 0.7287,
+        0.6979],)
         self.assertTrue(np.allclose(images, expected, atol=0.0001))
 
     def test_unload_lora(self):
         generator = paddle.Generator().manual_seed(0)
         prompt = "masterpiece, best quality, mountain"
-        num_inference_steps = 2
+        num_inference_steps = 5
         pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5", safety_checker=None)
         initial_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
@@ -681,7 +690,7 @@ class LoraIntegrationTests(unittest.TestCase):
         initial_images = initial_images[0, -3:, -3:, -1].flatten()
         lora_model_id = "hf-internal-testing/civitai-colored-icons-lora"
         lora_filename = "Colored_Icons_by_vizsumit.safetensors"
-        pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
+        pipe.load_lora_weights(lora_model_id, weight_name=lora_filename, from_diffusers=True)
         generator = paddle.Generator().manual_seed(0)
         lora_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
@@ -702,7 +711,7 @@ class LoraIntegrationTests(unittest.TestCase):
         # LoRA, the underlying adapter handling mechanism is format-agnostic.
         generator = paddle.Generator().manual_seed(0)
         prompt = "masterpiece, best quality, mountain"
-        num_inference_steps = 2
+        num_inference_steps = 5
         pipe = StableDiffusionPipeline.from_pretrained("runwayml/stable-diffusion-v1-5", safety_checker=None)
         initial_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
@@ -710,7 +719,7 @@ class LoraIntegrationTests(unittest.TestCase):
         initial_images = initial_images[0, -3:, -3:, -1].flatten()
         lora_model_id = "hf-internal-testing/civitai-colored-icons-lora"
         lora_filename = "Colored_Icons_by_vizsumit.safetensors"
-        pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
+        pipe.load_lora_weights(lora_model_id, weight_name=lora_filename, from_diffusers=True)
         generator = paddle.Generator().manual_seed(0)
         lora_images = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps
@@ -726,7 +735,7 @@ class LoraIntegrationTests(unittest.TestCase):
         self.assertTrue(np.allclose(initial_images, unloaded_lora_images, atol=0.001))
         # make sure we can load a LoRA again after unloading and they don't have
         # any undesired effects.
-        pipe.load_lora_weights(lora_model_id, weight_name=lora_filename)
+        pipe.load_lora_weights(lora_model_id, weight_name=lora_filename, from_diffusers=True)
         generator = paddle.Generator().manual_seed(0)
         lora_images_again = pipe(
             prompt, output_type="np", generator=generator, num_inference_steps=num_inference_steps

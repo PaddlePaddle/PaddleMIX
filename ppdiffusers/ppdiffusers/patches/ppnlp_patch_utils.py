@@ -779,8 +779,8 @@ if is_paddle_available() and is_paddlenlp_available():
         assert config is not None
 
         # we will remove in the future.
-        if not from_hf_hub and not os.path.exists(os.path.join(cache_dir, config_path, "config.json")):
-            config.save_pretrained(os.path.join(cache_dir, config_path))
+        # if not from_hf_hub and not os.path.exists(os.path.join(cache_dir, config_path, "config.json")):
+        #     config.save_pretrained(os.path.join(cache_dir, config_path))
 
         if paddle_dtype is None:
             paddle_dtype = config.get("dtype", paddle.get_default_dtype())

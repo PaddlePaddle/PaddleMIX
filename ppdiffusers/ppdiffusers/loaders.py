@@ -1351,7 +1351,8 @@ class LoraLoaderMixin:
             warnings.warn(warn_message)
 
         # load loras into unet
-        unet.load_attn_procs(state_dict, network_alphas=network_alphas)
+        # make sure we set from_diffusers=False
+        unet.load_attn_procs(state_dict, network_alphas=network_alphas, from_diffusers=False)
 
     @classmethod
     def load_lora_into_text_encoder(cls, state_dict, network_alphas, text_encoder, prefix=None, lora_scale=1.0):
