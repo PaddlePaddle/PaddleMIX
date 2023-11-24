@@ -407,7 +407,7 @@ with gr.Blocks() as demo:
                     text2img_steps = gr.Slider(label="steps", minimum=1, maximum=60, step=1, value=20)
                     with gr.Row():
                         text2img_height = gr.Slider(label="height", minimum=1, maximum=2048, step=1, value=512)
-                        text2img_width = gr.Slider(label="Swidth", minimum=1, maximum=2048, step=1, value=512)
+                        text2img_width = gr.Slider(label="width", minimum=1, maximum=2048, step=1, value=512)
                     text2img_seed = gr.Textbox(label="seed", value="-1")
                     text2img_scheduler = gr.Radio(label="采样方法", choices=scheduler_choices, value="ddim")
                 text2img_output = gr.Image(type="numpy", label="result")
@@ -438,7 +438,7 @@ with gr.Blocks() as demo:
                     img2img_steps = gr.Slider(label="steps", minimum=1, maximum=60, step=1, value=20)
                     with gr.Row():
                         img2img_height = gr.Slider(label="height", minimum=1, maximum=2048, step=1, value=512)
-                        img2img_width = gr.Slider(label="Swidth", minimum=1, maximum=2048, step=1, value=512)
+                        img2img_width = gr.Slider(label="width", minimum=1, maximum=2048, step=1, value=512)
                     img2img_seed = gr.Textbox(label="seed", value="-1")
                     img2img_scheduler = gr.Radio(label="采样方法", choices=scheduler_choices, value="ddim")
                 img2img_output = gr.Image(type="numpy", label="result")
@@ -469,7 +469,7 @@ with gr.Blocks() as demo:
                     inpaint_legacy_steps = gr.Slider(label="steps", minimum=1, maximum=60, step=1, value=20)
                     with gr.Row():
                         inpaint_legacy_height = gr.Slider(label="height", minimum=1, maximum=2048, step=1, value=512)
-                        inpaint_legacy_width = gr.Slider(label="Swidth", minimum=1, maximum=2048, step=1, value=512)
+                        inpaint_legacy_width = gr.Slider(label="width", minimum=1, maximum=2048, step=1, value=512)
                     inpaint_legacy_seed = gr.Textbox(label="seed", value="-1")
                     inpaint_legacy_scheduler = gr.Radio(label="采样方法", choices=scheduler_choices, value="ddim")
                 inpaint_legacy_output = gr.Image(type="numpy", label="result")
@@ -501,7 +501,7 @@ with gr.Blocks() as demo:
                     inpaint_steps = gr.Slider(label="steps", minimum=1, maximum=60, step=1, value=20)
                     with gr.Row():
                         inpaint_height = gr.Slider(label="height", minimum=1, maximum=2048, step=1, value=512)
-                        inpaint_width = gr.Slider(label="Swidth", minimum=1, maximum=2048, step=1, value=512)
+                        inpaint_width = gr.Slider(label="width", minimum=1, maximum=2048, step=1, value=512)
                     inpaint_seed = gr.Textbox(label="seed", value="-1")
                     inpaint_scheduler = gr.Radio(label="采样方法", choices=scheduler_choices, value="ddim")
                 inpaint_output = gr.Image(type="numpy", label="result")
@@ -533,7 +533,7 @@ with gr.Blocks() as demo:
                     controlnet_canny_steps = gr.Slider(label="steps", minimum=1, maximum=60, step=1, value=20)
                     with gr.Row():
                         controlnet_canny_height = gr.Slider(label="height", minimum=1, maximum=2048, step=1, value=512)
-                        controlnet_canny_width = gr.Slider(label="Swidth", minimum=1, maximum=2048, step=1, value=512)
+                        controlnet_canny_width = gr.Slider(label="width", minimum=1, maximum=2048, step=1, value=512)
                     controlnet_canny_seed = gr.Textbox(label="seed", value="-1")
                     controlnet_canny_scheduler = gr.Radio(label="采样方法", choices=scheduler_choices, value="ddim")
                 controlnet_canny_output = gr.Image(type="numpy", label="result")
