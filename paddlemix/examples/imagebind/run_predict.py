@@ -14,18 +14,18 @@
 
 import os
 from dataclasses import dataclass, field
-from paddlemix.datasets import *
-from paddlemix import ImageBindModel, ImageBindProcessor
-from paddlemix.models import *
-from PIL import Image
+from types import SimpleNamespace
+
+import paddle
 from paddlenlp.trainer import PdArgumentParser
+from PIL import Image
 
 from paddlemix import ImageBindModel, ImageBindProcessor
-from paddlemix.datasets import *
+from paddlemix.datasets import *  # noqa: F401,F403
+from paddlemix.models import *  # noqa: F401,F403
+from paddlemix.models.imagebind.utils import *  # noqa: F401,F403
 from paddlemix.utils.log import logger
 from ppdiffusers.utils import load_image
-from paddlemix.models.imagebind.utils import *
-from types import SimpleNamespace
 
 ModalityType = SimpleNamespace(
     VISION="vision",
@@ -35,6 +35,7 @@ ModalityType = SimpleNamespace(
     DEPTH="depth",
     IMU="imu",
 )
+
 
 class Predictor:
     def __init__(self, model_args):
@@ -51,21 +52,21 @@ class Predictor:
 
 def main(model_args, data_args):
 
-    # bulid model
+    # build model
     logger.info("imagebind_model: {}".format(model_args.model_name_or_path))
 
-    url = (data_args.input_image)
+    url = data_args.input_image
     if os.path.isfile(url):
-        #read image
+        # read image
         image_pil = Image.open(data_args.input_image).convert("RGB")
     elif url:
         image_pil = load_image(url)
     else:
         image_pil = None
 
-    url = (data_args.input_audio)
+    url = data_args.input_audio
     if os.path.isfile(url):
-        #read image
+        # read image
         input_audio = data_args.input_audio
     elif url:
         os.system("wget {}".format(url))

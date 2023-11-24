@@ -34,7 +34,7 @@ class StableDiffusionTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = StableDiffusionPipeline.from_pretrained(model)
 
         self._model = model_instance
@@ -85,7 +85,7 @@ class VersatileDiffusionDualGuidedTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = VersatileDiffusionDualGuidedPipeline.from_pretrained(model)
         model_instance.remove_unused_weights()
         self._model = model_instance

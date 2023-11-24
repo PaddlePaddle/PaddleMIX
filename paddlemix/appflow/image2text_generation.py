@@ -45,7 +45,7 @@ class Blip2CaptionTask(AppTask):
         """
         Construct the tokenizer for the predictor.
         """
-        # bulid processor
+        # build processor
         tokenizer_class = AutoTokenizer.from_pretrained(self._text_model, use_fast=False)
         image_processor = BlipImageProcessor.from_pretrained(os.path.join(model, "processor", "eval"))
         text_processor_class = BlipTextProcessor.from_pretrained(os.path.join(model, "processor", "eval"))
@@ -56,7 +56,7 @@ class Blip2CaptionTask(AppTask):
         """
         Construct the inference model for the predictor.
         """
-        # bulid model
+        # build model
         model_instance = Blip2ForConditionalGeneration.from_pretrained(model, cache_dir=self._model_dir)
 
         self._model = model_instance
@@ -103,7 +103,7 @@ class Blip2CaptionTask(AppTask):
 
         inputs["result"] = generated_text
         inputs["prompt"] = self._generate_tags(generated_text)
-        
+
         return inputs
 
     def _generate_tags(self, caption):
@@ -150,7 +150,7 @@ class MiniGPT4Task(AppTask):
         """
         Construct the inference model for the predictor.
         """
-        # bulid model
+        # build model
         model_instance = MiniGPT4ForConditionalGeneration.from_pretrained(self._task_path)
 
         self._model = model_instance

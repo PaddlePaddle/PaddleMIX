@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from paddlenlp import Taskflow
 from paddlespeech.cli.whisper import WhisperExecutor
-from .apptask import AppTask
+
 from paddlemix.utils.log import logger
+
+from .apptask import AppTask
 
 
 class AudioASRTask(AppTask):
     def __init__(self, task, model, **kwargs):
         super().__init__(task=task, model=model, **kwargs)
 
-
-        
         # Default to static mode
         self._static_mode = False
 
@@ -34,7 +33,7 @@ class AudioASRTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         whisper_executor = WhisperExecutor()
 
         self._model = whisper_executor
@@ -46,30 +45,32 @@ class AudioASRTask(AppTask):
         prompt = inputs.get("prompt")
         assert prompt is not None, "The prompt is None"
         return inputs
+
     def _run_model(self, inputs):
         """
         Run the task model from the outputs of the `_preprocess` function.
         """
-        
+
         _model = inputs.get("model", "whisper")
         _task = inputs.get("task", "transcribe")
         _sample_rate = inputs.get("sample_rate", 16000)
         _config = inputs.get("config", None)
         _ckpt_path = inputs.get("ckpt_path", None)
-        
+
         result = self._model(
             model=_model,
             task=_task,
             sample_rate=_sample_rate,
             config=_config,  # Set `_config` and `_ckpt_path` to None to use pretrained model.
             ckpt_path=_ckpt_path,
-            audio_file=inputs['audio'],
-            )
-        logger.info("Audio File ASR Result: {}".format(result['text']))
-        
-        inputs["prompt"] = inputs["prompt"].format(result['text'])
+            audio_file=inputs["audio"],
+        )
+        logger.info("Audio File ASR Result: {}".format(result["text"]))
+
+        inputs["prompt"] = inputs["prompt"].format(result["text"])
 
         return inputs
+
     def _postprocess(self, inputs):
         """
         The model output is tag ids, this function will convert the model output to raw text.

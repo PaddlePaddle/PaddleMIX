@@ -92,9 +92,9 @@ def main():
     else:
         image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
 
-    # bulid processor
+    # build processor
     processor = SamProcessor.from_pretrained(model_args.model_name_or_path)
-    # bulid model
+    # build model
     logger.info("SamModel: {}".format(model_args.model_name_or_path))
     sam_model = SamModel.from_pretrained(model_args.model_name_or_path, input_type=model_args.input_type)
 
