@@ -15,8 +15,8 @@ from typing import List, Optional, Union
 
 import paddle
 from packaging import version
+from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 from PIL import Image
-from transformers import CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.configuration_utils import FrozenDict
