@@ -17,6 +17,7 @@ import sys
 import unittest
 
 import numpy as np
+import paddle
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from paddlemix.appflow import Appflow
@@ -39,6 +40,7 @@ if __name__ == "__main__":
 
     def create_test(name, static_mode):
         def test_openset_det_sam(self):
+            paddle.seed(1024)
             self.task = Appflow(
                 app="openset_det_sam",
                 models=["GroundingDino/groundingdino-swint-ogc", "Sam/SamVitH-1024"],
@@ -59,7 +61,8 @@ if __name__ == "__main__":
 
         setattr(OpenSetDetSamAppSlowTest, name, test_openset_det_sam)
 
-    create_test(name="test_dygraph", static_mode=False)
+    create_test(name="test_static", static_mode=False)
+
     if _run_slow_test:
         create_test(name="test_static", static_mode=True)
 
