@@ -1,11 +1,11 @@
 # 调度器
 
-PPDiffusers提供了许多用于扩散过程的调度器函数。调度器接收模型的输出（扩散过程正在迭代的样本）和一个时间步长，返回去噪后的样本。时间步长很重要，因为它决定了步骤在扩散过程中的位置；数据通过向前迭代*n*个时间步长生成，推断通过向后传播时间步长进行。根据时间步长，调度器可以是*离散*的，此时时间步长为`int`，或者*连续*的，此时时间步长为`float`。
+PPDiffusers提供了许多用于扩散过程的调度器函数。调度器接收模型的输出（扩散过程正在迭代的样本）和一个时间步长，返回去噪后的样本。时间步长很重要，因为它决定了步骤在扩散过程中的位置；数据通过向前迭代*n*个时间步长生成，推理通过向后传播时间步长进行。根据时间步长，调度器可以是*离散*的，此时时间步长为`int`，或者*连续*的，此时时间步长为`float`。
 
 根据上下文，调度器定义了如何迭代地向图像添加噪声或者如何根据预训练模型的输出更新样本：
 
 - 在*训练*期间，调度器向样本添加噪声（有不同的算法可用于添加噪声），以训练扩散模型。
-- 在*推断*期间，调度器定义了如何根据预训练模型的输出更新样本。
+- 在*推理*期间，调度器定义了如何根据预训练模型的输出更新样本。
 
 许多调度器是由[Katherine Crowson](https://github.com/crowsonkb/)的[k-diffusion](https://github.com/crowsonkb/k-diffusion)库实现的，并且在A1111中也广泛使用。为了帮助您将k-diffusion和A1111中的调度器映射到PPDiffusers中的调度器，请查看下对照表：
 
@@ -88,7 +88,7 @@ save_pretrained(save_directory: Union[str, os.PathLike], push_to_hub: bool = Fal
 
 ### 参数
 
-- `prev_sample`（torch.FloatTensor，形状为(batch_size, num_channels, height, width)） - 上一个时间步的计算样本(x_{t-1})。`prev_sample`应该在去噪循环中作为下一个模型输入使用。
+- `prev_sample`（paddle.Tensor，形状为(batch_size, num_channels, height, width)） - 上一个时间步的计算样本(x_{t-1})。`prev_sample`应该在去噪循环中作为下一个模型输入使用。
 
 `SchedulerOutput`是调度器`step`函数输出的基类，用于存储和传递给下一个时间步的信息。它是一个抽象类，可以由具体的调度器子类继承和实现。
 
@@ -129,7 +129,7 @@ Denoising diffusion probabilistic models (DDPMs)在没有对抗训练的情况�
 该论文的原始代码可以在ermongroup/ddim找到，您可以在tsong.me上联系作者。
 
 提示：
-论文Common Diffusion Noise Schedules and Sample Steps are Flawed声称训练和推断设置之间的不匹配导致了Stable Diffusion的推断生成结果不佳。为了解决这个问题，作者提出了以下方法：
+论文Common Diffusion Noise Schedules and Sample Steps are Flawed声称训练和推理设置之间的不匹配导致了Stable Diffusion的推理生成结果不佳。为了解决这个问题，作者提出了以下方法：
 
 🧪 这是一个实验性的功能！
 
