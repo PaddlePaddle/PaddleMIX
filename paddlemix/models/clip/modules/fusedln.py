@@ -44,50 +44,56 @@ def check_normalized_shape(normalized_shape):
         assert len(normalized_shape) == 1
 
 
-class FusedLayerNorm(OriginLayerNorm):
-    def __init__(
-        self,
-        normalized_shape,
-        epsilon=1e-05,
-        weight_attr=None,
-        bias_attr=None,
-        name=None,
-    ):
-        super().__init__(
-            normalized_shape=normalized_shape,
-            epsilon=epsilon,
-            weight_attr=weight_attr,
-            bias_attr=bias_attr,
-        )
-        check_normalized_shape(self._normalized_shape)
+if fused_ln is not None:
 
-    def forward(self, input):
-        org_dtype = input.dtype
-        if org_dtype != self.weight.dtype:
-            return fused_ln(input.cast(self.weight.dtype), self.weight, self.bias, self._epsilon)[0].cast(org_dtype)
-        else:
-            return fused_ln(input, self.weight, self.bias, self._epsilon)[0]
+    class FusedLayerNorm(OriginLayerNorm):
+        def __init__(
+            self,
+            normalized_shape,
+            epsilon=1e-05,
+            weight_attr=None,
+            bias_attr=None,
+            name=None,
+        ):
+            super().__init__(
+                normalized_shape=normalized_shape,
+                epsilon=epsilon,
+                weight_attr=weight_attr,
+                bias_attr=bias_attr,
+            )
+            check_normalized_shape(self._normalized_shape)
+
+        def forward(self, input):
+            org_dtype = input.dtype
+            if org_dtype != self.weight.dtype:
+                return fused_ln(input.cast(self.weight.dtype), self.weight, self.bias, self._epsilon)[0].cast(
+                    org_dtype
+                )
+            else:
+                return fused_ln(input, self.weight, self.bias, self._epsilon)[0]
 
 
-class FastLayerNorm(OriginLayerNorm):
-    def __init__(
-        self,
-        normalized_shape,
-        epsilon=1e-05,
-        weight_attr=None,
-        bias_attr=None,
-        name=None,
-    ):
-        super().__init__(
-            normalized_shape=normalized_shape,
-            epsilon=epsilon,
-            weight_attr=weight_attr,
-            bias_attr=bias_attr,
-        )
-        check_normalized_shape(self._normalized_shape)
+if fast_ln is not None:
 
-    def forward(self, input):
-        return fast_ln(input, self.weight, self.bias, self._epsilon)[0]
+    class FastLayerNorm(OriginLayerNorm):
+        def __init__(
+            self,
+            normalized_shape,
+            epsilon=1e-05,
+            weight_attr=None,
+            bias_attr=None,
+            name=None,
+        ):
+            super().__init__(
+                normalized_shape=normalized_shape,
+                epsilon=epsilon,
+                weight_attr=weight_attr,
+                bias_attr=bias_attr,
+            )
+            check_normalized_shape(self._normalized_shape)
+
+        def forward(self, input):
+            return fast_ln(input, self.weight, self.bias, self._epsilon)[0]
 
 
 class FusedLinearWithGradAdd(paddle.autograd.PyLayer):
@@ -129,9 +135,9 @@ def get_env(env_name, default_value=False):
 
 
 def mock_layers():
-    if get_env("USE_FAST_LN"):
+    if get_env("USE_FAST_LN") and fast_ln is not None:
         paddle.nn.LayerNorm = FastLayerNorm
-    elif get_env("USE_FUSED_LN"):
+    elif get_env("USE_FUSED_LN") and fused_ln is not None:
         paddle.nn.LayerNorm = FusedLayerNorm
 
     if get_env("USE_LINEAR_WITH_GRAD_ADD"):
