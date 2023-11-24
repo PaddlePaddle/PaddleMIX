@@ -12,11 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from paddlespeech.cli.tts import TTSExecutor
-from .apptask import AppTask
 import paddle
+import paddle.nn as nn
+from paddlespeech.cli.tts import TTSExecutor
+
 from paddlemix.utils.log import logger
-import paddle.nn as nn, paddle
+
+from .apptask import AppTask
+
+
 def get_parameter_dtype(parameter: nn.Layer) -> paddle.dtype:
     try:
         return next(parameter.named_parameters())[1].dtype
@@ -25,45 +29,53 @@ def get_parameter_dtype(parameter: nn.Layer) -> paddle.dtype:
             return next(parameter.named_buffers())[1].dtype
         except StopIteration:
             return parameter._dtype
+
+
 @property
 def dtype_getter(self):
     if hasattr(self, "__dtype"):
         return self.__dtype
     return get_parameter_dtype(self)
+
+
 nn.Layer.dtype = dtype_getter
+
 
 @nn.Layer.dtype.setter
 def dtype_setter(self, value):
     self.__dtype = value
+
+
 nn.Layer.dtype = dtype_setter
 
 
 class AudioTTSTask(AppTask):
     def __init__(self, task, model, **kwargs):
         super().__init__(task=task, model=model, **kwargs)
-        
+
         # Default to static mode
         self._static_mode = False
-        
+
         self._construct_model()
 
     def _construct_model(self):
         """
         Construct the inference model for the predictor.
         """
-        
-        # bulid model
+
+        # build model
         tts_executor = TTSExecutor()
-        
+
         self._model = tts_executor
 
     def _preprocess(self, inputs):
         """ """
-        
+
         prompt = inputs.get("prompt", None)
-        assert prompt is not None, "The prompt is None"    
-        
+        assert prompt is not None, "The prompt is None"
+
         return inputs
+
     def _run_model(self, inputs):
         """
         Run the task model from the outputs of the `_preprocess` function.
@@ -102,13 +114,14 @@ class AudioTTSTask(AppTask):
             voc_ckpt=_voc_ckpt,
             voc_stat=_voc_stat,
             lang=_lang,
-            )
-        
+        )
+
         inputs.pop("audio", None)
         inputs["audio"] = wav_file
-        logger.info('Wave file has been generated: {}'.format(wav_file))
+        logger.info("Wave file has been generated: {}".format(wav_file))
 
         return inputs
+
     def _postprocess(self, inputs):
         """
         The model output is tag ids, this function will convert the model output to raw text.

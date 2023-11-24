@@ -85,7 +85,7 @@ class OpenSetDetTask(AppTask):
         """
         Construct the tokenizer for the predictor.
         """
-        # bulid processor
+        # build processor
         self._processor = GroudingDinoProcessor.from_pretrained(model, cache_dir=self._model_dir)
 
     def _construct_model(self, model):
@@ -93,7 +93,7 @@ class OpenSetDetTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = GroundingDinoModel.from_pretrained(model, cache_dir=self._model_dir)
 
         # Load the model parameter for the predict
@@ -248,7 +248,7 @@ class OpenSetSegTask(AppTask):
         """
         Construct the tokenizer for the predictor.
         """
-        # bulid processor
+        # build processor
         self._processor = SamProcessor.from_pretrained(model, cache_dir=self._model_dir)
 
     def _construct_model(self, model):
@@ -256,7 +256,7 @@ class OpenSetSegTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = SamModel.from_pretrained(model, input_type=self._input_type, cache_dir=self._model_dir)
 
         # Load the model parameter for the predict
