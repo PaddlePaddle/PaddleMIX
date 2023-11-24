@@ -35,8 +35,8 @@ from ppdiffusers.utils import slow
 PRETRAINED_MODEL_REPO_MAPPING = OrderedDict(
     [
         ("stable-diffusion", "runwayml/stable-diffusion-v1-5"),
-        ("if", "DeepFloyd/IF-I-XL-v1.0"),
-        ("kandinsky", "kandinsky-community/kandinsky-2-1"),
+        # ("if", "DeepFloyd/IF-I-XL-v1.0"), TODO, we cant load this model
+        # ("kandinsky", "kandinsky-community/kandinsky-2-1"), TODO, MultilingualCLIP
         ("kandinsky22", "kandinsky-community/kandinsky-2-2-decoder"),
     ]
 )

@@ -29,14 +29,12 @@ def str2bool(v):
     else:
         raise ValueError("Not supported value: {}".format(v))
 
-
-ppnlp_cache_home = os.path.expanduser(
+# make sure we have abs path
+ppnlp_cache_home = os.path.abspath(os.path.expanduser(
     os.getenv("PPNLP_HOME", os.path.join(os.getenv("XDG_CACHE_HOME", "~/.cache"), "paddlenlp"))
-)
-
-ppdiffusers_default_cache_path = os.path.join(ppnlp_cache_home, "ppdiffusers")
-# diffusers_default_cache_path = os.path.join(HUGGINGFACE_HUB_CACHE, "diffusers")
-diffusers_default_cache_path = HUGGINGFACE_HUB_CACHE
+))
+ppdiffusers_default_cache_path = os.path.abspath(os.path.join(ppnlp_cache_home, "ppdiffusers"))
+diffusers_default_cache_path = os.path.abspath(HUGGINGFACE_HUB_CACHE)
 
 CONFIG_NAME = "config.json"
 TORCH_WEIGHTS_NAME = "diffusion_pytorch_model.bin"
@@ -50,8 +48,9 @@ PPDIFFUSERS_CACHE = ppdiffusers_default_cache_path
 DIFFUSERS_CACHE = diffusers_default_cache_path
 DIFFUSERS_DYNAMIC_MODULE_NAME = "diffusers_modules"
 PPDIFFUSERS_DYNAMIC_MODULE_NAME = "ppdiffusers_modules"
-HF_MODULES_CACHE = os.getenv("HF_MODULES_CACHE", os.path.join(hf_cache_home, "modules"))
-PPDIFFUSERS_MODULES_CACHE = os.getenv("PPDIFFUSERS_MODULES_CACHE", os.path.join(ppnlp_cache_home, "modules"))
+# make sure we have abs path
+HF_MODULES_CACHE = os.path.abspath(os.getenv("HF_MODULES_CACHE", os.path.join(hf_cache_home, "modules")))
+PPDIFFUSERS_MODULES_CACHE = os.path.abspath(os.getenv("PPDIFFUSERS_MODULES_CACHE", os.path.join(ppnlp_cache_home, "modules")))
 
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
 FASTDEPLOY_WEIGHTS_NAME = "inference.pdiparams"

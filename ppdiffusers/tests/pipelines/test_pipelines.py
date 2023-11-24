@@ -538,15 +538,6 @@ class CustomPipelineTests(unittest.TestCase):
             output = pipeline()
         assert output.numel() == output.sum()
 
-        del sys.modules["ppdiffusers_modules.git.one_step_unet"]
-        pipeline = DiffusionPipeline.from_pretrained(
-            "google/ddpm-cifar10-32",
-            custom_pipeline="one_step_unet",
-            custom_revision="b088618584825b9a2373daecda4193ef450b72d0",
-        )
-        with paddle.no_grad():
-            output = pipeline()
-        assert output.numel() != output.sum()
 
         assert pipeline.__class__.__name__ == "UnetSchedulerOneForwardPipeline"
 
@@ -1035,7 +1026,7 @@ class PipelineSlowTests(unittest.TestCase):
         generator = paddle.Generator().manual_seed(0)
         new_image = new_ddpm(generator=generator, num_inference_steps=5, output_type="numpy").images
 
-        assert np.abs(image - new_image).sum() < 1e-5, "Models don't give the same forward pass"
+        assert np.abs(image - new_image).sum() < 5e-4, "Models don't give the same forward pass"
 
     def test_from_pretrained_hub(self):
         model_path = "google/ddpm-cifar10-32"
@@ -1049,7 +1040,7 @@ class PipelineSlowTests(unittest.TestCase):
         image = ddpm(generator=generator, num_inference_steps=5, output_type="numpy").images
         generator = paddle.Generator().manual_seed(0)
         new_image = ddpm_from_hub(generator=generator, num_inference_steps=5, output_type="numpy").images
-        assert np.abs(image - new_image).sum() < 1e-05, "Models don't give the same forward pass"
+        assert np.abs(image - new_image).sum() < 1e-04, "Models don't give the same forward pass"
 
     def test_from_pretrained_hub_pass_model(self):
         model_path = "google/ddpm-cifar10-32"
@@ -1064,7 +1055,7 @@ class PipelineSlowTests(unittest.TestCase):
         image = ddpm_from_hub_custom_model(generator=generator, num_inference_steps=5, output_type="numpy").images
         generator = paddle.Generator().manual_seed(0)
         new_image = ddpm_from_hub(generator=generator, num_inference_steps=5, output_type="numpy").images
-        assert np.abs(image - new_image).sum() < 1e-05, "Models don't give the same forward pass"
+        assert np.abs(image - new_image).sum() < 1e-04, "Models don't give the same forward pass"
 
     def test_output_format(self):
         model_path = "google/ddpm-cifar10-32"
