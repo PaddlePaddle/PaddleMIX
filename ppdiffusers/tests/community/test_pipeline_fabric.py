@@ -18,12 +18,13 @@ import requests
 from PIL import Image
 
 from ppdiffusers import DiffusionPipeline
+from ppdiffusers.utils.testing_utils import get_examples_pipeline
 
 # load the pipeline
 model_id_or_path = "runwayml/stable-diffusion-v1-5"
 # can also be used with dreamlike-art/dreamlike-photoreal-2.0
 pipe = DiffusionPipeline.from_pretrained(
-    model_id_or_path, paddle_dtype=paddle.float16, custom_pipeline="pipeline_fabric"
+    model_id_or_path, paddle_dtype=paddle.float16, custom_pipeline=get_examples_pipeline("pipeline_fabric")
 )
 
 # let's specify a prompt

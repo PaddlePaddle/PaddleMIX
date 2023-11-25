@@ -21,6 +21,7 @@ from IPython.display import display
 from paddlenlp.transformers import CLIPTextModel
 
 from ppdiffusers import DDIMScheduler, DiffusionPipeline
+from ppdiffusers.utils.testing_utils import get_examples_pipeline
 
 
 def center_crop_and_resize(im):
@@ -55,7 +56,7 @@ text_encoder = CLIPTextModel.from_pretrained(
 # initialize pipeline
 pipeline = DiffusionPipeline.from_pretrained(
     pretrained_model_name_or_path="CompVis/stable-diffusion-v1-4",
-    custom_pipeline="edict_pipeline",
+    custom_pipeline=get_examples_pipeline("edict_pipeline"),
     # Client Error: Not Found for url: https://bj.bcebos.com/paddlenlp/models/community/CompVis/stable-diffusion-v1-4/fp16/model_index.json
     # revision="fp16",
     scheduler=scheduler,
