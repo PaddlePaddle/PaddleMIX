@@ -36,7 +36,7 @@ class StableDiffusionInpaintTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = StableDiffusionInpaintPipeline.from_pretrained(model)
 
         self._model = model_instance

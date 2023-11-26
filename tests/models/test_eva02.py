@@ -170,7 +170,7 @@ class EVA02ForFinetuneModelTester:
 
 class EVA02ForFinetuneModelTest(ModelTesterMixin, unittest.TestCase):
 
-    all_model_classes = EVA02VisionTransformer
+    all_model_classes = (EVA02VisionTransformer,)
     fx_compatible = False
     test_pruning = False
     test_resize_embeddings = False
@@ -313,7 +313,7 @@ class EVA02ForPretrainModelTester:
 
 class EVA02ForPretrainModelTest(ModelTesterMixin, unittest.TestCase):
 
-    all_model_classes = EVA02ForPretrain
+    all_model_classes = (EVA02ForPretrain,)
     fx_compatible = False
     test_pruning = False
     test_resize_embeddings = False

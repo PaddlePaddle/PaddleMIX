@@ -10,7 +10,7 @@
 ## 2.1 依赖安装（可选）
 ```bash
 #Multi-scale deformable attention custom OP compilation
-cd /paddlemix/models/groundingdino/csrc/
+cd paddlemix/models/groundingdino/csrc/
 python setup_ms_deformable_attn_op.py install
 
 ```
@@ -18,5 +18,5 @@ python setup_ms_deformable_attn_op.py install
 ```bash
 python run_predict.py \
 --input_image image_you_want_to_detect.jpg \
---prompt "cat" \
+--prompt "cat"
 ```
