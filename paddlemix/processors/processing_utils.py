@@ -38,6 +38,13 @@ from paddlemix.utils.downloader import (
 )
 from paddlemix.utils.log import logger
 
+try:
+    from paddlenlp.transformers.aistudio_utils import aistudio_download
+except:
+    logger.warning("aistudio_download not import, if you want to use , require paddlenlp develop")
+    aistudio_download = None
+    pass
+
 PROCESSOR_CONFIG_MAPPING = {
     "image": "image_preprocessor_config.json",
     "text": "text_preprocessor_config.json",
@@ -241,6 +248,7 @@ class BaseProcessingMixin(object):
         """
         cache_dir = kwargs.pop("cache_dir", None)
         from_hf_hub = kwargs.pop("from_hf_hub", False)
+        from_aistudio = kwargs.get("from_aistudio", False)
         subfolder = kwargs.pop("subfolder", None)
         cache_dir = resolve_cache_dir(pretrained_model_name_or_path, from_hf_hub, cache_dir)
 
@@ -263,6 +271,9 @@ class BaseProcessingMixin(object):
                 library_name="PaddleNLP",
                 library_version=__version__,
             )
+        elif from_aistudio and aistudio_download is not None:
+            processor_file = PROCESSOR_CONFIG_MAPPING[cls.input_type]
+            resolved_processor_file = aistudio_download(repo_id=pretrained_model_name_or_path, filename=processor_file)
         else:
             # Assuming from community-contributed pretrained models
             processor_file = "/".join(
