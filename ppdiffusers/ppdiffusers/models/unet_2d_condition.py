@@ -389,6 +389,11 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         else:
             self.time_embed_act = get_activation(time_embedding_act_fn)
 
+        # pre_temb_act_fun opt
+        self.resnet_pre_temb_non_linearity = resnet_pre_temb_non_linearity
+        if resnet_pre_temb_non_linearity:
+            self.down_resnet_temb_nonlinearity = get_activation(act_fn)
+
         self.down_blocks = nn.LayerList([])
         self.up_blocks = nn.LayerList([])
 
@@ -423,11 +428,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             blocks_time_embed_dim = time_embed_dim * 2
         else:
             blocks_time_embed_dim = time_embed_dim
-
-        # pre_temb_act_fun opt
-        self.resnet_pre_temb_non_linearity = resnet_pre_temb_non_linearity
-        if resnet_pre_temb_non_linearity:
-            self.down_resnet_temb_nonlinearity = get_activation(act_fn)
 
         # down
         output_channel = block_out_channels[0]
@@ -889,6 +889,9 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             sample = paddle.concat([sample, hint], axis=1)
 
         emb = emb + aug_emb if aug_emb is not None else emb
+
+        if self.resnet_pre_temb_non_linearity:
+            emb = self.down_resnet_temb_nonlinearity(emb)
 
         if self.time_embed_act is not None:
             emb = self.time_embed_act(emb)
