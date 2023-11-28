@@ -33,7 +33,7 @@ class StableDiffusionImg2ImgTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = StableDiffusionImg2ImgPipeline.from_pretrained(model, safety_checker=None)
 
         self._model = model_instance
@@ -90,7 +90,7 @@ class StableDiffusionUpscaleTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = StableDiffusionUpscalePipeline.from_pretrained(model)
 
         self._model = model_instance

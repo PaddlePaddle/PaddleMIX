@@ -13,6 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
+
 import inspect
 import unittest
 
@@ -30,7 +35,7 @@ from tests.models.test_modeling_common import (
 )
 from tests.testing_utils import slow
 
-CLIP_PRETRAINED_MODEL_ARCHIVE_LIST = ["paddlemix/CLIP/Vit_L-14"]
+CLIP_PRETRAINED_MODEL_ARCHIVE_LIST = ["paddlemix/CLIP/Vit-L-14"]
 
 
 class VisionTransformerModelTester:
@@ -69,6 +74,7 @@ class VisionTransformerModelTester:
         self.attentional_pool = attentional_pool
         self.n_queries = n_queries
         self.attn_pooler_heads = attn_pooler_heads
+        self.embed_dim = embed_dim
         self.output_dim = embed_dim
         self.xattn = xattn
         self.output_tokens = output_tokens

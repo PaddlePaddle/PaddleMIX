@@ -12,13 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import sys
 import unittest
 
 import numpy as np
+import paddle
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from paddlemix.appflow import Appflow
 from ppdiffusers.utils import load_image, load_numpy
-from tests.testing_utils import slow
+from tests.testing_utils import _run_slow_test
 
 
 class OpenSetDetSamAppSlowTest(unittest.TestCase):
@@ -35,8 +39,8 @@ class OpenSetDetSamAppSlowTest(unittest.TestCase):
 if __name__ == "__main__":
 
     def create_test(name, static_mode):
-        @slow
         def test_openset_det_sam(self):
+            paddle.seed(1024)
             self.task = Appflow(
                 app="openset_det_sam",
                 models=["GroundingDino/groundingdino-swint-ogc", "Sam/SamVitH-1024"],
@@ -57,7 +61,9 @@ if __name__ == "__main__":
 
         setattr(OpenSetDetSamAppSlowTest, name, test_openset_det_sam)
 
-    create_test(name="test_dygraph", static_mode=False)
-    create_test(name="test_static", static_mode=True)
+    create_test(name="test_static", static_mode=False)
+
+    if _run_slow_test:
+        create_test(name="test_static", static_mode=True)
 
     unittest.main()

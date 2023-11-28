@@ -47,7 +47,7 @@ from ppdiffusers.utils import (
     replace_example_docstring,
 )
 
-check_min_version("0.14.1")
+check_min_version("0.19.3")
 
 EPS = 1e-6
 
@@ -170,7 +170,10 @@ def transformer_2d_model_forward(
     timestep=None,
     class_labels=None,
     cross_attention_kwargs=None,
+    attention_mask=None,
+    encoder_attention_mask=None,
     return_dict: bool = True,
+    **kwargs, # dummmy for comptability
 ):
     x = self.original_forward(
         hidden_states,
@@ -178,7 +181,10 @@ def transformer_2d_model_forward(
         timestep=timestep,
         class_labels=class_labels,
         cross_attention_kwargs=cross_attention_kwargs,
+        attention_mask=attention_mask,
+        encoder_attention_mask=encoder_attention_mask,
         return_dict=return_dict,
+        **kwargs, # dummmy for comptability
     )[0]
     output = None
     if getattr(self, "enable_gn", False):

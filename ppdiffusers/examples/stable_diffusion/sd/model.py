@@ -315,7 +315,7 @@ class StableDiffusionModel(nn.Layer):
                 uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0]
                 text_embeddings = paddle.concat([uncond_embeddings, text_embeddings], axis=0)
 
-            latents = paddle.randn((input_ids.shape[0], self.unet.in_channels, height // 8, width // 8))
+            latents = paddle.randn((input_ids.shape[0], self.unet.config.in_channels, height // 8, width // 8))
             latents = latents * self.eval_scheduler.init_noise_sigma
             accepts_eta = "eta" in set(inspect.signature(self.eval_scheduler.step).parameters.keys())
             extra_step_kwargs = {}
@@ -366,6 +366,11 @@ class StableDiffusionModel(nn.Layer):
                         "Could not enable memory efficient attention. Make sure develop paddlepaddle is installed"
                         f" correctly and a GPU is available: {e}"
                     )
+        else:
+            if hasattr(self.unet, "set_default_attn_processor"):
+                self.unet.set_default_attn_processor()
+            if hasattr(self.vae, "set_default_attn_processor"):
+                self.vae.set_default_attn_processor()
 
     def set_ema(self, use_ema=False):
         self.use_ema = use_ema

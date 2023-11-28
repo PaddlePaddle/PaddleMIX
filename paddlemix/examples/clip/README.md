@@ -2,7 +2,7 @@
 
 ## 1. 模型简介
 
-[CLIP](https://arxiv.org/abs/2103.00020): Contrastive Language-Image Pre-Training, Paddle实现版本.
+[CLIP](https://arxiv.org/abs/2103.00020): Contrastive Language-Image Pre-Training 论文的Paddle实现版本，实现了`CLIP`的`ViT`系列模型，对齐的是huggingface上的[OpenCLIP LAION-2B](https://huggingface.co/collections/laion/openclip-laion-2b-64fcade42d20ced4e9389b30)系列和[OpenCLIP DataComp](https://huggingface.co/collections/laion/openclip-datacomp-64fcac9eb961d0d12cb30bc3)系列，以及提供了[apple/DFN](https://huggingface.co/apple/DFN5B-CLIP-ViT-H-14-378)系列。
 
 语言-图像预训练对比学习，在很多语言、图像应用场景表现出性能优势，有着广泛的应用。
 
@@ -10,12 +10,55 @@
   <img src="https://github.com/openai/CLIP/blob/main/CLIP.png?raw=true" align="middle" width = "800" />
 </p>
 
-注：图片引用自[openai/CLIP](https://github.com/openai/CLIP).
+注：图片引用自[openai/CLIP](https://github.com/openai/CLIP)。
 
 
-### CLIP Model zoo
+### 2. CLIP Model Zoo
 
-(待补充)
+#### OpenCLIP models trained on LAION-2B
+
+<div align="center">
+
+| model name                          |   params (M)      | IN-1K zero-shot top-1 | weight(fp16) |
+|:------------------------------------|:------------------|:---------------------:|:------------:|
+| `CLIP-ViT-bigG-14-laion2B-39B-b160k`|       2539.57     | **80.1** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-bigG-14-laion2B-39B-b160k/model_state.pdparams) |
+| `CLIP-ViT-g-14-laion2B-s34B-b88K`   |       1366.68     | **78.5** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-g-14-laion2B-s34B-b88K/model_state.pdparams) |
+| `CLIP-ViT-H-14-laion2B-s32B-b79K`   |         986.11    | **78.0** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-H-14-laion2B-s32B-b79K/model_state.pdparams) |
+| `CLIP-ViT-L-14-laion2B-s32B-b82K`   |         427.62    | **75.2** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-L-14-laion2B-s32B-b82K/model_state.pdparams) |
+| `CLIP-ViT-B-16-laion2B-s34B-b88K`   |         149.62    | **70.2** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-B-16-laion2B-s34B-b88K/model_state.pdparams) |
+| `CLIP-ViT-B-32-laion2B-s34B-b79K`   |         151.28    | **66.5** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-B-32-laion2B-s34B-b79K/model_state.pdparams) |
+
+</div>
+
+#### OpenCLIP models trained on DataComp
+
+<div align="center">
+
+| model name                          |   params (M)      | IN-1K zero-shot top-1 | weight(fp16) |
+|:------------------------------------|:------------------|:---------------------:|:------------:|
+| `CLIP-ViT-L-14-DataComp.XL-s13B-b90K`|       427.62     | **79.2** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-L-14-DataComp.XL-s13B-b90K/model_state.pdparams) |
+| `CLIP-ViT-B-16-DataComp.XL-s13B-b90K`|         149.62   | **73.5** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-B-16-DataComp.XL-s13B-b90K/model_state.pdparams) |
+| `CLIP-ViT-B-32-DataComp.XL-s13B-b90K`|         151.28   | **69.2** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-B-32-DataComp.XL-s13B-b90K/model_state.pdparams) |
+| `CLIP-ViT-B-32-256x256-DataComp-s34B-b86K`|    151.28   | **72.8** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-B-32-256x256-DataComp-s34B-b86K/model_state.pdparams) |
+
+</div>
+
+#### CLIP models trained on Data Filtering Networks (DFNs)
+
+<div align="center">
+
+| model name                |   params (M)      | IN-1K zero-shot top-1 | weight(fp16) |
+|:--------------------------|:------------------|:---------------------:|:------------:|
+| `DFN5B-CLIP-ViT-H-14-378` |       986.71      | **84.2** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/DFN5B-CLIP-ViT-H-14-378/model_state.pdparams) |
+| `DFN5B-CLIP-ViT-H-14`     |       986.71      | **83.4** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/DFN5B-CLIP-ViT-H-14/model_state.pdparams) |
+| `DFN2B-CLIP-ViT-L-14`     |       427.62      | **81.4** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/DFN2B-CLIP-ViT-L-14/model_state.pdparams) |
+| `DFN2B-CLIP-ViT-B-16`     |       149.62      | **76.2** | [weight](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/DFN2B-CLIP-ViT-B-16/model_state.pdparams) |
+
+</div>
+
+注意:
+配置文件下载均为权重weight链接同目录下的`config.json`，如`CLIP-ViT-L-14-laion2B-s32B-b82K`模型的[config.json](https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/CLIP/CLIP-ViT-L-14-laion2B-s32B-b82K/config.json)。
+
 
 ## 2. 环境准备
 
@@ -31,7 +74,7 @@ pip install --pre --upgrade paddlenlp -f https://www.paddlepaddle.org.cn/whl/pad
 pip install -r requirements.txt
 ```
 
-3）安装`FusedLayerNorm`，在`paddlemix/external_ops/`目录下，安装fusedln包。(CLIP模型可选)
+3）安装`FusedLayerNorm`，在`paddlemix/external_ops/`目录下，安装fusedln包。(CLIP模型可不安装)
 
 ```
 # 安装fusedln到python环境
@@ -49,7 +92,18 @@ export $PATH=$PATH:$INSTALL_DIR
 
 如果想手动下载，请点击[DownLoadCOCO 20G](https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco.tar)下载数据，可解压后放在`/root/.paddlemix/datasets/`目录下，此目录也为自动下载并解压的目录。
 
-2) 自定义数据
+2) laion数据
+该数据集较大，对于训练速度和内存占用有限制的情况，建议使用`coco_karpathy`数据。使用该数据集时，参数`--task_name`需要是指向laion.filelist文件的路径。
+laion.filelist文件格式示例如下：
+```
+laiondata-pathdir/part-00000
+laiondata-pathdir/part-00001
+...
+```
+具体解析代码参考`paddlemix/datasets/laiondata.py`文件。
+该数据集暂不提供，请自行下载。
+
+3) 自定义数据
 
 如果需要自定义数据，推荐沿用`coco_karpathy`数据格式处理自己的数据。其中每条数据标注格式示例为:
 ```
@@ -58,8 +112,6 @@ export $PATH=$PATH:$INSTALL_DIR
 更多可参考数据集中的`annotations/coco_karpathy_train.json`文件。
 
 ## 4. 使用说明
-
-我们在Paddle中实现了`CLIP`的`ViT`系列模型，包括`Vit-L-14`.
 
 ### 4.1 训练
 
@@ -72,7 +124,8 @@ export $PATH=$PATH:$INSTALL_DIR
 注意如果采用分布式策略，分布式并行关系有：`nnodes * nproc_per_node == tensor_parallel_degree * sharding_parallel_degree * dp_parallel_degree`，其中`dp_parallel_degree`参数根据其他几个值计算出来，因此需要保证`nnodes * nproc_per_node >= tensor_parallel_degree * sharding_parallel_degree`。
 
 ```
-MODEL_NAME="paddlemix/CLIP/Vit-L-14/"
+MODEL_NAME="paddlemix/CLIP/CLIP-ViT-L-14-laion2B-s32B-b82K"
+TEXT_MODEL_NAME="CLIP-ViT-L-14-laion2B-s32B-b82K"
 IN_1K_DIR=[YOUR ImageNet1K val data path]
 
 python -m paddle.distributed.launch --nproc_per_node 8 run_pretrain_dist.py \
@@ -99,7 +152,7 @@ python -m paddle.distributed.launch --nproc_per_node 8 run_pretrain_dist.py \
     --save_steps 50000 \
     --local_loss true \
     --gather_with_grad true \
-    --pretrained_text_model ${MODEL_NAME} \
+    --pretrained_text_model ${TEXT_MODEL_NAME} \
     --classification_eval ${IN_1K_DIR} \
 
 ```
@@ -108,7 +161,7 @@ python -m paddle.distributed.launch --nproc_per_node 8 run_pretrain_dist.py \
 ```
 # 参数说明
 
---model #设置实际使用的模型,示例'paddlemix/CLIP/Vit-L-14/'
+--model #设置实际使用的模型，示例'paddlemix/CLIP/CLIP-ViT-L-14-laion2B-s32B-b82K'，或者可换为'paddlemix/CLIP/CLIP-ViT-B-16-laion2B-s34B-b88K'
 
 --dataloader_num_workers #数据加载线程数量
 
@@ -148,7 +201,7 @@ python -m paddle.distributed.launch --nproc_per_node 8 run_pretrain_dist.py \
 
 --gather_with_grad true #loss中是否打开gather_with_grad
 
---pretrained_text_model Vit-L-14 #预提取text features的模型
+--pretrained_text_model ${TEXT_MODEL_NAME} #预提取text features的模型
 
 --classification_eval ${IN_1K_DIR} #IN_1K测试数据路径
 ```
@@ -160,7 +213,8 @@ python -m paddle.distributed.launch --nproc_per_node 8 run_pretrain_dist.py \
 评估命令及参数配置示例：
 
 ```
-MODEL_NAME="paddlemix/CLIP/Vit-L-14"
+MODEL_NAME="paddlemix/CLIP/CLIP-ViT-L-14-laion2B-s32B-b82K"
+TEXT_MODEL_NAME="CLIP-ViT-L-14-laion2B-s32B-b82K"
 
 IN_1K_DIR=[YOUR ImageNet1K val data path]
 
@@ -169,16 +223,16 @@ python paddlemix/examples/clip/run_zero_shot_eval.py \
     --dataloader_num_workers=2 \
     --model ${MODEL_NAME}  \
     --fp16 False \
-    --pretrained_text_model Vit-L-14 \
+    --pretrained_text_model ${TEXT_MODEL_NAME} \
     --classification_eval ${IN_1K_DIR} \
     --output_dir "output" \
-    --disable_tqdm True \
+    --disable_tqdm False \
 ```
 
 ```
 # 参数说明
 
---model #设置实际使用的模型,示例'paddlemix/CLIP/Vit-L-14'
+--model #设置实际使用的模型，示例'paddlemix/CLIP/CLIP-ViT-L-14-laion2B-s32B-b82K'
 
 --dataloader_num_workers #数据加载线程数量
 
@@ -186,11 +240,11 @@ python paddlemix/examples/clip/run_zero_shot_eval.py \
 
 --fp16 False #是否开启fp16推理
 
---pretrained_text_model Vit-L-14 #预提取text features的模型
+--pretrained_text_model ${TEXT_MODEL_NAME} #预提取text features的模型
 
 --classification_eval ${IN_1K_DIR} #IN_1K测试数据路径
 
 --output_dir "output" #模型输出文件路径
 
---disable_tqdm True #是否关闭tqdm进度条
+--disable_tqdm False #是否关闭tqdm进度条
 ```

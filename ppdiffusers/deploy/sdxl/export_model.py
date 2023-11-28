@@ -39,7 +39,8 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     )
     pipeline = StableDiffusionXLPipeline.from_pretrained(
         model_path, unet=unet_model, safety_checker=None, feature_extractor=None
-    )
+    ).to(paddle_dtype="float32")
+
     # make sure we disable xformers
     pipeline.unet.set_default_attn_processor()
     pipeline.vae.set_default_attn_processor()

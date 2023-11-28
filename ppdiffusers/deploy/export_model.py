@@ -14,6 +14,8 @@
 
 import argparse
 import os
+# set USE_PPXFORMERS=False to avoid using ppxformers
+os.environ["USE_PPXFORMERS"] = "False"
 from pathlib import Path
 from types import MethodType
 
@@ -40,8 +42,6 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     pipeline = StableDiffusionPipeline.from_pretrained(
         model_path, unet=unet_model, safety_checker=None, feature_extractor=None
     )
-    # make sure we disable xformers
-    pipeline.disable_xformers_memory_efficient_attention()
     output_path = Path(output_path)
     # calculate latent's H and W
     latent_height = height // 8 if height is not None else None
