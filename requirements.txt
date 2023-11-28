@@ -7,4 +7,4 @@ pycocoevalcap
 ftfy
 regex
 einops>=0.6.1
-
+aistudio-sdk>=0.1.3

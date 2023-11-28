@@ -118,6 +118,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
     @classmethod
     def refine_state_dict(self, model, state_dict):
         from paddlemix.models.blip2.eva_vit import interpolate_pos_embed
+
         interpolate_pos_embed(model, state_dict)
 
     def get_expected_keys(self, model_state_dict, name=None):
@@ -203,6 +204,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
         subfolder = kwargs.pop("subfolder", "")
         variant = kwargs.pop("variant", None)
         use_safetensors = kwargs.pop("use_safetensors", None if is_safetensors_available() else False)
+        from_aistudio = kwargs.get("from_aistudio", False)
 
         low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", False)
         convert_from_torch = kwargs.pop("convert_from_torch", None)
@@ -269,6 +271,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
             cache_dir=cache_dir,
             subfolder=subfolder,
             from_hf_hub=from_hf_hub,
+            from_aistudio=from_aistudio,
             config=config,
             convert_from_torch=convert_from_torch,
             use_safetensors=use_safetensors,
@@ -322,7 +325,9 @@ class Blip2PretrainedModel(MixPretrainedModel):
         init_args = config["init_args"] or ()
         with ContextManagers(init_contexts):
             model = cls(config, *init_args, **model_kwargs)
-        cls.refine_state_dict(model, state_dict)
+        if state_dict is not None:
+            cls.refine_state_dict(model, state_dict)
+
         if use_keep_in_fp32_modules:
             # low_cpu_mem_usage = True
             keep_in_fp32_modules = model._keep_in_fp32_modules

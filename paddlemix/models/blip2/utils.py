@@ -100,16 +100,16 @@ def load_real_time_tokens():
     return tokens
 
 
-def create_tokenizer(text_model_name_or_path):
+def create_tokenizer(text_model_name_or_path, **kwags):
     if "opt" in text_model_name_or_path:
-        tokenizer_class = AutoTokenizer.from_pretrained(text_model_name_or_path, use_fast=False)
+        tokenizer_class = AutoTokenizer.from_pretrained(text_model_name_or_path, use_fast=False, **kwags)
     elif "t5" in text_model_name_or_path:
-        tokenizer_class = T5Tokenizer.from_pretrained(text_model_name_or_path, use_fast=False)
+        tokenizer_class = T5Tokenizer.from_pretrained(text_model_name_or_path, use_fast=False, **kwags)
     elif "llama" in text_model_name_or_path:
-        tokenizer_class = LlamaTokenizer.from_pretrained(text_model_name_or_path)
+        tokenizer_class = LlamaTokenizer.from_pretrained(text_model_name_or_path, **kwags)
         tokenizer_class.pad_token = tokenizer_class.eos_token
     elif "bloom" in text_model_name_or_path:
-        tokenizer_class = BloomTokenizer.from_pretrained(text_model_name_or_path)
+        tokenizer_class = BloomTokenizer.from_pretrained(text_model_name_or_path, **kwags)
         tokenizer_class.pad_token = tokenizer_class.eos_token
     else:
         raise NotImplementedError
