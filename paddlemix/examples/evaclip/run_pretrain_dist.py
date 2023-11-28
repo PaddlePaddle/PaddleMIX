@@ -27,7 +27,6 @@ import socket
 from dataclasses import dataclass, field
 
 import paddle
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 from paddlemix.datasets import load_dataset
 from paddlemix.datasets.dataset import ImageFolder
@@ -42,6 +41,7 @@ from paddlemix.processors.clip_processing import (
 from paddlemix.processors.tokenizer import SimpleTokenizer
 from paddlemix.trainer import CLIPTrainer
 from paddlemix.utils.env import setdistenv
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 
 @dataclass
@@ -55,7 +55,11 @@ class DataArguments:
 
     task_name: str = field(
         default="coco_clip",
-        metadata={"help": "The name of the task to use (via the datasets library)."},
+        metadata={
+            "help": "The name of the task to use (via the datasets library), coco or laion-aes"
+            " is support, if set to laion-aes, this should be the path to filelist file. "
+            "option: [coco_clip/[path to laion-aes.filelist]], default: coco_clip"
+        },
     )
 
     classification_eval: str = field(
@@ -218,7 +222,13 @@ def main_worker(training_args, model_args, data_args):
     if training_args.bf16 and training_args.fp16_opt_level == "O2":
         paddle.set_default_dtype("float32")
 
-    train_dataset = load_dataset(data_args.task_name, splits="train")
+    if "laion" in data_args.task_name:
+        from paddlemix.datasets.laiondata import LaionDataset
+
+        train_dataset = LaionDataset(data_args.task_name)
+    else:
+        train_dataset = load_dataset(data_args.task_name, splits="train")
+
     image_processor = CLIPImageProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
     text_processor = CLIPTextProcessor.from_pretrained(os.path.join(model_args.model, "processor", "train"))
     tokenizer = SimpleTokenizer()
