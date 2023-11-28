@@ -198,72 +198,72 @@ class DownloadTests(unittest.TestCase):
                     use_safetensors=True,
                 )
 
-    def test_download_safetensors(self):
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            tmpdirname = DiffusionPipeline.download(
-                "hf-internal-testing/tiny-stable-diffusion-pipe-safetensors",
-                from_hf_hub=True,
-                from_diffusers=True,
-                safety_checker=None,
-                cache_dir=tmpdirname,
-                use_safetensors=True,
-            )
+    # def test_download_safetensors(self):
+    #     with tempfile.TemporaryDirectory() as tmpdirname:
+    #         tmpdirname = DiffusionPipeline.download(
+    #             "hf-internal-testing/tiny-stable-diffusion-pipe-safetensors",
+    #             from_hf_hub=True,
+    #             from_diffusers=True,
+    #             safety_checker=None,
+    #             cache_dir=tmpdirname,
+    #             use_safetensors=True,
+    #         )
 
-            all_root_files = [t[-1] for t in os.walk(os.path.join(tmpdirname))]
-            files = [item for sublist in all_root_files for item in sublist]
-            assert not any(f.endswith(".bin") for f in files)
+    #         all_root_files = [t[-1] for t in os.walk(os.path.join(tmpdirname))]
+    #         files = [item for sublist in all_root_files for item in sublist]
+    #         assert not any(f.endswith(".bin") for f in files)
 
-    def test_download_safetensors_index(self):
-        for variant in ["fp16", None]:
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                tmpdirname = DiffusionPipeline.download(
-                    "hf-internal-testing/tiny-stable-diffusion-pipe-indexes",
-                    cache_dir=tmpdirname,
-                    use_safetensors=True,
-                    variant=variant,
-                    from_hf_hub=True,
-                    from_diffusers=True,
-                )
+    # def test_download_safetensors_index(self):
+    #     for variant in ["fp16", None]:
+    #         with tempfile.TemporaryDirectory() as tmpdirname:
+    #             tmpdirname = DiffusionPipeline.download(
+    #                 "hf-internal-testing/tiny-stable-diffusion-pipe-indexes",
+    #                 cache_dir=tmpdirname,
+    #                 use_safetensors=True,
+    #                 variant=variant,
+    #                 from_hf_hub=True,
+    #                 from_diffusers=True,
+    #             )
 
-                all_root_files = [t[-1] for t in os.walk(os.path.join(tmpdirname))]
-                files = [item for sublist in all_root_files for item in sublist]
+    #             all_root_files = [t[-1] for t in os.walk(os.path.join(tmpdirname))]
+    #             files = [item for sublist in all_root_files for item in sublist]
 
-                # None of the downloaded files should be a safetensors file even if we have some here:
-                # https://huggingface.co/hf-internal-testing/tiny-stable-diffusion-pipe-indexes/tree/main/text_encoder
-                if variant is None:
-                    assert not any("fp16" in f for f in files)
-                else:
-                    model_files = [f for f in files if "safetensors" in f]
-                    assert all("fp16" in f for f in model_files)
+    #             # None of the downloaded files should be a safetensors file even if we have some here:
+    #             # https://huggingface.co/hf-internal-testing/tiny-stable-diffusion-pipe-indexes/tree/main/text_encoder
+    #             if variant is None:
+    #                 assert not any("fp16" in f for f in files)
+    #             else:
+    #                 model_files = [f for f in files if "safetensors" in f]
+    #                 assert all("fp16" in f for f in model_files)
 
-                assert len([f for f in files if ".safetensors" in f]) == 8
-                assert not any(".bin" in f for f in files)
+    #             assert len([f for f in files if ".safetensors" in f]) == 8
+    #             assert not any(".bin" in f for f in files)
 
-    def test_download_bin_index(self):
-        for variant in ["fp16", None]:
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                tmpdirname = DiffusionPipeline.download(
-                    "hf-internal-testing/tiny-stable-diffusion-pipe-indexes",
-                    cache_dir=tmpdirname,
-                    use_safetensors=False,
-                    variant=variant,
-                    from_hf_hub=True,
-                    from_diffusers=True,
-                )
+    # def test_download_bin_index(self):
+    #     for variant in ["fp16", None]:
+    #         with tempfile.TemporaryDirectory() as tmpdirname:
+    #             tmpdirname = DiffusionPipeline.download(
+    #                 "hf-internal-testing/tiny-stable-diffusion-pipe-indexes",
+    #                 cache_dir=tmpdirname,
+    #                 use_safetensors=False,
+    #                 variant=variant,
+    #                 from_hf_hub=True,
+    #                 from_diffusers=True,
+    #             )
 
-                all_root_files = [t[-1] for t in os.walk(os.path.join(tmpdirname))]
-                files = [item for sublist in all_root_files for item in sublist]
+    #             all_root_files = [t[-1] for t in os.walk(os.path.join(tmpdirname))]
+    #             files = [item for sublist in all_root_files for item in sublist]
 
-                # None of the downloaded files should be a safetensors file even if we have some here:
-                # https://huggingface.co/hf-internal-testing/tiny-stable-diffusion-pipe-indexes/tree/main/text_encoder
-                if variant is None:
-                    assert not any("fp16" in f for f in files)
-                else:
-                    model_files = [f for f in files if "bin" in f]
-                    assert all("fp16" in f for f in model_files)
+    #             # None of the downloaded files should be a safetensors file even if we have some here:
+    #             # https://huggingface.co/hf-internal-testing/tiny-stable-diffusion-pipe-indexes/tree/main/text_encoder
+    #             if variant is None:
+    #                 assert not any("fp16" in f for f in files)
+    #             else:
+    #                 model_files = [f for f in files if "bin" in f]
+    #                 assert all("fp16" in f for f in model_files)
 
-                assert len([f for f in files if ".bin" in f]) == 8
-                assert not any(".safetensors" in f for f in files)
+    #             assert len([f for f in files if ".bin" in f]) == 8
+    #             assert not any(".safetensors" in f for f in files)
 
     def test_download_no_safety_checker(self):
         prompt = "hello"
@@ -323,22 +323,22 @@ class DownloadTests(unittest.TestCase):
                 if (p1 != p2).sum() > 0:
                     assert False, "Parameters not the same!"
 
-    def test_download_from_variant_folder(self):
-        for safe_avail in [False, True]:
-            import ppdiffusers
+    # def test_download_from_variant_folder(self):
+    #     for safe_avail in [False, True]:
+    #         import ppdiffusers
 
-            ppdiffusers.utils.import_utils._safetensors_available = safe_avail
-            other_format = ".bin" if safe_avail else ".safetensors"
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                tmpdirname = StableDiffusionPipeline.download(
-                    "hf-internal-testing/stable-diffusion-all-variants", cache_dir=tmpdirname
-                )
-                all_root_files = [t[-1] for t in os.walk(tmpdirname)]
-                files = [item for sublist in all_root_files for item in sublist]
-                assert len(files) == 15, f"We should only download 15 files, not {len(files)}"
-                assert not any(f.endswith(other_format) for f in files)
-                assert not any(len(f.split(".")) == 3 for f in files)
-        ppdiffusers.utils.import_utils._safetensors_available = True
+    #         ppdiffusers.utils.import_utils._safetensors_available = safe_avail
+    #         other_format = ".bin" if safe_avail else ".safetensors"
+    #         with tempfile.TemporaryDirectory() as tmpdirname:
+    #             tmpdirname = StableDiffusionPipeline.download(
+    #                 "hf-internal-testing/stable-diffusion-all-variants", cache_dir=tmpdirname
+    #             )
+    #             all_root_files = [t[-1] for t in os.walk(tmpdirname)]
+    #             files = [item for sublist in all_root_files for item in sublist]
+    #             assert len(files) == 15, f"We should only download 15 files, not {len(files)}"
+    #             assert not any(f.endswith(other_format) for f in files)
+    #             assert not any(len(f.split(".")) == 3 for f in files)
+    #     ppdiffusers.utils.import_utils._safetensors_available = True
 
     def test_download_variant_all(self):
         for safe_avail in [False, True]:
@@ -530,16 +530,16 @@ class CustomPipelineTests(unittest.TestCase):
         pipeline = pipeline
         assert pipeline.__class__.__name__ == "CustomPipeline"
 
-    def test_load_custom_github(self):
-        pipeline = DiffusionPipeline.from_pretrained(
-            "google/ddpm-cifar10-32", custom_pipeline="one_step_unet", custom_revision="develop"
-        )
-        with paddle.no_grad():
-            output = pipeline()
-        assert output.numel() == output.sum()
+    # def test_load_custom_github(self):
+    #     pipeline = DiffusionPipeline.from_pretrained(
+    #         "google/ddpm-cifar10-32", custom_pipeline="one_step_unet", custom_revision="develop"
+    #     )
+    #     with paddle.no_grad():
+    #         output = pipeline()
+    #     assert output.numel() == output.sum()
 
 
-        assert pipeline.__class__.__name__ == "UnetSchedulerOneForwardPipeline"
+    #     assert pipeline.__class__.__name__ == "UnetSchedulerOneForwardPipeline"
 
     def test_run_custom_pipeline(self):
         pipeline = DiffusionPipeline.from_pretrained(

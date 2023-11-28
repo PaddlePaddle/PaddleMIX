@@ -335,9 +335,9 @@ class ControlNetImg2ImgPipelineSlowTests(unittest.TestCase):
         paddle.device.cuda.empty_cache()
 
     def test_canny(self):
-        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny")
+        controlnet = ControlNetModel.from_pretrained("lllyasviel/sd-controlnet-canny", from_diffusers=False, from_hf_hub=False)
         pipe = StableDiffusionControlNetImg2ImgPipeline.from_pretrained(
-            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet
+            "runwayml/stable-diffusion-v1-5", safety_checker=None, controlnet=controlnet, from_diffusers=False, from_hf_hub=False
         )
         # pipe.enable_model_cpu_offload()
         pipe.set_progress_bar_config(disable=None)
