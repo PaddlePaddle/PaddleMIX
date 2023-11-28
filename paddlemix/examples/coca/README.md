@@ -60,7 +60,18 @@ export $PATH=$PATH:$INSTALL_DIR
 
 如果想手动下载，请点击[DownLoadCOCO 20G](https://bj.bcebos.com/v1/paddlenlp/datasets/paddlemix/coco.tar)下载数据，可解压后放在`/root/.paddlemix/datasets/`目录下，此目录也为自动下载并解压的目录。
 
-2) 自定义数据
+2) laion数据
+该数据集较大，对于训练速度和内存占用有限制的情况，建议使用`coco_karpathy`数据。使用该数据集时，参数`--task_name`需要是指向laion.filelist文件的路径。
+laion.filelist文件格式示例如下：
+```
+laiondata-pathdir/part-00000
+laiondata-pathdir/part-00001
+...
+```
+具体解析代码参考`paddlemix/datasets/laiondata.py`文件。
+该数据集暂不提供，请自行下载。
+
+3) 自定义数据
 
 如果需要自定义数据，推荐沿用`coco_karpathy`数据格式处理自己的数据。其中每条数据标注格式示例为:
 ```
