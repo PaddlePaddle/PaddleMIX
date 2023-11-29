@@ -362,7 +362,7 @@ class StableDiffusionXLInpaintPipeline(
                     truncation=True,
                     return_tensors="np",
                 )
-                breakpoint()
+                # breakpoint()
                 text_input_ids = paddle.to_tensor(text_inputs["input_ids"])
                 # text_input_ids = text_inputs.input_ids
                 untruncated_ids = tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
