@@ -347,12 +347,14 @@ if is_paddle_available() and is_paddlenlp_available():
             memory_efficient_attention,
         )
         from paddle.nn.functional.flash_attention import flash_attention
-
-        sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 + 64)
-        if sdp_kernel == "mem_efficient":
+        try:
+            sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 + 64) 
+            if sdp_kernel == "mem_efficient":
+                flash_attn_version = 1
+            else:
+                flash_attn_version = 2
+        except Exception:
             flash_attn_version = 1
-        else:
-            flash_attn_version = 2
 
         is_support_flash_attention = True
         flash_attn_error = None
