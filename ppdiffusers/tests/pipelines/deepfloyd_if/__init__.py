@@ -217,8 +217,8 @@ class IFPipelineTesterMixin:
         output = pipe(**inputs)[0]
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            pipe.save_pretrained(tmpdir)
-            pipe_loaded = self.pipeline_class.from_pretrained(tmpdir)
+            pipe.save_pretrained(tmpdir, to_diffusers=False)
+            pipe_loaded = self.pipeline_class.from_pretrained(tmpdir, from_diffusers=False)
             pipe_loaded.set_progress_bar_config(disable=None)
 
         pipe_loaded.unet.set_attn_processor(AttnAddedKVProcessor())  # For reproducibility tests
@@ -268,8 +268,8 @@ class IFPipelineTesterMixin:
         inputs = self.get_dummy_inputs()
         output = pipe(**inputs)[0]
         with tempfile.TemporaryDirectory() as tmpdir:
-            pipe.save_pretrained(tmpdir)
-            pipe_loaded = self.pipeline_class.from_pretrained(tmpdir)
+            pipe.save_pretrained(tmpdir, to_diffusers=False)
+            pipe_loaded = self.pipeline_class.from_pretrained(tmpdir, from_diffusers=False)
             pipe_loaded.set_progress_bar_config(disable=None)
 
         pipe_loaded.unet.set_attn_processor(AttnAddedKVProcessor())  # For reproducibility tests

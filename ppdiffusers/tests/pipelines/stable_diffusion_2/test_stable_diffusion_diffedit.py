@@ -186,9 +186,8 @@ class StableDiffusionDiffEditPipelineFastTests(PipelineLatentTesterMixin, Pipeli
         inputs = self.get_dummy_inputs()
         output = pipe(**inputs)[0]
         with tempfile.TemporaryDirectory() as tmpdir:
-            pipe.save_pretrained(tmpdir)
-            pipe_loaded = self.pipeline_class.from_pretrained(tmpdir)
-            pipe_loaded.to()
+            pipe.save_pretrained(tmpdir, to_diffusers=False)
+            pipe_loaded = self.pipeline_class.from_pretrained(tmpdir, from_diffusers=False)
             pipe_loaded.set_progress_bar_config(disable=None)
         for optional_component in pipe._optional_components:
             self.assertTrue(
