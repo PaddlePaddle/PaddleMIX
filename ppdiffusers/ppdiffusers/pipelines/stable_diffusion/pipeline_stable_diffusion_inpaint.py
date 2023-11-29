@@ -787,6 +787,7 @@ class StableDiffusionInpaintPipeline(
 
                 # concat latents, mask, masked_image_latents in the channel dimension
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
+                latent_model_input = latent_model_input.cast(mask.dtype)
                 if num_channels_unet == 9:
                     latent_model_input = paddle.concat(x=[latent_model_input, mask, masked_image_latents], axis=1)
 

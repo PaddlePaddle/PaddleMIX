@@ -157,8 +157,8 @@
 #         assert np.abs(image_slice.flatten() - expected_slice).max() < 0.01
 
 #     def test_attention_slicing_forward_pass(self):
-#         # super().test_attention_slicing_forward_pass()
-#         pass
+#         super().test_attention_slicing_forward_pass()
+#         # pass
 
 #     def test_dict_tuple_outputs_equivalent(self):
 #         pass
