@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import Optional
+from typing import Optional, Union
 
 import paddle
 import paddle.nn.functional as F
@@ -27,17 +27,17 @@ from .resnet import Downsample1D, ResidualTemporalBlock1D, Upsample1D, rearrange
 class DownResnetBlock1D(nn.Layer):
     def __init__(
         self,
-        in_channels,
-        out_channels=None,
-        num_layers=1,
-        conv_shortcut=False,
-        temb_channels=32,
-        groups=32,
-        groups_out=None,
-        non_linearity=None,
-        time_embedding_norm="default",
-        output_scale_factor=1.0,
-        add_downsample=True,
+        in_channels: int,
+        out_channels: Optional[int] = None,
+        num_layers: int = 1,
+        conv_shortcut: bool = False,
+        temb_channels: int = 32,
+        groups: int = 32,
+        groups_out: Optional[int] = None,
+        non_linearity: Optional[str] = None,
+        time_embedding_norm: str = "default",
+        output_scale_factor: float = 1.0,
+        add_downsample: bool = True,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -89,16 +89,16 @@ class DownResnetBlock1D(nn.Layer):
 class UpResnetBlock1D(nn.Layer):
     def __init__(
         self,
-        in_channels,
-        out_channels=None,
-        num_layers=1,
-        temb_channels=32,
-        groups=32,
-        groups_out=None,
-        non_linearity=None,
-        time_embedding_norm="default",
-        output_scale_factor=1.0,
-        add_upsample=True,
+        in_channels: int,
+        out_channels: Optional[int] = None,
+        num_layers: int = 1,
+        temb_channels: int = 32,
+        groups: int = 32,
+        groups_out: Optional[int] = None,
+        non_linearity: Optional[str] = None,
+        time_embedding_norm: str = "default",
+        output_scale_factor: float = 1.0,
+        add_upsample: bool = True,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -169,13 +169,13 @@ class ValueFunctionMidBlock1D(nn.Layer):
 class MidResTemporalBlock1D(nn.Layer):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        embed_dim,
+        in_channels: int,
+        out_channels: int,
+        embed_dim: int,
         num_layers: int = 1,
         add_downsample: bool = False,
         add_upsample: bool = False,
-        non_linearity=None,
+        non_linearity: Optional[str] = None,
     ):
         super().__init__()
         self.in_channels = in_channels
@@ -220,7 +220,7 @@ class MidResTemporalBlock1D(nn.Layer):
 
 
 class OutConv1DBlock(nn.Layer):
-    def __init__(self, num_groups_out, out_channels, embed_dim, act_fn):
+    def __init__(self, num_groups_out: int, out_channels: int, embed_dim: int, act_fn: str):
         super().__init__()
         self.final_conv1d_1 = nn.Conv1D(embed_dim, embed_dim, 5, padding=2)
         self.final_conv1d_gn = nn.GroupNorm(num_groups_out, embed_dim)
@@ -238,7 +238,7 @@ class OutConv1DBlock(nn.Layer):
 
 
 class OutValueFunctionBlock(nn.Layer):
-    def __init__(self, fc_dim, embed_dim, act_fn="mish"):
+    def __init__(self, fc_dim: int, embed_dim: int, act_fn: str = "mish"):
         super().__init__()
         self.final_block = nn.LayerList(
             [
@@ -278,7 +278,7 @@ _kernels = {
 
 
 class Downsample1d(nn.Layer):
-    def __init__(self, kernel="linear", pad_mode="reflect"):
+    def __init__(self, kernel: str = "linear", pad_mode: str = "reflect"):
         super().__init__()
         self.pad_mode = pad_mode
         kernel_1d = paddle.to_tensor(_kernels[kernel])
@@ -296,7 +296,7 @@ class Downsample1d(nn.Layer):
 
 
 class Upsample1d(nn.Layer):
-    def __init__(self, kernel="linear", pad_mode="reflect"):
+    def __init__(self, kernel: str = "linear", pad_mode: str = "reflect"):
         super().__init__()
         self.pad_mode = pad_mode
         kernel_1d = paddle.to_tensor(_kernels[kernel])
@@ -314,7 +314,7 @@ class Upsample1d(nn.Layer):
 
 
 class SelfAttention1d(nn.Layer):
-    def __init__(self, in_channels, n_head=1, dropout_rate=0.0):
+    def __init__(self, in_channels: int, n_head: int = 1, dropout_rate: float = 0.0):
         super().__init__()
         self.channels = in_channels
         self.group_norm = nn.GroupNorm(1, num_channels=in_channels)
@@ -332,6 +332,12 @@ class SelfAttention1d(nn.Layer):
 
         self._use_memory_efficient_attention_xformers = False
         self._attention_op = None
+
+    def transpose_for_scores(self, projection: paddle.Tensor) -> paddle.Tensor:
+        new_projection_shape = projection.shape[:-1] + (self.num_heads, -1)
+        # move heads to 2nd position (B, T, H * D) -> (B, T, H, D) -> (B, H, T, D)
+        new_projection = projection.reshape(new_projection_shape).transpose([0, 2, 1, 3])
+        return new_projection
 
     def reshape_heads_to_batch_dim(self, tensor, transpose=True):
         tensor = tensor.reshape([0, 0, self.num_heads, self.head_size])
@@ -372,6 +378,7 @@ class SelfAttention1d(nn.Layer):
 
     def forward(self, hidden_states):
         residual = hidden_states
+        # batch, channel_dim, seq = hidden_states.shape
 
         hidden_states = self.group_norm(hidden_states)
         hidden_states = hidden_states.transpose([0, 2, 1])
@@ -603,7 +610,7 @@ class AttnUpBlock1D(nn.Layer):
 
 
 class UpBlock1D(nn.Layer):
-    def __init__(self, in_channels, out_channels, mid_channels=None):
+    def __init__(self, in_channels: int, out_channels: int, mid_channels: Optional[int] = None):
         super().__init__()
         mid_channels = in_channels if mid_channels is None else mid_channels
 
@@ -651,7 +658,20 @@ class UpBlock1DNoSkip(nn.Layer):
         return hidden_states
 
 
-def get_down_block(down_block_type, num_layers, in_channels, out_channels, temb_channels, add_downsample):
+DownBlockType = Union[DownResnetBlock1D, DownBlock1D, AttnDownBlock1D, DownBlock1DNoSkip]
+MidBlockType = Union[MidResTemporalBlock1D, ValueFunctionMidBlock1D, UNetMidBlock1D]
+OutBlockType = Union[OutConv1DBlock, OutValueFunctionBlock]
+UpBlockType = Union[UpResnetBlock1D, UpBlock1D, AttnUpBlock1D, UpBlock1DNoSkip]
+
+
+def get_down_block(
+    down_block_type: str,
+    num_layers: int,
+    in_channels: int,
+    out_channels: int,
+    temb_channels: int,
+    add_downsample: bool,
+) -> DownBlockType:
     if down_block_type == "DownResnetBlock1D":
         return DownResnetBlock1D(
             in_channels=in_channels,
@@ -669,7 +689,9 @@ def get_down_block(down_block_type, num_layers, in_channels, out_channels, temb_
     raise ValueError(f"{down_block_type} does not exist.")
 
 
-def get_up_block(up_block_type, num_layers, in_channels, out_channels, temb_channels, add_upsample):
+def get_up_block(
+    up_block_type: str, num_layers: int, in_channels: int, out_channels: int, temb_channels: int, add_upsample: bool
+) -> UpBlockType:
     if up_block_type == "UpResnetBlock1D":
         return UpResnetBlock1D(
             in_channels=in_channels,
@@ -687,7 +709,15 @@ def get_up_block(up_block_type, num_layers, in_channels, out_channels, temb_chan
     raise ValueError(f"{up_block_type} does not exist.")
 
 
-def get_mid_block(mid_block_type, num_layers, in_channels, mid_channels, out_channels, embed_dim, add_downsample):
+def get_mid_block(
+    mid_block_type: str,
+    num_layers: int,
+    in_channels: int,
+    mid_channels: int,
+    out_channels: int,
+    embed_dim: int,
+    add_downsample: bool,
+) -> MidBlockType:
     if mid_block_type == "MidResTemporalBlock1D":
         return MidResTemporalBlock1D(
             num_layers=num_layers,
@@ -703,7 +733,9 @@ def get_mid_block(mid_block_type, num_layers, in_channels, mid_channels, out_cha
     raise ValueError(f"{mid_block_type} does not exist.")
 
 
-def get_out_block(*, out_block_type, num_groups_out, embed_dim, out_channels, act_fn, fc_dim):
+def get_out_block(
+    *, out_block_type: str, num_groups_out: int, embed_dim: int, out_channels: int, act_fn: str, fc_dim: int
+) -> Optional[OutBlockType]:
     if out_block_type == "OutConv1DBlock":
         return OutConv1DBlock(num_groups_out, out_channels, embed_dim, act_fn)
     elif out_block_type == "ValueFunction":

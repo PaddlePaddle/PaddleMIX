@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import gc
 import os
 import tempfile
@@ -24,10 +25,7 @@ from parameterized import parameterized
 from pytest import mark
 
 from ppdiffusers import UNet2DConditionModel
-from ppdiffusers.models.attention_processor import (
-    CustomDiffusionAttnProcessor,
-    LoRAAttnProcessor,
-)
+from ppdiffusers.models.attention_processor import CustomDiffusionAttnProcessor
 from ppdiffusers.utils import (
     floats_tensor,
     load_ppnlp_numpy,
@@ -44,28 +42,6 @@ from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
 logger = logging.get_logger(__name__)
 
 enable_full_determinism()
-
-
-def create_lora_layers(model, mock_weights: bool = True):
-    lora_attn_procs = {}
-    for name in model.attn_processors.keys():
-        cross_attention_dim = None if name.endswith("attn1.processor") else model.config.cross_attention_dim
-        if name.startswith("mid_block"):
-            hidden_size = model.config.block_out_channels[-1]
-        elif name.startswith("up_blocks"):
-            block_id = int(name[len("up_blocks.")])
-            hidden_size = list(reversed(model.config.block_out_channels))[block_id]
-        elif name.startswith("down_blocks"):
-            block_id = int(name[len("down_blocks.")])
-            hidden_size = model.config.block_out_channels[block_id]
-        lora_attn_procs[name] = LoRAAttnProcessor(hidden_size=hidden_size, cross_attention_dim=cross_attention_dim)
-        if mock_weights:
-            with paddle.no_grad():
-                lora_attn_procs[name].to_q_lora.up.weight.set_value(lora_attn_procs[name].to_q_lora.up.weight + 1)
-                lora_attn_procs[name].to_k_lora.up.weight.set_value(lora_attn_procs[name].to_k_lora.up.weight + 1)
-                lora_attn_procs[name].to_v_lora.up.weight.set_value(lora_attn_procs[name].to_v_lora.up.weight + 1)
-                lora_attn_procs[name].to_out_lora.up.weight.set_value(lora_attn_procs[name].to_out_lora.up.weight + 1)
-    return lora_attn_procs
 
 
 def create_custom_ppdiffusion_layers(model, mock_weights: bool = True):
@@ -184,11 +160,12 @@ class UNet2DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
         model_2.clear_gradients()
         loss_2 = (out_2 - labels).mean()
         loss_2.backward()
-        self.assertTrue((loss - loss_2).abs() < 1e-05)
+        # UNetMidBlock2DCrossAttn create_custom_forward associates the difference.
+        self.assertTrue((loss - loss_2).abs() < 1e-5)
         named_params = dict(model.named_parameters())
         named_params_2 = dict(model_2.named_parameters())
         for name, param in named_params.items():
-            self.assertTrue(paddle_all_close(param.grad, named_params_2[name].grad, atol=5e-05))
+            self.assertTrue(paddle_all_close(param.grad, named_params_2[name].grad, atol=5e-5))
 
     def test_model_with_attention_head_dim_tuple(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -313,6 +290,42 @@ class UNet2DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
         for module in model.children():
             check_sliceable_dim_attr(module)
 
+    def test_gradient_checkpointing_is_applied(self):
+        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
+
+        init_dict["attention_head_dim"] = (8, 16)
+
+        model_class_copy = copy.copy(self.model_class)
+
+        modules_with_gc_enabled = {}
+
+        # now monkey patch the following function:
+        #     def _set_gradient_checkpointing(self, module, value=False):
+        #         if hasattr(module, "gradient_checkpointing"):
+        #             module.gradient_checkpointing = value
+
+        def _set_gradient_checkpointing_new(self, module, value=False):
+            if hasattr(module, "gradient_checkpointing"):
+                module.gradient_checkpointing = value
+                modules_with_gc_enabled[module.__class__.__name__] = True
+
+        model_class_copy._set_gradient_checkpointing = _set_gradient_checkpointing_new
+
+        model = model_class_copy(**init_dict)
+        model.enable_gradient_checkpointing()
+
+        EXPECTED_SET = {
+            "CrossAttnUpBlock2D",
+            "CrossAttnDownBlock2D",
+            "UNetMidBlock2DCrossAttn",
+            "UpBlock2D",
+            "Transformer2DModel",
+            "DownBlock2D",
+        }
+
+        assert set(modules_with_gc_enabled.keys()) == EXPECTED_SET
+        assert all(modules_with_gc_enabled.values()), "All modules should be enabled"
+
     def test_special_attn_proc(self):
         class AttnEasyProc(nn.Layer):
             def __init__(self, num):
@@ -404,139 +417,6 @@ class UNet2DConditionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.Test
             assert trunc_mask_out.allclose(
                 y=keeplast_out, rtol=1e-3, atol=1e-5
             ).item(), "a mask with fewer tokens than condition, will be padded with 'keep' tokens. a 'discard-all' mask missing the final token is thus equivalent to a 'keep last' mask."
-
-    def test_lora_processors(self):
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        init_dict["attention_head_dim"] = 8, 16
-        model = self.model_class(**init_dict)
-        with paddle.no_grad():
-            sample1 = model(**inputs_dict).sample
-        lora_attn_procs = create_lora_layers(model)
-        model.set_attn_processor(lora_attn_procs)
-        model.set_attn_processor(model.attn_processors)
-        with paddle.no_grad():
-            sample2 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.0}).sample
-            sample3 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
-            sample4 = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
-        assert (sample1 - sample2).abs().max() < 3e-3
-        assert (sample3 - sample4).abs().max() < 3e-3
-        assert (sample2 - sample3).abs().max() > 3e-3
-
-    def test_lora_save_load(self):
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        init_dict["attention_head_dim"] = 8, 16
-        paddle.seed(0)
-        model = self.model_class(**init_dict)
-        with paddle.no_grad():
-            old_sample = model(**inputs_dict).sample
-        lora_attn_procs = create_lora_layers(model)
-        model.set_attn_processor(lora_attn_procs)
-        with paddle.no_grad():
-            sample = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_attn_procs(tmpdirname, to_diffusers=False)
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "paddle_lora_weights.pdparams")))
-            paddle.seed(0)
-            new_model = self.model_class(**init_dict)
-            new_model.load_attn_procs(tmpdirname, from_diffusers=False)
-
-        with paddle.no_grad():
-            new_sample = new_model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
-
-        assert (sample - new_sample).abs().max() < 1e-4
-
-        # LoRA and no LoRA should NOT be the same
-        assert (sample - old_sample).abs().max() > 1e-4
-
-    def test_lora_save_load_safetensors(self):
-        # enable deterministic behavior for gradient checkpointing
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-
-        init_dict["attention_head_dim"] = (8, 16)
-
-        paddle.seed(0)
-        model = self.model_class(**init_dict)
-
-        with paddle.no_grad():
-            old_sample = model(**inputs_dict).sample
-
-        lora_attn_procs = create_lora_layers(model)
-        model.set_attn_processor(lora_attn_procs)
-
-        with paddle.no_grad():
-            sample = model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
-
-        with tempfile.TemporaryDirectory() as tmpdirname:
-            model.save_attn_procs(tmpdirname, safe_serialization=True, to_diffusers=True)
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.safetensors")))
-            paddle.seed(0)
-            new_model = self.model_class(**init_dict)
-            new_model.load_attn_procs(tmpdirname, from_diffusers=True, use_safetensors=True)
-        with paddle.no_grad():
-            new_sample = new_model(**inputs_dict, cross_attention_kwargs={"scale": 0.5}).sample
-        assert (sample - new_sample).abs().max() < 0.0001
-        assert (sample - old_sample).abs().max() > 0.0001
-
-    # def test_lora_save_safetensors_load_torch(self):
-    #     # enable deterministic behavior for gradient checkpointing
-    #     init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-
-    #     init_dict["attention_head_dim"] = (8, 16)
-
-    #     paddle.seed(0)
-    #     model = self.model_class(**init_dict)
-
-    #     lora_attn_procs = create_lora_layers(model, mock_weights=False)
-    #     model.set_attn_processor(lora_attn_procs)
-    #     # Saving as paddle, properly reloads with directly filename
-    #     with tempfile.TemporaryDirectory() as tmpdirname:
-    #         model.save_attn_procs(tmpdirname, to_diffusers=True)
-    #         self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "pytorch_lora_weights.bin")))
-    #         paddle.seed(0)
-    #         new_model = self.model_class(**init_dict)
-    #         new_model.load_attn_procs(
-    #             tmpdirname, weight_name="pytorch_lora_weights.bin", from_diffusers=True, use_safetensors=False
-    #         )
-
-    def test_lora_save_torch_force_load_safetensors_error(self):
-        pass
-
-    def test_lora_on_off(self):
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        init_dict["attention_head_dim"] = 8, 16
-        paddle.seed(0)
-        model = self.model_class(**init_dict)
-        with paddle.no_grad():
-            old_sample = model(**inputs_dict).sample
-        lora_attn_procs = create_lora_layers(model)
-        model.set_attn_processor(lora_attn_procs)
-        with paddle.no_grad():
-            sample = model(**inputs_dict, cross_attention_kwargs={"scale": 0.0}).sample
-        model.set_default_attn_processor()
-        with paddle.no_grad():
-            new_sample = model(**inputs_dict).sample
-        assert (sample - new_sample).abs().max() < 0.0001
-        assert (sample - old_sample).abs().max() < 3e-3
-
-    @unittest.skipIf(
-        not is_ppxformers_available(),
-        reason="scaled_dot_product_attention attention is only available with CUDA and `scaled_dot_product_attention` installed",
-    )
-    def test_lora_xformers_on_off(self):
-        init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
-        init_dict["attention_head_dim"] = 8, 16
-        paddle.seed(0)
-        model = self.model_class(**init_dict)
-        lora_attn_procs = create_lora_layers(model)
-        model.set_attn_processor(lora_attn_procs)
-        with paddle.no_grad():
-            sample = model(**inputs_dict).sample
-            model.enable_xformers_memory_efficient_attention()
-            on_sample = model(**inputs_dict).sample
-            model.disable_xformers_memory_efficient_attention()
-            off_sample = model(**inputs_dict).sample
-        assert (sample - on_sample).abs().max() < 0.05
-        assert (sample - off_sample).abs().max() < 0.05
 
     def test_custom_diffusion_processors(self):
         # enable deterministic behavior for gradient checkpointing

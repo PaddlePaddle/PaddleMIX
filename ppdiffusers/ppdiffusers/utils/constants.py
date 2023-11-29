@@ -82,3 +82,6 @@ if bool(os.getenv("PATCH_ALLCLOSE", False)):
         print(x.tolist())
         print(y.tolist())
         return raw_all_close(x, y, rtol=rtol, atol=atol, equal_nan=equal_nan, name=name)
+
+
+USE_PEFT_BACKEND = False

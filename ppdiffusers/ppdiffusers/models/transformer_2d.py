@@ -18,14 +18,16 @@ from typing import Any, Dict, Optional
 import paddle
 import paddle.nn.functional as F
 from paddle import nn
+from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..models.embeddings import ImagePositionalEmbeddings
 from ..utils import BaseOutput, deprecate
 from .attention import BasicTransformerBlock
-from .embeddings import PatchEmbed
+from .embeddings import CaptionProjection, PatchEmbed
 from .lora import LoRACompatibleConv, LoRACompatibleLinear
 from .modeling_utils import ModelMixin
+from .normalization import AdaLayerNormSingle
 
 
 @dataclass
@@ -89,9 +91,13 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         num_embeds_ada_norm: Optional[int] = None,
         use_linear_projection: bool = False,
         only_cross_attention: bool = False,
+        double_self_attention: bool = False,
         upcast_attention: bool = False,
         norm_type: str = "layer_norm",
         norm_elementwise_affine: bool = True,
+        norm_eps: float = 1e-5,
+        attention_type: str = "default",
+        caption_channels: int = None,
     ):
         super().__init__()
         self.use_linear_projection = use_linear_projection
@@ -160,12 +166,15 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             self.width = sample_size
 
             self.patch_size = patch_size
+            interpolation_scale = self.config.sample_size // 64  # => 64 (= 512 pixart) has interpolation scale 1
+            interpolation_scale = max(interpolation_scale, 1)
             self.pos_embed = PatchEmbed(
                 height=sample_size,
                 width=sample_size,
                 patch_size=patch_size,
                 in_channels=in_channels,
                 embed_dim=inner_dim,
+                interpolation_scale=interpolation_scale,
             )
 
         # 3. Define transformers blocks
@@ -181,9 +190,12 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     num_embeds_ada_norm=num_embeds_ada_norm,
                     attention_bias=attention_bias,
                     only_cross_attention=only_cross_attention,
+                    double_self_attention=double_self_attention,
                     upcast_attention=upcast_attention,
                     norm_type=norm_type,
                     norm_elementwise_affine=norm_elementwise_affine,
+                    norm_eps=norm_eps,
+                    attention_type=attention_type,
                 )
                 for d in range(num_layers)
             ]
@@ -200,18 +212,42 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         elif self.is_input_vectorized:
             self.norm_out = nn.LayerNorm(inner_dim)
             self.out = nn.Linear(inner_dim, self.num_vector_embeds - 1)
-        elif self.is_input_patches:
+        elif self.is_input_patches and norm_type != "ada_norm_single":
             # elementwise_affine=False
             norm_kwargs = {"weight_attr": False, "bias_attr": False}
             self.norm_out = nn.LayerNorm(inner_dim, epsilon=1e-6, **norm_kwargs)
             self.proj_out_1 = nn.Linear(inner_dim, 2 * inner_dim)
             self.proj_out_2 = nn.Linear(inner_dim, patch_size * patch_size * self.out_channels)
+        elif self.is_input_patches and norm_type == "ada_norm_single":
+            norm_kwargs = {"weight_attr": False, "bias_attr": False}
+            self.norm_out = nn.LayerNorm(inner_dim, epsilon=1e-6, **norm_kwargs)
+            tmp_param = paddle.randn(2, inner_dim) / inner_dim**0.5
+            self.scale_shift_table = self.create_parameter(
+                shape=tmp_param.shape, default_initializer=paddle.nn.initializer.Assign(tmp_param)
+            )
+            self.proj_out = nn.Linear(inner_dim, patch_size * patch_size * self.out_channels)
+
+        # 5. PixArt-Alpha blocks.
+        self.adaln_single = None
+        self.use_additional_conditions = False
+        if norm_type == "ada_norm_single":
+            self.use_additional_conditions = self.config.sample_size == 128
+            # TODO(Sayak, PVP) clean this, for now we use sample size to determine whether to use
+            # additional conditions until we find better name
+            self.adaln_single = AdaLayerNormSingle(inner_dim, use_additional_conditions=self.use_additional_conditions)
+
+        self.caption_projection = None
+        if caption_channels is not None:
+            self.caption_projection = CaptionProjection(in_features=caption_channels, hidden_size=inner_dim)
+
+        self.gradient_checkpointing = False
 
     def forward(
         self,
         hidden_states: paddle.Tensor,
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         timestep: Optional[paddle.Tensor] = None,
+        added_cond_kwargs: Dict[str, paddle.Tensor] = None,
         class_labels: Optional[paddle.Tensor] = None,
         cross_attention_kwargs: Dict[str, Any] = None,
         attention_mask: Optional[paddle.Tensor] = None,
@@ -232,6 +268,14 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             class_labels ( `paddle.Tensor` of shape `(batch size, num classes)`, *optional*):
                 Used to indicate class labels conditioning. Optional class labels to be applied as an embedding in
                 `AdaLayerZeroNorm`.
+            cross_attention_kwargs ( `Dict[str, Any]`, *optional*):
+                A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
+                `self.processor` in
+                [diffusers.models.attention_processor](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention_processor.py).
+            attention_mask ( `paddle.Tensor`, *optional*):
+                An attention mask of shape `(batch, key_tokens)` is applied to `encoder_hidden_states`. If `1` the mask
+                is kept, otherwise if `0` it is discarded. Mask will be converted into a bias, which adds large
+                negative values to the attention scores corresponding to "discard" tokens.
             encoder_attention_mask ( `paddle.Tensor`, *optional*):
                 Cross-attention mask applied to `encoder_hidden_states`. Two formats supported:
 
@@ -272,40 +316,94 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_attention_mask = (1 - encoder_attention_mask.cast(hidden_states.dtype)) * -10000.0
             encoder_attention_mask = encoder_attention_mask.unsqueeze(1)
 
+        # Retrieve lora scale.
+        lora_scale = cross_attention_kwargs.get("scale", 1.0) if cross_attention_kwargs is not None else 1.0
+
         # 1. Input
         if self.is_input_continuous:
-            _, _, height, width = hidden_states.shape
+            batch, _, height, width = hidden_states.shape
             residual = hidden_states
             hidden_states = self.norm(hidden_states)
             if not self.use_linear_projection:
-                hidden_states = self.proj_in(hidden_states)
+                hidden_states = self.proj_in(hidden_states, scale=lora_scale)
             hidden_states = hidden_states.transpose([0, 2, 3, 1]).flatten(1, 2)
             if self.use_linear_projection:
-                hidden_states = self.proj_in(hidden_states)
+                hidden_states = self.proj_in(hidden_states, scale=lora_scale)
         elif self.is_input_vectorized:
-            hidden_states = self.latent_image_embedding(hidden_states.cast("int64"))
+            # paddle original code:
+            # hidden_states = self.latent_image_embedding(hidden_states.cast("int64"))
+            hidden_states = self.latent_image_embedding(hidden_states)
         elif self.is_input_patches:
+            height, width = hidden_states.shape[-2] // self.patch_size, hidden_states.shape[-1] // self.patch_size
             hidden_states = self.pos_embed(hidden_states)
 
+            if self.adaln_single is not None:
+                if self.use_additional_conditions and added_cond_kwargs is None:
+                    raise ValueError(
+                        "`added_cond_kwargs` cannot be None when using additional conditions for `adaln_single`."
+                    )
+                batch_size = hidden_states.shape[0]
+                timestep, embedded_timestep = self.adaln_single(
+                    timestep, added_cond_kwargs, batch_size=batch_size, hidden_dtype=hidden_states.dtype
+                )
+
         # 2. Blocks
+        if self.caption_projection is not None:
+            batch_size = hidden_states.shape[0]
+            encoder_hidden_states = self.caption_projection(encoder_hidden_states)
+            encoder_hidden_states = encoder_hidden_states.view(batch_size, -1, hidden_states.shape[-1])
+
         for block in self.transformer_blocks:
-            hidden_states = block(
-                hidden_states,
-                attention_mask=attention_mask,
-                encoder_hidden_states=encoder_hidden_states,
-                encoder_attention_mask=encoder_attention_mask,
-                timestep=timestep,
-                cross_attention_kwargs=cross_attention_kwargs,
-                class_labels=class_labels,
-            )
+            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+                # hidden_states = torch.utils.checkpoint.checkpoint(
+                #     block,
+                #     hidden_states,
+                #     attention_mask,
+                #     encoder_hidden_states,
+                #     encoder_attention_mask,
+                #     timestep,
+                #     cross_attention_kwargs,
+                #     class_labels,
+                #     use_reentrant=False,
+                # )
+                def create_custom_forward(module, return_dict=None):
+                    def custom_forward(*inputs):
+                        if return_dict is not None:
+                            return module(*inputs, return_dict=return_dict)[0]  # move [0] when paddlepaddle <= 2.4.1
+                        else:
+                            return module(*inputs)
+
+                    return custom_forward
+
+                hidden_states = recompute(
+                    create_custom_forward(block),
+                    hidden_states,
+                    attention_mask,
+                    encoder_hidden_states,
+                    encoder_attention_mask,
+                    timestep,
+                    cross_attention_kwargs,
+                    class_labels,
+                    # use_reentrant=False,
+                )  # [0]
+            else:
+                hidden_states = block(
+                    hidden_states,
+                    attention_mask=attention_mask,
+                    encoder_hidden_states=encoder_hidden_states,
+                    encoder_attention_mask=encoder_attention_mask,
+                    timestep=timestep,
+                    cross_attention_kwargs=cross_attention_kwargs,
+                    class_labels=class_labels,
+                )
 
         # 3. Output
         if self.is_input_continuous:
             if self.use_linear_projection:
-                hidden_states = self.proj_out(hidden_states)
-            hidden_states = hidden_states.reshape([-1, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
+                hidden_states = self.proj_out(hidden_states, scale=lora_scale)
+            hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
             if not self.use_linear_projection:
-                hidden_states = self.proj_out(hidden_states)
+                hidden_states = self.proj_out(hidden_states, scale=lora_scale)
             output = hidden_states + residual
         elif self.is_input_vectorized:
             hidden_states = self.norm_out(hidden_states)
@@ -315,17 +413,25 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
             # log(p(x_0))
             output = F.log_softmax(logits.cast("float64"), axis=1).cast("float32")
-        elif self.is_input_patches:
-            # TODO: cleanup!
-            conditioning = self.transformer_blocks[0].norm1.emb(
-                timestep, class_labels, hidden_dtype=hidden_states.dtype
-            )
-            shift, scale = self.proj_out_1(F.silu(conditioning)).chunk(2, axis=1)
-            hidden_states = self.norm_out(hidden_states) * (1 + scale[:, None]) + shift[:, None]
-            hidden_states = self.proj_out_2(hidden_states)
+        if self.is_input_patches:
+            if self.config.norm_type != "ada_norm_single":
+                conditioning = self.transformer_blocks[0].norm1.emb(
+                    timestep, class_labels, hidden_dtype=hidden_states.dtype
+                )
+                shift, scale = self.proj_out_1(F.silu(conditioning)).chunk(2, axis=1)
+                hidden_states = self.norm_out(hidden_states) * (1 + scale[:, None]) + shift[:, None]
+                hidden_states = self.proj_out_2(hidden_states)
+            elif self.config.norm_type == "ada_norm_single":
+                shift, scale = (self.scale_shift_table[None] + embedded_timestep[:, None]).chunk(2, axis=1)
+                hidden_states = self.norm_out(hidden_states)
+                # Modulation
+                hidden_states = hidden_states * (1 + scale) + shift
+                hidden_states = self.proj_out(hidden_states)
+                hidden_states = hidden_states.squeeze(1)
 
             # unpatchify
-            height = width = int(hidden_states.shape[1] ** 0.5)
+            if self.adaln_single is None:
+                height = width = int(hidden_states.shape[1] ** 0.5)
             hidden_states = hidden_states.reshape(
                 (-1, height, width, self.patch_size, self.patch_size, self.out_channels)
             )

@@ -23,9 +23,9 @@ import paddle.nn.functional as F
 
 from ..initializer import zeros_
 from .activations import get_activation
-from .attention import AdaGroupNorm
 from .attention_processor import SpatialNorm
 from .lora import LoRACompatibleConv, LoRACompatibleLinear
+from .normalization import AdaGroupNorm
 
 
 class Upsample1D(nn.Layer):
@@ -40,6 +40,8 @@ class Upsample1D(nn.Layer):
             option to use a convolution transpose.
         out_channels (`int`, optional):
             number of output channels. Defaults to `channels`.
+        name (`str`, default `conv`):
+            name of the upsampling 1D layer.
     """
 
     def __init__(self, channels, use_conv=False, use_conv_transpose=False, out_channels=None, name="conv"):
@@ -81,6 +83,8 @@ class Downsample1D(nn.Layer):
             number of output channels. Defaults to `channels`.
         padding (`int`, default `1`):
             padding for the convolution.
+        name (`str`, default `conv`):
+            name of the downsampling 1D layer.
     """
 
     def __init__(self, channels, use_conv=False, out_channels=None, padding=1, name="conv"):
@@ -115,6 +119,8 @@ class Upsample2D(nn.Layer):
             option to use a convolution transpose.
         out_channels (`int`, optional):
             number of output channels. Defaults to `channels`.
+        name (`str`, default `conv`):
+            name of the upsampling 2D layer.
     """
 
     def __init__(self, channels, use_conv=False, use_conv_transpose=False, out_channels=None, name="conv"):
@@ -137,7 +143,7 @@ class Upsample2D(nn.Layer):
         else:
             self.Conv2d_0 = conv
 
-    def forward(self, hidden_states, output_size=None):
+    def forward(self, hidden_states, output_size=None, scale: float = 1.0):
         assert hidden_states.shape[1] == self.channels
 
         if self.use_conv_transpose:
@@ -149,6 +155,10 @@ class Upsample2D(nn.Layer):
         dtype = hidden_states.dtype
         if dtype == paddle.bfloat16:
             hidden_states = hidden_states.cast("float32")
+
+        # upsample_nearest_nhwc fails with large batch sizes. see https://github.com/huggingface/diffusers/issues/984
+        if hidden_states.shape[0] >= 64:
+            hidden_states = hidden_states.contiguous() if hasattr(hidden_states, "contiguous") else hidden_states
 
         # if `output_size` is passed we force the interpolation output
         # size and do not make use of `scale_factor=2`
@@ -164,9 +174,15 @@ class Upsample2D(nn.Layer):
         # TODO(Suraj, Patrick) - clean up after weight dicts are correctly renamed
         if self.use_conv:
             if self.name == "conv":
-                hidden_states = self.conv(hidden_states)
+                if isinstance(self.conv, LoRACompatibleConv):
+                    hidden_states = self.conv(hidden_states, scale)
+                else:
+                    hidden_states = self.conv(hidden_states)
             else:
-                hidden_states = self.Conv2d_0(hidden_states)
+                if isinstance(self.Conv2d_0, LoRACompatibleConv):
+                    hidden_states = self.Conv2d_0(hidden_states, scale)
+                else:
+                    hidden_states = self.Conv2d_0(hidden_states)
 
         return hidden_states
 
@@ -183,6 +199,8 @@ class Downsample2D(nn.Layer):
             number of output channels. Defaults to `channels`.
         padding (`int`, default `1`):
             padding for the convolution.
+        name (`str`, default `conv`):
+            name of the downsampling 2D layer.
     """
 
     def __init__(self, channels, use_conv=False, out_channels=None, padding=1, name="conv"):
@@ -209,14 +227,17 @@ class Downsample2D(nn.Layer):
         else:
             self.conv = conv
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states, scale: float = 1.0):
         assert hidden_states.shape[1] == self.channels
         if self.use_conv and self.padding == 0:
             pad = (0, 1, 0, 1)
             hidden_states = F.pad(hidden_states, pad, mode="constant", value=0)
 
         assert hidden_states.shape[1] == self.channels
-        hidden_states = self.conv(hidden_states)
+        if isinstance(self.conv, LoRACompatibleConv):
+            hidden_states = self.conv(hidden_states, scale)
+        else:
+            hidden_states = self.conv(hidden_states)
 
         return hidden_states
 
@@ -423,6 +444,12 @@ class FirDownsample2D(nn.Layer):
 
 # downsample/upsample layer used in k-upscaler, might be able to use FirDownsample2D/DirUpsample2D instead
 class KDownsample2D(nn.Layer):
+    r"""A 2D K-downsampling layer.
+
+    Parameters:
+        pad_mode (`str`, *optional*, default to `"reflect"`): the padding mode to use.
+    """
+
     def __init__(self, pad_mode="reflect"):
         super().__init__()
         self.pad_mode = pad_mode
@@ -442,6 +469,12 @@ class KDownsample2D(nn.Layer):
 
 
 class KUpsample2D(nn.Layer):
+    r"""A 2D K-upsampling layer.
+
+    Parameters:
+        pad_mode (`str`, *optional*, default to `"reflect"`): the padding mode to use.
+    """
+
     def __init__(self, pad_mode="reflect"):
         super().__init__()
         self.pad_mode = pad_mode
@@ -592,7 +625,7 @@ class ResnetBlock2D(nn.Layer):
                 in_channels, conv_2d_out_channels, kernel_size=1, stride=1, padding=0, bias_attr=conv_shortcut_bias
             )
 
-    def forward(self, input_tensor, temb):
+    def forward(self, input_tensor, temb, scale: float = 1.0):
         hidden_states = input_tensor
 
         if self.time_embedding_norm == "ada_group" or self.time_embedding_norm == "spatial":
@@ -603,18 +636,34 @@ class ResnetBlock2D(nn.Layer):
         hidden_states = self.nonlinearity(hidden_states)
 
         if self.upsample is not None:
-            input_tensor = self.upsample(input_tensor)
-            hidden_states = self.upsample(hidden_states)
+            input_tensor = (
+                self.upsample(input_tensor, scale=scale)
+                if isinstance(self.upsample, Upsample2D)
+                else self.upsample(input_tensor)
+            )
+            hidden_states = (
+                self.upsample(hidden_states, scale=scale)
+                if isinstance(self.upsample, Upsample2D)
+                else self.upsample(hidden_states)
+            )
         elif self.downsample is not None:
-            input_tensor = self.downsample(input_tensor)
-            hidden_states = self.downsample(hidden_states)
+            input_tensor = (
+                self.downsample(input_tensor, scale=scale)
+                if isinstance(self.downsample, Downsample2D)
+                else self.downsample(input_tensor)
+            )
+            hidden_states = (
+                self.downsample(hidden_states, scale=scale)
+                if isinstance(self.downsample, Downsample2D)
+                else self.downsample(hidden_states)
+            )
 
-        hidden_states = self.conv1(hidden_states)
+        hidden_states = self.conv1(hidden_states, scale)
 
         if self.time_emb_proj is not None:
             if not self.pre_temb_non_linearity and not self.skip_time_act:
                 temb = self.nonlinearity(temb)
-            temb = self.time_emb_proj(temb)[:, :, None, None]
+            temb = self.time_emb_proj(temb, scale)[:, :, None, None]
 
         if temb is not None and self.time_embedding_norm == "default":
             hidden_states = hidden_states + temb
@@ -631,10 +680,10 @@ class ResnetBlock2D(nn.Layer):
         hidden_states = self.nonlinearity(hidden_states)
 
         hidden_states = self.dropout(hidden_states)
-        hidden_states = self.conv2(hidden_states)
+        hidden_states = self.conv2(hidden_states, scale)
 
         if self.conv_shortcut is not None:
-            input_tensor = self.conv_shortcut(input_tensor)
+            input_tensor = self.conv_shortcut(input_tensor, scale)
 
         # TODO this maybe result -inf, input_tensor's min value -57644  hidden_states's min value -10000
         output_tensor = (input_tensor + hidden_states) / self.output_scale_factor
@@ -657,14 +706,21 @@ def rearrange_dims(tensor):
 class Conv1dBlock(nn.Layer):
     """
     Conv1d --> GroupNorm --> Mish
+
+    Parameters:
+        inp_channels (`int`): Number of input channels.
+        out_channels (`int`): Number of output channels.
+        kernel_size (`int` or `tuple`): Size of the convolving kernel.
+        n_groups (`int`, default `8`): Number of groups to separate the channels into.
+        activation (`str`, defaults `mish`): Name of the activation function.
     """
 
-    def __init__(self, inp_channels, out_channels, kernel_size, n_groups=8):
+    def __init__(self, inp_channels, out_channels, kernel_size, n_groups=8, activation: str = "mish"):
         super().__init__()
 
         self.conv1d = nn.Conv1D(inp_channels, out_channels, kernel_size, padding=kernel_size // 2)
         self.group_norm = nn.GroupNorm(n_groups, out_channels)
-        self.mish = nn.Mish()
+        self.mish = get_activation(activation)
 
     def forward(self, inputs):
         intermediate_repr = self.conv1d(inputs)
@@ -677,12 +733,23 @@ class Conv1dBlock(nn.Layer):
 
 # unet_rl.py
 class ResidualTemporalBlock1D(nn.Layer):
-    def __init__(self, inp_channels, out_channels, embed_dim, kernel_size=5):
+    """
+    Residual 1D block with temporal convolutions.
+
+    Parameters:
+        inp_channels (`int`): Number of input channels.
+        out_channels (`int`): Number of output channels.
+        embed_dim (`int`): Embedding dimension.
+        kernel_size (`int` or `tuple`): Size of the convolving kernel.
+        activation (`str`, defaults `mish`): It is possible to choose the right activation function.
+    """
+
+    def __init__(self, inp_channels, out_channels, embed_dim, kernel_size=5, activation: str = "mish"):
         super().__init__()
         self.conv_in = Conv1dBlock(inp_channels, out_channels, kernel_size)
         self.conv_out = Conv1dBlock(out_channels, out_channels, kernel_size)
 
-        self.time_emb_act = nn.Mish()
+        self.time_emb_act = get_activation(activation)
         self.time_emb = nn.Linear(embed_dim, out_channels)
 
         self.residual_conv = (
@@ -852,6 +919,11 @@ class TemporalConvLayer(nn.Layer):
     """
     Temporal convolutional layer that can be used for video (sequence of images) input Code mostly copied from:
     https://github.com/modelscope/modelscope/blob/1509fdb973e5871f37148a4b5e5964cafd43e64d/modelscope/models/multi_modal/video_synthesis/unet_sd.py#L1016
+
+    Parameters:
+        in_dim (`int`): Number of input channels.
+        out_dim (`int`): Number of output channels.
+        dropout (`float`, *optional*, defaults to `0.0`): The dropout probability to use.
     """
 
     def __init__(self, in_dim, out_dim=None, dropout=0.0):
@@ -883,6 +955,8 @@ class TemporalConvLayer(nn.Layer):
             nn.Dropout(p=dropout),
             nn.Conv3D(in_channels=out_dim, out_channels=in_dim, kernel_size=(3, 1, 1), padding=(1, 0, 0)),
         )
+
+        # zero out the last layer params,so the conv block is identity
         zeros_(self.conv4[-1].weight)
         zeros_(self.conv4[-1].bias)
 
@@ -892,12 +966,15 @@ class TemporalConvLayer(nn.Layer):
             .reshape((-1, num_frames) + tuple(hidden_states.shape[1:]))
             .transpose(perm=[0, 2, 1, 3, 4])
         )
+
         identity = hidden_states
         hidden_states = self.conv1(hidden_states)
         hidden_states = self.conv2(hidden_states)
         hidden_states = self.conv3(hidden_states)
         hidden_states = self.conv4(hidden_states)
+
         hidden_states = identity + hidden_states
+
         hidden_states = hidden_states.transpose(perm=[0, 2, 1, 3, 4]).reshape(
             (hidden_states.shape[0] * hidden_states.shape[2], -1) + tuple(hidden_states.shape[3:])
         )
