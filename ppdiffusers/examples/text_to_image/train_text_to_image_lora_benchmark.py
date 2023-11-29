@@ -1113,9 +1113,14 @@ def main():
                     reader_cost_avg.record(train_reader_cost)
                     batch_cost_avg.record(train_batch_cost)
                     batch_ips_avg.record(train_batch_cost, sample_per_cards)
+                    max_mem_reserved_msg = ""
+                    max_mem_allocated_msg = ""
+                    if paddle.device.is_compiled_with_cuda():
+                        max_mem_reserved_msg = f"max_mem_reserved: {paddle.device.cuda.max_memory_reserved()} B,"
+                        max_mem_allocated_msg = f"max_mem_allocated: {paddle.device.cuda.max_memory_allocated()} B"
 
                     logger.info(
-                        "global step %d / %d, loss: %f, avg_reader_cost: %.5f sec, avg_batch_cost: %.5f sec, avg_samples: %.5f, ips: %.5f sample/sec"
+                        "global step %d / %d, loss: %f, avg_reader_cost: %.5f sec, avg_batch_cost: %.5f sec, avg_samples: %.5f, ips: %.5f sample/sec, %s %s"
                         % (
                             global_step,
                             args.max_train_steps,
@@ -1124,6 +1129,8 @@ def main():
                             batch_cost_avg.get_average(),
                             sample_per_cards,
                             batch_ips_avg.get_average_per_sec(),
+                            max_mem_reserved_msg,
+                            max_mem_allocated_msg,
                         ),
                     )
                     reader_cost_avg.reset()

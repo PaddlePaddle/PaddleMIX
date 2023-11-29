@@ -22,8 +22,7 @@ import paddle
 import paddle.nn.functional as F
 from paddle import Tensor, device, nn
 from paddle.distributed.fleet.utils import recompute
-
-from paddlemix.models.model_utils import MixPretrainedModel
+from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.bert.configuration import BertConfig
 from paddlenlp.transformers.model_outputs import (
@@ -32,7 +31,9 @@ from paddlenlp.transformers.model_outputs import (
     CausalLMOutputWithCrossAttentions,
     MaskedLMOutput,
 )
-from paddlenlp.transformers import AutoTokenizer
+
+from paddlemix.models.model_utils import MixPretrainedModel
+
 
 class CrossEntropyLoss(nn.Layer):
     """
@@ -84,6 +85,7 @@ class BertEmbeddings(nn.Layer):
     """
     Include embeddings from word, position and token_type embeddings
     """
+
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
 
@@ -97,7 +99,9 @@ class BertEmbeddings(nn.Layer):
 
         self.word_embeddings = nn.Embedding(vocab_size, config.hidden_size, padding_idx=pad_token_id)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
-        self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
+        self.token_type_embeddings = (
+            nn.Embedding(config.type_vocab_size, config.hidden_size) if hasattr(config, "type_vocab_size") else None
+        )
         self.LayerNorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
         self.register_buffer("position_ids", paddle.expand(paddle.arange(config.max_position_embeddings), [1, -1]))
@@ -1044,16 +1048,22 @@ class BertLMHeadModel(BertPreTrainedModel):
 
     def __init__(self, config, encoder_width=1408, train_in_satge1=False, **kwargs):
         super().__init__(config)
+        model_config = kwargs.get("config")
         config.encoder_width = encoder_width
         config.gradient_checkpointing = False
         self.ln_vision = paddle.nn.LayerNorm(config.encoder_width)
-        config.query_length = config.num_query_tokens
+        num_query_token = (
+            config.num_query_token
+            if hasattr(config, "num_query_token")
+            else getattr(model_config, "num_query_token", 32)
+        )
+        config.query_length = num_query_token
         config.use_fusedlinear = getattr(config, "use_fusedlinear", False)
         self.bert = BertModel(config, add_pooling_layer=False)
         self.cls = BertOnlyMLMHead(config)
 
         self.query_tokens = paddle.create_parameter(
-            shape=(1, config.num_query_tokens, config.hidden_size),
+            shape=(1, num_query_token, config.hidden_size),
             dtype="float32",
             default_initializer=paddle.nn.initializer.Normal(mean=0.0, std=config.initializer_range),
         )
