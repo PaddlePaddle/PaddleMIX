@@ -30,14 +30,14 @@ class AudioLDMPipelineTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = AudioLDMPipeline.from_pretrained(model)
 
         self._model = model_instance
 
     def _preprocess(self, inputs):
         """ """
-        prompt = inputs.get("prompt", None) 
+        prompt = inputs.get("prompt", None)
         assert prompt is not None, "The prompt is None"
 
         return inputs

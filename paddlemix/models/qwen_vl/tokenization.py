@@ -17,7 +17,14 @@ import os
 import unicodedata
 from typing import Any, Callable, Collection, Dict, List, Set, Tuple, Union
 
-import tiktoken
+from paddlemix.utils.log import logger
+
+try:
+    import tiktoken
+except:
+    logger.warning("tiktoken not import, if you want to use tiktoken, require python>=3.8 and pip install tiktoken")
+    pass
+
 from paddlenlp.transformers import AddedToken, PretrainedTokenizer
 
 VOCAB_FILES_NAMES = {"vocab_file": "qwen.tiktoken", "ttf": "SimSun.ttf"}

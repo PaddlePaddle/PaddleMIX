@@ -31,7 +31,7 @@ class TextToVideoSDTask(AppTask):
         Construct the inference model for the predictor.
         """
 
-        # bulid model
+        # build model
         model_instance = TextToVideoSDPipeline.from_pretrained(model)
         model_instance.scheduler = DPMSolverMultistepScheduler.from_config(model_instance.scheduler.config)
         self._model = model_instance

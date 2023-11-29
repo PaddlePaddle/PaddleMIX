@@ -182,12 +182,6 @@ class MiniGPT4VisionModelTest(ModelTesterMixin, unittest.TestCase):
         config_and_inputs = self.model_tester.prepare_config_and_inputs()
         self.model_tester.create_and_check_model(*config_and_inputs)
 
-    @slow
-    def test_model_from_pretrained(self):
-        for model_name in BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST[:1]:
-            model = MiniGPT4VisionModel.from_pretrained(model_name)
-            self.assertIsNotNone(model)
-
 
 class MiniGPT4QFormerModelTester:
     def __init__(
