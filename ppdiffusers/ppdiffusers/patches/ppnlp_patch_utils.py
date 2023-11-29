@@ -347,8 +347,9 @@ if is_paddle_available() and is_paddlenlp_available():
             memory_efficient_attention,
         )
         from paddle.nn.functional.flash_attention import flash_attention
+
         try:
-            sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 + 64) 
+            sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 + 64)
             if sdp_kernel == "mem_efficient":
                 flash_attn_version = 1
             else:
@@ -1286,12 +1287,18 @@ if is_paddle_available() and is_paddlenlp_available():
     try:
         from paddlenlp.transformers import ClapTextModelWithProjection
     except ImportError:
-        ClapTextModelWithProjection = None
+        logger.warning(
+            "ClapTextModelWithProjection is not available, please upgrade your paddlenlp version via `pip install -U paddlenlp`!"
+        )
+        paddlenlp.transformers.ClapTextModelWithProjection = ClapTextModelWithProjection = None
 
     try:
+        logger.warning(
+            "SpeechT5HifiGan is not available, please upgrade your paddlenlp version via `pip install -U paddlenlp`!"
+        )
         from paddlenlp.transformers import SpeechT5HifiGan
     except ImportError:
-        SpeechT5HifiGan = None
+        paddlenlp.transformers.SpeechT5HifiGan = SpeechT5HifiGan = None
 
     if not hasattr(T5EncoderModel, "_keep_in_fp32_modules"):
         T5EncoderModel._keep_in_fp32_modules = ["wo"]
