@@ -40,7 +40,7 @@ from ppdiffusers.utils.testing_utils import (
     require_paddle_gpu,
 )
 
-from ...models.test_models_unet_2d_condition import create_lora_layers
+from ...lora.test_lora_layers import create_lora_layers
 from ..pipeline_params import (
     TEXT_GUIDED_IMAGE_INPAINTING_BATCH_PARAMS,
     TEXT_GUIDED_IMAGE_INPAINTING_PARAMS,

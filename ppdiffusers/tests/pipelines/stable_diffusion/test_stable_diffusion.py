@@ -14,7 +14,8 @@
 # limitations under the License.
 
 import gc
-import tempfile
+
+# import tempfile
 import unittest
 
 import numpy as np
@@ -36,7 +37,7 @@ from ppdiffusers import (
 from ppdiffusers.utils import nightly, slow
 from ppdiffusers.utils.testing_utils import CaptureLogger, require_paddle_gpu
 
-from ...models.test_models_unet_2d_condition import create_lora_layers
+from ...lora.test_lora_layers import create_lora_layers
 from ..pipeline_params import TEXT_TO_IMAGE_BATCH_PARAMS, TEXT_TO_IMAGE_PARAMS
 from ..test_pipelines_common import PipelineTesterMixin
 
