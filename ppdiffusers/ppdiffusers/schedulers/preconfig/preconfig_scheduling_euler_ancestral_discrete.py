@@ -293,6 +293,9 @@ class PreconfigEulerAncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         noise: paddle.Tensor,
         timesteps: paddle.Tensor,
     ) -> paddle.Tensor:
+        # Fix 0D tensor
+        if paddle.is_tensor(timesteps) and timesteps.ndim == 0:
+            timesteps = timesteps.unsqueeze(0)
         # Make sure sigmas and timesteps have the same dtype as original_samples
         self.sigmas = self.sigmas.cast(original_samples.dtype)
 

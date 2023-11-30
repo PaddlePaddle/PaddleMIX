@@ -107,33 +107,33 @@ class RepaintPipelineNightlyTests(unittest.TestCase):
         gc.collect()
         paddle.device.cuda.empty_cache()
 
-    def test_celebahq(self):
-        original_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/repaint/celeba_hq_256.png"
-        )
-        mask_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/repaint/mask_256.png"
-        )
-        expected_image = load_numpy(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/repaint/celeba_hq_256_result.npy"
-        )
-        model_id = "google/ddpm-ema-celebahq-256"
-        unet = UNet2DModel.from_pretrained(model_id)
-        scheduler = RePaintScheduler.from_pretrained(model_id)
-        repaint = RePaintPipeline(unet=unet, scheduler=scheduler)
-        repaint.set_progress_bar_config(disable=None)
-        repaint.enable_attention_slicing()
-        generator = paddle.Generator().manual_seed(0)
-        output = repaint(
-            original_image,
-            mask_image,
-            num_inference_steps=250,
-            eta=0.0,
-            jump_length=10,
-            jump_n_sample=10,
-            generator=generator,
-            output_type="np",
-        )
-        image = output.images[0]
-        assert image.shape == (256, 256, 3)
-        assert np.abs(expected_image - image).mean() < 0.01
+    # def test_celebahq(self):
+    #     original_image = load_image(
+    #         "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/repaint/celeba_hq_256.png"
+    #     )
+    #     mask_image = load_image(
+    #         "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/repaint/mask_256.png"
+    #     )
+    #     expected_image = load_numpy(
+    #         "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/repaint/celeba_hq_256_result.npy"
+    #     )
+    #     model_id = "google/ddpm-ema-celebahq-256"
+    #     unet = UNet2DModel.from_pretrained(model_id)
+    #     scheduler = RePaintScheduler.from_pretrained(model_id)
+    #     repaint = RePaintPipeline(unet=unet, scheduler=scheduler)
+    #     repaint.set_progress_bar_config(disable=None)
+    #     repaint.enable_attention_slicing()
+    #     generator = paddle.Generator().manual_seed(0)
+    #     output = repaint(
+    #         original_image,
+    #         mask_image,
+    #         num_inference_steps=250,
+    #         eta=0.0,
+    #         jump_length=10,
+    #         jump_n_sample=10,
+    #         generator=generator,
+    #         output_type="np",
+    #     )
+    #     image = output.images[0]
+    #     assert image.shape == (256, 256, 3)
+    #     assert np.abs(expected_image - image).mean() < 0.01

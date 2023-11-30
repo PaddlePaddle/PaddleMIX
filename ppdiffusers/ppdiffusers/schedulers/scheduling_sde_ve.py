@@ -271,6 +271,9 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         noise: paddle.Tensor,
         timesteps: paddle.Tensor,
     ) -> paddle.Tensor:
+        # Fix 0D tensor
+        if paddle.is_tensor(timesteps) and timesteps.ndim == 0:
+            timesteps = timesteps.unsqueeze(0)
         # Make sure sigmas and timesteps have the same dtype as original_samples
         sigmas = self.discrete_sigmas[timesteps]
         noise = paddle.randn(original_samples.shape, dtype=original_samples.dtype) * sigmas[:, None, None, None]

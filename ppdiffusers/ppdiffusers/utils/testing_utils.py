@@ -436,8 +436,10 @@ def export_to_video(video_frames: List[np.ndarray], output_video_path: str = Non
 
 def load_hf_numpy(path) -> np.ndarray:
     if not path.startswith("http://") or path.startswith("https://"):
+        HF_ENDPOINT = os.getenv("HF_ENDPOINT", "https://huggingface.co").rstrip("/")
         path = os.path.join(
-            "https://huggingface.co/datasets/fusing/diffusers-testing/resolve/main", urllib.parse.quote(path)
+            f"{HF_ENDPOINT}/datasets/fusing/diffusers-testing/resolve/main",
+            urllib.parse.quote(path),
         )
 
     return load_numpy(path)
