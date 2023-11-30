@@ -1293,11 +1293,11 @@ if is_paddle_available() and is_paddlenlp_available():
         paddlenlp.transformers.ClapTextModelWithProjection = ClapTextModelWithProjection = None
 
     try:
+        from paddlenlp.transformers import SpeechT5HifiGan
+    except ImportError:
         logger.warning(
             "SpeechT5HifiGan is not available, please upgrade your paddlenlp version via `pip install -U paddlenlp`!"
         )
-        from paddlenlp.transformers import SpeechT5HifiGan
-    except ImportError:
         paddlenlp.transformers.SpeechT5HifiGan = SpeechT5HifiGan = None
 
     if not hasattr(T5EncoderModel, "_keep_in_fp32_modules"):
