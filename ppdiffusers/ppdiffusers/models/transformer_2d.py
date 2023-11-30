@@ -330,9 +330,10 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             if self.use_linear_projection:
                 hidden_states = self.proj_in(hidden_states, scale=lora_scale)
         elif self.is_input_vectorized:
-            # paddle original code:
-            # hidden_states = self.latent_image_embedding(hidden_states.cast("int64"))
-            hidden_states = self.latent_image_embedding(hidden_states)
+            # pytorch code:
+            # hidden_states = self.latent_image_embedding(hidden_states)
+            # paddle code, _C_ops.embedding not support float32, need convert to int64:
+            hidden_states = self.latent_image_embedding(hidden_states.cast("int64"))
         elif self.is_input_patches:
             height, width = hidden_states.shape[-2] // self.patch_size, hidden_states.shape[-1] // self.patch_size
             hidden_states = self.pos_embed(hidden_states)
