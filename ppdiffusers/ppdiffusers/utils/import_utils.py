@@ -75,8 +75,13 @@ if USE_PADDLE in ENV_VARS_TRUE_AND_AUTO_VALUES:
                     memory_efficient_attention,
                 )
 
+                _ = memory_efficient_attention(
+                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                    paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+                )
                 _ppxformers_available = True
-            except ImportError:
+            except Exception:
                 _ppxformers_available = False
 
 else:
@@ -297,7 +302,7 @@ def is_ppxformers_available():
     if USE_PPXFORMERS:
         return _ppxformers_available
     else:
-        False
+        return False
 
 
 def is_torch_available():
@@ -372,8 +377,9 @@ def is_paddlesde_available():
     return _paddlesde_available
 
 
+# This is pytorch packge
 def is_invisible_watermark_available():
-    return _invisible_watermark_available
+    return False  # _invisible_watermark_available
 
 
 # docstyle-ignore

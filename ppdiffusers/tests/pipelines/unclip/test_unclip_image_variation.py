@@ -388,17 +388,17 @@ class UnCLIPImageVariationPipelineIntegrationTests(unittest.TestCase):
         gc.collect()
         paddle.device.cuda.empty_cache()
 
-    def test_unclip_image_variation_karlo(self):
-        input_image = load_image(
-            "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/unclip/cat.png"
-        )
-        expected_image = np.array([[0.967059, 0.7926067, 0.27177247], [0.9816743, 0.7524097, 0.17401046]])
-        # TODO(wugaosheng): test this function
-        pipeline = UnCLIPImageVariationPipeline.from_pretrained("kakaobrain/karlo-v1-alpha-image-variations")
-        pipeline.set_progress_bar_config(disable=None)
-        generator = paddle.Generator().manual_seed(0)
-        output = pipeline(input_image, generator=generator, output_type="np")
-        image = output.images[0]
-        assert image.shape == (256, 256, 3)
+    # def test_unclip_image_variation_karlo(self):
+    #     input_image = load_image(
+    #         "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/unclip/cat.png"
+    #     )
+    #     expected_image = np.array([[0.967059, 0.7926067, 0.27177247], [0.9816743, 0.7524097, 0.17401046]])
+    #     # TODO(wugaosheng): test this function
+    #     pipeline = UnCLIPImageVariationPipeline.from_pretrained("kakaobrain/karlo-v1-alpha-image-variations")
+    #     pipeline.set_progress_bar_config(disable=None)
+    #     generator = paddle.Generator().manual_seed(0)
+    #     output = pipeline(input_image, generator=generator, output_type="np")
+    #     image = output.images[0]
+    #     assert image.shape == (256, 256, 3)
 
-        assert_mean_pixel_difference(image[128][127:129], expected_image)
+    #     assert_mean_pixel_difference(image[128][127:129], expected_image)

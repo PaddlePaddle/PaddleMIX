@@ -121,7 +121,10 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                         load_state_as_np=True,
                         ignore_mismatched_sizes=True,
                     )
+
+
                 elif "llama" in name_or_path:
+
                     from paddlenlp.transformers.llama.configuration import LlamaConfig
 
                     if config.mp_degree > 1:
@@ -141,7 +144,10 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                         )
                     language_model.hidden_size = LlamaConfig.from_pretrained(config.text_config).hidden_size
                     language_model.pad_token_id = LlamaConfig.from_pretrained(config.text_config).pad_token_id
+
+
                 elif "bloom" in name_or_path:
+
                     import paddle.distributed.fleet as fleet
                     from paddlenlp.transformers.bloom.configuration import BloomConfig
 
@@ -152,8 +158,31 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                     language_model = BloomForCausalLM(llm_config)
                     language_model.pad_token_id = llm_config.pad_token_id
                     language_model.hidden_size = llm_config.hidden_size
-                else:
-                    raise NotImplementedError
+
+                elif "glm2" in name_or_path:
+                    import paddle.distributed.fleet as fleet
+                    from paddlenlp.transformers.chatglm_v2.configuration import ChatGLMv2Config
+                    from paddlenlp.transformers.chatglm_v2.modeling import ChatGLMv2ForCausalLM
+
+                    llm_config = ChatGLMv2Config.from_pretrained(config.text_config)
+
+                    if config.mp_degree > 1:
+                        hcg = fleet.get_hybrid_communicate_group()
+                        language_model = ChatGLMv2ForCausalLM.from_pretrained(
+                            config.text_config, 
+                            tensor_parallel_degree=config.mp_degree,
+                            tensor_parallel_rank=hcg.get_model_parallel_rank(),
+                            tensor_parallel_output=False,
+                        )
+                    else:
+                        language_model = ChatGLMv2ForCausalLM.from_pretrained(
+                            config.text_config,
+                            tensor_parallel_output=False,
+                        )
+
+                    language_model.pad_token_id = llm_config.pad_token_id
+                    language_model.hidden_size = llm_config.hidden_size
+                    
             else:
                 from paddlenlp.transformers import T5Config
 
