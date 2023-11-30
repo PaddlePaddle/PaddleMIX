@@ -27,7 +27,6 @@ from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import BaseOutput, randn_tensor
 from .scheduling_utils import KarrasDiffusionSchedulers, SchedulerMixin
 
-# from ..pipelines.semantic_stable_diffusion.custom_quantile import quantile
 quantile = paddle.quantile
 
 
@@ -458,6 +457,9 @@ class DDPMScheduler(SchedulerMixin, ConfigMixin):
         noise: paddle.Tensor,
         timesteps: paddle.Tensor,
     ) -> paddle.Tensor:
+        # Fix 0D tensor
+        if paddle.is_tensor(timesteps) and timesteps.ndim == 0:
+            timesteps = timesteps.unsqueeze(0)
         # Make sure alphas_cumprod and timestep have same dtype as original_samples
         alphas_cumprod = self.alphas_cumprod.cast(original_samples.dtype)
 

@@ -144,11 +144,11 @@ if is_paddle_available():
     # paddle.Tensor.clamp = paddle.clip
     # paddle.clamp = paddle.clip
 
-    def view_pt(x, *shape: builtins.int, name=None):
-        return paddle.reshape(x, shape=shape, name=name)
+    # def view_pt(x, *shape: builtins.int, name=None):
+    #     return paddle.reshape(x, shape=shape, name=name)
 
-    paddle.view = view_pt
-    paddle.Tensor.view = view_pt
+    # paddle.view = view_pt
+    # paddle.Tensor.view = view_pt
 
     if not hasattr(paddle.Tensor, "data_ptr"):
         paddle.Tensor.data_ptr = lambda x: x.value().get_tensor()._ptr()
@@ -216,7 +216,8 @@ if is_paddle_available():
 
     paddle.gather_nd = gather_nd
     paddle.Tensor.gather_nd = gather_nd
-    paddle.Tensor.contiguous = lambda x: x
+    if not hasattr(paddle.Tensor, "contiguous"):
+        paddle.Tensor.contiguous = lambda x: x
 
     # must return self!
     def eval(self):
@@ -347,11 +348,14 @@ if is_paddle_available() and is_paddlenlp_available():
         )
         from paddle.nn.functional.flash_attention import flash_attention
 
-        sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 + 64)
-        if sdp_kernel == "mem_efficient":
+        try:
+            sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 + 64)
+            if sdp_kernel == "mem_efficient":
+                flash_attn_version = 1
+            else:
+                flash_attn_version = 2
+        except Exception:
             flash_attn_version = 1
-        else:
-            flash_attn_version = 2
 
         is_support_flash_attention = True
         flash_attn_error = None
@@ -778,8 +782,8 @@ if is_paddle_available() and is_paddlenlp_available():
         assert config is not None
 
         # we will remove in the future.
-        if not from_hf_hub and not os.path.exists(os.path.join(cache_dir, config_path, "config.json")):
-            config.save_pretrained(os.path.join(cache_dir, config_path))
+        # if not from_hf_hub and not os.path.exists(os.path.join(cache_dir, config_path, "config.json")):
+        #     config.save_pretrained(os.path.join(cache_dir, config_path))
 
         if paddle_dtype is None:
             paddle_dtype = config.get("dtype", paddle.get_default_dtype())
@@ -1272,15 +1276,29 @@ if is_paddle_available() and is_paddlenlp_available():
     from paddlenlp.transformers import (
         BertModel,
         BitBackbone,
-        ClapTextModelWithProjection,
         CLIPTextModel,
         CLIPTextModelWithProjection,
         CLIPVisionModel,
         CLIPVisionModelWithProjection,
         DPTForDepthEstimation,
-        SpeechT5HifiGan,
         T5EncoderModel,
     )
+
+    try:
+        from paddlenlp.transformers import ClapTextModelWithProjection
+    except ImportError:
+        logger.warning(
+            "ClapTextModelWithProjection is not available, please upgrade your paddlenlp version via `pip install -U paddlenlp`!"
+        )
+        paddlenlp.transformers.ClapTextModelWithProjection = ClapTextModelWithProjection = None
+
+    try:
+        from paddlenlp.transformers import SpeechT5HifiGan
+    except ImportError:
+        logger.warning(
+            "SpeechT5HifiGan is not available, please upgrade your paddlenlp version via `pip install -U paddlenlp`!"
+        )
+        paddlenlp.transformers.SpeechT5HifiGan = SpeechT5HifiGan = None
 
     if not hasattr(T5EncoderModel, "_keep_in_fp32_modules"):
         T5EncoderModel._keep_in_fp32_modules = ["wo"]
@@ -1449,10 +1467,12 @@ if is_paddle_available() and is_paddlenlp_available():
         PaintByExampleImageEncoder,
         IFSafetyChecker,
     ]:
-        setattr(cls_, "smart_convert", clip_smart_convert)
+        if cls_ is not None:
+            setattr(cls_, "smart_convert", clip_smart_convert)
 
     for cls_ in [BertModel, RobertaSeriesModelWithTransformation]:
-        setattr(cls_, "smart_convert", bert_smart_convert)
+        if cls_ is not None:
+            setattr(cls_, "smart_convert", bert_smart_convert)
 
     if str2bool(os.getenv("USE_TORCH_LINEAR", "no")):
         TRANSFORMERS_CLIP_MODEL = []
@@ -1480,7 +1500,8 @@ if is_paddle_available() and is_paddlenlp_available():
         ClapTextModelWithProjection,
         T5EncoderModel,
     ] + TRANSFORMERS_CLIP_MODEL:
-        setattr(cls_, "smart_convert", convert_pytorch_state_dict_to_paddle_class_method)
+        if cls_ is not None:
+            setattr(cls_, "smart_convert", convert_pytorch_state_dict_to_paddle_class_method)
 
     # TODO remove this when we updage ImageProcessingMixin
     # patch get_image_processor_dict support subfolder.

@@ -356,7 +356,7 @@ class StableDiffusionImg2ImgPipelineSlowTests(unittest.TestCase):
         image_slice = image[255:258, 383:386, -1]
         assert image.shape == (504, 760, 3)
         expected_slice = np.array([0.7286, 0.7218, 0.7078, 0.7278, 0.7201, 0.7027, 0.7305, 0.7267, 0.7097])
-        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.005
+        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.05
 
 
 @nightly

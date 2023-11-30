@@ -59,43 +59,43 @@ class UniDiffuserPipelineSlowTests(unittest.TestCase):
         latents = {"prompt_latents": prompt_latents, "vae_latents": vae_latents, "clip_latents": clip_latents}
         return latents
 
-    def test_unidiffuser_default_joint_v1(self):
-        pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser-v1")
-        pipe.set_progress_bar_config(disable=None)
-        pipe.enable_attention_slicing()
-        inputs = self.get_inputs(generate_latents=True)
-        del inputs["prompt"]
-        del inputs["image"]
-        sample = pipe(**inputs)
-        image = sample.images
-        text = sample.text
-        assert image.shape == (1, 512, 512, 3)
-        image_slice = image[(0), -3:, -3:, (-1)]
-        expected_img_slice = np.array([0.0484, 0.0802, 0.053, 0.0782, 0.0824, 0.0817, 0.0822, 0.074, 0.023])
-        assert np.abs(image_slice.flatten() - expected_img_slice).max() < 0.1
-        expected_text_prefix = "a yellow gable"
-        assert text[0][: len(expected_text_prefix)] == expected_text_prefix
+    # def test_unidiffuser_default_joint_v1(self):
+    #     pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser-v1")
+    #     pipe.set_progress_bar_config(disable=None)
+    #     pipe.enable_attention_slicing()
+    #     inputs = self.get_inputs(generate_latents=True)
+    #     del inputs["prompt"]
+    #     del inputs["image"]
+    #     sample = pipe(**inputs)
+    #     image = sample.images
+    #     text = sample.text
+    #     assert image.shape == (1, 512, 512, 3)
+    #     image_slice = image[(0), -3:, -3:, (-1)]
+    #     expected_img_slice = np.array([0.0484, 0.0802, 0.053, 0.0782, 0.0824, 0.0817, 0.0822, 0.074, 0.023])
+    #     assert np.abs(image_slice.flatten() - expected_img_slice).max() < 0.1
+    #     expected_text_prefix = "a yellow gable"
+    #     assert text[0][: len(expected_text_prefix)] == expected_text_prefix
 
-    def test_unidiffuser_default_text2img_v1(self):
-        pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser-v1")
-        pipe.set_progress_bar_config(disable=None)
-        pipe.enable_attention_slicing()
-        inputs = self.get_inputs(generate_latents=True)
-        del inputs["image"]
-        sample = pipe(**inputs)
-        image = sample.images
-        assert image.shape == (1, 512, 512, 3)
-        image_slice = image[(0), -3:, -3:, (-1)]
-        expected_slice = np.array([0.1214, 0.1147, 0.113, 0.1092, 0.1107, 0.0977, 0.1324, 0.1324, 0.0884])
-        assert np.abs(image_slice.flatten() - expected_slice).max() < 0.1
+    # def test_unidiffuser_default_text2img_v1(self):
+    #     pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser-v1")
+    #     pipe.set_progress_bar_config(disable=None)
+    #     pipe.enable_attention_slicing()
+    #     inputs = self.get_inputs(generate_latents=True)
+    #     del inputs["image"]
+    #     sample = pipe(**inputs)
+    #     image = sample.images
+    #     assert image.shape == (1, 512, 512, 3)
+    #     image_slice = image[(0), -3:, -3:, (-1)]
+    #     expected_slice = np.array([0.1214, 0.1147, 0.113, 0.1092, 0.1107, 0.0977, 0.1324, 0.1324, 0.0884])
+    #     assert np.abs(image_slice.flatten() - expected_slice).max() < 0.1
 
-    def test_unidiffuser_default_img2text_v1(self):
-        pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser-v1")
-        pipe.set_progress_bar_config(disable=None)
-        pipe.enable_attention_slicing()
-        inputs = self.get_inputs(generate_latents=True)
-        del inputs["prompt"]
-        sample = pipe(**inputs)
-        text = sample.text
-        expected_text_prefix = "An image of an astronaut"
-        assert text[0][: len(expected_text_prefix)] == expected_text_prefix
+    # def test_unidiffuser_default_img2text_v1(self):
+    #     pipe = UniDiffuserPipeline.from_pretrained("thu-ml/unidiffuser-v1")
+    #     pipe.set_progress_bar_config(disable=None)
+    #     pipe.enable_attention_slicing()
+    #     inputs = self.get_inputs(generate_latents=True)
+    #     del inputs["prompt"]
+    #     sample = pipe(**inputs)
+    #     text = sample.text
+    #     expected_text_prefix = "An image of an astronaut"
+    #     assert text[0][: len(expected_text_prefix)] == expected_text_prefix

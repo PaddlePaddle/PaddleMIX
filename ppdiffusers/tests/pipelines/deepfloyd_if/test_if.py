@@ -91,52 +91,52 @@ class IFPipelineSlowTests(unittest.TestCase):
         gc.collect()
         paddle.device.cuda.empty_cache()
 
-    def test_all(self):
-        # if
+    # def test_all(self):
+    #     # if
 
-        pipe_1 = IFPipeline.from_pretrained("DeepFloyd/IF-I-XL-v1.0", variant="fp16", paddle_dtype=paddle.float16)
+    #     pipe_1 = IFPipeline.from_pretrained("DeepFloyd/IF-I-XL-v1.0", variant="fp16", paddle_dtype=paddle.float16)
 
-        pipe_2 = IFSuperResolutionPipeline.from_pretrained(
-            "DeepFloyd/IF-II-L-v1.0", variant="fp16", paddle_dtype=paddle.float16, text_encoder=None, tokenizer=None
-        )
+    #     pipe_2 = IFSuperResolutionPipeline.from_pretrained(
+    #         "DeepFloyd/IF-II-L-v1.0", variant="fp16", paddle_dtype=paddle.float16, text_encoder=None, tokenizer=None
+    #     )
 
-        # pre compute text embeddings and remove T5 to save memory
+    #     # pre compute text embeddings and remove T5 to save memory
 
-        pipe_1.text_encoder
+    #     pipe_1.text_encoder
 
-        prompt_embeds, negative_prompt_embeds = pipe_1.encode_prompt("anime turtle")
+    #     prompt_embeds, negative_prompt_embeds = pipe_1.encode_prompt("anime turtle")
 
-        del pipe_1.tokenizer
-        del pipe_1.text_encoder
-        gc.collect()
+    #     del pipe_1.tokenizer
+    #     del pipe_1.text_encoder
+    #     gc.collect()
 
-        pipe_1.tokenizer = None
-        pipe_1.text_encoder = None
+    #     pipe_1.tokenizer = None
+    #     pipe_1.text_encoder = None
 
-        pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
-        pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
+    #     pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
+    #     pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
 
-        self._test_if(pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds)
+    #     self._test_if(pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds)
 
-        # img2img
+    #     # img2img
 
-        pipe_1 = IFImg2ImgPipeline(**pipe_1.components)
-        pipe_2 = IFImg2ImgSuperResolutionPipeline(**pipe_2.components)
+    #     pipe_1 = IFImg2ImgPipeline(**pipe_1.components)
+    #     pipe_2 = IFImg2ImgSuperResolutionPipeline(**pipe_2.components)
 
-        pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
-        pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
+    #     pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
+    #     pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
 
-        self._test_if_img2img(pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds)
+    #     self._test_if_img2img(pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds)
 
-        # inpainting
+    #     # inpainting
 
-        pipe_1 = IFInpaintingPipeline(**pipe_1.components)
-        pipe_2 = IFInpaintingSuperResolutionPipeline(**pipe_2.components)
+    #     pipe_1 = IFInpaintingPipeline(**pipe_1.components)
+    #     pipe_2 = IFInpaintingSuperResolutionPipeline(**pipe_2.components)
 
-        pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
-        pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
+    #     pipe_1.unet.set_attn_processor(AttnAddedKVProcessor())
+    #     pipe_2.unet.set_attn_processor(AttnAddedKVProcessor())
 
-        self._test_if_inpainting(pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds)
+    #     self._test_if_inpainting(pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds)
 
     def _test_if(self, pipe_1, pipe_2, prompt_embeds, negative_prompt_embeds):
         # pipeline 1

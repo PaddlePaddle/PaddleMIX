@@ -22,7 +22,7 @@ from parameterized import parameterized
 from ppdiffusers import AsymmetricAutoencoderKL, AutoencoderKL
 from ppdiffusers.utils import (
     floats_tensor,
-    load_ppnlp_numpy,
+    load_hf_numpy,
     paddle_all_close,
     require_paddle_gpu,
     slow,
@@ -213,7 +213,7 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
 
     def get_sd_image(self, seed=0, shape=(4, 3, 512, 512), fp16=False):
         dtype = paddle.float16 if fp16 else paddle.float32
-        image = paddle.to_tensor(data=load_ppnlp_numpy(self.get_file_format(seed, shape))).cast(dtype)
+        image = paddle.to_tensor(data=load_hf_numpy(self.get_file_format(seed, shape))).cast(dtype)
         return image
 
     def get_sd_vae_model(self, model_id="CompVis/stable-diffusion-v1-4", fp16=False):
@@ -230,12 +230,10 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
             [
                 33,
                 [-0.1603, 0.9878, -0.0495, -0.079, -0.2709, 0.8375, -0.206, -0.0824],
-                [-0.2395, 0.0098, 0.0102, -0.0709, -0.284, -0.0274, -0.0718, -0.1824],
             ],
             [
                 47,
                 [-0.2376, 0.1168, 0.1332, -0.484, -0.2508, -0.0791, -0.0493, -0.4089],
-                [0.035, 0.0847, 0.0467, 0.0344, -0.0842, -0.0547, -0.0633, -0.1131],
             ],
         ]
     )
@@ -273,12 +271,10 @@ class AutoencoderKLIntegrationTests(unittest.TestCase):
             [
                 33,
                 [-0.1609, 0.9866, -0.0487, -0.0777, -0.2716, 0.8368, -0.2055, -0.0814],
-                [-0.2395, 0.0098, 0.0102, -0.0709, -0.284, -0.0274, -0.0718, -0.1824],
             ],
             [
                 47,
                 [-0.2377, 0.1147, 0.1333, -0.4841, -0.2506, -0.0805, -0.0491, -0.4085],
-                [0.035, 0.0847, 0.0467, 0.0344, -0.0842, -0.0547, -0.0633, -0.1131],
             ],
         ]
     )
@@ -407,7 +403,7 @@ class AsymmetricAutoencoderKLIntegrationTests(unittest.TestCase):
 
     def get_sd_image(self, seed=0, shape=(4, 3, 512, 512), fp16=False):
         dtype = "float16" if fp16 else "float32"
-        image = paddle.to_tensor(data=load_ppnlp_numpy(self.get_file_format(seed, shape))).cast(dtype)
+        image = paddle.to_tensor(data=load_hf_numpy(self.get_file_format(seed, shape))).cast(dtype)
         return image
 
     def get_sd_vae_model(self, model_id="cross-attention/asymmetric-autoencoder-kl-x-1-5", fp16=False):
@@ -418,19 +414,17 @@ class AsymmetricAutoencoderKLIntegrationTests(unittest.TestCase):
         return model
 
     def get_generator(self, seed=0):
-        return paddle.Generator().manual_seed()(seed)
+        return paddle.Generator().manual_seed(seed)
 
     @parameterized.expand(
         [
             [
                 33,
                 [-0.0344, 0.2912, 0.1687, -0.0137, -0.3462, 0.3552, -0.1337, 0.1078],
-                [-0.1603, 0.9878, -0.0495, -0.079, -0.2709, 0.8375, -0.206, -0.0824],
             ],
             [
                 47,
                 [0.44, 0.0543, 0.2873, 0.2946, 0.0553, 0.0839, -0.1585, 0.2529],
-                [-0.2376, 0.1168, 0.1332, -0.484, -0.2508, -0.0791, -0.0493, -0.4089],
             ],
         ]
     )
@@ -450,11 +444,9 @@ class AsymmetricAutoencoderKLIntegrationTests(unittest.TestCase):
             [
                 33,
                 [-0.034, 0.287, 0.1698, -0.0105, -0.3448, 0.3529, -0.1321, 0.1097],
-                [-0.0344, 0.2912, 0.1687, -0.0137, -0.3462, 0.3552, -0.1337, 0.1078],
             ],
             [
                 47,
-                [0.4397, 0.055, 0.2873, 0.2946, 0.0567, 0.0855, -0.158, 0.2531],
                 [0.4397, 0.055, 0.2873, 0.2946, 0.0567, 0.0855, -0.158, 0.2531],
             ],
         ]

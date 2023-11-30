@@ -583,11 +583,11 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
                             )
                         else:
                             tmp = paddle.quantile(
-                                x=paddle.abs(x=noise_guidance_edit_tmp).flatten(start_axis=2).to("float32"),
+                                x=paddle.abs(x=noise_guidance_edit_tmp).flatten(start_axis=2).cast("float32"),
                                 q=edit_threshold_c,
                                 axis=2,
                                 keepdim=False,
-                            ).to(noise_guidance_edit_tmp.dtype)
+                            ).cast(noise_guidance_edit_tmp.dtype)
                         noise_guidance_edit_tmp = paddle.where(
                             condition=paddle.abs(x=noise_guidance_edit_tmp) >= tmp[:, :, None, None],
                             x=noise_guidance_edit_tmp,
@@ -599,8 +599,8 @@ class SemanticStableDiffusionPipeline(DiffusionPipeline):
 
                     warmup_inds = paddle.to_tensor(data=warmup_inds)
                     if len(noise_pred_edit_concepts) > warmup_inds.shape[0] > 0:
-                        concept_weights = concept_weights.to("cpu")
-                        noise_guidance_edit = noise_guidance_edit.to("cpu")
+                        concept_weights = concept_weights.cpu()
+                        noise_guidance_edit = noise_guidance_edit.cpu()
                         concept_weights_tmp = paddle.index_select(x=concept_weights, axis=0, index=warmup_inds)
                         concept_weights_tmp = paddle.where(
                             condition=concept_weights_tmp < 0,
