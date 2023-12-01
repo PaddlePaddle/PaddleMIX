@@ -157,9 +157,9 @@ APPLICATIONS = {
     },
     "audio2caption": {
         "models": {
-            "whisper": {
+            "conformer_u2pp_online_wenetspeech": {
                 "task_class": AudioASRTask,
-                "task_flag": "audio2caption-whisper-asr"
+                "task_flag": "audio2caption-asr-conformer_u2pp_online_wenetspeech"
             },
             "THUDM/chatglm-6b": {
                 "task_class": ChatGlmTask,
@@ -179,10 +179,6 @@ APPLICATIONS = {
                 "task_class": ChatGlmTask,
                 "task_flag": "music_generation-chatglm-6b",
             },
-            "whisper": { 
-                "task_class": AudioASRTask, 
-                "task_flag": "music_generation-whisper-asr"
-            },
             "cvssp/audioldm": {
                 "task_class": AudioLDMPipelineTask,
                 "task_flag": "music_generation-audioldm",
@@ -192,9 +188,9 @@ APPLICATIONS = {
 
     "audio_chat": {
         "models": {
-            "whisper": {
+            "conformer_u2pp_online_wenetspeech": {
                 "task_class": AudioASRTask,
-                "task_flag": "audio_chat-whisper-asr"
+                "task_flag": "audio_chat-asr-conformer_u2pp_online_wenetspeech"
             },
             "speech": {
                 "task_class": AudioTTSTask,
