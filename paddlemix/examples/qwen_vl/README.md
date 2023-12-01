@@ -208,7 +208,7 @@ paddlemix/examples/qwen_vl/finetune.py \
 
 > 注：若不需要 sharding 策略，则无需指定tensor_parallel_degree、sharding_parallel_degree、sharding、pipeline_parallel_degree参数
 
-### 2.3.2 lora训练
+### 2.3.3 lora训练
 
 训练命令及参数配置示例：
 ```
