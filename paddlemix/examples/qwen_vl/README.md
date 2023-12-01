@@ -248,7 +248,7 @@ paddlemix/examples/qwen_vl/finetune.py \
     --pipeline_parallel_degree 1
 ```
 
-> 注：使用lora训练后，需要合并lora参数，我们提供LoRA参数合并脚本，可以将LoRA参数合并到主干模型并保存相应的权重。命令如下L：
+> 注：使用lora训练后，需要合并lora参数，我们提供LoRA参数合并脚本，可以将LoRA参数合并到主干模型并保存相应的权重。命令如下：
 
 ```bash
 python paddlemix/examples/qwen_vl/merge_lora_params.py \
