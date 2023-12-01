@@ -8,7 +8,7 @@ Enter audio and prompt words for question and answer.
 
 *****
 - No training is need.
-- Integration with the moedel of [whisper](), [chatglm]().
+- Integration with the moedel of [conformer_u2pp_online_wenetspeech](), [chatglm]().
 
 ----
 
@@ -28,7 +28,7 @@ python applications/AudioChat/audiochat.py \
 from paddlemix.appflow import Appflow
 import paddle
 paddle.seed(1024)
-task = Appflow(app="audio2caption", models=["whisper", "THUDM/chatglm-6b"])
+task = Appflow(app="audio2caption", models=["conformer_u2pp_online_wenetspeech", "THUDM/chatglm-6b"])
 audio_file = "./zh.wav"
 prompt = (
     "描述这段话：{}."
