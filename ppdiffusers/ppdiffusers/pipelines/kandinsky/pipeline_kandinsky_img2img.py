@@ -229,6 +229,9 @@ class KandinskyImg2ImgPipeline(DiffusionPipeline):
     def add_noise(
         self, original_samples: paddle.Tensor, noise: paddle.Tensor, timesteps: paddle.Tensor
     ) -> paddle.Tensor:
+        # Fix 0D tensor
+        if paddle.is_tensor(timesteps) and timesteps.ndim == 0:
+            timesteps = timesteps.unsqueeze(0)
         betas = paddle.linspace(start=0.0001, stop=0.02, num=1000).astype("float32")
         alphas = 1.0 - betas
         alphas_cumprod = paddle.cumprod(dim=0, x=alphas)

@@ -436,8 +436,10 @@ def export_to_video(video_frames: List[np.ndarray], output_video_path: str = Non
 
 def load_hf_numpy(path) -> np.ndarray:
     if not path.startswith("http://") or path.startswith("https://"):
+        HF_ENDPOINT = os.getenv("HF_ENDPOINT", "https://huggingface.co").rstrip("/")
         path = os.path.join(
-            "https://huggingface.co/datasets/fusing/diffusers-testing/resolve/main", urllib.parse.quote(path)
+            f"{HF_ENDPOINT}/datasets/fusing/diffusers-testing/resolve/main",
+            urllib.parse.quote(path),
         )
 
     return load_numpy(path)
@@ -715,3 +717,18 @@ def disable_full_determinism():
     os.environ["FLAGS_cudnn_deterministic"] = "False"
     os.environ["FLAGS_cpu_deterministic"] = "False"
     os.environ["NVIDIA_TF32_OVERRIDE"] = "1"
+
+
+def get_examples_pipeline(name=None):
+    """
+    Args:
+        name: The pipeline name.
+    Return:
+        The full path to pipeline, or just name.
+    """
+    ppdiffusers_dir = os.path.dirname(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+    pipeline_file = os.path.join(ppdiffusers_dir, "examples", "community", name + ".py")
+    if os.path.exists(pipeline_file):
+        return pipeline_file
+    else:
+        return name

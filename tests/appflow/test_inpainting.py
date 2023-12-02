@@ -60,7 +60,9 @@ class GroundedSAMChatglmAppSlowTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.url = "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"
-        cls.expected_image = load_numpy("https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/bus.npy")
+        cls.expected_image = load_numpy(
+            "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/chat-inpainting-bus.npy"
+        )
         cls.task = Appflow(
             app="inpainting",
             models=[
