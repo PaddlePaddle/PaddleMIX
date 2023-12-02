@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from paddlespeech.cli.whisper import WhisperExecutor
+from paddlespeech.cli.asr import ASRExecutor
 
 from paddlemix.utils.log import logger
 
@@ -27,6 +27,8 @@ class AudioASRTask(AppTask):
         self._static_mode = False
 
         self._construct_model()
+        
+        self.model = model
 
     def _construct_model(self):
         """
@@ -34,9 +36,8 @@ class AudioASRTask(AppTask):
         """
 
         # build model
-        whisper_executor = WhisperExecutor()
-
-        self._model = whisper_executor
+        s2t_executor = ASRExecutor()    
+        self._model = s2t_executor
 
     def _preprocess(self, inputs):
         """ """
@@ -50,24 +51,11 @@ class AudioASRTask(AppTask):
         """
         Run the task model from the outputs of the `_preprocess` function.
         """
+        result = self._model(audio_file=inputs["audio"])
 
-        _model = inputs.get("model", "whisper")
-        _task = inputs.get("task", "transcribe")
-        _sample_rate = inputs.get("sample_rate", 16000)
-        _config = inputs.get("config", None)
-        _ckpt_path = inputs.get("ckpt_path", None)
+        logger.info("Audio File ASR Result: {}".format(result))
 
-        result = self._model(
-            model=_model,
-            task=_task,
-            sample_rate=_sample_rate,
-            config=_config,  # Set `_config` and `_ckpt_path` to None to use pretrained model.
-            ckpt_path=_ckpt_path,
-            audio_file=inputs["audio"],
-        )
-        logger.info("Audio File ASR Result: {}".format(result["text"]))
-
-        inputs["prompt"] = inputs["prompt"].format(result["text"])
+        inputs["prompt"] = inputs["prompt"].format(result)
 
         return inputs
 

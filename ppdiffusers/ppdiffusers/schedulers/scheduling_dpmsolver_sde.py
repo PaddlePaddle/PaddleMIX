@@ -486,6 +486,9 @@ class DPMSolverSDEScheduler(SchedulerMixin, ConfigMixin):
         noise: paddle.Tensor,
         timesteps: paddle.Tensor,
     ) -> paddle.Tensor:
+        # Fix 0D tensor
+        if paddle.is_tensor(timesteps) and timesteps.ndim == 0:
+            timesteps = timesteps.unsqueeze(0)
         # Make sure sigmas and timesteps have the same device and dtype as original_samples
         sigmas = self.sigmas.cast(original_samples.dtype)
 

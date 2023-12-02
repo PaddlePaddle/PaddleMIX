@@ -210,7 +210,7 @@ class PipelineIntegrationTests(unittest.TestCase):
 
         audio = output.audios[0]
 
-        assert abs(np.abs(audio).sum() - 3815.163) < 1e-1
+        assert abs(np.abs(audio.numpy()).sum() - 3815.163) < 1e-1
 
     def test_spectrogram(self):
 
@@ -228,4 +228,5 @@ class PipelineIntegrationTests(unittest.TestCase):
         output = pipe(input_tokens, num_inference_steps=100, generator=generator)
 
         audio = output.audios[0]
-        assert abs(np.abs(audio).sum() - 14418.089) < 5e-2
+        assert abs(np.abs(audio.numpy()).sum() - 14418.089) < 5e-2
+  

@@ -189,15 +189,18 @@ class KandinskyV22PipelineIntegrationTests(unittest.TestCase):
         paddle.device.cuda.empty_cache()
 
     def test_kandinsky_text2img(self):
+        print("mask 0")
         expected_image = load_numpy(
             "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main/kandinskyv22/kandinskyv22_text2img_cat_fp16.npy"
         )
+        print("mask 1")
         pipe_prior = KandinskyV22PriorPipeline.from_pretrained(
-            "kandinsky-community/kandinsky-2-2-prior", paddle_dtype="float32"
+            "kandinsky-community/kandinsky-2-2-prior", paddle_dtype="float32", from_diffusers=False, from_hf_hub=False
         )
 
+        print("mask 2")
         pipeline = KandinskyV22Pipeline.from_pretrained(
-            "kandinsky-community/kandinsky-2-2-decoder", paddle_dtype="float32"
+            "kandinsky-community/kandinsky-2-2-decoder", paddle_dtype="float32", from_diffusers=False, from_hf_hub=False
         )
 
         pipeline.set_progress_bar_config(disable=None)

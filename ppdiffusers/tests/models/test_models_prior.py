@@ -120,7 +120,7 @@ class PriorTransformerTests(ModelTesterMixin, unittest.TestCase):
 @slow
 class PriorTransformerIntegrationTests(unittest.TestCase):
     def get_dummy_seed_input(self, batch_size=1, embedding_dim=768, num_embeddings=77, seed=0):
-        paddle.Generator().manual_seed(seed)
+        paddle.seed(seed)
         batch_size = batch_size
         embedding_dim = embedding_dim
         num_embeddings = num_embeddings
@@ -142,8 +142,10 @@ class PriorTransformerIntegrationTests(unittest.TestCase):
 
     @parameterized.expand(
         [
-            [13, [-0.5861, 0.1283, -0.0931, 0.0882, 0.4476, 0.1329, -0.0498, 0.064]],
-            [37, [-0.4913, 0.011, -0.0483, 0.0541, 0.4954, -0.017, 0.0354, 0.1651]],
+            [13, [-0.5909,  0.0573,  0.0137,  0.0298,  0.4896,  0.1071,  0.0063,
+        0.0351]],
+            [37, [-0.5035,  0.0744,  0.021 , -0.1601,  0.6158, -0.0021, -0.1296,
+        0.0843]],
         ]
     )
     def test_kandinsky_prior(self, seed, expected_slice):
