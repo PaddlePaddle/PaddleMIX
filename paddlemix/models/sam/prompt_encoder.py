@@ -94,8 +94,6 @@ class PromptEncoder(paddle.nn.Layer):
         point_embedding[labels == -1] = 0.0
         if point_embedding[labels == -1].shape[0] != 0:
             point_embedding[labels == -1] += self.not_a_point_embed.weight
-        if point_embedding[labels == 0].shape[0] != 0:
-            point_embedding[labels == 0] += self.point_embeddings[0].weight
         if point_embedding[labels == 1].shape[0] != 0:
             point_embedding[labels == 1] += self.point_embeddings[1].weight
         return point_embedding
@@ -159,14 +157,7 @@ class PromptEncoder(paddle.nn.Layer):
             Bx(embed_dim)x(embed_H)x(embed_W)
         """
         bs = self._get_batch_size(points, boxes, masks)
-        sparse_embeddings = paddle.empty(shape=(bs, 0, self.embed_dim))
-        if points is not None:
-            coords, labels = points
-            point_embeddings = self._embed_points(coords, labels, pad=boxes is None)
-            sparse_embeddings = paddle.concat(x=[sparse_embeddings, point_embeddings], axis=1)
-        if boxes is not None:
-            box_embeddings = self._embed_boxes(boxes)
-            sparse_embeddings = paddle.concat(x=[sparse_embeddings, box_embeddings], axis=1)
+
         if masks is not None:
             dense_embeddings = self._embed_masks(masks)
         else:
@@ -178,7 +169,15 @@ class PromptEncoder(paddle.nn.Layer):
                     self.image_embedding_size[1],
                 ]
             )
-        return sparse_embeddings, dense_embeddings
+
+        if points is not None:
+            coords, labels = points
+            point_embeddings = self._embed_points(coords, labels, pad=boxes is None)
+            return point_embeddings, dense_embeddings
+
+        if boxes is not None:
+            box_embeddings = self._embed_boxes(boxes)
+            return box_embeddings, dense_embeddings
 
 
 class PositionEmbeddingRandom(paddle.nn.Layer):
