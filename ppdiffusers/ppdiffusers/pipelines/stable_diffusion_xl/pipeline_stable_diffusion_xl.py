@@ -237,7 +237,7 @@ class StableDiffusionXLPipeline(DiffusionPipeline, FromSingleFileMixin, LoraLoad
                 prompt_embeds = text_encoder(text_input_ids, output_hidden_states=True)
 
                 # We are only ALWAYS interested in the pooled output of the final text encoder
-                breakpoint()
+                # breakpoint()
                 pooled_prompt_embeds = prompt_embeds[0]
                 prompt_embeds = prompt_embeds.hidden_states[-2]
                 prompt_embeds_list.append(prompt_embeds)
