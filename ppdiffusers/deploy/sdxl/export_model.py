@@ -35,7 +35,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
 ):
     # specify unet model with unet pre_temb_act opt enabled.
     unet_model = UNet2DConditionModelSDXLHousing.from_pretrained(
-        model_path, resnet_pre_temb_non_linearity=True, subfolder="unet"
+        model_path, resnet_pre_temb_non_linearity=False, subfolder="unet"
     )
     pipeline = StableDiffusionXLPipeline.from_pretrained(
         model_path, unet=unet_model, safety_checker=None, feature_extractor=None
