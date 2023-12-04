@@ -1,10 +1,25 @@
-import PIL
+# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
-import numpy as np
-from typing import Union
-import requests
-from PIL import ImageOps, Image
 from argparse import ArgumentParser
+from typing import Union
+
+import numpy as np
+import PIL
+import requests
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -12,6 +27,7 @@ def parse_args():
     parser.add_argument("--target_image", type=str, required=True)
     args = parser.parse_args()
     return args
+
 
 def load_image(image: Union[str, PIL.Image.Image]) -> PIL.Image.Image:
     """
@@ -42,6 +58,7 @@ def load_image(image: Union[str, PIL.Image.Image]) -> PIL.Image.Image:
     image = image.convert("RGB")
     return image
 
+
 def test_diff(image1, image2):
     if isinstance(image1, PIL.Image.Image):
         image1 = np.array(image1)
@@ -54,9 +71,9 @@ def test_diff(image1, image2):
     assert avg_diff < expected_max_diff, f"Fail: Error image deviates {avg_diff} pixels on average"
     print(f"Success: Image diff test passed with {avg_diff} pixels on average")
 
+
 if __name__ == "__main__":
     args = parse_args()
     image = load_image(args.source_image)
     expected_image = load_image(args.target_image)
     test_diff(image, expected_image)
-    

@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-export CUDA_VISIBLE_DEVICES=1
-LOCAL_PATH=/root/lxl/DEVELOP_PR # 填写PaddleMIX文件夹所在的本地路径
+export CUDA_VISIBLE_DEVICES=1 # 填写: GPU卡号
+LOCAL_PATH=/root/lxl/DEVELOP_PR # 填写: PaddleMIX文件夹所在的本地路径
 cd $LOCAL_PATH/PaddleMIX/ppdiffusers/deploy/sdxl
 
 echo "### 1. export model"
 export USE_PPXFORMERS=False
-python export_model.py --pretrained_model_name_or_path stabilityai/stable-diffusion-xl-base-1.0 --output_path static_model/stable-diffusion-xl-base-1.0 
+python export_model.py --pretrained_model_name_or_path stabilityai/stable-diffusion-xl-base-1.0 --output_path static_model/stable-diffusion-xl-base-1.0
 
 echo "### 2. inference"
 rm -rf infer_op_raw_fp16

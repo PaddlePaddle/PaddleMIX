@@ -274,7 +274,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
         # 1. Input
         if self.is_input_continuous:
-            _, _, height, width = hidden_states.shape
+            _, _, height, width = paddle.shape(hidden_states)
             residual = hidden_states
             hidden_states = self.norm(hidden_states)
             if not self.use_linear_projection:
