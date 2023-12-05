@@ -16,15 +16,18 @@ export CUDA_VISIBLE_DEVICES=1 # 填写: GPU卡号
 LOCAL_PATH=/root/lxl/DEVELOP_PR # 填写: PaddleMIX文件夹所在的本地路径
 cd $LOCAL_PATH/PaddleMIX/ppdiffusers/deploy/
 
+
 echo "### 1. export model"
 export USE_PPXFORMERS=False
 python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 --output_path static_model/stable-diffusion-v1-5
+
 
 echo "### 2. inference"
 rm -rf infer_op_raw_fp16
 python infer.py --model_dir static_model/stable-diffusion-v1-5 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name text2img
 python infer.py --model_dir static_model/stable-diffusion-v1-5 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name img2img
 python infer.py --model_dir static_model/stable-diffusion-v1-5 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name inpaint
+
 
 echo "### 3. test diff"
 echo "### 3.1 test_image_diff text2img"

@@ -16,6 +16,7 @@ export CUDA_VISIBLE_DEVICES=1 # 填写: GPU卡号
 LOCAL_PATH=/root/lxl/DEVELOP_PR # 填写: PaddleMIX文件夹所在的本地路径
 cd $LOCAL_PATH/PaddleMIX/ppdiffusers/deploy/controlnet
 
+
 echo "### 1. export model"
 export USE_PPXFORMERS=False
 python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 --controlnet_pretrained_model_name_or_path lllyasviel/sd-controlnet-canny --output_path static_model/stable-diffusion-v1-5-canny
