@@ -1169,6 +1169,10 @@ class FastDeployRuntimeModel:
         inputs = {}
         for k, v in kwargs.items():
             if k == "timestep":
+                if v.ndim == 0:
+                    # fix 0D tensor error
+                    v = v.reshape((1,))
+                # fix dtype error
                 v = v.astype("float32")
             inputs[k] = v
 
