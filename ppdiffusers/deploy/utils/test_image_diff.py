@@ -19,6 +19,7 @@ from typing import Union
 import numpy as np
 import PIL
 import requests
+from PIL import Image, ImageOps  # noqa
 
 
 def parse_args():

@@ -26,10 +26,10 @@ python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --schedule
 
 echo "### 3. test diff"
 echo "### 3.1 test_image_diff text2img"
-python test_image_diff.py --source_image ./infer_op_raw_fp16/text2img.png  --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sdxl_infer_op_raw_fp16/text2img.png
+python ../utils/test_image_diff.py --source_image ./infer_op_raw_fp16/text2img.png  --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sdxl_infer_op_raw_fp16/text2img.png
 
 echo "### 3.2 test_image_diff img2img"
-python test_image_diff.py --source_image ./infer_op_raw_fp16/img2img.png --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sdxl_infer_op_raw_fp16/img2img.png
+python ../utils/test_image_diff.py --source_image ./infer_op_raw_fp16/img2img.png --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sdxl_infer_op_raw_fp16/img2img.png
 
 echo "### 3.3 test_image_diff inpaint"
-python test_image_diff.py --source_image ./infer_op_raw_fp16/inpaint.png --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sdxl_infer_op_raw_fp16/inpaint.png
+python ../utils/test_image_diff.py --source_image ./infer_op_raw_fp16/inpaint.png --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sdxl_infer_op_raw_fp16/inpaint.png
