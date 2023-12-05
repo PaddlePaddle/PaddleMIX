@@ -236,7 +236,7 @@ class LoRACompatibleConv(nn.Conv2D):
             )
         else:
             original_outputs = F.conv2d(
-                hidden_states, self.weight, self.bias, self.stride, self.padding, self.dilation, self.groups
+                hidden_states, self.weight, self.bias, self._stride, self._padding, self._dilation, self._groups
             )
             return original_outputs + (scale * self.lora_layer(hidden_states))
 
