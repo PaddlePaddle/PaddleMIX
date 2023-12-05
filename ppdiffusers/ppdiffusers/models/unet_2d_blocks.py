@@ -1193,7 +1193,7 @@ class CrossAttnDownBlock2D(nn.Layer):
                     encoder_attention_mask,
                 )  # [0]
             else:
-                hidden_states = resnet(hidden_states, temb)
+                hidden_states = resnet(hidden_states, temb, scale=lora_scale)
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
