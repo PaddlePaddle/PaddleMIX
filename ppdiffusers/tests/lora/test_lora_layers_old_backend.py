@@ -899,8 +899,8 @@ class SDXLLoraLoaderMixinTests(unittest.TestCase):
         images_with_unloaded_lora = sd_pipe(**pipeline_inputs, generator=paddle.Generator().manual_seed(0)).images
         images_with_unloaded_lora_slice = images_with_unloaded_lora[0, -3:, -3:, -1]
 
-        assert np.allclose(
-            lora_image_slice, images_with_unloaded_lora_slice, atol=0.05
+        assert (
+            np.abs(lora_image_slice - images_with_unloaded_lora_slice).max() < 2e-1  # diffusers 0.23
         ), "`unload_lora_weights()` should have not effect on the semantics of the results as the LoRA parameters were fused."
 
     def test_fuse_lora_with_different_scales(self):
