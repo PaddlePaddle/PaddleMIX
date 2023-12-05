@@ -100,7 +100,7 @@ python paddlemix/examples/qwen_vl/chat_demo.py
 
 对话中的检测框可以表示为`<box>(x1,y1),(x2,y2)</box>`，其中 `(x1, y1)` 和`(x2, y2)`分别对应左上角和右下角的坐标，并且被归一化到`[0, 1000)`的范围内. 检测框对应的文本描述也可以通过`<ref>text_caption</ref>`表示。
 
-### 2.3.2 训练
+### 2.3.2 全参数训练
 训练时使用`paddlemix/examples/qwen_vl/finetune.py`程序进行训练，**训练前请先检查数据集路径,如果使用url，请确保环境网络正常**。推荐使用A100训练。
 
 训练命令及参数配置示例：
@@ -122,6 +122,9 @@ paddlemix/examples/qwen_vl/finetune.py \
     --save_steps 1000 \
     --save_strategy "steps" \
     --save_total_limit 10 \
+    --evaluation_strategy "steps" \
+    --per_device_eval_batch_size 1 \
+    --eval_steps 1000 \
     --learning_rate 1e-5 \
     --weight_decay 0.1 \
     --adam_beta2 0.95 \
@@ -166,6 +169,15 @@ paddlemix/examples/qwen_vl/finetune.py \
 
 --save_total_limit  #最多保存多少个模型
 
+--evaluation_strategy   #评估策略。可选择：
+                        #“no”：在训练期间不进行任何评估。
+                        #“epoch”`：每个epoch后评估。
+                        #“steps”`：每“eval_steps”评估一次。
+
+--per_device_eval_batch_size  #评估batch大小
+
+--eval_steps  #每多少个step评估一次
+
 --learning_rate  #学习率
 
 --adam_beta2   #optimizer中beta2参数
@@ -195,3 +207,52 @@ paddlemix/examples/qwen_vl/finetune.py \
 ```
 
 > 注：若不需要 sharding 策略，则无需指定tensor_parallel_degree、sharding_parallel_degree、sharding、pipeline_parallel_degree参数
+
+### 2.3.3 lora训练
+
+训练命令及参数配置示例：
+```
+MODEL_NAME="qwen-vl/qwen-vl-chat-7b"
+MASTER='127.0.0.1:8080'
+DATA="train.json"
+
+python -m paddle.distributed.launch --master ${MASTER} --nnodes 1 --nproc_per_node 8 \
+paddlemix/examples/qwen_vl/finetune.py \
+    --model_name_or_path ${MODEL_NAME} \
+    --data_path ${DATA} \
+    --dtype 'bfloat16' \
+    --fix_vit True \
+    --use_lora True \
+    --output_dir output_qwen_vl \
+    --num_train_epochs 5 \
+    --per_device_train_batch_size 1 \
+    --gradient_accumulation_steps 16 \
+    --save_steps 1000 \
+    --save_strategy "steps" \
+    --save_total_limit 10 \
+    --evaluation_strategy "steps" \
+    --per_device_eval_batch_size 1 \
+    --eval_steps 1000 \
+    --learning_rate 1e-5 \
+    --weight_decay 0.1 \
+    --adam_beta2 0.95 \
+    --warmup_ratio 0.01 \
+    --lr_scheduler_type "cosine" \
+    --logging_steps 1 \
+    --report_to "none" \
+    --model_max_length 2048 \
+    --lazy_preprocess True \
+    --sharding "stage2" \
+    --tensor_parallel_degree 1 \
+    --sharding_parallel_degree 8 \
+    --pipeline_parallel_degree 1
+```
+
+> 注：使用lora训练后，需要合并lora参数，我们提供LoRA参数合并脚本，可以将LoRA参数合并到主干模型并保存相应的权重。命令如下：
+
+```bash
+python paddlemix/examples/qwen_vl/merge_lora_params.py \
+--model_name_or_path qwen-vl/qwen-vl-chat-7b \
+--lora_path output_qwen_vl\
+--merge_model_path qwen_vl_merge
+```
