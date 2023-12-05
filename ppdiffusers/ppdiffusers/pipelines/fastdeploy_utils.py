@@ -568,13 +568,13 @@ class FastDeployDiffusionPipelineMixin:
 
     def get_timesteps(self, num_inference_steps, strength=1.0):
         if strength >= 1:
-            return self.scheduler.timesteps.cast(self.dtype), num_inference_steps
+            return self.scheduler.timesteps, num_inference_steps
 
         # get the original timestep using init_timestep
         init_timestep = min(int(num_inference_steps * strength), num_inference_steps)
 
         t_start = max(num_inference_steps - init_timestep, 0)
-        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order :].cast(self.dtype)
+        timesteps = self.scheduler.timesteps[t_start * self.scheduler.order :]
 
         if hasattr(self.scheduler, "step_index_offset"):
             self.scheduler.step_index_offset = t_start * self.scheduler.order
@@ -1169,6 +1169,10 @@ class FastDeployRuntimeModel:
         inputs = {}
         for k, v in kwargs.items():
             if k == "timestep":
+                if v.ndim == 0:
+                    # fix 0D tensor error
+                    v = v.reshape((1,))
+                # fix dtype error
                 v = v.astype("float32")
             inputs[k] = v
 
@@ -1183,8 +1187,7 @@ class FastDeployRuntimeModel:
                 output,
             ]
         elif infer_op == "raw":
-            inputs = {}
-            for k, v in kwargs.items():
+            for k, v in inputs.items():
                 if paddle.is_tensor(v):
                     v = v.numpy()
                 inputs[k] = np.array(v)

@@ -14,9 +14,10 @@
 
 import json
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import paddle
+from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer import PdArgumentParser, Trainer, TrainingArguments
 from paddlenlp.transformers import PretrainedTokenizer
 from paddlenlp.transformers.qwen.configuration import QWenConfig
@@ -36,6 +37,7 @@ class ModelArguments:
 @dataclass
 class DataArguments:
     data_path: str = field(default=None, metadata={"help": "Path to the training data."})
+    eval_data_path: str = field(default=None, metadata={"help": "Path to the evaluation data."})
     lazy_preprocess: bool = False
 
 
@@ -49,6 +51,26 @@ class PreTrainingArguments(TrainingArguments):
     )
     use_lora: bool = False
     fix_vit: bool = True
+
+
+@dataclass
+class LoraArguments:
+    lora_r: int = 64
+    lora_alpha: int = 16
+    lora_dropout: float = 0.05
+
+    lora_target_modules: List[str] = field(
+        default_factory=lambda: [
+            ".*attn.c_attn.*",
+            ".*attn.c_proj.*",
+            ".*mlp.w1.*",
+            ".*mlp.w2.*",
+        ]
+    )
+
+    lora_weight_path: str = ""
+    lora_bias: str = "none"
+    q_lora: bool = False
 
 
 def preprocess(
@@ -163,8 +185,13 @@ def make_supervised_data_module(tokenizer: PretrainedTokenizer, data_args, max_l
 
 def train():
     global local_rank
-    parser = PdArgumentParser((ModelArguments, DataArguments, PreTrainingArguments))
-    model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+    parser = PdArgumentParser((ModelArguments, DataArguments, PreTrainingArguments, LoraArguments))
+    (
+        model_args,
+        data_args,
+        training_args,
+        lora_args,
+    ) = parser.parse_args_into_dataclasses()
 
     local_rank = training_args.local_rank
 
@@ -182,8 +209,9 @@ def train():
         cache_dir=training_args.cache_dir,
     )
 
-    if training_args.fix_vit and hasattr(model, "visual"):
-        model.freeze_vit()
+    if not training_args.use_lora:
+        if training_args.fix_vit and hasattr(model, "visual"):
+            model.freeze_vit()
 
     tokenizer = QWenTokenizer.from_pretrained(
         model_args.model_name_or_path,
@@ -192,6 +220,21 @@ def train():
         padding_side="right",
     )
     tokenizer.pad_token_id = tokenizer.eod_id
+
+    if training_args.use_lora:
+        lora_config = LoRAConfig(
+            target_modules=lora_args.lora_target_modules,
+            r=lora_args.lora_r,
+            lora_alpha=lora_args.lora_alpha,
+            lora_dropout=lora_args.lora_dropout,
+            trainable_bias=lora_args.lora_bias,
+            merge_weights=False,
+            tensor_parallel_degree=training_args.tensor_parallel_degree,
+            dtype=model_args.dtype,
+        )
+        model = LoRAModel(model, lora_config)
+        model.mark_only_lora_as_trainable()
+        model.print_trainable_parameters()
 
     data_module = make_supervised_data_module(
         tokenizer=tokenizer, data_args=data_args, max_len=training_args.model_max_length

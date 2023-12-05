@@ -19,6 +19,6 @@ python run_predict.py \
 #points
 python run_predict.py \
 --input_image mage_you_want_to_seg.jpg \
---points_prompt points x y
+--points_prompt points x y \
 --input_type points
 ```
