@@ -25,7 +25,10 @@ import numpy as np
 from paddlenlp.trainer.argparser import strtobool
 from tqdm.auto import trange
 
-from ppdiffusers import DiffusionPipeline, FastDeployStableDiffusionXLMegaPipeline
+from ppdiffusers import (  # noqa
+    DiffusionPipeline,
+    FastDeployStableDiffusionXLMegaPipeline,
+)
 from ppdiffusers.utils import load_image
 
 
@@ -262,14 +265,22 @@ def main(args):
     vae_in_channels = 4
     text_encoder_max_length = 77
     unet_max_length = text_encoder_max_length * 3  # lpw support max_length is 77x3
-    min_image_size = 512
-    max_image_size = 768
+    min_image_size = 1024
+    max_image_size = 1024
     max_image_size = max(min_image_size, max_image_size)
-    hidden_states = 768
+    hidden_states = 2048
     unet_in_channels = 9 if args.task_name == "inpaint" else 4
     bs = 2
 
     text_encoder_dynamic_shape = {
+        "input_ids": {
+            "min_shape": [1, text_encoder_max_length],
+            "max_shape": [1, text_encoder_max_length],
+            "opt_shape": [1, text_encoder_max_length],
+        }
+    }
+
+    text_encoder_2_dynamic_shape = {
         "input_ids": {
             "min_shape": [1, text_encoder_max_length],
             "max_shape": [1, text_encoder_max_length],
@@ -324,11 +335,22 @@ def main(args):
             "max_shape": [bs, unet_max_length, hidden_states],
             "opt_shape": [2, text_encoder_max_length, hidden_states],
         },
+        "text_embeds": {
+            "min_shape": [1, 1280],
+            "max_shape": [bs, 1280],
+            "opt_shape": [2, 1280],
+        },
+        "time_ids": {
+            "min_shape": [1, 6],
+            "max_shape": [bs, 6],
+            "opt_shape": [2, 6],
+        },
     }
     # 4. Init runtime
     if args.backend == "onnx_runtime":
         runtime_options = dict(
             text_encoder=create_ort_runtime(device_id=args.device_id),
+            text_encoder_2=create_ort_runtime(device_id=args.device_id),
             vae_encoder=create_ort_runtime(device_id=args.device_id),
             vae_decoder=create_ort_runtime(device_id=args.device_id),
             unet=create_ort_runtime(device_id=args.device_id),
@@ -336,6 +358,7 @@ def main(args):
     elif args.backend == "paddlelite":
         runtime_options = dict(
             text_encoder=create_paddle_lite_runtime(device=args.device, device_id=args.device_id, use_fp16=False),
+            text_encoder_2=create_paddle_lite_runtime(device=args.device, device_id=args.device_id, use_fp16=False),
             vae_encoder=create_paddle_lite_runtime(device=args.device, device_id=args.device_id, use_fp16=False),
             vae_decoder=create_paddle_lite_runtime(device=args.device, device_id=args.device_id, use_fp16=False),
             unet=create_paddle_lite_runtime(device=args.device, device_id=args.device_id, use_fp16=args.use_fp16),
@@ -344,6 +367,11 @@ def main(args):
         runtime_options = dict(
             text_encoder=create_trt_runtime(
                 dynamic_shape=text_encoder_dynamic_shape,
+                use_fp16=args.use_fp16,
+                device_id=args.device_id,
+            ),
+            text_encoder_2=create_trt_runtime(
+                dynamic_shape=text_encoder_2_dynamic_shape,
                 use_fp16=args.use_fp16,
                 device_id=args.device_id,
             ),
@@ -373,6 +401,15 @@ def main(args):
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
                 disable_paddle_trt_ops=["arg_max", "range", "lookup_table_v2"],
+                paddle_stream=paddle_stream,
+            ),
+            text_encoder_2=create_paddle_inference_runtime(
+                use_trt=args.use_trt,
+                dynamic_shape=text_encoder_2_dynamic_shape,
+                use_fp16=args.use_fp16,
+                use_bf16=args.use_bf16,
+                device_id=args.device_id,
+                disable_paddle_trt_ops=["arg_max", "range", "lookup_table_v2", "matrix_multiply"],
                 paddle_stream=paddle_stream,
             ),
             vae_encoder=create_paddle_inference_runtime(
@@ -509,8 +546,8 @@ def main(args):
             mask_image = load_image(mask_url)
             prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
             time_costs = []
-            pipe.inpaint(  
-                prompt,  
+            pipe.inpaint(
+                prompt,
                 image=init_image,
                 mask_image=mask_image,
                 num_inference_steps=20,
@@ -519,7 +556,7 @@ def main(args):
                 parse_prompt_type=parse_prompt_type,
                 infer_op_dict=infer_op_dict,
             )
-            print(f"==> Test inpaint performance.")
+            print("==> Test inpaint performance.")
             for step in trange(args.benchmark_steps):
                 start = time.time()
                 paddle.seed(seed)
@@ -542,6 +579,7 @@ def main(args):
             )
 
             images[0].save(f"{folder}/inpaint.png")
+
 
 if __name__ == "__main__":
     args = parse_arguments()
