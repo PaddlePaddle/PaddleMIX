@@ -81,7 +81,7 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
         model_state_dict = model.state_dict()
 
         for param_name, param_value in unet2d.named_parameters():
-            self.assertTrue(paddle.equal(model_state_dict[param_name], param_value))
+            self.assertTrue(paddle.equal_all(model_state_dict[param_name], param_value))
 
     def test_freeze_unet2d(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -103,33 +103,32 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
         for idx, down_block in enumerate(model.down_blocks):
             adapter_state_dict = adapter.down_blocks[idx].motion_modules.state_dict()
             for param_name, param_value in down_block.motion_modules.named_parameters():
-                self.assertTrue(paddle.equal(adapter_state_dict[param_name], param_value))
+                self.assertTrue(paddle.equal_all(adapter_state_dict[param_name], param_value))
 
         for idx, up_block in enumerate(model.up_blocks):
             adapter_state_dict = adapter.up_blocks[idx].motion_modules.state_dict()
             for param_name, param_value in up_block.motion_modules.named_parameters():
-                self.assertTrue(paddle.equal(adapter_state_dict[param_name], param_value))
+                self.assertTrue(paddle.equal_all(adapter_state_dict[param_name], param_value))
 
         mid_block_adapter_state_dict = adapter.mid_block.motion_modules.state_dict()
         for param_name, param_value in model.mid_block.motion_modules.named_parameters():
-            self.assertTrue(paddle.equal(mid_block_adapter_state_dict[param_name], param_value))
+            self.assertTrue(paddle.equal_all(mid_block_adapter_state_dict[param_name], param_value))
 
     def test_saving_motion_modules(self):
         paddle.seed(0)
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
-        model
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             model.save_motion_modules(tmpdirname)
-            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "diffusion_pytorch_model.safetensors")))
+            # pytorch: diffusion_pytorch_model.safetensors
+            self.assertTrue(os.path.isfile(os.path.join(tmpdirname, "model_state.pdparams")))
 
             adapter_loaded = MotionAdapter.from_pretrained(tmpdirname)
 
             paddle.seed(0)
             model_loaded = self.model_class(**init_dict)
             model_loaded.load_motion_modules(adapter_loaded)
-            model_loaded
 
         with paddle.no_grad():
             output = model(**inputs_dict)[0]
@@ -191,7 +190,6 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
         init_dict["norm_num_groups"] = 32
 
         model = self.model_class(**init_dict)
-        model
         model.eval()
 
         with paddle.no_grad():
@@ -208,7 +206,6 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
         # enable deterministic behavior for gradient checkpointing
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
-        model
 
         with paddle.no_grad():
             sample = model(**inputs_dict).sample
@@ -222,14 +219,12 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
 
         paddle.seed(0)
         model = self.model_class(**init_dict)
-        model
         model.eval()
 
         with tempfile.TemporaryDirectory() as tmpdirname:
             model.save_pretrained(tmpdirname, safe_serialization=False)
             paddle.seed(0)
             new_model = self.model_class.from_pretrained(tmpdirname)
-            new_model
 
         with paddle.no_grad():
             image = model(**inputs_dict)
@@ -249,7 +244,6 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
 
         paddle.seed(0)
         model = self.model_class(**init_dict)
-        model
         model.eval()
 
         with tempfile.TemporaryDirectory() as tmpdirname:
@@ -262,9 +256,7 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
                 self.model_class.from_pretrained(tmpdirname)
 
             # make sure that error message states what keys are missing
-            assert "Error no file named diffusion_pytorch_model.bin found in directory" in str(error_context.exception)
-
-            new_model
+            assert "Error no file named model_state.fp16.pdparams found in directory" in str(error_context.exception)
 
         with paddle.no_grad():
             image = model(**inputs_dict)

@@ -443,7 +443,7 @@ class UNetMotionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
             model.load_motion_modules(motion_adapter)
 
         # ensure that the Motion UNet is the same dtype as the UNet2DConditionModel
-        model.to(unet.dtype)
+        model.to(dtype=unet.dtype)
 
         return model
 
