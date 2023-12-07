@@ -238,8 +238,7 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
         max_diff = (image - new_image).abs().max().item()
         self.assertLessEqual(max_diff, expected_max_diff, "Models give different forward passes")
 
-    # test_modeling_common.py has the same name test: test_from_save_pretrained_variant
-    def test_from_save_pretrained_variant_motion(self, expected_max_diff=5e-5):
+    def test_from_save_pretrained_variant(self, expected_max_diff=5e-5):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
 
         paddle.seed(0)
@@ -256,7 +255,7 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
                 self.model_class.from_pretrained(tmpdirname)
 
             # make sure that error message states what keys are missing
-            assert "Error no file named model_state.fp16.pdparams found in directory" in str(error_context.exception)
+            assert "Error no file named model_state.pdparams found in directory" in str(error_context.exception)
 
         with paddle.no_grad():
             image = model(**inputs_dict)
