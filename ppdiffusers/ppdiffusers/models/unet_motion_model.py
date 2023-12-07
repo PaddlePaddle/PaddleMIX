@@ -453,23 +453,23 @@ class UNetMotionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         """
         # Freeze everything
         for param in self.parameters():
-            param.requires_grad = False
+            param.stop_gradient = True
 
         # Unfreeze Motion Modules
         for down_block in self.down_blocks:
             motion_modules = down_block.motion_modules
             for param in motion_modules.parameters():
-                param.requires_grad = True
+                param.stop_gradient = False
 
         for up_block in self.up_blocks:
             motion_modules = up_block.motion_modules
             for param in motion_modules.parameters():
-                param.requires_grad = True
+                param.stop_gradient = False
 
         if hasattr(self.mid_block, "motion_modules"):
             motion_modules = self.mid_block.motion_modules
             for param in motion_modules.parameters():
-                param.requires_grad = True
+                param.stop_gradient = False
 
         return
 
