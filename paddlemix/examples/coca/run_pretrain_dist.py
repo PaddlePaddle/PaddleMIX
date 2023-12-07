@@ -127,6 +127,10 @@ class PreTrainingArguments(TrainingArguments):
         default=1.0,
         metadata={"help": "coca_contrastive_loss_weight set, default: 1.0"},
     )
+    tensor_fusion: bool = field(
+        default=False,
+        metadata={"help": "Whether to use tensor fusion."},
+    )
 
 
 class SelfTrainer(CLIPTrainer):
