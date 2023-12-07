@@ -269,7 +269,7 @@ def main(args):
     max_image_size = 1024
     max_image_size = max(min_image_size, max_image_size)
     hidden_states = 2048
-    unet_in_channels = 9 if args.task_name == "inpaint" else 4
+    unet_in_channels = 4
     bs = 2
 
     text_encoder_dynamic_shape = {
@@ -400,20 +400,20 @@ def main(args):
                 use_fp16=args.use_fp16,
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
-                disable_paddle_trt_ops=["arg_max", "range", "lookup_table_v2"],
+                disable_paddle_trt_ops=["range", "lookup_table_v2"],
                 paddle_stream=paddle_stream,
             ),
             text_encoder_2=create_paddle_inference_runtime(
-                use_trt=args.use_trt,
+                use_trt=False,
                 dynamic_shape=text_encoder_2_dynamic_shape,
                 use_fp16=args.use_fp16,
                 use_bf16=args.use_bf16,
                 device_id=args.device_id,
-                disable_paddle_trt_ops=["arg_max", "range", "lookup_table_v2", "matrix_multiply"],
+                disable_paddle_trt_ops=["range", "lookup_table_v2"],
                 paddle_stream=paddle_stream,
             ),
             vae_encoder=create_paddle_inference_runtime(
-                use_trt=args.use_trt,
+                use_trt=False,
                 dynamic_shape=vae_encoder_dynamic_shape,
                 use_fp16=args.use_fp16,
                 use_bf16=args.use_bf16,
@@ -421,7 +421,7 @@ def main(args):
                 paddle_stream=paddle_stream,
             ),
             vae_decoder=create_paddle_inference_runtime(
-                use_trt=args.use_trt,
+                use_trt=False,
                 dynamic_shape=vae_decoder_dynamic_shape,
                 use_fp16=args.use_fp16,
                 use_bf16=args.use_bf16,
@@ -471,7 +471,7 @@ def main(args):
             # warmup
             pipe.text2img(
                 prompt,
-                num_inference_steps=10,
+                num_inference_steps=20,
                 height=height,
                 width=width,
                 parse_prompt_type=parse_prompt_type,

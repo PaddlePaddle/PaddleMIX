@@ -21,6 +21,8 @@ import paddle
 from fd_stable_diffusion_xl_housing import (
     FastDeploySFastDeployStableDiffusionXLPipelineHousing,
 )
+from text_encoder_2_housing import CLIPTextModelWithProjectionHousing
+from text_encoder_housing import CLIPTextModelHousing
 from unet_2d_condition_housing import UNet2DConditionModelSDXLHousing
 
 from ppdiffusers import FastDeployRuntimeModel, StableDiffusionXLPipeline
@@ -37,8 +39,15 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     unet_model = UNet2DConditionModelSDXLHousing.from_pretrained(
         model_path, resnet_pre_temb_non_linearity=False, subfolder="unet"
     )
+    text_encoder_model = CLIPTextModelHousing.from_pretrained(model_path, subfolder="text_encoder")
+    text_encoder_2_model = CLIPTextModelWithProjectionHousing.from_pretrained(model_path, subfolder="text_encoder_2")
     pipeline = StableDiffusionXLPipeline.from_pretrained(
-        model_path, unet=unet_model, safety_checker=None, feature_extractor=None
+        model_path,
+        unet=unet_model,
+        text_encoder=text_encoder_model,
+        text_encoder_2=text_encoder_2_model,
+        safety_checker=None,
+        feature_extractor=None,
     ).to(paddle_dtype="float32")
 
     # make sure we disable xformers
@@ -61,8 +70,10 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     )
 
     # 1. Convert text_encoder
+    text_encoder = pipeline.text_encoder
+    # text_encoder.forward = MethodType(forward_text_encoder, text_encoder)
     text_encoder = paddle.jit.to_static(
-        pipeline.text_encoder,
+        text_encoder,
         input_spec=[paddle.static.InputSpec(shape=[None, None], dtype="int64", name="input_ids")],  # input_ids
     )
     save_path = os.path.join(args.output_path, "text_encoder", "inference")
@@ -70,8 +81,10 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     print(f"Save text_encoder model in {save_path} successfully.")
     del pipeline.text_encoder
 
+    text_encoder_2 = pipeline.text_encoder_2
+    # text_encoder_2.forward = MethodType(forward_text_encoder_2, text_encoder_2)
     text_encoder_2 = paddle.jit.to_static(
-        pipeline.text_encoder_2,
+        text_encoder_2,
         input_spec=[paddle.static.InputSpec(shape=[None, None], dtype="int64", name="input_ids")],  # input_ids
     )
     save_path = os.path.join(args.output_path, "text_encoder_2", "inference")
@@ -93,7 +106,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
             paddle.static.InputSpec(
                 shape=[None, 1280], dtype="float32", name="text_embeds"
             ),  # added_cond_kwargs_text_embeds
-            paddle.static.InputSpec(shape=[None, 6], dtype="int64", name="time_ids"),  # added_cond_kwargs_time_ids
+            paddle.static.InputSpec(shape=[None, 6], dtype="float32", name="time_ids"),  # added_cond_kwargs_time_ids
         ],
     )
     save_path = os.path.join(args.output_path, "unet", "inference")

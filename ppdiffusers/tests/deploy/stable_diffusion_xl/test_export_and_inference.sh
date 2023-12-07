@@ -25,6 +25,7 @@ python export_model.py --pretrained_model_name_or_path stabilityai/stable-diffus
 echo "### 2. inference"
 rm -rf infer_op_raw_fp16
 python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name all
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "preconfig-euler-ancestral" --backend paddle_tensorrt --device gpu --task_name all
 
 
 echo "### 3. test diff"
@@ -36,3 +37,5 @@ python ../utils/test_image_diff.py --source_image ./infer_op_raw_fp16/img2img.pn
 
 echo "### 3.3 test_image_diff inpaint"
 python ../utils/test_image_diff.py --source_image ./infer_op_raw_fp16/inpaint.png --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sdxl_infer_op_raw_fp16/inpaint.png
+## 失败提示：FAILED: Error image deviates {avg_diff} pixels on average
+## 成功提示：PASSED: Image diff test passed with {avg_diff} pixels on average

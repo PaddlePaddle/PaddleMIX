@@ -24,11 +24,15 @@ python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion
 
 echo "### 2. inference"
 rm -rf infer_op_raw_fp16
-echo "### 2. inference"
-rm -rf infer_op_raw_fp16
+rm -rf infer_op_zero_copy_infer_fp16
+# paddle
 python infer.py --model_dir static_model/stable-diffusion-v1-5-canny --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name text2img_control
 python infer.py --model_dir static_model/stable-diffusion-v1-5-canny --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name img2img_control
 python infer.py --model_dir static_model/stable-diffusion-v1-5-canny --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name inpaint_legacy_control
+# paddle_tensorrt
+python infer.py --model_dir static_model/stable-diffusion-v1-5-canny --scheduler "preconfig-euler-ancestral" --backend paddle_tensorrt --device gpu --task_name text2img_control
+python infer.py --model_dir static_model/stable-diffusion-v1-5-canny --scheduler "preconfig-euler-ancestral" --backend paddle_tensorrt --device gpu --task_name img2img_control
+python infer.py --model_dir static_model/stable-diffusion-v1-5-canny --scheduler "preconfig-euler-ancestral" --backend paddle_tensorrt --device gpu --task_name inpaint_legacy_control
 
 
 echo "### 3. test diff"
@@ -40,3 +44,5 @@ python ../utils/test_image_diff.py --source_image ./infer_op_raw_fp16/img2img_co
 
 echo "### 3.3 test_image_diff inpaint"
 python ../utils/test_image_diff.py --source_image ./infer_op_raw_fp16/inpaint_legacy_control.png --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sd15_controlnet_infer_op_raw_fp16/inpaint_legacy_control.png
+## 失败提示：FAILED: Error image deviates {avg_diff} pixels on average
+## 成功提示：PASSED: Image diff test passed with {avg_diff} pixels on average

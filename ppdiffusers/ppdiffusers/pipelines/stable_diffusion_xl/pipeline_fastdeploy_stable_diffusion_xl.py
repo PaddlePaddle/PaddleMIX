@@ -12,21 +12,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import inspect
-import os
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import paddle
 
 from ...schedulers import KarrasDiffusionSchedulers
-from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin, FastDeployRuntimeModel
-from ...utils import (
-    logging,
-    randn_tensor,
-    replace_example_docstring,
-)
+from ...utils import logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
+from .fastdeployxl_utils import (
+    FastDeployDiffusionXLPipelineMixin,
+    FastDeployRuntimeModel,
+)
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 import paddlenlp
@@ -359,7 +356,7 @@ class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusion
             negative_pooled_prompt_embeds,
         )
         infer_op_dict = self.prepare_infer_op_dict(infer_op_dict)
-        
+
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
@@ -446,7 +443,6 @@ class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusion
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # predict the noise residual
-                added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
                 noise_pred = self.unet(
                     sample=latent_model_input,
                     timestep=t,
@@ -487,5 +483,5 @@ class FastDeployStableDiffusionXLPipeline(DiffusionPipeline, FastDeployDiffusion
 
         if not return_dict:
             return (image,)
-        
+
         return StableDiffusionXLPipelineOutput(images=image)

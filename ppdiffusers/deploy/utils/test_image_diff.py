@@ -69,8 +69,8 @@ def test_diff(image1, image2):
     expected_max_diff = 0.1
     avg_diff = np.abs(image1 - image2).mean()
 
-    assert avg_diff < expected_max_diff, f"Fail: Error image deviates {avg_diff} pixels on average"
-    print(f"Success: Image diff test passed with {avg_diff} pixels on average")
+    assert avg_diff < expected_max_diff, f"FAILED: Error image deviates {avg_diff} pixels on average"
+    print(f"PASSED: Image diff test passed with {avg_diff} pixels on average")
 
 
 if __name__ == "__main__":

@@ -24,9 +24,14 @@ python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion
 
 echo "### 2. inference"
 rm -rf infer_op_raw_fp16
+rm -rf infer_op_zero_copy_infer_fp16
 python infer.py --model_dir static_model/stable-diffusion-v1-5 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name text2img
 python infer.py --model_dir static_model/stable-diffusion-v1-5 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name img2img
-python infer.py --model_dir static_model/stable-diffusion-v1-5 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name inpaint
+python infer.py --model_dir static_model/stable-diffusion-v1-5 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name inpaint_legacy
+# paddle_tensorrt
+python infer.py --model_dir static_model/stable-diffusion-v1-5 --scheduler "preconfig-euler-ancestral" --backend paddle_tensorrt --device gpu --task_name text2img
+python infer.py --model_dir static_model/stable-diffusion-v1-5 --scheduler "preconfig-euler-ancestral" --backend paddle_tensorrt --device gpu --task_name img2img
+python infer.py --model_dir static_model/stable-diffusion-v1-5 --scheduler "preconfig-euler-ancestral" --backend paddle_tensorrt --device gpu --task_name inpaint_legacy
 
 
 echo "### 3. test diff"
@@ -37,4 +42,6 @@ echo "### 3.2 test_image_diff img2img"
 python ./utils/test_image_diff.py --source_image ./infer_op_raw_fp16/img2img.png --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sd15_infer_op_raw_fp16/img2img.png
 
 echo "### 3.3 test_image_diff inpaint"
-python ./utils/test_image_diff.py --source_image ./infer_op_raw_fp16/inpaint.png --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sd15_infer_op_raw_fp16/inpaint.png
+python ./utils/test_image_diff.py --source_image ./infer_op_raw_fp16/inpaint_legacy.png --target_image https://paddlenlp.bj.bcebos.com/models/community/baicai/sd15_infer_op_raw_fp16/inpaint_legacy.png
+## 失败提示：FAILED: Error image deviates {avg_diff} pixels on average
+## 成功提示：PASSED: Image diff test passed with {avg_diff} pixels on average
