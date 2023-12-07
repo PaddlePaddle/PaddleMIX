@@ -13,6 +13,8 @@
 |ControlNet Reference Only| 基于参考图片生成与图片相似的图片|[ControlNet Reference Only](#controlnet-reference-only)||
 |Stable Diffusion Mixture Tiling| 基于Mixture机制的多文本大图生成Stable Diffusion Pipeline|[Stable Diffusion Mixture Tiling](#stable-diffusion-mixture-tiling)||
 |CLIP Guided Images Mixing Stable Diffusion Pipeline| 一个用于图片融合的Stable Diffusion Pipeline|[CLIP Guided Images Mixing Using Stable Diffusion](#clip-guided-images-mixing-with-stable-diffusion)||
+|EDICT Image Editing Pipeline| 一个用于文本引导的图像编辑的 Stable Diffusion Pipeline|[EDICT Image Editing Pipeline](#edict_pipeline)||
+|FABRIC - Stable Diffusion with feedback Pipeline| 一个用于喜欢图片和不喜欢图片的反馈 Pipeline|[FABRIC - Stable Diffusion with feedback Pipeline](#fabric_pipeline)||
 
 ## Example usages
 
@@ -620,9 +622,152 @@ pipe_images[0].save('clip_guided_images_mixing_stable_diffusion.png')
 <div align="center">
 <center><img src="https://user-images.githubusercontent.com/20476674/251700919-8abd694f-d93f-4ead-8379-f99405aff1c4.jpg" width=30%></center>
 <center>内容图像</center>
+</div>
 <div align="center">
 <center><img src="https://user-images.githubusercontent.com/20476674/251700932-4ff5f914-bbd6-4c99-abc4-c7a7fc0fa826.jpg" width=30%></center>
 <center>风格图像</center>
+</div>
 <div align="center">
 <center><img src="https://user-images.githubusercontent.com/20476674/251701022-c11ea706-f865-4b3f-ab99-9eb79c87439b.png" width=30%></center>
 <center>生成图像</center>
+</div>
+
+### EDICT Image Editing Pipeline
+`EDICTPipeline`一个用于文本引导的图像编辑的 Stable Diffusion Pipeline。使用方式如下所示：
+
+```python
+from io import BytesIO
+
+import paddle
+import PIL
+import requests
+from IPython.display import display
+from paddlenlp.transformers import CLIPTextModel
+
+from ppdiffusers import DDIMScheduler, DiffusionPipeline
+from ppdiffusers.utils.testing_utils import get_examples_pipeline
+
+
+def center_crop_and_resize(im):
+
+    width, height = im.size
+    d = min(width, height)
+    left = (width - d) / 2
+    upper = (height - d) / 2
+    right = (width + d) / 2
+    lower = (height + d) / 2
+
+    return im.crop((left, upper, right, lower)).resize((512, 512))
+
+
+paddle_dtype = paddle.float16
+
+# scheduler and text_encoder param values as in the paper
+scheduler = DDIMScheduler(
+    num_train_timesteps=1000,
+    beta_start=0.00085,
+    beta_end=0.012,
+    beta_schedule="scaled_linear",
+    set_alpha_to_one=False,
+    clip_sample=False,
+)
+
+text_encoder = CLIPTextModel.from_pretrained(
+    pretrained_model_name_or_path="openai/clip-vit-large-patch14",
+    paddle_dtype=paddle_dtype,
+)
+
+# initialize pipeline
+pipeline = DiffusionPipeline.from_pretrained(
+    pretrained_model_name_or_path="CompVis/stable-diffusion-v1-4",
+    custom_pipeline=get_examples_pipeline("edict_pipeline"),
+    scheduler=scheduler,
+    text_encoder=text_encoder,
+    leapfrog_steps=True,
+    paddle_dtype=paddle_dtype,
+)
+
+# download image
+image_url = "https://huggingface.co/datasets/Joqsan/images/resolve/main/imagenet_dog_1.jpeg"
+response = requests.get(image_url)
+image = PIL.Image.open(BytesIO(response.content))
+
+# preprocess it
+cropped_image = center_crop_and_resize(image)
+
+# define the prompts
+base_prompt = "A dog"
+target_prompt = "A golden retriever"
+
+# run the pipeline
+result_image = pipeline(
+    base_prompt=base_prompt,
+    target_prompt=target_prompt,
+    image=cropped_image,
+)
+
+for i, img in enumerate(result_image):
+    img.save(f"edict_pipeline_{i}.png")
+display(result_image)
+```
+生成的图片如下所示：
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/4617245/9cacc784-3be0-4d91-ba1f-e049bd2ec0ad" width=100%></center>
+
+### FABRIC - Stable Diffusion with feedback Pipeline
+`FabricPipeline`一个用于喜欢图片和不喜欢图片的反馈 Pipeline。使用方式如下所示：
+
+```python
+from io import BytesIO
+
+import paddle
+import requests
+from PIL import Image
+
+from ppdiffusers import DiffusionPipeline
+from ppdiffusers.utils.testing_utils import get_examples_pipeline
+
+# load the pipeline
+model_id_or_path = "runwayml/stable-diffusion-v1-5"
+# can also be used with dreamlike-art/dreamlike-photoreal-2.0
+pipe = DiffusionPipeline.from_pretrained(
+    model_id_or_path, paddle_dtype=paddle.float16, custom_pipeline=get_examples_pipeline("pipeline_fabric")
+)
+
+# let's specify a prompt
+prompt = "An astronaut riding an elephant"
+negative_prompt = "lowres, cropped"
+
+# call the pipeline
+image = pipe(
+    prompt=prompt,
+    negative_prompt=negative_prompt,
+    num_inference_steps=20,
+    generator=paddle.Generator().manual_seed(17),
+).images[0]
+
+image.save("horse_to_elephant.jpg")
+
+# let's try another example with feedback
+url = "https://raw.githubusercontent.com/ChenWu98/cycle-diffusion/main/data/dalle2/A%20black%20colored%20car.png"
+response = requests.get(url)
+init_image = Image.open(BytesIO(response.content)).convert("RGB")
+
+prompt = "photo, A blue colored car, fish eye"
+liked = [init_image]
+# same goes with disliked
+
+# call the pipeline
+paddle.seed(seed=0)
+image = pipe(
+    prompt=prompt,
+    negative_prompt=negative_prompt,
+    liked=liked,
+    num_inference_steps=20,
+    generator=paddle.Generator().manual_seed(0),
+).images[0]
+
+image.save("black_to_blue.png")
+```
+生成的图片如下所示：
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/4617245/efb1f1d8-dcaa-4250-a90e-198b9ab01ff6" width=100%></center>
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/4617245/2cc4b360-3c51-43ef-8f4e-292ae776566a" width=100%></center>
