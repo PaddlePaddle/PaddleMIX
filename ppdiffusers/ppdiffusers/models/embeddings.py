@@ -316,7 +316,10 @@ class SinusoidalPositionalEmbedding(nn.Layer):
         pe[0, :, 1::2] = paddle.cos(
             (position * div_term).cast(paddle.get_default_dtype())
         )  # paddle: cos not support int64, convert to float32
-        self.register_buffer("pe", pe)
+        # When use register_buffer, CI occur error in UNetMotionModelTests::test_from_save_pretrained_dtype
+        # self.register_buffer("pe", pe)
+        pe.stop_gradient = True
+        self.pe = pe
 
     def forward(self, x):
         _, seq_length, _ = x.shape
