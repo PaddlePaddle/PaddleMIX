@@ -316,6 +316,7 @@ class SinusoidalPositionalEmbedding(nn.Layer):
         pe[0, :, 1::2] = paddle.cos(
             (position * div_term).cast(paddle.get_default_dtype())
         )  # paddle: cos not support int64, convert to float32
+        self._dtype = paddle.get_default_dtype()
         self.register_buffer("pe", pe)
 
     def forward(self, x):
