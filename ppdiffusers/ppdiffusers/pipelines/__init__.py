@@ -83,6 +83,7 @@ else:
         IFPipeline,
         IFSuperResolutionPipeline,
     )
+    from .img_to_video import ImgToVideoSDPipeline
     from .kandinsky import (
         KandinskyCombinedPipeline,
         KandinskyImg2ImgCombinedPipeline,
