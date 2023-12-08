@@ -289,5 +289,5 @@ class UNetMotionModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase)
         expected_shape = inputs_dict["sample"].shape
         self.assertEqual(output.shape, expected_shape, "Input and output shapes do not match")
 
-    def test_from_save_pretrained_dtype(self):
-        pass
+    # def test_from_save_pretrained_dtype(self):
+    #     pass
