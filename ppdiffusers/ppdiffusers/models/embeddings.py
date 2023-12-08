@@ -311,10 +311,12 @@ class SinusoidalPositionalEmbedding(nn.Layer):
         div_term = paddle.exp(paddle.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim))
         pe = paddle.zeros([1, max_seq_length, embed_dim])
         pe[0, :, 0::2] = paddle.sin(
-            (position * div_term).cast(paddle.get_default_dtype())
+            (position * div_term).cast(paddle.float32)  # use paddle.get_default_type(), CI occur error
+        ).cast(
+            pe.dtype
         )  # paddle: sin not support int64, convert to float32
-        pe[0, :, 1::2] = paddle.cos(
-            (position * div_term).cast(paddle.get_default_dtype())
+        pe[0, :, 1::2] = paddle.cos((position * div_term).cast(paddle.float32)).cast(
+            pe.dtype
         )  # paddle: cos not support int64, convert to float32
         # When use register_buffer, CI occur error in UNetMotionModelTests::test_from_save_pretrained_dtype
         # self.register_buffer("pe", pe)
