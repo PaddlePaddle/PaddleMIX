@@ -92,7 +92,9 @@ class T5FilmDecoder(ModelMixin, ConfigMixin):
 
     def forward(self, encodings_and_masks, decoder_input_tokens, decoder_noise_time):
         batch, _, _ = decoder_input_tokens.shape
-        assert decoder_noise_time.shape == (batch,)
+        assert decoder_noise_time.shape == [
+            batch,
+        ]
 
         # decoder_noise_time is in [0, 1), so rescale to expected timing range.
         time_steps = get_timestep_embedding(
@@ -103,7 +105,7 @@ class T5FilmDecoder(ModelMixin, ConfigMixin):
 
         conditioning_emb = self.conditioning_emb(time_steps).unsqueeze(1)
 
-        assert conditioning_emb.shape == (batch, 1, self.config.d_model * 4)
+        assert conditioning_emb.shape == [batch, 1, self.config.d_model * 4]
 
         seq_length = decoder_input_tokens.shape[1]
 

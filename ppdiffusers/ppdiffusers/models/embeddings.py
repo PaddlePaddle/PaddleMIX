@@ -311,10 +311,10 @@ class SinusoidalPositionalEmbedding(nn.Layer):
         div_term = paddle.exp(paddle.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim))
         pe = paddle.zeros([1, max_seq_length, embed_dim])
         pe[0, :, 0::2] = paddle.sin(
-            paddle.to_tensor(position * div_term, dtype=paddle.get_default_dtype())
+            (position * div_term).cast(paddle.get_default_dtype())
         )  # paddle: sin not support int64, convert to float32
         pe[0, :, 1::2] = paddle.cos(
-            paddle.to_tensor(position * div_term, dtype=paddle.get_default_dtype())
+            (position * div_term).cast(paddle.get_default_dtype())
         )  # paddle: cos not support int64, convert to float32
         self.register_buffer("pe", pe)
 

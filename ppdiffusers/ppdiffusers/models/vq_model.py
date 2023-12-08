@@ -135,6 +135,8 @@ class VQModel(ModelMixin, ConfigMixin):
     def decode(
         self, h: paddle.Tensor, force_not_quantize: bool = False, return_dict: bool = True
     ) -> Union[DecoderOutput, paddle.Tensor]:
+        # cast h to float16 / float32
+        h = h.cast(self.dtype)
         # also go through quantization layer
         if not force_not_quantize:
             quant, emb_loss, info = self.quantize(h)
