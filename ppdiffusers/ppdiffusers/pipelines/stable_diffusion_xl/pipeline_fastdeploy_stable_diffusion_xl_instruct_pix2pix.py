@@ -12,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -20,11 +19,13 @@ import paddle
 import paddlenlp
 import PIL.Image
 
-from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin, FastDeployRuntimeModel
+from ppdiffusers import FastDeployRuntimeModel
+
 from ...schedulers import KarrasDiffusionSchedulers
-from ...utils import deprecate, logging, randn_tensor
+from ...utils import deprecate, logging
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
+from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -143,7 +144,14 @@ class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, Fast
                 )
 
     def prepare_image_latents(
-        self, image, batch_size, num_images_per_prompt, dtype, do_classifier_free_guidance, generator=None, infer_op=None,
+        self,
+        image,
+        batch_size,
+        num_images_per_prompt,
+        dtype,
+        do_classifier_free_guidance,
+        generator=None,
+        infer_op=None,
     ):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
@@ -485,5 +493,5 @@ class FastDeployStableDiffusionXLInstructPix2PixPipeline(DiffusionPipeline, Fast
         image = self.image_processor.postprocess(image, output_type=output_type)
         if not return_dict:
             return (image,)
-        
+
         return StableDiffusionXLPipelineOutput(images=image)

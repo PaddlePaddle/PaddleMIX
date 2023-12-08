@@ -12,25 +12,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
+import paddlenlp
 import PIL.Image
 
+from ppdiffusers import FastDeployRuntimeModel
+
 from ...schedulers import KarrasDiffusionSchedulers
-from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin, FastDeployRuntimeModel
-from ...utils import (
-    is_invisible_watermark_available,
-    logging,
-    randn_tensor,
-    replace_example_docstring,
-)
+from ...utils import logging, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
-
-import paddlenlp
+from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin
 
 logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
@@ -65,7 +60,8 @@ def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
     # mix with the original results from guidance by factor guidance_rescale to avoid "plain looking" images
     noise_cfg = guidance_rescale * noise_pred_rescaled + (1 - guidance_rescale) * noise_cfg
     return noise_cfg
-                
+
+
 class FastDeployStableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FastDeployDiffusionXLPipelineMixin):
     """
     Pipeline for text-to-image generation using Stable Diffusion XL.
@@ -536,9 +532,9 @@ class FastDeployStableDiffusionXLImg2ImgPipeline(DiffusionPipeline, FastDeployDi
         else:
             image = latents
             return StableDiffusionXLPipelineOutput(images=image)
-        
+
         image = self.image_processor.postprocess(image, output_type=output_type)
         if not return_dict:
             return (image,)
-        
+
         return StableDiffusionXLPipelineOutput(images=image)

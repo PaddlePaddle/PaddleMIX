@@ -12,24 +12,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import paddle
+import paddlenlp
 import PIL
 
+from ppdiffusers import FastDeployRuntimeModel
+
 from ...schedulers import KarrasDiffusionSchedulers
-from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin, FastDeployRuntimeModel
-from ...utils import (
-    logging,
-    randn_tensor,
-    replace_example_docstring,
-)
+from ...utils import logging, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
-
-import paddlenlp
+from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin
 
 logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """
@@ -191,9 +187,7 @@ def prepare_mask_and_masked_image(image, mask, height, width, return_image: bool
     return mask, masked_image
 
 
-class FastDeployStableDiffusionXLInpaintPipeline(
-    DiffusionPipeline, FastDeployDiffusionXLPipelineMixin
-):
+class FastDeployStableDiffusionXLInpaintPipeline(DiffusionPipeline, FastDeployDiffusionXLPipelineMixin):
     """
     Pipeline for text-to-image generation using Stable Diffusion XL.
 
@@ -316,7 +310,7 @@ class FastDeployStableDiffusionXLInpaintPipeline(
                 raise ValueError(
                     f"`prompt_embeds` and `negative_prompt_embeds` must have the same shape when passed directly, but got: `prompt_embeds` {prompt_embeds.shape} != `negative_prompt_embeds` {negative_prompt_embeds.shape}."
                 )
-            
+
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
@@ -645,8 +639,7 @@ class FastDeployStableDiffusionXLInpaintPipeline(
             )
             num_inference_steps = len(list(filter(lambda ts: ts >= discrete_timestep_cutoff, timesteps)))
             timesteps = timesteps[:num_inference_steps]
-        
-        
+
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
@@ -701,9 +694,9 @@ class FastDeployStableDiffusionXLInpaintPipeline(
         else:
             image = latents
             return StableDiffusionXLPipelineOutput(images=image)
-        
+
         image = self.image_processor.postprocess(image, output_type=output_type)
         if not return_dict:
             return (image,)
-        
+
         return StableDiffusionXLPipelineOutput(images=image)

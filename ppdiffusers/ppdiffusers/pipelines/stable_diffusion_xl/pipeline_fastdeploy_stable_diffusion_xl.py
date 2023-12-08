@@ -16,14 +16,13 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import paddle
 
+from ppdiffusers import FastDeployRuntimeModel
+
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
-from .fastdeployxl_utils import (
-    FastDeployDiffusionXLPipelineMixin,
-    FastDeployRuntimeModel,
-)
+from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 import paddlenlp
