@@ -106,8 +106,8 @@ def pipe_init(args):
     vae_in_channels = 4
     text_encoder_max_length = 77
     unet_max_length = text_encoder_max_length * 3  # lpw support max_length is 77x3
-    min_image_size = 64
-    max_image_size = 2048
+    min_image_size = 384
+    max_image_size = 768
     hidden_states = 1024 if args.is_sd2_0 else 768
     unet_in_channels = 9 if args.task_name == "inpaint" else 4
     bs = 2
@@ -263,7 +263,7 @@ def parse_arguments():
         choices=["paddle", "paddle_tensorrt"],
         help="The inference runtime backend of unet model and text encoder model.",
     )
-    parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
+    parser.add_argument("--use_fp16", type=strtobool, default=False, help="Wheter to use FP16 mode")
     parser.add_argument("--use_bf16", type=strtobool, default=False, help="Wheter to use BF16 mode")
     parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id.")
     parser.add_argument(
@@ -314,98 +314,99 @@ def infer(
         generator = None
 
     if image is not None:
-        image = cv2.resize(image, (width, height))
+        if isinstance(image, dict):
+            image["image"] = cv2.resize(image["image"], (width, height))
+            image["mask"] = cv2.resize(image["mask"], (width, height))
+        else:
+            image = cv2.resize(image, (width, height))
     if mask is not None:
         mask = cv2.resize(mask, (width, height))
 
-    try:
-        if task_name == "text2img":
-            images = fd_pipe.text2img(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                num_inference_steps=steps,
-                height=height,
-                width=width,
-                guidance_scale=guidance_scale,
-                parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict,
-                generator=generator,
-            )
-        elif task_name == "img2img":
-            images = fd_pipe.img2img(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                image=np.array(image, dtype=np.float32),
-                num_inference_steps=steps,
-                height=height,
-                width=width,
-                strength=strength,
-                guidance_scale=guidance_scale,
-                parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict,
-                generator=generator,
-            )
-        elif task_name == "inpaint_legacy":
-            if mask is not None:
-                mask_image = mask
-            else:
-                mask_image = image["mask"][:, :, ::-1]
-            image = image["image"]
-            images = fd_pipe.inpaint_legacy(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                image=np.array(image, dtype=np.float32),
-                mask_image=Image.fromarray(mask_image).convert("L"),
-                num_inference_steps=steps,
-                height=height,
-                width=width,
-                strength=strength,
-                guidance_scale=guidance_scale,
-                parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict,
-                generator=generator,
-            )
-        elif task_name == "inpaint":
-            if mask is not None:
-                mask_image = mask
-            else:
-                mask_image = image["mask"][:, :, ::-1]
-            image = image["image"]
-            images = fd_pipe.inpaint(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                image=np.array(image, dtype=np.float32),
-                mask_image=Image.fromarray(mask_image).convert("L"),
-                num_inference_steps=steps,
-                height=height,
-                width=width,
-                strength=strength,
-                guidance_scale=guidance_scale,
-                parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict,
-                generator=generator,
-            )
-
-        elif task_name == "controlnet_canny":
-            canny_image = Image.fromarray(mask)
-
-            images = fd_pipe.text2img(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                num_inference_steps=steps,
-                height=height,
-                width=width,
-                guidance_scale=guidance_scale,
-                parse_prompt_type=parse_prompt_type,
-                controlnet_cond=canny_image,
-                controlnet_conditioning_scale=conditioning_scale,
-                infer_op_dict=infer_op_dict,
-                generator=generator,
-            )
+    if task_name == "text2img":
+        images = fd_pipe.text2img(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_inference_steps=steps,
+            height=height,
+            width=width,
+            guidance_scale=guidance_scale,
+            parse_prompt_type=parse_prompt_type,
+            infer_op_dict=infer_op_dict,
+            generator=generator,
+        )
+    elif task_name == "img2img":
+        images = fd_pipe.img2img(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            image=Image.fromarray(np.array(image)).convert("RGB"),
+            num_inference_steps=steps,
+            height=height,
+            width=width,
+            strength=strength,
+            guidance_scale=guidance_scale,
+            parse_prompt_type=parse_prompt_type,
+            infer_op_dict=infer_op_dict,
+            generator=generator,
+        )
+    elif task_name == "inpaint_legacy":
+        if mask is not None:
+            mask_image = mask
         else:
-            return gr.Error(f"task error! {task_name} not found ")
-    except Exception as e:
-        raise gr.Error(e)
+            mask_image = image["mask"]
+        image = image["image"]
+        images = fd_pipe.inpaint_legacy(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            image=Image.fromarray(np.array(image)).convert("RGB"),
+            mask_image=Image.fromarray(mask_image).convert("RGB"),
+            num_inference_steps=steps,
+            height=height,
+            width=width,
+            strength=strength,
+            guidance_scale=guidance_scale,
+            parse_prompt_type=parse_prompt_type,
+            infer_op_dict=infer_op_dict,
+            generator=generator,
+        )
+    elif task_name == "inpaint":
+        if mask is not None:
+            mask_image = mask
+        else:
+            mask_image = image["mask"]
+        image = image["image"]
+        images = fd_pipe.inpaint(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            image=Image.fromarray(np.array(image)).convert("RGB"),
+            mask_image=Image.fromarray(mask_image).convert("RGB"),
+            num_inference_steps=steps,
+            height=height,
+            width=width,
+            strength=strength,
+            guidance_scale=guidance_scale,
+            parse_prompt_type=parse_prompt_type,
+            infer_op_dict=infer_op_dict,
+            generator=generator,
+        )
+
+    elif task_name == "controlnet_canny":
+        canny_image = Image.fromarray(mask)
+
+        images = fd_pipe.text2img(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            num_inference_steps=steps,
+            height=height,
+            width=width,
+            guidance_scale=guidance_scale,
+            parse_prompt_type=parse_prompt_type,
+            controlnet_cond=canny_image,
+            controlnet_conditioning_scale=conditioning_scale,
+            infer_op_dict=infer_op_dict,
+            generator=generator,
+        )
+    else:
+        return gr.Error(f"task error! {task_name} not found ")
 
     return images[0][0]
 
@@ -460,8 +461,8 @@ with gr.Blocks() as demo:
                     text2img_negative_prompt = gr.Textbox(label="负向描述词", lines=2)
                     text2img_steps = gr.Slider(label="steps", minimum=1, maximum=60, step=1, value=20)
                     with gr.Row():
-                        text2img_height = gr.Slider(label="height", minimum=64, maximum=2048, step=1, value=512)
-                        text2img_width = gr.Slider(label="width", minimum=64, maximum=2048, step=1, value=512)
+                        text2img_height = gr.Slider(label="height", minimum=384, maximum=768, step=8, value=512)
+                        text2img_width = gr.Slider(label="width", minimum=384, maximum=768, step=8, value=512)
                     text2img_seed = gr.Textbox(label="seed", value="-1")
                     text2img_strength = gr.State(value=None)
                     text2img_guidance_scale = gr.Slider(
@@ -502,8 +503,8 @@ with gr.Blocks() as demo:
                     img2img_negative_prompt = gr.Textbox(label="负向描述词", lines=2)
                     img2img_steps = gr.Slider(label="steps", minimum=1, maximum=60, step=1, value=20)
                     with gr.Row():
-                        img2img_height = gr.Slider(label="height", minimum=64, maximum=2048, step=1, value=512)
-                        img2img_width = gr.Slider(label="width", minimum=64, maximum=2048, step=1, value=512)
+                        img2img_height = gr.Slider(label="height", minimum=384, maximum=768, step=8, value=512)
+                        img2img_width = gr.Slider(label="width", minimum=384, maximum=768, step=8, value=512)
                     img2img_seed = gr.Textbox(label="seed", value="-1")
                     img2img_strength = gr.Slider(
                         label="Denoising strength", minimum=0, maximum=1, step=0.01, value=0.75
@@ -546,8 +547,8 @@ with gr.Blocks() as demo:
                     inpaint_legacy_negative_prompt = gr.Textbox(label="负向描述词", lines=2)
                     inpaint_legacy_steps = gr.Slider(label="steps", minimum=1, maximum=60, step=1, value=20)
                     with gr.Row():
-                        inpaint_legacy_height = gr.Slider(label="height", minimum=64, maximum=2048, step=1, value=512)
-                        inpaint_legacy_width = gr.Slider(label="width", minimum=64, maximum=2048, step=1, value=512)
+                        inpaint_legacy_height = gr.Slider(label="height", minimum=384, maximum=768, step=8, value=512)
+                        inpaint_legacy_width = gr.Slider(label="width", minimum=384, maximum=768, step=8, value=512)
                     inpaint_legacy_seed = gr.Textbox(label="seed", value="-1")
                     inpaint_legacy_strength = gr.Slider(
                         label="Denoising strength", minimum=0, maximum=1, step=0.01, value=0.75
@@ -591,8 +592,8 @@ with gr.Blocks() as demo:
                     inpaint_negative_prompt = gr.Textbox(label="负向描述词", lines=2)
                     inpaint_steps = gr.Slider(label="steps", minimum=1, maximum=60, step=1, value=20)
                     with gr.Row():
-                        inpaint_height = gr.Slider(label="height", minimum=64, maximum=2048, step=1, value=512)
-                        inpaint_width = gr.Slider(label="width", minimum=64, maximum=2048, step=1, value=512)
+                        inpaint_height = gr.Slider(label="height", minimum=384, maximum=768, step=8, value=512)
+                        inpaint_width = gr.Slider(label="width", minimum=384, maximum=768, step=8, value=512)
                     inpaint_seed = gr.Textbox(label="seed", value="-1")
                     inpaint_strength = gr.Slider(
                         label="Denoising strength", minimum=0, maximum=1, step=0.01, value=0.75
@@ -638,9 +639,9 @@ with gr.Blocks() as demo:
                     controlnet_canny_steps = gr.Slider(label="steps", minimum=1, maximum=60, step=1, value=20)
                     with gr.Row():
                         controlnet_canny_height = gr.Slider(
-                            label="height", minimum=64, maximum=2048, step=1, value=512
+                            label="height", minimum=384, maximum=768, step=8, value=512
                         )
-                        controlnet_canny_width = gr.Slider(label="width", minimum=64, maximum=2048, step=1, value=512)
+                        controlnet_canny_width = gr.Slider(label="width", minimum=384, maximum=768, step=8, value=512)
                     controlnet_canny_seed = gr.Textbox(label="seed", value="-1")
                     controlnet_canny_strength = gr.Slider(
                         label="Denoising strength", minimum=0, maximum=1, step=0.01, value=0.75
@@ -679,4 +680,4 @@ with gr.Blocks() as demo:
             )
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(show_error=True)
