@@ -14,7 +14,7 @@
 
 import paddle
 
-from paddlemix import QWenLMHeadModel, QWenTokenizer
+from paddlemix import QWenLMHeadModel, QWenTokenizer, QwenVLProcessor
 from paddlemix.utils.log import logger
 
 paddle.seed(1234)
@@ -24,22 +24,20 @@ if not paddle.amp.is_bfloat16_supported():
     dtype = "float32"
 
 tokenizer = QWenTokenizer.from_pretrained("qwen-vl/qwen-vl-chat-7b", dtype=dtype)
-
+processor = QwenVLProcessor(tokenizer=tokenizer)
 model = QWenLMHeadModel.from_pretrained("qwen-vl/qwen-vl-chat-7b", dtype=dtype)
 model.eval()
 
 # 第一轮对话
-query1 = tokenizer.from_list_format(
-    [
-        {
-            "image": "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"
-        },  # Either a local path or an url
-        {"text": "这是什么?"},
-    ]
-)
+query1 = [
+    {"image": "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"},
+    {"text": "这是什么?"},
+]
 
+input = processor(query=query1, return_tensors="pd")
+query1 = tokenizer.from_list_format(query1)
+response, history = model.chat(tokenizer, query=query1, history=None, images=input["images"])
 
-response, history = model.chat(tokenizer, query=query1, history=None)
 print("answer1:", response)
 # 这张图片展示了一辆红色的 Beacon Bus 正在行驶，它在道路上与其它车辆共同行驶。
 # bus 上的数字显示它正在前往特定地点，可能是一个公共汽车 stop。

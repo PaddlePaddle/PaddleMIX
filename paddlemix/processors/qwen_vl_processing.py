@@ -51,25 +51,17 @@ class QwenVLProcessor(ProcessorMixin):
 
         if query is None:
             raise ValueError("You have to specify query.")
+        images = []
+        for ele in query:
+            if "image" in ele:
+                images.append(ele["image"])
 
         query = self.tokenizer.from_list_format(query)
 
         inputs = self.tokenizer(query, return_tensors=return_tensors)
-        input_ids = paddle.to_tensor(inputs["input_ids"])
         inputs["images"] = None
 
-        if paddle.any(input_ids == self.image_start_id):
-            bos_pos = paddle.where(input_ids == self.image_start_id)
-            eos_pos = paddle.where(input_ids == self.image_start_id + 1)
-            assert (bos_pos[0] == eos_pos[0]).astype("bool").all()
-            img_pos = paddle.concat(x=(bos_pos[0], bos_pos[1], eos_pos[1]), axis=1)
-            images = []
-
-            for i, a, b in img_pos:
-                image = input_ids[i][a + 1 : b - 1].tolist()
-                image = image[: image.index(self.image_start_id + 2)]
-                images.append(bytes(image).decode("utf-8"))
-
+        if len(images) > 0:
             inputs["images"] = self.image_processor(images)
 
         return inputs
@@ -94,7 +86,7 @@ class QwenVLImageProcessor(BaseImageProcessor):
         self,
         image_size: int = 448,
         image_mean: Optional[Union[float, List[float]]] = [0.48145466, 0.4578275, 0.40821073],
-        image_std: Optional[Union[float, List[float]]] = [0.48145466, 0.4578275, 0.40821073],
+        image_std: Optional[Union[float, List[float]]] = [0.26862954, 0.26130258, 0.27577711],
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)

@@ -148,10 +148,9 @@ def _decode_chatml(
         if tokens[eod_token_idx] in eod_token_ids:
             end_reason = f"Gen {tokenizer.decode([tokens[eod_token_idx]])!r}"
             break
-
-    trim_decode_tokens = tokenizer.decode(tokens[:eod_token_idx], errors=errors)[raw_text_len:]
+    trim_decode_tokens = tokenizer.decode(tokens[context_length:eod_token_idx], errors=errors)
     if verbose:
-        print("\nRaw Generate w/o EOD:", tokenizer.decode(tokens, errors=errors)[raw_text_len:])
+        print("\nRaw Generate w/o EOD:", tokenizer.decode(tokens, errors=errors))
         print("\nRaw Generate:", trim_decode_tokens)
         print("\nEnd Reason:", end_reason)
     for stop_word in stop_words:

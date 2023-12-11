@@ -21,7 +21,7 @@ import requests
 from paddlenlp.trainer import PdArgumentParser
 from PIL import Image, ImageDraw, ImageFont
 
-from paddlemix import QWenLMHeadModel, QWenTokenizer
+from paddlemix import QWenLMHeadModel, QWenTokenizer, QwenVLProcessor
 from paddlemix.utils.log import logger
 
 
@@ -122,6 +122,7 @@ def main():
 
     # build tokenizer
     tokenizer = QWenTokenizer.from_pretrained(model_args.model_name_or_path, dtype=model_args.dtype)
+    processor = QwenVLProcessor(tokenizer=tokenizer)
     # build model
     logger.info("model: {},dtypes: {}".format(model_args.model_name_or_path, model_args.dtype))
     model = QWenLMHeadModel.from_pretrained(model_args.model_name_or_path, dtype=model_args.dtype)
@@ -146,11 +147,10 @@ def main():
     if data_args.prompt is not None:
         query.append({"text": data_args.prompt})
 
-    query = tokenizer.from_list_format(query)
-    inputs = tokenizer(query, return_tensors="pd")
+    inputs = processor(query=query, return_tensors="pd")
 
     pred, _ = model.generate(**inputs)
-    response = tokenizer.decode(pred.cpu()[0], skip_special_tokens=False)
+    response = processor.decode(pred)
     print("response:", response)
 
     boxes_ref = tokenizer._fetch_all_box_with_ref(response)
@@ -163,6 +163,8 @@ def main():
         pred_phrases = []
         pred_boxes = []
         for obj in boxes_ref:
+            if "ref" not in obj.keys():
+                continue
             pred_boxes.append(list(obj["box"]))
             pred_phrases.append(obj["ref"])
 
