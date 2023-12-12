@@ -54,7 +54,7 @@ class Attention(nn.Layer):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        self._use_memory_efficient_attention_xformers = True
+        self._use_memory_efficient_attention_xformers = is_ppxformers_available()
         self._attention_op = None
 
     def reshape_heads_to_batch_dim(self, tensor, transpose=True):
