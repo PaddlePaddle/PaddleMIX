@@ -265,6 +265,10 @@ else:
         FastDeployStableDiffusionMegaPipeline,
         FastDeployStableDiffusionPipeline,
         FastDeployStableDiffusionUpscalePipeline,
+        FastDeployStableDiffusionXLPipeline,
+        FastDeployStableDiffusionXLImg2ImgPipeline,
+        FastDeployStableDiffusionXLInpaintPipeline,
+        FastDeployStableDiffusionXLMegaPipeline,
     )
 
 try:

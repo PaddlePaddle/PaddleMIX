@@ -52,3 +52,7 @@ else:
     from .pipeline_stable_diffusion_xl_instruct_pix2pix import (
         StableDiffusionXLInstructPix2PixPipeline,
     )
+    from .pipeline_fastdeploy_stable_diffusion_xl import FastDeployStableDiffusionXLPipeline
+    from .pipeline_fastdeploy_stable_diffusion_xl_img2img import FastDeployStableDiffusionXLImg2ImgPipeline
+    from .pipeline_fastdeploy_stable_diffusion_xl_inpaint import FastDeployStableDiffusionXLInpaintPipeline
+    from .pipeline_fastdeploy_stable_diffusion_xl_mega import FastDeployStableDiffusionXLMegaPipeline
