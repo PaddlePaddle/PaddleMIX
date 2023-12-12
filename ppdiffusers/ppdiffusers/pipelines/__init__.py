@@ -183,6 +183,12 @@ else:
         FastDeployStableDiffusionPipeline,
         FastDeployStableDiffusionUpscalePipeline,
     )
+    from .stable_diffusion_xl import (
+        FastDeployStableDiffusionXLPipeline,
+        FastDeployStableDiffusionXLImg2ImgPipeline,
+        FastDeployStableDiffusionXLInpaintPipeline,
+        FastDeployStableDiffusionXLMegaPipeline,
+    )
 
 try:
     if not (is_paddle_available() and is_paddlenlp_available() and is_k_diffusion_available()):

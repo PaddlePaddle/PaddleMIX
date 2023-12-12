@@ -15,18 +15,18 @@
 
 from paddlenlp.transformers import CLIPTokenizer
 
-from ppdiffusers.pipelines.fastdeploy_utils import (
-    FastDeployDiffusionPipelineMixin,
+from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
+from ppdiffusers.pipelines.stable_diffusion_xl.fastdeployxl_utils import (
+    FastDeployDiffusionXLPipelineMixin,
     FastDeployRuntimeModel,
 )
-from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
 from ppdiffusers.utils import logging
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
-class FastDeploySFastDeployStableDiffusionXLPipelineHousing(DiffusionPipeline, FastDeployDiffusionPipelineMixin):
+class FastDeploySFastDeployStableDiffusionXLPipelineHousing(DiffusionPipeline, FastDeployDiffusionXLPipelineMixin):
     r"""
     Pipeline for text-to-image generation using Stable Diffusion XL.
 
