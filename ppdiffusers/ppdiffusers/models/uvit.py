@@ -307,10 +307,10 @@ class UViTModel(ModelMixin, ConfigMixin):
         self.pos_embed_token = self.create_parameter(
             shape=(1, 1, embed_dim), default_initializer=nn.initializer.Constant(0.0)
         )
+        self.gradient_checkpointing = False
 
     def _set_gradient_checkpointing(self, module, value=False):
-        if isinstance(module, (Block)):
-            module.gradient_checkpointing = value
+        self.gradient_checkpointing = value
 
     def forward(
         self,
@@ -368,19 +368,19 @@ class UViTModel(ModelMixin, ConfigMixin):
 
         skips = []
         for blk in self.in_blocks:
-            if self._supports_gradient_checkpointing:
+            if self.gradient_checkpointing:
                 x = paddle.distributed.fleet.utils.recompute(blk, x)
             else:
                 x = blk(x)
             skips.append(x)
 
-        if self._supports_gradient_checkpointing:
+        if self.gradient_checkpointing:
             x = paddle.distributed.fleet.utils.recompute(self.mid_block, x)
         else:
             x = self.mid_block(x)
 
         for blk in self.out_blocks:
-            if self._supports_gradient_checkpointing:
+            if self.gradient_checkpointing:
                 x = paddle.distributed.fleet.utils.recompute(blk, x, skips.pop())
             else:
                 x = blk(x, skips.pop())
