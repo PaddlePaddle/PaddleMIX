@@ -20,6 +20,7 @@
 **PPDiffusers**是一款支持多种模态（如文本图像跨模态、图像、语音）扩散模型（Diffusion Model）训练和推理的国产化工具箱，依托于[**PaddlePaddle**](https://www.paddlepaddle.org.cn/)框架和[**PaddleNLP**](https://github.com/PaddlePaddle/PaddleNLP)自然语言处理开发库。
 
 ## News 📢
+* 🔥 **2023.12.12 发布 0.19.4 版本，修复已知的部分 BUG，修复 0D Tensor 的 Warning，新增 SDXL 的 FastdeployPipeline。**
 * 🔥 **2023.09.27 发布 0.19.3 版本，新增[SDXL](#文本图像多模)，支持Text2Image、Img2Img、Inpainting、InstructPix2Pix等任务，支持DreamBooth Lora训练；
 新增[UniDiffuser](#文本图像多模)，通过统一的多模态扩散过程支持文生图、图生文等任务；
 新增文本条件视频生成模型[LVDM](https://github.com/PaddlePaddle/PaddleMIX/tree/develop/ppdiffusers/examples/text_to_video_lvdm)，支持训练与推理；
