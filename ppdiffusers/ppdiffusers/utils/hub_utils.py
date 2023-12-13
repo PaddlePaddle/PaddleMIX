@@ -34,7 +34,7 @@ from huggingface_hub import (
 from huggingface_hub.file_download import REGEX_COMMIT_HASH
 from huggingface_hub.utils import is_jinja_available
 
-from .. import __version__
+from ..version import VERSION as __version__
 from .constants import DIFFUSERS_CACHE, HUGGINGFACE_CO_RESOLVE_ENDPOINT
 from .import_utils import (
     ENV_VARS_TRUE_VALUES,

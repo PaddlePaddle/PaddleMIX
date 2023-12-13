@@ -21,7 +21,6 @@ from huggingface_hub import model_info
 from packaging import version
 from paddle import nn
 
-from .. import __version__
 from ..models.modeling_pytorch_paddle_utils import (
     convert_paddle_state_dict_to_pytorch,
     convert_pytorch_state_dict_to_paddle,
@@ -45,6 +44,7 @@ from ..utils import (
     is_torch_available,
     logging,
 )
+from ..version import VERSION as __version__
 from .lora_conversion_utils import (
     _convert_kohya_lora_to_diffusers,
     _maybe_map_sgm_blocks_to_diffusers,

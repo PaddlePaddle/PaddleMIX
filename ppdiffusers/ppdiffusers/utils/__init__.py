@@ -17,7 +17,7 @@ import os
 
 from packaging import version
 
-from .. import __version__
+from ..version import VERSION as __version__
 from . import initializer_utils
 from .constants import (  # fastdeploy; NEW; DIFFUSERS; PPDIFFUSERS; TRANSFORMERS; PADDLENLP
     CONFIG_NAME,

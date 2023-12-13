@@ -15,13 +15,13 @@
 import platform
 from argparse import ArgumentParser
 
-from .. import __version__ as version
 from ..utils import (
     is_paddle_available,
     is_paddlenlp_available,
     is_ppaccelerate_available,
     is_ppxformers_available,
 )
+from ..version import VERSION as version
 from . import BasePPDiffusersCLICommand
 
 

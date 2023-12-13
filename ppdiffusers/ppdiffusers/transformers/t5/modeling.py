@@ -39,6 +39,7 @@ from paddlenlp.transformers.model_outputs import (
     Seq2SeqQuestionAnsweringModelOutput,
     Seq2SeqSequenceClassifierOutput,
 )
+from paddlenlp.transformers.model_utils import register_base_model
 
 from ...utils import logging
 from ..model_utils import ALL_LAYERNORM_LAYERS
@@ -1107,6 +1108,7 @@ class T5Stack(T5PreTrainedModel):
         )
 
 
+@register_base_model
 class T5Model(T5PreTrainedModel):
     _keys_to_ignore_on_load_unexpected = [
         "decoder.block.0.layer.1.EncDecAttention.relative_attention_bias.weight",

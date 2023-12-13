@@ -36,6 +36,7 @@ from paddlenlp.transformers.model_outputs import (
     SequenceClassifierOutput,
     TokenClassifierOutput,
 )
+from paddlenlp.transformers.model_utils import register_base_model
 from paddlenlp.utils.converter import StateDictNameMapping
 
 # LinearClass = nn.TorchLinear
@@ -665,6 +666,7 @@ class BertPreTrainedModel(PreTrainedModel):
         mappings = []
         model_mappings = [
             ["embeddings.word_embeddings.weight", "embeddings.word_embeddings.weight"],
+            ["embeddings.position_ids", "embeddings.position_ids"],
             ["embeddings.position_embeddings.weight", "embeddings.position_embeddings.weight"],
             ["embeddings.token_type_embeddings.weight", "embeddings.token_type_embeddings.weight"],
             ["embeddings.LayerNorm.weight", "embeddings.LayerNorm.weight"],
@@ -867,6 +869,7 @@ class BertForPreTrainingOutput(ModelOutput):
     attentions: Optional[Tuple[paddle.Tensor]] = None
 
 
+@register_base_model
 class BertModel(BertPreTrainedModel):
     """
 

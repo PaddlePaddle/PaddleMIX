@@ -28,7 +28,6 @@ from huggingface_hub import create_repo
 from paddle import nn
 from tqdm import tqdm
 
-from .. import __version__
 from ..utils import (
     CONFIG_NAME,
     DIFFUSERS_CACHE,
@@ -60,6 +59,7 @@ from ..utils import (
     logging,
     smart_load,
 )
+from ..version import VERSION as __version__
 from .modeling_pytorch_paddle_utils import (
     convert_paddle_state_dict_to_pytorch,
     convert_pytorch_state_dict_to_paddle,
