@@ -1,5 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2022 Kakao Brain and The HuggingFace Team. All rights reserved.
+# Copyright 2023 Kakao Brain and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,7 +20,8 @@ import numpy as np
 import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import BaseOutput, randn_tensor
+from ..utils import BaseOutput
+from ..utils.paddle_utils import randn_tensor
 from .scheduling_utils import SchedulerMixin
 
 
@@ -29,14 +29,14 @@ from .scheduling_utils import SchedulerMixin
 # Copied from ppdiffusers.schedulers.scheduling_ddpm.DDPMSchedulerOutput with DDPM->UnCLIP
 class UnCLIPSchedulerOutput(BaseOutput):
     """
-    Output class for the scheduler's step function output.
+    Output class for the scheduler's `step` function output.
 
     Args:
         prev_sample (`paddle.Tensor` of shape `(batch_size, num_channels, height, width)` for images):
-            Computed sample (x_{t-1}) of previous timestep. `prev_sample` should be used as next model input in the
+            Computed sample `(x_{t-1})` of previous timestep. `prev_sample` should be used as next model input in the
             denoising loop.
         pred_original_sample (`paddle.Tensor` of shape `(batch_size, num_channels, height, width)` for images):
-            The predicted denoised sample (x_{0}) based on the model output from the current timestep.
+            The predicted denoised sample `(x_{0})` based on the model output from the current timestep.
             `pred_original_sample` can be used to preview progress or for guidance.
     """
 
@@ -245,9 +245,8 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
         t = timestep
 
         if model_output.shape[1] == sample.shape[1] * 2 and self.variance_type == "learned_range":
-            # must split like this, 3 -> split 2 -> [2, 1]
-            model_output, predicted_variance = model_output.split(
-                [sample.shape[1], model_output.shape[1] - sample.shape[1]], axis=1
+            model_output, predicted_variance = paddle.split(
+                model_output, [sample.shape[1], model_output.shape[1] - sample.shape[1]], axis=1
             )
         else:
             predicted_variance = None
@@ -339,8 +338,8 @@ class UnCLIPScheduler(SchedulerMixin, ConfigMixin):
         # Fix 0D tensor
         if paddle.is_tensor(timesteps) and timesteps.ndim == 0:
             timesteps = timesteps.unsqueeze(0)
-        # Make sure alphas_cumprod and timestep have same device and dtype as original_samples
-        alphas_cumprod = self.alphas_cumprod.cast(original_samples.dtype)
+        # Make sure alphas_cumprod and timestep have same dtype as original_samples
+        alphas_cumprod = self.alphas_cumprod.cast(dtype=original_samples.dtype)
 
         sqrt_alpha_prod = alphas_cumprod[timesteps] ** 0.5
         sqrt_alpha_prod = sqrt_alpha_prod.flatten()

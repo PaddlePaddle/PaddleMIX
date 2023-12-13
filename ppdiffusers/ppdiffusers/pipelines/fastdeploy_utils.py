@@ -46,6 +46,7 @@ from ..utils import (
     DIFFUSERS_CACHE,
     FASTDEPLOY_MODEL_NAME,
     FASTDEPLOY_WEIGHTS_NAME,
+    FROM_AISTUDIO,
     FROM_HF_HUB,
     HF_HUB_OFFLINE,
     ONNX_EXTERNAL_WEIGHTS_NAME,
@@ -1325,6 +1326,7 @@ class FastDeployRuntimeModel:
         cache_dir: Optional[str] = None,
         runtime_options: Optional["fd.RuntimeOption"] = None,
         from_hf_hub: Optional[bool] = False,
+        from_aistudio: Optional[bool] = False,
         proxies: Optional[Dict] = None,
         resume_download: bool = False,
         local_files_only: bool = False,
@@ -1393,6 +1395,7 @@ class FastDeployRuntimeModel:
                 force_download=force_download,
                 revision=revision,
                 from_hf_hub=from_hf_hub,
+                from_aistudio=from_aistudio,
                 proxies=proxies,
                 resume_download=resume_download,
                 local_files_only=local_files_only,
@@ -1411,6 +1414,7 @@ class FastDeployRuntimeModel:
                     force_download=force_download,
                     revision=revision,
                     from_hf_hub=from_hf_hub,
+                    from_aistudio=from_aistudio,
                     proxies=proxies,
                     resume_download=resume_download,
                     local_files_only=local_files_only,
@@ -1439,16 +1443,24 @@ class FastDeployRuntimeModel:
         **kwargs,
     ):
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
-        cache_dir = (
-            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
-        )
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = None  # TODO, check aistudio cache
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
         force_download = kwargs.pop("force_download", False)
         resume_download = kwargs.pop("resume_download", False)
         proxies = kwargs.pop("proxies", None)
         local_files_only = kwargs.pop("local_files_only", HF_HUB_OFFLINE)
         use_auth_token = kwargs.pop("use_auth_token", None)
         revision = kwargs.pop("revision", None)
-        subfolder = kwargs.pop("subfolder", None)
+        subfolder = kwargs.pop("subfolder", "")
+        if subfolder is None:
+            subfolder = ""
         variant = kwargs.pop("variant", None)
 
         user_agent = {
@@ -1468,6 +1480,7 @@ class FastDeployRuntimeModel:
             cache_dir=cache_dir,
             runtime_options=runtime_options,
             from_hf_hub=from_hf_hub,
+            from_aistudio=from_aistudio,
             proxies=proxies,
             resume_download=resume_download,
             local_files_only=local_files_only,

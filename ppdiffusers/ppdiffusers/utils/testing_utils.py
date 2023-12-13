@@ -1,5 +1,4 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import functools
 import inspect
 import io
 import logging
@@ -21,7 +21,9 @@ import os
 import random
 import re
 import struct
+import sys
 import tempfile
+import time
 import unittest
 import urllib.parse
 from contextlib import contextmanager
@@ -34,6 +36,7 @@ import numpy as np
 import PIL.Image
 import PIL.ImageOps
 import requests
+from numpy.linalg import norm
 
 from .import_utils import (
     BACKENDS_MAPPING,
@@ -51,6 +54,9 @@ from .logging import get_logger
 global_rng = random.Random()
 
 logger = get_logger(__name__)
+
+
+USE_PPPEFT_BACKEND = False
 
 if is_paddle_available():
     import paddle
@@ -90,12 +96,21 @@ def paddle_all_close(a, b, *args, **kwargs):
     return True
 
 
+def numpy_cosine_similarity_distance(a, b):
+    similarity = np.dot(a, b) / (norm(a) * norm(b))
+    distance = 1.0 - similarity.mean()
+
+    return distance
+
+
 def print_tensor_test(tensor, filename="test_corrections.txt", expected_tensor_name="expected_slice"):
     test_name = os.environ.get("PYTEST_CURRENT_TEST")
     if not paddle.is_tensor(tensor):
         tensor = paddle.to_tensor(tensor)
 
-    tensor_str = str(tensor.detach().cpu().flatten().cast("float32")).replace("\n", "")
+    tensor_str = str(tensor.detach().cpu().flatten().cast(paddle.float32)).replace("\n", "")
+    # format is usually:
+    # expected_slice = np.array([-0.5713, -0.3018, -0.9814, 0.04663, -0.879, 0.76, -1.734, 0.1044, 1.161])
     output_str = tensor_str.replace("tensor", f"{expected_tensor_name} = np.array")
     test_file, test_class, test_fn = test_name.split("::")
     test_fn = test_fn.split()[0]
@@ -237,6 +252,30 @@ def require_paddlesde(test_case):
     return unittest.skipUnless(is_paddlesde_available(), "test requires paddlesde")(test_case)
 
 
+def require_peft_backend(test_case):
+    """
+    Decorator marking a test that requires PEFT backend, this would require some specific versions of PEFT and
+    transformers.
+    """
+    return unittest.skipUnless(USE_PPPEFT_BACKEND, "test requires PEFT backend")(test_case)
+
+
+def deprecate_after_peft_backend(test_case):
+    """
+    Decorator marking a test that will be skipped after PEFT backend
+    """
+    return unittest.skipUnless(not USE_PPPEFT_BACKEND, "test skipped in favor of PEFT backend")(test_case)
+
+
+def require_python39_or_higher(test_case):
+    def python39_available():
+        sys_info = sys.version_info
+        major, minor = sys_info.major, sys_info.minor
+        return major == 3 and minor >= 9
+
+    return unittest.skipUnless(python39_available(), "test requires Python 3.9 or higher")(test_case)
+
+
 def load_numpy(arry: Union[str, np.ndarray], local_path: Optional[str] = None) -> np.ndarray:
     if isinstance(arry, str):
         # local_path = "/home/patrick_huggingface_co/"
@@ -286,6 +325,7 @@ def load_pd(url: str):
 def load_image(image: Union[str, PIL.Image.Image]) -> PIL.Image.Image:
     """
     Loads `image` to a PIL Image.
+
     Args:
         image (`str` or `PIL.Image.Image`):
             The image to convert to the PIL Image format.
@@ -558,13 +598,12 @@ def pytest_terminal_summary_main(tr, id):
             tr._tw.line(longrepr)
             # note: not printing out any rep.sections to keep the report short
 
-        # use ready-made report funcs, we are just hijacking the filehandle to log to a dedicated file each
-        # adapted from https://github.com/pytest-dev/pytest/blob/897f151e/src/_pytest/terminal.py#L814
-        # note: some pytest plugins may interfere by hijacking the default `terminalreporter` (e.g.
-        # pytest-instafail does that)
+    # use ready-made report funcs, we are just hijacking the filehandle to log to a dedicated file each
+    # adapted from https://github.com/pytest-dev/pytest/blob/897f151e/src/_pytest/terminal.py#L814
+    # note: some pytest plugins may interfere by hijacking the default `terminalreporter` (e.g.
+    # pytest-instafail does that)
 
-        # report failures with line/short/long styles
-
+    # report failures with line/short/long styles
     config.option.tbstyle = "auto"  # full tb
     with open(report_files["failures_long"], "w") as f:
         tr._tw = create_terminal_writer(config, f)
@@ -608,10 +647,48 @@ def pytest_terminal_summary_main(tr, id):
     config.option.tbstyle = orig_tbstyle
 
 
+# Copied from https://github.com/huggingface/transformers/blob/000e52aec8850d3fe2f360adc6fd256e5b47fe4c/src/transformers/testing_utils.py#L1905
+def is_flaky(max_attempts: int = 5, wait_before_retry: Optional[float] = None, description: Optional[str] = None):
+    """
+    To decorate flaky tests. They will be retried on failures.
+
+    Args:
+        max_attempts (`int`, *optional*, defaults to 5):
+            The maximum number of attempts to retry the flaky test.
+        wait_before_retry (`float`, *optional*):
+            If provided, will wait that number of seconds before retrying the test.
+        description (`str`, *optional*):
+            A string to describe the situation (what / where / why is flaky, link to GH issue/PR comments, errors,
+            etc.)
+    """
+
+    def decorator(test_func_ref):
+        @functools.wraps(test_func_ref)
+        def wrapper(*args, **kwargs):
+            retry_count = 1
+
+            while retry_count < max_attempts:
+                try:
+                    return test_func_ref(*args, **kwargs)
+
+                except Exception as err:
+                    print(f"Test failed with {err} at try {retry_count}/{max_attempts}.", file=sys.stderr)
+                    if wait_before_retry is not None:
+                        time.sleep(wait_before_retry)
+                    retry_count += 1
+
+            return test_func_ref(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
 # Taken from: https://github.com/huggingface/transformers/blob/3658488ff77ff8d45101293e749263acf437f4d5/src/transformers/testing_utils.py#L1787
 def run_test_in_subprocess(test_case, target_func, inputs=None, timeout=None):
     """
     To run a test in a subprocess. In particular, this can avoid (GPU) memory issue.
+
     Args:
         test_case (`unittest.TestCase`):
             The test that will run `target_func`.
@@ -717,18 +794,3 @@ def disable_full_determinism():
     os.environ["FLAGS_cudnn_deterministic"] = "False"
     os.environ["FLAGS_cpu_deterministic"] = "False"
     os.environ["NVIDIA_TF32_OVERRIDE"] = "1"
-
-
-def get_examples_pipeline(name=None):
-    """
-    Args:
-        name: The pipeline name.
-    Return:
-        The full path to pipeline, or just name.
-    """
-    ppdiffusers_dir = os.path.dirname(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
-    pipeline_file = os.path.join(ppdiffusers_dir, "examples", "community", name + ".py")
-    if os.path.exists(pipeline_file):
-        return pipeline_file
-    else:
-        return name

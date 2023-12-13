@@ -47,7 +47,7 @@ def _no_grad_uniform_(tensor, a, b):
 def _no_grad_normal_(tensor, mean=0.0, std=1.0):
     with paddle.no_grad():
         # try:
-        tensor.copy_(paddle.normal(mean=mean, std=std, shape=tensor.shape), True)
+        tensor.copy_(paddle.normal(mean=mean, std=std, shape=tensor.shape), False)
         # except:
         # breakpoint()
     return tensor

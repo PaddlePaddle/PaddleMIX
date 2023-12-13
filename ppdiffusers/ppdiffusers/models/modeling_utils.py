@@ -1,5 +1,5 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# coding=utf-8
+# Copyright 2023 The HuggingFace Inc. team.
 # Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,36 +14,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import gc
+import json
 import os
+from collections import OrderedDict
+from contextlib import ExitStack
 from functools import partial
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
-import paddle
-import paddle.nn as nn
+import numpy as np
+from aistudio_sdk.hub import create_repo as aistudio_create_repo
+from huggingface_hub import create_repo
+from paddle import nn
+from tqdm import tqdm
 
+from .. import __version__
 from ..utils import (
     CONFIG_NAME,
     DIFFUSERS_CACHE,
+    FROM_AISTUDIO,
     FROM_DIFFUSERS,
     FROM_HF_HUB,
     HF_HUB_OFFLINE,
     LOW_CPU_MEM_USAGE_DEFAULT,
+    PADDLE_SAFETENSORS_WEIGHTS_NAME,
+    PADDLE_SAFETENSORS_WEIGHTS_NAME_INDEX_NAME,
     PADDLE_WEIGHTS_NAME,
+    PADDLE_WEIGHTS_NAME_INDEX_NAME,
     PPDIFFUSERS_CACHE,
     TO_DIFFUSERS,
     TORCH_SAFETENSORS_WEIGHTS_NAME,
+    TORCH_SAFETENSORS_WEIGHTS_NAME_INDEX_NAME,
     TORCH_WEIGHTS_NAME,
+    TORCH_WEIGHTS_NAME_INDEX_NAME,
     _add_variant,
     _get_model_file,
+    check_pppeft_version,
     deprecate,
+    get_checkpoint_shard_files,
+    is_paddle_available,
+    is_paddle_version,
     is_paddlenlp_available,
     is_safetensors_available,
     is_torch_available,
-    is_torch_file,
     logging,
     smart_load,
 )
-from ..version import VERSION as __version__
 from .modeling_pytorch_paddle_utils import (
     convert_paddle_state_dict_to_pytorch,
     convert_pytorch_state_dict_to_paddle,
@@ -51,67 +67,37 @@ from .modeling_pytorch_paddle_utils import (
 
 logger = logging.get_logger(__name__)
 
-if is_safetensors_available():
-    from safetensors.numpy import save_file as safetensors_numpy_save_file
-
-    if is_torch_available():
-        from safetensors.torch import save_file as safetensors_torch_save_file
-
 if is_torch_available():
     import torch
 
-if is_paddlenlp_available:
+if is_safetensors_available():
+    from safetensors import safe_open
+    from safetensors.numpy import save_file as np_safe_save_file
+
+    if is_torch_available():
+        from safetensors.torch import save_file as torch_safe_save_file
+
+if is_paddle_available():
+    import paddle
+
+if is_paddlenlp_available():
     try:
         from paddlenlp.transformers.model_utils import no_init_weights
     except ImportError:
         from ..utils.paddle_utils import no_init_weights
+    # from paddlenlp.transformers.utils import device_guard
 
 
-def get_parameter_device(parameter: nn.Layer):
-    try:
-        # TODO https://github.com/huggingface/diffusers/compare/v0.15.0...v0.16.0#diff-6a3b9a08c1d37dbc341131632415fea800af242a84fb31f1bcd40d725e2eeeebR64
-        return next(parameter.named_parameters())[1].place
-    except StopIteration:
-        try:
-            return next(parameter.named_buffers())[1].place
-        except StopIteration:
-            return paddle.get_device()
-
-
-# TODO, update this in the near future https://github.com/huggingface/diffusers/compare/v0.16.1...v0.19.3#diff-6a3b9a08c1d37dbc341131632415fea800af242a84fb31f1bcd40d725e2eeeebR79
-def get_parameter_dtype(parameter: nn.Layer) -> paddle.dtype:
-    try:
-        # TODO https://github.com/huggingface/diffusers/compare/v0.15.0...v0.16.0#diff-6a3b9a08c1d37dbc341131632415fea800af242a84fb31f1bcd40d725e2eeeebR80
-        return next(parameter.named_parameters())[1].dtype
-    except StopIteration:
-        try:
-            return next(parameter.named_buffers())[1].dtype
-        except StopIteration:
-            return parameter._dtype
-
-
-def convert_state_dict(state_dict, framework="torch"):
-    if framework in ["torch", "pt"]:
-        # support bfloat16
-        newstate_dict = {}
-        for k, v in state_dict.items():
-            if v.dtype == paddle.bfloat16:
-                v = v.cast("float32").cpu().numpy()
-                newstate_dict[k] = torch.tensor(v).to(torch.bfloat16)
-            else:
-                newstate_dict[k] = torch.tensor(v.cpu().numpy())
-        return newstate_dict
-    elif framework in ["numpy", "np"]:
-        state_dict = {k: v.cpu().numpy() for k, v in state_dict.items()}
-        return state_dict
-    elif framework in ["paddle", "pd"]:
-        state_dict = {k: paddle.to_tensor(v, place="cpu") for k, v in state_dict.items()}
-        return state_dict
-    else:
-        raise NotImplementedError(f"Not Implemented {framework} framework!")
-
-
-from contextlib import ExitStack
+def faster_set_state_dict(model, state_dict):
+    # the state_dict will be destroied.
+    with paddle.no_grad():
+        for k, v in model.state_dict().items():
+            if k in state_dict:
+                v_new = state_dict.pop(k)
+                # with device_guard(): donot do device guard
+                if isinstance(v_new, np.ndarray):
+                    v_new = paddle.Tensor(v_new, zero_copy=True)
+                v.copy_(v_new._to(dtype=v.dtype), False)
 
 
 class ContextManagers:
@@ -132,6 +118,170 @@ class ContextManagers:
         self.stack.__exit__(*args, **kwargs)
 
 
+def get_parameter_device(parameter: nn.Layer):
+    try:
+        # TODO https://github.com/huggingface/diffusers/compare/v0.15.0...v0.16.0#diff-6a3b9a08c1d37dbc341131632415fea800af242a84fb31f1bcd40d725e2eeeebR64
+        return next(parameter.named_parameters())[1].place
+    except StopIteration:
+        try:
+            return next(parameter.named_buffers())[1].place
+        except StopIteration:
+            return paddle.get_device()
+
+
+def get_parameter_dtype(parameter: nn.Layer) -> paddle.dtype:
+    try:
+        # TODO https://github.com/huggingface/diffusers/compare/v0.15.0...v0.16.0#diff-6a3b9a08c1d37dbc341131632415fea800af242a84fb31f1bcd40d725e2eeeebR80
+        return next(parameter.named_parameters())[1].dtype
+    except StopIteration:
+        try:
+            return next(parameter.named_buffers())[1].dtype
+        except StopIteration:
+            return parameter._dtype
+
+
+def load_state_dict(
+    checkpoint_file: Union[str, os.PathLike], state_dict, tensor_parallel_split_mapping=None, ignore_keys=None
+):
+    """
+    Reads a PaddlePaddle checkpoint file, returning properly formatted errors if they arise.
+    """
+    if tensor_parallel_split_mapping is None:
+        tensor_parallel_split_mapping = {}
+    data_format = "pd"
+    if checkpoint_file.endswith(".safetensors") and is_safetensors_available():
+        # Check format of the archive
+        with safe_open(checkpoint_file, framework="np") as f:
+            metadata = f.metadata()
+        if metadata.get("format") not in ["pt", "pd", "np"]:
+            raise OSError(
+                f"The safetensors archive passed at {checkpoint_file} does not contain the valid metadata. Make sure "
+                "you save your model with the `save_pretrained` method."
+            )
+        data_format = metadata.get("format")
+        with safe_open(checkpoint_file, framework="np") as f:
+            for key in f.keys():
+                need_continue = False
+                if ignore_keys is not None:
+                    for ik in ignore_keys:
+                        if key.startswith(ik):
+                            logger.info("Deleting key {} from state_dict.".format(key))
+                            need_continue = True
+                            break
+                if need_continue:
+                    continue
+                py_safe_slice_ = f.get_slice(key)
+                if key in tensor_parallel_split_mapping:
+                    weight = tensor_parallel_split_mapping[key](py_safe_slice_)
+                else:
+                    weight = py_safe_slice_[:]
+                state_dict[key] = weight
+
+        for k in list(state_dict.keys()):
+            # with device_guard():
+            state_dict[k] = paddle.Tensor(state_dict.pop(k), zero_copy=True)
+    else:
+        if any(checkpoint_file.endswith(suffix) for suffix in [".pt", ".pth", ".bin", ".ckpt"]):
+            data_format = "pt"
+
+        tmp_state_dict = smart_load(checkpoint_file, return_numpy=True)
+        for key in list(tmp_state_dict.keys()):
+            need_continue = False
+            for ik in ignore_keys:
+                if key.startswith(ik):
+                    logger.info("Deleting key {} from state_dict.".format(key))
+                    need_continue = True
+                    break
+            if need_continue:
+                continue
+            # with device_guard():
+            state_dict[key] = paddle.Tensor(tmp_state_dict.pop(key), zero_copy=True)
+    return data_format
+
+
+def shard_checkpoint(
+    state_dict: Dict[str, paddle.Tensor],
+    max_shard_size: Union[int, str] = "10GB",
+    weights_name: str = PADDLE_WEIGHTS_NAME,
+    shard_format="naive",
+):
+    """
+    Splits a model state dictionary in sub-checkpoints so that the final size of each sub-checkpoint does not exceed a
+    given size.
+
+    The sub-checkpoints are determined by iterating through the `state_dict` in the order of its keys, so there is no
+    optimization made to make each sub-checkpoint as close as possible to the maximum size passed. For example, if the
+    limit is 10GB and we have weights of sizes [6GB, 6GB, 2GB, 6GB, 2GB, 2GB] they will get sharded as [6GB], [6+2GB],
+    [6+2+2GB] and not [6+2+2GB], [6+2GB], [6GB].
+
+    <Tip warning={true}>
+
+    If one of the model's weight is bigger that `max_sahrd_size`, it will end up in its own sub-checkpoint which will
+    have a size greater than `max_shard_size`.
+
+    </Tip>
+
+    Args:
+        state_dict (`Dict[str, paddle.Tensor]`): The state dictionary of a model to save.
+        max_shard_size (`int` or `str`, *optional*, defaults to `"10GB"`):
+            The maximum size of each sub-checkpoint. If expressed as a string, needs to be digits followed by a unit
+            (like `"5MB"`).
+        weights_name (`str`, *optional*, defaults to `"model_state.pdparams"`):
+            The name of the model save file.
+        shard_format (`str`, *optional*, defaults to `"naive"`):
+            only support naive.
+    """
+    assert shard_format in [
+        "naive",
+    ], f"Invalid shard_format: {shard_format}, it should be `naive`."
+    from paddlenlp.transformers.utils import convert_file_size_to_int, dtype_byte_size
+
+    max_shard_size = convert_file_size_to_int(max_shard_size)
+
+    sharded_state_dicts = []
+    current_block = {}
+    current_block_size = 0
+    total_size = 0
+
+    if shard_format == "naive":
+        for key, weight in state_dict.items():
+            weight_size = weight.numel().item() * dtype_byte_size(weight.dtype)
+            # If this weight is going to tip up over the maximal size, we split.
+            if current_block_size + weight_size > max_shard_size:
+                # fix if the first param is large than max_shard_size
+                if len(current_block) > 0:
+                    sharded_state_dicts.append(current_block)
+                current_block = {}
+                current_block_size = 0
+
+            current_block[key] = weight
+            current_block_size += weight_size
+            total_size += weight_size
+
+        # Add the last block
+        sharded_state_dicts.append(current_block)
+
+    # If we only have one shard, we return it
+    if len(sharded_state_dicts) == 1:
+        return {weights_name: sharded_state_dicts[0]}, None
+
+    # Otherwise, let's build the index
+    weight_map = {}
+    shards = {}
+    for idx, shard in enumerate(sharded_state_dicts):
+        weights_name_list = weights_name.split(".")
+        weights_name_list[-2] = weights_name_list[-2] + f"-{idx+1:05d}-of-{len(sharded_state_dicts):05d}"
+        shard_file = ".".join(weights_name_list)
+        shards[shard_file] = shard
+        for key in shard.keys():
+            weight_map[key] = shard_file
+
+    # Add the metadata
+    metadata = {"total_size": total_size}
+    index = {"metadata": metadata, "weight_map": weight_map}
+    return shards, index
+
+
 class ModelMixin(nn.Layer):
     r"""
     Base class for all models.
@@ -140,12 +290,13 @@ class ModelMixin(nn.Layer):
     saving models.
 
         - **config_name** ([`str`]) -- Filename to save a model to when calling [`~models.ModelMixin.save_pretrained`].
-
     """
+
     config_name = CONFIG_NAME
     _automatically_saved_args = ["_ppdiffusers_version", "_class_name", "_name_or_path"]
     _supports_gradient_checkpointing = False
     _keys_to_ignore_on_load_unexpected = None
+    _hf_peft_config_loaded = False
 
     def __init__(self):
         super().__init__()
@@ -178,7 +329,7 @@ class ModelMixin(nn.Layer):
             for m in self.sublayers(include_self=True)
         )
 
-    def enable_gradient_checkpointing(self):
+    def enable_gradient_checkpointing(self) -> None:
         """
         Activates gradient checkpointing for the current model (may be referred to as *activation checkpointing* or
         *checkpoint activations* in other frameworks).
@@ -187,7 +338,7 @@ class ModelMixin(nn.Layer):
             raise ValueError(f"{self.__class__.__name__} does not support gradient checkpointing.")
         self.apply(partial(self._set_gradient_checkpointing, value=True))
 
-    def disable_gradient_checkpointing(self):
+    def disable_gradient_checkpointing(self) -> None:
         """
         Deactivates gradient checkpointing for the current model (may be referred to as *activation checkpointing* or
         *checkpoint activations* in other frameworks).
@@ -210,17 +361,22 @@ class ModelMixin(nn.Layer):
             if isinstance(module, nn.Layer):
                 fn_recursive_set_mem_eff(module)
 
-    def enable_xformers_memory_efficient_attention(self, attention_op: Optional[str] = None):
+    def enable_xformers_memory_efficient_attention(self, attention_op: Optional[str] = None) -> None:
         r"""
         Enable memory efficient attention from [xFormers](https://facebookresearch.github.io/xformers/).
+
         When this option is enabled, you should observe lower GPU memory usage and a potential speed up during
         inference. Speed up during training is not guaranteed.
+
         <Tip warning={true}>
+
         ⚠️ When memory efficient attention and sliced attention are both enabled, memory efficient attention takes
         precedent.
+
         </Tip>
+
         Parameters:
-            attention_op (`Callable`, *optional*):
+            attention_op (`str`, *optional*):
                 Override the default `None`
 
         Examples:
@@ -232,25 +388,87 @@ class ModelMixin(nn.Layer):
         >>> model = UNet2DConditionModel.from_pretrained(
         ...     "stabilityai/stable-diffusion-2-1", subfolder="unet", paddle_dtype=paddle.float16
         ... )
-        >>> model.enable_xformers_memory_efficient_attention()
+        >>> model.enable_xformers_memory_efficient_attention(attention_op="auto")
         ```
         """
         self.set_use_memory_efficient_attention_xformers(True, attention_op)
 
-    def disable_xformers_memory_efficient_attention(self):
+    def disable_xformers_memory_efficient_attention(self) -> None:
         r"""
         Disable memory efficient attention as implemented in xformers.
         """
         self.set_use_memory_efficient_attention_xformers(False)
 
+    def add_adapter(self, adapter_config, adapter_name: str = "default") -> None:
+        r"""
+        Adds a new adapter to the current model for training. If no adapter name is passed, a default name is assigned
+        to the adapter to follow the convention of the PEFT library.
+
+        If you are not familiar with adapters and PEFT methods, we invite you to read more about them in the PEFT
+        [documentation](https://huggingface.co/docs/peft).
+
+        Args:
+            adapter_config (`[~peft.PeftConfig]`):
+                The configuration of the adapter to add; supported adapters are non-prefix tuning and adaption prompt
+                methods.
+            adapter_name (`str`, *optional*, defaults to `"default"`):
+                The name of the adapter to add. If no name is passed, a default name is assigned to the adapter.
+        """
+        check_pppeft_version()
+
+    def set_adapter(self, adapter_name: Union[str, List[str]]) -> None:
+        """
+        Sets a specific adapter by forcing the model to only use that adapter and disables the other adapters.
+
+        If you are not familiar with adapters and PEFT methods, we invite you to read more about them on the PEFT
+        official documentation: https://huggingface.co/docs/peft
+
+        Args:
+            adapter_name (Union[str, List[str]])):
+                The list of adapters to set or the adapter name in case of single adapter.
+        """
+        check_pppeft_version()
+
+    def disable_adapters(self) -> None:
+        r"""
+        Disable all adapters attached to the model and fallback to inference with the base model only.
+
+        If you are not familiar with adapters and PEFT methods, we invite you to read more about them on the PEFT
+        official documentation: https://huggingface.co/docs/peft
+        """
+        check_pppeft_version()
+
+    def enable_adapters(self) -> None:
+        """
+        Enable adapters that are attached to the model. The model will use `self.active_adapters()` to retrieve the
+        list of adapters to enable.
+
+        If you are not familiar with adapters and PEFT methods, we invite you to read more about them on the PEFT
+        official documentation: https://huggingface.co/docs/peft
+        """
+        check_pppeft_version()
+
+    def active_adapters(self) -> List[str]:
+        """
+        Gets the current list of active adapters of the model.
+
+        If you are not familiar with adapters and PEFT methods, we invite you to read more about them on the PEFT
+        official documentation: https://huggingface.co/docs/peft
+        """
+        check_pppeft_version()
+
     def save_pretrained(
         self,
         save_directory: Union[str, os.PathLike],
         is_main_process: bool = True,
-        save_function: Callable = None,
-        safe_serialization: bool = False,
+        save_function: Optional[Callable] = None,
+        max_shard_size: Union[int, str] = "10GB",
+        safe_serialization: bool = True,
         variant: Optional[str] = None,
+        push_to_hub: bool = False,
+        save_to_aistudio: bool = False,
         to_diffusers: Optional[bool] = None,
+        **kwargs,
     ):
         """
         Save a model and its configuration file to a directory so that it can be reloaded using the
@@ -267,15 +485,19 @@ class ModelMixin(nn.Layer):
                 The function to use to save the state dictionary. Useful during distributed training when you need to
                 replace `torch.save` with another method. Can be configured with the environment variable
                 `DIFFUSERS_SAVE_MODE`.
-            safe_serialization (`bool`, *optional*, defaults to `False`):
+            safe_serialization (`bool`, *optional*, defaults to `True`):
                 Whether to save the model using `safetensors` or the traditional PyTorch way with `pickle`.
             variant (`str`, *optional*):
                 If specified, weights are saved in the format `pytorch_model.<variant>.bin`.
+            push_to_hub (`bool`, *optional*, defaults to `False`):
+                Whether or not to push your model to the Hugging Face Hub after saving it. You can specify the
+                repository you want to push to with `repo_id` (will default to the name of `save_directory` in your
+                namespace).
+            kwargs (`Dict[str, Any]`, *optional*):
+                Additional keyword arguments passed along to the [`~utils.PushToHubMixin.push_to_hub`] method.
         """
         if to_diffusers is None:
             to_diffusers = TO_DIFFUSERS
-        if to_diffusers and safe_serialization and not is_safetensors_available():
-            raise ImportError("`safe_serialization` requires the `safetensors library: `pip install safetensors`.")
 
         if os.path.isfile(save_directory):
             logger.error(f"Provided path ({save_directory}) should be a directory, not a file")
@@ -283,6 +505,37 @@ class ModelMixin(nn.Layer):
 
         os.makedirs(save_directory, exist_ok=True)
 
+        # create repo
+        commit_message = kwargs.pop("commit_message", None)
+        private = kwargs.pop("private", False)
+        create_pr = kwargs.pop("create_pr", False)
+        token = kwargs.pop("token", None)
+        token_kwargs = {}
+        if token is not None:
+            token_kwargs["token"] = token
+        repo_id = kwargs.pop("repo_id", save_directory.split(os.path.sep)[-1])
+        license = kwargs.pop("license", "creativeml-openrail-m")
+        exist_ok = kwargs.pop("exist_ok", True)
+
+        if push_to_hub:
+            repo_id = create_repo(repo_id, exist_ok=True, private=private, **token_kwargs).repo_id
+
+        if save_to_aistudio:
+            assert "/" in repo_id, "Please specify the repo id in format of `user_id/repo_name`"
+            res = aistudio_create_repo(repo_id=repo_id, private=private, license=license, **token_kwargs)
+            if "error_code" in res:
+                if res["error_code"] == 10003 and exist_ok:
+                    logger.info(
+                        f"Repo {repo_id} already exists, it will override files with the same name. To avoid this, please set exist_ok=False"
+                    )
+                else:
+                    logger.error(
+                        f"Failed to create repo {repo_id}, error_code: {res['error_code']}, error_msg: {res['error_msg']}"
+                    )
+            else:
+                logger.info(f"Successfully created repo {repo_id}")
+
+        # Only save the model itself if we are using distributed training
         model_to_save = self
 
         # Attach architecture to the config
@@ -293,44 +546,88 @@ class ModelMixin(nn.Layer):
         # Save the model
         state_dict = model_to_save.state_dict()
 
-        # save ignore lora_weights
-        fn = lambda k: ".lora_" in k or ".alpha" in k
-        state_dict = {k: v for k, v in state_dict.items() if not fn(k)}
-
-        # choose save_function
-        if save_function is None:
-            if to_diffusers:
-                if safe_serialization:
-                    if is_torch_available():
-                        save_function = safetensors_torch_save_file
-                        state_dict = convert_state_dict(state_dict, framework="torch")
-                    else:
-                        save_function = safetensors_numpy_save_file
-                        state_dict = convert_state_dict(state_dict, framework="numpy")
-                    weights_name = _add_variant(TORCH_SAFETENSORS_WEIGHTS_NAME, variant)
+        if to_diffusers:
+            if not is_torch_available() and not safe_serialization:
+                safe_serialization = True
+                logger.warning(
+                    "PyTorch is not installed, and `safe_serialization` is currently set to `False`. "
+                    "To ensure proper model saving, we will automatically set `safe_serialization=True`. "
+                    "If you want to keep `safe_serialization=False`, please make sure PyTorch is installed."
+                )
+            if safe_serialization:
+                save_index_file = TORCH_SAFETENSORS_WEIGHTS_NAME_INDEX_NAME
+                weights_name = TORCH_SAFETENSORS_WEIGHTS_NAME
+                if is_torch_available():
+                    save_function = partial(torch_safe_save_file, metadata={"format": "pt"})
                 else:
-                    if not is_torch_available():
-                        raise ImportError(
-                            "`to_diffusers=True` with `safe_serialization=False` requires the `torch library: `pip install torch`."
-                        )
-                    save_function = torch.save
-                    weights_name = _add_variant(TORCH_WEIGHTS_NAME, variant)
-                    state_dict = convert_state_dict(state_dict, framework="torch")
-
-                state_dict = convert_paddle_state_dict_to_pytorch(state_dict, model_to_save)
+                    save_function = partial(np_safe_save_file, metadata={"format": "pt"})
             else:
+                save_index_file = TORCH_WEIGHTS_NAME_INDEX_NAME
+                weights_name = TORCH_WEIGHTS_NAME
+                save_function = torch.save
+        else:
+            if safe_serialization:
+                save_index_file = PADDLE_SAFETENSORS_WEIGHTS_NAME_INDEX_NAME
+                weights_name = PADDLE_SAFETENSORS_WEIGHTS_NAME
+                save_function = partial(np_safe_save_file, metadata={"format": "pd"})
+            else:
+                save_index_file = PADDLE_WEIGHTS_NAME_INDEX_NAME
+                weights_name = PADDLE_WEIGHTS_NAME
                 save_function = paddle.save
-                weights_name = _add_variant(PADDLE_WEIGHTS_NAME, variant)
+
+        weights_name = _add_variant(weights_name, variant)
+
+        # Save model
+        shards, index = shard_checkpoint(
+            state_dict,
+            max_shard_size=max_shard_size,
+            weights_name=weights_name,
+        )
+        # Save the model
+        for shard_file, shard in shards.items():
+            for k in list(shard.keys()):
+                if isinstance(shard[k], paddle.Tensor):
+                    shard[k] = np.ascontiguousarray(shard.pop(k).cpu().numpy())
+            if to_diffusers:
+                convert_paddle_state_dict_to_pytorch(self, shard)
+            save_function(shard, os.path.join(save_directory, shard_file))
 
         # Save the model
-        save_function(state_dict, os.path.join(save_directory, weights_name))
+        if index is None:
+            logger.info(f"Model weights saved in {os.path.join(save_directory, weights_name)}")
 
-        logger.info(f"Model weights saved in {os.path.join(save_directory, weights_name)}")
+        else:
+            save_index_file = os.path.join(save_directory, _add_variant(save_index_file, variant))
+            # Save the index as well
+            with open(save_index_file, "w", encoding="utf-8") as f:
+                content = json.dumps(index, indent=2) + "\n"
+                f.write(content)
+            logger.info(
+                f"The model is bigger than the maximum size per checkpoint ({max_shard_size}) and is going to be "
+                f"split in {len(shards)} checkpoint shards. You can find where each parameters has been saved in the "
+                f"index located at {save_index_file}."
+            )
+        # upload to aistudio or huggingface hub
+        if save_to_aistudio:
+            self._upload_folder_aistudio(
+                save_directory,
+                repo_id,
+                commit_message=commit_message,
+                **token_kwargs,
+            )
+        if push_to_hub:
+            self._upload_folder(
+                save_directory,
+                repo_id,
+                commit_message=commit_message,
+                create_pr=create_pr,
+                **token_kwargs,
+            )
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path: Optional[Union[str, os.PathLike]], **kwargs):
         r"""
-        Instantiate a pretrained Paddle model from a pretrained model configuration.
+        Instantiate a pretrained PyTorch model from a pretrained model configuration.
 
         The model is set in evaluation mode - `model.eval()` - by default, and dropout modules are deactivated. To
         train the model, set it back in training mode with `model.train()`.
@@ -347,8 +644,8 @@ class ModelMixin(nn.Layer):
             cache_dir (`Union[str, os.PathLike]`, *optional*):
                 Path to a directory where a downloaded pretrained model configuration is cached if the standard cache
                 is not used.
-            torch_dtype (`str` or `torch.dtype`, *optional*):
-                Override the default `torch.dtype` and load the model with another dtype. If `"auto"` is passed, the
+            paddle_dtype (`str` or `paddle.dtype`, *optional*):
+                Override the default `paddle.dtype` and load the model with another dtype. If `"auto"` is passed, the
                 dtype is automatically derived from the model's weights.
             force_download (`bool`, *optional*, defaults to `False`):
                 Whether or not to force the (re-)download of the model weights and configuration files, overriding the
@@ -420,7 +717,7 @@ class ModelMixin(nn.Layer):
         Example:
 
         ```py
-        from ppdiffusers import UNet2DConditionModel
+        from diffusers import UNet2DConditionModel
 
         unet = UNet2DConditionModel.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="unet")
         ```
@@ -434,9 +731,15 @@ class ModelMixin(nn.Layer):
         ```
         """
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
-        cache_dir = (
-            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
-        )
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = None  # TODO, check aistudio cache
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
         ignore_mismatched_sizes = kwargs.pop("ignore_mismatched_sizes", False)
         force_download = kwargs.pop("force_download", False)
         from_diffusers = kwargs.pop("from_diffusers", FROM_DIFFUSERS)
@@ -447,22 +750,26 @@ class ModelMixin(nn.Layer):
         use_auth_token = kwargs.pop("use_auth_token", None)
         revision = kwargs.pop("revision", None)
         paddle_dtype = kwargs.pop("paddle_dtype", None)
-        subfolder = kwargs.pop("subfolder", None)
+        subfolder = kwargs.pop("subfolder", "")
+        if subfolder is None:
+            subfolder = ""
         device_map = kwargs.pop("device_map", None)
         max_memory = kwargs.pop("max_memory", None)
         offload_folder = kwargs.pop("offload_folder", None)
         offload_state_dict = kwargs.pop("offload_state_dict", False)
-        ignore_keys = kwargs.pop("ignore_keys", None)
         low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", LOW_CPU_MEM_USAGE_DEFAULT)
         variant = kwargs.pop("variant", None)
         use_safetensors = kwargs.pop("use_safetensors", None)
+        ignore_keys = kwargs.pop("ignore_keys", [])
 
-        if from_diffusers and use_safetensors and not is_safetensors_available():
-            raise ValueError(
-                "`use_safetensors`=True but safetensors is not installed. Please install safetensors with `pip install safetensors"
-            )
         if use_safetensors is None:
-            use_safetensors = is_safetensors_available()
+            use_safetensors = True
+
+        if low_cpu_mem_usage and not is_paddle_version(">=", "2.5.0"):
+            raise NotImplementedError(
+                "Low memory initialization requires paddlepaddle-gpu >= 2.5.0. Please either update your PaddlePaddle version or set"
+                " `low_cpu_mem_usage=False`."
+            )
 
         # Load config if we don't provide a configuration
         config_path = pretrained_model_name_or_path
@@ -474,11 +781,12 @@ class ModelMixin(nn.Layer):
         }
 
         # load config
-        config, unused_kwargs, commit_hash = cls.load_config(
+        config, unused_kwargs, commit_hash, config_file = cls.load_config(
             config_path,
             cache_dir=cache_dir,
             return_unused_kwargs=True,
             return_commit_hash=True,
+            return_config_file=True,
             force_download=force_download,
             resume_download=resume_download,
             proxies=proxies,
@@ -486,24 +794,76 @@ class ModelMixin(nn.Layer):
             use_auth_token=use_auth_token,
             revision=revision,
             subfolder=subfolder,
-            user_agent=user_agent,
             device_map=device_map,
             max_memory=max_memory,
             offload_folder=offload_folder,
             offload_state_dict=offload_state_dict,
-            from_hf_hub=from_hf_hub,  # whether or not from_hf_hub
+            user_agent=user_agent,
+            from_hf_hub=from_hf_hub,
+            from_aistudio=from_aistudio,
             **kwargs,
         )
+        index_file = None
 
-        # This variable will flag if we're loading a sharded checkpoint. In this case the archive file is just the
-        # Load model
-        model_file = None
-        if from_diffusers:
-            if use_safetensors:
-                try:
-                    model_file = _get_model_file(
+        variant_list = [variant]
+        if "fp16" not in variant_list:
+            variant_list.append("fp16")
+        if "fp32" not in variant_list:
+            variant_list.append("fp32")
+        for v_index, variant in enumerate(variant_list):
+            try:
+                if use_safetensors:
+                    try:
+                        # is sharded model
+                        index_file = _get_model_file(
+                            pretrained_model_name_or_path,
+                            weights_name=_add_variant(TORCH_SAFETENSORS_WEIGHTS_NAME_INDEX_NAME, variant)
+                            if from_diffusers
+                            else _add_variant(PADDLE_SAFETENSORS_WEIGHTS_NAME_INDEX_NAME, variant),
+                            cache_dir=cache_dir,
+                            force_download=force_download,
+                            resume_download=resume_download,
+                            proxies=proxies,
+                            local_files_only=local_files_only,
+                            use_auth_token=use_auth_token,
+                            revision=revision,
+                            subfolder=subfolder,
+                            user_agent=user_agent,
+                            commit_hash=commit_hash,
+                            from_hf_hub=from_hf_hub,
+                            from_aistudio=from_aistudio,
+                        )
+                    except Exception:
+                        index_file = None
+                if index_file is None:
+                    # is sharded model
+                    try:
+                        index_file = _get_model_file(
+                            pretrained_model_name_or_path,
+                            weights_name=_add_variant(TORCH_WEIGHTS_NAME_INDEX_NAME, variant)
+                            if from_diffusers
+                            else _add_variant(PADDLE_WEIGHTS_NAME_INDEX_NAME, variant),
+                            cache_dir=cache_dir,
+                            force_download=force_download,
+                            resume_download=resume_download,
+                            proxies=proxies,
+                            local_files_only=local_files_only,
+                            use_auth_token=use_auth_token,
+                            revision=revision,
+                            subfolder=subfolder,
+                            user_agent=user_agent,
+                            commit_hash=commit_hash,
+                            from_hf_hub=from_hf_hub,
+                            from_aistudio=from_aistudio,
+                        )
+                    except Exception:
+                        index_file = None
+                is_sharded = index_file is not None
+
+                if is_sharded:
+                    resolved_model_files, sharded_metadata = get_checkpoint_shard_files(
                         pretrained_model_name_or_path,
-                        weights_name=_add_variant(TORCH_SAFETENSORS_WEIGHTS_NAME, variant),
+                        index_filename=index_file,
                         cache_dir=cache_dir,
                         force_download=force_download,
                         resume_download=resume_download,
@@ -515,69 +875,81 @@ class ModelMixin(nn.Layer):
                         user_agent=user_agent,
                         commit_hash=commit_hash,
                         from_hf_hub=from_hf_hub,
+                        from_aistudio=from_aistudio,
                     )
-                    # try load model_file with paddle / torch / safetensor
-                    state_dict = smart_load(model_file)
-                except Exception:
+                    if not isinstance(resolved_model_files, list):
+                        resolved_model_files = [resolved_model_files]
+                else:
+                    # load model
                     model_file = None
-                    pass
-            if model_file is None:
-                model_file = _get_model_file(
-                    pretrained_model_name_or_path,
-                    weights_name=_add_variant(TORCH_WEIGHTS_NAME, variant),
-                    cache_dir=cache_dir,
-                    force_download=force_download,
-                    resume_download=resume_download,
-                    proxies=proxies,
-                    local_files_only=local_files_only,
-                    use_auth_token=use_auth_token,
-                    revision=revision,
-                    subfolder=subfolder,
-                    user_agent=user_agent,
-                    commit_hash=commit_hash,
-                    from_hf_hub=from_hf_hub,
+                    if use_safetensors:
+                        try:
+                            model_file = _get_model_file(
+                                pretrained_model_name_or_path,
+                                weights_name=_add_variant(TORCH_SAFETENSORS_WEIGHTS_NAME, variant)
+                                if from_diffusers
+                                else _add_variant(PADDLE_SAFETENSORS_WEIGHTS_NAME, variant),
+                                cache_dir=cache_dir,
+                                force_download=force_download,
+                                resume_download=resume_download,
+                                proxies=proxies,
+                                local_files_only=local_files_only,
+                                use_auth_token=use_auth_token,
+                                revision=revision,
+                                subfolder=subfolder,
+                                user_agent=user_agent,
+                                commit_hash=commit_hash,
+                                from_hf_hub=from_hf_hub,
+                                from_aistudio=from_aistudio,
+                            )
+                        except Exception:
+                            model_file = None
+                            pass
+                    if model_file is None:
+                        model_file = _get_model_file(
+                            pretrained_model_name_or_path,
+                            weights_name=_add_variant(TORCH_WEIGHTS_NAME, variant)
+                            if from_diffusers
+                            else _add_variant(PADDLE_WEIGHTS_NAME, variant),
+                            cache_dir=cache_dir,
+                            force_download=force_download,
+                            resume_download=resume_download,
+                            proxies=proxies,
+                            local_files_only=local_files_only,
+                            use_auth_token=use_auth_token,
+                            revision=revision,
+                            subfolder=subfolder,
+                            user_agent=user_agent,
+                            commit_hash=commit_hash,
+                            from_hf_hub=from_hf_hub,
+                            from_aistudio=from_aistudio,
+                        )
+                    resolved_model_files = [model_file]
+            except Exception as e:  # NOQA
+                logger.warning(
+                    f"Unable to load the `variant={variant}` of the model from `{pretrained_model_name_or_path}`! "
+                    "Please make sure the specified variant exists and is correct."
                 )
-                # try load model_file with paddle / torch / safetensor
-                state_dict = smart_load(model_file)
-        else:
-            model_file = _get_model_file(
-                pretrained_model_name_or_path,
-                weights_name=_add_variant(PADDLE_WEIGHTS_NAME, variant),
-                cache_dir=cache_dir,
-                force_download=force_download,
-                resume_download=resume_download,
-                proxies=proxies,
-                local_files_only=local_files_only,
-                use_auth_token=use_auth_token,
-                revision=revision,
-                subfolder=subfolder,
-                user_agent=user_agent,
-                commit_hash=commit_hash,
-                from_hf_hub=from_hf_hub,
-            )
-            # try load model_file with paddle / torch / safetensor
-            state_dict = smart_load(model_file)
-
+                resolved_model_files = []
+            if len(resolved_model_files) > 0:
+                if v_index > 0:
+                    name = (
+                        ", ".join([config_file, index_file] + resolved_model_files)
+                        if index_file is not None
+                        else ", ".join(resolved_model_files)
+                    )
+                    logger.warning(
+                        f"Proceeding to load the `variant={variant}` of the model with the resolved model files: {name}. "
+                        "Please note that this might not be the desired variant."
+                    )
+                break
+        assert len(resolved_model_files) > 0, (
+            f"Could not find any model files in `{pretrained_model_name_or_path}`. "
+            "Please check the provided path and make sure it contains the necessary model files."
+        )
         init_contexts = []
 
-        dtype = set(v.dtype for v in state_dict.values() if paddle.is_tensor(v) and paddle.is_floating_point(v))
-        if len(dtype) > 1 and paddle.float32 not in dtype:
-            raise ValueError(
-                f"The weights of the model file {model_file} have a mixture of incompatible dtypes {dtype}. Please"
-                f" make sure that {model_file} weights have only one dtype."
-            )
-        elif len(dtype) > 1 and paddle.float32 in dtype:
-            dtype = paddle.float32
-        elif len(dtype) == 0:
-            dtype = paddle.float32
-        else:
-            dtype = dtype.pop()
-
-        # for
-        if "uint8" in str(dtype):
-            state_dict = {k: v.astype("float32") for k, v in state_dict.items()}
-            dtype = paddle.float32
-
+        dtype = paddle.float32 if paddle_dtype is None else paddle_dtype
         init_contexts.append(paddle.dtype_guard(dtype))
 
         if low_cpu_mem_usage:
@@ -589,28 +961,14 @@ class ModelMixin(nn.Layer):
         with ContextManagers(init_contexts):
             model = cls.from_config(config, **unused_kwargs)
 
-        # NOTE: convert old model state dict!
-        model._convert_deprecated_attention_blocks(state_dict)
-
-        # convert weights
-        if from_diffusers or is_torch_file(model_file):
-            state_dict = convert_pytorch_state_dict_to_paddle(state_dict, model)
-
-        # remove keys
-        if ignore_keys is not None:
-            keys = list(state_dict.keys())
-            for k in keys:
-                for ik in ignore_keys:
-                    if k.startswith(ik):
-                        logger.warning("Deleting key {} from state_dict.".format(k))
-                        del state_dict[k]
-
         model, missing_keys, unexpected_keys, mismatched_keys, error_msgs = cls._load_pretrained_model(
             model,
-            state_dict,
-            model_file,
+            resolved_model_files,
             pretrained_model_name_or_path,
             ignore_mismatched_sizes=ignore_mismatched_sizes,
+            ignore_keys=ignore_keys,
+            from_diffusers=from_diffusers,
+            tensor_parallel_split_mapping=None,
         )
 
         loading_info = {
@@ -620,10 +978,6 @@ class ModelMixin(nn.Layer):
             "error_msgs": error_msgs,
         }
 
-        # if paddle_dtype is not None and not isinstance(paddle_dtype, paddle.dtype):
-        #     raise ValueError(
-        #         f"{paddle_dtype} needs to be of type `paddle.dtype`, e.g. `paddle.float16`, but is {type(paddle_dtype)}."
-        #     )
         if paddle_dtype is not None:
             model = model.to(dtype=paddle_dtype)
 
@@ -639,62 +993,82 @@ class ModelMixin(nn.Layer):
     @classmethod
     def _load_pretrained_model(
         cls,
-        model,
-        state_dict,
-        resolved_archive_file,
-        pretrained_model_name_or_path,
-        ignore_mismatched_sizes=False,
+        model: "ModelMixin",
+        resolved_model_files,
+        pretrained_model_name_or_path: Union[str, os.PathLike],
+        ignore_mismatched_sizes: bool = False,
+        ignore_keys=None,
+        from_diffusers=False,
+        tensor_parallel_split_mapping=None,
     ):
-
-        # Retrieve missing & unexpected_keys
+        state_dict = OrderedDict()
         model_state_dict = model.state_dict()
-        loaded_keys = list(state_dict.keys())
-
+        loaded_keys = []
         expected_keys = list(model_state_dict.keys())
+        error_msgs = []
+        mismatched_keys = []
 
-        original_loaded_keys = loaded_keys
+        if len(resolved_model_files) > 1:
+            resolved_model_files = tqdm(resolved_model_files, desc="Loading checkpoint shards")
 
-        missing_keys = list(set(expected_keys) - set(loaded_keys))
-        unexpected_keys = list(set(loaded_keys) - set(expected_keys))
+        # load shard state dict
+        for shard_file in resolved_model_files:
+            data_format = load_state_dict(
+                shard_file,
+                state_dict,  # inplace update state_dict
+                tensor_parallel_split_mapping=tensor_parallel_split_mapping,
+                ignore_keys=ignore_keys,
+            )
+            # NOTE: convert old model state dict!
+            model._convert_deprecated_attention_blocks(state_dict)
 
-        # Make sure we are able to load base models as well as derived models (with heads)
-        model_to_load = model
+            # NOTE: convert torch model state dict!
+            if from_diffusers or data_format in ["pt"]:
+                convert_pytorch_state_dict_to_paddle(model, state_dict)
 
-        def _find_mismatched_keys(
-            state_dict,
-            model_state_dict,
-            loaded_keys,
-            ignore_mismatched_sizes,
-        ):
-            mismatched_keys = []
-            for checkpoint_key in loaded_keys:
-                model_key = checkpoint_key
+            original_loaded_keys = state_dict.keys()
+            loaded_keys.extend(original_loaded_keys)
 
-                if model_key in model_state_dict and list(state_dict[checkpoint_key].shape) != list(
-                    model_state_dict[model_key].shape
-                ):
-                    mismatched_keys.append(
-                        (checkpoint_key, state_dict[checkpoint_key].shape, model_state_dict[model_key].shape)
-                    )
-                    del state_dict[checkpoint_key]
-            if ignore_mismatched_sizes:
-                mismatched_keys = []
-            return mismatched_keys
+            # Make sure we are able to load base models as well as derived models (with heads)
+            model_to_load = model
 
-        if state_dict is not None:
-            # Whole checkpoint
-            mismatched_keys = _find_mismatched_keys(
+            def _find_mismatched_keys(
                 state_dict,
                 model_state_dict,
-                original_loaded_keys,
+                loaded_keys,
                 ignore_mismatched_sizes,
-            )
-            error_msgs = []
-            for key_name, loaded_shape, model_shape in mismatched_keys:
-                error_msgs.append(
-                    f"Error size mismatch, {key_name} receives a shape {loaded_shape}, but the expected shape is {model_shape}."
+            ):
+                mismatched_keys = []
+                for checkpoint_key in loaded_keys:
+                    model_key = checkpoint_key
+
+                    if model_key in model_state_dict and list(state_dict[checkpoint_key].shape) != list(
+                        model_state_dict[model_key].shape
+                    ):
+                        mismatched_keys.append(
+                            (checkpoint_key, state_dict[checkpoint_key].shape, model_state_dict[model_key].shape)
+                        )
+                        del state_dict[checkpoint_key]
+                if ignore_mismatched_sizes:
+                    mismatched_keys = []
+                return mismatched_keys
+
+            if state_dict is not None and len(state_dict) > 0:
+                _mismatched_keys = _find_mismatched_keys(
+                    state_dict,
+                    model_state_dict,
+                    original_loaded_keys,
+                    ignore_mismatched_sizes,
                 )
-            model_to_load.load_dict(state_dict)
+                mismatched_keys.extend(_mismatched_keys)
+                for key_name, loaded_shape, model_shape in _mismatched_keys:
+                    error_msgs.append(
+                        f"Error size mismatch, {key_name} receives a shape {loaded_shape}, but the expected shape is {model_shape}."
+                    )
+                faster_set_state_dict(model_to_load, state_dict)
+
+        missing_keys = sorted(list(set(expected_keys) - set(loaded_keys)))
+        unexpected_keys = sorted(list(set(loaded_keys) - set(expected_keys)))
 
         if len(error_msgs) > 0:
             error_msg = "\n\t".join(error_msgs)
@@ -743,7 +1117,8 @@ class ModelMixin(nn.Layer):
                 f" match:\n{mismatched_warning}\nYou should probably TRAIN this model on a down-stream task to be"
                 " able to use it for predictions and inference."
             )
-
+        del state_dict
+        gc.collect()
         return model, missing_keys, unexpected_keys, mismatched_keys, error_msgs
 
     @property
@@ -798,7 +1173,7 @@ class ModelMixin(nn.Layer):
         else:
             return sum(p.numel() for p in self.parameters() if not p.stop_gradient or not only_trainable)
 
-    def _convert_deprecated_attention_blocks(self, state_dict):
+    def _convert_deprecated_attention_blocks(self, state_dict: OrderedDict) -> None:
         deprecated_attention_block_paths = []
 
         def recursive_find_attn_block(name, module):
@@ -842,7 +1217,7 @@ class ModelMixin(nn.Layer):
             if f"{path}.proj_attn.bias" in state_dict:
                 state_dict[f"{path}.to_out.0.bias"] = state_dict.pop(f"{path}.proj_attn.bias")
 
-    def _temp_convert_self_to_deprecated_attention_blocks(self):
+    def _temp_convert_self_to_deprecated_attention_blocks(self) -> None:
         deprecated_attention_block_modules = []
 
         def recursive_find_attn_block(module):
@@ -869,10 +1244,10 @@ class ModelMixin(nn.Layer):
             del module.to_v
             del module.to_out
 
-    def _undo_temp_convert_self_to_deprecated_attention_blocks(self):
+    def _undo_temp_convert_self_to_deprecated_attention_blocks(self) -> None:
         deprecated_attention_block_modules = []
 
-        def recursive_find_attn_block(module):
+        def recursive_find_attn_block(module) -> None:
             if hasattr(module, "_from_deprecated_attn_block") and module._from_deprecated_attn_block:
                 deprecated_attention_block_modules.append(module)
 
@@ -891,47 +1266,3 @@ class ModelMixin(nn.Layer):
             del module.key
             del module.value
             del module.proj_attn
-
-    # def to(self=None, device=None, dtype=None, blocking=None):
-    #     # NOTE: https://github.com/PaddlePaddle/Paddle/issues/54777
-    #     # floating_only=True means we only cast floating weights!
-    #     return self._to_impl(
-    #         device=device,
-    #         dtype=dtype,
-    #         blocking=blocking,
-    #         include_sublayers=True,
-    #         floating_only=True, )
-
-
-def unfreeze_params(params):
-    for param in params:
-        param.stop_gradient = False
-
-
-def freeze_params(params):
-    for param in params:
-        param.stop_gradient = True
-
-
-def unfreeze_model(model: nn.Layer):
-    for param in model.parameters():
-        param.stop_gradient = False
-
-
-def freeze_model(model: nn.Layer):
-    for param in model.parameters():
-        param.stop_gradient = True
-
-
-def unwrap_model(model: nn.Layer) -> nn.Layer:
-    """
-    Recursively unwraps a model from potential containers (as used in distributed training).
-
-    Args:
-        model (`nn.Layer`): The model to unwrap.
-    """
-    # since there could be multiple levels of wrapping, unwrap recursively
-    if hasattr(model, "_layers"):
-        return unwrap_model(model._layers)
-    else:
-        return model
