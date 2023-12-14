@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2022 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +25,7 @@ logger = logging.get_logger(__name__)
 
 
 class MultiAdapter(ModelMixin):
-    """
+    r"""
     MultiAdapter is a wrapper model that contains multiple adapter models and merges their outputs according to
     user-assigned weighting.
 
@@ -74,7 +73,7 @@ class MultiAdapter(ModelMixin):
         self.downscale_factor = first_adapter_downscale_factor
 
     def forward(self, xs: paddle.Tensor, adapter_weights: Optional[List[float]] = None) -> List[paddle.Tensor]:
-        """
+        r"""
         Args:
             xs (`paddle.Tensor`):
                 (batch, channel, height, width) input images for multiple adapter models concated along dimension 1,
@@ -160,7 +159,7 @@ class MultiAdapter(ModelMixin):
         Parameters:
             pretrained_model_path (`os.PathLike`):
                 A path to a *directory* containing model weights saved using
-                [`~diffusers.models.adapter.MultiAdapter.save_pretrained`], e.g., `./my_model_directory/adapter`.
+                [`~ppdiffusers.models.adapter.MultiAdapter.save_pretrained`], e.g., `./my_model_directory/adapter`.
             torch_dtype (`str` or `torch.dtype`, *optional*):
                 Override the default `torch.dtype` and load the model under this dtype. If `"auto"` is passed the dtype
                 will be automatically derived from the model's weights.
@@ -367,7 +366,7 @@ class FullAdapterXL(nn.Layer):
             else:
                 self.body.append(AdapterBlock(channels[i], channels[i], num_res_blocks))
 
-        self.body = nn.ModuleList(self.body)
+        self.body = nn.LayerList(self.body)
         # XL has only one downsampling AdapterBlock.
         self.total_downscale_factor = downscale_factor * 2
 
@@ -445,13 +444,13 @@ class AdapterResnetBlock(nn.Layer):
             Number of channels of AdapterResnetBlock's input and output.
     """
 
-    def __init__(self, channels):
+    def __init__(self, channels: int):
         super().__init__()
         self.block1 = nn.Conv2D(channels, channels, kernel_size=3, padding=1)
         self.act = nn.ReLU()
         self.block2 = nn.Conv2D(channels, channels, kernel_size=1)
 
-    def forward(self, x):
+    def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         r"""
         This method takes input tensor x and applies a convolutional layer, ReLU activation, and another convolutional
         layer on the input tensor. It returns addition with the input tensor.
@@ -529,7 +528,7 @@ class LightAdapterBlock(nn.Layer):
             Whether to perform downsampling on LightAdapterBlock's input.
     """
 
-    def __init__(self, in_channels, out_channels, num_res_blocks, down=False):
+    def __init__(self, in_channels: int, out_channels: int, num_res_blocks: int, down: bool = False):
         super().__init__()
         mid_channels = out_channels // 4
 
@@ -566,7 +565,7 @@ class LightAdapterResnetBlock(nn.Layer):
             Number of channels of LightAdapterResnetBlock's input and output.
     """
 
-    def __init__(self, channels):
+    def __init__(self, channels: int):
         super().__init__()
         self.block1 = nn.Conv2D(channels, channels, kernel_size=3, padding=1)
         self.act = nn.ReLU()

@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 Ollin Boer Bohan and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +20,7 @@ import paddle
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import BaseOutput
+from ..utils.ppaccelerate_utils import apply_forward_hook
 from .modeling_utils import ModelMixin
 from .vae import DecoderOutput, DecoderTiny, EncoderTiny
 
@@ -91,23 +91,24 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
             `force_upcast` can be set to `False` (see this fp16-friendly
             [AutoEncoder](https://huggingface.co/madebyollin/sdxl-vae-fp16-fix)).
     """
+
     _supports_gradient_checkpointing = True
 
     @register_to_config
     def __init__(
         self,
-        in_channels=3,
-        out_channels=3,
-        encoder_block_out_channels: Tuple[int] = (64, 64, 64, 64),
-        decoder_block_out_channels: Tuple[int] = (64, 64, 64, 64),
+        in_channels: int = 3,
+        out_channels: int = 3,
+        encoder_block_out_channels: Tuple[int, ...] = (64, 64, 64, 64),
+        decoder_block_out_channels: Tuple[int, ...] = (64, 64, 64, 64),
         act_fn: str = "relu",
         latent_channels: int = 4,
         upsampling_scaling_factor: int = 2,
-        num_encoder_blocks: Tuple[int] = (1, 3, 3, 3),
-        num_decoder_blocks: Tuple[int] = (3, 3, 3, 1),
+        num_encoder_blocks: Tuple[int, ...] = (1, 3, 3, 3),
+        num_decoder_blocks: Tuple[int, ...] = (3, 3, 3, 1),
         latent_magnitude: int = 3,
         latent_shift: float = 0.5,
-        force_upcast: float = False,
+        force_upcast: bool = False,
         scaling_factor: float = 1.0,
     ):
         super().__init__()
@@ -147,33 +148,36 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
         self.tile_sample_min_size = 512
         self.tile_latent_min_size = self.tile_sample_min_size // self.spatial_scale_factor
 
-    def _set_gradient_checkpointing(self, module, value=False):
+        self.register_to_config(block_out_channels=decoder_block_out_channels)
+        self.register_to_config(force_upcast=False)
+
+    def _set_gradient_checkpointing(self, module, value: bool = False) -> None:
         if isinstance(module, (EncoderTiny, DecoderTiny)):
             module.gradient_checkpointing = value
 
-    def scale_latents(self, x):
+    def scale_latents(self, x: paddle.Tensor) -> paddle.Tensor:
         """raw latents -> [0, 1]"""
-        return x.div(2 * self.latent_magnitude).add(self.latent_shift).clamp(0, 1)
+        return ((x / 2 * self.latent_magnitude) + self.latent_shift).clip(0, 1)
 
-    def unscale_latents(self, x):
+    def unscale_latents(self, x: paddle.Tensor) -> paddle.Tensor:
         """[0, 1] -> raw latents"""
-        return x.sub(self.latent_shift).mul(2 * self.latent_magnitude)
+        return (x - self.latent_shift) * (2 * self.latent_magnitude)
 
-    def enable_slicing(self):
+    def enable_slicing(self) -> None:
         r"""
         Enable sliced VAE decoding. When this option is enabled, the VAE will split the input tensor in slices to
         compute decoding in several steps. This is useful to save some memory and allow larger batch sizes.
         """
         self.use_slicing = True
 
-    def disable_slicing(self):
+    def disable_slicing(self) -> None:
         r"""
         Disable sliced VAE decoding. If `enable_slicing` was previously enabled, this method will go back to computing
         decoding in one step.
         """
         self.use_slicing = False
 
-    def enable_tiling(self, use_tiling: bool = True):
+    def enable_tiling(self, use_tiling: bool = True) -> None:
         r"""
         Enable tiled VAE decoding. When this option is enabled, the VAE will split the input tensor into tiles to
         compute decoding and encoding in several steps. This is useful for saving a large amount of memory and to allow
@@ -181,7 +185,7 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
         """
         self.use_tiling = use_tiling
 
-    def disable_tiling(self):
+    def disable_tiling(self) -> None:
         r"""
         Disable tiled VAE decoding. If `enable_tiling` was previously enabled, this method will go back to computing
         decoding in one step.
@@ -197,13 +201,9 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
 
         Args:
             x (`paddle.Tensor`): Input batch of images.
-            return_dict (`bool`, *optional*, defaults to `True`):
-                Whether or not to return a [`~models.autoencoder_tiny.AutoencoderTinyOutput`] instead of a plain tuple.
 
         Returns:
-            [`~models.autoencoder_tiny.AutoencoderTinyOutput`] or `tuple`:
-                If return_dict is True, a [`~models.autoencoder_tiny.AutoencoderTinyOutput`] is returned, otherwise a
-                plain `tuple` is returned.
+            `paddle.Tensor`: Encoded batch of images.
         """
         # scale of encoder output relative to input
         sf = self.spatial_scale_factor
@@ -221,7 +221,7 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
         blend_masks = paddle.stack(
             paddle.meshgrid([paddle.arange(tile_size / sf) / (blend_size / sf - 1)] * 2, indexing="ij")
         )
-        blend_masks = blend_masks.clamp(0, 1)
+        blend_masks = blend_masks.clip(0, 1)
 
         # output array
         out = paddle.zeros([x.shape[0], 4, x.shape[-2] // sf, x.shape[-1] // sf])
@@ -237,8 +237,13 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
                 blend_mask_j = paddle.ones_like(blend_masks[1]) if j == 0 else blend_masks[1]
                 blend_mask = blend_mask_i * blend_mask_j
                 tile, blend_mask = tile[..., :h, :w], blend_mask[..., :h, :w]
-                # pytorch: tile_out.copy_(blend_mask * tile + (1 - blend_mask) * tile_out)
-                tile_out = blend_mask * tile + (1 - blend_mask) * tile_out
+
+                # NOTE this copy_ method is not work in paddlepaddle
+                # tile_out.copy_(blend_mask * tile + (1 - blend_mask) * tile_out)
+                out[..., i // sf : (i + tile_size) // sf, j // sf : (j + tile_size) // sf] = (
+                    blend_mask * tile + (1 - blend_mask) * tile_out
+                )
+
         return out
 
     def _tiled_decode(self, x: paddle.Tensor) -> paddle.Tensor:
@@ -250,13 +255,9 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
 
         Args:
             x (`paddle.Tensor`): Input batch of images.
-            return_dict (`bool`, *optional*, defaults to `True`):
-                Whether or not to return a [`~models.autoencoder_tiny.AutoencoderTinyOutput`] instead of a plain tuple.
 
         Returns:
-            [`~models.vae.DecoderOutput`] or `tuple`:
-                If return_dict is True, a [`~models.vae.DecoderOutput`] is returned, otherwise a plain `tuple` is
-                returned.
+            `paddle.Tensor`: Encoded batch of images.
         """
         # scale of decoder output relative to input
         sf = self.spatial_scale_factor
@@ -274,10 +275,10 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
         blend_masks = paddle.stack(
             paddle.meshgrid([paddle.arange(tile_size * sf) / (blend_size * sf - 1)] * 2, indexing="ij")
         )
-        blend_masks = blend_masks.clamp(0, 1).to(x.device)
+        blend_masks = blend_masks.clip(0, 1)
 
         # output array
-        out = paddle.zeros(x.shape[0], 3, x.shape[-2] * sf, x.shape[-1] * sf, device=x.device)
+        out = paddle.zeros([x.shape[0], 3, x.shape[-2] * sf, x.shape[-1] * sf])
         for i in ti:
             for j in tj:
                 tile_in = x[..., i : i + tile_size, j : j + tile_size]
@@ -289,13 +290,20 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
                 blend_mask_i = paddle.ones_like(blend_masks[0]) if i == 0 else blend_masks[0]
                 blend_mask_j = paddle.ones_like(blend_masks[1]) if j == 0 else blend_masks[1]
                 blend_mask = (blend_mask_i * blend_mask_j)[..., :h, :w]
-                # pytorch: tile_out.copy_(blend_mask * tile + (1 - blend_mask) * tile_out)
-                tile_out = blend_mask * tile + (1 - blend_mask) * tile_out
+
+                # NOTE this copy_ method is not work in paddlepaddle
+                # tile_out.copy_(blend_mask * tile + (1 - blend_mask) * tile_out)
+                out[..., i // sf : (i + tile_size) // sf, j // sf : (j + tile_size) // sf] = (
+                    blend_mask * tile + (1 - blend_mask) * tile_out
+                )
         return out
 
+    @apply_forward_hook
     def encode(self, x: paddle.Tensor, return_dict: bool = True) -> Union[AutoencoderTinyOutput, Tuple[paddle.Tensor]]:
         if self.use_slicing and x.shape[0] > 1:
-            output = [self._tiled_encode(x_slice) if self.use_tiling else self.encoder(x) for x_slice in x.split(1)]
+            output = [
+                self._tiled_encode(x_slice) if self.use_tiling else self.encoder(x) for x_slice in x.chunk(x.shape[0])
+            ]
             output = paddle.concat(output)
         else:
             output = self._tiled_encode(x) if self.use_tiling else self.encoder(x)
@@ -305,11 +313,17 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
 
         return AutoencoderTinyOutput(latents=output)
 
+    @apply_forward_hook
     def decode(
         self, x: paddle.Tensor, generator: Optional[paddle.Generator] = None, return_dict: bool = True
     ) -> Union[DecoderOutput, Tuple[paddle.Tensor]]:
+        # TODO junnyu, add this to support pure fp16
+        x = x.cast(self.decoder.dtype)
+
         if self.use_slicing and x.shape[0] > 1:
-            output = [self._tiled_decode(x_slice) if self.use_tiling else self.decoder(x) for x_slice in x.split(1)]
+            output = [
+                self._tiled_decode(x_slice) if self.use_tiling else self.decoder(x) for x_slice in x.chunk(x.shape[0])
+            ]
             output = paddle.concat(output)
         else:
             output = self._tiled_decode(x) if self.use_tiling else self.decoder(x)
@@ -334,7 +348,7 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
 
         # scale latents to be in [0, 1], then quantize latents to a byte tensor,
         # as if we were storing the latents in an RGBA uint8 image.
-        scaled_enc = self.scale_latents(enc).mul_(255).round_().byte()
+        scaled_enc = (self.scale_latents(enc) * 255).round().cast("byte")
 
         # unquantize latents back into [0, 1], then unscale latents back to their original range,
         # as if we were loading the latents from an RGBA uint8 image.

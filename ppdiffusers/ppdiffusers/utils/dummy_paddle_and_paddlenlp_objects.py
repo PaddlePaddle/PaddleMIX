@@ -1,5 +1,4 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,7 +46,82 @@ class AltDiffusionPipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle", "paddlenlp"])
 
 
+class AnimateDiffPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class AudioLDM2Pipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class AudioLDM2ProjectionModel(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class AudioLDM2UNet2DConditionModel(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
 class AudioLDMPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class CLIPImageProjection(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
     def __init__(self, *args, **kwargs):
@@ -168,6 +242,36 @@ class IFSuperResolutionPipeline(metaclass=DummyObject):
 
 
 class ImageTextPipelineOutput(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class Kandinsky3Img2ImgPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class Kandinsky3Pipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
     def __init__(self, *args, **kwargs):
@@ -437,6 +541,36 @@ class KandinskyV22PriorPipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle", "paddlenlp"])
 
 
+class LatentConsistencyModelImg2ImgPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class LatentConsistencyModelPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
 class LDMTextToImagePipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
@@ -452,7 +586,37 @@ class LDMTextToImagePipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle", "paddlenlp"])
 
 
+class MusicLDMPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
 class PaintByExamplePipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class PixArtAlphaPipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
     def __init__(self, *args, **kwargs):
@@ -603,6 +767,36 @@ class StableDiffusionDepth2ImgPipeline(metaclass=DummyObject):
 
 
 class StableDiffusionDiffEditPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class StableDiffusionGLIGENPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class StableDiffusionGLIGENTextImagePipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
     def __init__(self, *args, **kwargs):
@@ -872,6 +1066,51 @@ class StableDiffusionUpscalePipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle", "paddlenlp"])
 
 
+class StableDiffusionXLAdapterPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class StableDiffusionXLControlNetImg2ImgPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class StableDiffusionXLControlNetInpaintPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
 class StableDiffusionXLControlNetPipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
@@ -977,6 +1216,66 @@ class StableUnCLIPPipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle", "paddlenlp"])
 
 
+class StableVideoDiffusionPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class TextToVideoSDPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class TextToVideoZeroPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class TextToVideoZeroSDXLPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
 class UnCLIPImageVariationPipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
@@ -993,6 +1292,51 @@ class UnCLIPImageVariationPipeline(metaclass=DummyObject):
 
 
 class UnCLIPPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class UniDiffuserModel(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class UniDiffuserPipeline(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class UniDiffuserTextDecoder(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
     def __init__(self, *args, **kwargs):
@@ -1097,7 +1441,7 @@ class VQDiffusionPipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle", "paddlenlp"])
 
 
-class TextToVideoSDPipeline(metaclass=DummyObject):
+class WuerstchenCombinedPipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
     def __init__(self, *args, **kwargs):
@@ -1112,7 +1456,7 @@ class TextToVideoSDPipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle", "paddlenlp"])
 
 
-class TextToVideoZeroPipeline(metaclass=DummyObject):
+class WuerstchenDecoderPipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
     def __init__(self, *args, **kwargs):
@@ -1127,7 +1471,7 @@ class TextToVideoZeroPipeline(metaclass=DummyObject):
         requires_backends(cls, ["paddle", "paddlenlp"])
 
 
-class UniDiffuserPipeline(metaclass=DummyObject):
+class WuerstchenPriorPipeline(metaclass=DummyObject):
     _backends = ["paddle", "paddlenlp"]
 
     def __init__(self, *args, **kwargs):

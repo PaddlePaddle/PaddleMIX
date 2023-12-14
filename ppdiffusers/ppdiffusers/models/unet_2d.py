@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +19,6 @@ import paddle.nn as nn
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import BaseOutput
-from .activations import get_activation
 from .embeddings import GaussianFourierProjection, TimestepEmbedding, Timesteps
 from .modeling_utils import ModelMixin
 from .unet_2d_blocks import UNetMidBlock2D, get_down_block, get_up_block
@@ -120,7 +118,6 @@ class UNet2DModel(ModelMixin, ConfigMixin):
         class_embed_type: Optional[str] = None,
         num_class_embeds: Optional[int] = None,
         num_train_timesteps: Optional[int] = None,
-        resnet_pre_temb_non_linearity: Optional[bool] = False,
     ):
         super().__init__()
 
@@ -168,11 +165,6 @@ class UNet2DModel(ModelMixin, ConfigMixin):
         self.mid_block = None
         self.up_blocks = nn.LayerList([])
 
-        # pre_temb_act_fun opt
-        self.resnet_pre_temb_non_linearity = resnet_pre_temb_non_linearity
-        if resnet_pre_temb_non_linearity:
-            self.down_resnet_temb_nonlinearity = get_activation(act_fn)
-
         # down
         output_channel = block_out_channels[0]
         for i, down_block_type in enumerate(down_block_types):
@@ -195,7 +187,6 @@ class UNet2DModel(ModelMixin, ConfigMixin):
                 resnet_time_scale_shift=resnet_time_scale_shift,
                 downsample_type=downsample_type,
                 dropout=dropout,
-                resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
             self.down_blocks.append(down_block)
 
@@ -212,7 +203,6 @@ class UNet2DModel(ModelMixin, ConfigMixin):
             resnet_groups=norm_num_groups,
             attn_groups=attn_norm_num_groups,
             add_attention=add_attention,
-            resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
         )
 
         # up
@@ -240,7 +230,6 @@ class UNet2DModel(ModelMixin, ConfigMixin):
                 resnet_time_scale_shift=resnet_time_scale_shift,
                 upsample_type=upsample_type,
                 dropout=dropout,
-                resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
             self.up_blocks.append(up_block)
             prev_output_channel = output_channel
@@ -292,10 +281,11 @@ class UNet2DModel(ModelMixin, ConfigMixin):
             timesteps = timesteps[None]
 
         # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
-        timesteps = timesteps.expand(
+        timesteps = timesteps * paddle.ones(
             [
                 sample.shape[0],
-            ]
+            ],
+            dtype=timesteps.dtype,
         )
 
         t_emb = self.time_proj(timesteps)
@@ -303,7 +293,7 @@ class UNet2DModel(ModelMixin, ConfigMixin):
         # timesteps does not contain any weights and will always return f32 tensors
         # but time_embedding might actually be running in fp16. so we need to cast here.
         # there might be better ways to encapsulate this.
-        t_emb = t_emb.cast(sample.dtype)
+        t_emb = t_emb.cast(self.dtype)
         emb = self.time_embedding(t_emb)
 
         if self.class_embedding is not None:
@@ -328,10 +318,6 @@ class UNet2DModel(ModelMixin, ConfigMixin):
 
         # 3. down
         down_block_res_samples = (sample,)
-
-        if self.resnet_pre_temb_non_linearity:
-            emb = self.down_resnet_temb_nonlinearity(emb)
-
         for downsample_block in self.down_blocks:
             if hasattr(downsample_block, "skip_conv"):
                 sample, res_samples, skip_sample = downsample_block(
@@ -365,7 +351,7 @@ class UNet2DModel(ModelMixin, ConfigMixin):
             sample += skip_sample
 
         if self.config.time_embedding_type == "fourier":
-            timesteps = timesteps.reshape((sample.shape[0], *([1] * len(sample.shape[1:]))))
+            timesteps = timesteps.reshape([sample.shape[0], *([1] * len(sample.shape[1:]))])
             sample = sample / timesteps
 
         if not return_dict:

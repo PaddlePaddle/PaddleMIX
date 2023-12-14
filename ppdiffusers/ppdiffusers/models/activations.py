@@ -1,4 +1,5 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# coding=utf-8
+# Copyright 2023 HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import paddle.nn as nn
+import paddle
 import paddle.nn.functional as F
+from paddle import nn
 
-from ..utils import USE_PEFT_BACKEND
+from ..utils import USE_PPPEFT_BACKEND
 from .lora import LoRACompatibleLinear
 
 ACTIVATION_FUNCTIONS = {
@@ -56,13 +58,15 @@ class GELU(nn.Layer):
 
     def __init__(self, dim_in: int, dim_out: int, approximate: str = "none"):
         super().__init__()
-        self.proj = LoRACompatibleLinear(dim_in, dim_out)
+        self.proj = nn.Linear(dim_in, dim_out)
         self.approximate = approximate
-        self.approximate_bool = approximate == "tanh"
+
+    def gelu(self, gate: paddle.Tensor) -> paddle.Tensor:
+        return F.gelu(gate, approximate=self.approximate != "none")
 
     def forward(self, hidden_states):
         hidden_states = self.proj(hidden_states)
-        hidden_states = F.gelu(hidden_states, approximate=self.approximate_bool)
+        hidden_states = self.gelu(hidden_states)
         return hidden_states
 
 
@@ -77,14 +81,17 @@ class GEGLU(nn.Layer):
 
     def __init__(self, dim_in: int, dim_out: int):
         super().__init__()
-        linear_cls = LoRACompatibleLinear if not USE_PEFT_BACKEND else nn.Linear
+        linear_cls = LoRACompatibleLinear if not USE_PPPEFT_BACKEND else nn.Linear
 
         self.proj = linear_cls(dim_in, dim_out * 2)
 
+    def gelu(self, gate: paddle.Tensor) -> paddle.Tensor:
+        return F.gelu(gate)
+
     def forward(self, hidden_states, scale: float = 1.0):
-        args = () if USE_PEFT_BACKEND else (scale,)
+        args = () if USE_PPPEFT_BACKEND else (scale,)
         hidden_states, gate = self.proj(hidden_states, *args).chunk(2, axis=-1)
-        return hidden_states * F.gelu(gate)
+        return hidden_states * self.gelu(gate)
 
 
 class ApproximateGELU(nn.Layer):
@@ -101,6 +108,6 @@ class ApproximateGELU(nn.Layer):
         super().__init__()
         self.proj = nn.Linear(dim_in, dim_out)
 
-    def forward(self, x):
+    def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         x = self.proj(x)
         return x * F.sigmoid(1.702 * x)

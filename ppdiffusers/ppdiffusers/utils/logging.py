@@ -1,5 +1,5 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2022 Optuna, Hugging Face
+# coding=utf-8
+# Copyright 2023 Optuna, Hugging Face
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 # limitations under the License.
 """ Logging utilities."""
 
+import functools
 import logging
 import os
 import sys
@@ -26,7 +27,7 @@ from logging import INFO  # NOQA
 from logging import NOTSET  # NOQA
 from logging import WARN  # NOQA
 from logging import WARNING  # NOQA
-from typing import Optional
+from typing import Dict, Optional
 
 from tqdm import auto as tqdm_lib
 
@@ -46,7 +47,7 @@ _default_log_level = logging.WARNING
 _tqdm_active = True
 
 
-def _get_default_logging_level():
+def _get_default_logging_level() -> int:
     """
     If PPDIFFUSERS_VERBOSITY env var is set to one of the valid choices return that as the new default level. If it is
     not - fall back to `_default_log_level`
@@ -101,7 +102,7 @@ def _reset_library_root_logger() -> None:
         _default_handler = None
 
 
-def get_log_levels_dict():
+def get_log_levels_dict() -> Dict[str, int]:
     return log_levels
 
 
@@ -126,11 +127,13 @@ def get_verbosity() -> int:
     Returns:
         `int`:
             Logging level integers which can be one of:
-            - `50`: `diffusers.logging.CRITICAL` or `diffusers.logging.FATAL`
-            - `40`: `diffusers.logging.ERROR`
-            - `30`: `diffusers.logging.WARNING` or `diffusers.logging.WARN`
-            - `20`: `diffusers.logging.INFO`
-            - `10`: `diffusers.logging.DEBUG`
+
+            - `50`: `ppdiffusers.logging.CRITICAL` or `ppdiffusers.logging.FATAL`
+            - `40`: `ppdiffusers.logging.ERROR`
+            - `30`: `ppdiffusers.logging.WARNING` or `ppdiffusers.logging.WARN`
+            - `20`: `ppdiffusers.logging.INFO`
+            - `10`: `ppdiffusers.logging.DEBUG`
+
     """
 
     _configure_library_root_logger()
@@ -156,28 +159,28 @@ def set_verbosity(verbosity: int) -> None:
     _get_library_root_logger().setLevel(verbosity)
 
 
-def set_verbosity_info():
+def set_verbosity_info() -> None:
     """Set the verbosity to the `INFO` level."""
     return set_verbosity(INFO)
 
 
-def set_verbosity_warning():
+def set_verbosity_warning() -> None:
     """Set the verbosity to the `WARNING` level."""
     return set_verbosity(WARNING)
 
 
-def set_verbosity_debug():
+def set_verbosity_debug() -> None:
     """Set the verbosity to the `DEBUG` level."""
     return set_verbosity(DEBUG)
 
 
-def set_verbosity_error():
+def set_verbosity_error() -> None:
     """Set the verbosity to the `ERROR` level."""
     return set_verbosity(ERROR)
 
 
 def disable_default_handler() -> None:
-    """Disable the default handler of the PPDiffusers' root logger."""
+    """Disable the default handler of the 🤗 Diffusers' root logger."""
 
     _configure_library_root_logger()
 
@@ -186,7 +189,7 @@ def disable_default_handler() -> None:
 
 
 def enable_default_handler() -> None:
-    """Enable the default handler of the PPDiffusers' root logger."""
+    """Enable the default handler of the 🤗 Diffusers' root logger."""
 
     _configure_library_root_logger()
 
@@ -195,7 +198,7 @@ def enable_default_handler() -> None:
 
 
 def add_handler(handler: logging.Handler) -> None:
-    """adds a handler to the PPDiffusers' root logger."""
+    """adds a handler to the PaddleMIX PPDiffusers' root logger."""
 
     _configure_library_root_logger()
 
@@ -204,7 +207,7 @@ def add_handler(handler: logging.Handler) -> None:
 
 
 def remove_handler(handler: logging.Handler) -> None:
-    """removes given handler from the PPDiffusers' root logger."""
+    """removes given handler from the PaddleMIX PPDiffusers' root logger."""
 
     _configure_library_root_logger()
 
@@ -223,7 +226,7 @@ def disable_propagation() -> None:
 
 def enable_propagation() -> None:
     """
-    Enable propagation of the library log outputs. Please disable the PaddleNLP PPDiffusers' default handler to prevent
+    Enable propagation of the library log outputs. Please disable the PaddleMIX PPDiffusers' default handler to prevent
     double logging if the root logger has been configured.
     """
 
@@ -233,9 +236,9 @@ def enable_propagation() -> None:
 
 def enable_explicit_format() -> None:
     """
-    Enable explicit formatting for every PaddleNLP PPDiffusers' logger. The explicit formatter is as follows:
+    Enable explicit formatting for every PPDiffusers' logger. The explicit formatter is as follows:
     ```
-        [LEVELNAME|FILENAME|LINE NUMBER] TIME >> MESSAGE
+    [LEVELNAME|FILENAME|LINE NUMBER] TIME >> MESSAGE
     ```
     All handlers currently bound to the root logger are affected by this method.
     """
@@ -258,7 +261,7 @@ def reset_format() -> None:
         handler.setFormatter(None)
 
 
-def warning_advice(self, *args, **kwargs):
+def warning_advice(self, *args, **kwargs) -> None:
     """
     This method is identical to `logger.warning()`, but if env var PPDIFFUSERS_NO_ADVISORY_WARNINGS=1 is set, this
     warning will not be printed
@@ -270,6 +273,21 @@ def warning_advice(self, *args, **kwargs):
 
 
 logging.Logger.warning_advice = warning_advice
+
+
+@functools.lru_cache(None)
+def warning_once(self, *args, **kwargs):
+    """
+    This method is identical to `logger.warning()`, but will emit the warning with the same message only once
+
+    Note: The cache is for the function arguments, so 2 different callers using the same arguments will hit the cache.
+    The assumption here is that all warning messages are unique across the code. If they aren't then need to switch to
+    another type of cache that includes the caller frame information in the hashing function.
+    """
+    self.warning(*args, **kwargs)
+
+
+logging.Logger.warning_once = warning_once
 
 
 class EmptyTqdm:
@@ -322,13 +340,13 @@ def is_progress_bar_enabled() -> bool:
     return bool(_tqdm_active)
 
 
-def enable_progress_bar():
+def enable_progress_bar() -> None:
     """Enable tqdm progress bar."""
     global _tqdm_active
     _tqdm_active = True
 
 
-def disable_progress_bar():
+def disable_progress_bar() -> None:
     """Disable tqdm progress bar."""
     global _tqdm_active
     _tqdm_active = False

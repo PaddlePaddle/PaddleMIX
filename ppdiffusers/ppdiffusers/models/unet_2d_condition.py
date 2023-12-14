@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +19,7 @@ import paddle.nn as nn
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..loaders import UNet2DConditionLoadersMixin
-from ..utils import NEG_INF, BaseOutput, deprecate, logging
+from ..utils import BaseOutput, deprecate, logging
 from .activations import get_activation
 from .attention_processor import (
     ADDED_KV_ATTENTION_PROCESSORS,
@@ -63,7 +62,7 @@ class UNet2DConditionOutput(BaseOutput):
             The hidden states output conditioned on `encoder_hidden_states` input. Output of last layer of model.
     """
 
-    sample: paddle.Tensor
+    sample: paddle.Tensor = None
 
 
 class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
@@ -218,7 +217,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         mid_block_only_cross_attention: Optional[bool] = None,
         cross_attention_norm: Optional[str] = None,
         addition_embed_type_num_heads=64,
-        resnet_pre_temb_non_linearity: Optional[bool] = False,
     ):
         super().__init__()
 
@@ -346,9 +344,9 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
 
         # class embedding
         if class_embed_type is None and num_class_embeds is not None:
-            self.class_embedding = nn.Embedding(num_class_embeds, time_embed_dim)  # int64
+            self.class_embedding = nn.Embedding(num_class_embeds, time_embed_dim)
         elif class_embed_type == "timestep":
-            self.class_embedding = TimestepEmbedding(timestep_input_dim, time_embed_dim, act_fn=act_fn)  # float
+            self.class_embedding = TimestepEmbedding(timestep_input_dim, time_embed_dim, act_fn=act_fn)
         elif class_embed_type == "identity":
             self.class_embedding = nn.Identity(time_embed_dim, time_embed_dim)
         elif class_embed_type == "projection":
@@ -363,7 +361,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             # Note that `TimestepEmbedding` is quite general, being mainly linear layers and activations.
             # When used for embedding actual timesteps, the timesteps are first converted to sinusoidal embeddings.
             # As a result, `TimestepEmbedding` can be passed arbitrary vectors.
-            self.class_embedding = TimestepEmbedding(projection_class_embeddings_input_dim, time_embed_dim)  # float
+            self.class_embedding = TimestepEmbedding(projection_class_embeddings_input_dim, time_embed_dim)
         elif class_embed_type == "simple_projection":
             if projection_class_embeddings_input_dim is None:
                 raise ValueError(
@@ -405,11 +403,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             self.time_embed_act = None
         else:
             self.time_embed_act = get_activation(time_embedding_act_fn)
-
-        # pre_temb_act_fun opt
-        self.resnet_pre_temb_non_linearity = resnet_pre_temb_non_linearity
-        if resnet_pre_temb_non_linearity:
-            self.down_resnet_temb_nonlinearity = get_activation(act_fn)
 
         self.down_blocks = nn.LayerList([])
         self.up_blocks = nn.LayerList([])
@@ -478,7 +471,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 cross_attention_norm=cross_attention_norm,
                 attention_head_dim=attention_head_dim[i] if attention_head_dim[i] is not None else output_channel,
                 dropout=dropout,
-                resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
             self.down_blocks.append(down_block)
 
@@ -500,7 +492,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 use_linear_projection=use_linear_projection,
                 upcast_attention=upcast_attention,
                 attention_type=attention_type,
-                resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
         elif mid_block_type == "UNetMidBlock2DSimpleCrossAttn":
             self.mid_block = UNetMidBlock2DSimpleCrossAttn(
@@ -517,7 +508,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 skip_time_act=resnet_skip_time_act,
                 only_cross_attention=mid_block_only_cross_attention,
                 cross_attention_norm=cross_attention_norm,
-                resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
         elif mid_block_type == "UNetMidBlock2D":
             self.mid_block = UNetMidBlock2D(
@@ -531,7 +521,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 resnet_groups=norm_num_groups,
                 resnet_time_scale_shift=resnet_time_scale_shift,
                 add_attention=False,
-                resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
         elif mid_block_type is None:
             self.mid_block = None
@@ -551,7 +540,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             if reverse_transformer_layers_per_block is None
             else reverse_transformer_layers_per_block
         )
-        only_cross_attention = list(reversed(only_cross_attention))
+        reversed_only_cross_attention = list(reversed(only_cross_attention))
 
         output_channel = reversed_block_out_channels[0]
         for i, up_block_type in enumerate(up_block_types):
@@ -585,7 +574,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 num_attention_heads=reversed_num_attention_heads[i],
                 dual_cross_attention=dual_cross_attention,
                 use_linear_projection=use_linear_projection,
-                only_cross_attention=only_cross_attention[i],
+                only_cross_attention=reversed_only_cross_attention[i],
                 upcast_attention=upcast_attention,
                 resnet_time_scale_shift=resnet_time_scale_shift,
                 attention_type=attention_type,
@@ -594,7 +583,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 cross_attention_norm=cross_attention_norm,
                 attention_head_dim=attention_head_dim[i] if attention_head_dim[i] is not None else output_channel,
                 dropout=dropout,
-                resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
             self.up_blocks.append(up_block)
             prev_output_channel = output_channel
@@ -604,7 +592,9 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             self.conv_norm_out = nn.GroupNorm(
                 num_channels=block_out_channels[0], num_groups=norm_num_groups, epsilon=norm_eps
             )
+
             self.conv_act = get_activation(act_fn)
+
         else:
             self.conv_norm_out = None
             self.conv_act = None
@@ -822,17 +812,17 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         The [`UNet2DConditionModel`] forward method.
 
         Args:
-            sample (`torch.FloatTensor`):
+            sample (`paddle.Tensor`):
                 The noisy input tensor with the following shape `(batch, channel, height, width)`.
-            timestep (`torch.FloatTensor` or `float` or `int`): The number of timesteps to denoise an input.
-            encoder_hidden_states (`torch.FloatTensor`):
+            timestep (`paddle.Tensor` or `float` or `int`): The number of timesteps to denoise an input.
+            encoder_hidden_states (`paddle.Tensor`):
                 The encoder hidden states with shape `(batch, sequence_length, feature_dim)`.
-            class_labels (`torch.Tensor`, *optional*, defaults to `None`):
+            class_labels (`paddle.Tensor`, *optional*, defaults to `None`):
                 Optional class labels for conditioning. Their embeddings will be summed with the timestep embeddings.
-            timestep_cond: (`torch.Tensor`, *optional*, defaults to `None`):
+            timestep_cond: (`paddle.Tensor`, *optional*, defaults to `None`):
                 Conditional embeddings for timestep. If provided, the embeddings will be summed with the samples passed
                 through the `self.time_embedding` layer to obtain the timestep embeddings.
-            attention_mask (`torch.Tensor`, *optional*, defaults to `None`):
+            attention_mask (`paddle.Tensor`, *optional*, defaults to `None`):
                 An attention mask of shape `(batch, key_tokens)` is applied to `encoder_hidden_states`. If `1` the mask
                 is kept, otherwise if `0` it is discarded. Mask will be converted into a bias, which adds large
                 negative values to the attention scores corresponding to "discard" tokens.
@@ -843,11 +833,11 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             added_cond_kwargs: (`dict`, *optional*):
                 A kwargs dictionary containing additional embeddings that if specified are added to the embeddings that
                 are passed along to the UNet blocks.
-            down_block_additional_residuals: (`tuple` of `torch.Tensor`, *optional*):
+            down_block_additional_residuals: (`tuple` of `paddle.Tensor`, *optional*):
                 A tuple of tensors that if specified are added to the residuals of down unet blocks.
-            mid_block_additional_residual: (`torch.Tensor`, *optional*):
+            mid_block_additional_residual: (`paddle.Tensor`, *optional*):
                 A tensor that if specified is added to the residual of the middle unet block.
-            encoder_attention_mask (`torch.Tensor`):
+            encoder_attention_mask (`paddle.Tensor`):
                 A cross-attention mask of shape `(batch, sequence_length)` is applied to `encoder_hidden_states`. If
                 `True` the mask is kept, otherwise if `False` it is discarded. Mask will be converted into a bias,
                 which adds large negative values to the attention scores corresponding to "discard" tokens.
@@ -859,12 +849,12 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             added_cond_kwargs: (`dict`, *optional*):
                 A kwargs dictionary containin additional embeddings that if specified are added to the embeddings that
                 are passed along to the UNet blocks.
-            down_block_additional_residuals (`tuple` of `torch.Tensor`, *optional*):
+            down_block_additional_residuals (`tuple` of `paddle.Tensor`, *optional*):
                 additional residuals to be added to UNet long skip connections from down blocks to up blocks for
                 example from ControlNet side model(s)
-            mid_block_additional_residual (`torch.Tensor`, *optional*):
+            mid_block_additional_residual (`paddle.Tensor`, *optional*):
                 additional residual to be added to UNet mid block output, for example from ControlNet side model
-            down_intrablock_additional_residuals (`tuple` of `torch.Tensor`, *optional*):
+            down_intrablock_additional_residuals (`tuple` of `paddle.Tensor`, *optional*):
                 additional residuals to be added within UNet down blocks, for example from T2I-Adapter side model(s)
 
         Returns:
@@ -872,10 +862,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 If `return_dict` is True, an [`~models.unet_2d_condition.UNet2DConditionOutput`] is returned, otherwise
                 a `tuple` is returned where the first element is the sample tensor.
         """
-        # By default samples have to be AT least a multiple of the overall upsampling factor.
-        # The overall upsampling factor is equal to 2 ** (# num of upsampling layers).
-        # However, the upsampling interpolation output size can be forced to fit any upsampling size
-        # on the fly if necessary.
         # TODO junnyu, add this to support pure fp16
         sample = sample.cast(self.dtype)
 
@@ -889,9 +875,11 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         forward_upsample_size = False
         upsample_size = None
 
-        if any(s % default_overall_up_factor != 0 for s in sample.shape[-2:]):
-            logger.info("Forward upsample size to force interpolation output size.")
-            forward_upsample_size = True
+        for dim in sample.shape[-2:]:
+            if dim % default_overall_up_factor != 0:
+                # Forward upsample size to force interpolation output size.
+                forward_upsample_size = True
+                break
 
         # ensure attention_mask is a bias, and give it a singleton query_tokens dimension
         # expects mask of shape:
@@ -906,7 +894,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             #   (1 = keep,      0 = discard)
             # convert mask into a bias that can be added to attention scores:
             #       (keep = +0,     discard = -10000.0)
-            attention_mask = (1 - attention_mask.cast(sample.dtype)) * NEG_INF
+            attention_mask = (1 - attention_mask.cast(sample.dtype)) * -10000.0
             attention_mask = attention_mask.unsqueeze(1)
 
         # convert encoder_attention_mask to a bias the same way we do for attention_mask
@@ -937,6 +925,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         # but time_embedding might actually be running in fp16. so we need to cast here.
         # there might be better ways to encapsulate this.
         t_emb = t_emb.cast(sample.dtype)
+
         emb = self.time_embedding(t_emb, timestep_cond)
         aug_emb = None
 
@@ -944,15 +933,16 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             if class_labels is None:
                 raise ValueError("class_labels should be provided when num_class_embeds > 0")
 
-            # maybe cast it to float16
+            # NEW ADD maybe cast it to float16
             class_labels = class_labels.cast(self.dtype)
             if self.config.class_embed_type == "timestep":
                 class_labels = self.time_proj(class_labels)
+
                 # `Timesteps` does not contain any weights and will always return f32 tensors
                 # there might be better ways to encapsulate this.
                 class_labels = class_labels.cast(sample.dtype)
 
-            # maybe cast it to int64
+            # NEW ADD maybe cast it to int64
             if isinstance(self.class_embedding, nn.Embedding):
                 class_labels = class_labels.cast(paddle.int64)
             class_emb = self.class_embedding(class_labels).cast(sample.dtype)
@@ -986,11 +976,9 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                     f"{self.__class__} has the config param `addition_embed_type` set to 'text_time' which requires the keyword argument `time_ids` to be passed in `added_cond_kwargs`"
                 )
             time_ids = added_cond_kwargs.get("time_ids")
-            time_embeds_size_1 = time_ids.shape[1]
             time_embeds = self.add_time_proj(time_ids.flatten())
-            time_embeds_size_2 = time_embeds.shape[1]
-            time_embeds = time_embeds.reshape((text_embeds.shape[0], time_embeds_size_1 * time_embeds_size_2))
-            # make sure [text_embeds, time_embeds] has the same dtype
+            time_embeds = time_embeds.reshape((text_embeds.shape[0], -1))
+            # NEW ADD make sure [text_embeds, time_embeds] has the same dtype
             time_embeds = time_embeds.cast(text_embeds.dtype)
             add_embeds = paddle.concat([text_embeds, time_embeds], axis=-1)
             add_embeds = add_embeds.cast(emb.dtype)
@@ -1016,9 +1004,6 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
 
         emb = emb + aug_emb if aug_emb is not None else emb
 
-        if self.resnet_pre_temb_non_linearity:
-            emb = self.down_resnet_temb_nonlinearity(emb)
-
         if self.time_embed_act is not None:
             emb = self.time_embed_act(emb)
 
@@ -1041,6 +1026,15 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 )
             image_embeds = added_cond_kwargs.get("image_embeds")
             encoder_hidden_states = self.encoder_hid_proj(image_embeds)
+        elif self.encoder_hid_proj is not None and self.config.encoder_hid_dim_type == "ip_image_proj":
+            if "image_embeds" not in added_cond_kwargs:
+                raise ValueError(
+                    f"{self.__class__} has the config param `encoder_hid_dim_type` set to 'ip_image_proj' which requires the keyword argument `image_embeds` to be passed in  `added_conditions`"
+                )
+            image_embeds = added_cond_kwargs.get("image_embeds")
+            image_embeds = self.encoder_hid_proj(image_embeds).cast(encoder_hidden_states.dtype)
+            encoder_hidden_states = paddle.concat([encoder_hidden_states, image_embeds], axis=1)
+
         # 2. pre-process
         sample = self.conv_in(sample)
 
@@ -1052,6 +1046,9 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
 
         # 3. down
         lora_scale = cross_attention_kwargs.get("scale", 1.0) if cross_attention_kwargs is not None else 1.0
+        # if USE_PPPEFT_BACKEND:
+        #     # weight the lora layers by setting `lora_scale` for each PEFT layer
+        #     scale_lora_layers(self, lora_scale)
 
         is_controlnet = mid_block_additional_residual is not None and down_block_additional_residuals is not None
         # using new arg down_intrablock_additional_residuals for T2I-Adapters, to distinguish from controlnets
@@ -1089,19 +1086,10 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                     **additional_residuals,
                 )
             else:
-                # paddle original code:
-                # sample, res_samples = downsample_block(hidden_states=sample, temb=emb)
-
-                # if is_adapter and len(down_block_additional_residuals) > 0:
-                #     sample += down_block_additional_residuals.pop(0)
-                #     # westfish: add to align with torch features
-                #     res_samples = tuple(res_samples[:-1]) + (sample,)
-
                 sample, res_samples = downsample_block(hidden_states=sample, temb=emb, scale=lora_scale)
                 if is_adapter and len(down_intrablock_additional_residuals) > 0:
                     sample += down_intrablock_additional_residuals.pop(0)
-                    # pytorch without the following line:
-                    # westfish: add to align with torch features
+                    # westfish: add to align with torch features, `sample +=` in torch is inplace operation, it will affect `res_samples` tuple
                     res_samples = tuple(res_samples[:-1]) + (sample,)
             down_block_res_samples += res_samples
 
@@ -1151,7 +1139,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             # if we have not reached the final block and need to forward the
             # upsample size, we do it here
             if not is_final_block and forward_upsample_size:
-                upsample_size = paddle.shape(down_block_res_samples[-1])[2:]
+                upsample_size = paddle.shape(down_block_res_samples[-1])[2:]  # (NOTE,junnyu) make export happier
 
             if hasattr(upsample_block, "has_cross_attention") and upsample_block.has_cross_attention:
                 sample = upsample_block(
@@ -1178,6 +1166,10 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             sample = self.conv_norm_out(sample)
             sample = self.conv_act(sample)
         sample = self.conv_out(sample)
+
+        # if USE_PPPEFT_BACKEND:
+        #     # remove `lora_scale` from each PEFT layer
+        #     unscale_lora_layers(self, lora_scale)
 
         if not return_dict:
             return (sample,)

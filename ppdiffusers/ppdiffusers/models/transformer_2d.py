@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +21,7 @@ from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..models.embeddings import ImagePositionalEmbeddings
-from ..utils import BaseOutput, deprecate
+from ..utils import USE_PPPEFT_BACKEND, BaseOutput, deprecate, is_paddle_version
 from .attention import BasicTransformerBlock
 from .embeddings import CaptionProjection, PatchEmbed
 from .lora import LoRACompatibleConv, LoRACompatibleLinear
@@ -72,6 +71,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             Configure if the `TransformerBlocks` attention should contain a bias parameter.
     """
 
+    _supports_gradient_checkpointing = True
+
     @register_to_config
     def __init__(
         self,
@@ -104,6 +105,9 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         self.num_attention_heads = num_attention_heads
         self.attention_head_dim = attention_head_dim
         self.inner_dim = inner_dim = num_attention_heads * attention_head_dim
+
+        conv_cls = nn.Conv2D if USE_PPPEFT_BACKEND else LoRACompatibleConv
+        linear_cls = nn.Linear if USE_PPPEFT_BACKEND else LoRACompatibleLinear
 
         # 1. Transformer2DModel can process both standard continuous images of shape `(batch_size, num_channels, width, height)` as well as quantized image embeddings of shape `(batch_size, num_image_vectors)`
         # Define whether input is continuous or discrete depending on configuration
@@ -144,9 +148,9 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
             self.norm = nn.GroupNorm(num_groups=norm_num_groups, num_channels=in_channels, epsilon=1e-6)
             if use_linear_projection:
-                self.proj_in = LoRACompatibleLinear(in_channels, inner_dim)
+                self.proj_in = linear_cls(in_channels, inner_dim)
             else:
-                self.proj_in = LoRACompatibleConv(in_channels, inner_dim, kernel_size=1, stride=1, padding=0)
+                self.proj_in = conv_cls(in_channels, inner_dim, kernel_size=1, stride=1, padding=0)
         elif self.is_input_vectorized:
             assert sample_size is not None, "Transformer2DModel over discrete input must provide sample_size"
             assert num_vector_embeds is not None, "Transformer2DModel over discrete input must provide num_embed"
@@ -206,25 +210,21 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         if self.is_input_continuous:
             # TODO: should use out_channels for continuous projections
             if use_linear_projection:
-                self.proj_out = LoRACompatibleLinear(inner_dim, in_channels)
+                self.proj_out = linear_cls(inner_dim, in_channels)
             else:
-                self.proj_out = LoRACompatibleConv(inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
+                self.proj_out = conv_cls(inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
         elif self.is_input_vectorized:
             self.norm_out = nn.LayerNorm(inner_dim)
             self.out = nn.Linear(inner_dim, self.num_vector_embeds - 1)
         elif self.is_input_patches and norm_type != "ada_norm_single":
-            # elementwise_affine=False
-            norm_kwargs = {"weight_attr": False, "bias_attr": False}
-            self.norm_out = nn.LayerNorm(inner_dim, epsilon=1e-6, **norm_kwargs)
+            norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
+            self.norm_out = nn.LayerNorm(inner_dim, epsilon=1e-6, **norm_elementwise_affine_kwargs)
             self.proj_out_1 = nn.Linear(inner_dim, 2 * inner_dim)
             self.proj_out_2 = nn.Linear(inner_dim, patch_size * patch_size * self.out_channels)
         elif self.is_input_patches and norm_type == "ada_norm_single":
-            norm_kwargs = {"weight_attr": False, "bias_attr": False}
-            self.norm_out = nn.LayerNorm(inner_dim, epsilon=1e-6, **norm_kwargs)
-            tmp_param = paddle.randn(2, inner_dim) / inner_dim**0.5
-            self.scale_shift_table = self.create_parameter(
-                shape=tmp_param.shape, default_initializer=paddle.nn.initializer.Assign(tmp_param)
-            )
+            norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
+            self.norm_out = nn.LayerNorm(inner_dim, epsilon=1e-6, **norm_elementwise_affine_kwargs)
+            self.scale_shift_table = nn.Parameter(paddle.randn([2, inner_dim]) / inner_dim**0.5)
             self.proj_out = nn.Linear(inner_dim, patch_size * patch_size * self.out_channels)
 
         # 5. PixArt-Alpha blocks.
@@ -241,6 +241,10 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             self.caption_projection = CaptionProjection(in_features=caption_channels, hidden_size=inner_dim)
 
         self.gradient_checkpointing = False
+
+    def _set_gradient_checkpointing(self, module, value=False):
+        if hasattr(module, "gradient_checkpointing"):
+            module.gradient_checkpointing = value
 
     def forward(
         self,
@@ -300,8 +304,9 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         # adds singleton query_tokens dimension:
         #   [batch,                    1, key_tokens]
         # this helps to broadcast it as a bias over attention scores, which will be in one of the following shapes:
-        #   [batch,  heads, query_tokens, key_tokens] (e.g. torch sdp attn)
-        #   [batch * heads, query_tokens, key_tokens] (e.g. xformers or classic attn)
+        #   [batch,  query_tokens, heads, key_tokens] (e.g. paddle sdp or ppxformers attn)
+        #   [batch,  heads, query_tokens, key_tokens] (e.g. classic attn)
+        # pure fp16
         hidden_states = hidden_states.cast(self.dtype)
         if attention_mask is not None and attention_mask.ndim == 2:
             # assume that mask is expressed as:
@@ -321,19 +326,27 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
         # 1. Input
         if self.is_input_continuous:
-            batch, _, height, width = paddle.shape(hidden_states)
+            batch, _, height, width = paddle.shape(hidden_states)  # (NOTE,junnyu) make export happier
             residual = hidden_states
+
             hidden_states = self.norm(hidden_states)
             if not self.use_linear_projection:
-                hidden_states = self.proj_in(hidden_states, scale=lora_scale)
-            hidden_states = hidden_states.transpose([0, 2, 3, 1]).flatten(1, 2)
-            if self.use_linear_projection:
-                hidden_states = self.proj_in(hidden_states, scale=lora_scale)
+                hidden_states = (
+                    self.proj_in(hidden_states, scale=lora_scale)
+                    if not USE_PPPEFT_BACKEND
+                    else self.proj_in(hidden_states)
+                )
+                hidden_states = hidden_states.transpose([0, 2, 3, 1]).flatten(1, 2)
+            else:
+                hidden_states = hidden_states.transpose([0, 2, 3, 1]).flatten(1, 2)
+                hidden_states = (
+                    self.proj_in(hidden_states, scale=lora_scale)
+                    if not USE_PPPEFT_BACKEND
+                    else self.proj_in(hidden_states)
+                )
+
         elif self.is_input_vectorized:
-            # pytorch code:
-            # hidden_states = self.latent_image_embedding(hidden_states)
-            # paddle code, _C_ops.embedding not support float32, need convert to int64:
-            hidden_states = self.latent_image_embedding(hidden_states.cast("int64"))
+            hidden_states = self.latent_image_embedding(hidden_states.cast("int64"))  # NEW ADD
         elif self.is_input_patches:
             height, width = hidden_states.shape[-2] // self.patch_size, hidden_states.shape[-1] // self.patch_size
             hidden_states = self.pos_embed(hidden_states)
@@ -352,30 +365,21 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
         if self.caption_projection is not None:
             batch_size = hidden_states.shape[0]
             encoder_hidden_states = self.caption_projection(encoder_hidden_states)
-            encoder_hidden_states = encoder_hidden_states.view(batch_size, -1, hidden_states.shape[-1])
+            encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
 
         for block in self.transformer_blocks:
             if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
-                # hidden_states = torch.utils.checkpoint.checkpoint(
-                #     block,
-                #     hidden_states,
-                #     attention_mask,
-                #     encoder_hidden_states,
-                #     encoder_attention_mask,
-                #     timestep,
-                #     cross_attention_kwargs,
-                #     class_labels,
-                #     use_reentrant=False,
-                # )
+
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
                         if return_dict is not None:
-                            return module(*inputs, return_dict=return_dict)[0]  # move [0] when paddlepaddle <= 2.4.1
+                            return module(*inputs, return_dict=return_dict)
                         else:
                             return module(*inputs)
 
                     return custom_forward
 
+                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(
                     create_custom_forward(block),
                     hidden_states,
@@ -385,8 +389,8 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     timestep,
                     cross_attention_kwargs,
                     class_labels,
-                    # use_reentrant=False,
-                )  # [0]
+                    **ckpt_kwargs,
+                )
             else:
                 hidden_states = block(
                     hidden_states,
@@ -400,11 +404,21 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
         # 3. Output
         if self.is_input_continuous:
-            if self.use_linear_projection:
-                hidden_states = self.proj_out(hidden_states, scale=lora_scale)
-            hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
             if not self.use_linear_projection:
-                hidden_states = self.proj_out(hidden_states, scale=lora_scale)
+                hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
+                hidden_states = (
+                    self.proj_out(hidden_states, scale=lora_scale)
+                    if not USE_PPPEFT_BACKEND
+                    else self.proj_out(hidden_states)
+                )
+            else:
+                hidden_states = (
+                    self.proj_out(hidden_states, scale=lora_scale)
+                    if not USE_PPPEFT_BACKEND
+                    else self.proj_out(hidden_states)
+                )
+                hidden_states = hidden_states.reshape([batch, height, width, self.inner_dim]).transpose([0, 3, 1, 2])
+
             output = hidden_states + residual
         elif self.is_input_vectorized:
             hidden_states = self.norm_out(hidden_states)
@@ -414,6 +428,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
             # log(p(x_0))
             output = F.log_softmax(logits.cast("float64"), axis=1).cast("float32")
+
         if self.is_input_patches:
             if self.config.norm_type != "ada_norm_single":
                 conditioning = self.transformer_blocks[0].norm1.emb(
@@ -434,10 +449,12 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             if self.adaln_single is None:
                 height = width = int(hidden_states.shape[1] ** 0.5)
             hidden_states = hidden_states.reshape(
-                (-1, height, width, self.patch_size, self.patch_size, self.out_channels)
+                shape=(-1, height, width, self.patch_size, self.patch_size, self.out_channels)
             )
             hidden_states = paddle.einsum("nhwpqc->nchpwq", hidden_states)
-            output = hidden_states.reshape((-1, self.out_channels, height * self.patch_size, width * self.patch_size))
+            output = hidden_states.reshape(
+                shape=(-1, self.out_channels, height * self.patch_size, width * self.patch_size)
+            )
 
         if not return_dict:
             return (output,)

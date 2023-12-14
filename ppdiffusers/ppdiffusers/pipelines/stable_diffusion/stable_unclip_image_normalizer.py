@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +15,7 @@
 from typing import Optional
 
 import paddle
-import paddle.nn as nn
+from paddle import nn
 
 from ...configuration_utils import ConfigMixin, register_to_config
 from ...models.modeling_utils import ModelMixin
@@ -37,31 +36,16 @@ class StableUnCLIPImageNormalizer(ModelMixin, ConfigMixin):
     ):
         super().__init__()
 
-        self.mean = self.create_parameter(
-            (1, embedding_dim), dtype=paddle.get_default_dtype(), default_initializer=nn.initializer.Constant(0.0)
-        )
-        self.std = self.create_parameter(
-            (1, embedding_dim), dtype=paddle.get_default_dtype(), default_initializer=nn.initializer.Constant(1.0)
-        )
+        self.mean = nn.Parameter(paddle.zeros([1, embedding_dim]))
+        self.std = nn.Parameter(paddle.ones([1, embedding_dim]))
 
     def to(
         self,
-        device: Optional[str] = None,
-        dtype: Optional[paddle.dtype] = None,
+        paddle_device: Optional[str] = None,
+        paddle_dtype: Optional[paddle.dtype] = None,
     ):
-        if dtype is not None:
-            self.mean = self.create_parameter(
-                self.mean.shape,
-                dtype=dtype,
-                default_initializer=paddle.nn.initializer.Assign(self.mean.numpy()),
-            )
-            self.std = self.create_parameter(
-                self.std.shape, dtype=dtype, default_initializer=paddle.nn.initializer.Assign(self.std.numpy())
-            )
-        if device is not None:
-            self.mean._to(device)
-            self.std._to(device)
-
+        self.mean._to(device=paddle_device, dtype=paddle_dtype)
+        self.std._to(device=paddle_device, dtype=paddle_dtype)
         return self
 
     def scale(self, embeds):

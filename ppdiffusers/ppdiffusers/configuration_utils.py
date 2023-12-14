@@ -1,5 +1,5 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2022 The HuggingFace Inc. team.
+# coding=utf-8
+# Copyright 2023 The HuggingFace Inc. team.
 # Copyright (c) 2022, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,6 +24,9 @@ from collections import OrderedDict
 from pathlib import PosixPath
 from typing import Any, Dict, Tuple, Union
 
+from .utils.download_utils import SaveToAistudioMixin
+from .utils.hub_utils import PushToHubMixin
+
 try:
     from omegaconf.listconfig import ListConfig
 
@@ -31,19 +34,20 @@ try:
 except:
     _omegaconf_available = False
 import numpy as np
-import paddle
+from huggingface_hub import create_repo
 
 from .utils import (
     DIFFUSERS_CACHE,
+    FROM_AISTUDIO,
+    FROM_HF_HUB,
     PPDIFFUSERS_CACHE,
     DummyObject,
-    bos_hf_download,
+    bos_aistudio_hf_download,
     deprecate,
     extract_commit_hash,
     http_user_agent,
     logging,
 )
-from .utils.constants import FROM_HF_HUB
 from .version import VERSION as __version__
 
 logger = logging.get_logger(__name__)
@@ -83,7 +87,7 @@ class FrozenDict(OrderedDict):
         super().__setitem__(name, value)
 
 
-class ConfigMixin:
+class ConfigMixin(PushToHubMixin, SaveToAistudioMixin):
     r"""
     Base class for all configuration classes. All configuration parameters are stored under `self.config`. Also
     provides the [`~ConfigMixin.from_config`] and [`~ConfigMixin.save_config`] methods for loading, downloading, and
@@ -99,6 +103,7 @@ class ConfigMixin:
           should only have a `kwargs` argument if at least one argument is deprecated (should be overridden by
           subclass).
     """
+
     config_name = None
     ignore_for_config = []
     has_compatibles = False
@@ -125,6 +130,7 @@ class ConfigMixin:
     def __getattr__(self, name: str) -> Any:
         """The only reason we overwrite `getattr` here is to gracefully deprecate accessing
         config attributes directly. See https://github.com/huggingface/diffusers/pull/3129
+
         Tihs funtion is mostly copied from PyTorch's __getattr__ overwrite:
         https://pytorch.org/docs/stable/_modules/torch/nn/modules/module.html#Module
         """
@@ -140,7 +146,12 @@ class ConfigMixin:
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     def save_config(
-        self, save_directory: Union[str, os.PathLike], push_to_hub: bool = False, to_diffusers=False, **kwargs
+        self,
+        save_directory: Union[str, os.PathLike],
+        push_to_hub: bool = False,
+        save_to_aistudio: bool = False,
+        to_diffusers: bool = False,
+        **kwargs,
     ):
         """
         Save a configuration object to the directory specified in `save_directory` so that it can be reloaded using the
@@ -149,6 +160,12 @@ class ConfigMixin:
         Args:
             save_directory (`str` or `os.PathLike`):
                 Directory where the configuration JSON file is saved (will be created if it does not exist).
+            push_to_hub (`bool`, *optional*, defaults to `False`):
+                Whether or not to push your model to the Hugging Face Hub after saving it. You can specify the
+                repository you want to push to with `repo_id` (will default to the name of `save_directory` in your
+                namespace).
+            kwargs (`Dict[str, Any]`, *optional*):
+                Additional keyword arguments passed along to the [`~utils.PushToHubMixin.push_to_hub`] method.
         """
         if os.path.isfile(save_directory):
             raise AssertionError(f"Provided path ({save_directory}) should be a directory, not a file")
@@ -161,6 +178,50 @@ class ConfigMixin:
         self.to_json_file(output_config_file, to_diffusers=to_diffusers)
         logger.info(f"Configuration saved in {output_config_file}")
 
+        commit_message = kwargs.pop("commit_message", None)
+        create_pr = kwargs.pop("create_pr", False)
+        token = kwargs.pop("token", None)
+        token_kwargs = {}
+        if token is not None:
+            token_kwargs["token"] = token
+        private = kwargs.pop("private", False)
+        exist_ok = kwargs.pop("exist_ok", True)
+        repo_id = kwargs.pop("repo_id", save_directory.split(os.path.sep)[-1])
+        license = kwargs.pop("license", "creativeml-openrail-m")
+
+        if save_to_aistudio:
+            from aistudio_sdk.hub import create_repo as aistudio_create_repo
+
+            assert "/" in repo_id, "Please specify the repo id in format of `user_id/repo_name`"
+            res = aistudio_create_repo(repo_id=repo_id, private=private, license=license, **token_kwargs)
+            if "error_code" in res:
+                if res["error_code"] == 10003 and exist_ok:
+                    logger.info(
+                        f"Repo {repo_id} already exists, it will override files with the same name. To avoid this, please set exist_ok=False"
+                    )
+                else:
+                    logger.error(
+                        f"Failed to create repo {repo_id}, error_code: {res['error_code']}, error_msg: {res['error_msg']}"
+                    )
+            else:
+                logger.info(f"Successfully created repo {repo_id}")
+            self._upload_folder_aistudio(
+                save_directory,
+                repo_id,
+                commit_message=commit_message,
+                **token_kwargs,
+            )
+
+        if push_to_hub:
+            repo_id = create_repo(repo_id, exist_ok=exist_ok, private=private, **token_kwargs).repo_id
+            self._upload_folder(
+                save_directory,
+                repo_id,
+                commit_message=commit_message,
+                create_pr=create_pr,
+                **token_kwargs,
+            )
+
     @classmethod
     def from_config(cls, config: Union[FrozenDict, Dict[str, Any]] = None, return_unused_kwargs=False, **kwargs):
         r"""
@@ -172,11 +233,11 @@ class ConfigMixin:
                 files of compatible classes.
             return_unused_kwargs (`bool`, *optional*, defaults to `False`):
                 Whether kwargs that are not consumed by the Python class should be returned or not.
-
             kwargs (remaining dictionary of keyword arguments, *optional*):
                 Can be used to update the configuration object (after it is loaded) and initiate the Python class.
                 `**kwargs` are passed directly to the underlying scheduler/model's `__init__` method and eventually
                 overwrite the same named arguments in `config`.
+
         Returns:
             [`ModelMixin`] or [`SchedulerMixin`]:
                 A model or scheduler object instantiated from a config dictionary.
@@ -266,13 +327,16 @@ class ConfigMixin:
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         r"""
         Load a model or scheduler configuration.
+
         Parameters:
             pretrained_model_name_or_path (`str` or `os.PathLike`, *optional*):
                 Can be either:
+
                     - A string, the *model id* (for example `google/ddpm-celebahq-256`) of a pretrained model hosted on
                       the Hub.
                     - A path to a *directory* (for example `./my_model_directory`) containing model weights saved with
                       [`~ConfigMixin.save_config`].
+
             cache_dir (`Union[str, os.PathLike]`, *optional*):
                 Path to a directory where a downloaded pretrained model configuration is cached if the standard cache
                 is not used.
@@ -302,14 +366,23 @@ class ConfigMixin:
                 Whether unused keyword arguments of the config are returned.
             return_commit_hash (`bool`, *optional*, defaults to `False):
                 Whether the `commit_hash` of the loaded configuration are returned.
+
         Returns:
             `dict`:
                 A dictionary of all the parameters stored in a JSON configuration file.
+
         """
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
-        cache_dir = (
-            kwargs.pop("cache_dir", DIFFUSERS_CACHE) if from_hf_hub else kwargs.pop("cache_dir", PPDIFFUSERS_CACHE)
-        )
+        from_aistudio = kwargs.pop("from_aistudio", FROM_AISTUDIO)
+        cache_dir = kwargs.pop("cache_dir", None)
+        if cache_dir is None:
+            if from_aistudio:
+                cache_dir = PPDIFFUSERS_CACHE
+            elif from_hf_hub:
+                cache_dir = DIFFUSERS_CACHE
+            else:
+                cache_dir = PPDIFFUSERS_CACHE
+
         force_download = kwargs.pop("force_download", False)
         resume_download = kwargs.pop("resume_download", False)
         proxies = kwargs.pop("proxies", None)
@@ -317,10 +390,14 @@ class ConfigMixin:
         local_files_only = kwargs.pop("local_files_only", False)
         revision = kwargs.pop("revision", None)
         _ = kwargs.pop("mirror", None)
-        subfolder = kwargs.pop("subfolder", None)
+        subfolder = kwargs.pop("subfolder", "")
+        if subfolder is None:
+            subfolder = ""
         user_agent = kwargs.pop("user_agent", {})
+
         user_agent = {**user_agent, "file_type": "config"}
         user_agent = http_user_agent(user_agent)
+
         # new add return_config_file
         return_config_file = kwargs.pop("return_config_file", False)
 
@@ -347,9 +424,9 @@ class ConfigMixin:
                     f"Error no file named {cls.config_name} found in directory {pretrained_model_name_or_path}."
                 )
         else:
-            config_file = bos_hf_download(
+            config_file = bos_aistudio_hf_download(
                 pretrained_model_name_or_path,
-                filename=cls.config_name,
+                cls.config_name,
                 cache_dir=cache_dir,
                 force_download=force_download,
                 proxies=proxies,
@@ -360,13 +437,14 @@ class ConfigMixin:
                 subfolder=subfolder,
                 revision=revision,
                 from_hf_hub=from_hf_hub,
+                from_aistudio=from_aistudio,
             )
 
         try:
             # Load config dict
             config_dict = cls._dict_from_json_file(config_file)
-            commit_hash = extract_commit_hash(config_file)
 
+            commit_hash = extract_commit_hash(config_file)
         except (json.JSONDecodeError, UnicodeDecodeError):
             raise EnvironmentError(f"It looks like the config file at '{config_file}' is not a valid JSON file.")
 
@@ -374,6 +452,7 @@ class ConfigMixin:
             return config_dict
 
         outputs = (config_dict,)
+
         if return_unused_kwargs:
             outputs += (kwargs,)
 
@@ -410,7 +489,7 @@ class ConfigMixin:
         if len(cls.ignore_for_config) > 0:
             expected_keys = expected_keys - set(cls.ignore_for_config)
 
-        # load diffusers library to import compatible and original scheduler
+        # load ppdiffusers library to import compatible and original scheduler
         ppdiffusers_library = importlib.import_module(__name__.split(".")[0])
 
         if cls.has_compatibles:
@@ -427,10 +506,18 @@ class ConfigMixin:
 
         # remove attributes from orig class that cannot be expected
         orig_cls_name = config_dict.pop("_class_name", cls.__name__)
-        if orig_cls_name != cls.__name__ and hasattr(ppdiffusers_library, orig_cls_name):
+        if (
+            isinstance(orig_cls_name, str)
+            and orig_cls_name != cls.__name__
+            and hasattr(ppdiffusers_library, orig_cls_name)
+        ):
             orig_cls = getattr(ppdiffusers_library, orig_cls_name)
             unexpected_keys_from_orig = cls._get_init_keys(orig_cls) - expected_keys
             config_dict = {k: v for k, v in config_dict.items() if k not in unexpected_keys_from_orig}
+        elif not isinstance(orig_cls_name, str) and not isinstance(orig_cls_name, (list, tuple)):
+            raise ValueError(
+                "Make sure that the `_class_name` is of type string or list of string (for custom pipelines)."
+            )
 
         # remove private attributes
         config_dict = {k: v for k, v in config_dict.items() if not k.startswith("_")}
@@ -509,13 +596,13 @@ class ConfigMixin:
     def to_json_string(self, to_diffusers=False) -> str:
         """
         Serializes the configuration instance to a JSON string.
+
         Returns:
             `str`:
                 String containing all the attributes that make up the configuration instance in JSON format.
         """
         config_dict = self._internal_dict if hasattr(self, "_internal_dict") else {}
         config_dict["_class_name"] = self.__class__.__name__
-
         # json
         if to_diffusers:
             config_dict["_diffusers_version"] = __version__
@@ -543,7 +630,7 @@ class ConfigMixin:
         json_string = json.dumps(config_dict, indent=2, sort_keys=True) + "\n"
         if to_diffusers:
             json_string = json_string.replace('"ppdiffusers"', '"diffusers"').replace(
-                '"paddlenlp.transformers"', '"transformers"'
+                '"ppdiffusers.transformers"', '"transformers"'
             )
         return json_string
 
@@ -606,65 +693,3 @@ def register_to_config(init):
         init(self, *args, **init_kwargs)
 
     return inner_init
-
-
-def finfo(dtype: paddle.dtype = None):
-    if dtype is None:
-        dtype = paddle.get_default_dtype()
-
-    if dtype == paddle.bfloat16:
-        # Numpy do not support `np.finfo(np.uint16)`, so try to construct a finfo object to fetch min value
-        class BFloatFInfo:
-            min = -3.3895313892515355e38
-
-        return BFloatFInfo
-    if dtype == paddle.float32:
-        return np.finfo(np.float32)
-    if dtype == paddle.float16:
-        return np.finfo(np.float16)
-    if dtype == paddle.float64:
-        return np.finfo(np.float64)
-
-
-class ModuleUtilsMixin:
-    """
-    A few utilities for `torch.nn.Modules`, to be used as a mixin.
-    """
-
-    def get_extended_attention_mask(
-        self, attention_mask: paddle.Tensor, input_shape: Tuple[int], dtype: paddle.float32 = None
-    ) -> paddle.Tensor:
-        """
-        Makes broadcastable attention and causal masks so that future and masked tokens are ignored.
-        Arguments:
-            attention_mask (`paddle.Tensor`):
-                Mask with ones indicating tokens to attend to, zeros for tokens to ignore.
-            input_shape (`Tuple[int]`):
-                The shape of the input to the model.
-        Returns:
-            `paddle.Tensor` The extended attention mask, with a the same dtype as `attention_mask.dtype`.
-        """
-        if dtype is None:
-            dtype = self.dtype
-        # We can provide a self-attention mask of dimensions [batch_size, from_seq_length, to_seq_length]
-        # ourselves in which case we just need to make it broadcastable to all heads.
-        if attention_mask.dim() == 3:
-            extended_attention_mask = attention_mask[:, None, :, :]
-        elif attention_mask.dim() == 2:
-            # Provided a padding mask of dimensions [batch_size, seq_length]
-            # - the model is an encoder, so make the mask broadcastable to [batch_size, num_heads, seq_length, seq_length]
-            extended_attention_mask = attention_mask[:, None, None, :]
-        else:
-            raise ValueError(
-                "Wrong shape for input_ids (shape {}) or attention_mask (shape {})".format(
-                    input_shape, attention_mask.shape
-                )
-            )
-
-        # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
-        # masked positions, this operation will create a tensor which is 0.0 for
-        # positions we want to attend and -10000.0 for masked positions.
-        # Since we are adding it to the raw scores before the softmax, this is
-        # effectively the same as removing these entirely.
-        extended_attention_mask = (1.0 - extended_attention_mask) * finfo(dtype).min
-        return extended_attention_mask

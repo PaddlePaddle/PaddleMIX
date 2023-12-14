@@ -1,5 +1,4 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,12 +16,12 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Union
 
 import paddle
-import paddle.nn as nn
 import paddle.nn.functional as F
+from paddle import nn
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..loaders import UNet2DConditionLoadersMixin
-from ..utils import NEG_INF, BaseOutput
+from ..utils import BaseOutput
 from .attention import BasicTransformerBlock
 from .attention_processor import (
     ADDED_KV_ATTENTION_PROCESSORS,
@@ -135,18 +134,10 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         else:
             raise ValueError(f"unsupported encoder_hid_proj_type: {encoder_hid_proj_type}")
 
-        self.positional_embedding = self.create_parameter(
-            (1, num_embeddings + additional_embeddings, inner_dim),
-            dtype=paddle.get_default_dtype(),
-            default_initializer=nn.initializer.Constant(0.0),
-        )
+        self.positional_embedding = nn.Parameter(paddle.zeros([1, num_embeddings + additional_embeddings, inner_dim]))
 
         if added_emb_type == "prd":
-            self.prd_embedding = self.create_parameter(
-                (1, 1, inner_dim),
-                dtype=paddle.get_default_dtype(),
-                default_initializer=nn.initializer.Constant(0.0),
-            )
+            self.prd_embedding = nn.Parameter(paddle.zeros([1, 1, inner_dim]))
         elif added_emb_type is None:
             self.prd_embedding = None
         else:
@@ -180,17 +171,13 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         self.proj_to_clip_embeddings = nn.Linear(inner_dim, clip_embed_dim)
 
         causal_attention_mask = paddle.triu(
-            paddle.full([num_embeddings + additional_embeddings, num_embeddings + additional_embeddings], NEG_INF), 1
+            paddle.full([num_embeddings + additional_embeddings, num_embeddings + additional_embeddings], -1e4), 1
         )
-        causal_attention_mask = causal_attention_mask.unsqueeze(0)
+        causal_attention_mask = causal_attention_mask[None, ...]
         self.register_buffer("causal_attention_mask", causal_attention_mask, persistable=False)
 
-        self.clip_mean = self.create_parameter(
-            (1, clip_embed_dim), dtype=paddle.get_default_dtype(), default_initializer=nn.initializer.Constant(0.0)
-        )
-        self.clip_std = self.create_parameter(
-            (1, clip_embed_dim), dtype=paddle.get_default_dtype(), default_initializer=nn.initializer.Constant(0.0)
-        )
+        self.clip_mean = nn.Parameter(paddle.zeros([1, clip_embed_dim]))
+        self.clip_std = nn.Parameter(paddle.zeros([1, clip_embed_dim]))
 
     @property
     # Copied from ppdiffusers.models.unet_2d_condition.UNet2DConditionModel.attn_processors
@@ -223,12 +210,15 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
     ):
         r"""
         Sets the attention processor to use to compute attention.
+
         Parameters:
             processor (`dict` of `AttentionProcessor` or only `AttentionProcessor`):
                 The instantiated processor class or a dictionary of processor classes that will be set as the processor
                 for **all** `Attention` layers.
+
                 If `processor` is a dict, the key needs to define the path to the corresponding cross attention
                 processor. This is strongly recommended when setting trainable attention processors.
+
         """
         count = len(self.attn_processors.keys())
 
@@ -288,7 +278,7 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
                 Projected embedding vector the denoising process is conditioned on.
             encoder_hidden_states (`paddle.Tensor` of shape `(batch_size, num_embeddings, embedding_dim)`):
                 Hidden states of the text embeddings the denoising process is conditioned on.
-            attention_mask (`torch.BoolTensor` of shape `(batch_size, num_embeddings)`):
+            attention_mask (`paddle.Tensor` of shape `(batch_size, num_embeddings)`):
                 Text mask for the text embeddings.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~models.prior_transformer.PriorTransformerOutput`] instead of a plain
@@ -299,6 +289,7 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
                 If return_dict is True, a [`~models.prior_transformer.PriorTransformerOutput`] is returned, otherwise a
                 tuple is returned where the first element is the sample tensor.
         """
+        # TODO junnyu, add this to support pure fp16
         hidden_states = hidden_states.cast(self.dtype)
         batch_size = hidden_states.shape[0]
 
@@ -375,7 +366,7 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         hidden_states = hidden_states + positional_embeddings
 
         if attention_mask is not None:
-            attention_mask = (1 - attention_mask.cast(hidden_states.dtype)) * NEG_INF
+            attention_mask = (1 - attention_mask.cast(hidden_states.dtype)) * -1e4
             attention_mask = F.pad(
                 attention_mask.unsqueeze(0), (0, self.additional_embeddings), value=0.0, data_format="NCL"
             ).squeeze(0)
@@ -386,7 +377,6 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
             hidden_states = self.norm_in(hidden_states)
 
         for block in self.transformer_blocks:
-            # breakpoint()
             hidden_states = block(hidden_states, attention_mask=attention_mask)
 
         hidden_states = self.norm_out(hidden_states)

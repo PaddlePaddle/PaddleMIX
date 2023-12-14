@@ -1,5 +1,5 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# coding=utf-8
+# Copyright 2023 The HuggingFace Inc. team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,15 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import os
 import re
 import sys
+import tempfile
 import traceback
 from pathlib import Path
 from typing import Dict, Optional, Union
 from uuid import uuid4
 
-from huggingface_hub import HfFolder, ModelCard, ModelCardData, whoami
+from huggingface_hub import (
+    HfFolder,
+    ModelCard,
+    ModelCardData,
+    create_repo,
+    upload_folder,
+    whoami,
+)
 from huggingface_hub.file_download import REGEX_COMMIT_HASH
 from huggingface_hub.utils import is_jinja_available
 
@@ -39,6 +48,7 @@ from .import_utils import (
 from .logging import get_logger
 
 logger = get_logger(__name__)
+
 
 MODEL_CARD_TEMPLATE_PATH = Path(__file__).parent / "model_card_template.md"
 SESSION_ID = uuid4().hex
@@ -58,6 +68,10 @@ def http_user_agent(user_agent: Union[Dict, str, None] = None) -> str:
         ua += f"; torch/{_torch_version}"
     if is_paddle_available():
         ua += f"; paddle/{_paddle_version}"
+        import paddle
+
+        ua += f"; paddle_commit/{paddle.__git_commit__}"
+
     if is_fastdeploy_available():
         ua += f"; fastdeploy/{_fastdeploy_version}"
     # CI will set this value to True
@@ -161,7 +175,6 @@ def move_cache(old_cache_dir: Optional[str] = None, new_cache_dir: Optional[str]
 
     old_cache_dir = Path(old_cache_dir).expanduser()
     new_cache_dir = Path(new_cache_dir).expanduser()
-    # move file blob by blob
     for old_blob_path in old_cache_dir.glob("**/blobs/*"):
         if old_blob_path.is_file() and not old_blob_path.is_symlink():
             new_blob_path = new_cache_dir / old_blob_path.relative_to(old_cache_dir)
@@ -173,7 +186,6 @@ def move_cache(old_cache_dir: Optional[str] = None, new_cache_dir: Optional[str]
                 logger.warning(
                     "Could not create symlink between old cache and new cache. If you use an older version of diffusers again, files will be re-downloaded."
                 )
-
     # At this point, old_cache_dir contains symlinks to the new cache (it can still be used).
 
 
@@ -215,3 +227,102 @@ if cache_version < 1:
             f"There was a problem when trying to write in your cache folder ({DIFFUSERS_CACHE}). Please, ensure "
             "the directory exists and can be written to."
         )
+
+
+class PushToHubMixin:
+    """
+    A Mixin to push a model, scheduler, or pipeline to the Hugging Face Hub.
+    """
+
+    def _upload_folder(
+        self,
+        working_dir: Union[str, os.PathLike],
+        repo_id: str,
+        token: Optional[str] = None,
+        commit_message: Optional[str] = None,
+        create_pr: bool = False,
+    ):
+        """
+        Uploads all files in `working_dir` to `repo_id`.
+        """
+        if commit_message is None:
+            if "Model" in self.__class__.__name__:
+                commit_message = "Upload model"
+            elif "Scheduler" in self.__class__.__name__:
+                commit_message = "Upload scheduler"
+            else:
+                commit_message = f"Upload {self.__class__.__name__}"
+
+        logger.info(f"Uploading the files of {working_dir} to {repo_id}.")
+        return upload_folder(
+            repo_id=repo_id, folder_path=working_dir, token=token, commit_message=commit_message, create_pr=create_pr
+        )
+
+    def push_to_hub(
+        self,
+        repo_id: str,
+        commit_message: Optional[str] = None,
+        private: Optional[bool] = None,
+        token: Optional[str] = None,
+        create_pr: bool = False,
+        safe_serialization: bool = True,
+        variant: Optional[str] = None,
+        to_diffusers: bool = None,
+        max_shard_size: Union[int, str] = "10GB",
+    ) -> str:
+        """
+        Upload model, scheduler, or pipeline files to the 🤗 Hugging Face Hub.
+
+        Parameters:
+            repo_id (`str`):
+                The name of the repository you want to push your model, scheduler, or pipeline files to. It should
+                contain your organization name when pushing to an organization. `repo_id` can also be a path to a local
+                directory.
+            commit_message (`str`, *optional*):
+                Message to commit while pushing. Default to `"Upload {object}"`.
+            private (`bool`, *optional*):
+                Whether or not the repository created should be private.
+            token (`str`, *optional*):
+                The token to use as HTTP bearer authorization for remote files. The token generated when running
+                `huggingface-cli login` (stored in `~/.huggingface`).
+            create_pr (`bool`, *optional*, defaults to `False`):
+                Whether or not to create a PR with the uploaded files or directly commit.
+            safe_serialization (`bool`, *optional*, defaults to `True`):
+                Whether or not to convert the model weights to the `safetensors` format.
+            variant (`str`, *optional*):
+                If specified, weights are saved in the format `pytorch_model.<variant>.bin`.
+
+        Examples:
+
+        ```python
+        from diffusers import UNet2DConditionModel
+
+        unet = UNet2DConditionModel.from_pretrained("stabilityai/stable-diffusion-2", subfolder="unet")
+
+        # Push the `unet` to your namespace with the name "my-finetuned-unet".
+        unet.push_to_hub("my-finetuned-unet")
+
+        # Push the `unet` to an organization with the name "my-finetuned-unet".
+        unet.push_to_hub("your-org/my-finetuned-unet")
+        ```
+        """
+        repo_id = create_repo(repo_id, private=private, token=token, exist_ok=True).repo_id
+
+        # Save all files.
+        save_kwargs = {}
+        if "Scheduler" not in self.__class__.__name__:
+            save_kwargs.update({"safe_serialization": safe_serialization})
+            save_kwargs.update({"variant": variant})
+            save_kwargs.update({"to_diffusers": to_diffusers})
+            save_kwargs.update({"max_shard_size": max_shard_size})
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self.save_pretrained(tmpdir, **save_kwargs)
+
+            return self._upload_folder(
+                tmpdir,
+                repo_id,
+                token=token,
+                commit_message=commit_message,
+                create_pr=create_pr,
+            )

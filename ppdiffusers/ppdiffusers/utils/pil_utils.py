@@ -1,5 +1,4 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from typing import List
 
 import PIL.Image
 import PIL.ImageOps
@@ -70,3 +71,20 @@ def numpy_to_pil(images):
         pil_images = [Image.fromarray(image) for image in images]
 
     return pil_images
+
+
+def make_image_grid(images: List[PIL.Image.Image], rows: int, cols: int, resize: int = None) -> PIL.Image.Image:
+    """
+    Prepares a single grid of images. Useful for visualization purposes.
+    """
+    assert len(images) == rows * cols
+
+    if resize is not None:
+        images = [img.resize((resize, resize)) for img in images]
+
+    w, h = images[0].size
+    grid = Image.new("RGB", size=(cols * w, rows * h))
+
+    for i, img in enumerate(images):
+        grid.paste(img, box=(i % cols * w, i // cols * h))
+    return grid

@@ -12,4 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from . import ppnlp_patch_utils, tomesd_patch_utils, webui_lora_patch_utils
+from .paddle_patch import *

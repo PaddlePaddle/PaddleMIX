@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Union
 
 import paddle
@@ -20,7 +18,7 @@ import paddle.nn as nn
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..loaders import FromOriginalVAEMixin
-from ..utils import BaseOutput, apply_forward_hook
+from ..utils import apply_forward_hook
 from .attention_processor import (
     ADDED_KV_ATTENTION_PROCESSORS,
     CROSS_ATTENTION_PROCESSORS,
@@ -28,29 +26,18 @@ from .attention_processor import (
     AttnAddedKVProcessor,
     AttnProcessor,
 )
+from .modeling_outputs import AutoencoderKLOutput
 from .modeling_utils import ModelMixin
 from .vae import Decoder, DecoderOutput, DiagonalGaussianDistribution, Encoder
-
-
-@dataclass
-class AutoencoderKLOutput(BaseOutput):
-    """
-    Output of AutoencoderKL encoding method.
-
-    Args:
-        latent_dist (`DiagonalGaussianDistribution`):
-            Encoded outputs of `Encoder` represented as the mean and logvar of `DiagonalGaussianDistribution`.
-            `DiagonalGaussianDistribution` allows for sampling latents from the distribution.
-    """
-
-    latent_dist: DiagonalGaussianDistribution
 
 
 class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
     r"""
     A VAE model with KL loss for encoding images into latents and decoding latent representations into images.
+
     This model inherits from [`ModelMixin`]. Check the superclass documentation for it's generic methods implemented
     for all models (such as downloading or saving).
+
     Parameters:
         in_channels (int, *optional*, defaults to 3): Number of channels in the input image.
         out_channels (int,  *optional*, defaults to 3): Number of channels in the output.
@@ -75,6 +62,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             can be fine-tuned / trained to a lower range without loosing too much precision in which case
             `force_upcast` can be set to `False` - see: https://huggingface.co/madebyollin/sdxl-vae-fp16-fix
     """
+
     _supports_gradient_checkpointing = True
 
     @register_to_config
@@ -97,13 +85,9 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
     ):
         super().__init__()
         # if down_block_out_channels not givien, we will use block_out_channels
-        _down_block_out_channels = (
-            self.config.block_out_channels if down_block_out_channels is None else self.config.down_block_out_channels
-        )
+        _down_block_out_channels = block_out_channels if down_block_out_channels is None else down_block_out_channels
         # if up_block_out_channels not givien, we will use block_out_channels
-        _up_block_out_channels = (
-            self.config.block_out_channels if up_block_out_channels is None else self.config.up_block_out_channels
-        )
+        _up_block_out_channels = block_out_channels if up_block_out_channels is None else up_block_out_channels
 
         # pass init params to Encoder
         self.encoder = Encoder(
@@ -263,7 +247,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         Encode a batch of images into latents.
 
         Args:
-            x (`torch.FloatTensor`): Input batch of images.
+            x (`paddle.Tensor`): Input batch of images.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether to return a [`~models.autoencoder_kl.AutoencoderKLOutput`] instead of a plain tuple.
 
@@ -271,8 +255,6 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
                 The latent representations of the encoded images. If `return_dict` is True, a
                 [`~models.autoencoder_kl.AutoencoderKLOutput`] is returned, otherwise a plain `tuple` is returned.
         """
-        # TODO junnyu, support float16
-        x = x.cast(self.encoder.conv_in.weight.dtype)
         if self.use_tiling and (x.shape[-1] > self.tile_sample_min_size or x.shape[-2] > self.tile_sample_min_size):
             return self.tiled_encode(x, return_dict=return_dict)
 
@@ -310,7 +292,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         Decode a batch of images.
 
         Args:
-            z (`torch.FloatTensor`): Input batch of latent vectors.
+            z (`paddle.Tensor`): Input batch of latent vectors.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether to return a [`~models.vae.DecoderOutput`] instead of a plain tuple.
 
@@ -334,13 +316,13 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
         return DecoderOutput(sample=decoded)
 
-    def blend_v(self, a, b, blend_extent):
+    def blend_v(self, a: paddle.Tensor, b: paddle.Tensor, blend_extent: int) -> paddle.Tensor:
         blend_extent = min(a.shape[2], b.shape[2], blend_extent)
         for y in range(blend_extent):
             b[:, :, y, :] = a[:, :, -blend_extent + y, :] * (1 - y / blend_extent) + b[:, :, y, :] * (y / blend_extent)
         return b
 
-    def blend_h(self, a, b, blend_extent):
+    def blend_h(self, a: paddle.Tensor, b: paddle.Tensor, blend_extent: int) -> paddle.Tensor:
         blend_extent = min(a.shape[3], b.shape[3], blend_extent)
         for x in range(blend_extent):
             b[:, :, :, x] = a[:, :, :, -blend_extent + x] * (1 - x / blend_extent) + b[:, :, :, x] * (x / blend_extent)

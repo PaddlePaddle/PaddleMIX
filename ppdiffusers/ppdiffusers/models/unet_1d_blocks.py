@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import math
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 
 import paddle
 import paddle.nn.functional as F
@@ -68,7 +67,7 @@ class DownResnetBlock1D(nn.Layer):
         if add_downsample:
             self.downsample = Downsample1D(out_channels, use_conv=True, padding=1)
 
-    def forward(self, hidden_states, temb=None):
+    def forward(self, hidden_states: paddle.Tensor, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         output_states = ()
 
         hidden_states = self.resnets[0](hidden_states, temb)
@@ -128,7 +127,12 @@ class UpResnetBlock1D(nn.Layer):
         if add_upsample:
             self.upsample = Upsample1D(out_channels, use_conv_transpose=True)
 
-    def forward(self, hidden_states, res_hidden_states_tuple=None, temb=None):
+    def forward(
+        self,
+        hidden_states: paddle.Tensor,
+        res_hidden_states_tuple: Optional[Tuple[paddle.Tensor, ...]] = None,
+        temb: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
         if res_hidden_states_tuple is not None:
             res_hidden_states = res_hidden_states_tuple[-1]
             hidden_states = paddle.concat((hidden_states, res_hidden_states), axis=1)
@@ -147,7 +151,7 @@ class UpResnetBlock1D(nn.Layer):
 
 
 class ValueFunctionMidBlock1D(nn.Layer):
-    def __init__(self, in_channels, out_channels, embed_dim):
+    def __init__(self, in_channels: int, out_channels: int, embed_dim: int):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -158,7 +162,7 @@ class ValueFunctionMidBlock1D(nn.Layer):
         self.res2 = ResidualTemporalBlock1D(in_channels // 2, in_channels // 4, embed_dim=embed_dim)
         self.down2 = Downsample1D(out_channels // 4, use_conv=True)
 
-    def forward(self, x, temb=None):
+    def forward(self, x: paddle.Tensor, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         x = self.res1(x, temb)
         x = self.down1(x)
         x = self.res2(x, temb)
@@ -206,7 +210,7 @@ class MidResTemporalBlock1D(nn.Layer):
         if self.upsample and self.downsample:
             raise ValueError("Block cannot downsample and upsample")
 
-    def forward(self, hidden_states, temb):
+    def forward(self, hidden_states: paddle.Tensor, temb: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.resnets[0](hidden_states, temb)
         for resnet in self.resnets[1:]:
             hidden_states = resnet(hidden_states, temb)
@@ -227,7 +231,7 @@ class OutConv1DBlock(nn.Layer):
         self.final_conv1d_act = get_activation(act_fn)
         self.final_conv1d_2 = nn.Conv1D(embed_dim, out_channels, 1)
 
-    def forward(self, hidden_states, temb=None):
+    def forward(self, hidden_states: paddle.Tensor, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         hidden_states = self.final_conv1d_1(hidden_states)
         hidden_states = rearrange_dims(hidden_states)
         hidden_states = self.final_conv1d_gn(hidden_states)
@@ -248,7 +252,7 @@ class OutValueFunctionBlock(nn.Layer):
             ]
         )
 
-    def forward(self, hidden_states, temb):
+    def forward(self, hidden_states: paddle.Tensor, temb: paddle.Tensor) -> paddle.Tensor:
         hidden_states = hidden_states.reshape([hidden_states.shape[0], -1])
         hidden_states = paddle.concat((hidden_states, temb), axis=-1)
         for layer in self.final_block:
@@ -285,7 +289,7 @@ class Downsample1d(nn.Layer):
         self.pad = kernel_1d.shape[0] // 2 - 1
         self.register_buffer("kernel", kernel_1d)
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = F.pad(hidden_states, (self.pad,) * 2, self.pad_mode, data_format="NCL")
         weight = paddle.zeros(
             [hidden_states.shape[1], hidden_states.shape[1], self.kernel.shape[0]], dtype=hidden_states.dtype
@@ -303,8 +307,8 @@ class Upsample1d(nn.Layer):
         self.pad = kernel_1d.shape[0] // 2 - 1
         self.register_buffer("kernel", kernel_1d)
 
-    def forward(self, hidden_states, temb=None):
-        hidden_states = F.pad(hidden_states, ((self.pad + 1) // 2,) * 2, self.pad_mode, data_format="NCL")
+    def forward(self, hidden_states: paddle.Tensor, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
+        hidden_states = F.pad(hidden_states, ((self.pad + 1) // 2,) * 2, self.pad_mode)
         weight = paddle.zeros(
             [hidden_states.shape[1], hidden_states.shape[1], self.kernel.shape[0]], dtype=hidden_states.dtype
         )
@@ -333,12 +337,6 @@ class SelfAttention1d(nn.Layer):
         self._use_memory_efficient_attention_xformers = False
         self._attention_op = None
 
-    def transpose_for_scores(self, projection: paddle.Tensor) -> paddle.Tensor:
-        new_projection_shape = projection.shape[:-1] + (self.num_heads, -1)
-        # move heads to 2nd position (B, T, H * D) -> (B, T, H, D) -> (B, H, T, D)
-        new_projection = projection.reshape(new_projection_shape).transpose([0, 2, 1, 3])
-        return new_projection
-
     def reshape_heads_to_batch_dim(self, tensor, transpose=True):
         tensor = tensor.reshape([0, 0, self.num_heads, self.head_size])
         if transpose:
@@ -354,9 +352,6 @@ class SelfAttention1d(nn.Layer):
     def set_use_memory_efficient_attention_xformers(
         self, use_memory_efficient_attention_xformers: bool, attention_op: Optional[str] = None
     ):
-        # remove this PR: https://github.com/PaddlePaddle/Paddle/pull/56045
-        # if self.head_size > 128 and attention_op == "flash":
-        #     attention_op = "cutlass"
         if use_memory_efficient_attention_xformers:
             if not is_ppxformers_available():
                 raise NotImplementedError(
@@ -376,9 +371,8 @@ class SelfAttention1d(nn.Layer):
         self._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
         self._attention_op = attention_op
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         residual = hidden_states
-        # batch, channel_dim, seq = hidden_states.shape
 
         hidden_states = self.group_norm(hidden_states)
         hidden_states = hidden_states.transpose([0, 2, 1])
@@ -429,7 +423,7 @@ class SelfAttention1d(nn.Layer):
 
 
 class ResConvBlock(nn.Layer):
-    def __init__(self, in_channels, mid_channels, out_channels, is_last=False):
+    def __init__(self, in_channels: int, mid_channels: int, out_channels: int, is_last: bool = False):
         super().__init__()
         self.is_last = is_last
         self.has_conv_skip = in_channels != out_channels
@@ -446,7 +440,7 @@ class ResConvBlock(nn.Layer):
             self.group_norm_2 = nn.GroupNorm(1, out_channels)
             self.gelu_2 = nn.GELU()
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         residual = self.conv_skip(hidden_states) if self.has_conv_skip else hidden_states
 
         hidden_states = self.conv_1(hidden_states)
@@ -463,7 +457,7 @@ class ResConvBlock(nn.Layer):
 
 
 class UNetMidBlock1D(nn.Layer):
-    def __init__(self, mid_channels, in_channels, out_channels=None):
+    def __init__(self, mid_channels: int, in_channels: int, out_channels: Optional[int] = None):
         super().__init__()
 
         out_channels = in_channels if out_channels is None else out_channels
@@ -491,7 +485,7 @@ class UNetMidBlock1D(nn.Layer):
         self.attentions = nn.LayerList(attentions)
         self.resnets = nn.LayerList(resnets)
 
-    def forward(self, hidden_states, temb=None):
+    def forward(self, hidden_states: paddle.Tensor, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         hidden_states = self.down(hidden_states)
         for attn, resnet in zip(self.attentions, self.resnets):
             hidden_states = resnet(hidden_states)
@@ -503,7 +497,7 @@ class UNetMidBlock1D(nn.Layer):
 
 
 class AttnDownBlock1D(nn.Layer):
-    def __init__(self, out_channels, in_channels, mid_channels=None):
+    def __init__(self, out_channels: int, in_channels: int, mid_channels: Optional[int] = None):
         super().__init__()
         mid_channels = out_channels if mid_channels is None else mid_channels
 
@@ -522,7 +516,7 @@ class AttnDownBlock1D(nn.Layer):
         self.attentions = nn.LayerList(attentions)
         self.resnets = nn.LayerList(resnets)
 
-    def forward(self, hidden_states, temb=None):
+    def forward(self, hidden_states: paddle.Tensor, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         hidden_states = self.down(hidden_states)
 
         for resnet, attn in zip(self.resnets, self.attentions):
@@ -533,7 +527,7 @@ class AttnDownBlock1D(nn.Layer):
 
 
 class DownBlock1D(nn.Layer):
-    def __init__(self, out_channels, in_channels, mid_channels=None):
+    def __init__(self, out_channels: int, in_channels: int, mid_channels: Optional[int] = None):
         super().__init__()
         mid_channels = out_channels if mid_channels is None else mid_channels
 
@@ -546,7 +540,7 @@ class DownBlock1D(nn.Layer):
 
         self.resnets = nn.LayerList(resnets)
 
-    def forward(self, hidden_states, temb=None):
+    def forward(self, hidden_states: paddle.Tensor, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         hidden_states = self.down(hidden_states)
 
         for resnet in self.resnets:
@@ -556,7 +550,7 @@ class DownBlock1D(nn.Layer):
 
 
 class DownBlock1DNoSkip(nn.Layer):
-    def __init__(self, out_channels, in_channels, mid_channels=None):
+    def __init__(self, out_channels: int, in_channels: int, mid_channels: Optional[int] = None):
         super().__init__()
         mid_channels = out_channels if mid_channels is None else mid_channels
 
@@ -568,7 +562,7 @@ class DownBlock1DNoSkip(nn.Layer):
 
         self.resnets = nn.LayerList(resnets)
 
-    def forward(self, hidden_states, temb=None):
+    def forward(self, hidden_states: paddle.Tensor, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
         hidden_states = paddle.concat([hidden_states, temb], axis=1)
         for resnet in self.resnets:
             hidden_states = resnet(hidden_states)
@@ -577,7 +571,7 @@ class DownBlock1DNoSkip(nn.Layer):
 
 
 class AttnUpBlock1D(nn.Layer):
-    def __init__(self, in_channels, out_channels, mid_channels=None):
+    def __init__(self, in_channels: int, out_channels: int, mid_channels: Optional[int] = None):
         super().__init__()
         mid_channels = out_channels if mid_channels is None else mid_channels
 
@@ -596,7 +590,12 @@ class AttnUpBlock1D(nn.Layer):
         self.resnets = nn.LayerList(resnets)
         self.up = Upsample1d(kernel="cubic")
 
-    def forward(self, hidden_states, res_hidden_states_tuple, temb=None):
+    def forward(
+        self,
+        hidden_states: paddle.Tensor,
+        res_hidden_states_tuple: Tuple[paddle.Tensor, ...],
+        temb: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
         res_hidden_states = res_hidden_states_tuple[-1]
         hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
@@ -623,7 +622,12 @@ class UpBlock1D(nn.Layer):
         self.resnets = nn.LayerList(resnets)
         self.up = Upsample1d(kernel="cubic")
 
-    def forward(self, hidden_states, res_hidden_states_tuple, temb=None):
+    def forward(
+        self,
+        hidden_states: paddle.Tensor,
+        res_hidden_states_tuple: Tuple[paddle.Tensor, ...],
+        temb: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
         res_hidden_states = res_hidden_states_tuple[-1]
         hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
@@ -636,7 +640,7 @@ class UpBlock1D(nn.Layer):
 
 
 class UpBlock1DNoSkip(nn.Layer):
-    def __init__(self, in_channels, out_channels, mid_channels=None):
+    def __init__(self, in_channels: int, out_channels: int, mid_channels: Optional[int] = None):
         super().__init__()
         mid_channels = in_channels if mid_channels is None else mid_channels
 
@@ -648,7 +652,12 @@ class UpBlock1DNoSkip(nn.Layer):
 
         self.resnets = nn.LayerList(resnets)
 
-    def forward(self, hidden_states, res_hidden_states_tuple, temb=None):
+    def forward(
+        self,
+        hidden_states: paddle.Tensor,
+        res_hidden_states_tuple: Tuple[paddle.Tensor, ...],
+        temb: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
         res_hidden_states = res_hidden_states_tuple[-1]
         hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 

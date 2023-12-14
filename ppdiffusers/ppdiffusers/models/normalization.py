@@ -36,14 +36,12 @@ class AdaLayerNorm(nn.Layer):
         self.emb = nn.Embedding(num_embeddings, embedding_dim)
         self.silu = nn.Silu()
         self.linear = nn.Linear(embedding_dim, embedding_dim * 2)
-        # elementwise_affine=False
-        norm_kwargs = {"weight_attr": False, "bias_attr": False}
-        self.norm = nn.LayerNorm(embedding_dim, **norm_kwargs)
+        norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
+        self.norm = nn.LayerNorm(embedding_dim, **norm_elementwise_affine_kwargs)
 
-    def forward(self, x, timestep):
+    def forward(self, x: paddle.Tensor, timestep: paddle.Tensor) -> paddle.Tensor:
         emb = self.linear(self.silu(self.emb(timestep)))
-        # must set axis=-1, paddle vs pytorch
-        scale, shift = paddle.chunk(emb, 2, axis=-1)
+        scale, shift = paddle.chunk(emb, 2)
         x = self.norm(x) * (1 + scale) + shift
         return x
 
@@ -63,12 +61,17 @@ class AdaLayerNormZero(nn.Layer):
         self.emb = CombinedTimestepLabelEmbeddings(num_embeddings, embedding_dim)
 
         self.silu = nn.Silu()
-        self.linear = nn.Linear(embedding_dim, 6 * embedding_dim, bias_attr=True)
-        # elementwise_affine=False
-        norm_kwargs = {"weight_attr": False, "bias_attr": False}
-        self.norm = nn.LayerNorm(embedding_dim, epsilon=1e-6, **norm_kwargs)
+        self.linear = nn.Linear(embedding_dim, 6 * embedding_dim)
+        norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
+        self.norm = nn.LayerNorm(embedding_dim, epsilon=1e-6, **norm_elementwise_affine_kwargs)
 
-    def forward(self, x, timestep, class_labels, hidden_dtype=None):
+    def forward(
+        self,
+        x: paddle.Tensor,
+        timestep: paddle.Tensor,
+        class_labels: paddle.Tensor,
+        hidden_dtype: Optional[paddle.dtype] = None,
+    ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
         emb = self.linear(self.silu(self.emb(timestep, class_labels, hidden_dtype=hidden_dtype)))
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = emb.chunk(6, axis=1)
         x = self.norm(x) * (1 + scale_msa[:, None]) + shift_msa[:, None]
@@ -94,13 +97,13 @@ class AdaLayerNormSingle(nn.Layer):
         )
 
         self.silu = nn.Silu()
-        self.linear = nn.Linear(embedding_dim, 6 * embedding_dim, bias=True)
+        self.linear = nn.Linear(embedding_dim, 6 * embedding_dim)
 
     def forward(
         self,
         timestep: paddle.Tensor,
-        added_cond_kwargs: Dict[str, paddle.Tensor] = None,
-        batch_size: int = None,
+        added_cond_kwargs: Optional[Dict[str, paddle.Tensor]] = None,
+        batch_size: Optional[int] = None,
         hidden_dtype: Optional[paddle.dtype] = None,
     ) -> Tuple[paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor, paddle.Tensor]:
         # No modulation happening here.
@@ -133,9 +136,9 @@ class AdaGroupNorm(nn.Layer):
             self.act = get_activation(act_fn)
 
         self.linear = nn.Linear(embedding_dim, out_dim * 2)
-        # elementwise_affine=False
-        norm_kwargs = {"weight_attr": False, "bias_attr": False}
-        self.group_norm = nn.GroupNorm(num_groups, out_dim, epsilon=eps, **norm_kwargs)
+
+        norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
+        self.group_norm = nn.GroupNorm(num_groups, out_dim, epsilon=eps, **norm_elementwise_affine_kwargs)
         self.group_norm.weight = None
         self.group_norm.bias = None
 
@@ -145,6 +148,7 @@ class AdaGroupNorm(nn.Layer):
         emb = self.linear(emb)
         emb = emb[:, :, None, None]
         scale, shift = emb.chunk(2, axis=1)
+
         x = self.group_norm(x)
         x = x * (1 + scale) + shift
         return x

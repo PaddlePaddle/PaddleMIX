@@ -1,4 +1,3 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +18,9 @@ import numpy as np
 import paddle
 from paddle import nn
 
+from ..utils import USE_PPPEFT_BACKEND
 from .activations import get_activation
+from .lora import LoRACompatibleLinear
 
 
 def get_timestep_embedding(
@@ -133,7 +134,6 @@ class PatchEmbed(nn.Layer):
         flatten=True,
         bias=True,
         interpolation_scale=1,
-        add_pos_embed=True,
     ):
         super().__init__()
 
@@ -145,8 +145,8 @@ class PatchEmbed(nn.Layer):
             in_channels, embed_dim, kernel_size=(patch_size, patch_size), stride=patch_size, bias_attr=bias
         )
         if layer_norm:
-            # elementwise_affine=False  -> weight_attr=False, bias_attr=False
-            self.norm = nn.LayerNorm(embed_dim, epsilon=1e-6, weight_attr=False, bias_attr=False)
+            norm_elementwise_affine_kwargs = dict(weight_attr=False, bias_attr=False)
+            self.norm = nn.LayerNorm(embed_dim, eps=1e-6, **norm_elementwise_affine_kwargs)
         else:
             self.norm = None
 
@@ -156,17 +156,10 @@ class PatchEmbed(nn.Layer):
         self.height, self.width = height // patch_size, width // patch_size
         self.base_size = height // patch_size
         self.interpolation_scale = interpolation_scale
-        self.add_pos_embed = add_pos_embed
-        if add_pos_embed:
-            pos_embed = get_2d_sincos_pos_embed(
-                embed_dim,
-                int(num_patches**0.5),
-                base_size=self.base_size,
-                interpolation_scale=self.interpolation_scale,
-            )
-            self.register_buffer(
-                "pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=False
-            )
+        pos_embed = get_2d_sincos_pos_embed(
+            embed_dim, int(num_patches**0.5), base_size=self.base_size, interpolation_scale=self.interpolation_scale
+        )
+        self.register_buffer("pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=False)
 
     def forward(self, latent):
         height, width = latent.shape[-2] // self.patch_size, latent.shape[-1] // self.patch_size
@@ -191,10 +184,7 @@ class PatchEmbed(nn.Layer):
         else:
             pos_embed = self.pos_embed
 
-        if self.add_pos_embed:
-            return latent + self.pos_embed
-        else:
-            return latent
+        return (latent + pos_embed).cast(latent.dtype)
 
 
 class TimestepEmbedding(nn.Layer):
@@ -208,8 +198,9 @@ class TimestepEmbedding(nn.Layer):
         cond_proj_dim=None,
     ):
         super().__init__()
+        linear_cls = nn.Linear if USE_PPPEFT_BACKEND else LoRACompatibleLinear
 
-        self.linear_1 = nn.Linear(in_channels, time_embed_dim)
+        self.linear_1 = linear_cls(in_channels, time_embed_dim)
 
         if cond_proj_dim is not None:
             self.cond_proj = nn.Linear(cond_proj_dim, in_channels, bias_attr=False)
@@ -222,7 +213,7 @@ class TimestepEmbedding(nn.Layer):
             time_embed_dim_out = out_dim
         else:
             time_embed_dim_out = time_embed_dim
-        self.linear_2 = nn.Linear(time_embed_dim, time_embed_dim_out)
+        self.linear_2 = linear_cls(time_embed_dim, time_embed_dim_out)
 
         if post_act_fn is None:
             self.post_act = None
@@ -231,7 +222,7 @@ class TimestepEmbedding(nn.Layer):
 
     def forward(self, sample, condition=None):
         if condition is not None:
-            sample = sample + self.cond_proj(condition.cast(sample.dtype))
+            sample = sample + self.cond_proj(condition.cast(sample.dtype))  # NEW ADD cast dtype
         sample = self.linear_1(sample)
 
         if self.act is not None:
@@ -310,18 +301,9 @@ class SinusoidalPositionalEmbedding(nn.Layer):
         position = paddle.arange(max_seq_length).unsqueeze(1)
         div_term = paddle.exp(paddle.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim))
         pe = paddle.zeros([1, max_seq_length, embed_dim])
-        pe[0, :, 0::2] = paddle.sin(
-            (position * div_term).cast(paddle.float32)  # use paddle.get_default_type(), CI occur error
-        ).cast(
-            pe.dtype
-        )  # paddle: sin not support int64, convert to float32
-        pe[0, :, 1::2] = paddle.cos((position * div_term).cast(paddle.float32)).cast(
-            pe.dtype
-        )  # paddle: cos not support int64, convert to float32
-        # When use register_buffer, CI occur error in UNetMotionModelTests::test_from_save_pretrained_dtype
-        # self.register_buffer("pe", pe)
-        pe.stop_gradient = True
-        self.pe = pe
+        pe[0, :, 0::2] = paddle.sin(position * div_term)
+        pe[0, :, 1::2] = paddle.cos(position * div_term)
+        self.register_buffer("pe", pe)
 
     def forward(self, x):
         _, seq_length, _ = x.shape
@@ -427,7 +409,7 @@ class LabelEmbedding(nn.Layer):
         labels = paddle.where(drop_ids, self.num_classes, labels)
         return labels
 
-    def forward(self, labels, force_drop_ids=None):
+    def forward(self, labels: paddle.Tensor, force_drop_ids=None):
         use_dropout = self.dropout_prob > 0
         if (self.training and use_dropout) or (force_drop_ids is not None):
             labels = self.token_drop(labels, force_drop_ids)
@@ -587,12 +569,11 @@ class AttentionPooling(nn.Layer):
 
     def __init__(self, num_heads, embed_dim, dtype=None):
         super().__init__()
-        self.positional_embedding = self.create_parameter(
-            (1, embed_dim), default_initializer=nn.initializer.Assign(paddle.randn((1, embed_dim)) / embed_dim**0.5)
-        )
-        self.k_proj = nn.Linear(embed_dim, embed_dim)
-        self.q_proj = nn.Linear(embed_dim, embed_dim)
-        self.v_proj = nn.Linear(embed_dim, embed_dim)
+        self.dtype = dtype
+        self.positional_embedding = nn.Parameter(paddle.randn(1, embed_dim) / embed_dim**0.5)
+        self.k_proj = nn.Linear(embed_dim, embed_dim, dtype=self.dtype)
+        self.q_proj = nn.Linear(embed_dim, embed_dim, dtype=self.dtype)
+        self.v_proj = nn.Linear(embed_dim, embed_dim, dtype=self.dtype)
         self.num_heads = num_heads
         self.dim_per_head = embed_dim // self.num_heads
         self.scale = 1 / math.sqrt(math.sqrt(self.dim_per_head))
@@ -644,11 +625,11 @@ class FourierEmbedder(nn.Layer):
 
         freq_bands = temperature ** (paddle.arange(num_freqs) / num_freqs)
         freq_bands = freq_bands[None, None, None]
-        self.register_buffer("freq_bands", freq_bands, persistent=False)
+        self.register_buffer("freq_bands", freq_bands, persistable=False)
 
     def __call__(self, x):
         x = self.freq_bands * x.unsqueeze(-1)
-        return paddle.stack((x.sin(), x.cos()), dim=-1).transpose([0, 1, 3, 4, 2]).reshape([*x.shape[:2], -1])
+        return paddle.stack((x.sin(), x.cos()), axis=-1).transpose([0, 1, 3, 4, 2]).reshape([*x.shape[:2], -1])
 
 
 class PositionNet(nn.Layer):
@@ -666,44 +647,38 @@ class PositionNet(nn.Layer):
         if feature_type == "text-only":
             self.linears = nn.Sequential(
                 nn.Linear(self.positive_len + self.position_dim, 512),
-                nn.SiLU(),
+                nn.Silu(),
                 nn.Linear(512, 512),
-                nn.SiLU(),
+                nn.Silu(),
                 nn.Linear(512, out_dim),
             )
-            tmp_0 = paddle.zeros([self.positive_len])
-            self.null_positive_feature = self.create_parameter(
-                shape=tmp_0.shape, default_initializer=paddle.nn.initializer.Assign(tmp_0)
+            self.null_positive_feature = nn.Parameter(
+                paddle.zeros(
+                    [
+                        self.positive_len,
+                    ]
+                )
             )
 
         elif feature_type == "text-image":
             self.linears_text = nn.Sequential(
                 nn.Linear(self.positive_len + self.position_dim, 512),
-                nn.SiLU(),
+                nn.Silu(),
                 nn.Linear(512, 512),
-                nn.SiLU(),
+                nn.Silu(),
                 nn.Linear(512, out_dim),
             )
             self.linears_image = nn.Sequential(
                 nn.Linear(self.positive_len + self.position_dim, 512),
-                nn.SiLU(),
+                nn.Silu(),
                 nn.Linear(512, 512),
-                nn.SiLU(),
+                nn.Silu(),
                 nn.Linear(512, out_dim),
             )
-            tmp_0 = paddle.zeros([self.positive_len])
-            self.null_text_feature = self.create_parameter(
-                shape=tmp_0.shape, default_initializer=paddle.nn.initializer.Assign(tmp_0)
-            )
-            tmp_1 = paddle.zeros([self.positive_len])
-            self.null_image_feature = self.create_parameter(
-                shape=tmp_1.shape, default_initializer=paddle.nn.initializer.Assign(tmp_1)
-            )
+            self.null_text_feature = nn.Parameter(paddle.zeros([self.positive_len]))
+            self.null_image_feature = nn.Parameter(paddle.zeros([self.positive_len]))
 
-        tmp = paddle.zeros([self.position_dim])
-        self.null_position_feature = self.create_parameter(
-            shape=tmp.shape, default_initializer=paddle.nn.initializer.Assign(tmp)
-        )
+        self.null_position_feature = nn.Parameter(paddle.zeros([self.position_dim]))
 
     def forward(
         self,
@@ -721,7 +696,7 @@ class PositionNet(nn.Layer):
         xyxy_embedding = self.fourier_embedder(boxes)  # B*N*4 -> B*N*C
 
         # learnable null embedding
-        xyxy_null = self.null_position_feature.view(1, 1, -1)
+        xyxy_null = self.null_position_feature.reshape([1, 1, -1])
 
         # replace padding with learnable null embedding
         xyxy_embedding = xyxy_embedding * masks + (1 - masks) * xyxy_null
@@ -729,7 +704,7 @@ class PositionNet(nn.Layer):
         # positionet with text only information
         if positive_embeddings is not None:
             # learnable null embedding
-            positive_null = self.null_positive_feature.view(1, 1, -1)
+            positive_null = self.null_positive_feature.reshape([1, 1, -1])
 
             # replace padding with learnable null embedding
             positive_embeddings = positive_embeddings * masks + (1 - masks) * positive_null
@@ -742,8 +717,8 @@ class PositionNet(nn.Layer):
             image_masks = image_masks.unsqueeze(-1)
 
             # learnable null embedding
-            text_null = self.null_text_feature.view(1, 1, -1)
-            image_null = self.null_image_feature.view(1, 1, -1)
+            text_null = self.null_text_feature.reshape([1, 1, -1])
+            image_null = self.null_image_feature.reshape([1, 1, -1])
 
             # replace padding with learnable null embedding
             phrases_embeddings = phrases_embeddings * phrases_masks + (1 - phrases_masks) * text_null
@@ -788,8 +763,8 @@ class CombinedTimestepSizeEmbeddings(nn.Layer):
                 raise ValueError(f"`batch_size` should be {size.shape[0]} but found {batch_size}.")
 
         current_batch_size, dims = size.shape[0], size.shape[1]
-        size = size.reshape([-1])
-        size_freq = self.additional_condition_proj(size).to(size.dtype)
+        size = size.reshape((-1,))
+        size_freq = self.additional_condition_proj(size).cast(size.dtype)
 
         size_emb = embedder(size_freq)
         size_emb = size_emb.reshape([current_batch_size, dims * self.outdim])
@@ -797,7 +772,7 @@ class CombinedTimestepSizeEmbeddings(nn.Layer):
 
     def forward(self, timestep, resolution, aspect_ratio, batch_size, hidden_dtype):
         timesteps_proj = self.time_proj(timestep)
-        timesteps_emb = self.timestep_embedder(timesteps_proj.to(dtype=hidden_dtype))  # (N, D)
+        timesteps_emb = self.timestep_embedder(timesteps_proj.cast(dtype=hidden_dtype))  # (N, D)
 
         if self.use_additional_conditions:
             resolution = self.apply_condition(resolution, batch_size=batch_size, embedder=self.resolution_embedder)
@@ -820,11 +795,10 @@ class CaptionProjection(nn.Layer):
 
     def __init__(self, in_features, hidden_size, num_tokens=120):
         super().__init__()
-        self.linear_1 = nn.Linear(in_features=in_features, out_features=hidden_size, bias=True)
-        self.act_1 = nn.GELU(approximate=True)
-        self.linear_2 = nn.Linear(in_features=hidden_size, out_features=hidden_size, bias=True)
-        tmp_0 = paddle.randn(num_tokens, in_features) / in_features**0.5
-        self.register_buffer("y_embedding", self.create_parameter(tmp_0.shape, paddle.nn.initializer.Assign(tmp_0)))
+        self.linear_1 = nn.Linear(in_features=in_features, out_features=hidden_size)
+        self.act_1 = nn.GELU(approximate="tanh")
+        self.linear_2 = nn.Linear(in_features=hidden_size, out_features=hidden_size)
+        self.register_buffer("y_embedding", paddle.randn(num_tokens, in_features) / in_features**0.5)
 
     def forward(self, caption, force_drop_ids=None):
         hidden_states = self.linear_1(caption)

@@ -12,21 +12,56 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Optional
+
+# IMPORTANT:                                                      #
+###################################################################
+# ----------------------------------------------------------------#
+# This file is deprecated and will be removed soon                #
+# (as soon as PEFT will become a required dependency for LoRA)    #
+# ----------------------------------------------------------------#
+###################################################################
+
+from typing import Optional, Tuple, Union
 
 import paddle
-import paddle.nn as nn
-import paddle.nn.functional as F
+from paddle import nn
 
-from ..initializer import normal_, zeros_
-from ..loaders import (
-    PatchedLoraProjection,
-    text_encoder_attn_modules,
-    text_encoder_mlp_modules,
-)
 from ..utils import logging
+from ..utils.import_utils import is_paddlenlp_available
+
+if is_paddlenlp_available():
+    from paddlenlp.transformers import CLIPTextModel, CLIPTextModelWithProjection
+
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
+
+
+def text_encoder_attn_modules(text_encoder):
+    attn_modules = []
+
+    if isinstance(text_encoder, (CLIPTextModel, CLIPTextModelWithProjection)):
+        for i, layer in enumerate(text_encoder.text_model.encoder.layers):
+            name = f"text_model.encoder.layers.{i}.self_attn"
+            mod = layer.self_attn
+            attn_modules.append((name, mod))
+    else:
+        raise ValueError(f"do not know how to get attention modules for: {text_encoder.__class__.__name__}")
+
+    return attn_modules
+
+
+def text_encoder_mlp_modules(text_encoder):
+    mlp_modules = []
+
+    if isinstance(text_encoder, (CLIPTextModel, CLIPTextModelWithProjection)):
+        for i, layer in enumerate(text_encoder.text_model.encoder.layers):
+            mlp_mod = layer.mlp
+            name = f"text_model.encoder.layers.{i}.mlp"
+            mlp_modules.append((name, mlp_mod))
+    else:
+        raise ValueError(f"do not know how to get mlp modules for: {text_encoder.__class__.__name__}")
+
+    return mlp_modules
 
 
 def adjust_lora_scale_text_encoder(text_encoder, lora_scale: float = 1.0):
@@ -38,9 +73,105 @@ def adjust_lora_scale_text_encoder(text_encoder, lora_scale: float = 1.0):
             attn_module.out_proj.lora_scale = lora_scale
 
     for _, mlp_module in text_encoder_mlp_modules(text_encoder):
-        if isinstance(mlp_module.linear1, PatchedLoraProjection):
-            mlp_module.linear1.lora_scale = lora_scale
-            mlp_module.linear2.lora_scale = lora_scale
+        if isinstance(mlp_module.fc1, PatchedLoraProjection):
+            mlp_module.fc1.lora_scale = lora_scale
+            mlp_module.fc2.lora_scale = lora_scale
+
+
+class PatchedLoraProjection(nn.Layer):
+    def __init__(self, regular_linear_layer, lora_scale=1, network_alpha=None, rank=4, dtype=None):
+        super().__init__()
+        from ..models.lora import LoRALinearLayer
+
+        self.regular_linear_layer = regular_linear_layer
+
+        if dtype is None:
+            dtype = self.regular_linear_layer.weight.dtype
+
+        self.lora_linear_layer = LoRALinearLayer(
+            self.regular_linear_layer.in_features,
+            self.regular_linear_layer.out_features,
+            network_alpha=network_alpha,
+            dtype=dtype,
+            rank=rank,
+        )
+
+        self.lora_scale = lora_scale
+
+    # overwrite PyTorch's `state_dict` to be sure that only the 'regular_linear_layer' weights are saved
+    # when saving the whole text encoder model and when LoRA is unloaded or fused
+    def state_dict(self, destination=None, include_sublayers=True, structured_name_prefix="", use_hook=True):
+        if self.lora_linear_layer is None:
+            return self.regular_linear_layer.state_dict(
+                destination=destination,
+                include_sublayers=include_sublayers,
+                structured_name_prefix=structured_name_prefix,
+                use_hook=use_hook,
+            )
+
+        return super().state_dict(
+            destination=destination,
+            include_sublayers=include_sublayers,
+            structured_name_prefix=structured_name_prefix,
+            use_hook=use_hook,
+        )
+
+    def _fuse_lora(self, lora_scale=1.0, safe_fusing=False):
+        if self.lora_linear_layer is None:
+            return
+
+        dtype = self.regular_linear_layer.weight.dtype
+
+        w_orig = self.regular_linear_layer.weight.cast("float32")
+        w_up = self.lora_linear_layer.up.weight.cast("float32")
+        w_down = self.lora_linear_layer.down.weight.cast("float32")
+
+        if self.lora_linear_layer.network_alpha is not None:
+            w_up = w_up * self.lora_linear_layer.network_alpha / self.lora_linear_layer.rank
+
+        fused_weight = w_orig + (lora_scale * paddle.matmul(w_up[None, :], w_down[None, :])[0])
+
+        if safe_fusing and paddle.isnan(fused_weight).any().item():
+            raise ValueError(
+                "This LoRA weight seems to be broken. "
+                f"Encountered NaN values when trying to fuse LoRA weights for {self}."
+                "LoRA weights will not be fused."
+            )
+
+        self.regular_linear_layer.weight.copy_(fused_weight.cast(dtype=dtype), False)
+
+        # we can drop the lora layer now
+        self.lora_linear_layer = None
+
+        # offload the up and down matrices to CPU to not blow the memory
+        self.w_up = w_up.cpu()
+        self.w_down = w_down.cpu()
+        self.lora_scale = lora_scale
+
+    def _unfuse_lora(self):
+        if not (getattr(self, "w_up", None) is not None and getattr(self, "w_down", None) is not None):
+            return
+
+        fused_weight = self.regular_linear_layer.weight
+        dtype = fused_weight.dtype
+
+        w_up = self.w_up.cast("float32")
+        w_down = self.w_down.cast("float32")
+
+        unfused_weight = fused_weight.cast("float32") - (
+            self.lora_scale * paddle.matmul(w_up[None, :], w_down[None, :])[0]
+        )
+        self.regular_linear_layer.weight.copy_(unfused_weight.cast(dtype=dtype), False)
+
+        self.w_up = None
+        self.w_down = None
+
+    def forward(self, input):
+        if self.lora_scale is None:
+            self.lora_scale = 1.0
+        if self.lora_linear_layer is None:
+            return self.regular_linear_layer(input)
+        return self.regular_linear_layer(input) + (self.lora_scale * self.lora_linear_layer(input))
 
 
 class LoRALinearLayer(nn.Layer):
@@ -58,24 +189,25 @@ class LoRALinearLayer(nn.Layer):
             The value of the network alpha used for stable learning and preventing underflow. This value has the same
             meaning as the `--network_alpha` option in the kohya-ss trainer script. See
             https://github.com/darkstorm2150/sd-scripts/blob/main/docs/train_network_README-en.md#execute-learning
-        device (`torch.device`, `optional`, defaults to `None`):
-            The device to use for the layer's weights.
         dtype (`torch.dtype`, `optional`, defaults to `None`):
             The dtype to use for the layer's weights.
     """
 
-    def __init__(self, in_features, out_features, rank=4, network_alpha=None, device=None, dtype=None):
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        rank: int = 4,
+        network_alpha: Optional[float] = None,
+        dtype: Optional[paddle.dtype] = None,
+    ):
         super().__init__()
 
         self.down = nn.Linear(in_features, rank, bias_attr=False)
         self.up = nn.Linear(rank, out_features, bias_attr=False)
-        if device is not None:
-            self.down.to(device=device)
-            self.up.to(device=device)
         if dtype is not None:
             self.down.to(dtype=dtype)
             self.up.to(dtype=dtype)
-
         # This value has the same meaning as the `--network_alpha` option in the kohya-ss trainer script.
         # See https://github.com/darkstorm2150/sd-scripts/blob/main/docs/train_network_README-en.md#execute-learning
         self.network_alpha = network_alpha
@@ -83,10 +215,10 @@ class LoRALinearLayer(nn.Layer):
         self.out_features = out_features
         self.in_features = in_features
 
-        normal_(self.down.weight, std=1 / rank)
-        zeros_(self.up.weight)
+        nn.init.normal_(self.down.weight, std=1 / rank)
+        nn.init.zeros_(self.up.weight)
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         orig_dtype = hidden_states.dtype
         dtype = self.down.weight.dtype
 
@@ -123,7 +255,14 @@ class LoRAConv2dLayer(nn.Layer):
     """
 
     def __init__(
-        self, in_features, out_features, rank=4, kernel_size=(1, 1), stride=(1, 1), padding=0, network_alpha=None
+        self,
+        in_features: int,
+        out_features: int,
+        rank: int = 4,
+        kernel_size: Union[int, Tuple[int, int]] = (1, 1),
+        stride: Union[int, Tuple[int, int]] = (1, 1),
+        padding: Union[int, Tuple[int, int], str] = 0,
+        network_alpha: Optional[float] = None,
     ):
         super().__init__()
 
@@ -139,10 +278,10 @@ class LoRAConv2dLayer(nn.Layer):
         self.network_alpha = network_alpha
         self.rank = rank
 
-        normal_(self.down.weight, std=1 / rank)
-        zeros_(self.up.weight)
+        nn.init.normal_(self.down.weight, std=1 / rank)
+        nn.init.zeros_(self.up.weight)
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         orig_dtype = hidden_states.dtype
         dtype = self.down.weight.dtype
 
@@ -162,6 +301,9 @@ class LoRACompatibleConv(nn.Conv2D):
 
     def __init__(self, *args, lora_layer: Optional[LoRAConv2dLayer] = None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.in_channels = self._in_channels
+        self.out_channels = self._out_channels
+        self.kernel_size = self._kernel_size
         self.lora_layer = lora_layer
 
     def set_lora_layer(self, lora_layer: Optional[LoRAConv2dLayer]):
@@ -173,15 +315,15 @@ class LoRACompatibleConv(nn.Conv2D):
 
         dtype = self.weight.dtype
 
-        w_orig = self.weight.astype(paddle.get_default_dtype())
-        w_up = self.lora_layer.up.weight.astype(paddle.get_default_dtype())
-        w_down = self.lora_layer.down.weight.astype(paddle.get_default_dtype())
+        w_orig = self.weight.weight.cast("float32")
+        w_up = self.lora_layer.up.weight.weight.cast("float32")
+        w_down = self.lora_layer.down.weight.weight.cast("float32")
 
         if self.lora_layer.network_alpha is not None:
             w_up = w_up * self.lora_layer.network_alpha / self.lora_layer.rank
 
-        fusion = paddle.mm(w_up.flatten(start_axis=1), w_down.flatten(start_axis=1))
-        fusion = fusion.reshape((w_orig.shape))
+        fusion = paddle.matmul(w_up.flatten(start_dim=1), w_down.flatten(start_dim=1))
+        fusion = fusion.reshape(w_orig.shape)
         fused_weight = w_orig + (lora_scale * fusion)
 
         if safe_fusing and paddle.isnan(fused_weight).any().item():
@@ -191,11 +333,7 @@ class LoRACompatibleConv(nn.Conv2D):
                 "LoRA weights will not be fused."
             )
 
-        out_0 = fused_weight.cast(dtype=dtype)
-        self.weight = self.create_parameter(
-            shape=out_0.shape,
-            default_initializer=nn.initializer.Assign(out_0),
-        )
+        self.weight.copy_(fused_weight.cast(dtype=dtype), False)
 
         # we can drop the lora layer now
         self.lora_layer = None
@@ -212,30 +350,26 @@ class LoRACompatibleConv(nn.Conv2D):
         fused_weight = self.weight
         dtype = fused_weight.dtype
 
-        self.w_up = self.w_up.astype(paddle.get_default_dtype())
-        self.w_down = self.w_down.astype(paddle.get_default_dtype())
+        w_up = self.w_up.cast("float32")
+        w_down = self.w_down.cast("float32")
 
-        fusion = paddle.mm(self.w_up.flatten(start_axis=1), self.w_down.flatten(start_axis=1))
-        fusion = fusion.reshape((fused_weight.shape))
-        unfused_weight = fused_weight.astype(paddle.get_default_dtype()) - (self._lora_scale * fusion)
-        out_0 = unfused_weight.cast(dtype=dtype)
-        self.weight = self.create_parameter(
-            shape=out_0.shape,
-            default_initializer=nn.initializer.Assign(out_0),
-        )
+        fusion = paddle.matmul(w_up.flatten(start_dim=1), w_down.flatten(start_dim=1))
+        fusion = fusion.reshape(fused_weight.shape)
+        unfused_weight = fused_weight.cast("float32") - (self._lora_scale * fusion)
+        self.weight.copy_(unfused_weight.cast(dtype=dtype), False)
 
         self.w_up = None
         self.w_down = None
 
-    def forward(self, hidden_states, scale: float = 1.0):
+    def forward(self, hidden_states: paddle.Tensor, scale: float = 1.0) -> paddle.Tensor:
         if self.lora_layer is None:
             # make sure to the functional Conv2D function as otherwise torch.compile's graph will break
             # see: https://github.com/huggingface/diffusers/pull/4315
-            return F.conv2d(
+            return nn.functional.conv2d(
                 hidden_states, self.weight, self.bias, self._stride, self._padding, self._dilation, self._groups
             )
         else:
-            original_outputs = F.conv2d(
+            original_outputs = nn.functional.conv2d(
                 hidden_states, self.weight, self.bias, self._stride, self._padding, self._dilation, self._groups
             )
             return original_outputs + (scale * self.lora_layer(hidden_states))
@@ -259,14 +393,14 @@ class LoRACompatibleLinear(nn.Linear):
 
         dtype = self.weight.dtype
 
-        w_orig = self.weight.astype(paddle.get_default_dtype())
-        w_up = self.lora_layer.up.weight.astype(paddle.get_default_dtype())
-        w_down = self.lora_layer.down.weight.astype(paddle.get_default_dtype())
+        w_orig = self.weight.cast("float32")
+        w_up = self.lora_layer.up.weight.cast("float32")
+        w_down = self.lora_layer.down.weight.cast("float32")
 
         if self.lora_layer.network_alpha is not None:
             w_up = w_up * self.lora_layer.network_alpha / self.lora_layer.rank
 
-        fused_weight = w_orig + (lora_scale * paddle.bmm(w_up.T[None, :], w_down.T[None, :])[0]).T
+        fused_weight = w_orig + (lora_scale * paddle.matmul(w_up[None, :], w_down[None, :])[0])
 
         if safe_fusing and paddle.isnan(fused_weight).any().item():
             raise ValueError(
@@ -274,12 +408,7 @@ class LoRACompatibleLinear(nn.Linear):
                 f"Encountered NaN values when trying to fuse LoRA weights for {self}."
                 "LoRA weights will not be fused."
             )
-
-        out_0 = fused_weight.cast(dtype=dtype)
-        self.weight = self.create_parameter(
-            shape=out_0.shape,
-            default_initializer=nn.initializer.Assign(out_0),
-        )
+        self.weight.copy_(fused_weight.cast(dtype=dtype), False)
 
         # we can drop the lora layer now
         self.lora_layer = None
@@ -296,30 +425,24 @@ class LoRACompatibleLinear(nn.Linear):
         fused_weight = self.weight
         dtype = fused_weight.dtype
 
-        w_up = self.w_up.astype(paddle.get_default_dtype())
-        w_down = self.w_down.astype(paddle.get_default_dtype())
+        w_up = self.w_up.cast("float32")
+        w_down = self.w_down.cast("float32")
 
-        unfused_weight = (
-            fused_weight.astype(paddle.get_default_dtype())
-            - (self._lora_scale * paddle.bmm(w_up.T[None, :], w_down.T[None, :])[0]).T
+        unfused_weight = fused_weight.cast("float32") - (
+            self._lora_scale * paddle.matmul(w_up[None, :], w_down[None, :])[0]
         )
-        out_0 = unfused_weight.cast(dtype=dtype)
-        self.weight = self.create_parameter(
-            shape=out_0.shape,
-            default_initializer=nn.initializer.Assign(out_0),
-        )
+        self.weight.copy_(unfused_weight.cast(dtype=dtype), False)
 
         self.w_up = None
         self.w_down = None
 
-    def forward(self, hidden_states, scale: float = 1.0):
-        # breakpoint()
+    def forward(self, hidden_states: paddle.Tensor, scale: float = 1.0) -> paddle.Tensor:
         if self.lora_layer is None:
-            # return super().forward(hidden_states)
             return nn.functional.linear(
                 hidden_states,
                 self.weight,
                 self.bias,
             )
         else:
-            return super().forward(hidden_states) + (scale * self.lora_layer(hidden_states))
+            out = super().forward(hidden_states) + (scale * self.lora_layer(hidden_states))
+            return out
