@@ -37,7 +37,7 @@ PaddleMIX提供一键预测功能，无需训练，这里以开放世界检测�
 >>> from paddlemix.appflow import Appflow
 >>> from ppdiffusers.utils import load_image
 
->>> task = Appflow(task="openset_det_sam",
+>>> task = Appflow(app="openset_det_sam",
                    models=["GroundingDino/groundingdino-swint-ogc","Sam/SamVitH-1024"],
                    static_mode=False) #如果开启静态图推理，设置为True,默认动态图
 >>> url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
@@ -73,10 +73,11 @@ Appflow提供丰富的开箱即用工具集，覆盖跨模态多场景应用，�
 ### 跨模态多场景应用
 | 应用名称                           | 调用模型                         | 静态图推理    |
 | :--------------------------------- | -------------------------------- | ----------|
+| [视觉语言对话（Vision-Language-Chat）](./VLChat/README.md)              | `qwen-vl-chat-7b`  |     🚧     |
 | [开放世界检测分割（Openset-Det-Sam）](./CVinW/README.md/#开放世界检测分割grounded-sam-detect-and-segment-everything-with-text-prompt)              | `grounded sam`  |     ✅      |
 | [自动标注（AutoLabel）](./Automatic_label/README.md/#自动标注autolabel)              | `blip2 grounded sam`        |      ✅       |
 | [检测框引导的图像编辑（Det-Guided-Inpainting）](./Inpainting/README.md/#检测框引导的图像编辑det-guided-inpainting)      | `chatglm-6b stable-diffusion-2-inpainting grounded sam`                 |     ✅     |
-| [文图生成（Text-to-Image Generation）](./text2image/README.md/#文图生成text-to-image-generation)      | `runwayml/stable-diffusion-v1-5`   |    [fastdeploy](../ppdiffusers/deploy/README.md/#文图生成text-to-image-generation)     |
+| [文图生成（Text-to-Image Generation）](./text2image/README.md/#文图生成text-to-image-generation)      | `runwayml/stable-diffusion-v1-5 stabilityai/stable-diffusion-xl-base-1.0`   |    [fastdeploy](../ppdiffusers/deploy/README.md/#文图生成text-to-image-generation)     |
 | [文本引导的图像放大（Text-Guided Image Upscaling）](./image2image/README.md/#文本引导的图像放大text-guided-image-upscaling)           | `ldm-super-resolution-4x-openimages`|    ❌     |
 | [文本引导的图像编辑（Text-Guided Image Inpainting）](./Inpainting/README.md/#文本引导的图像编辑text-guided-image-inpainting) | `stable-diffusion-2-inpainting`     |   [fastdeploy](../ppdiffusers/deploy/README.md/#文本引导的图像编辑text-guided-image-inpainting)     |
 | [文本引导的图像变换（Image-to-Image Text-Guided Generation）](./image2image/README.md/#文本引导的图像变换image-to-image-text-guided-generation)              | `stable-diffusion-v1-5`    |    [fastdeploy](../ppdiffusers/deploy/README.md/#文本引导的图像变换image-to-image-text-guided-generation)    |
@@ -86,6 +87,8 @@ Appflow提供丰富的开箱即用工具集，覆盖跨模态多场景应用，�
 | [音频对话（Audio-to-Chat Generation）](./AudioChat/README.md/#音频对话audio-to-chat-generation)  | `chatglm-6b whisper fastspeech2`  |          |
 | [音乐生成（Music Generation）](./MusicGeneration/README.md/#音乐生成music-generation)  | `chatglm-6b minigpt4 audioldm`  |          |
 
-
-
 更多应用持续开发中......
+
+* ✅: Supported
+* 🚧: In Progress
+* ❌: Not Supported
