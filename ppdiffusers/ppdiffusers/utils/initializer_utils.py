@@ -39,23 +39,29 @@ __all__ = [
 
 
 def _no_grad_uniform_(tensor, a, b):
-    with paddle.no_grad():
-        tensor.uniform_(min=a, max=b)
+    try:
+        with paddle.no_grad():
+            tensor.uniform_(min=a, max=b)
+    except:
+        pass
     return tensor
 
 
 def _no_grad_normal_(tensor, mean=0.0, std=1.0):
-    with paddle.no_grad():
-        # try:
-        tensor.copy_(paddle.normal(mean=mean, std=std, shape=tensor.shape), False)
-        # except:
-        # breakpoint()
+    try:
+        with paddle.no_grad():
+            tensor.copy_(paddle.normal(mean=mean, std=std, shape=tensor.shape), False)
+    except:
+        pass
     return tensor
 
 
 def _no_grad_fill_(tensor, value=0.0):
-    with paddle.no_grad():
-        tensor.fill_(value)
+    try:
+        with paddle.no_grad():
+            tensor.fill_(value)
+    except:
+        pass
     return tensor
 
 
@@ -120,8 +126,11 @@ def zeros_(tensor):
 
 
 def vector_(tensor, vector):
-    with paddle.no_grad():
-        tensor.set_value(paddle.to_tensor(vector, dtype=tensor.dtype))
+    try:
+        with paddle.no_grad():
+            tensor.set_value(paddle.to_tensor(vector, dtype=tensor.dtype))
+    except:
+        pass
     return tensor
 
 

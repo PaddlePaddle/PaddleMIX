@@ -774,7 +774,7 @@ class ModelMixin(nn.Layer):
         if use_safetensors is None:
             use_safetensors = True
 
-        if low_cpu_mem_usage and not is_paddle_version(">=", "2.5.0"):
+        if low_cpu_mem_usage and (not is_paddle_version(">=", "2.5.0") and not is_paddle_version("==", "0.0.0")):
             raise NotImplementedError(
                 "Low memory initialization requires paddlepaddle-gpu >= 2.5.0. Please either update your PaddlePaddle version or set"
                 " `low_cpu_mem_usage=False`."
