@@ -24,6 +24,28 @@ from .modeling_utils import ModelMixin
 
 
 class T5FilmDecoder(ModelMixin, ConfigMixin):
+    r"""
+    T5 style decoder with FiLM conditioning.
+
+    Args:
+        input_dims (`int`, *optional*, defaults to `128`):
+            The number of input dimensions.
+        targets_length (`int`, *optional*, defaults to `256`):
+            The length of the targets.
+        d_model (`int`, *optional*, defaults to `768`):
+            Size of the input hidden states.
+        num_layers (`int`, *optional*, defaults to `12`):
+            The number of `DecoderLayer`'s to use.
+        num_heads (`int`, *optional*, defaults to `12`):
+            The number of attention heads to use.
+        d_kv (`int`, *optional*, defaults to `64`):
+            Size of the key-value projection vectors.
+        d_ff (`int`, *optional*, defaults to `2048`):
+            The number of dimensions in the intermediate feed-forward layer of `DecoderLayer`'s.
+        dropout_rate (`float`, *optional*, defaults to `0.1`):
+            Dropout probability.
+    """
+
     @register_to_config
     def __init__(
         self,
@@ -70,7 +92,9 @@ class T5FilmDecoder(ModelMixin, ConfigMixin):
 
     def forward(self, encodings_and_masks, decoder_input_tokens, decoder_noise_time):
         batch, _, _ = decoder_input_tokens.shape
-        assert decoder_noise_time.shape[0] == batch
+        assert decoder_noise_time.shape == [
+            batch,
+        ]
 
         # decoder_noise_time is in [0, 1), so rescale to expected timing range.
         time_steps = get_timestep_embedding(
@@ -125,7 +149,27 @@ class T5FilmDecoder(ModelMixin, ConfigMixin):
 
 
 class DecoderLayer(nn.Layer):
-    def __init__(self, d_model, d_kv, num_heads, d_ff, dropout_rate, layer_norm_epsilon=1e-6):
+    r"""
+    T5 decoder layer.
+
+    Args:
+        d_model (`int`):
+            Size of the input hidden states.
+        d_kv (`int`):
+            Size of the key-value projection vectors.
+        num_heads (`int`):
+            Number of attention heads.
+        d_ff (`int`):
+            Size of the intermediate feed-forward layer.
+        dropout_rate (`float`):
+            Dropout probability.
+        layer_norm_epsilon (`float`, *optional*, defaults to `1e-6`):
+            A small value used for numerical stability to avoid dividing by zero.
+    """
+
+    def __init__(
+        self, d_model: int, d_kv: int, num_heads: int, d_ff: int, dropout_rate: float, layer_norm_epsilon: float = 1e-6
+    ):
         super().__init__()
         self.layer = nn.LayerList()
 
@@ -183,7 +227,21 @@ class DecoderLayer(nn.Layer):
 
 
 class T5LayerSelfAttentionCond(nn.Layer):
-    def __init__(self, d_model, d_kv, num_heads, dropout_rate):
+    r"""
+    T5 style self-attention layer with conditioning.
+
+    Args:
+        d_model (`int`):
+            Size of the input hidden states.
+        d_kv (`int`):
+            Size of the key-value projection vectors.
+        num_heads (`int`):
+            Number of attention heads.
+        dropout_rate (`float`):
+            Dropout probability.
+    """
+
+    def __init__(self, d_model: int, d_kv: int, num_heads: int, dropout_rate: float):
         super().__init__()
         self.layer_norm = T5LayerNorm(d_model)
         self.FiLMLayer = T5FiLMLayer(in_features=d_model * 4, out_features=d_model)
@@ -211,7 +269,23 @@ class T5LayerSelfAttentionCond(nn.Layer):
 
 
 class T5LayerCrossAttention(nn.Layer):
-    def __init__(self, d_model, d_kv, num_heads, dropout_rate, layer_norm_epsilon):
+    r"""
+    T5 style cross-attention layer.
+
+    Args:
+        d_model (`int`):
+            Size of the input hidden states.
+        d_kv (`int`):
+            Size of the key-value projection vectors.
+        num_heads (`int`):
+            Number of attention heads.
+        dropout_rate (`float`):
+            Dropout probability.
+        layer_norm_epsilon (`float`):
+            A small value used for numerical stability to avoid dividing by zero.
+    """
+
+    def __init__(self, d_model: int, d_kv: int, num_heads: int, dropout_rate: float, layer_norm_epsilon: float):
         super().__init__()
         self.attention = Attention(query_dim=d_model, heads=num_heads, dim_head=d_kv, out_bias=False, scale_qk=False)
         self.layer_norm = T5LayerNorm(d_model, eps=layer_norm_epsilon)
@@ -234,7 +308,21 @@ class T5LayerCrossAttention(nn.Layer):
 
 
 class T5LayerFFCond(nn.Layer):
-    def __init__(self, d_model, d_ff, dropout_rate, layer_norm_epsilon):
+    r"""
+    T5 style feed-forward conditional layer.
+
+    Args:
+        d_model (`int`):
+            Size of the input hidden states.
+        d_ff (`int`):
+            Size of the intermediate feed-forward layer.
+        dropout_rate (`float`):
+            Dropout probability.
+        layer_norm_epsilon (`float`):
+            A small value used for numerical stability to avoid dividing by zero.
+    """
+
+    def __init__(self, d_model: int, d_ff: int, dropout_rate: float, layer_norm_epsilon: float):
         super().__init__()
         self.DenseReluDense = T5DenseGatedActDense(d_model=d_model, d_ff=d_ff, dropout_rate=dropout_rate)
         self.film = T5FiLMLayer(in_features=d_model * 4, out_features=d_model)
@@ -252,7 +340,19 @@ class T5LayerFFCond(nn.Layer):
 
 
 class T5DenseGatedActDense(nn.Layer):
-    def __init__(self, d_model, d_ff, dropout_rate):
+    r"""
+    T5 style feed-forward layer with gated activations and dropout.
+
+    Args:
+        d_model (`int`):
+            Size of the input hidden states.
+        d_ff (`int`):
+            Size of the intermediate feed-forward layer.
+        dropout_rate (`float`):
+            Dropout probability.
+    """
+
+    def __init__(self, d_model: int, d_ff: int, dropout_rate: float):
         super().__init__()
         self.wi_0 = nn.Linear(d_model, d_ff, bias_attr=False)
         self.wi_1 = nn.Linear(d_model, d_ff, bias_attr=False)
@@ -271,11 +371,20 @@ class T5DenseGatedActDense(nn.Layer):
 
 
 class T5LayerNorm(nn.Layer):
-    """
-    Construct a layernorm module in the T5 style No bias and no subtraction of mean.
+    r"""
+    T5 style layer normalization module.
+
+    Args:
+        hidden_size (`int`):
+            Size of the input hidden states.
+        eps (`float`, `optional`, defaults to `1e-6`):
+            A small value used for numerical stability to avoid dividing by zero.
     """
 
-    def __init__(self, hidden_size, eps=1e-6):
+    def __init__(self, hidden_size: int, eps: float = 1e-6):
+        """
+        Construct a layernorm module in the T5 style. No bias and no subtraction of mean.
+        """
         super().__init__()
         self.weight = self.create_parameter(shape=[hidden_size], default_initializer=nn.initializer.Constant(1.0))
         self.variance_epsilon = eps
@@ -309,10 +418,16 @@ class NewGELUActivation(nn.Layer):
 
 class T5FiLMLayer(nn.Layer):
     """
-    FiLM Layer
+    T5 style FiLM Layer.
+
+    Args:
+        in_features (`int`):
+            Number of input features.
+        out_features (`int`):
+            Number of output features.
     """
 
-    def __init__(self, in_features, out_features):
+    def __init__(self, in_features: int, out_features: int):
         super().__init__()
         self.scale_bias = nn.Linear(in_features, out_features * 2, bias_attr=False)
 

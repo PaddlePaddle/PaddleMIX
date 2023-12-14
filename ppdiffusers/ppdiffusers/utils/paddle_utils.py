@@ -225,3 +225,63 @@ if is_paddle_available():
             yield
         finally:
             _init_weights = old_init_weights
+
+
+def fourier_filter(x_in, threshold, scale):
+    from paddle.fft import fftn, fftshift, ifftn, ifftshift
+
+    """Fourier filter as introduced in FreeU (https://arxiv.org/abs/2309.11497).
+
+    This version of the method comes from here:
+    https://github.com/huggingface/diffusers/pull/5164#issuecomment-1732638706
+    """
+    x = x_in
+    B, C, H, W = x.shape
+
+    # Non-power of 2 images must be float32
+    if (W & (W - 1)) != 0 or (H & (H - 1)) != 0:
+        x = x.to(dtype=paddle.float32)
+
+    # FFT
+    x_freq = fftn(x, axes=(-2, -1))
+    x_freq = fftshift(x_freq, axes=(-2, -1))
+
+    B, C, H, W = x_freq.shape
+    mask = paddle.ones((B, C, H, W))
+
+    crow, ccol = H // 2, W // 2
+    mask[..., crow - threshold : crow + threshold, ccol - threshold : ccol + threshold] = scale
+    x_freq = x_freq * mask
+
+    # IFFT
+    x_freq = ifftshift(x_freq, axes=(-2, -1))
+    x_filtered = ifftn(x_freq, axes=(-2, -1)).real
+
+    return x_filtered.to(dtype=x_in.dtype)
+
+
+def apply_freeu(
+    resolution_idx: int, hidden_states: paddle.Tensor, res_hidden_states: paddle.Tensor, **freeu_kwargs
+) -> Tuple[paddle.Tensor, paddle.Tensor]:
+    """Applies the FreeU mechanism as introduced in https:
+    //arxiv.org/abs/2309.11497. Adapted from the official code repository: https://github.com/ChenyangSi/FreeU.
+
+    Args:
+        resolution_idx (`int`): Integer denoting the UNet block where FreeU is being applied.
+        hidden_states (`paddle.Tensor`): Inputs to the underlying block.
+        res_hidden_states (`paddle.Tensor`): Features from the skip block corresponding to the underlying block.
+        s1 (`float`): Scaling factor for stage 1 to attenuate the contributions of the skip features.
+        s2 (`float`): Scaling factor for stage 2 to attenuate the contributions of the skip features.
+        b1 (`float`): Scaling factor for stage 1 to amplify the contributions of backbone features.
+        b2 (`float`): Scaling factor for stage 2 to amplify the contributions of backbone features.
+    """
+    if resolution_idx == 0:
+        num_half_channels = hidden_states.shape[1] // 2
+        hidden_states[:, :num_half_channels] = hidden_states[:, :num_half_channels] * freeu_kwargs["b1"]
+        res_hidden_states = fourier_filter(res_hidden_states, threshold=1, scale=freeu_kwargs["s1"])
+    if resolution_idx == 1:
+        num_half_channels = hidden_states.shape[1] // 2
+        hidden_states[:, :num_half_channels] = hidden_states[:, :num_half_channels] * freeu_kwargs["b2"]
+        res_hidden_states = fourier_filter(res_hidden_states, threshold=1, scale=freeu_kwargs["s2"])
+
+    return hidden_states, res_hidden_states

@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import paddle
@@ -21,8 +21,14 @@ import paddle.nn as nn
 from paddle.distributed.fleet.utils import recompute
 
 from ..utils import BaseOutput, randn_tensor
+from .activations import get_activation
 from .attention_processor import SpatialNorm
-from .unet_2d_blocks import UNetMidBlock2D, get_down_block, get_up_block
+from .unet_2d_blocks import (
+    AutoencoderTinyBlock,
+    UNetMidBlock2D,
+    get_down_block,
+    get_up_block,
+)
 
 try:
     from paddle.amp.auto_cast import amp_state
@@ -53,16 +59,39 @@ class DecoderOutput(BaseOutput):
 
 
 class Encoder(nn.Layer):
+    r"""
+    The `Encoder` layer of a variational autoencoder that encodes its input into a latent representation.
+
+    Args:
+        in_channels (`int`, *optional*, defaults to 3):
+            The number of input channels.
+        out_channels (`int`, *optional*, defaults to 3):
+            The number of output channels.
+        down_block_types (`Tuple[str, ...]`, *optional*, defaults to `("DownEncoderBlock2D",)`):
+            The types of down blocks to use. See `~diffusers.models.unet_2d_blocks.get_down_block` for available
+            options.
+        block_out_channels (`Tuple[int, ...]`, *optional*, defaults to `(64,)`):
+            The number of output channels for each block.
+        layers_per_block (`int`, *optional*, defaults to 2):
+            The number of layers per block.
+        norm_num_groups (`int`, *optional*, defaults to 32):
+            The number of groups for normalization.
+        act_fn (`str`, *optional*, defaults to `"silu"`):
+            The activation function to use. See `~diffusers.models.activations.get_activation` for available options.
+        double_z (`bool`, *optional*, defaults to `True`):
+            Whether to double the number of output channels for the last block.
+    """
+
     def __init__(
         self,
-        in_channels=3,
-        out_channels=3,
-        down_block_types=("DownEncoderBlock2D",),
-        block_out_channels=(64,),
-        layers_per_block=2,
-        norm_num_groups=32,
-        act_fn="silu",
-        double_z=True,
+        in_channels: int = 3,
+        out_channels: int = 3,
+        down_block_types: Tuple[str, ...] = ("DownEncoderBlock2D",),
+        block_out_channels: Tuple[int, ...] = (64,),
+        layers_per_block: int = 2,
+        norm_num_groups: int = 32,
+        act_fn: str = "silu",
+        double_z: bool = True,
     ):
         super().__init__()
         self.layers_per_block = layers_per_block
@@ -116,8 +145,9 @@ class Encoder(nn.Layer):
         self.conv_out = nn.Conv2D(block_out_channels[-1], conv_out_channels, 3, padding=1)
         self.gradient_checkpointing = False
 
-    def forward(self, x):
-        sample = x
+    def forward(self, sample: paddle.Tensor) -> paddle.Tensor:
+        r"""The forward method of the `Encoder` class."""
+
         sample = self.conv_in(sample)
 
         if self.training and self.gradient_checkpointing and not sample.stop_gradient:
@@ -152,16 +182,38 @@ class Encoder(nn.Layer):
 
 
 class Decoder(nn.Layer):
+    r"""
+    The `Decoder` layer of a variational autoencoder that decodes its latent representation into an output sample.
+
+    Args:
+        in_channels (`int`, *optional*, defaults to 3):
+            The number of input channels.
+        out_channels (`int`, *optional*, defaults to 3):
+            The number of output channels.
+        up_block_types (`Tuple[str, ...]`, *optional*, defaults to `("UpDecoderBlock2D",)`):
+            The types of up blocks to use. See `~diffusers.models.unet_2d_blocks.get_up_block` for available options.
+        block_out_channels (`Tuple[int, ...]`, *optional*, defaults to `(64,)`):
+            The number of output channels for each block.
+        layers_per_block (`int`, *optional*, defaults to 2):
+            The number of layers per block.
+        norm_num_groups (`int`, *optional*, defaults to 32):
+            The number of groups for normalization.
+        act_fn (`str`, *optional*, defaults to `"silu"`):
+            The activation function to use. See `~diffusers.models.activations.get_activation` for available options.
+        norm_type (`str`, *optional*, defaults to `"group"`):
+            The normalization type to use. Can be either `"group"` or `"spatial"`.
+    """
+
     def __init__(
         self,
-        in_channels=3,
-        out_channels=3,
-        up_block_types=("UpDecoderBlock2D",),
-        block_out_channels=(64,),
-        layers_per_block=2,
-        norm_num_groups=32,
-        act_fn="silu",
-        norm_type="group",  # group, spatial
+        in_channels: int = 3,
+        out_channels: int = 3,
+        up_block_types: Tuple[str, ...] = ("UpDecoderBlock2D",),
+        block_out_channels: Tuple[int, ...] = (64,),
+        layers_per_block: int = 2,
+        norm_num_groups: int = 32,
+        act_fn: str = "silu",
+        norm_type: str = "group",  # group, spatial
     ):
         super().__init__()
         self.layers_per_block = layers_per_block
@@ -221,8 +273,9 @@ class Decoder(nn.Layer):
         self.conv_out = nn.Conv2D(block_out_channels[0], out_channels, 3, padding=1)
         self.gradient_checkpointing = False
 
-    def forward(self, z, latent_embeds=None):
-        sample = z
+    def forward(self, sample: paddle.Tensor, latent_embeds: Optional[paddle.Tensor] = None) -> paddle.Tensor:
+        r"""The forward method of the `Decoder` class."""
+
         sample = self.conv_in(sample)
 
         upscale_dtype = self.up_blocks.dtype
@@ -270,6 +323,16 @@ class Decoder(nn.Layer):
 
 
 class UpSample(nn.Layer):
+    r"""
+    The `UpSample` layer of a variational autoencoder that upsamples its input.
+
+    Args:
+        in_channels (`int`, *optional*, defaults to 3):
+            The number of input channels.
+        out_channels (`int`, *optional*, defaults to 3):
+            The number of output channels.
+    """
+
     def __init__(
         self,
         in_channels: int,
@@ -281,6 +344,7 @@ class UpSample(nn.Layer):
         self.deconv = nn.Conv2DTranspose(in_channels, out_channels, kernel_size=4, stride=2, padding=1)
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
+        r"""The forward method of the `UpSample` class."""
         x = paddle.nn.functional.relu(x)
         x = self.deconv(x)
         return x
@@ -329,6 +393,7 @@ class MaskConditionEncoder(nn.Layer):
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x: paddle.Tensor, mask=None) -> paddle.Tensor:
+        r"""The forward method of the `MaskConditionEncoder` class."""
         out = {}
         for l in range(len(self.layers)):
             layer = self.layers[l]
@@ -339,19 +404,38 @@ class MaskConditionEncoder(nn.Layer):
 
 
 class MaskConditionDecoder(nn.Layer):
-    """The `MaskConditionDecoder` should be used in combination with [`AsymmetricAutoencoderKL`] to enhance the model's
-    decoder with a conditioner on the mask and masked image."""
+    r"""The `MaskConditionDecoder` should be used in combination with [`AsymmetricAutoencoderKL`] to enhance the model's
+    decoder with a conditioner on the mask and masked image.
+
+    Args:
+        in_channels (`int`, *optional*, defaults to 3):
+            The number of input channels.
+        out_channels (`int`, *optional*, defaults to 3):
+            The number of output channels.
+        up_block_types (`Tuple[str, ...]`, *optional*, defaults to `("UpDecoderBlock2D",)`):
+            The types of up blocks to use. See `~diffusers.models.unet_2d_blocks.get_up_block` for available options.
+        block_out_channels (`Tuple[int, ...]`, *optional*, defaults to `(64,)`):
+            The number of output channels for each block.
+        layers_per_block (`int`, *optional*, defaults to 2):
+            The number of layers per block.
+        norm_num_groups (`int`, *optional*, defaults to 32):
+            The number of groups for normalization.
+        act_fn (`str`, *optional*, defaults to `"silu"`):
+            The activation function to use. See `~diffusers.models.activations.get_activation` for available options.
+        norm_type (`str`, *optional*, defaults to `"group"`):
+            The normalization type to use. Can be either `"group"` or `"spatial"`.
+    """
 
     def __init__(
         self,
-        in_channels=3,
-        out_channels=3,
-        up_block_types=("UpDecoderBlock2D",),
-        block_out_channels=(64,),
-        layers_per_block=2,
-        norm_num_groups=32,
-        act_fn="silu",
-        norm_type="group",  # group, spatial
+        in_channels: int = 3,
+        out_channels: int = 3,
+        up_block_types: Tuple[str, ...] = ("UpDecoderBlock2D",),
+        block_out_channels: Tuple[int, ...] = (64,),
+        layers_per_block: int = 2,
+        norm_num_groups: int = 32,
+        act_fn: str = "silu",
+        norm_type: str = "group",  # group, spatial
     ):
         super().__init__()
         self.layers_per_block = layers_per_block
@@ -426,7 +510,14 @@ class MaskConditionDecoder(nn.Layer):
 
         self.gradient_checkpointing = False
 
-    def forward(self, z, image=None, mask=None, latent_embeds=None):
+    def forward(
+        self,
+        z: paddle.Tensor,
+        image: Optional[paddle.Tensor] = None,
+        mask: Optional[paddle.Tensor] = None,
+        latent_embeds: Optional[paddle.Tensor] = None,
+    ) -> paddle.Tensor:
+        r"""The forward method of the `MaskConditionDecoder` class."""
         sample = z
         sample = self.conv_in(sample)
 
@@ -498,7 +589,14 @@ class VectorQuantizer(nn.Layer):
     # backwards compatibility we use the buggy version by default, but you can
     # specify legacy=False to fix it.
     def __init__(
-        self, n_e, vq_embed_dim, beta, remap=None, unknown_index="random", sane_index_shape=False, legacy=True
+        self,
+        n_e: int,
+        vq_embed_dim: int,
+        beta: float,
+        remap=None,
+        unknown_index: str = "random",
+        sane_index_shape: bool = False,
+        legacy: bool = True,
     ):
         super().__init__()
         self.n_e = n_e
@@ -527,7 +625,7 @@ class VectorQuantizer(nn.Layer):
 
         self.sane_index_shape = sane_index_shape
 
-    def remap_to_used(self, inds):
+    def remap_to_used(self, inds: paddle.Tensor) -> paddle.Tensor:
         ishape = inds.shape
         assert len(ishape) > 1
         inds = inds.reshape([ishape[0], -1])
@@ -541,7 +639,7 @@ class VectorQuantizer(nn.Layer):
             new[unknown] = self.unknown_index
         return new.reshape(ishape)
 
-    def unmap_to_all(self, inds):
+    def unmap_to_all(self, inds: paddle.Tensor) -> paddle.Tensor:
         ishape = inds.shape
         assert len(ishape) > 1
         inds = inds.reshape([ishape[0], -1])
@@ -551,7 +649,7 @@ class VectorQuantizer(nn.Layer):
         back = paddle.take_along_axis(used[None, :][inds.shape[0] * [0], :], inds, axis=1)
         return back.reshape(ishape)
 
-    def forward(self, z):
+    def forward(self, z: paddle.Tensor) -> Tuple[paddle.Tensor, paddle.Tensor, Tuple]:
         # reshape z -> (batch, height, width, channel) and flatten
         z = z.transpose([0, 2, 3, 1])
         z_flattened = z.reshape([-1, self.vq_embed_dim])
@@ -590,7 +688,7 @@ class VectorQuantizer(nn.Layer):
 
         return z_q, loss, (perplexity, min_encodings, min_encoding_indices)
 
-    def get_codebook_entry(self, indices, shape):
+    def get_codebook_entry(self, indices: paddle.Tensor, shape: Tuple[int, ...]) -> paddle.Tensor:
         # shape specifying (batch, height, width, channel)
         if self.remap is not None:
             indices = indices.reshape([shape[0], -1])  # add batch axis
@@ -613,7 +711,7 @@ class VectorQuantizer(nn.Layer):
 
 
 class DiagonalGaussianDistribution(object):
-    def __init__(self, parameters, deterministic=False):
+    def __init__(self, parameters: paddle.Tensor, deterministic: bool = False):
         self.parameters = parameters
         self.mean, self.logvar = paddle.chunk(parameters, 2, axis=1)
         self.logvar = paddle.clip(self.logvar, -30.0, 20.0)
@@ -629,7 +727,7 @@ class DiagonalGaussianDistribution(object):
         x = self.mean + self.std * sample
         return x
 
-    def kl(self, other=None):
+    def kl(self, other: "DiagonalGaussianDistribution" = None) -> paddle.Tensor:
         if self.deterministic:
             return paddle.to_tensor([0.0])
         else:
@@ -653,3 +751,141 @@ class DiagonalGaussianDistribution(object):
 
     def mode(self):
         return self.mean
+
+
+class EncoderTiny(nn.Layer):
+    r"""
+    The `EncoderTiny` layer is a simpler version of the `Encoder` layer.
+
+    Args:
+        in_channels (`int`):
+            The number of input channels.
+        out_channels (`int`):
+            The number of output channels.
+        num_blocks (`Tuple[int, ...]`):
+            Each value of the tuple represents a Conv2d layer followed by `value` number of `AutoencoderTinyBlock`'s to
+            use.
+        block_out_channels (`Tuple[int, ...]`):
+            The number of output channels for each block.
+        act_fn (`str`):
+            The activation function to use. See `~diffusers.models.activations.get_activation` for available options.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        num_blocks: Tuple[int, ...],
+        block_out_channels: Tuple[int, ...],
+        act_fn: str,
+    ):
+        super().__init__()
+
+        layers = []
+        for i, num_block in enumerate(num_blocks):
+            num_channels = block_out_channels[i]
+
+            if i == 0:
+                layers.append(nn.Conv2D(in_channels, num_channels, kernel_size=3, padding=1))
+            else:
+                layers.append(nn.Conv2D(num_channels, num_channels, kernel_size=3, padding=1, stride=2, bias=False))
+
+            for _ in range(num_block):
+                layers.append(AutoencoderTinyBlock(num_channels, num_channels, act_fn))
+
+        layers.append(nn.Conv2D(block_out_channels[-1], out_channels, kernel_size=3, padding=1))
+
+        self.layers = nn.Sequential(*layers)
+        self.gradient_checkpointing = False
+
+    def forward(self, x: paddle.Tensor) -> paddle.Tensor:
+        r"""The forward method of the `EncoderTiny` class."""
+        if self.training and self.gradient_checkpointing and not x.stop_gradient:
+
+            def create_custom_forward(module):
+                def custom_forward(*inputs):
+                    return module(*inputs)
+
+                return custom_forward
+
+            x = recompute(create_custom_forward(self.layers), x)
+
+        else:
+            # scale image from [-1, 1] to [0, 1] to match TAESD convention
+            x = self.layers(x.add(1).div(2))
+
+        return x
+
+
+class DecoderTiny(nn.Layer):
+    r"""
+    The `DecoderTiny` layer is a simpler version of the `Decoder` layer.
+
+    Args:
+        in_channels (`int`):
+            The number of input channels.
+        out_channels (`int`):
+            The number of output channels.
+        num_blocks (`Tuple[int, ...]`):
+            Each value of the tuple represents a Conv2d layer followed by `value` number of `AutoencoderTinyBlock`'s to
+            use.
+        block_out_channels (`Tuple[int, ...]`):
+            The number of output channels for each block.
+        upsampling_scaling_factor (`int`):
+            The scaling factor to use for upsampling.
+        act_fn (`str`):
+            The activation function to use. See `~diffusers.models.activations.get_activation` for available options.
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        num_blocks: Tuple[int, ...],
+        block_out_channels: Tuple[int, ...],
+        upsampling_scaling_factor: int,
+        act_fn: str,
+    ):
+        super().__init__()
+
+        layers = [
+            nn.Conv2D(in_channels, block_out_channels[0], kernel_size=3, padding=1),
+            get_activation(act_fn),
+        ]
+
+        for i, num_block in enumerate(num_blocks):
+            is_final_block = i == (len(num_blocks) - 1)
+            num_channels = block_out_channels[i]
+
+            for _ in range(num_block):
+                layers.append(AutoencoderTinyBlock(num_channels, num_channels, act_fn))
+
+            if not is_final_block:
+                layers.append(nn.Upsample(scale_factor=upsampling_scaling_factor))
+
+            conv_out_channel = num_channels if not is_final_block else out_channels
+            layers.append(nn.Conv2d(num_channels, conv_out_channel, kernel_size=3, padding=1, bias=is_final_block))
+
+        self.layers = nn.Sequential(*layers)
+        self.gradient_checkpointing = False
+
+    def forward(self, x: paddle.Tensor) -> paddle.Tensor:
+        r"""The forward method of the `DecoderTiny` class."""
+        # Clamp.
+        x = paddle.tanh(x / 3) * 3
+
+        if self.training and self.gradient_checkpointing:
+
+            def create_custom_forward(module):
+                def custom_forward(*inputs):
+                    return module(*inputs)
+
+                return custom_forward
+
+            x = recompute(create_custom_forward(self.layers), x)
+
+        else:
+            x = self.layers(x)
+
+        # scale image from [0, 1] to [-1, 1] to match diffusers convention
+        return x.multiply(paddle.to_tensor(2)).subtract(paddle.to_tensor(1))

@@ -64,17 +64,22 @@ def get_timestep_embedding(
     return emb
 
 
-def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=0):
+def get_2d_sincos_pos_embed(
+    embed_dim, grid_size, cls_token=False, extra_tokens=0, interpolation_scale=1.0, base_size=16
+):
     """
     grid_size: int of the grid height and width return: pos_embed: [grid_size*grid_size, embed_dim] or
     [1+grid_size*grid_size, embed_dim] (w/ or w/o cls_token)
     """
-    grid_h = np.arange(grid_size, dtype=np.float32)
-    grid_w = np.arange(grid_size, dtype=np.float32)
+    if isinstance(grid_size, int):
+        grid_size = (grid_size, grid_size)
+
+    grid_h = np.arange(grid_size[0], dtype=np.float32) / (grid_size[0] / base_size) / interpolation_scale
+    grid_w = np.arange(grid_size[1], dtype=np.float32) / (grid_size[1] / base_size) / interpolation_scale
     grid = np.meshgrid(grid_w, grid_h)  # here w goes first
     grid = np.stack(grid, axis=0)
 
-    grid = grid.reshape([2, 1, grid_size, grid_size])
+    grid = grid.reshape([2, 1, grid_size[1], grid_size[0]])
     pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
     if cls_token and extra_tokens > 0:
         pos_embed = np.concatenate([np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
@@ -127,6 +132,7 @@ class PatchEmbed(nn.Layer):
         layer_norm=False,
         flatten=True,
         bias=True,
+        interpolation_scale=1,
         add_pos_embed=True,
     ):
         super().__init__()
@@ -144,19 +150,47 @@ class PatchEmbed(nn.Layer):
         else:
             self.norm = None
 
+        self.patch_size = patch_size
+        # See:
+        # https://github.com/PixArt-alpha/PixArt-alpha/blob/0f55e922376d8b797edd44d25d0e7464b260dcab/diffusion/model/nets/PixArtMS.py#L161
+        self.height, self.width = height // patch_size, width // patch_size
+        self.base_size = height // patch_size
+        self.interpolation_scale = interpolation_scale
         self.add_pos_embed = add_pos_embed
         if add_pos_embed:
-            pos_embed = get_2d_sincos_pos_embed(embed_dim, int(num_patches**0.5))
+            pos_embed = get_2d_sincos_pos_embed(
+                embed_dim,
+                int(num_patches**0.5),
+                base_size=self.base_size,
+                interpolation_scale=self.interpolation_scale,
+            )
             self.register_buffer(
                 "pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=False
             )
 
     def forward(self, latent):
+        height, width = latent.shape[-2] // self.patch_size, latent.shape[-1] // self.patch_size
+
         latent = self.proj(latent)
         if self.flatten:
             latent = latent.flatten(2).transpose([0, 2, 1])  # BCHW -> BNC
         if self.layer_norm:
             latent = self.norm(latent)
+
+        # Interpolate positional embeddings if needed.
+        # (For PixArt-Alpha: https://github.com/PixArt-alpha/PixArt-alpha/blob/0f55e922376d8b797edd44d25d0e7464b260dcab/diffusion/model/nets/PixArtMS.py#L162C151-L162C160)
+        if self.height != height or self.width != width:
+            pos_embed = get_2d_sincos_pos_embed(
+                embed_dim=self.pos_embed.shape[-1],
+                grid_size=(height, width),
+                base_size=self.base_size,
+                interpolation_scale=self.interpolation_scale,
+            )
+            pos_embed = paddle.to_tensor(pos_embed)
+            pos_embed = pos_embed.cast("float32").unsqueeze(0)
+        else:
+            pos_embed = self.pos_embed
+
         if self.add_pos_embed:
             return latent + self.pos_embed
         else:
@@ -257,6 +291,42 @@ class GaussianFourierProjection(nn.Layer):
         else:
             out = paddle.concat([paddle.sin(x_proj), paddle.cos(x_proj)], axis=-1)
         return out
+
+
+class SinusoidalPositionalEmbedding(nn.Layer):
+    """Apply positional information to a sequence of embeddings.
+
+    Takes in a sequence of embeddings with shape (batch_size, seq_length, embed_dim) and adds positional embeddings to
+    them
+
+    Args:
+        embed_dim: (int): Dimension of the positional embedding.
+        max_seq_length: Maximum sequence length to apply positional embeddings
+
+    """
+
+    def __init__(self, embed_dim: int, max_seq_length: int = 32):
+        super().__init__()
+        position = paddle.arange(max_seq_length).unsqueeze(1)
+        div_term = paddle.exp(paddle.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim))
+        pe = paddle.zeros([1, max_seq_length, embed_dim])
+        pe[0, :, 0::2] = paddle.sin(
+            (position * div_term).cast(paddle.float32)  # use paddle.get_default_type(), CI occur error
+        ).cast(
+            pe.dtype
+        )  # paddle: sin not support int64, convert to float32
+        pe[0, :, 1::2] = paddle.cos((position * div_term).cast(paddle.float32)).cast(
+            pe.dtype
+        )  # paddle: cos not support int64, convert to float32
+        # When use register_buffer, CI occur error in UNetMotionModelTests::test_from_save_pretrained_dtype
+        # self.register_buffer("pe", pe)
+        pe.stop_gradient = True
+        self.pe = pe
+
+    def forward(self, x):
+        _, seq_length, _ = x.shape
+        x = x + self.pe[:, :seq_length]
+        return x
 
 
 class ImagePositionalEmbeddings(nn.Layer):
@@ -563,3 +633,201 @@ class AttentionPooling(nn.Layer):
         a = a.reshape([bs, -1, 1]).transpose([0, 2, 1])
 
         return a[:, 0, :]  # cls_token
+
+
+class FourierEmbedder(nn.Layer):
+    def __init__(self, num_freqs=64, temperature=100):
+        super().__init__()
+
+        self.num_freqs = num_freqs
+        self.temperature = temperature
+
+        freq_bands = temperature ** (paddle.arange(num_freqs) / num_freqs)
+        freq_bands = freq_bands[None, None, None]
+        self.register_buffer("freq_bands", freq_bands, persistent=False)
+
+    def __call__(self, x):
+        x = self.freq_bands * x.unsqueeze(-1)
+        return paddle.stack((x.sin(), x.cos()), dim=-1).transpose([0, 1, 3, 4, 2]).reshape([*x.shape[:2], -1])
+
+
+class PositionNet(nn.Layer):
+    def __init__(self, positive_len, out_dim, feature_type="text-only", fourier_freqs=8):
+        super().__init__()
+        self.positive_len = positive_len
+        self.out_dim = out_dim
+
+        self.fourier_embedder = FourierEmbedder(num_freqs=fourier_freqs)
+        self.position_dim = fourier_freqs * 2 * 4  # 2: sin/cos, 4: xyxy
+
+        if isinstance(out_dim, tuple):
+            out_dim = out_dim[0]
+
+        if feature_type == "text-only":
+            self.linears = nn.Sequential(
+                nn.Linear(self.positive_len + self.position_dim, 512),
+                nn.SiLU(),
+                nn.Linear(512, 512),
+                nn.SiLU(),
+                nn.Linear(512, out_dim),
+            )
+            tmp_0 = paddle.zeros([self.positive_len])
+            self.null_positive_feature = self.create_parameter(
+                shape=tmp_0.shape, default_initializer=paddle.nn.initializer.Assign(tmp_0)
+            )
+
+        elif feature_type == "text-image":
+            self.linears_text = nn.Sequential(
+                nn.Linear(self.positive_len + self.position_dim, 512),
+                nn.SiLU(),
+                nn.Linear(512, 512),
+                nn.SiLU(),
+                nn.Linear(512, out_dim),
+            )
+            self.linears_image = nn.Sequential(
+                nn.Linear(self.positive_len + self.position_dim, 512),
+                nn.SiLU(),
+                nn.Linear(512, 512),
+                nn.SiLU(),
+                nn.Linear(512, out_dim),
+            )
+            tmp_0 = paddle.zeros([self.positive_len])
+            self.null_text_feature = self.create_parameter(
+                shape=tmp_0.shape, default_initializer=paddle.nn.initializer.Assign(tmp_0)
+            )
+            tmp_1 = paddle.zeros([self.positive_len])
+            self.null_image_feature = self.create_parameter(
+                shape=tmp_1.shape, default_initializer=paddle.nn.initializer.Assign(tmp_1)
+            )
+
+        tmp = paddle.zeros([self.position_dim])
+        self.null_position_feature = self.create_parameter(
+            shape=tmp.shape, default_initializer=paddle.nn.initializer.Assign(tmp)
+        )
+
+    def forward(
+        self,
+        boxes,
+        masks,
+        positive_embeddings=None,
+        phrases_masks=None,
+        image_masks=None,
+        phrases_embeddings=None,
+        image_embeddings=None,
+    ):
+        masks = masks.unsqueeze(-1)
+
+        # embedding position (it may includes padding as placeholder)
+        xyxy_embedding = self.fourier_embedder(boxes)  # B*N*4 -> B*N*C
+
+        # learnable null embedding
+        xyxy_null = self.null_position_feature.view(1, 1, -1)
+
+        # replace padding with learnable null embedding
+        xyxy_embedding = xyxy_embedding * masks + (1 - masks) * xyxy_null
+
+        # positionet with text only information
+        if positive_embeddings is not None:
+            # learnable null embedding
+            positive_null = self.null_positive_feature.view(1, 1, -1)
+
+            # replace padding with learnable null embedding
+            positive_embeddings = positive_embeddings * masks + (1 - masks) * positive_null
+
+            objs = self.linears(paddle.concat([positive_embeddings, xyxy_embedding], axis=-1))
+
+        # positionet with text and image infomation
+        else:
+            phrases_masks = phrases_masks.unsqueeze(-1)
+            image_masks = image_masks.unsqueeze(-1)
+
+            # learnable null embedding
+            text_null = self.null_text_feature.view(1, 1, -1)
+            image_null = self.null_image_feature.view(1, 1, -1)
+
+            # replace padding with learnable null embedding
+            phrases_embeddings = phrases_embeddings * phrases_masks + (1 - phrases_masks) * text_null
+            image_embeddings = image_embeddings * image_masks + (1 - image_masks) * image_null
+
+            objs_text = self.linears_text(paddle.concat([phrases_embeddings, xyxy_embedding], axis=-1))
+            objs_image = self.linears_image(paddle.concat([image_embeddings, xyxy_embedding], axis=-1))
+            objs = paddle.concat([objs_text, objs_image], axis=1)
+
+        return objs
+
+
+class CombinedTimestepSizeEmbeddings(nn.Layer):
+    """
+    For PixArt-Alpha.
+
+    Reference:
+    https://github.com/PixArt-alpha/PixArt-alpha/blob/0f55e922376d8b797edd44d25d0e7464b260dcab/diffusion/model/nets/PixArtMS.py#L164C9-L168C29
+    """
+
+    def __init__(self, embedding_dim, size_emb_dim, use_additional_conditions: bool = False):
+        super().__init__()
+
+        self.outdim = size_emb_dim
+        self.time_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0)
+        self.timestep_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=embedding_dim)
+
+        self.use_additional_conditions = use_additional_conditions
+        if use_additional_conditions:
+            self.use_additional_conditions = True
+            self.additional_condition_proj = Timesteps(num_channels=256, flip_sin_to_cos=True, downscale_freq_shift=0)
+            self.resolution_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=size_emb_dim)
+            self.aspect_ratio_embedder = TimestepEmbedding(in_channels=256, time_embed_dim=size_emb_dim)
+
+    def apply_condition(self, size: paddle.Tensor, batch_size: int, embedder: nn.Layer):
+        if size.ndim == 1:
+            size = size[:, None]
+
+        if size.shape[0] != batch_size:
+            size = size.tile([batch_size // size.shape[0], 1])
+            if size.shape[0] != batch_size:
+                raise ValueError(f"`batch_size` should be {size.shape[0]} but found {batch_size}.")
+
+        current_batch_size, dims = size.shape[0], size.shape[1]
+        size = size.reshape([-1])
+        size_freq = self.additional_condition_proj(size).to(size.dtype)
+
+        size_emb = embedder(size_freq)
+        size_emb = size_emb.reshape([current_batch_size, dims * self.outdim])
+        return size_emb
+
+    def forward(self, timestep, resolution, aspect_ratio, batch_size, hidden_dtype):
+        timesteps_proj = self.time_proj(timestep)
+        timesteps_emb = self.timestep_embedder(timesteps_proj.to(dtype=hidden_dtype))  # (N, D)
+
+        if self.use_additional_conditions:
+            resolution = self.apply_condition(resolution, batch_size=batch_size, embedder=self.resolution_embedder)
+            aspect_ratio = self.apply_condition(
+                aspect_ratio, batch_size=batch_size, embedder=self.aspect_ratio_embedder
+            )
+            conditioning = timesteps_emb + paddle.concat([resolution, aspect_ratio], axis=1)
+        else:
+            conditioning = timesteps_emb
+
+        return conditioning
+
+
+class CaptionProjection(nn.Layer):
+    """
+    Projects caption embeddings. Also handles dropout for classifier-free guidance.
+
+    Adapted from https://github.com/PixArt-alpha/PixArt-alpha/blob/master/diffusion/model/nets/PixArt_blocks.py
+    """
+
+    def __init__(self, in_features, hidden_size, num_tokens=120):
+        super().__init__()
+        self.linear_1 = nn.Linear(in_features=in_features, out_features=hidden_size, bias=True)
+        self.act_1 = nn.GELU(approximate=True)
+        self.linear_2 = nn.Linear(in_features=hidden_size, out_features=hidden_size, bias=True)
+        tmp_0 = paddle.randn(num_tokens, in_features) / in_features**0.5
+        self.register_buffer("y_embedding", self.create_parameter(tmp_0.shape, paddle.nn.initializer.Assign(tmp_0)))
+
+    def forward(self, caption, force_drop_ids=None):
+        hidden_states = self.linear_1(caption)
+        hidden_states = self.act_1(hidden_states)
+        hidden_states = self.linear_2(hidden_states)
+        return hidden_states
