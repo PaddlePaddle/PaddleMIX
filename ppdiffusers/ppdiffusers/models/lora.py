@@ -26,12 +26,9 @@ from typing import Optional, Tuple, Union
 import paddle
 from paddle import nn
 
+from ppdiffusers.transformers import CLIPTextModel, CLIPTextModelWithProjection
+
 from ..utils import logging
-from ..utils.import_utils import is_paddlenlp_available
-
-if is_paddlenlp_available():
-    from paddlenlp.transformers import CLIPTextModel, CLIPTextModelWithProjection
-
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -129,7 +126,7 @@ class PatchedLoraProjection(nn.Layer):
         if self.lora_linear_layer.network_alpha is not None:
             w_up = w_up * self.lora_linear_layer.network_alpha / self.lora_linear_layer.rank
 
-        fused_weight = w_orig + (lora_scale * paddle.matmul(w_up[None, :], w_down[None, :])[0])
+        fused_weight = w_orig + (lora_scale * paddle.matmul(w_down[None, :], w_up[None, :])[0])
 
         if safe_fusing and paddle.isnan(fused_weight).any().item():
             raise ValueError(
@@ -159,7 +156,7 @@ class PatchedLoraProjection(nn.Layer):
         w_down = self.w_down.cast("float32")
 
         unfused_weight = fused_weight.cast("float32") - (
-            self.lora_scale * paddle.matmul(w_up[None, :], w_down[None, :])[0]
+            self.lora_scale * paddle.matmul(w_down[None, :], w_up[None, :])[0]
         )
         self.regular_linear_layer.weight.copy_(unfused_weight.cast(dtype=dtype), False)
 
@@ -315,14 +312,14 @@ class LoRACompatibleConv(nn.Conv2D):
 
         dtype = self.weight.dtype
 
-        w_orig = self.weight.weight.cast("float32")
-        w_up = self.lora_layer.up.weight.weight.cast("float32")
-        w_down = self.lora_layer.down.weight.weight.cast("float32")
+        w_orig = self.weight.cast("float32")
+        w_up = self.lora_layer.up.weight.cast("float32")
+        w_down = self.lora_layer.down.weight.cast("float32")
 
         if self.lora_layer.network_alpha is not None:
             w_up = w_up * self.lora_layer.network_alpha / self.lora_layer.rank
 
-        fusion = paddle.matmul(w_up.flatten(start_dim=1), w_down.flatten(start_dim=1))
+        fusion = paddle.matmul(w_up.flatten(start_axis=1), w_down.flatten(start_axis=1))
         fusion = fusion.reshape(w_orig.shape)
         fused_weight = w_orig + (lora_scale * fusion)
 
@@ -353,7 +350,7 @@ class LoRACompatibleConv(nn.Conv2D):
         w_up = self.w_up.cast("float32")
         w_down = self.w_down.cast("float32")
 
-        fusion = paddle.matmul(w_up.flatten(start_dim=1), w_down.flatten(start_dim=1))
+        fusion = paddle.matmul(w_up.flatten(start_axis=1), w_down.flatten(start_axis=1))
         fusion = fusion.reshape(fused_weight.shape)
         unfused_weight = fused_weight.cast("float32") - (self._lora_scale * fusion)
         self.weight.copy_(unfused_weight.cast(dtype=dtype), False)
@@ -400,7 +397,7 @@ class LoRACompatibleLinear(nn.Linear):
         if self.lora_layer.network_alpha is not None:
             w_up = w_up * self.lora_layer.network_alpha / self.lora_layer.rank
 
-        fused_weight = w_orig + (lora_scale * paddle.matmul(w_up[None, :], w_down[None, :])[0])
+        fused_weight = w_orig + (lora_scale * paddle.matmul(w_down[None, :], w_up[None, :])[0])
 
         if safe_fusing and paddle.isnan(fused_weight).any().item():
             raise ValueError(
@@ -429,7 +426,7 @@ class LoRACompatibleLinear(nn.Linear):
         w_down = self.w_down.cast("float32")
 
         unfused_weight = fused_weight.cast("float32") - (
-            self._lora_scale * paddle.matmul(w_up[None, :], w_down[None, :])[0]
+            self._lora_scale * paddle.matmul(w_down[None, :], w_up[None, :])[0]
         )
         self.weight.copy_(unfused_weight.cast(dtype=dtype), False)
 

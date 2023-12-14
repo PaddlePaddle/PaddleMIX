@@ -25,7 +25,7 @@ from ..models.modeling_pytorch_paddle_utils import (
     convert_paddle_state_dict_to_pytorch,
     convert_pytorch_state_dict_to_paddle,
 )
-from ..models.modeling_utils import faster_set_state_dict, load_state_dict
+from ..models.modeling_utils import faster_set_state_dict
 from ..utils import (
     DIFFUSERS_CACHE,
     FROM_AISTUDIO,
@@ -307,11 +307,12 @@ class LoraLoaderMixin:
                     )
 
             assert model_file is not None, "Could not find the model file!"
-            data_format = load_state_dict(model_file, state_dict)
-            if data_format == "pt":
+            # TODO, check this
+            from ppdiffusers.utils import smart_load
+
+            state_dict = smart_load(model_file, return_is_torch_weight=True)
+            if "is_torch_weight" in state_dict and state_dict.pop("is_torch_weight", False) and not from_diffusers:
                 from_diffusers = True
-            if data_format == "pd":
-                from_diffusers = False
         else:
             state_dict = pretrained_model_name_or_path_or_dict
 
@@ -940,24 +941,8 @@ class LoraLoaderMixin:
         if unfuse_unet:
             if not USE_PPPEFT_BACKEND:
                 self.unet.unfuse_lora()
-            else:
-                # from peft.tuners.tuners_utils import BaseTunerLayer
 
-                # for module in self.unet.modules():
-                #     if isinstance(module, BaseTunerLayer):
-                #         module.unmerge()
-                pass
-
-        if USE_PPPEFT_BACKEND:
-            # from peft.tuners.tuners_utils import BaseTunerLayer
-
-            # def unfuse_text_encoder_lora(text_encoder):
-            #     for module in text_encoder.modules():
-            #         if isinstance(module, BaseTunerLayer):
-            #             module.unmerge()
-            pass
-
-        else:
+        if not USE_PPPEFT_BACKEND:
             if version.parse(__version__) > version.parse("0.23"):
                 deprecate("unfuse_text_encoder_lora", "0.25", LORA_DEPRECATION_MESSAGE)
 
@@ -1003,27 +988,6 @@ class LoraLoaderMixin:
         if not USE_PPPEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
 
-        # def process_weights(adapter_names, weights):
-        #     if weights is None:
-        #         weights = [1.0] * len(adapter_names)
-        #     elif isinstance(weights, float):
-        #         weights = [weights]
-
-        #     if len(adapter_names) != len(weights):
-        #         raise ValueError(
-        #             f"Length of adapter names {len(adapter_names)} is not equal to the length of the weights {len(weights)}"
-        #         )
-        #     return weights
-
-        # adapter_names = [adapter_names] if isinstance(adapter_names, str) else adapter_names
-        # text_encoder_weights = process_weights(adapter_names, text_encoder_weights)
-        # text_encoder = text_encoder or getattr(self, "text_encoder", None)
-        # if text_encoder is None:
-        #     raise ValueError(
-        #         "The pipeline does not have a default `pipe.text_encoder` class. Please make sure to pass a `text_encoder` instead."
-        #     )
-        # set_weights_and_activate_adapters(text_encoder, adapter_names, text_encoder_weights)
-
     def disable_lora_for_text_encoder(self, text_encoder: Optional["PretrainedModel"] = None):
         """
         Disables the LoRA layers for the text encoder.
@@ -1036,11 +1000,6 @@ class LoraLoaderMixin:
         if not USE_PPPEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
 
-        # text_encoder = text_encoder or getattr(self, "text_encoder", None)
-        # if text_encoder is None:
-        #     raise ValueError("Text Encoder not found.")
-        # set_adapter_layers(text_encoder, enabled=False)
-
     def enable_lora_for_text_encoder(self, text_encoder: Optional["PretrainedModel"] = None):
         """
         Enables the LoRA layers for the text encoder.
@@ -1052,10 +1011,6 @@ class LoraLoaderMixin:
         """
         if not USE_PPPEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
-        # text_encoder = text_encoder or getattr(self, "text_encoder", None)
-        # if text_encoder is None:
-        #     raise ValueError("Text Encoder not found.")
-        # set_adapter_layers(self.text_encoder, enabled=True)
 
     def set_adapters(
         self,
@@ -1075,27 +1030,9 @@ class LoraLoaderMixin:
         if not USE_PPPEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
 
-        # # Disable unet adapters
-        # self.unet.disable_lora()
-
-        # # Disable text encoder adapters
-        # if hasattr(self, "text_encoder"):
-        #     self.disable_lora_for_text_encoder(self.text_encoder)
-        # if hasattr(self, "text_encoder_2"):
-        #     self.disable_lora_for_text_encoder(self.text_encoder_2)
-
     def enable_lora(self):
         if not USE_PPPEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
-
-        # # Enable unet adapters
-        # self.unet.enable_lora()
-
-        # # Enable text encoder adapters
-        # if hasattr(self, "text_encoder"):
-        #     self.enable_lora_for_text_encoder(self.text_encoder)
-        # if hasattr(self, "text_encoder_2"):
-        #     self.enable_lora_for_text_encoder(self.text_encoder_2)
 
     def delete_adapters(self, adapter_names: Union[List[str], str]):
         """
@@ -1106,19 +1043,6 @@ class LoraLoaderMixin:
         """
         if not USE_PPPEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
-
-        # if isinstance(adapter_names, str):
-        #     adapter_names = [adapter_names]
-
-        # # Delete unet adapters
-        # self.unet.delete_adapters(adapter_names)
-
-        # for adapter_name in adapter_names:
-        #     # Delete text encoder adapters
-        #     if hasattr(self, "text_encoder"):
-        #         delete_adapter_layers(self.text_encoder, adapter_name)
-        #     if hasattr(self, "text_encoder_2"):
-        #         delete_adapter_layers(self.text_encoder_2, adapter_name)
 
     def get_active_adapters(self) -> List[str]:
         """
@@ -1141,17 +1065,6 @@ class LoraLoaderMixin:
                 "PEFT backend is required for this method. Please install the latest version of PEFT `pip install -U peft`"
             )
 
-        # from peft.tuners.tuners_utils import BaseTunerLayer
-
-        # active_adapters = []
-
-        # for module in self.unet.modules():
-        #     if isinstance(module, BaseTunerLayer):
-        #         active_adapters = module.active_adapters
-        #         break
-
-        # return active_adapters
-
     def get_list_adapters(self) -> Dict[str, List[str]]:
         """
         Gets the current list of all available adapters in the pipeline.
@@ -1160,19 +1073,6 @@ class LoraLoaderMixin:
             raise ValueError(
                 "PEFT backend is required for this method. Please install the latest version of PEFT `pip install -U peft`"
             )
-
-        # set_adapters = {}
-
-        # if hasattr(self, "text_encoder") and hasattr(self.text_encoder, "peft_config"):
-        #     set_adapters["text_encoder"] = list(self.text_encoder.peft_config.keys())
-
-        # if hasattr(self, "text_encoder_2") and hasattr(self.text_encoder_2, "peft_config"):
-        #     set_adapters["text_encoder_2"] = list(self.text_encoder_2.peft_config.keys())
-
-        # if hasattr(self, "unet") and hasattr(self.unet, "peft_config"):
-        #     set_adapters["unet"] = list(self.unet.peft_config.keys())
-
-        # return set_adapters
 
     def set_lora_device(
         self,
@@ -1190,31 +1090,6 @@ class LoraLoaderMixin:
         """
         if not USE_PPPEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
-
-        # from peft.tuners.tuners_utils import BaseTunerLayer
-
-        # # Handle the UNET
-        # for unet_module in self.unet.modules():
-        #     if isinstance(unet_module, BaseTunerLayer):
-        #         for adapter_name in adapter_names:
-        #             unet_module.lora_A[adapter_name].to(device)
-        #             unet_module.lora_B[adapter_name].to(device)
-
-        # # Handle the text encoder
-        # modules_to_process = []
-        # if hasattr(self, "text_encoder"):
-        #     modules_to_process.append(self.text_encoder)
-
-        # if hasattr(self, "text_encoder_2"):
-        #     modules_to_process.append(self.text_encoder_2)
-
-        # for text_encoder in modules_to_process:
-        #     # loop over submodules
-        #     for text_encoder_module in text_encoder.modules():
-        #         if isinstance(text_encoder_module, BaseTunerLayer):
-        #             for adapter_name in adapter_names:
-        #                 text_encoder_module.lora_A[adapter_name].to(device)
-        #                 text_encoder_module.lora_B[adapter_name].to(device)
 
 
 class StableDiffusionXLLoraLoaderMixin(LoraLoaderMixin):

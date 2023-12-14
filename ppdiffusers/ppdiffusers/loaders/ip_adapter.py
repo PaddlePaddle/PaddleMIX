@@ -135,15 +135,12 @@ class IPAdapterMixin:
                 state_dict = {"image_proj": {}, "ip_adapter": {}}
                 with safe_open(model_file, framework="np") as f:
                     metadata = f.metadata()
-                    # TODO, maybe this is pt model
-                    if metadata is None:
-                        metadata = {"format": "pt"}
-                    if metadata.get("format") not in ["pt", "pd", "np"]:
+                    if metadata.get("format", "pt") not in ["pt", "pd", "np"]:
                         raise OSError(
                             f"The safetensors archive passed at {model_file} does not contain the valid metadata. Make sure "
                             "you save your model with the `save_pretrained` method."
                         )
-                    data_format = metadata.get("format")
+                    data_format = metadata.get("format", "pt")
                     if data_format == "pt":
                         from_diffusers = True
                     for key in f.keys():

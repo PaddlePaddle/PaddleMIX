@@ -199,7 +199,7 @@ class CLIPVisionEmbeddings(nn.Layer):
 
         class_embeds = self.class_embedding.expand([batch_size, 1, -1])
         embeddings = paddle.concat([class_embeds, patch_embeds], axis=1)
-        embeddings = embeddings + self.position_embedding(self.position_ids)
+        embeddings = embeddings + self.position_embedding(self.position_ids._to(dtype=paddle.int64))
         return embeddings
 
 
@@ -232,7 +232,7 @@ class CLIPTextEmbeddings(nn.Layer):
         if inputs_embeds is None:
             inputs_embeds = self.token_embedding(input_ids)
 
-        position_embeddings = self.position_embedding(position_ids)
+        position_embeddings = self.position_embedding(position_ids._to(dtype=paddle.int64))
         embeddings = inputs_embeds + position_embeddings
 
         return embeddings

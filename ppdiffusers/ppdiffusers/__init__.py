@@ -11,7 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from paddlenlp.utils.log import logger
 
+logger.set_level("WARNING")
 from .models import (
     AsymmetricAutoencoderKL,
     AutoencoderKL,
@@ -45,7 +47,7 @@ from .optimization import (
     get_scheduler,
 )
 from .patches import *
-from .pipelines import StableDiffusionPipeline, StableDiffusionXLPipeline
+from .pipelines import *
 from .schedulers import (
     CMStochasticIterativeScheduler,
     DDIMInverseScheduler,

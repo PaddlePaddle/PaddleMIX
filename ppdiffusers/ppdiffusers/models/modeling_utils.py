@@ -153,12 +153,12 @@ def load_state_dict(
         # Check format of the archive
         with safe_open(checkpoint_file, framework="np") as f:
             metadata = f.metadata()
-        if metadata.get("format") not in ["pt", "pd", "np"]:
+        if metadata.get("format", "pt") not in ["pt", "pd", "np"]:
             raise OSError(
                 f"The safetensors archive passed at {checkpoint_file} does not contain the valid metadata. Make sure "
                 "you save your model with the `save_pretrained` method."
             )
-        data_format = metadata.get("format")
+        data_format = metadata.get("format", "pt")
         with safe_open(checkpoint_file, framework="np") as f:
             for key in f.keys():
                 need_continue = False
@@ -300,6 +300,15 @@ class ModelMixin(nn.Layer):
 
     def __init__(self):
         super().__init__()
+
+    def to(self=None, device=None, dtype=None, blocking=None):
+        return self._to_impl(
+            device=device,
+            dtype=dtype,
+            blocking=blocking,
+            include_sublayers=True,
+            floating_only=True,
+        )
 
     def __getattr__(self, name: str) -> Any:
         """The only reason we overwrite `getattr` here is to gracefully deprecate accessing

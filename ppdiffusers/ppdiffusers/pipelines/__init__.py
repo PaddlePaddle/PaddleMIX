@@ -12,5 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .stable_diffusion import StableDiffusionPipeline
-from .stable_diffusion_xl import StableDiffusionXLPipeline
+from .animatediff import AnimateDiffPipeline
+from .consistency_models import ConsistencyModelPipeline
+from .latent_consistency_models import (
+    LatentConsistencyModelImg2ImgPipeline,
+    LatentConsistencyModelPipeline,
+)
+from .stable_diffusion import StableDiffusionPipeline, StableDiffusionPipelineOutput
+from .stable_diffusion_xl import (
+    StableDiffusionXLPipeline,
+    StableDiffusionXLPipelineOutput,
+)
+from .stable_video_diffusion import (
+    StableVideoDiffusionPipeline,
+    StableVideoDiffusionPipelineOutput,
+)

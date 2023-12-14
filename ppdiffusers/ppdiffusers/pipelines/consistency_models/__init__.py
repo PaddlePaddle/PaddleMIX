@@ -12,8 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .pipeline_stable_diffusion import (
-    StableDiffusionPipeline,
-    StableDiffusionPipelineOutput,
-)
-from .safety_checker import StableDiffusionSafetyChecker
+from typing import TYPE_CHECKING
+
+from ...utils import PPDIFFUSERS_SLOW_IMPORT, _LazyModule
+
+_import_structure = {
+    "pipeline_consistency_models": ["ConsistencyModelPipeline"],
+}
+
+if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
+    from .pipeline_consistency_models import ConsistencyModelPipeline
+
+else:
+    import sys
+
+    sys.modules[__name__] = _LazyModule(
+        __name__,
+        globals()["__file__"],
+        _import_structure,
+        module_spec=__spec__,
+    )
