@@ -297,6 +297,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin):
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
         from_diffusers = kwargs.pop("from_diffusers", None)
+        revision = kwargs.pop("revision", None)  # noqa: F841
         if from_diffusers is not None:
             kwargs["convert_from_torch"] = from_diffusers
         # pop `paddle_dtype`

@@ -677,7 +677,7 @@ class StableDiffusionXLPipeline(
         emb = paddle.concat([paddle.sin(emb), paddle.cos(emb)], axis=1)
         if embedding_dim % 2 == 1:
             emb = paddle.concat(emb, paddle.zeros([emb.shape[0], 1]), axis=-1)
-        assert emb.shape == (w.shape[0], embedding_dim)
+        assert emb.shape == [w.shape[0], embedding_dim]
         return emb
 
     @property
