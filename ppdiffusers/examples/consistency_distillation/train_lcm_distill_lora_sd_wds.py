@@ -1184,7 +1184,12 @@ def main(args):
                                     shutil.rmtree(removing_checkpoint)
 
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        accelerator.save_state(save_path)
+                        os.makedirs(save_path, exist_ok=True)
+                        # accelerator.save_state(save_path)
+                        lora_state_dict = get_module_kohya_state_dict(unet, "lora_unet", weight_dtype)
+                        save_file(
+                            lora_state_dict, os.path.join(save_path, "lcm_lora.safetensors"), metadata={"format": "pt"}
+                        )
                         logger.info(f"Saved state to {save_path}")
 
                     if global_step % args.validation_steps == 0:
@@ -1203,7 +1208,9 @@ def main(args):
         unet = accelerator.unwrap_model(unet)
         # unet.save_pretrained(args.output_dir)
         lora_state_dict = get_module_kohya_state_dict(unet, "lora_unet", weight_dtype)
-        save_file(lora_state_dict, os.path.join(args.output_dir, "unet_lora", "abcdefg.safetensors"), metadata="pt")
+        save_path = os.path.join(args.output_dir, "unet_lora")
+        os.makedirs(save_path, exist_ok=True)
+        save_file(lora_state_dict, os.path.join(save_path, "lcm_lora.safetensors"), metadata={"format": "pt"})
 
     accelerator.end_training()
 
