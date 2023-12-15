@@ -23,11 +23,7 @@ from paddlenlp.transformers.activations import ACT2FN
 from paddlenlp.transformers.model_outputs import BaseModelOutput
 from paddlenlp.utils.converter import StateDictNameMapping
 
-from ppdiffusers.transformers import (
-    BertTokenizer,
-    PPDiffusersPretrainedConfig,
-    PPDiffusersPretrainedModel,
-)
+from ppdiffusers.transformers import BertTokenizer, PretrainedConfig, PretrainedModel
 
 from ...models import AutoencoderKL, UNet2DConditionModel, UNet2DModel, VQModel
 from ...schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
@@ -62,7 +58,7 @@ class LDMTextToImagePipeline(DiffusionPipeline):
     def __init__(
         self,
         vqvae: Union[VQModel, AutoencoderKL],
-        bert: PPDiffusersPretrainedModel,
+        bert: PretrainedConfig,
         tokenizer: BertTokenizer,
         unet: Union[UNet2DModel, UNet2DConditionModel],
         scheduler: Union[DDIMScheduler, PNDMScheduler, LMSDiscreteScheduler],
@@ -252,7 +248,7 @@ LDMBERT_PRETRAINED_CONFIG_ARCHIVE_MAP = {
 """ LDMBERT model configuration"""
 
 
-class LDMBertConfig(PPDiffusersPretrainedConfig):
+class LDMBertConfig(PretrainedConfig):
     model_type = "ldmbert"
     keys_to_ignore_at_inference = ["past_key_values"]
     attribute_map = {"num_attention_heads": "encoder_attention_heads", "hidden_size": "d_model"}
@@ -524,7 +520,7 @@ class LDMBertEncoderLayer(nn.Layer):
         return outputs
 
 
-class LDMBertPreTrainedModel(PPDiffusersPretrainedModel):
+class LDMBertPreTrainedModel(PretrainedModel):
     config_class = LDMBertConfig
     base_model_prefix = "model"
     _supports_gradient_checkpointing = True

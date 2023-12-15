@@ -21,7 +21,7 @@ from collections import OrderedDict, defaultdict
 from paddlenlp.transformers.auto.modeling import AutoModel as PPNLPAutoModel
 from paddlenlp.utils.import_utils import import_module
 
-from ..model_utils import PPDiffusersPretrainedModel
+from ..model_utils import PretrainedModel
 
 __all__ = [
     "AutoModel",
@@ -67,7 +67,7 @@ def get_configurations():
         modeling_module = import_module(f"ppdiffusers.transformers.{model_name}.modeling")
         for key in dir(modeling_module):
             value = getattr(modeling_module, key)
-            if inspect.isclass(value) and issubclass(value, PPDiffusersPretrainedModel):
+            if inspect.isclass(value) and issubclass(value, PretrainedModel):
                 mappings[model_name].append(value)
 
     return mappings

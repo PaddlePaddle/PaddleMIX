@@ -76,7 +76,7 @@ class NextSentencePredictorOutput(ModelOutput):
 from paddlenlp.transformers.model_utils import apply_chunking_to_forward
 
 from ...utils import logging
-from ..model_utils import PPDiffusersPretrainedModel as PreTrainedModel
+from ..model_utils import PretrainedModel
 from .configuration import BertConfig
 
 logger = logging.get_logger(__name__)
@@ -646,7 +646,7 @@ class BertPreTrainingHeads(nn.Layer):
         return prediction_scores, seq_relationship_score
 
 
-class BertPreTrainedModel(PreTrainedModel):
+class BertPreTrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.

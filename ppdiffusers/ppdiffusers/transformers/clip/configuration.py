@@ -20,7 +20,7 @@ import os
 from typing import Union
 
 from ...utils import logging
-from ..model_utils import PPDiffusersPretrainedConfig as PretrainedConfig
+from ..model_utils import PretrainedConfig
 
 __all__ = [
     "CLIPTextConfig",

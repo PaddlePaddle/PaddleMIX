@@ -42,8 +42,7 @@ from paddlenlp.transformers.model_outputs import (
 from paddlenlp.transformers.model_utils import register_base_model
 
 from ...utils import logging
-from ..model_utils import ALL_LAYERNORM_LAYERS
-from ..model_utils import PPDiffusersPretrainedModel as PreTrainedModel
+from ..model_utils import ALL_LAYERNORM_LAYERS, PretrainedModel
 from .configuration import T5Config
 
 logger = logging.get_logger(__name__)
@@ -631,7 +630,7 @@ class T5ClassificationHead(nn.Layer):
         return hidden_states
 
 
-class T5PreTrainedModel(PreTrainedModel):
+class T5PreTrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.

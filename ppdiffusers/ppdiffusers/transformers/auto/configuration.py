@@ -21,7 +21,7 @@ from collections import defaultdict
 from paddlenlp.transformers.auto.configuration import AutoConfig as PPNLPAutoConfig
 from paddlenlp.utils.import_utils import import_module
 
-from ..model_utils import PPDiffusersPretrainedConfig, PPDiffusersPretrainedModel
+from ..model_utils import PretrainedConfig, PretrainedModel
 
 
 def get_configurations():
@@ -51,7 +51,7 @@ def get_configurations():
         configuration_module = import_module(f"ppdiffusers.transformers.{model_name}.configuration")
         for key in dir(configuration_module):
             value = getattr(configuration_module, key)
-            if inspect.isclass(value) and issubclass(value, PPDiffusersPretrainedConfig):
+            if inspect.isclass(value) and issubclass(value, PretrainedConfig):
                 mappings[model_name].append(value)
 
     return mappings
@@ -77,7 +77,7 @@ class AutoConfig(PPNLPAutoConfig):
         model_class = import_module(f"ppdiffusers.transformers.{model_name}")
 
         assert inspect.isclass(model_class) and issubclass(
-            model_class, PPDiffusersPretrainedModel
+            model_class, PretrainedModel
         ), f"<{model_class}> should be a PretarinedModel class, but <{type(model_class)}>"
 
         return cls if model_class.config_class is None else model_class.config_class

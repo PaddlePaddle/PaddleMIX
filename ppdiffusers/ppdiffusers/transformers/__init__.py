@@ -15,19 +15,13 @@
 from paddlenlp.transformers import (
     FeatureExtractionMixin,
     ImageProcessingMixin,
-    PretrainedModel,
     PretrainedTokenizer,
     ProcessorMixin,
-    RobertaTokenizer,
 )
 
 from .auto import *
 from .bert import *
 from .clip import *
-from .model_utils import (
-    ModuleUtilsMixin,
-    PPDiffusersPretrainedConfig,
-    PPDiffusersPretrainedModel,
-)
+from .model_utils import ModuleUtilsMixin, PretrainedConfig, PretrainedModel
 from .t5 import *
 from .xlm_roberta import *

@@ -28,7 +28,7 @@ from paddlenlp.transformers.model_outputs import (
 )
 from paddlenlp.utils.converter import StateDictNameMapping
 
-from ..model_utils import PPDiffusersPretrainedModel as PretrainedModel
+from ..model_utils import PretrainedModel
 from .configuration import CLIPConfig, CLIPTextConfig, CLIPVisionConfig
 
 CLIP_PRETRAINED_MODEL_ARCHIVE_LIST = [

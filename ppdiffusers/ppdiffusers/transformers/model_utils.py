@@ -21,8 +21,10 @@ from typing import Callable, Optional, Tuple, Union
 import paddle
 import paddle.nn as nn
 from paddle.distributed.fleet.utils import recompute
-from paddlenlp.transformers.configuration_utils import PretrainedConfig
-from paddlenlp.transformers.model_utils import PretrainedModel
+from paddlenlp.transformers.configuration_utils import (
+    PretrainedConfig as PPNLPPretrainedConfig,
+)
+from paddlenlp.transformers.model_utils import PretrainedModel as PPNLPPretrainedModel
 
 from ppdiffusers.utils import (
     is_paddle_version,
@@ -41,8 +43,8 @@ if is_safetensors_available():
         import torch
         from safetensors.torch import save_file as torch_safe_save_file
 
-raw_from_pretrained = PretrainedModel.from_pretrained.__func__
-raw_save_pretrained = PretrainedModel.save_pretrained
+raw_from_pretrained = PPNLPPretrainedModel.from_pretrained.__func__
+raw_save_pretrained = PPNLPPretrainedModel.save_pretrained
 
 
 ALL_LAYERNORM_LAYERS = [nn.LayerNorm]
@@ -182,14 +184,14 @@ class ModuleUtilsMixin:
         return extended_attention_mask
 
 
-class PPDiffusersPretrainedModel(PretrainedModel, ModuleUtilsMixin):
+class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin):
     supports_gradient_checkpointing = False
 
     def _set_gradient_checkpointing(self, enable: bool = True, gradient_checkpointing_func: Callable = recompute):
         is_gradient_checkpointing_set = False
 
         # Apply it on the top-level module in case the top-level modules supports it
-        # for example, LongT5Stack inherits from `PreTrainedModel`.
+        # for example, LongT5Stack inherits from `PretrainedModel`.
         if hasattr(self, "gradient_checkpointing"):
             self._gradient_checkpointing_func = gradient_checkpointing_func
             self.gradient_checkpointing = enable
@@ -368,5 +370,5 @@ class PPDiffusersPretrainedModel(PretrainedModel, ModuleUtilsMixin):
         )
 
 
-class PPDiffusersPretrainedConfig(PretrainedConfig):
+class PretrainedConfig(PPNLPPretrainedConfig):
     pass

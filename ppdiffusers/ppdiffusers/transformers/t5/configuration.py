@@ -15,7 +15,7 @@
 """ T5 model configuration"""
 
 from ...utils import logging
-from ..model_utils import PPDiffusersPretrainedConfig
+from ..model_utils import PretrainedConfig
 
 logger = logging.get_logger(__name__)
 
@@ -30,7 +30,7 @@ T5_PRETRAINED_CONFIG_ARCHIVE_MAP = {
 __all__ = ["T5Config"]
 
 
-class T5Config(PPDiffusersPretrainedConfig):
+class T5Config(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`T5Model`] or a [`TFT5Model`]. It is used to
     instantiate a T5 model according to the specified arguments, defining the model architecture. Instantiating a

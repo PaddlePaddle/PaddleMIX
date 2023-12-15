@@ -39,7 +39,7 @@ from paddlenlp.transformers.model_utils import (
 from paddlenlp.utils.converter import StateDictNameMapping
 
 from ...utils import logging
-from ..model_utils import PPDiffusersPretrainedModel as PreTrainedModel
+from ..model_utils import PretrainedModel
 from .configuration import XLMRobertaConfig
 
 logger = logging.get_logger(__name__)
@@ -550,7 +550,7 @@ class XLMRobertaPooler(nn.Layer):
         return pooled_output
 
 
-class XLMRobertaPreTrainedModel(PreTrainedModel):
+class XLMRobertaPreTrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.

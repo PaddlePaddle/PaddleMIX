@@ -16,14 +16,14 @@
 """ XLM-RoBERTa configuration"""
 
 from ...utils import logging
-from ..model_utils import PPDiffusersPretrainedConfig
+from ..model_utils import PretrainedConfig
 
 logger = logging.get_logger(__name__)
 
 __all__ = ["XLMRobertaConfig"]
 
 
-class XLMRobertaConfig(PPDiffusersPretrainedConfig):
+class XLMRobertaConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`XLMRobertaModel`] or a [`TFXLMRobertaModel`]. It
     is used to instantiate a XLM-RoBERTa model according to the specified arguments, defining the model architecture.
