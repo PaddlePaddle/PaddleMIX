@@ -18,7 +18,6 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from paddlemix.appflow import Appflow
-import paddle
 from tests.testing_utils import _run_slow_test
 
 
@@ -33,17 +32,12 @@ if __name__ == "__main__":
     def create_test(name, static_mode):
         def test_openset_det_sam(self):
 
-            paddle.seed(1024)
-            task = Appflow(app="audio2caption", models=["whisper", "THUDM/chatglm-6b"])
-            audio_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zh.wav")
+            prompt = "An astronaut riding a horse."
 
-            prompt = (
-                "描述这段话：{}."
-            )
-            result = task(audio=audio_file, prompt=prompt)['prompt']
+            app = Appflow(app='text_to_video_generation',models=['damo-vilab/text-to-video-ms-1.7b'])
+            video_frames = app(prompt=prompt,num_inference_steps=25)['result']
 
-            self.assertIsNotNone(result)
-            self.assertIn('健康', result)
+            self.assertIsNotNone(video_frames)
 
         setattr(OpenSetDetSamAppSlowTest, name, test_openset_det_sam)
 

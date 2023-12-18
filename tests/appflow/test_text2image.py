@@ -17,8 +17,8 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
-from paddlemix.appflow import Appflow
 import paddle
+from paddlemix.appflow import Appflow
 from tests.testing_utils import _run_slow_test
 
 
@@ -32,18 +32,14 @@ if __name__ == "__main__":
 
     def create_test(name, static_mode):
         def test_openset_det_sam(self):
-
             paddle.seed(1024)
-            task = Appflow(app="audio2caption", models=["whisper", "THUDM/chatglm-6b"])
-            audio_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zh.wav")
-
-            prompt = (
-                "描述这段话：{}."
-            )
-            result = task(audio=audio_file, prompt=prompt)['prompt']
+            task = Appflow(app="text2image_generation",
+                        models=["stabilityai/stable-diffusion-v1-5"]
+                        )
+            prompt = "a photo of an astronaut riding a horse on mars."
+            result = task(prompt=prompt)['result']
 
             self.assertIsNotNone(result)
-            self.assertIn('健康', result)
 
         setattr(OpenSetDetSamAppSlowTest, name, test_openset_det_sam)
 
