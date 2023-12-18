@@ -18,7 +18,6 @@ from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 import paddle
-import paddle.nn.functional
 import PIL.Image
 
 from ppdiffusers.transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
@@ -48,7 +47,7 @@ def tensor2vid(video: paddle.Tensor, processor, output_type="np"):
     batch_size, channels, num_frames, height, width = video.shape
     outputs = []
     for batch_idx in range(batch_size):
-        batch_vid = video[batch_idx].transpose([1, 0, 2, 3])
+        batch_vid = video[batch_idx].transpose(perm=[1, 0, 2, 3])
         batch_output = processor.postprocess(batch_vid, output_type)
 
         outputs.append(batch_output)
@@ -114,7 +113,8 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
 
     def _encode_image(self, image, num_videos_per_prompt, do_classifier_free_guidance):
-        dtype = next(self.image_encoder.named_parameters())[1].dtype
+        # westfish
+        dtype = self.image_encoder.parameters()[0].dtype
 
         if not isinstance(image, paddle.Tensor):
             image = self.image_processor.pil_to_numpy(image)
@@ -136,7 +136,14 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
                 return_tensors="pd",
             ).pixel_values
 
-        image = image._to(dtype=dtype)
+        image = image.cast(dtype=dtype)
+        # westfish: bug find: not support pipeline(dtype=paddle.float16) or pipeline(dtype=paddle.float32)
+        # or CLIPVisionEmbeddings self.position_ids will deform to paddle.float16 or paddle.float32
+        # anther solution: self.image_encoder.vision_model.embeddings.position_ids.cast(dtype="int64")
+        self.image_encoder.vision_model.embeddings.position_ids = (
+            self.image_encoder.vision_model.embeddings.position_ids.cast(dtype="int64")
+        )
+
         image_embeddings = self.image_encoder(image).image_embeds
         image_embeddings = image_embeddings.unsqueeze(1)
 
@@ -196,7 +203,7 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
                 f"Model expects an added time embedding vector of length {expected_add_embed_dim}, but a vector of {passed_add_embed_dim} was created. The model has an incorrect config. Please check `unet.config.time_embedding_type` and `text_encoder_2.config.projection_dim`."
             )
 
-        add_time_ids = paddle.to_tensor([add_time_ids], dtype=dtype)
+        add_time_ids = paddle.to_tensor(data=[add_time_ids], dtype=dtype)
         add_time_ids = add_time_ids.tile([batch_size * num_videos_per_prompt, 1])
 
         if do_classifier_free_guidance:
@@ -223,13 +230,13 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
 
             frame = self.vae.decode(latents[i : i + decode_chunk_size], **decode_kwargs).sample
             frames.append(frame)
-        frames = paddle.concat(frames, axis=0)
+        frames = paddle.concat(x=frames, axis=0)
 
         # [batch*frames, channels, height, width] -> [batch, channels, frames, height, width]
-        frames = frames.reshape([-1, num_frames, *frames.shape[1:]]).transpose([0, 2, 1, 3, 4])
+        frames = frames.reshape([-1, num_frames, *frames.shape[1:]]).transpose(perm=[0, 2, 1, 3, 4])
 
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
-        frames = frames.cast("float32")
+        frames = frames.astype(dtype="float32")
         return frames
 
     def check_inputs(self, image, height, width):
@@ -254,7 +261,6 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
         height,
         width,
         dtype,
-        device,
         generator,
         latents=None,
     ):
@@ -272,9 +278,7 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
             )
 
         if latents is None:
-            latents = randn_tensor(shape, generator=generator, device=device, dtype=dtype)
-        else:
-            latents = latents._to(dtype=dtype)
+            latents = randn_tensor(shape, generator=generator, dtype=dtype)
 
         # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
@@ -351,7 +355,8 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
             num_videos_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`] to make generation deterministic.
+                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
+                generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
@@ -427,16 +432,16 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
         noise = randn_tensor(image.shape, generator=generator, dtype=image.dtype)
         image = image + noise_aug_strength * noise
 
-        needs_upcasting = self.vae.dtype == paddle.float16 and self.vae.config.force_upcast
+        needs_upcasting = self.vae.dtype in [paddle.float16, "float16"] and self.vae.config.force_upcast
         if needs_upcasting:
-            self.vae.to(dtype=paddle.float32)
+            self.vae.to(dtype="float32")
 
         image_latents = self._encode_vae_image(image, num_videos_per_prompt, do_classifier_free_guidance)
-        image_latents = image_latents._to(dtype=image_embeddings.dtype)
+        image_latents = image_latents.cast(image_embeddings.dtype)
 
         # cast back to fp16 if needed
         if needs_upcasting:
-            self.vae.to(dtype=paddle.float16)
+            self.vae.to(dtype="float16")
 
         # Repeat the image latents for each frame so we can concatenate them with the noise
         # image_latents [batch, channels, height, width] ->[batch, num_frames, channels, height, width]
@@ -472,7 +477,7 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
 
         # 7. Prepare guidance scale
         guidance_scale = paddle.linspace(min_guidance_scale, max_guidance_scale, num_frames).unsqueeze(0)
-        guidance_scale = guidance_scale._to(dtype=latents.dtype)
+        guidance_scale = guidance_scale.cast(latents.dtype)
         guidance_scale = guidance_scale.tile([batch_size * num_videos_per_prompt, 1])
         guidance_scale = _append_dims(guidance_scale, latents.ndim)
 
@@ -488,6 +493,10 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
                 latent_model_input = self.scheduler.scale_model_input(latent_model_input, t)
 
                 # Concatenate image_latents over channels dimention
+
+                # westfish
+                latent_model_input = latent_model_input.cast(image_latents.dtype)
+
                 latent_model_input = paddle.concat([latent_model_input, image_latents], axis=2)
 
                 # predict the noise residual
@@ -521,7 +530,7 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
         if not output_type == "latent":
             # cast back to fp16 if needed
             if needs_upcasting:
-                self.vae.to(dtype=paddle.float16)
+                self.vae.to(dtype="float16")
             frames = self.decode_latents(latents, num_frames, decode_chunk_size)
             frames = tensor2vid(frames, self.image_processor, output_type=output_type)
         else:
@@ -590,14 +599,14 @@ def _compute_padding(kernel_size):
 def _filter2d(input, kernel):
     # prepare kernel
     b, c, h, w = input.shape
-    tmp_kernel = kernel[:, None, ...]._to(dtype=input.dtype)
+    tmp_kernel = kernel[:, None, ...].cast(dtype=input.dtype)
 
     tmp_kernel = tmp_kernel.expand([-1, c, -1, -1])
 
     height, width = tmp_kernel.shape[-2:]
 
     padding_shape: list[int] = _compute_padding([height, width])
-
+    # westfish
     input = paddle.nn.functional.pad(input, padding_shape, mode="reflect")
 
     # kernel and input tensor reshape to align element-wise or batch-wise params
@@ -617,7 +626,7 @@ def _gaussian(window_size: int, sigma):
 
     batch_size = sigma.shape[0]
 
-    x = (paddle.arange(window_size, dtype=sigma.dtype) - window_size // 2).expand([batch_size, -1])
+    x = (paddle.arange(dtype=sigma.dtype, end=window_size) - window_size // 2).expand([batch_size, -1])
 
     if window_size % 2 == 0:
         x = x + 0.5
@@ -629,9 +638,9 @@ def _gaussian(window_size: int, sigma):
 
 def _gaussian_blur2d(input, kernel_size, sigma):
     if isinstance(sigma, tuple):
-        sigma = paddle.to_tensor([sigma], dtype=input.dtype)
+        sigma = paddle.to_tensor(data=[sigma], dtype=input.dtype)
     else:
-        sigma = sigma._to(dtype=input.dtype)
+        sigma = sigma.cast(dtype=input.dtype)
 
     ky, kx = int(kernel_size[0]), int(kernel_size[1])
     bs = sigma.shape[0]
