@@ -24,9 +24,9 @@ from paddlenlp.transformers.image_utils import to_numpy_array
 from PIL import Image
 
 from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
-from ...models.autoencoder_img2vid import AutoencoderKL_imgtovideo
-from ...models.gaussian_diffusion import GaussianDiffusion, beta_schedule
-from ...models.sf_unet import SFUNetModel
+from ...models.modelscope_autoencoder_img2vid import AutoencoderKL_imgtovideo
+from ...models.modelscope_gaussian_diffusion import GaussianDiffusion, beta_schedule
+from ...models.modelscope_sf_unet import SFUNetModel
 from ...utils import logging, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import ImgToVideoSDPipelineOutput
