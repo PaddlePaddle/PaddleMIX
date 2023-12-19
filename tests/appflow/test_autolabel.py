@@ -24,7 +24,7 @@ from ppdiffusers.utils import load_image, load_numpy
 from tests.testing_utils import _run_slow_test
 
 
-class OpenSetDetSamAppSlowTest(unittest.TestCase):
+class AutoLabelTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.url = (

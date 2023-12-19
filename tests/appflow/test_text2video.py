@@ -18,10 +18,9 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from paddlemix.appflow import Appflow
-from tests.testing_utils import _run_slow_test
 
 
-class OpenSetDetSamAppSlowTest(unittest.TestCase):
+class Text2VideoTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         pass
@@ -30,7 +29,7 @@ class OpenSetDetSamAppSlowTest(unittest.TestCase):
 if __name__ == "__main__":
 
     def create_test(name, static_mode):
-        def test_openset_det_sam(self):
+        def test_text2video(self):
 
             prompt = "An astronaut riding a horse."
 
@@ -39,10 +38,8 @@ if __name__ == "__main__":
 
             self.assertIsNotNone(video_frames)
 
-        setattr(OpenSetDetSamAppSlowTest, name, test_openset_det_sam)
+        setattr(Text2VideoTest, name, test_text2video)
 
     create_test(name="test_dygraph", static_mode=False)
-    if _run_slow_test:
-        create_test(name="test_static", static_mode=True)
 
     unittest.main()

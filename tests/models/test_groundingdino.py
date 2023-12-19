@@ -14,21 +14,17 @@
 # limitations under the License.
 import os
 import sys
-from paddlemix.models.groundingdino.configuration import GroundingDinoConfig
-from paddlemix.models.groundingdino.modeling import GroundingDinoModel
-from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
 
-
-from paddlemix.models.sam.modeling import SamModel
-from paddlemix.models.sam.configuration import SamConfig
 
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 
-from PIL import Image
-from paddlemix.processors.sam_processing import SamProcessor
-import requests
+from paddlemix.models.groundingdino.configuration import GroundingDinoConfig
+from paddlemix.models.groundingdino.modeling import GroundingDinoModel
+from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
 
+from PIL import Image
+import requests
 
 import inspect
 import tempfile
@@ -37,17 +33,7 @@ import unittest
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddlenlp.transformers.opt.configuration import OPTConfig
 
-from paddlemix.models.blip2 import (
-    Blip2Config,
-    Blip2ForConditionalGeneration,
-    Blip2QFormerConfig,
-    Blip2VisionConfig,
-)
-from paddlemix.models.blip2.eva_vit import VisionTransformer
-from paddlemix.models.blip2.modeling import BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST
-from paddlemix.models.blip2.Qformer import BertLMHeadModel
 from tests.models.test_configuration_common import ConfigTester
 from tests.models.test_modeling_common import (
     ModelTesterMixin,
@@ -151,7 +137,7 @@ class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
         self.assertIsNotNone(config)
 
 
-    #todo @slow
+    @slow
     def test_model_from_pretrained(self):
         model = GroundingDinoModel.from_pretrained('GroundingDino/groundingdino-swint-ogc')
         self.assertIsNotNone(model)

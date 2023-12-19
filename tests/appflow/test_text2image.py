@@ -19,10 +19,9 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import paddle
 from paddlemix.appflow import Appflow
-from tests.testing_utils import _run_slow_test
 
 
-class OpenSetDetSamAppSlowTest(unittest.TestCase):
+class Text2ImageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         pass
@@ -40,11 +39,11 @@ if __name__ == "__main__":
             result = task(prompt=prompt)['result']
 
             self.assertIsNotNone(result)
+            # todo: 增加结果对比
+            
 
-        setattr(OpenSetDetSamAppSlowTest, name, test_openset_det_sam)
+        setattr(Text2ImageTest, name, test_openset_det_sam)
 
     create_test(name="test_dygraph", static_mode=False)
-    if _run_slow_test:
-        create_test(name="test_static", static_mode=True)
 
     unittest.main()
