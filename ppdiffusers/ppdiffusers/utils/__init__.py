@@ -45,7 +45,6 @@ from .constants import (
     TO_DIFFUSERS,
     TORCH_SAFETENSORS_WEIGHTS_NAME,
     TORCH_WEIGHTS_NAME,
-    USE_PEFT_BACKEND,
     WEIGHTS_NAME,
     get_map_location_default,
     str2bool,

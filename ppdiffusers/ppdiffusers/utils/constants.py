@@ -29,11 +29,10 @@ def str2bool(v):
     else:
         raise ValueError("Not supported value: {}".format(v))
 
-
 # make sure we have abs path
-ppnlp_cache_home = os.path.abspath(
-    os.path.expanduser(os.getenv("PPNLP_HOME", os.path.join(os.getenv("XDG_CACHE_HOME", "~/.cache"), "paddlenlp")))
-)
+ppnlp_cache_home = os.path.abspath(os.path.expanduser(
+    os.getenv("PPNLP_HOME", os.path.join(os.getenv("XDG_CACHE_HOME", "~/.cache"), "paddlenlp"))
+))
 ppdiffusers_default_cache_path = os.path.abspath(os.path.join(ppnlp_cache_home, "ppdiffusers"))
 diffusers_default_cache_path = os.path.abspath(HUGGINGFACE_HUB_CACHE)
 
@@ -51,9 +50,7 @@ DIFFUSERS_DYNAMIC_MODULE_NAME = "diffusers_modules"
 PPDIFFUSERS_DYNAMIC_MODULE_NAME = "ppdiffusers_modules"
 # make sure we have abs path
 HF_MODULES_CACHE = os.path.abspath(os.getenv("HF_MODULES_CACHE", os.path.join(hf_cache_home, "modules")))
-PPDIFFUSERS_MODULES_CACHE = os.path.abspath(
-    os.getenv("PPDIFFUSERS_MODULES_CACHE", os.path.join(ppnlp_cache_home, "modules"))
-)
+PPDIFFUSERS_MODULES_CACHE = os.path.abspath(os.getenv("PPDIFFUSERS_MODULES_CACHE", os.path.join(ppnlp_cache_home, "modules")))
 
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
 FASTDEPLOY_WEIGHTS_NAME = "inference.pdiparams"
@@ -76,35 +73,22 @@ TO_DIFFUSERS = str2bool(os.getenv("TO_DIFFUSERS", False))
 
 # FOR tests
 if bool(os.getenv("PATCH_ALLCLOSE", False)):
-    from pprint import pprint
-
-    import numpy
     import paddle
-
+    import numpy
+    from pprint import pprint
     numpy.set_printoptions(precision=4)
 
     paddle_raw_all_close = paddle.allclose
-
+    
     def allclose_pd(x, y, rtol=1e-05, atol=1e-08, equal_nan=False, name=None):
         pprint(x.numpy())
         pprint(y.numpy())
         return paddle_raw_all_close(x, y, rtol=rtol, atol=atol, equal_nan=equal_nan, name=name)
-
     paddle.allclose = allclose_pd
 
     numpy_raw_all_close = numpy.allclose
-
-    def allclose_np(
-        a,
-        b,
-        rtol=1e-05,
-        atol=1e-08,
-        equal_nan=False,
-    ):
+    def allclose_np(a, b, rtol=1e-05, atol=1e-08, equal_nan=False, ):
         pprint(a)
         pprint(b)
         return numpy_raw_all_close(a, b, rtol=rtol, atol=atol, equal_nan=equal_nan)
-
     numpy.allclose = allclose_np
-
-USE_PEFT_BACKEND = False

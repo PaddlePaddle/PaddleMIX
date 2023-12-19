@@ -155,7 +155,7 @@ class ModelTesterMixin:
     main_input_name = None  # overwrite in model specific tester class
     base_precision = 1e-3
 
-    def test_from_save_pretrained(self, expected_max_diff=1e-01):
+    def test_from_save_pretrained(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
         if hasattr(model, "set_default_attn_processor"):
@@ -174,7 +174,7 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
         max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, expected_max_diff, "Models give different forward passes")
+        self.assertLessEqual(max_diff, 1e-01, "Models give different forward passes")
 
     def test_getattr_is_correct(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -259,7 +259,7 @@ class ModelTesterMixin:
         assert paddle.allclose(x=output_2, y=output_5, atol=self.base_precision).item()
         assert paddle.allclose(x=output_2, y=output_6, atol=self.base_precision).item()
 
-    def test_from_save_pretrained_variant(self, expected_max_diff=1e-01):
+    def test_from_save_pretrained_variant(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
         model = self.model_class(**init_dict)
         if hasattr(model, "set_default_attn_processor"):
@@ -289,7 +289,7 @@ class ModelTesterMixin:
             if isinstance(new_image, dict):
                 new_image = new_image.to_tuple()[0]
         max_diff = (image - new_image).abs().sum().item()
-        self.assertLessEqual(max_diff, expected_max_diff, "Models give different forward passes")
+        self.assertLessEqual(max_diff, 1e-01, "Models give different forward passes")
 
     def test_from_save_pretrained_dtype(self):
         init_dict, inputs_dict = self.prepare_init_args_and_inputs_for_common()
@@ -393,7 +393,6 @@ class ModelTesterMixin:
     def test_outputs_equivalence(self):
         def set_nan_tensor_to_zero(t):
             # t[t != t] = 0
-            t = paddle.nan_to_num(t, 0, 0, 0)
             return t
 
         def recursive_check(tuple_object, dict_object):
@@ -408,9 +407,7 @@ class ModelTesterMixin:
             else:
                 self.assertTrue(
                     paddle.allclose(
-                        set_nan_tensor_to_zero(tuple_object),
-                        set_nan_tensor_to_zero(dict_object),
-                        atol=5e-05,  # 1e-05, The original test needs to increase the error.
+                        set_nan_tensor_to_zero(tuple_object), set_nan_tensor_to_zero(dict_object), atol=1e-05
                     ),
                     msg=f"Tuple and dict output are not equal. Difference: {paddle.max(x=paddle.abs(x=tuple_object - dict_object))}. Tuple has `nan`: {paddle.isnan(x=tuple_object).any()} and `inf`: {paddle.isinf(x=tuple_object)}. Dict has `nan`: {paddle.isnan(x=dict_object).any()} and `inf`: {paddle.isinf(x=dict_object)}.",
                 )

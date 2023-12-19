@@ -21,13 +21,7 @@ import paddle.nn as nn
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..loaders import FromOriginalVAEMixin
 from ..utils import BaseOutput, apply_forward_hook
-from .attention_processor import (
-    ADDED_KV_ATTENTION_PROCESSORS,
-    CROSS_ATTENTION_PROCESSORS,
-    AttentionProcessor,
-    AttnAddedKVProcessor,
-    AttnProcessor,
-)
+from .attention_processor import AttentionProcessor, AttnProcessor
 from .modeling_utils import ModelMixin
 from .vae import Decoder, DecoderOutput, DiagonalGaussianDistribution, Encoder
 
@@ -189,8 +183,8 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         processors = {}
 
         def fn_recursive_add_processors(name: str, module: nn.Layer, processors: Dict[str, AttentionProcessor]):
-            if hasattr(module, "get_processor"):
-                processors[f"{name}.processor"] = module.get_processor(return_deprecated_lora=True)
+            if hasattr(module, "set_processor"):
+                processors[f"{name}.processor"] = module.processor
 
             for sub_name, child in module.named_children():
                 fn_recursive_add_processors(f"{name}.{sub_name}", child, processors)
@@ -203,20 +197,15 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         return processors
 
     # Copied from ppdiffusers.models.unet_2d_condition.UNet2DConditionModel.set_attn_processor
-    def set_attn_processor(
-        self, processor: Union[AttentionProcessor, Dict[str, AttentionProcessor]], _remove_lora=False
-    ):
+    def set_attn_processor(self, processor: Union[AttentionProcessor, Dict[str, AttentionProcessor]]):
         r"""
         Sets the attention processor to use to compute attention.
-
         Parameters:
             processor (`dict` of `AttentionProcessor` or only `AttentionProcessor`):
                 The instantiated processor class or a dictionary of processor classes that will be set as the processor
                 for **all** `Attention` layers.
-
                 If `processor` is a dict, the key needs to define the path to the corresponding cross attention
                 processor. This is strongly recommended when setting trainable attention processors.
-
         """
         count = len(self.attn_processors.keys())
 
@@ -229,9 +218,9 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         def fn_recursive_attn_processor(name: str, module: nn.Layer, processor):
             if hasattr(module, "set_processor"):
                 if not isinstance(processor, dict):
-                    module.set_processor(processor, _remove_lora=_remove_lora)
+                    module.set_processor(processor)
                 else:
-                    module.set_processor(processor.pop(f"{name}.processor"), _remove_lora=_remove_lora)
+                    module.set_processor(processor.pop(f"{name}.processor"))
 
             for sub_name, child in module.named_children():
                 fn_recursive_attn_processor(f"{name}.{sub_name}", child, processor)
@@ -244,33 +233,10 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         """
         Disables custom attention processors and sets the default attention implementation.
         """
-        if all(proc.__class__ in ADDED_KV_ATTENTION_PROCESSORS for proc in self.attn_processors.values()):
-            processor = AttnAddedKVProcessor()
-        elif all(proc.__class__ in CROSS_ATTENTION_PROCESSORS for proc in self.attn_processors.values()):
-            processor = AttnProcessor()
-        else:
-            raise ValueError(
-                f"Cannot call `set_default_attn_processor` when attention processors are of type {next(iter(self.attn_processors.values()))}"
-            )
-
-        self.set_attn_processor(processor, _remove_lora=True)
+        self.set_attn_processor(AttnProcessor())
 
     @apply_forward_hook
-    def encode(
-        self, x: paddle.Tensor, return_dict: bool = True
-    ) -> Union[AutoencoderKLOutput, Tuple[DiagonalGaussianDistribution]]:
-        """
-        Encode a batch of images into latents.
-
-        Args:
-            x (`torch.FloatTensor`): Input batch of images.
-            return_dict (`bool`, *optional*, defaults to `True`):
-                Whether to return a [`~models.autoencoder_kl.AutoencoderKLOutput`] instead of a plain tuple.
-
-        Returns:
-                The latent representations of the encoded images. If `return_dict` is True, a
-                [`~models.autoencoder_kl.AutoencoderKLOutput`] is returned, otherwise a plain `tuple` is returned.
-        """
+    def encode(self, x: paddle.Tensor, return_dict: bool = True) -> AutoencoderKLOutput:
         # TODO junnyu, support float16
         x = x.cast(self.encoder.conv_in.weight.dtype)
         if self.use_tiling and (x.shape[-1] > self.tile_sample_min_size or x.shape[-2] > self.tile_sample_min_size):
@@ -281,7 +247,6 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
             h = paddle.concat(encoded_slices)
         else:
             h = self.encoder(x)
-
         moments = self.quant_conv(h)
         posterior = DiagonalGaussianDistribution(moments)
 
@@ -303,23 +268,7 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         return DecoderOutput(sample=dec)
 
     @apply_forward_hook
-    def decode(
-        self, z: paddle.Tensor, return_dict: bool = True, generator=None
-    ) -> Union[DecoderOutput, paddle.Tensor]:
-        """
-        Decode a batch of images.
-
-        Args:
-            z (`torch.FloatTensor`): Input batch of latent vectors.
-            return_dict (`bool`, *optional*, defaults to `True`):
-                Whether to return a [`~models.vae.DecoderOutput`] instead of a plain tuple.
-
-        Returns:
-            [`~models.vae.DecoderOutput`] or `tuple`:
-                If return_dict is True, a [`~models.vae.DecoderOutput`] is returned, otherwise a plain `tuple` is
-                returned.
-
-        """
+    def decode(self, z: paddle.Tensor, return_dict: bool = True) -> Union[DecoderOutput, paddle.Tensor]:
         # TODO junnyu, add this to support pure fp16
         z = z.cast(self.post_quant_conv.weight.dtype)
         if self.use_slicing and z.shape[0] > 1:
@@ -348,18 +297,15 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
     def tiled_encode(self, x: paddle.Tensor, return_dict: bool = True) -> AutoencoderKLOutput:
         r"""Encode a batch of images using a tiled encoder.
-
         When this option is enabled, the VAE will split the input tensor into tiles to compute encoding in several
         steps. This is useful to keep memory use constant regardless of image size. The end result of tiled encoding is
         different from non-tiled encoding because each tile uses a different encoder. To avoid tiling artifacts, the
         tiles overlap and are blended together to form a smooth output. You may still see tile-sized changes in the
         output, but they should be much less noticeable.
-
         Args:
             x (`paddle.Tensor`): Input batch of images.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~models.autoencoder_kl.AutoencoderKLOutput`] instead of a plain tuple.
-
         Returns:
             [`~models.autoencoder_kl.AutoencoderKLOutput`] or `tuple`:
                 If return_dict is True, a [`~models.autoencoder_kl.AutoencoderKLOutput`] is returned, otherwise a plain
@@ -403,12 +349,10 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
     def tiled_decode(self, z: paddle.Tensor, return_dict: bool = True) -> Union[DecoderOutput, paddle.Tensor]:
         r"""
         Decode a batch of images using a tiled decoder.
-
         Args:
             z (`paddle.Tensor`): Input batch of latent vectors.
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`~models.vae.DecoderOutput`] instead of a plain tuple.
-
         Returns:
             [`~models.vae.DecoderOutput`] or `tuple`:
                 If return_dict is True, a [`~models.vae.DecoderOutput`] is returned, otherwise a plain `tuple` is

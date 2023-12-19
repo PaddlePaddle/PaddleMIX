@@ -116,10 +116,6 @@ class DualTransformer2DModel(nn.Layer):
                 Optional timestep to be applied as an embedding in AdaLayerNorm's. Used to indicate denoising step.
             attention_mask (`paddle.Tensor`, *optional*):
                 Optional attention mask to be applied in Attention
-            cross_attention_kwargs (`dict`, *optional*):
-                A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
-                `self.processor` in
-                [diffusers.models.attention_processor](https://github.com/huggingface/diffusers/blob/main/src/diffusers/models/attention_processor.py).
             return_dict (`bool`, *optional*, defaults to `True`):
                 Whether or not to return a [`models.unet_2d_condition.UNet2DConditionOutput`] instead of a plain tuple.
 
