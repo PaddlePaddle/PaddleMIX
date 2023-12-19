@@ -21,7 +21,6 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from paddlemix.appflow import Appflow
 from ppdiffusers.utils import load_image, load_numpy
-from tests.testing_utils import _run_slow_test
 
 
 class AutoLabelTest(unittest.TestCase):
@@ -39,33 +38,32 @@ class AutoLabelTest(unittest.TestCase):
             [  0, 141, 511, 511]])
     
     def test_autolable(self):
-            
-            self.task = Appflow(
-                app="auto_label",
-                models=["paddlemix/blip2-caption-opt2.7b", "GroundingDino/groundingdino-swint-ogc", "Sam/SamVitH-1024"],
-            )
-            image_pil = load_image(self.url)
-            blip2_prompt = "describe the image"
-            result = self.task(image=image_pil, blip2_prompt=blip2_prompt)
+        self.task = Appflow(
+            app="auto_label",
+            models=["paddlemix/blip2-caption-opt2.7b", "GroundingDino/groundingdino-swint-ogc", "Sam/SamVitH-1024"],
+        )
+        image_pil = load_image(self.url)
+        blip2_prompt = "describe the image"
+        result = self.task(image=image_pil, blip2_prompt=blip2_prompt)
 
-            # check labels
-            # res_labels like:  ['dog(0.72)', 'bench(0.63)', 'field(0.49)']
-            res_labels_name = [label.split('(')[0] for label in result['labels']]
-            res_label_expected_label_map = []
-            for expected_l in self.expected_labels:
-                self.assertIn(expected_l, res_labels_name)
-            
-            for label in res_labels_name:
-                res_label_expected_label_map.append(self.expected_labels.index(label))
-            assert len(result['boxes']) == len(self.expected_boxes), "Error box num"
-            for i, box in enumerate(result['boxes']):
-                avg_diff = np.abs(self.expected_boxes[res_label_expected_label_map[i]] - box).mean()
-                assert avg_diff < 5, f"Error bbox deviates {avg_diff} pixels on average"
+        # check labels
+        # res_labels like:  ['dog(0.72)', 'bench(0.63)', 'field(0.49)']
+        res_labels_name = [label.split('(')[0] for label in result['labels']]
+        res_label_expected_label_map = []
+        for expected_l in self.expected_labels:
+            self.assertIn(expected_l, res_labels_name)
+        
+        for label in res_labels_name:
+            res_label_expected_label_map.append(self.expected_labels.index(label))
+        assert len(result['boxes']) == len(self.expected_boxes), "Error box num"
+        for i, box in enumerate(result['boxes']):
+            avg_diff = np.abs(self.expected_boxes[res_label_expected_label_map[i]] - box).mean()
+            assert avg_diff < 5, f"Error bbox deviates {avg_diff} pixels on average"
 
-            avg_diff = np.abs(
-                result["seg_masks"][0].cpu().numpy().astype(int) - self.expected_image.astype(int)
-            ).mean()
-            assert avg_diff < 10, f"Error image deviates {avg_diff} pixels on average"
+        avg_diff = np.abs(
+            result["seg_masks"][0].cpu().numpy().astype(int) - self.expected_image.astype(int)
+        ).mean()
+        assert avg_diff < 10, f"Error image deviates {avg_diff} pixels on average"
 
 
 if __name__ == "__main__":
