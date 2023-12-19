@@ -251,8 +251,6 @@ class ModelMixin(nn.Layer):
         safe_serialization: bool = False,
         variant: Optional[str] = None,
         to_diffusers: Optional[bool] = None,
-        push_to_hub: bool = False,
-        **kwargs,
     ):
         """
         Save a model and its configuration file to a directory so that it can be reloaded using the

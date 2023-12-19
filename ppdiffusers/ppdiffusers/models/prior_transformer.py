@@ -21,16 +21,9 @@ import paddle.nn as nn
 import paddle.nn.functional as F
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..loaders import UNet2DConditionLoadersMixin
 from ..utils import NEG_INF, BaseOutput
 from .attention import BasicTransformerBlock
-from .attention_processor import (
-    ADDED_KV_ATTENTION_PROCESSORS,
-    CROSS_ATTENTION_PROCESSORS,
-    AttentionProcessor,
-    AttnAddedKVProcessor,
-    AttnProcessor,
-)
+from .attention_processor import AttentionProcessor, AttnProcessor
 from .embeddings import TimestepEmbedding, Timesteps
 from .modeling_utils import ModelMixin
 
@@ -48,7 +41,7 @@ class PriorTransformerOutput(BaseOutput):
     predicted_image_embedding: paddle.Tensor
 
 
-class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
+class PriorTransformer(ModelMixin, ConfigMixin):
     """
     A Prior Transformer model.
 
@@ -204,8 +197,8 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         processors = {}
 
         def fn_recursive_add_processors(name: str, module: nn.Layer, processors: Dict[str, AttentionProcessor]):
-            if hasattr(module, "get_processor"):
-                processors[f"{name}.processor"] = module.get_processor(return_deprecated_lora=True)
+            if hasattr(module, "set_processor"):
+                processors[f"{name}.processor"] = module.processor
 
             for sub_name, child in module.named_children():
                 fn_recursive_add_processors(f"{name}.{sub_name}", child, processors)
@@ -218,9 +211,7 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         return processors
 
     # Copied from ppdiffusers.models.unet_2d_condition.UNet2DConditionModel.set_attn_processor
-    def set_attn_processor(
-        self, processor: Union[AttentionProcessor, Dict[str, AttentionProcessor]], _remove_lora=False
-    ):
+    def set_attn_processor(self, processor: Union[AttentionProcessor, Dict[str, AttentionProcessor]]):
         r"""
         Sets the attention processor to use to compute attention.
         Parameters:
@@ -241,9 +232,9 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         def fn_recursive_attn_processor(name: str, module: nn.Layer, processor):
             if hasattr(module, "set_processor"):
                 if not isinstance(processor, dict):
-                    module.set_processor(processor, _remove_lora=_remove_lora)
+                    module.set_processor(processor)
                 else:
-                    module.set_processor(processor.pop(f"{name}.processor"), _remove_lora=_remove_lora)
+                    module.set_processor(processor.pop(f"{name}.processor"))
 
             for sub_name, child in module.named_children():
                 fn_recursive_attn_processor(f"{name}.{sub_name}", child, processor)
@@ -256,16 +247,7 @@ class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         """
         Disables custom attention processors and sets the default attention implementation.
         """
-        if all(proc.__class__ in ADDED_KV_ATTENTION_PROCESSORS for proc in self.attn_processors.values()):
-            processor = AttnAddedKVProcessor()
-        elif all(proc.__class__ in CROSS_ATTENTION_PROCESSORS for proc in self.attn_processors.values()):
-            processor = AttnProcessor()
-        else:
-            raise ValueError(
-                f"Cannot call `set_default_attn_processor` when attention processors are of type {next(iter(self.attn_processors.values()))}"
-            )
-
-        self.set_attn_processor(processor, _remove_lora=True)
+        self.set_attn_processor(AttnProcessor())
 
     def forward(
         self,

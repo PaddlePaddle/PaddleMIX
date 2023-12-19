@@ -13,8 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import inspect
-
-# import warnings
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
@@ -25,7 +24,6 @@ from ...configuration_utils import FrozenDict
 from ...image_processor import VaeImageProcessor
 from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models import AutoencoderKL, UNet2DConditionModel
-from ...models.lora import adjust_lora_scale_text_encoder
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import deprecate, logging, randn_tensor, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
@@ -197,34 +195,6 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
         negative_prompt_embeds: Optional[paddle.Tensor] = None,
         lora_scale: Optional[float] = None,
     ):
-        deprecation_message = "`_encode_prompt()` is deprecated and it will be removed in a future version. Use `encode_prompt()` instead. Also, be aware that the output format changed from a concatenated tensor to a tuple."
-        deprecate("_encode_prompt()", "1.0.0", deprecation_message, standard_warn=False)
-
-        prompt_embeds_tuple = self.encode_prompt(
-            prompt=prompt,
-            num_images_per_prompt=num_images_per_prompt,
-            do_classifier_free_guidance=do_classifier_free_guidance,
-            negative_prompt=negative_prompt,
-            prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds,
-            lora_scale=lora_scale,
-        )
-
-        # concatenate for backwards comp
-        prompt_embeds = paddle.concat([prompt_embeds_tuple[1], prompt_embeds_tuple[0]])
-
-        return prompt_embeds
-
-    def encode_prompt(
-        self,
-        prompt,
-        num_images_per_prompt,
-        do_classifier_free_guidance,
-        negative_prompt=None,
-        prompt_embeds: Optional[paddle.Tensor] = None,
-        negative_prompt_embeds: Optional[paddle.Tensor] = None,
-        lora_scale: Optional[float] = None,
-    ):
         """
         Encodes the prompt into text encoder hidden states.
 
@@ -253,10 +223,6 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
         # function of text encoder can correctly access it
         if lora_scale is not None and isinstance(self, LoraLoaderMixin):
             self._lora_scale = lora_scale
-
-            # dynamically adjust the LoRA scale
-            adjust_lora_scale_text_encoder(self.text_encoder, lora_scale)
-
         if prompt is not None and isinstance(prompt, str):
             batch_size = 1
         elif prompt is not None and isinstance(prompt, list):
@@ -292,16 +258,7 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
                 attention_mask = None
             prompt_embeds = self.text_encoder(text_input_ids, attention_mask=attention_mask)
             prompt_embeds = prompt_embeds[0]
-
-        if self.text_encoder is not None:
-            prompt_embeds_dtype = self.text_encoder.dtype
-        elif self.unet is not None:
-            prompt_embeds_dtype = self.unet.dtype
-        else:
-            prompt_embeds_dtype = prompt_embeds.dtype
-
-        prompt_embeds = prompt_embeds.cast(dtype=prompt_embeds_dtype)
-
+        prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder.dtype)
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
         prompt_embeds = prompt_embeds.tile(repeat_times=[1, num_images_per_prompt, 1])
@@ -348,8 +305,8 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            # prompt_embeds = paddle.concat(x=[negative_prompt_embeds, prompt_embeds])
-        return prompt_embeds, negative_prompt_embeds
+            prompt_embeds = paddle.concat(x=[negative_prompt_embeds, prompt_embeds])
+        return prompt_embeds
 
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
@@ -366,9 +323,10 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
         return image, has_nsfw_concept
 
     def decode_latents(self, latents):
-        deprecation_message = "The decode_latents method is deprecated and will be removed in 1.0.0. Please use VaeImageProcessor.postprocess(...) instead"
-        deprecate("decode_latents", "1.0.0", deprecation_message, standard_warn=False)
-
+        warnings.warn(
+            "The decode_latents method is deprecated and will be removed in a future version. Please use VaeImageProcessor instead",
+            FutureWarning,
+        )
         latents = 1 / self.vae.config.scaling_factor * latents
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(min=0, max=1)
@@ -552,12 +510,10 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
         # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
         # corresponds to doing no classifier free guidance.
         do_classifier_free_guidance = guidance_scale > 1.0
-
-        # 3. Encode input prompt
         text_encoder_lora_scale = (
             cross_attention_kwargs.get("scale", None) if cross_attention_kwargs is not None else None
         )
-        prompt_embeds, negative_prompt_embeds = self.encode_prompt(
+        prompt_embeds = self._encode_prompt(
             prompt,
             num_images_per_prompt,
             do_classifier_free_guidance,
@@ -566,14 +522,9 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale,
         )
-        # For classifier free guidance, we need to do two forward passes.
-        # Here we concatenate the unconditional and text embeddings into a single batch
-        # to avoid doing two forward passes
-        if do_classifier_free_guidance:
-            prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds])
+        self.scheduler.set_timesteps(num_inference_steps)
 
         # 4. Prepare timesteps
-        self.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.scheduler.timesteps
 
         # 5. Prepare latent variables
@@ -590,9 +541,9 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
+        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
 
         # 7. Denoising loop
-        num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
@@ -620,7 +571,7 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
                 latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
 
                 # call the callback, if provided
-                if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
+                if i == len(timesteps) - 1 or i + 1 > num_warmup_steps and (i + 1) % self.scheduler.order == 0:
                     progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         callback(i, t, latents)
@@ -637,6 +588,5 @@ class StableDiffusionPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lo
         image = self.image_processor.postprocess(image, output_type=output_type, do_denormalize=do_denormalize)
 
         if not return_dict:
-            return (image, has_nsfw_concept)
-
+            return image, has_nsfw_concept
         return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=has_nsfw_concept)

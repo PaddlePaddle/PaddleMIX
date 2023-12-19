@@ -37,7 +37,6 @@ if is_paddle_available():
     from .unet_2d import UNet2DModel
     from .unet_2d_condition import UNet2DConditionModel
     from .unet_3d_condition import UNet3DConditionModel
-    from .unet_motion_model import MotionAdapter, UNetMotionModel
     from .vq_model import VQModel
 
 try:

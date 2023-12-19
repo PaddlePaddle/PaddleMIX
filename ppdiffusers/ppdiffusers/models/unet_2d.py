@@ -72,14 +72,9 @@ class UNet2DModel(ModelMixin, ConfigMixin):
             The downsample type for downsampling layers. Choose between "conv" and "resnet"
         upsample_type (`str`, *optional*, defaults to `conv`):
             The upsample type for upsampling layers. Choose between "conv" and "resnet"
-        dropout (`float`, *optional*, defaults to 0.0): The dropout probability to use.
         act_fn (`str`, *optional*, defaults to `"silu"`): The activation function to use.
         attention_head_dim (`int`, *optional*, defaults to `8`): The attention head dimension.
         norm_num_groups (`int`, *optional*, defaults to `32`): The number of groups for normalization.
-        attn_norm_num_groups (`int`, *optional*, defaults to `None`):
-            If set to an integer, a group norm layer will be created in the mid block's [`Attention`] layer with the
-            given number of groups. If left as `None`, the group norm layer will only be created if
-            `resnet_time_scale_shift` is set to `default`, and if created will have `norm_num_groups` groups.
         norm_eps (`float`, *optional*, defaults to `1e-5`): The epsilon for normalization.
         resnet_time_scale_shift (`str`, *optional*, defaults to `"default"`): Time scale shift config
             for ResNet blocks (see [`~models.resnet.ResnetBlock2D`]). Choose from `default` or `scale_shift`.
@@ -109,17 +104,14 @@ class UNet2DModel(ModelMixin, ConfigMixin):
         downsample_padding: int = 1,
         downsample_type: str = "conv",
         upsample_type: str = "conv",
-        dropout: float = 0.0,
         act_fn: str = "silu",
         attention_head_dim: Optional[int] = 8,
         norm_num_groups: int = 32,
-        attn_norm_num_groups: Optional[int] = None,
         norm_eps: float = 1e-5,
         resnet_time_scale_shift: str = "default",
         add_attention: bool = True,
         class_embed_type: Optional[str] = None,
         num_class_embeds: Optional[int] = None,
-        num_train_timesteps: Optional[int] = None,
         resnet_pre_temb_non_linearity: Optional[bool] = False,
     ):
         super().__init__()
@@ -147,9 +139,6 @@ class UNet2DModel(ModelMixin, ConfigMixin):
             timestep_input_dim = 2 * block_out_channels[0]
         elif time_embedding_type == "positional":
             self.time_proj = Timesteps(block_out_channels[0], flip_sin_to_cos, freq_shift)
-            timestep_input_dim = block_out_channels[0]
-        elif time_embedding_type == "learned":
-            self.time_proj = nn.Embedding(num_train_timesteps, block_out_channels[0])
             timestep_input_dim = block_out_channels[0]
 
         self.time_embedding = TimestepEmbedding(timestep_input_dim, time_embed_dim)
@@ -194,7 +183,6 @@ class UNet2DModel(ModelMixin, ConfigMixin):
                 downsample_padding=downsample_padding,
                 resnet_time_scale_shift=resnet_time_scale_shift,
                 downsample_type=downsample_type,
-                dropout=dropout,
                 resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
             self.down_blocks.append(down_block)
@@ -203,14 +191,12 @@ class UNet2DModel(ModelMixin, ConfigMixin):
         self.mid_block = UNetMidBlock2D(
             in_channels=block_out_channels[-1],
             temb_channels=time_embed_dim,
-            dropout=dropout,
             resnet_eps=norm_eps,
             resnet_act_fn=act_fn,
             output_scale_factor=mid_block_scale_factor,
             resnet_time_scale_shift=resnet_time_scale_shift,
             attention_head_dim=attention_head_dim if attention_head_dim is not None else block_out_channels[-1],
             resnet_groups=norm_num_groups,
-            attn_groups=attn_norm_num_groups,
             add_attention=add_attention,
             resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
         )
@@ -239,7 +225,6 @@ class UNet2DModel(ModelMixin, ConfigMixin):
                 attention_head_dim=attention_head_dim if attention_head_dim is not None else output_channel,
                 resnet_time_scale_shift=resnet_time_scale_shift,
                 upsample_type=upsample_type,
-                dropout=dropout,
                 resnet_pre_temb_non_linearity=resnet_pre_temb_non_linearity,
             )
             self.up_blocks.append(up_block)
@@ -319,8 +304,6 @@ class UNet2DModel(ModelMixin, ConfigMixin):
                 class_labels = class_labels.cast(paddle.int64)
             class_emb = self.class_embedding(class_labels).cast(sample.dtype)
             emb = emb + class_emb
-        elif self.class_embedding is None and class_labels is not None:
-            raise ValueError("class_embedding needs to be initialized in order to use class conditioning")
 
         # 2. pre-process
         skip_sample = sample
@@ -365,7 +348,7 @@ class UNet2DModel(ModelMixin, ConfigMixin):
             sample += skip_sample
 
         if self.config.time_embedding_type == "fourier":
-            timesteps = timesteps.reshape((sample.shape[0], *([1] * len(sample.shape[1:]))))
+            timesteps = timesteps.reshape([sample.shape[0], *([1] * len(sample.shape[1:]))])
             sample = sample / timesteps
 
         if not return_dict:
