@@ -15,49 +15,55 @@
 import os
 import sys
 
-
-
-
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 
-from PIL import Image
 from paddlemix.models.sam.modeling import SamModel
 from paddlemix.models.sam.configuration import SamConfig
-from paddlemix.processors.sam_processing import SamProcessor
-import requests
-
 
 import inspect
-import tempfile
 import unittest
 
 import numpy as np
 import paddle
-import paddle.nn as nn
-from paddlenlp.transformers.opt.configuration import OPTConfig
 
-from paddlemix.models.blip2 import (
-    Blip2Config,
-    Blip2ForConditionalGeneration,
-    Blip2QFormerConfig,
-    Blip2VisionConfig,
-)
-from paddlemix.models.blip2.eva_vit import VisionTransformer
-from paddlemix.models.blip2.modeling import BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST
-from paddlemix.models.blip2.Qformer import BertLMHeadModel
-from tests.models.test_configuration_common import ConfigTester
 from tests.models.test_modeling_common import (
     ModelTesterMixin,
-    floats_tensor,
-    ids_tensor,
-    random_attention_mask,
+    floats_tensor
 )
 from tests.testing_utils import slow
 
 
 class SamModelTester:
-    def __init__(self):
-        pass
+    def __init__(self, parent):
+        self.parent = parent
+
+    def get_config(self):
+        # todo: more input type
+        return SamConfig(input_type='boxs')
+    
+    def prepare_config_and_inputs(self):
+        pixel_values = floats_tensor([1, 3, 1024, 1024])
+        # box prompt
+        prompt = paddle.to_tensor([[[0, 0, 1024, 1024]]])
+        config = self.get_config()
+
+        return config, pixel_values, prompt
+    
+    def prepare_config_and_inputs_for_common(self):
+        config, pixel_values, prompt = self.prepare_config_and_inputs()
+        inputs_dict = {
+            'img': pixel_values,
+            'prompt': prompt
+        }
+        return config, inputs_dict
+    
+    def create_and_check_model(self, config, pixel_values, prompt):
+        model = SamModel(config=config)
+        model.eval()
+        with paddle.no_grad():
+            result = model(pixel_values, prompt)
+        
+        self.parent.assertIsNotNone(result)
 
 class SamModelTest(ModelTesterMixin, unittest.TestCase):
     all_model_classes = (SamModel,)
@@ -70,35 +76,17 @@ class SamModelTest(ModelTesterMixin, unittest.TestCase):
     use_test_inputs_embeds: bool = False
 
     def setUp(self):
-        pass
-        # self.model_tester = SamModelTester(self)
-
-    def test_for_conditional_generation(self):
-        config_and_inputs = self.model_tester.prepare_config_and_inputs()
-        self.model_tester.create_and_check_for_conditional_generation(*config_and_inputs)
+        self.model_tester = SamModelTester(self)
 
     @unittest.skip(reason="Hidden_states is tested in individual model tests")
     def test_hidden_states_output(self):
         pass
 
+    def test_model(self):
+        config_and_inputs = self.model_tester.prepare_config_and_inputs()
+        self.model_tester.create_and_check_model(*config_and_inputs)
+        
     def test_determinism(self):
-        # config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
-        url = '/home/aistudio/work/PaddleMIX/paddlemix/examples/Sam/overture-creations.png'
-        if os.path.isfile(url):
-            # read image
-            image_pil = Image.open(url).convert("RGB")
-        else:
-            image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
-            
-        processor = SamProcessor.from_pretrained('Sam/SamVitH-1024')
-                    
-        image_seg, prompt = processor(
-            image_pil,
-            input_type='boxs',
-            box=np.array([0, 0, 512, 512]),
-            point_coords=None,
-        )
-
         def check_determinism(first, second):
             out_1 = first.numpy()
             out_2 = second.numpy()
@@ -107,14 +95,7 @@ class SamModelTest(ModelTesterMixin, unittest.TestCase):
             max_diff = np.amax(np.abs(out_1 - out_2))
             self.assertLessEqual(max_diff, 1e-5)
 
-        # model = SamModel.from_pretrained('Sam/SamVitH-1024', input_type='boxs')
-        # seg_masks = model(img=image_seg, prompt=prompt)
-
-        config = SamConfig(input_type='boxs')
-        inputs_dict = {
-            'img': floats_tensor([1, 3, 1024, 1024]),
-            'prompt': prompt
-        }
+        config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
         for model_class in self.all_model_classes:
             model = self._make_model_instance(config, model_class)
             model.eval()
@@ -130,7 +111,7 @@ class SamModelTest(ModelTesterMixin, unittest.TestCase):
                 check_determinism(first, second)
 
     def test_forward_signature(self):
-        config = SamConfig(input_type='boxs')
+        config = self.model_tester.get_config()
         for model_class in self.all_model_classes:
             model = model_class(config)
             signature = inspect.signature(model.forward)
@@ -145,7 +126,7 @@ class SamModelTest(ModelTesterMixin, unittest.TestCase):
         self.assertIsNotNone(config)
 
 
-    #todo @slow
+    @slow
     def test_model_from_pretrained(self):
         model = SamModel.from_pretrained('Sam/SamVitH-1024', input_type='boxs')
         self.assertIsNotNone(model)
