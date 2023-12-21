@@ -100,15 +100,6 @@ class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
         pass
 
     def test_determinism(self):
-        image_tensor = floats_tensor([1,3,800,800])
-        mask = paddle.zeros((1, 800, 800), dtype=bool)
-        tokenized_out = {
-            'input_ids': ids_tensor([1, 4], 5000),
-            'attention_mask': random_attention_mask([1,4]),
-            'position_ids': paddle.to_tensor([[0, 0, 1, 0]]),
-            'text_self_attention_masks': random_attention_mask([1,4,4])
-        }
-
         def check_determinism(first, second):
             out_1 = first.numpy()
             out_2 = second.numpy()
@@ -116,17 +107,6 @@ class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
             out_2 = out_2[~np.isnan(out_2) & ~np.isinf(out_2)]
             max_diff = np.amax(np.abs(out_1 - out_2))
             self.assertLessEqual(max_diff, 1e-5)
-
-        config = GroundingDinoConfig()
-        
-        inputs_dict = {
-            'x': image_tensor,
-            'm': mask,
-            'input_ids': tokenized_out["input_ids"],
-            'attention_mask': tokenized_out["attention_mask"],
-            'text_self_attention_masks': tokenized_out["text_self_attention_masks"],
-            'position_ids': tokenized_out["position_ids"],
-        }
         
         config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
         for model_class in self.all_model_classes:
@@ -218,8 +198,8 @@ class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
         
         avg_diff = np.abs(boxes_filt[0].numpy() - expect_boxes).mean()
         self.assertLessEqual(avg_diff, 0.01)
+        
         self.assertIn('dog', pred_phrases[0])
-
 
     def test_save_load(self):
         pass
