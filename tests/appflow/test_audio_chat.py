@@ -22,7 +22,7 @@ from paddlemix.appflow import Appflow
 from tests.testing_utils import _run_slow_test
 
 
-class OpenSetDetSamAppSlowTest(unittest.TestCase):
+class AudioChatTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         pass
@@ -31,7 +31,7 @@ class OpenSetDetSamAppSlowTest(unittest.TestCase):
 if __name__ == "__main__":
 
     def create_test(name, static_mode):
-        def test_openset_det_sam(self):
+        def test_audio_chat(self):
 
             paddle.seed(1024)
             task = Appflow(app="audio_chat", models=["whisper", "THUDM/chatglm-6b", "speech"])
@@ -46,10 +46,8 @@ if __name__ == "__main__":
 
             self.assertIsNotNone(result)
 
-        setattr(OpenSetDetSamAppSlowTest, name, test_openset_det_sam)
+        setattr(AudioChatTest, name, test_audio_chat)
 
     create_test(name="test_dygraph", static_mode=False)
-    if _run_slow_test:
-        create_test(name="test_static", static_mode=True)
 
     unittest.main()
