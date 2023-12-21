@@ -15,24 +15,19 @@
 import os
 import sys
 
-
-
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 
 from paddlemix.models.groundingdino.configuration import GroundingDinoConfig
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
 from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
-
-from PIL import Image
-import requests
+from ppdiffusers.utils import load_image
+import paddle.nn.functional as F
 
 import inspect
-import tempfile
 import unittest
 
 import numpy as np
 import paddle
-import paddle.nn as nn
 
 from tests.models.test_configuration_common import ConfigTester
 from tests.models.test_modeling_common import (
@@ -44,10 +39,48 @@ from tests.models.test_modeling_common import (
 from tests.testing_utils import slow
 
 
-
 class GroundingDinoModelTester:
-    def __init__(self):
-        pass
+    def __init__(self, parent):
+        self.parent = parent
+
+    def get_config(self):
+        return GroundingDinoConfig()
+    
+    def prepare_config_and_inputs(self):
+        pixel_values = floats_tensor([1,3,800,800])
+        mask = paddle.zeros((1, 800, 800), dtype=bool)
+        tokenized_out = {
+            'input_ids': ids_tensor([1, 4], 5000),
+            'attention_mask': random_attention_mask([1,4]),
+            'position_ids': paddle.to_tensor([[0, 0, 1, 0]]),
+            'text_self_attention_masks': random_attention_mask([1,4,4])
+        }
+
+        config = self.get_config()
+
+        return config, pixel_values, mask, tokenized_out
+    
+    def prepare_config_and_inputs_for_common(self):
+        config, pixel_values, mask, tokenized_out = self.prepare_config_and_inputs()
+        
+        inputs_dict = {
+            'x': pixel_values,
+            'm': mask,
+            'input_ids': tokenized_out["input_ids"],
+            'attention_mask': tokenized_out["attention_mask"],
+            'text_self_attention_masks': tokenized_out["text_self_attention_masks"],
+            'position_ids': tokenized_out["position_ids"],
+        }
+ 
+        return config, inputs_dict
+    
+    def create_and_check_model(self, x, m, input_ids, attention_mask, text_self_attention_masks, position_ids):
+        model = GroundingDinoModel(config=self.get_config())
+        model.eval()
+        with paddle.no_grad():
+            result = model(x, m, input_ids, attention_mask, text_self_attention_masks, position_ids)
+        
+        self.parent.assertIsNotNone(result)
 
 class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
     all_model_classes = (GroundingDinoModel,)
@@ -60,29 +93,21 @@ class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
     use_test_inputs_embeds: bool = False
 
     def setUp(self):
-        pass
-        # self.model_tester = SamModelTester(self)
-
-    def test_for_conditional_generation(self):
-        config_and_inputs = self.model_tester.prepare_config_and_inputs()
-        self.model_tester.create_and_check_for_conditional_generation(*config_and_inputs)
+        self.model_tester = GroundingDinoModelTester(self)
 
     @unittest.skip(reason="Hidden_states is tested in individual model tests")
     def test_hidden_states_output(self):
         pass
 
     def test_determinism(self):
-        # config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
-        url = '/home/aistudio/work/PaddleMIX/paddlemix/examples/Sam/overture-creations.png'
-        if os.path.isfile(url):
-            # read image
-            image_pil = Image.open(url).convert("RGB")
-        else:
-            image_pil = Image.open(requests.get(url, stream=True).raw).convert("RGB")
-    
-        processor = GroudingDinoProcessor.from_pretrained('GroundingDino/groundingdino-swint-ogc')
-
-        image_tensor, mask, tokenized_out = processor(images=image_pil, text='cat')
+        image_tensor = floats_tensor([1,3,800,800])
+        mask = paddle.zeros((1, 800, 800), dtype=bool)
+        tokenized_out = {
+            'input_ids': ids_tensor([1, 4], 5000),
+            'attention_mask': random_attention_mask([1,4]),
+            'position_ids': paddle.to_tensor([[0, 0, 1, 0]]),
+            'text_self_attention_masks': random_attention_mask([1,4,4])
+        }
 
         def check_determinism(first, second):
             out_1 = first.numpy()
@@ -91,7 +116,6 @@ class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
             out_2 = out_2[~np.isnan(out_2) & ~np.isinf(out_2)]
             max_diff = np.amax(np.abs(out_1 - out_2))
             self.assertLessEqual(max_diff, 1e-5)
-
 
         config = GroundingDinoConfig()
         
@@ -103,6 +127,8 @@ class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
             'text_self_attention_masks': tokenized_out["text_self_attention_masks"],
             'position_ids': tokenized_out["position_ids"],
         }
+        
+        config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
         for model_class in self.all_model_classes:
             model = self._make_model_instance(config, model_class)
             
@@ -120,7 +146,7 @@ class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
                     check_determinism(first[k], second[k])
 
     def test_forward_signature(self):
-        config = GroundingDinoConfig()
+        config, _ = self.model_tester.prepare_config_and_inputs_for_common()
         for model_class in self.all_model_classes:
             model = model_class(config)
             signature = inspect.signature(model.forward)
@@ -131,7 +157,10 @@ class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
                                   "position_ids", "targets"]
             self.assertListEqual(arg_names[:7], expected_arg_names)
 
-    # todo: test_loadSamConfig
+    def test_model(self):
+        config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
+        self.model_tester.create_and_check_model(**inputs_dict)
+
     def test_dinoconfig_from_pretrained(self):
         config = GroundingDinoConfig.from_pretrained("GroundingDino/groundingdino-swint-ogc")
         self.assertIsNotNone(config)
@@ -139,8 +168,58 @@ class GroundingDinoModelTest(ModelTesterMixin, unittest.TestCase):
 
     @slow
     def test_model_from_pretrained(self):
-        model = GroundingDinoModel.from_pretrained('GroundingDino/groundingdino-swint-ogc')
+        pretrained_model_path = 'GroundingDino/groundingdino-swint-ogc'
+        model = GroundingDinoModel.from_pretrained(pretrained_model_path)
         self.assertIsNotNone(model)
+        
+        # test the result
+        paddle.seed(1024)
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+        image_pil = load_image(img_url)
+        
+        processor = GroudingDinoProcessor.from_pretrained(pretrained_model_path)
+        image_tensor, mask, tokenized_out = processor(images=image_pil, text='dog')
+        # expect res
+        expect_boxes = np.array([0.47491184, 0.56778389, 0.26748717, 0.68284708])
+        expect_label = 'dog(0.78)'
+        
+        with paddle.no_grad():
+            outputs = model(
+                image_tensor,
+                mask,
+                input_ids=tokenized_out["input_ids"],
+                attention_mask=tokenized_out["attention_mask"],
+                text_self_attention_masks=tokenized_out["text_self_attention_masks"],
+                position_ids=tokenized_out["position_ids"],
+            )
+
+        logits = F.sigmoid(outputs["pred_logits"])[0]  # (nq, 256)
+        boxes = outputs["pred_boxes"][0]  # (nq, 4)
+        
+        # filter output
+        logits_filt = logits.clone()
+        boxes_filt = boxes.clone()
+        filt_mask = logits_filt.max(axis=1) > 0.3
+        logits_filt = logits_filt[filt_mask]  # num_filt, 256
+        boxes_filt = boxes_filt[filt_mask]  # num_filt, 4
+
+        # build pred
+        pred_phrases = []
+        for logit, box in zip(logits_filt, boxes_filt):
+            pred_phrase = processor.decode(logit > 0.25)
+            pred_phrases.append(pred_phrase + f"({str(logit.max().item())[:4]})")
+
+        size = image_pil.size
+        pred_dict = {
+            "boxes": boxes_filt,
+            "size": [size[1], size[0]],  # H,W
+            "labels": pred_phrases,
+        }
+        
+        avg_diff = np.abs(boxes_filt[0].numpy() - expect_boxes).mean()
+        self.assertLessEqual(avg_diff, 0.01)
+        self.assertIn('dog', pred_phrases[0])
+
 
     def test_save_load(self):
         pass
