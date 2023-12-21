@@ -3,7 +3,7 @@
 ## 1. 模型简介
 
 [Segment Anything](https://ai.facebook.com/research/publications/segment-anything/) 是 Meta AI Research, FAIR
-的图像分割模型。根据输入提示（如点或框）生成高质量mask，并可为图像中的所有对象进行分割。它已经在1100万张图像和11亿个掩模的数据集上进行了训练，并在各种分割任务上具有强大的零样本性能。
+发布的图像分割模型。根据输入提示（如点或框）生成高质量mask，可为图像中的所有对象进行分割。它已经在1100万张图像和11亿个掩模的数据集上进行了训练，并在各种分割任务上具有强大的零样本性能。
 
 <p align="center">
   <img src="https://github.com/facebookresearch/segment-anything/blob/main/assets/model_diagram.png" align="middle" width = "600" />
