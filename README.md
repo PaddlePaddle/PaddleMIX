@@ -150,6 +150,7 @@ pip install -e .
   </tbody>
 </table>
 
+更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
 ## 许可证书
 
 本项目的发布受Apache 2.0 license许可认证。

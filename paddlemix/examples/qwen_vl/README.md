@@ -68,6 +68,22 @@ print(result["result"])
 
 ```
 
+输入图片：<center><img src="https://github.com/LokeZhou/PaddleMIX/assets/13300429/95f73037-097e-4712-95be-17d5ca489f11" /></center>
+
+prompt：“这是什么？”
+
+输出:
+```
+这是一张红色城市公交车的图片，它正在道路上行驶，穿越城市。该区域似乎是一个住宅区，因为可以在背景中看到一些房屋。除了公交车之外，还有其他车辆，包括一辆汽车和一辆卡车，共同构成了交通场景。此外，图片中还显示了一一个人，他站在路边，可能是在等待公交车或进行其他活动。
+```
+prompt2：“框出图中公交车的位置”
+
+输出:
+```
+<ref>公交车</ref><box>(178,280),(803,894)</box>
+```
+<center><img src="https://github.com/LokeZhou/PaddleMIX/assets/13300429/95f73037-097e-4712-95be-17d5ca489f11" /></center>
+
 
 ## 4 模型微调
 我们提供 `finetune.py` 脚本，用于模型微调。模型微调支持全参数微调，以及lora微调。
