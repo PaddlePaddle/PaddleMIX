@@ -22,7 +22,7 @@ import paddle
 from tests.testing_utils import _run_slow_test
 
 
-class OpenSetDetSamAppSlowTest(unittest.TestCase):
+class AudioToCaptionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         pass
@@ -31,7 +31,7 @@ class OpenSetDetSamAppSlowTest(unittest.TestCase):
 if __name__ == "__main__":
 
     def create_test(name, static_mode):
-        def test_openset_det_sam(self):
+        def test_audio2caption(self):
 
             paddle.seed(1024)
             task = Appflow(app="audio2caption", models=["whisper", "THUDM/chatglm-6b"])
@@ -45,7 +45,7 @@ if __name__ == "__main__":
             self.assertIsNotNone(result)
             self.assertIn('健康', result)
 
-        setattr(OpenSetDetSamAppSlowTest, name, test_openset_det_sam)
+        setattr(AudioToCaptionTest, name, test_audio2caption)
 
     create_test(name="test_dygraph", static_mode=False)
     if _run_slow_test:
