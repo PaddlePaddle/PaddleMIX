@@ -111,12 +111,13 @@ pip install -e .
             <li><a href="paddlemix/examples/blip2">BLIP-2</a></li>
             <li><a href="paddlemix/examples/minigpt4">miniGPT-4</a></li>
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
+            <li><a href="paddlemix/examples/qwen_vl">VIsualGLM</a></li>
       </ul>
       </ul>
           <li><b>开放世界视觉模型</b></li>
         <ul>
             <li><a href="paddlemix/examples/groundingdino">Grounding DINO</a></li>
-            <li><a href="paddlemix/examples/Sam">SAM</a></li>
+            <li><a href="paddlemix/examples/sam">SAM</a></li>
       </ul>
       </ul>
           <li><b>更多模态预训练模型</b></li>

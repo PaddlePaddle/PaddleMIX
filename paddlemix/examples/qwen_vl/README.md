@@ -1,13 +1,18 @@
 # Qwen-VL
 
-## 1. 模型简介
+## 1. 模型介绍
 
-该模型是 [Qwen-VL](https://arxiv.org/pdf/2308.12966.pdf) 的 paddle 实现。
+[Qwen-VL](https://arxiv.org/pdf/2308.12966.pdf) 是大规模视觉语言模型。可以以图像、文本、检测框作为输入，并以文本和检测框作为输出。Qwen-VL 系列模型的特点包括：
+
+- **功能强大丰富**：支持多个多模态任务，包括零样本图像描述生成（Zero-shot Image Caption)、视觉问答（VQA）、细粒度视觉定位（Referring Expression Comprehension）等；
+- **多语言对话模型**：支持英文、中文等多语言对话，端到端支持图片里中英双语的长文本识别；
+- **多图多轮交错对话**：支持多图输入和比较，指定图片问答等；
+- **细粒度识别和理解**：细粒度的文字识别、文档问答和检测框标注。
+
+本仓库提供paddle版本的Qwen-VL-7b和Qwen-VL-Chat-7b模型。
 
 
-## 2. Demo
-
-## 2.1 环境准备
+## 2 环境准备
 - **python >= 3.8**
 - tiktoken
 > 注：tiktoken 要求python >= 3.8
@@ -16,7 +21,10 @@
 
 > 注：请确保安装了以上依赖，否则无法运行。同时，需要安装[此目录](https://github.com/PaddlePaddle/PaddleNLP/tree/develop/model_zoo/gpt-3/external_ops)下的自定义OP, `python setup.py install`。如果安装后仍然找不到算子，需要额外设置PYTHONPATH
 
-## 2.2 动态图推理
+## 3 快速开始
+完成环境准备后，我们提供三种使用方式：
+
+## a 单轮预测
 ```bash
 # qwen-vl
 python paddlemix/examples/qwen_vl/run_predict.py \
@@ -34,15 +42,38 @@ python paddlemix/examples/qwen_vl/run_predict.py \
   * `input_image` :输入图片路径或url，默认None。
   * `prompt` :输入prompt。
 
-
-# qwen-vl-chat demo
+## b 多轮对话
 ```bash
 python paddlemix/examples/qwen_vl/chat_demo.py
 ```
 
-## 2.3 stage3 微调
-我们提供 `finetune.py` 脚本，用于 stage3 微调模型。
-### 2.3.1 数据准备
+## c 通过[Appflow](../../../applications/README.md/)调用
+> 注：使用Appflow前，需要完成Appflow环境配置，请参考[依赖安装](../../../applications/README.md/#1-appflow-依赖安装)。
+```python
+
+import paddle
+from paddlemix.appflow import Appflow
+paddle.seed(1234)
+task = Appflow(app="image2text_generation",
+                   models=["qwen-vl/qwen-vl-chat-7b"])
+image= "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"
+prompt = "这是什么？"
+result = task(image=image,prompt=prompt)
+
+print(result["result"])
+
+prompt2 = "框出图中公交车的位置"
+result = task(prompt=prompt2)
+print(result["result"])
+
+```
+
+
+## 4 模型微调
+我们提供 `finetune.py` 脚本，用于模型微调。模型微调支持全参数微调，以及lora微调。
+全参数微调需要A100 80G显存，lora微调支持V100 40G显存。
+
+### 4.1 数据准备
 将自己的数据放到一个列表中并存入json文件中，示例如下,或参考[sft_examples](https://bj.bcebos.com/v1/paddlenlp/models/community/qwen-vl/sft_examples.json)：
 ```json
 [
@@ -100,8 +131,8 @@ python paddlemix/examples/qwen_vl/chat_demo.py
 
 对话中的检测框可以表示为`<box>(x1,y1),(x2,y2)</box>`，其中 `(x1, y1)` 和`(x2, y2)`分别对应左上角和右下角的坐标，并且被归一化到`[0, 1000)`的范围内. 检测框对应的文本描述也可以通过`<ref>text_caption</ref>`表示。
 
-### 2.3.2 全参数训练
-训练时使用`paddlemix/examples/qwen_vl/finetune.py`程序进行训练，**训练前请先检查数据集路径,如果使用url，请确保环境网络正常**。推荐使用A100训练。
+### 4.2 全参数训练
+训练时使用`paddlemix/examples/qwen_vl/finetune.py`程序进行训练，**训练前请先检查数据集路径,如果使用url，请确保环境网络正常**。需要使用A100 80G训练；若显存不足，可以使用V100 40G 进行lora微调。
 
 训练命令及参数配置示例：
 ```
@@ -208,7 +239,8 @@ paddlemix/examples/qwen_vl/finetune.py \
 
 > 注：若不需要 sharding 策略，则无需指定tensor_parallel_degree、sharding_parallel_degree、sharding、pipeline_parallel_degree参数
 
-### 2.3.3 lora训练
+### 4.3 lora微调
+lora微调需要v100 40G显存，训练后，需要使用[merge_lora_params.py](merge_lora_params.py)脚本将lora参数合并到主干模型中。
 
 训练命令及参数配置示例：
 ```
