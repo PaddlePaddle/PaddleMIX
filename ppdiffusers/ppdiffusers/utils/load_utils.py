@@ -46,6 +46,7 @@ if is_safetensors_available():
     np.bfloat16 = np.uint16
     np.bool = bool
     safetensors.numpy._TYPES.update({"BF16": np.uint16})
+    from safetensors import safe_open
 
 if is_torch_available():
     import torch
@@ -336,14 +337,28 @@ def smart_load(
         if suffix in safetensors_suffix:
             state_dict = convert_to_paddle(safetensors_load(path), return_numpy, return_global_step)
             if return_is_torch_weight:
-                state_dict["is_torch_weight"] = True
+                with safe_open(path, framework="np") as f:
+                    metadata = f.metadata()
+                    data_format = metadata.get("format", "pt")
+                    if data_format == "pt":
+                        is_torch_weight = True
+                    else:
+                        is_torch_weight = False
+                state_dict["is_torch_weight"] = is_torch_weight
             return state_dict
 
         # must use safetensors_load first
         try:
             state_dict = convert_to_paddle(safetensors_load(path), return_numpy, return_global_step)
             if return_is_torch_weight:
-                state_dict["is_torch_weight"] = True
+                with safe_open(path, framework="np") as f:
+                    metadata = f.metadata()
+                    data_format = metadata.get("format", "pt")
+                    if data_format == "pt":
+                        is_torch_weight = True
+                    else:
+                        is_torch_weight = False
+                state_dict["is_torch_weight"] = is_torch_weight
             return state_dict
         except Exception:
             logger.info(f"Cant load file {name} with safetensors!")
