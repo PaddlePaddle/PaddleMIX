@@ -17,6 +17,7 @@ import os
 import sys
 import time
 
+import numpy as np
 import paddle
 import paddle.amp.auto_cast as autocast
 from paddle.io import DataLoader
@@ -223,6 +224,31 @@ class BenchmarkCallback(TrainerCallback):
 INTEGRATION_TO_CALLBACK.update({"custom_visualdl": VisualDLWithImageCallback})
 
 
+def get_module_kohya_state_dict(module, prefix: str = ""):
+    kohya_ss_state_dict = {}
+    if prefix is not None and prefix != "" and not prefix.endswith("."):
+        prefix += "."
+
+    for peft_key, weight in module.get_trainable_state_dict().items():
+        kohya_key = prefix + peft_key.rstrip(".weight")
+        kohya_key = kohya_key.replace("lora_A", "lora_down.weight")
+        kohya_key = kohya_key.replace("lora_B", "lora_up.weight")
+        kohya_key = kohya_key.replace(".", "_", kohya_key.count(".") - 2)
+        # transpose 2D weight for torch
+        if weight.ndim == 2:
+            weight = weight.T
+        kohya_ss_state_dict[kohya_key] = np.ascontiguousarray(weight)
+
+        # Set alpha parameter
+        if "lora_down" in kohya_key:
+            alpha_key = f'{kohya_key.split(".")[0]}.alpha'
+            kohya_ss_state_dict[alpha_key] = np.ascontiguousarray(
+                paddle.to_tensor(module.lora_config.lora_alpha, dtype=weight.dtype)
+            )
+
+    return kohya_ss_state_dict
+
+
 class LCMTrainer(Trainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -264,6 +290,14 @@ class LCMTrainer(Trainer):
             if unwraped_model.is_lora:
                 logger.info(f"Saving lcm unet lora checkpoint to {output_dir}/lora")
                 unwraped_model.unet.save_pretrained(os.path.join(output_dir, "lora"))
+                from safetensors.numpy import save_file
+
+                lora_kohya_state_dict = get_module_kohya_state_dict(unwraped_model.unet, prefix="lora_unet")
+                save_file(
+                    lora_kohya_state_dict,
+                    os.path.join(output_dir, "lora", "lcm_lora.safetensors"),
+                    metadata={"format": "pt"},
+                )
             else:
                 logger.info(f"Saving unet checkpoint to {output_dir}/unet")
                 unwraped_model.unet.save_pretrained(os.path.join(output_dir, "unet"))
