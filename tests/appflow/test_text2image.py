@@ -16,6 +16,8 @@ import os
 import sys
 import unittest
 
+from paddlemix.processors.image_utils import load_image
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import paddle
 from paddlemix.appflow import Appflow
@@ -24,26 +26,37 @@ from paddlemix.appflow import Appflow
 class Text2ImageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        pass
+        cls.expect_img_url = 'https://github.com/LokeZhou/PaddleMIX/assets/13300429/1622fb1e-c841-4531-ad39-9c5092a2456c'
 
+    def test_text2image(self):
+        paddle.seed(42)
+        task = Appflow(app="text2image_generation",
+                    models=["stabilityai/stable-diffusion-v1-5"]
+                    )
+        prompt = "a photo of an astronaut riding a horse on mars."
+        result = task(prompt=prompt)['result']
+
+        self.assertIsNotNone(result)
+        #增加结果对比
+        expect_img = load_image(self.expect_img_url)
+
+        size = (768, 768)
+        image1 = result.resize(size)
+        image2 = expect_img.resize(size)
+
+        # 获取图像数据
+        data1 = list(image1.getdata())
+        data2 = list(image2.getdata())
+
+        # 计算每个像素点的差值，并求平均值
+        diff_sum = 0.0
+        for i in range(len(data1)):
+            diff_sum += sum(abs(c - d) for c, d in zip(data1[i], data2[i]))
+
+        average_diff = diff_sum / len(data1)
+
+        self.assertLessEqual(average_diff, 5)
 
 if __name__ == "__main__":
-
-    def create_test(name, static_mode):
-        def test_openset_det_sam(self):
-            paddle.seed(1024)
-            task = Appflow(app="text2image_generation",
-                        models=["stabilityai/stable-diffusion-v1-5"]
-                        )
-            prompt = "a photo of an astronaut riding a horse on mars."
-            result = task(prompt=prompt)['result']
-
-            self.assertIsNotNone(result)
-            # todo: 增加结果对比
-            
-
-        setattr(Text2ImageTest, name, test_openset_det_sam)
-
-    create_test(name="test_dygraph", static_mode=False)
 
     unittest.main()
