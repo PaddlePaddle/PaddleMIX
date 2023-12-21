@@ -111,7 +111,7 @@ pip install -e .
             <li><a href="paddlemix/examples/blip2">BLIP-2</a></li>
             <li><a href="paddlemix/examples/minigpt4">miniGPT-4</a></li>
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
-            <li><a href="paddlemix/examples/qwen_vl">VIsualGLM</a></li>
+            <li><a href="paddlemix/examples/qwen_vl">qwen_vl</a></li>
       </ul>
       </ul>
           <li><b>开放世界视觉模型</b></li>
