@@ -288,3 +288,12 @@ python paddlemix/examples/qwen_vl/merge_lora_params.py \
 --lora_path output_qwen_vl\
 --merge_model_path qwen_vl_merge
 ```
+### 参考文献
+```BibTeX
+@article{Qwen-VL,
+  title={Qwen-VL: A Versatile Vision-Language Model for Understanding, Localization, Text Reading, and Beyond},
+  author={Bai, Jinze and Bai, Shuai and Yang, Shusheng and Wang, Shijie and Tan, Sinan and Wang, Peng and Lin, Junyang and Zhou, Chang and Zhou, Jingren},
+  journal={arXiv preprint arXiv:2308.12966},
+  year={2023}
+}
+```
