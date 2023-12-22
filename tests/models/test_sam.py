@@ -19,6 +19,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../
 
 from paddlemix.models.sam.modeling import SamModel
 from paddlemix.models.sam.configuration import SamConfig
+from ppdiffusers.utils import load_image, load_numpy
+from paddlemix.processors.sam_processing import SamProcessor
 
 import inspect
 import unittest
@@ -128,8 +130,38 @@ class SamModelTest(ModelTesterMixin, unittest.TestCase):
 
     @slow
     def test_model_from_pretrained(self):
+        pretrained_model = 'Sam/SamVitH-1024'
         model = SamModel.from_pretrained('Sam/SamVitH-1024', input_type='boxs')
         self.assertIsNotNone(model)
+
+        # todo: check the res
+        paddle.seed(1024)
+        img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
+        expected_image = load_numpy(
+            "https://bj.bcebos.com/v1/paddlenlp/models/community/Sam/SamVitH-1024/overture-creations-mask.npy"
+        )
+
+        image_pil = load_image(img_url)
+        
+        # bulid processor
+        processor = SamProcessor.from_pretrained(pretrained_model)
+        # bulid model
+        input_type='boxs'
+        sam_model = SamModel.from_pretrained(pretrained_model, input_type=input_type)
+        box_prompt = np.array([174, 115, 311, 465])
+
+        image_seg, prompt = processor(
+            image_pil,
+            input_type=input_type,
+            box=box_prompt,
+            point_coords=None,
+        )
+        seg_masks = sam_model(img=image_seg, prompt=prompt)
+        seg_masks = processor.postprocess_masks(seg_masks)
+
+        avg_diff = np.abs(seg_masks.cpu().numpy().astype(int) - expected_image.astype(int)).mean()
+        assert avg_diff < 10, f"Error image deviates {avg_diff} pixels on average"
+
 
     def test_save_load(self):
         pass
