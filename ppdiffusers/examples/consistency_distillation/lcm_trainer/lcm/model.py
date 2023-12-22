@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import inspect
+import math
 import os
 
 import numpy as np
@@ -20,6 +21,7 @@ import paddle.amp
 import paddle.nn as nn
 import paddle.nn.functional as F
 from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
+from paddlenlp.utils.log import logger
 
 from ppdiffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
 from ppdiffusers.training_utils import freeze_params
@@ -215,6 +217,7 @@ class LCMModel(nn.Layer):
             )
             self.unet.config.tensor_parallel_degree = 1
             self.unet = LoRAModel(self.unet, lora_config)
+            self.reset_lora_parameters(self.unet, init_lora_weights=True)
             self.unet.mark_only_lora_as_trainable()
             self.unet.print_trainable_parameters()
         else:
@@ -499,3 +502,40 @@ class LCMModel(nn.Layer):
                 self.unet.set_default_attn_processor()
             if hasattr(self.vae, "set_default_attn_processor"):
                 self.vae.set_default_attn_processor()
+
+    @paddle.no_grad()
+    def reset_lora_parameters(self, unet, init_lora_weights=True):
+        if init_lora_weights is False:
+            return
+        for name, module in unet.named_sublayers(include_self=True):
+            module_name = module.__class__.__name__.lower()
+            if module_name in ["loralinear"]:
+                if init_lora_weights is True:
+                    # initialize A the same way as the default for nn.Linear and B to zero
+                    # https://github.com/microsoft/LoRA/blob/a0a92e0f26c067cf94747bdbf1ce73793fa44d19/loralib/layers.py#L124
+                    tmp_tensor = paddle.zeros(module.lora_A.T.shape, dtype=module.lora_A.dtype)
+                    nn.init.kaiming_uniform_(tmp_tensor, a=math.sqrt(5))
+                    module.lora_A.set_value(tmp_tensor.T)
+                    del tmp_tensor
+                    logger.info(f"Initialized {name}'s LoRA parameters with Kaiming uniform init!")
+                elif init_lora_weights.lower() == "gaussian":
+                    tmp_tensor = paddle.zeros(module.lora_A.T.shape, dtype=module.lora_A.dtype)
+                    nn.init.normal_(tmp_tensor, std=1 / self.r)
+                    module.lora_A.set_value(tmp_tensor.T)
+                    del tmp_tensor
+                    logger.info(f"Initialized {name}'s LoRA parameters with Gaussian init!")
+                else:
+                    raise ValueError(f"Unknown initialization {init_lora_weights}!")
+                nn.init.zeros_(module.lora_B)
+            elif module_name in ["loraconv2d"]:
+                if init_lora_weights is True:
+                    # initialize A the same way as the default for nn.Linear and B to zero
+                    # https://github.com/microsoft/LoRA/blob/a0a92e0f26c067cf94747bdbf1ce73793fa44d19/loralib/layers.py#L124
+                    nn.init.kaiming_uniform_(module.lora_A, a=math.sqrt(5))
+                    logger.info(f"Initialized {name}'s LoRA parameters with Kaiming uniform init!")
+                elif init_lora_weights.lower() == "gaussian":
+                    nn.init.normal_(module.lora_A, std=1 / self.r)
+                    logger.info(f"Initialized {name}'s LoRA parameters with Gaussian init!")
+                else:
+                    raise ValueError(f"Unknown initialization {init_lora_weights}!")
+                nn.init.zeros_(module.lora_B)
