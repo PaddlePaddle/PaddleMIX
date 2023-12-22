@@ -13,31 +13,35 @@
 # limitations under the License.
 
 import os
+
 os.environ["FLAGS_use_cuda_managed_memory"] = "true"
 
 
-from dataclasses import dataclass, field
-import numpy as np
 import random
+from dataclasses import dataclass, field
 
+import numpy as np
 import paddle
 import paddle.distributed as dist
-from paddle.distributed import fleet
 import paddle.nn as nn
-from paddle.io import BatchSampler, DataLoader
-
-from paddlenlp.ops import transfer_param
-from paddlenlp.trainer import (PdArgumentParser, TrainingArguments,
-                               get_last_checkpoint)
+from paddle.distributed import fleet
 from paddle.distributed.fleet.meta_parallel import get_rng_state_tracker
+from paddlenlp.ops import transfer_param
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 from paddlenlp.transformers import LlamaForCausalLM
+
+from paddlemix import (
+    MiniGPT4Config,
+    MiniGPT4ForConditionalGeneration,
+    MiniGPT4Processor,
+    MiniGPT4QFormerModel,
+    MiniGPT4VisionModel,
+)
 from paddlemix.datasets import load_dataset
-from paddlemix import MiniGPT4Processor, MiniGPT4ForConditionalGeneration, MiniGPT4VisionConfig, MiniGPT4QFormerConfig, MiniGPT4Config, MiniGPT4VisionModel, MiniGPT4QFormerModel
+from paddlemix.trainer.minigpt4_trainer import MiniGPT4Trainer as Trainer
 from paddlemix.utils import paddlemix_load
 from paddlemix.utils.log import logger
 from paddlemix.utils.parameters import freeze_parameters
-from paddlemix.optimization import CosineDecayWithWarmup
-from paddlemix.trainer.minigpt4_trainer import MiniGPT4Trainer as Trainer
 
 
 @dataclass
@@ -64,8 +68,9 @@ class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
     """
+
     pretrained_model_name_or_path: str = field(
-        default="/wangqinghui/mynlp/PaddleNLP/paddlenlp/transformers/minigpt4/minigpt4-13b",
+        default=None,
         metadata={"help": "The directory path to save pretrained model or model identifier"},
     )
 
@@ -77,48 +82,30 @@ class PreTrainingArguments(TrainingArguments):
     """
 
     pretrained_model_path: str = field(
-        default="/wangqinghui/mynlp/PaddleNLP/paddlenlp/transformers/minigpt4/minigpt4-13b/model_state.pdparams",
-        metadata={
-            "help": "The path to pre-trained model that we will use for pretraining."
-        },
+        default=None,
+        metadata={"help": "The path to pre-trained model that we will use for pretraining."},
     )
     # batch_size: int = field(
     #     default=12,
     #     metadata={"help": "Number of samples in one batch."}
     # )
-    weight_decay: float = field(
-        default=0.05, metadata={"help": "Weight decay if we apply some."}
-    )
-    learning_rate: float = field(
-        default=3e-5, metadata={"help": "The initial learning rate."}
-    )
-    num_train_epochs: float = field(
-        default=200, metadata={"help": "Total number of training epochs to perform."}
-    )
-    warmup_start_lr: float = field(
-        default=1e-6, metadata={"help": "Initial learning rate of warm up."}
-    )
-    eta_min: float = field(
-        default=1e-5, metadata={"help": "The minimum value of learning rate."}
-    )
+    weight_decay: float = field(default=0.05, metadata={"help": "Weight decay if we apply some."})
+    learning_rate: float = field(default=3e-5, metadata={"help": "The initial learning rate."})
+    num_train_epochs: float = field(default=200, metadata={"help": "Total number of training epochs to perform."})
+    warmup_start_lr: float = field(default=1e-6, metadata={"help": "Initial learning rate of warm up."})
+    eta_min: float = field(default=1e-5, metadata={"help": "The minimum value of learning rate."})
     # warmup_steps: int = field(
     #     default=200, metadata={"help": "Number of warmup steps."}
     # )
-    warmup: int = field(
-        default=200, metadata={"help": "warmup ratio or steps."}
-    )
-    lr_scheduler_name: str = field(
-        default="CosineDecayWithWarmup", metadata={"help": "The scheduler name to use."}
-    )
+    warmup: int = field(default=200, metadata={"help": "warmup ratio or steps."})
+    lr_scheduler_name: str = field(default="CosineDecayWithWarmup", metadata={"help": "The scheduler name to use."})
     per_device_train_batch_size: int = field(
         default=6, metadata={"help": "Batch size per GPU core/CPU for training. (default: 8)"}
     )
     per_device_eval_batch_size: int = field(
         default=6, metadata={"help": " Batch size per GPU core/CPU for evaluation. (default:8)"}
     )
-    output_dir: str = field(
-        default="./checkpoints", metadata={"help": "The directory name for saving checkpoint"}
-    )
+    output_dir: str = field(default="./checkpoints", metadata={"help": "The directory name for saving checkpoint"})
     do_eval: bool = field(default=False, metadata={"help": "Whether to evaluation."})
     do_train: bool = field(default=True, metadata={"help": "Whether to train."})
     logging_steps: int = field(default=50, metadata={"help": "Logging interval"})
@@ -135,30 +122,14 @@ class PreTrainingArguments(TrainingArguments):
     )
     pipeline_parallel_degree: int = field(default=1, metadata={"help": "Enable pipeline parallel"})
 
-    use_amp: str = field(
-        default=True, metadata={"help": "Whether to use amp for training."}
-    )
-    warmup_proportion: float = field(
-        default=0.1, metadata={"help": "The warmup rate."}
-    )
-    freeze_vit: float = field(
-        default=True, metadata={"help": "Whether to freeze vit."}
-    )
-    freeze_qformer: float = field(
-        default=True, metadata={"help": "Whether to freeze Qformer."}
-    )
-    freeze_llama: float = field(
-        default=True, metadata={"help": "Whether to freeze Llama."}
-    )
-    seed: int = field(
-        default=42, metadata={"help": "The random seed."}
-    )
-    log_freq: int = field(
-        default=1, metadata={"help":"The log frequency."}
-    )
-    num_workers: int = field(
-        default=0, metadata={"help": "The random seed."}
-    )
+    use_amp: str = field(default=True, metadata={"help": "Whether to use amp for training."})
+    warmup_proportion: float = field(default=0.1, metadata={"help": "The warmup rate."})
+    freeze_vit: float = field(default=True, metadata={"help": "Whether to freeze vit."})
+    freeze_qformer: float = field(default=True, metadata={"help": "Whether to freeze Qformer."})
+    freeze_llama: float = field(default=True, metadata={"help": "Whether to freeze Llama."})
+    seed: int = field(default=42, metadata={"help": "The random seed."})
+    log_freq: int = field(default=1, metadata={"help": "The log frequency."})
+    num_workers: int = field(default=0, metadata={"help": "The random seed."})
 
     resume_from_checkpoint: str = field(
         default=None,
@@ -203,15 +174,14 @@ def create_model(model_args):
     model = MiniGPT4ForConditionalGeneration(config)
     return model
 
+
 # TODO, better to split qformer, vit and llama for config and checkpoint
 def load_pretrained_model(model, pretrained_model_path, del_keys=[]):
     if pretrained_model_path is None:
         return
 
     if not os.path.exists(pretrained_model_path):
-        raise ValueError(
-            "Cannot find pretrained model path: {}".format(pretrained_model_path)
-    )
+        raise ValueError("Cannot find pretrained model path: {}".format(pretrained_model_path))
 
     state_dict = paddlemix_load(pretrained_model_path, map_location="cpu")
 
@@ -398,14 +368,12 @@ def main():
         trainer.save_model()
         trainer.save_state()
 
-
-
     # training setting
     # num_training_steps = training_args.num_train_epochs * len(train_loader)
     # lr_scheduler = CosineDecayWithWarmup(
-    #     learning_rate=training_args.learning_rate, 
+    #     learning_rate=training_args.learning_rate,
     #     total_steps=num_training_steps,
-    #     eta_min=training_args.eta_min, 
+    #     eta_min=training_args.eta_min,
     #     warmup=training_args.warmup_steps,
     #     warmup_start_lr=training_args.warmup_start_lr,
     #     last_step=-1,
