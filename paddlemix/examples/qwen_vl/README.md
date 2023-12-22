@@ -24,7 +24,7 @@
 ## 3 快速开始
 完成环境准备后，我们提供三种使用方式：
 
-## a 单轮预测
+## a. 单轮预测
 ```bash
 # qwen-vl
 python paddlemix/examples/qwen_vl/run_predict.py \
@@ -42,12 +42,12 @@ python paddlemix/examples/qwen_vl/run_predict.py \
   * `input_image` :输入图片路径或url，默认None。
   * `prompt` :输入prompt。
 
-## b 多轮对话
+## b. 多轮对话
 ```bash
 python paddlemix/examples/qwen_vl/chat_demo.py
 ```
 
-## c 通过[Appflow](../../../applications/README.md/)调用
+## c. 通过[Appflow](../../../applications/README.md/)调用
 > 注：使用Appflow前，需要完成Appflow环境配置，请参考[依赖安装](../../../applications/README.md/#1-appflow-依赖安装)。
 ```python
 
@@ -82,7 +82,7 @@ prompt2：“框出图中公交车的位置”
 ```
 <ref>公交车</ref><box>(178,280),(803,894)</box>
 ```
-<center><img src="https://github.com/LokeZhou/PaddleMIX/assets/13300429/95f73037-097e-4712-95be-17d5ca489f11" /></center>
+<center><img src="https://github.com/LokeZhou/PaddleMIX/assets/13300429/2ff2ebcf-b7d7-48ed-af42-ead9d2befeb4" /></center>
 
 
 ## 4 模型微调
