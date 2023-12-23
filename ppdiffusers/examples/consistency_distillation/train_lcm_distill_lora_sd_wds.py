@@ -917,17 +917,6 @@ def main(args):
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
 
-    # 12. Optimizer creation
-    optimizer = AdamW(
-        parameters=[p for p in unet.parameters() if not p.stop_gradient],
-        learning_rate=args.learning_rate,
-        beta1=args.adam_beta1,
-        beta2=args.adam_beta2,
-        weight_decay=args.adam_weight_decay,
-        epsilon=args.adam_epsilon,
-        grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
-    )
-
     # Here, we compute not just the text embeddings but also the additional embeddings
     # needed for the SD XL UNet to operate.
     def compute_embeddings(prompt_batch, proportion_empty_prompts, text_encoder, tokenizer, is_train=True):
@@ -970,6 +959,17 @@ def main(args):
         learning_rate=args.learning_rate,
         num_warmup_steps=args.lr_warmup_steps,
         num_training_steps=args.max_train_steps,
+    )
+
+    # 12. Optimizer creation
+    optimizer = AdamW(
+        parameters=[p for p in unet.parameters() if not p.stop_gradient],
+        learning_rate=lr_scheduler,
+        beta1=args.adam_beta1,
+        beta2=args.adam_beta2,
+        weight_decay=args.adam_weight_decay,
+        epsilon=args.adam_epsilon,
+        grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
     )
 
     # Prepare everything with our `accelerator`.
