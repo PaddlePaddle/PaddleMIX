@@ -793,7 +793,7 @@ class Accelerator:
         self.gradient_state.plugin_kwargs.update({"num_steps": gradient_accumulation_steps})
 
     @contextmanager
-    def accumulate(self, *models):
+    def accumulate(self, *models, gradient_checkpointing=None):
         """
         A context manager that will lightly wrap around and perform gradient accumulation automatically
 
@@ -823,7 +823,14 @@ class Accelerator:
         self._do_sync()
         with contextlib.ExitStack() as cm_stack:
             for m in models:
-                cm_stack.enter_context(contextlib.nullcontext() if self.sync_gradients else self.no_sync(m))
+                do_gradient_checkpointing = (
+                    gradient_checkpointing if gradient_checkpointing is not None else m.do_gradient_checkpointing
+                )
+                cm_stack.enter_context(
+                    self.no_sync(m)
+                    if not self.sync_gradients or do_gradient_checkpointing
+                    else contextlib.nullcontext()
+                )
             yield
 
     @contextmanager
@@ -1005,6 +1012,10 @@ class Accelerator:
 
         # if device_placement and not self.verify_device_map(model):
         #     model = model.to(self.device)
+        if hasattr(model, "is_gradient_checkpointing"):
+            model.do_gradient_checkpointing = model.is_gradient_checkpointing
+        else:
+            model.do_gradient_checkpointing = False
         if not evaluation_mode:
             if self.distributed_type in (DistributedType.MULTI_GPU,):
                 if any(not p.stop_gradient for p in model.parameters()):
@@ -1012,6 +1023,9 @@ class Accelerator:
                     model = paddle.DataParallel(
                         model,
                     )
+                    model.do_gradient_checkpointing = model._layers.do_gradient_checkpointing
+                else:
+                    model.do_gradient_checkpointing = False
 
         return model
 
