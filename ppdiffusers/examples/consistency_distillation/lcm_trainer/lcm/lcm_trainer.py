@@ -99,6 +99,14 @@ class VisualDLWithImageCallback(VisualDLCallback):
                     width=args.resolution,
                     max_batch=max_batch,
                 )
+                for prompt, input_ids in zip(model.validation_prompts, model.text_input_ids):
+                    image_logs[prompt] = model.log_image(
+                        input_ids=input_ids.unsqueeze(0).tile([max_batch, -1]),
+                        height=args.resolution,
+                        width=args.resolution,
+                        max_batch=max_batch,
+                        seed=args.seed,
+                    )
 
         if not state.is_world_process_zero:
             return

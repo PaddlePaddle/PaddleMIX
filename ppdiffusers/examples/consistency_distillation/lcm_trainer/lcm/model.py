@@ -25,6 +25,7 @@ from paddlenlp.utils.log import logger
 
 from ppdiffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
 from ppdiffusers.training_utils import freeze_params
+from ppdiffusers.utils.initializer_utils import reset_initialized_parameter
 
 from .lcm_scheduler import LCMScheduler
 
@@ -226,6 +227,8 @@ class LCMModel(nn.Layer):
             if self.teacher_unet.config.time_cond_proj_dim is None:
                 self.teacher_unet.config["time_cond_proj_dim"] = self.model_args.unet_time_cond_proj_dim
             self.unet = UNet2DConditionModel(**self.teacher_unet.config)
+            # inialize the `time_embedding.cond_proj` like `torch.nn.Linear``
+            reset_initialized_parameter(self.unet.time_embedding.cond_proj)
             # load teacher_unet weights into unet
             self.unet.load_dict(self.teacher_unet.state_dict())
             self.unet.train()
@@ -246,13 +249,27 @@ class LCMModel(nn.Layer):
             timesteps=self.noise_scheduler.config.num_train_timesteps,
             ddim_timesteps=model_args.num_ddim_timesteps,
         )
-        self.eval_scheduler = LCMScheduler.from_pretrained(vae_name_or_path.replace("vae", "scheduler"))
 
+        # set this attr for eval
+        self.eval_scheduler = LCMScheduler.from_pretrained(vae_name_or_path.replace("vae", "scheduler"))
+        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         uncond_input_ids = self.tokenizer(
             [""], return_tensors="pd", padding="max_length", max_length=self.tokenizer.model_max_length
         ).input_ids
         self.uncond_prompt_embeds = self.text_encoder(uncond_input_ids)[0]
-        self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
+        self.validation_prompts = [
+            "portrait photo of a girl, photograph, highly detailed face, depth of field, moody light, golden hour, style by Dan Winters, Russell James, Steve McCurry, centered, extremely detailed, Nikon D850, award winning photography",
+            "Self-portrait oil painting, a beautiful cyborg with golden hair, 8k",
+            "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+            "A photo of beautiful mountain with realistic sunset and blue lake, highly detailed, masterpiece",
+        ]
+        self.text_input_ids = self.tokenizer(
+            self.validation_prompts,
+            padding="max_length",
+            max_length=self.tokenizer.model_max_length,
+            truncation=True,
+            return_tensors="pd",
+        ).input_ids
 
     def forward(self, input_ids=None, pixel_values=None, **kwargs):
         self.vae.eval()
@@ -415,8 +432,14 @@ class LCMModel(nn.Layer):
         width=256,
         max_batch=8,
         timesteps=None,
+        seed=42,
         **kwargs,
     ):
+        orig_rng_state = None
+        if seed is not None and seed > 0:
+            orig_rng_state = paddle.get_rng_state()
+            paddle.seed(seed)
+
         if self.is_lora:
             guidance_scale = 1.0
         else:
@@ -487,6 +510,8 @@ class LCMModel(nn.Layer):
         # vae decode
         image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1]) * 255.0
+        if orig_rng_state is not None:
+            paddle.set_rng_state(orig_rng_state)
         return image.cast("float32").numpy().round()
 
     def set_recompute(self, use_recompute=False):
