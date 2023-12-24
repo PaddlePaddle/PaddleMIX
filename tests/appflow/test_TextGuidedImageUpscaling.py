@@ -17,6 +17,7 @@ import sys
 import unittest
 
 import numpy as np
+import paddle
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 from paddlemix.appflow import Appflow
@@ -34,12 +35,31 @@ class TextGuidedImageUpscalingTest(unittest.TestCase):
         low_res_img = load_image(self.url).resize((128, 128))
 
         prompt = "a white cat"
+        paddle.seed(1024)
 
         app = Appflow(app='image2image_text_guided_upscaling',models=['stabilityai/stable-diffusion-x4-upscaler'])
         image = app(prompt=prompt,image=low_res_img)['result']
 
         self.assertIsNotNone(image)
+        #增加结果对比
+        expect_img = load_image('/home/aistudio/upscaled_white_cat.png')
 
+        size = (512, 512)
+        image1 = image.resize(size)
+        image2 = expect_img.resize(size)
+
+        # 获取图像数据
+        data1 = list(image1.getdata())
+        data2 = list(image2.getdata())
+
+        # 计算每个像素点的差值，并求平均值
+        diff_sum = 0.0
+        for i in range(len(data1)):
+            diff_sum += sum(abs(c - d) for c, d in zip(data1[i], data2[i]))
+
+        average_diff = diff_sum / len(data1)
+
+        self.assertLessEqual(average_diff, 5)
 
 if __name__ == "__main__":
 
