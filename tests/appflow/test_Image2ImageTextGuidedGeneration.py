@@ -15,7 +15,7 @@
 import os
 import sys
 import unittest
-
+import paddle
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
@@ -41,7 +41,25 @@ class Image2ImageTextGuidedGeneration(unittest.TestCase):
         image = app(prompt=prompt,negative_prompt=negative_prompt,image=image)['result']
 
         self.assertIsNotNone(image)
+        #增加结果对比
+        expect_img = load_image('/home/aistudio/image2image_text_guided_generation.png')
 
+        size = (512, 512)
+        image1 = image.resize(size)
+        image2 = expect_img.resize(size)
+
+        # 获取图像数据
+        data1 = list(image1.getdata())
+        data2 = list(image2.getdata())
+
+        # 计算每个像素点的差值，并求平均值
+        diff_sum = 0.0
+        for i in range(len(data1)):
+            diff_sum += sum(abs(c - d) for c, d in zip(data1[i], data2[i]))
+
+        average_diff = diff_sum / len(data1)
+
+        self.assertLessEqual(average_diff, 5)
 
 if __name__ == "__main__":
 
