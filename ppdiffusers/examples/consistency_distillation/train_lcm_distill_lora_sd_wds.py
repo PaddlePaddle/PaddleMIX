@@ -856,6 +856,7 @@ def main(args):
             ".*upsamplers.0.conv.*",
             ".*time_emb_proj.*",
         ],
+        merge_weights=False,
     )
     unet.config.tensor_parallel_degree = 1
     unet = LoRAModel(unet, lora_config)
