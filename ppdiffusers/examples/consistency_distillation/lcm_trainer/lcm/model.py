@@ -454,6 +454,7 @@ class LCMModel(nn.Layer):
         max_batch=8,
         timesteps=None,
         seed=42,
+        unet=None,
         **kwargs,
     ):
         orig_rng_state = None
@@ -478,9 +479,12 @@ class LCMModel(nn.Layer):
         if input_ids.shape[0] > max_batch:
             input_ids = input_ids[:max_batch]
 
+        # choose unet to infer
+        unet = self.unet if unet is None else unet
+
         prompt_embeds = self.text_encoder(input_ids)[0]
 
-        do_classifier_free_guidance = guidance_scale > 1 and self.unet.config.time_cond_proj_dim is None
+        do_classifier_free_guidance = guidance_scale > 1 and unet.config.time_cond_proj_dim is None
         if do_classifier_free_guidance:
             prompt_embeds = paddle.concat(
                 [self.uncond_prompt_embeds.expand([prompt_embeds.shape[0], -1, -1]), prompt_embeds]
@@ -492,14 +496,14 @@ class LCMModel(nn.Layer):
         latents = paddle.randn(shape, dtype=prompt_embeds.dtype) * self.eval_scheduler.init_noise_sigma
 
         timestep_cond = None
-        if self.unet.config.time_cond_proj_dim is not None:
+        if unet.config.time_cond_proj_dim is not None:
             guidance_scale_tensor = paddle.to_tensor([guidance_scale - 1]).tile(
                 [
                     batch_size,
                 ]
             )
             timestep_cond = get_guidance_scale_embedding(
-                guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim
+                guidance_scale_tensor, embedding_dim=unet.config.time_cond_proj_dim
             )
 
         for i, t in enumerate(timesteps):
@@ -508,7 +512,7 @@ class LCMModel(nn.Layer):
             latent_model_input = self.eval_scheduler.scale_model_input(latent_model_input, t)
 
             # predict the noise residual
-            noise_pred = self.unet(
+            noise_pred = unet(
                 latent_model_input,
                 t,
                 encoder_hidden_states=prompt_embeds,

@@ -99,15 +99,25 @@ class VisualDLWithImageCallback(VisualDLCallback):
                     width=args.resolution,
                     max_batch=max_batch,
                 )
+                prefix = "eval_prompt/" if model.is_lora else "eval_prompt/online_unet/"
                 for prompt, input_ids in zip(model.validation_prompts, model.text_input_ids):
-                    image_logs[prompt] = model.log_image(
+                    image_logs[prefix + prompt] = model.log_image(
                         input_ids=input_ids.unsqueeze(0).tile([max_batch, 1]),
                         height=args.resolution,
                         width=args.resolution,
                         max_batch=max_batch,
                         seed=args.seed,
                     )
-
+                if not model.is_lora:
+                    for prompt, input_ids in zip(model.validation_prompts, model.text_input_ids):
+                        image_logs["eval_prompt/target_unet/" + prompt] = model.log_image(
+                            input_ids=input_ids.unsqueeze(0).tile([max_batch, 1]),
+                            height=args.resolution,
+                            width=args.resolution,
+                            max_batch=max_batch,
+                            seed=args.seed,
+                            unet=model.target_unet,
+                        )
         if not state.is_world_process_zero:
             return
 
