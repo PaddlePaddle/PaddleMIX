@@ -306,7 +306,7 @@ class LCMTrainer(Trainer):
         if self.args.only_save_updated_model:
             unwraped_model = unwrap_model(self.model)
             if unwraped_model.is_lora:
-                logger.info(f"Saving lcm unet lora checkpoint to {output_dir}/lora")
+                logger.info(f"Saving lcm unet lora checkpoint to `{output_dir}/lora`.")
                 unwraped_model.unet.save_pretrained(os.path.join(output_dir, "lora"))
                 from safetensors.numpy import save_file
 
@@ -317,8 +317,9 @@ class LCMTrainer(Trainer):
                     metadata={"format": "pt"},
                 )
             else:
-                logger.info(f"Saving unet checkpoint to {output_dir}/unet")
+                logger.info(f"Saving unet checkpoint to `{output_dir}/unet` and `{output_dir}/unet_target`.")
                 unwraped_model.unet.save_pretrained(os.path.join(output_dir, "unet"))
+                unwraped_model.target_unet.save_pretrained(os.path.join(output_dir, "unet_target"))
         else:
             logger.info(f"Saving model checkpoint to {output_dir}")
             if state_dict is None:
