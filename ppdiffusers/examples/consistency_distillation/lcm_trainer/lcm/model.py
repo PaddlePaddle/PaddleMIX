@@ -151,6 +151,20 @@ def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
     return noise_cfg
 
 
+@paddle.no_grad()
+def update_ema(target_params, source_params, rate=0.99):
+    """
+    Update target parameters to be closer to those of source parameters using
+    an exponential moving average.
+
+    :param target_params: the target parameter sequence.
+    :param source_params: the source parameter sequence.
+    :param rate: the EMA rate (closer to 1 means slower).
+    """
+    for targ, src in zip(target_params, source_params):
+        targ.copy_(rate * targ + (1 - rate) * src, False)
+
+
 class LCMModel(nn.Layer):
     def __init__(self, model_args):
         super().__init__()
@@ -254,7 +268,10 @@ class LCMModel(nn.Layer):
         self.eval_scheduler = LCMScheduler.from_pretrained(vae_name_or_path.replace("vae", "scheduler"))
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         uncond_input_ids = self.tokenizer(
-            [""], return_tensors="pd", padding="max_length", max_length=self.tokenizer.model_max_length
+            [""],
+            return_tensors="pd",
+            padding="max_length",
+            max_length=self.tokenizer.model_max_length,
         ).input_ids
         self.uncond_prompt_embeds = self.text_encoder(uncond_input_ids)[0]
         self.validation_prompts = [
@@ -423,6 +440,10 @@ class LCMModel(nn.Layer):
         image = (image / 2 + 0.5).clip(0, 1).transpose([0, 2, 3, 1])
         image = (image * 255.0).cast("float32").numpy().round()
         return image
+
+    def on_train_batch_end(self):
+        if not self.is_lora:
+            update_ema(self.target_unet.parameters(), self.unet.parameters(), self.model_args.ema_decay)
 
     @paddle.no_grad()
     def log_image(

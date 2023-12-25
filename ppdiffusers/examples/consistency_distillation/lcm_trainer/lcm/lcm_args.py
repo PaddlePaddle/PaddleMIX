@@ -120,7 +120,10 @@ class LCMModelArguments:
             " does not have `time_cond_proj_dim` set. Only used if `--is_lora=False`."
         },
     )
-
+    ema_decay: float = field(
+        default=0.95,
+        metadata={"help": "The exponential moving average (EMA) rate or decay factor."},
+    )
     # --------------------- LORA --------------------------
     is_lora: bool = field(default=False, metadata={"help": "Whether or not lora model"})
     lora_rank: int = field(
