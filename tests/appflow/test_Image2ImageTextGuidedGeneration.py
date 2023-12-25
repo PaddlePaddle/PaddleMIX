@@ -27,6 +27,7 @@ class Image2ImageTextGuidedGeneration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/image_Kurisu.png"
+        cls.expected_image = '/home/aistudio/image2image_text_guided_generation.png'
 
     def test_image_generation(self):
         image = load_image(self.url).resize((512, 768))
@@ -42,7 +43,7 @@ class Image2ImageTextGuidedGeneration(unittest.TestCase):
 
         self.assertIsNotNone(image)
         #增加结果对比
-        expect_img = load_image('/home/aistudio/image2image_text_guided_generation.png')
+        expect_img = load_image(self.expected_image)
 
         size = (512, 512)
         image1 = image.resize(size)

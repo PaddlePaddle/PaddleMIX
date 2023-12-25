@@ -28,6 +28,7 @@ class TextGuidedImageInpaintingTest(unittest.TestCase):
     def setUpClass(cls):
         cls.img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
         cls.mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
+        cls.expected_image = '/home/aistudio/inpainting.png'
 
     def test_image_inpainting(self):
         image = load_image(self.img_url)
@@ -41,7 +42,7 @@ class TextGuidedImageInpaintingTest(unittest.TestCase):
 
         self.assertIsNotNone(image)        
         #增加结果对比
-        expect_img = load_image('/home/aistudio/inpainting.png')
+        expect_img = load_image(self.expected_image)
 
         size = (512, 512)
         image1 = image.resize(size)

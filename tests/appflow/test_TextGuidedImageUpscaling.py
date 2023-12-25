@@ -28,7 +28,7 @@ class TextGuidedImageUpscalingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/low_res_cat.png"
-    
+        cls.expected_image = '/home/aistudio/upscaled_white_cat.png'
     
     def test_image_upscaling(self):
 
@@ -42,7 +42,7 @@ class TextGuidedImageUpscalingTest(unittest.TestCase):
 
         self.assertIsNotNone(image)
         #增加结果对比
-        expect_img = load_image('/home/aistudio/upscaled_white_cat.png')
+        expect_img = load_image(self.expected_image)
 
         size = (512, 512)
         image1 = image.resize(size)
