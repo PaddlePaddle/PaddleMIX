@@ -37,9 +37,6 @@ from braceexpand import braceexpand
 from paddle.io.dataloader.collate import default_collate_fn
 from paddle.optimizer import AdamW
 from paddle.vision import transforms
-from ppaccelerate import Accelerator
-from ppaccelerate.logging import get_logger
-from ppaccelerate.utils import ProjectConfiguration, set_seed
 from safetensors.numpy import save_file
 from tqdm.auto import tqdm
 from webdataset.tariterators import (
@@ -57,10 +54,12 @@ from ppdiffusers import (
     StableDiffusionPipeline,
     UNet2DConditionModel,
 )
+from ppdiffusers.accelerate import Accelerator
+from ppdiffusers.accelerate.logging import get_logger
+from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
 from ppdiffusers.utils import check_min_version, is_wandb_available
-from ppdiffusers.utils.import_utils import is_ppxformers_available
 
 MAX_SEQ_LENGTH = 77
 
@@ -748,7 +747,7 @@ def main(args):
         mixed_precision=args.mixed_precision,
         log_with=args.report_to,
         project_config=accelerator_project_config,
-        # split_batches=True,  # It's important to set this to True when using webdataset to get the right number of steps for lr scheduling. If set to False, the number of steps will be devide by the number of processes assuming batches are multiplied by the number of processes
+        split_batches=True,  # It's important to set this to True when using webdataset to get the right number of steps for lr scheduling. If set to False, the number of steps will be devide by the number of processes assuming batches are multiplied by the number of processes
     )
 
     # Make one log on every process with the configuration for debugging.
@@ -756,6 +755,7 @@ def main(args):
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
         level=logging.INFO,
+        force=True,
     )
     logger.info(accelerator.state, main_process_only=False)
     if accelerator.is_local_main_process:
@@ -856,9 +856,33 @@ def main(args):
             ".*upsamplers.0.conv.*",
             ".*time_emb_proj.*",
         ],
+        merge_weights=False,
     )
     unet.config.tensor_parallel_degree = 1
     unet = LoRAModel(unet, lora_config)
+
+    @paddle.no_grad()
+    def reset_lora_parameters(unet, init_lora_weights=True):
+        import math
+
+        if init_lora_weights is False:
+            return
+        for name, module in unet.named_sublayers(include_self=True):
+            module_name = module.__class__.__name__.lower()
+            if module_name in ["loralinear", "loraconv2d"]:
+                if init_lora_weights is True:
+                    # initialize A the same way as the default for nn.Linear and B to zero
+                    # https://github.com/microsoft/LoRA/blob/a0a92e0f26c067cf94747bdbf1ce73793fa44d19/loralib/layers.py#L124
+                    nn.init.kaiming_uniform_(module.lora_A, a=math.sqrt(5), reverse=module_name == "loralinear")
+                    logger.info(f"Initialized {name}'s LoRA parameters with Kaiming uniform init!")
+                elif init_lora_weights.lower() == "gaussian":
+                    nn.init.normal_(module.lora_A, std=1 / module.r)
+                    logger.info(f"Initialized {name}'s LoRA parameters with Gaussian init!")
+                else:
+                    raise ValueError(f"Unknown initialization {init_lora_weights}!")
+                nn.init.zeros_(module.lora_B)
+
+    reset_lora_parameters(unet)
     unet.mark_only_lora_as_trainable()
     unet.print_trainable_parameters()
 
@@ -878,32 +902,21 @@ def main(args):
     text_encoder.to(dtype=weight_dtype)
 
     # Move teacher_unet to device, optionally cast to weight_dtype
-    teacher_unet.to(accelerator.device)
+    # teacher_unet.to(accelerator.device)
     if args.cast_teacher_unet:
         teacher_unet.to(dtype=weight_dtype)
 
     # 11. Enable optimizations
-    if args.enable_xformers_memory_efficient_attention:
-        if is_ppxformers_available():
-            unet.enable_xformers_memory_efficient_attention()
-            teacher_unet.enable_xformers_memory_efficient_attention()
-            # target_unet.enable_xformers_memory_efficient_attention()
-        else:
-            raise ValueError("xformers is not available. Make sure it is installed correctly")
+    # if args.enable_xformers_memory_efficient_attention:
+    #     if is_ppxformers_available():
+    #         unet.enable_xformers_memory_efficient_attention()
+    #         teacher_unet.enable_xformers_memory_efficient_attention()
+    #         # target_unet.enable_xformers_memory_efficient_attention()
+    #     else:
+    #         raise ValueError("xformers is not available. Make sure it is installed correctly")
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
-
-    # 12. Optimizer creation
-    optimizer = AdamW(
-        parameters=[p for p in unet.parameters() if not p.stop_gradient],
-        learning_rate=args.learning_rate,
-        beta1=args.adam_beta1,
-        beta2=args.adam_beta2,
-        weight_decay=args.adam_weight_decay,
-        epsilon=args.adam_epsilon,
-        grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
-    )
 
     # Here, we compute not just the text embeddings but also the additional embeddings
     # needed for the SD XL UNet to operate.
@@ -944,9 +957,20 @@ def main(args):
 
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler,
-        learning_rate=1.0,
+        learning_rate=args.learning_rate,
         num_warmup_steps=args.lr_warmup_steps,
         num_training_steps=args.max_train_steps,
+    )
+
+    # 12. Optimizer creation
+    optimizer = AdamW(
+        parameters=[p for p in unet.parameters() if not p.stop_gradient],
+        learning_rate=lr_scheduler,
+        beta1=args.adam_beta1,
+        beta2=args.adam_beta2,
+        weight_decay=args.adam_weight_decay,
+        epsilon=args.adam_epsilon,
+        grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
     )
 
     # Prepare everything with our `accelerator`.
@@ -1186,7 +1210,9 @@ def main(args):
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                         os.makedirs(save_path, exist_ok=True)
                         # accelerator.save_state(save_path)
-                        lora_state_dict = get_module_kohya_state_dict(unet, "lora_unet", weight_dtype)
+                        lora_state_dict = get_module_kohya_state_dict(
+                            accelerator.unwrap_model(unet), "lora_unet", weight_dtype
+                        )
                         save_file(
                             lora_state_dict, os.path.join(save_path, "lcm_lora.safetensors"), metadata={"format": "pt"}
                         )
@@ -1195,7 +1221,7 @@ def main(args):
                     if global_step % args.validation_steps == 0:
                         log_validation(vae, unet, args, accelerator, weight_dtype, global_step)
 
-            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_lr() * args.learning_rate}
+            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_lr()}
             progress_bar.set_postfix(**logs)
             accelerator.log(logs, step=global_step)
 
