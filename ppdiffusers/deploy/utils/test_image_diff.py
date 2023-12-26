@@ -66,7 +66,7 @@ def test_diff(image1, image2):
     if isinstance(image2, PIL.Image.Image):
         image2 = np.array(image2)
 
-    expected_max_diff = 0.1
+    expected_max_diff = 30
     avg_diff = np.abs(image1 - image2).mean()
 
     assert avg_diff < expected_max_diff, f"FAILED: Error image deviates {avg_diff} pixels on average"

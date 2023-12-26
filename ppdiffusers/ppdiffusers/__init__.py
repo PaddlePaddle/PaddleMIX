@@ -48,6 +48,7 @@ from .optimization import (
 )
 from .patches import *
 from .pipelines import *
+from .pipelines import StableDiffusionControlNetPipeline
 from .schedulers import (
     CMStochasticIterativeScheduler,
     DDIMInverseScheduler,
@@ -76,4 +77,30 @@ from .schedulers import (
     UniPCMultistepScheduler,
     VQDiffusionScheduler,
 )
+from .utils import (
+    OptionalDependencyNotAvailable,
+    is_fastdeploy_available,
+    is_paddle_available,
+    is_paddlenlp_available,
+)
 from .version import VERSION as __version__
+
+try:
+    if not (is_paddle_available() and is_paddlenlp_available() and is_fastdeploy_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from .utils.dummy_paddle_and_paddlenlp_and_fastdeploy_objects import *  # noqa F403
+else:
+    from .pipelines import (  # FastDeployStableDiffusionUpscalePipeline,
+        FastDeployCycleDiffusionPipeline,
+        FastDeployStableDiffusionControlNetPipeline,
+        FastDeployStableDiffusionImg2ImgPipeline,
+        FastDeployStableDiffusionInpaintPipeline,
+        FastDeployStableDiffusionInpaintPipelineLegacy,
+        FastDeployStableDiffusionMegaPipeline,
+        FastDeployStableDiffusionPipeline,
+        FastDeployStableDiffusionXLImg2ImgPipeline,
+        FastDeployStableDiffusionXLInpaintPipeline,
+        FastDeployStableDiffusionXLMegaPipeline,
+        FastDeployStableDiffusionXLPipeline,
+    )

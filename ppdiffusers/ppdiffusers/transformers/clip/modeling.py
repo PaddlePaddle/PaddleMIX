@@ -199,7 +199,7 @@ class CLIPVisionEmbeddings(nn.Layer):
 
         class_embeds = self.class_embedding.expand([batch_size, 1, -1])
         embeddings = paddle.concat([class_embeds, patch_embeds], axis=1)
-        embeddings = embeddings + self.position_embedding(self.position_ids._to(dtype=paddle.int64))
+        embeddings = embeddings + self.position_embedding(self.position_ids.cast(dtype=paddle.int64))
         return embeddings
 
 
@@ -232,7 +232,7 @@ class CLIPTextEmbeddings(nn.Layer):
         if inputs_embeds is None:
             inputs_embeds = self.token_embedding(input_ids)
 
-        position_embeddings = self.position_embedding(position_ids._to(dtype=paddle.int64))
+        position_embeddings = self.position_embedding(position_ids.cast(dtype=paddle.int64))
         embeddings = inputs_embeds + position_embeddings
 
         return embeddings
@@ -712,6 +712,14 @@ class CLIPTextTransformer(nn.Layer):
         self.final_layer_norm = nn.LayerNorm(embed_dim, epsilon=config.layer_norm_eps)
         # For `pooled_output` computation
         self.eos_token_id = config.eos_token_id
+        # self.register_buffer(
+        #     "causal_mask",
+        #     paddle.triu(
+        #         paddle.ones((1, 1, config.max_position_embeddings, config.max_position_embeddings)) * paddle.finfo(self.embeddings.token_embedding.weight.dtype).min,
+        #         diagonal=1,
+        #     ),
+        #     persistable=False,
+        # )
 
     def forward(
         self,
@@ -748,6 +756,7 @@ class CLIPTextTransformer(nn.Layer):
             seq_len,
             hidden_states.dtype,
         )
+        # causal_attention_mask = self.causal_mask[:, :, :seq_len, :seq_len]
         # expand attention_mask
         if attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
@@ -805,7 +814,8 @@ class CLIPTextTransformer(nn.Layer):
 
     def _build_causal_attention_mask(self, bsz, seq_len, dtype):
         mask = paddle.triu(
-            paddle.full((bsz, 1, seq_len, seq_len), paddle.finfo(dtype).min, dtype=dtype),
+            # paddle.full((bsz, 1, seq_len, seq_len), paddle.finfo(dtype).min, dtype=dtype),
+            paddle.ones((bsz, paddle.to_tensor([1]), seq_len, seq_len), dtype=dtype) * paddle.finfo(dtype).min,
             diagonal=1,
         )
         return mask
@@ -1208,6 +1218,9 @@ class CLIPTextModelWithProjection(CLIPPreTrainedModel):
         self.text_model = CLIPTextTransformer(config)
 
         self.text_projection = LinearClass(config.hidden_size, config.projection_dim, bias_attr=False)
+        # self.text_projection = paddle.create_parameter(
+        #     (config.hidden_size, config.projection_dim), paddle.get_default_dtype()
+        # )
 
         # Initialize weights and apply final processing
         self.post_init()

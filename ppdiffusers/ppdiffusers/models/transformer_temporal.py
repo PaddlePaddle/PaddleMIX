@@ -345,7 +345,7 @@ class TransformerSpatioTemporalModel(nn.Layer):
         # 2. Blocks
         for block, temporal_block in zip(self.transformer_blocks, self.temporal_transformer_blocks):
             if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(
                     block,
                     hidden_states,

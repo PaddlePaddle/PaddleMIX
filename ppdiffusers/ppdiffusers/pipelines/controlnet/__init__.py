@@ -1,4 +1,5 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,16 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 from ...utils import (
-    BaseOutput,
     OptionalDependencyNotAvailable,
     is_fastdeploy_available,
     is_paddle_available,
     is_paddlenlp_available,
 )
-from .pipeline_output import StableDiffusionXLPipelineOutput
-from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline
 
 try:
     if not (is_paddlenlp_available() and is_paddle_available()):
@@ -28,23 +25,12 @@ try:
 except OptionalDependencyNotAvailable:
     from ...utils.dummy_paddle_and_paddlenlp_objects import *
 else:
-    from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline  # noqa F401
-
-try:
-    if not (is_paddle_available() and is_fastdeploy_available()):
-        raise OptionalDependencyNotAvailable()
-except OptionalDependencyNotAvailable:
-    from ...utils.dummy_fastdeploy_objects import *  # noqa F403
-else:
-    from .pipeline_fastdeploy_stable_diffusion_xl import (
-        FastDeployStableDiffusionXLPipeline,
-    )
-    from .pipeline_fastdeploy_stable_diffusion_xl_img2img import (
-        FastDeployStableDiffusionXLImg2ImgPipeline,
-    )
-    from .pipeline_fastdeploy_stable_diffusion_xl_inpaint import (
-        FastDeployStableDiffusionXLInpaintPipeline,
-    )
-    from .pipeline_fastdeploy_stable_diffusion_xl_mega import (
-        FastDeployStableDiffusionXLMegaPipeline,
+    from .multicontrolnet import MultiControlNetModel
+    from .pipeline_controlnet import StableDiffusionControlNetPipeline
+    from .pipeline_controlnet_img2img import StableDiffusionControlNetImg2ImgPipeline
+    from .pipeline_controlnet_inpaint import StableDiffusionControlNetInpaintPipeline
+    from .pipeline_controlnet_sd_xl import StableDiffusionXLControlNetPipeline
+if is_paddlenlp_available() and is_fastdeploy_available():
+    from .pipeline_fastdeploy_stable_diffusion_controlnet import (
+        FastDeployStableDiffusionControlNetPipeline,
     )

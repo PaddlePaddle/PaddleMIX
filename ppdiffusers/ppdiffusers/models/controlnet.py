@@ -882,6 +882,7 @@ class ControlNetModel(ModelMixin, ConfigMixin, FromOriginalControlnetMixin):
         )
 
 
+@paddle.no_grad()
 def zero_module(module):
     for p in module.parameters():
         p.zero_()

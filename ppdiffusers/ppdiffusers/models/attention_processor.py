@@ -604,7 +604,7 @@ class Attention(nn.Layer):
         if attention_mask is None:
             return attention_mask
 
-        current_length: int = attention_mask.shape[-1]
+        current_length = attention_mask.shape[-1]
         if current_length != target_length:
             # TODO: for pipelines such as stable-diffusion, padding cross-attn mask:
             #       we want to instead pad by (0, remaining_length), where remaining_length is:
