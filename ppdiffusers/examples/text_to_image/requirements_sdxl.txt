@@ -1,0 +1,5 @@
+Pillow
+ppdiffusers>=0.24.0
+ftfy
+Jinja2
+datasets

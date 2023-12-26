@@ -310,7 +310,7 @@ class UNet2DConditionLoadersMixin:
                 if from_diffusers:
                     rank = value_dict["lora.down.weight"].shape[0]
                 else:
-                    rank = value_dict["lora.weight"].shape[1]
+                    rank = value_dict["lora.down.weight"].shape[1]
 
                 if isinstance(attn_processor, LoRACompatibleConv):
                     in_features = attn_processor._in_channels

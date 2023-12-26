@@ -218,8 +218,10 @@ class LoRALinearLayer(nn.Layer):
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         orig_dtype = hidden_states.dtype
         dtype = self.down.weight.dtype
-
-        down_hidden_states = self.down(hidden_states.cast(dtype))
+        try:
+            down_hidden_states = self.down(hidden_states.cast(dtype))
+        except:
+            breakpoint()
         up_hidden_states = self.up(down_hidden_states)
 
         if self.network_alpha is not None:

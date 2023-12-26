@@ -16,6 +16,7 @@ from contextlib import nullcontext
 from functools import partial
 from typing import Callable, Dict, List, Optional, Union
 
+import numpy as np
 import paddle
 from huggingface_hub import model_info
 from packaging import version
@@ -310,9 +311,11 @@ class LoraLoaderMixin:
             # TODO, check this
             from ppdiffusers.utils import smart_load
 
-            state_dict = smart_load(model_file, return_is_torch_weight=True)
-            if "is_torch_weight" in state_dict and state_dict.pop("is_torch_weight", False) and not from_diffusers:
-                from_diffusers = True
+            state_dict = smart_load(model_file)
+            # state_dict = smart_load(model_file, return_is_torch_weight=True)
+            # breakpoint()
+            # if "is_torch_weight" in state_dict and state_dict.pop("is_torch_weight", False) and not from_diffusers:
+            #     from_diffusers = True
         else:
             state_dict = pretrained_model_name_or_path_or_dict
 
@@ -810,6 +813,7 @@ class LoraLoaderMixin:
                     save_function = torch.save
             else:
                 if safe_serialization:
+                    state_dict = {k: np.ascontiguousarray(v) for k, v in state_dict.items()}
                     save_function = partial(np_safe_save_file, metadata={"format": "pd"})
                 else:
                     save_function = paddle.save
