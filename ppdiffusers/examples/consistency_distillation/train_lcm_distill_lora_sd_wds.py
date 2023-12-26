@@ -34,7 +34,7 @@ import paddle.nn.functional as F
 import paddle.vision.transforms.functional as TF
 import webdataset as wds
 from braceexpand import braceexpand
-from paddle.io.dataloader.collate import default_collate_fn
+from paddle.io.dataloader.collate import default_collate_fn as default_collate
 from paddle.optimizer import AdamW
 from paddle.vision import transforms
 from safetensors.numpy import save_file
@@ -60,14 +60,8 @@ from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
 from ppdiffusers.utils import check_min_version, is_wandb_available
-from ppdiffusers.utils.import_utils import is_ppxformers_available
 
 MAX_SEQ_LENGTH = 77
-
-# Adjust for your dataset
-WDS_JSON_WIDTH = "width"  # original_width for LAION
-WDS_JSON_HEIGHT = "height"  # original_height for LAION
-MIN_SIZE = 700  # ~960 for LAION, ideal: 1024 if the dataset contains large images
 
 
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
@@ -153,8 +147,8 @@ class WebdatasetFilter:
         try:
             if "json" in x:
                 x_json = json.loads(x["json"])
-                filter_size = (x_json.get(WDS_JSON_WIDTH, 0.0) or 0.0) >= self.min_size and x_json.get(
-                    WDS_JSON_HEIGHT, 0
+                filter_size = (x_json.get("original_width", 0.0) or 0.0) >= self.min_size and x_json.get(
+                    "original_height", 0
                 ) >= self.min_size
                 filter_watermark = (x_json.get("pwatermark", 1.0) or 1.0) <= self.max_pwatermark
                 return filter_size and filter_watermark
@@ -164,7 +158,7 @@ class WebdatasetFilter:
             return False
 
 
-class Text2ImageDataset:
+class SDText2ImageDataset:
     def __init__(
         self,
         train_shards_path_or_url: Union[str, List[str]],
@@ -201,6 +195,7 @@ class Text2ImageDataset:
             image = TF.crop(image, c_top, c_left, resolution, resolution)
             image = TF.to_tensor(image)
             image = TF.normalize(image, [0.5], [0.5])
+
             example["image"] = image
             return example
 
@@ -218,7 +213,7 @@ class Text2ImageDataset:
             tarfile_to_samples_nothrow,
             wds.shuffle(shuffle_buffer_size),
             *processing_pipeline,
-            wds.batched(per_gpu_batch_size, partial=False, collation_fn=default_collate_fn),
+            wds.batched(per_gpu_batch_size, partial=False, collation_fn=default_collate),
         ]
 
         num_worker_batches = math.ceil(num_train_examples / (global_batch_size * num_workers))  # per dataloader worker
@@ -298,7 +293,7 @@ def log_validation(vae, unet, args, accelerator, weight_dtype, step):
         image_logs.append({"validation_prompt": prompt, "images": images})
 
     for tracker in accelerator.trackers:
-        if tracker.name == "tensorboard":
+        if tracker.name in ["tensorboard", "visualdl"]:
             for log in image_logs:
                 images = log["images"]
                 validation_prompt = log["validation_prompt"]
@@ -308,7 +303,7 @@ def log_validation(vae, unet, args, accelerator, weight_dtype, step):
 
                 formatted_images = np.stack(formatted_images)
 
-                tracker.writer.add_images(validation_prompt, formatted_images, step, dataformats="NHWC")
+                tracker.log_images({validation_prompt: formatted_images}, step, dataformats="NHWC")
         elif tracker.name == "wandb" and is_wandb_available():
             import wandb
 
@@ -348,17 +343,41 @@ def scalings_for_boundary_conditions(timestep, sigma_data=0.5, timestep_scaling=
 
 
 # Compare LCMScheduler.step, Step 4
-def predicted_origin(model_output, timesteps, sample, prediction_type, alphas, sigmas):
+def get_predicted_original_sample(model_output, timesteps, sample, prediction_type, alphas, sigmas):
+    alphas = extract_into_tensor(alphas, timesteps, sample.shape)
+    sigmas = extract_into_tensor(sigmas, timesteps, sample.shape)
     if prediction_type == "epsilon":
-        sigmas = extract_into_tensor(sigmas, timesteps, sample.shape)
-        alphas = extract_into_tensor(alphas, timesteps, sample.shape)
         pred_x_0 = (sample - sigmas * model_output) / alphas
+    elif prediction_type == "sample":
+        pred_x_0 = model_output
     elif prediction_type == "v_prediction":
-        pred_x_0 = alphas[timesteps] * sample - sigmas[timesteps] * model_output
+        pred_x_0 = alphas * sample - sigmas * model_output
     else:
-        raise ValueError(f"Prediction type {prediction_type} currently not supported.")
+        raise ValueError(
+            f"Prediction type {prediction_type} is not supported; currently, `epsilon`, `sample`, and `v_prediction`"
+            f" are supported."
+        )
 
     return pred_x_0
+
+
+# Based on step 4 in DDIMScheduler.step
+def get_predicted_noise(model_output, timesteps, sample, prediction_type, alphas, sigmas):
+    alphas = extract_into_tensor(alphas, timesteps, sample.shape)
+    sigmas = extract_into_tensor(sigmas, timesteps, sample.shape)
+    if prediction_type == "epsilon":
+        pred_epsilon = model_output
+    elif prediction_type == "sample":
+        pred_epsilon = (sample - alphas * model_output) / sigmas
+    elif prediction_type == "v_prediction":
+        pred_epsilon = alphas * model_output + sigmas * sample
+    else:
+        raise ValueError(
+            f"Prediction type {prediction_type} is not supported; currently, `epsilon`, `sample`, and `v_prediction`"
+            f" are supported."
+        )
+
+    return pred_epsilon
 
 
 def extract_into_tensor(a, t, x_shape):
@@ -388,11 +407,10 @@ class DDIMSolver:
         return x_prev
 
 
-def import_model_class_from_model_name_or_path(
-    pretrained_model_name_or_path: str, revision: str, subfolder: str = "text_encoder"
-):
+def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: str, subfolder: str = "text_encoder"):
     text_encoder_config = PretrainedConfig.from_pretrained(
-        pretrained_model_name_or_path, subfolder=subfolder, revision=revision
+        pretrained_model_name_or_path,
+        subfolder=subfolder,
     )
     model_class = text_encoder_config.architectures[0]
 
@@ -748,7 +766,7 @@ def main(args):
         mixed_precision=args.mixed_precision,
         log_with=args.report_to,
         project_config=accelerator_project_config,
-        # split_batches=True,  # It's important to set this to True when using webdataset to get the right number of steps for lr scheduling. If set to False, the number of steps will be devide by the number of processes assuming batches are multiplied by the number of processes
+        split_batches=True,  # It's important to set this to True when using webdataset to get the right number of steps for lr scheduling. If set to False, the number of steps will be devide by the number of processes assuming batches are multiplied by the number of processes
     )
 
     # Make one log on every process with the configuration for debugging.
@@ -756,6 +774,7 @@ def main(args):
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
         level=logging.INFO,
+        force=True,
     )
     logger.info(accelerator.state, main_process_only=False)
     if accelerator.is_local_main_process:
@@ -777,38 +796,38 @@ def main(args):
         args.pretrained_teacher_model, subfolder="scheduler", revision=args.teacher_revision
     )
 
-    # The scheduler calculates the alpha and sigma schedule for us
+    # DDPMScheduler calculates the alpha and sigma noise schedules (based on the alpha bars) for us
     alpha_schedule = paddle.sqrt(noise_scheduler.alphas_cumprod)
     sigma_schedule = paddle.sqrt(1 - noise_scheduler.alphas_cumprod)
+    # Initialize the DDIM ODE solver for distillation.
     solver = DDIMSolver(
         noise_scheduler.alphas_cumprod.numpy(),
         timesteps=noise_scheduler.config.num_train_timesteps,
         ddim_timesteps=args.num_ddim_timesteps,
     )
 
-    # 2. Load tokenizers from SD-XL checkpoint.
+    # 2. Load tokenizers from SD 1.X/2.X checkpoint.
     tokenizer = AutoTokenizer.from_pretrained(
         args.pretrained_teacher_model,
         subfolder="tokenizer",
-        revision=args.teacher_revision,
     )
 
-    # 3. Load text encoders from SD-1.5 checkpoint.
+    # 3. Load text encoders from SD 1.X/2.X checkpoint.
     # import correct text encoder classes
-    text_encoder_cls = import_model_class_from_model_name_or_path(args.pretrained_teacher_model, args.teacher_revision)
+    text_encoder_cls = import_model_class_from_model_name_or_path(args.pretrained_teacher_model)
     text_encoder = text_encoder_cls.from_pretrained(
         args.pretrained_teacher_model,
-        subfolder="text_encoder",  # revision=args.teacher_revision
+        subfolder="text_encoder",
     )
 
-    # 4. Load VAE from SD-XL checkpoint (or more stable VAE)
+    # 4. Load VAE from SD 1.X/2.X checkpoint
     vae = AutoencoderKL.from_pretrained(
         args.pretrained_teacher_model,
         subfolder="vae",
         revision=args.teacher_revision,
     )
 
-    # 5. Load teacher U-Net from SD-XL checkpoint
+    # 5. Load teacher U-Net from SD 1.X/2.X checkpoint
     teacher_unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_teacher_model, subfolder="unet", revision=args.teacher_revision
     )
@@ -818,7 +837,7 @@ def main(args):
     text_encoder.requires_grad_(False)
     teacher_unet.requires_grad_(False)
 
-    # 7. Create online (`unet`) student U-Nets.
+    # 7. Create online student U-Net.
     unet = UNet2DConditionModel.from_pretrained(
         args.pretrained_teacher_model, subfolder="unet", revision=args.teacher_revision
     )
@@ -856,9 +875,33 @@ def main(args):
             ".*upsamplers.0.conv.*",
             ".*time_emb_proj.*",
         ],
+        merge_weights=False,
     )
     unet.config.tensor_parallel_degree = 1
     unet = LoRAModel(unet, lora_config)
+
+    # @paddle.no_grad()
+    # def reset_lora_parameters(unet, init_lora_weights=True):
+    #     import math
+
+    #     if init_lora_weights is False:
+    #         return
+    #     for name, module in unet.named_sublayers(include_self=True):
+    #         module_name = module.__class__.__name__.lower()
+    #         if module_name in ["loralinear", "loraconv2d"]:
+    #             if init_lora_weights is True:
+    #                 # initialize A the same way as the default for nn.Linear and B to zero
+    #                 # https://github.com/microsoft/LoRA/blob/a0a92e0f26c067cf94747bdbf1ce73793fa44d19/loralib/layers.py#L124
+    #                 nn.init.kaiming_uniform_(module.lora_A, a=math.sqrt(5), reverse=module_name == "loralinear")
+    #                 logger.info(f"Initialized {name}'s LoRA parameters with Kaiming uniform init!")
+    #             elif init_lora_weights.lower() == "gaussian":
+    #                 nn.init.normal_(module.lora_A, std=1 / module.r)
+    #                 logger.info(f"Initialized {name}'s LoRA parameters with Gaussian init!")
+    #             else:
+    #                 raise ValueError(f"Unknown initialization {init_lora_weights}!")
+    #             nn.init.zeros_(module.lora_B)
+
+    # reset_lora_parameters(unet)
     unet.mark_only_lora_as_trainable()
     unet.print_trainable_parameters()
 
@@ -878,18 +921,18 @@ def main(args):
     text_encoder.to(dtype=weight_dtype)
 
     # Move teacher_unet to device, optionally cast to weight_dtype
-    teacher_unet.to(accelerator.device)
+    # teacher_unet.to(accelerator.device)
     if args.cast_teacher_unet:
         teacher_unet.to(dtype=weight_dtype)
 
     # 11. Enable optimizations
-    if args.enable_xformers_memory_efficient_attention:
-        if is_ppxformers_available():
-            unet.enable_xformers_memory_efficient_attention()
-            teacher_unet.enable_xformers_memory_efficient_attention()
-            # target_unet.enable_xformers_memory_efficient_attention()
-        else:
-            raise ValueError("xformers is not available. Make sure it is installed correctly")
+    # if args.enable_xformers_memory_efficient_attention:
+    #     if is_ppxformers_available():
+    #         unet.enable_xformers_memory_efficient_attention()
+    #         teacher_unet.enable_xformers_memory_efficient_attention()
+    #         # target_unet.enable_xformers_memory_efficient_attention()
+    #     else:
+    #         raise ValueError("xformers is not available. Make sure it is installed correctly")
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
@@ -905,13 +948,14 @@ def main(args):
         grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
     )
 
+    # 13. Dataset creation and data processing
     # Here, we compute not just the text embeddings but also the additional embeddings
     # needed for the SD XL UNet to operate.
     def compute_embeddings(prompt_batch, proportion_empty_prompts, text_encoder, tokenizer, is_train=True):
         prompt_embeds = encode_prompt(prompt_batch, text_encoder, tokenizer, proportion_empty_prompts, is_train)
         return {"prompt_embeds": prompt_embeds}
 
-    dataset = Text2ImageDataset(
+    dataset = SDText2ImageDataset(
         train_shards_path_or_url=args.train_shards_path_or_url,
         num_train_examples=args.max_train_samples,
         per_gpu_batch_size=args.train_batch_size,
@@ -931,11 +975,13 @@ def main(args):
         tokenizer=tokenizer,
     )
 
+    # 14. LR Scheduler creation
     # Scheduler and math around the number of training steps.
+    overrode_max_train_steps = False
     num_update_steps_per_epoch = math.ceil(train_dataloader.num_batches / args.gradient_accumulation_steps)
     if args.max_train_steps is None:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
+        overrode_max_train_steps = True
 
     if args.scale_lr:
         args.learning_rate = (
@@ -944,13 +990,23 @@ def main(args):
 
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler,
-        learning_rate=1.0,
+        learning_rate=args.learning_rate,
         num_warmup_steps=args.lr_warmup_steps,
         num_training_steps=args.max_train_steps,
     )
+    # override the learning rate with lr_scheduler
+    optimizer._learning_rate = lr_scheduler
 
+    # 15. Prepare for training
     # Prepare everything with our `accelerator`.
     unet, optimizer, lr_scheduler = accelerator.prepare(unet, optimizer, lr_scheduler)
+
+    # We need to recalculate our total training steps as the size of the training dataloader may have changed.
+    num_update_steps_per_epoch = math.ceil(train_dataloader.num_batches / args.gradient_accumulation_steps)
+    if overrode_max_train_steps:
+        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
+    # Afterwards we recalculate our number of training epochs
+    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
     # We need to initialize the trackers we use, and also store our configuration.
     # The trackers initializes automatically on the main process.
@@ -959,11 +1015,14 @@ def main(args):
         accelerator.init_trackers(args.tracker_project_name, config=tracker_config)
 
     uncond_input_ids = tokenizer(
-        [""] * args.train_batch_size, return_tensors="pd", padding="max_length", max_length=77
+        [""] * args.train_batch_size,
+        return_tensors="pd",
+        padding="max_length",
+        max_length=tokenizer.model_max_length,
     ).input_ids
     uncond_prompt_embeds = text_encoder(uncond_input_ids)[0]
 
-    # Train!
+    # 16. Train!
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
 
     logger.info("***** Running training *****")
@@ -1016,9 +1075,11 @@ def main(args):
     for epoch in range(first_epoch, args.num_train_epochs):
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(unet):
+                # 1. Load and process the image and text conditioning
                 image, text = batch
+
                 encoded_text = compute_embeddings_fn(text)
-                pixel_values = image._to(dtype=weight_dtype)
+                pixel_values = image.cast(dtype=weight_dtype)
 
                 # encode pixel values with batch size of at most 32
                 latents = []
@@ -1027,38 +1088,38 @@ def main(args):
                 latents = paddle.concat(latents, axis=0)
 
                 latents = latents * vae.config.scaling_factor
-                latents = latents._to(dtype=weight_dtype)
-
-                # Sample noise that we'll add to the latents
-                noise = paddle.randn(latents.shape, dtype=latents.dtype)
+                latents = latents.cast(dtype=weight_dtype)
                 bsz = latents.shape[0]
 
-                # Sample a random timestep for each image t_n ~ U[0, N - k - 1] without bias.
+                # 2. Sample a random timestep for each image t_n from the ODE solver timesteps without bias.
+                # For the DDIM solver, the timestep schedule is [T - 1, T - k - 1, T - 2 * k - 1, ...]
                 topk = noise_scheduler.config.num_train_timesteps // args.num_ddim_timesteps
                 index = paddle.randint(0, args.num_ddim_timesteps, (bsz,), dtype="int64")
                 start_timesteps = solver.ddim_timesteps[index]
                 timesteps = start_timesteps - topk
                 timesteps = paddle.where(timesteps < 0, paddle.zeros_like(timesteps), timesteps)
 
-                # 20.4.4. Get boundary scalings for start_timesteps and (end) timesteps.
+                # 3. Get boundary scalings for start_timesteps and (end) timesteps.
                 c_skip_start, c_out_start = scalings_for_boundary_conditions(start_timesteps)
                 c_skip_start, c_out_start = [append_dims(x, latents.ndim) for x in [c_skip_start, c_out_start]]
                 c_skip, c_out = scalings_for_boundary_conditions(timesteps)
                 c_skip, c_out = [append_dims(x, latents.ndim) for x in [c_skip, c_out]]
 
-                # 20.4.5. Add noise to the latents according to the noise magnitude at each timestep
-                # (this is the forward diffusion process) [z_{t_{n + k}} in Algorithm 1]
+                # 4. Sample noise from the prior and add it to the latents according to the noise magnitude at each
+                # timestep (this is the forward diffusion process) [z_{t_{n + k}} in Algorithm 1]
+                noise = paddle.randn(latents.shape, dtype=latents.dtype)
                 noisy_model_input = noise_scheduler.add_noise(latents, noise, start_timesteps)
 
-                # 20.4.6. Sample a random guidance scale w from U[w_min, w_max] and embed it
+                # 5. Sample a random guidance scale w from U[w_min, w_max]
+                # Note that for LCM-LoRA distillation it is not necessary to use a guidance scale embedding
                 w = (args.w_max - args.w_min) * paddle.rand((bsz,)) + args.w_min
                 w = w.reshape([bsz, 1, 1, 1])
-                w = w._to(dtype=latents.dtype)
+                w = w.cast(dtype=latents.dtype)
 
-                # 20.4.8. Prepare prompt embeds and unet_added_conditions
+                # 6. Prepare prompt embeds and unet_added_conditions
                 prompt_embeds = encoded_text.pop("prompt_embeds")
 
-                # 20.4.9. Get online LCM prediction on z_{t_{n + k}}, w, c, t_{n + k}
+                # 7. Get online LCM prediction on z_{t_{n + k}} (noisy_model_input), w, c, t_{n + k} (start_timesteps)
                 noise_pred = unet(
                     noisy_model_input,
                     start_timesteps,
@@ -1067,7 +1128,7 @@ def main(args):
                     added_cond_kwargs=encoded_text,
                 ).sample
 
-                pred_x_0 = predicted_origin(
+                pred_x_0 = get_predicted_original_sample(
                     noise_pred,
                     start_timesteps,
                     noisy_model_input,
@@ -1078,17 +1139,27 @@ def main(args):
 
                 model_pred = c_skip_start * noisy_model_input + c_out_start * pred_x_0
 
-                # 20.4.10. Use the ODE solver to predict the kth step in the augmented PF-ODE trajectory after
-                # noisy_latents with both the conditioning embedding c and unconditional embedding 0
-                # Get teacher model prediction on noisy_latents and conditional embedding
+                # 8. Compute the conditional and unconditional teacher model predictions to get CFG estimates of the
+                # predicted noise eps_0 and predicted original sample x_0, then run the ODE solver using these
+                # estimates to predict the data point in the augmented PF-ODE trajectory corresponding to the next ODE
+                # solver timestep.
                 with paddle.no_grad():
                     with paddle.amp.auto_cast():
+                        # 1. Get teacher model prediction on noisy_model_input z_{t_{n + k}} and conditional embedding c
                         cond_teacher_output = teacher_unet(
-                            noisy_model_input._to(dtype=weight_dtype),
+                            noisy_model_input.cast(dtype=weight_dtype),
                             start_timesteps,
-                            encoder_hidden_states=prompt_embeds._to(dtype=weight_dtype),
+                            encoder_hidden_states=prompt_embeds.cast(dtype=weight_dtype),
                         ).sample
-                        cond_pred_x0 = predicted_origin(
+                        cond_pred_x0 = get_predicted_original_sample(
+                            cond_teacher_output,
+                            start_timesteps,
+                            noisy_model_input,
+                            noise_scheduler.config.prediction_type,
+                            alpha_schedule,
+                            sigma_schedule,
+                        )
+                        cond_pred_noise = get_predicted_noise(
                             cond_teacher_output,
                             start_timesteps,
                             noisy_model_input,
@@ -1097,13 +1168,21 @@ def main(args):
                             sigma_schedule,
                         )
 
-                        # Get teacher model prediction on noisy_latents and unconditional embedding
+                        # 2. Get teacher model prediction on noisy_model_input z_{t_{n + k}} and unconditional embedding 0
                         uncond_teacher_output = teacher_unet(
-                            noisy_model_input._to(dtype=weight_dtype),
+                            noisy_model_input.cast(dtype=weight_dtype),
                             start_timesteps,
-                            encoder_hidden_states=uncond_prompt_embeds._to(dtype=weight_dtype),
+                            encoder_hidden_states=uncond_prompt_embeds.cast(dtype=weight_dtype),
                         ).sample
-                        uncond_pred_x0 = predicted_origin(
+                        uncond_pred_x0 = get_predicted_original_sample(
+                            uncond_teacher_output,
+                            start_timesteps,
+                            noisy_model_input,
+                            noise_scheduler.config.prediction_type,
+                            alpha_schedule,
+                            sigma_schedule,
+                        )
+                        uncond_pred_noise = get_predicted_noise(
                             uncond_teacher_output,
                             start_timesteps,
                             noisy_model_input,
@@ -1112,21 +1191,26 @@ def main(args):
                             sigma_schedule,
                         )
 
-                        # 20.4.11. Perform "CFG" to get x_prev estimate (using the LCM paper's CFG formulation)
+                        # 3. Calculate the CFG estimate of x_0 (pred_x0) and eps_0 (pred_noise)
+                        # Note that this uses the LCM paper's CFG formulation rather than the Imagen CFG formulation
                         pred_x0 = cond_pred_x0 + w * (cond_pred_x0 - uncond_pred_x0)
-                        pred_noise = cond_teacher_output + w * (cond_teacher_output - uncond_teacher_output)
+                        pred_noise = cond_pred_noise + w * (cond_pred_noise - uncond_pred_noise)
+                        # 4. Run one step of the ODE solver to estimate the next point x_prev on the
+                        # augmented PF-ODE trajectory (solving backward in time)
+                        # Note that the DDIM step depends on both the predicted x_0 and source noise eps_0.
                         x_prev = solver.ddim_step(pred_x0, pred_noise, index)
 
-                # 20.4.12. Get target LCM prediction on x_prev, w, c, t_n
+                # 9. Get target LCM prediction on x_prev, w, c, t_n (timesteps)
+                # Note that we do not use a separate target network for LCM-LoRA distillation.
                 with paddle.no_grad():
                     with paddle.amp.auto_cast():
                         target_noise_pred = unet(
-                            x_prev._to(dtype=paddle.float32),
+                            x_prev.cast(dtype=paddle.float32),
                             timesteps,
                             timestep_cond=None,
-                            encoder_hidden_states=prompt_embeds._to(dtype=paddle.float32),
+                            encoder_hidden_states=prompt_embeds.cast(dtype=paddle.float32),
                         ).sample
-                    pred_x_0 = predicted_origin(
+                    pred_x_0 = get_predicted_original_sample(
                         target_noise_pred,
                         timesteps,
                         x_prev,
@@ -1136,22 +1220,24 @@ def main(args):
                     )
                     target = c_skip * x_prev + c_out * pred_x_0
 
-                # 20.4.13. Calculate loss
+                # 10. Calculate loss
                 if args.loss_type == "l2":
                     loss = F.mse_loss(
-                        model_pred._to(dtype=paddle.float32), target._to(dtype=paddle.float32), reduction="mean"
+                        model_pred.cast(dtype=paddle.float32), target.cast(dtype=paddle.float32), reduction="mean"
                     )
                 elif args.loss_type == "huber":
                     loss = paddle.mean(
                         paddle.sqrt(
-                            (model_pred._to(dtype=paddle.float32) - target._to(dtype=paddle.float32)) ** 2
+                            (model_pred.cast(dtype=paddle.float32) - target.cast(dtype=paddle.float32)) ** 2
                             + args.huber_c**2
                         )
                         - args.huber_c
                     )
 
-                # 20.4.14. Backpropagate on the online student model (`unet`)
+                # 11. Backpropagate on the online student model (`unet`)
                 accelerator.backward(loss)
+                # if accelerator.sync_gradients:
+                #     accelerator.clip_grad_norm_(unet.parameters(), args.max_grad_norm)
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad()
@@ -1186,7 +1272,9 @@ def main(args):
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
                         os.makedirs(save_path, exist_ok=True)
                         # accelerator.save_state(save_path)
-                        lora_state_dict = get_module_kohya_state_dict(unet, "lora_unet", weight_dtype)
+                        lora_state_dict = get_module_kohya_state_dict(
+                            accelerator.unwrap_model(unet), "lora_unet", weight_dtype
+                        )
                         save_file(
                             lora_state_dict, os.path.join(save_path, "lcm_lora.safetensors"), metadata={"format": "pt"}
                         )
@@ -1195,7 +1283,7 @@ def main(args):
                     if global_step % args.validation_steps == 0:
                         log_validation(vae, unet, args, accelerator, weight_dtype, global_step)
 
-            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_lr() * args.learning_rate}
+            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_lr()}
             progress_bar.set_postfix(**logs)
             accelerator.log(logs, step=global_step)
 
