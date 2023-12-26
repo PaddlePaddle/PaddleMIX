@@ -26,10 +26,11 @@ from paddlemix.appflow import Appflow
 class Text2ImageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.expect_img_url = 'https://github.com/LokeZhou/PaddleMIX/assets/13300429/1622fb1e-c841-4531-ad39-9c5092a2456c'
+        # TODO: 更换为线上地址
+        cls.expect_img_url = '/home/aistudio/work/PaddleMIX/tests/appflow/riding_horse.png'
 
     def test_text2image(self):
-        paddle.seed(42)
+        paddle.seed(1024)
         task = Appflow(app="text2image_generation",
                     models=["stabilityai/stable-diffusion-v1-5"]
                     )

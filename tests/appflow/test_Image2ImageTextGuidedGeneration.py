@@ -27,7 +27,7 @@ class Image2ImageTextGuidedGeneration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/image_Kurisu.png"
-        cls.expected_image = '/home/aistudio/image2image_text_guided_generation.png'
+        cls.expected_image = 'https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_Image2ImageTextGuidedGeneration/image2image_text_guided_generation.png'
 
     def test_image_generation(self):
         image = load_image(self.url).resize((512, 768))

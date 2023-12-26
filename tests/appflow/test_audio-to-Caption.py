@@ -35,6 +35,7 @@ if __name__ == "__main__":
 
             paddle.seed(1024)
             task = Appflow(app="audio2caption", models=["whisper", "THUDM/chatglm-6b"])
+            # TODO:更换为线上地址
             audio_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zh.wav")
 
             prompt = (

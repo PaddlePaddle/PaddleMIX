@@ -27,7 +27,7 @@ class DualTextGuidedImageGeneration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/benz.jpg"
-        cls.expected_image = '/home/aistudio/dual_text_and_image_guided_generation.png'
+        cls.expected_image = 'https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_DualTextAndImageGuidedGeneration/dual_text_and_image_guided_generation.png'
     def test_image_generation(self):
         image = load_image(self.url)
         prompt = "a red car in the sun"

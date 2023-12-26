@@ -28,7 +28,7 @@ class TextGuidedImageUpscalingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/data/low_res_cat.png"
-        cls.expected_image = '/home/aistudio/upscaled_white_cat.png'
+        cls.expected_image = 'https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_TextGuidedImageUpscaling/upscaled_white_cat.png'
     
     def test_image_upscaling(self):
 

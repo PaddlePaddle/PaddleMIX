@@ -28,7 +28,7 @@ class TextGuidedImageInpaintingTest(unittest.TestCase):
     def setUpClass(cls):
         cls.img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
         cls.mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
-        cls.expected_image = '/home/aistudio/inpainting.png'
+        cls.expected_image = 'https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_TextGuidedImageInpainting/inpainting.png'
 
     def test_image_inpainting(self):
         image = load_image(self.img_url)

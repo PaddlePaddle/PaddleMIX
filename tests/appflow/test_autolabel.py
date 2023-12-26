@@ -30,8 +30,7 @@ class AutoLabelTest(unittest.TestCase):
             "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
         )
         cls.expected_image = load_numpy(
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_autolabel_mask.npy")
-        )
+            'https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_autolabel/test_autolabel_mask.npy')
         cls.expected_labels = ['dog', 'bench', 'field']
         cls.expected_boxes = np.array([[174, 116, 312, 467],
             [ 32, 223, 464, 491],
