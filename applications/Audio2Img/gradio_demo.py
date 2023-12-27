@@ -113,7 +113,7 @@ def parse_arguments():
 
 
 with gr.Blocks() as demo:
-    gr.Markdown("test")
+    gr.Markdown("音频生成图像（Audio-to-Image Generation）")
     with gr.Row():
         with gr.Column():
             input_audio = gr.Audio(label="input audio", type="filepath")
