@@ -225,7 +225,7 @@ python -m pip install paddlepaddle-gpu==2.5.2 -i https://pypi.tuna.tsinghua.edu.
 
 pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
 
-pip install https://paddlenlp.bj.bcebos.com/models/community/junnyu/fd_trt_model/ppdiffusers-0.19.3-py3-none-any.whl
+pip install https://paddlenlp.bj.bcebos.com/models/community/junnyu/fd_trt_model/ppdiffusers-0.19.4-py3-none-any.whl
 ```
 
 ## 快速体验
