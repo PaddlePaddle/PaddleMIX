@@ -111,12 +111,13 @@ pip install -e .
             <li><a href="paddlemix/examples/blip2">BLIP-2</a></li>
             <li><a href="paddlemix/examples/minigpt4">miniGPT-4</a></li>
             <li><a href="paddlemix/examples/visualglm">VIsualGLM</a></li>
+            <li><a href="paddlemix/examples/qwen_vl">qwen_vl</a></li>
       </ul>
       </ul>
           <li><b>开放世界视觉模型</b></li>
         <ul>
             <li><a href="paddlemix/examples/groundingdino">Grounding DINO</a></li>
-            <li><a href="paddlemix/examples/Sam">SAM</a></li>
+            <li><a href="paddlemix/examples/sam">SAM</a></li>
       </ul>
       </ul>
           <li><b>更多模态预训练模型</b></li>
@@ -149,6 +150,7 @@ pip install -e .
   </tbody>
 </table>
 
+更多模型能力，可参考[模型能力矩阵](./paddlemix/examples/README.md)
 ## 许可证书
 
 本项目的发布受Apache 2.0 license许可认证。

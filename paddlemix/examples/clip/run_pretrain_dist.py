@@ -119,6 +119,10 @@ class PreTrainingArguments(TrainingArguments):
         metadata={"help": "Whether to use tensorboard to record loss."},
     )
     pretrained_text_model: str = field(default="openclip", metadata={"help": "the model to pre-extract text feats"})
+    tensor_fusion: bool = field(
+        default=False,
+        metadata={"help": "Whether to use tensor fusion."},
+    )
 
 
 class SelfTrainer(CLIPTrainer):

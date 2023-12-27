@@ -13,4 +13,4 @@
 # limitations under the License.
 
 export USE_PPXFORMERS=False
-python export_model.py --pretrained_model_name_or_path stabilityai/stable-diffusion-xl-base-1.0 --output_path static_model/stable-diffusion-xl-base-1.0 --height=1024 --width=1024
+python export_model.py --pretrained_model_name_or_path stabilityai/stable-diffusion-xl-base-1.0 --output_path static_model/stable-diffusion-xl-base-1.0

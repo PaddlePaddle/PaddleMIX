@@ -984,7 +984,7 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
             # if we have not reached the final block and need to forward the
             # upsample size, we do it here
             if not is_final_block and forward_upsample_size:
-                upsample_size = down_block_res_samples[-1].shape[2:]
+                upsample_size = paddle.shape(down_block_res_samples[-1])[2:]
 
             if hasattr(upsample_block, "has_cross_attention") and upsample_block.has_cross_attention:
                 sample = upsample_block(
