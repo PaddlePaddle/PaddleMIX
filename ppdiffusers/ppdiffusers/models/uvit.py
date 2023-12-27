@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import einops
+import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
@@ -53,7 +54,7 @@ class Attention(nn.Layer):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        self._use_memory_efficient_attention_xformers = False
+        self._use_memory_efficient_attention_xformers = is_ppxformers_available()
         self._attention_op = None
 
     def reshape_heads_to_batch_dim(self, tensor, transpose=True):
@@ -71,9 +72,8 @@ class Attention(nn.Layer):
     def set_use_memory_efficient_attention_xformers(
         self, use_memory_efficient_attention_xformers: bool, attention_op: Optional[str] = None
     ):
-        # remove this PR: https://github.com/PaddlePaddle/Paddle/pull/56045
-        # if self.head_size > 128 and attention_op == "flash":
-        #     attention_op = "cutlass"
+        if self.head_size > 128 and attention_op == "flash":
+            attention_op = "cutlass"
         if use_memory_efficient_attention_xformers:
             if not is_ppxformers_available():
                 raise NotImplementedError(
@@ -194,6 +194,7 @@ class UViTModel(ModelMixin, ConfigMixin):
     after concatenat-ing a long skip connection, which stabilizes the training of U-ViT in UniDiffuser.
 
     """
+    _supports_gradient_checkpointing = True
 
     @register_to_config
     def __init__(
@@ -253,6 +254,7 @@ class UViTModel(ModelMixin, ConfigMixin):
         norm_layer = nn.LayerNorm
         self.pos_drop = nn.Dropout(p=pos_drop_rate)
 
+        dpr = np.linspace(0, drop_rate, depth + 1)
         self.in_blocks = nn.LayerList(
             [
                 Block(
@@ -261,11 +263,11 @@ class UViTModel(ModelMixin, ConfigMixin):
                     mlp_ratio=mlp_ratio,
                     qkv_bias=qkv_bias,
                     qk_scale=qk_scale,
-                    drop=drop_rate,
+                    drop=dpr[i],
                     attn_drop=attn_drop_rate,
                     norm_layer=norm_layer,
                 )
-                for _ in range(depth // 2)
+                for i in range(depth // 2)
             ]
         )
 
@@ -275,7 +277,7 @@ class UViTModel(ModelMixin, ConfigMixin):
             mlp_ratio=mlp_ratio,
             qkv_bias=qkv_bias,
             qk_scale=qk_scale,
-            drop=drop_rate,
+            drop=dpr[depth // 2],
             attn_drop=attn_drop_rate,
             norm_layer=norm_layer,
         )
@@ -288,12 +290,12 @@ class UViTModel(ModelMixin, ConfigMixin):
                     mlp_ratio=mlp_ratio,
                     qkv_bias=qkv_bias,
                     qk_scale=qk_scale,
-                    drop=drop_rate,
+                    drop=dpr[i + 1 + depth // 2],
                     attn_drop=attn_drop_rate,
                     norm_layer=norm_layer,
                     skip=True,
                 )
-                for _ in range(depth // 2)
+                for i in range(depth // 2)
             ]
         )
 
@@ -305,6 +307,10 @@ class UViTModel(ModelMixin, ConfigMixin):
         self.pos_embed_token = self.create_parameter(
             shape=(1, 1, embed_dim), default_initializer=nn.initializer.Constant(0.0)
         )
+        self.gradient_checkpointing = False
+
+    def _set_gradient_checkpointing(self, module, value=False):
+        self.gradient_checkpointing = value
 
     def forward(
         self,
@@ -362,13 +368,22 @@ class UViTModel(ModelMixin, ConfigMixin):
 
         skips = []
         for blk in self.in_blocks:
-            x = blk(x)
+            if self.gradient_checkpointing:
+                x = paddle.distributed.fleet.utils.recompute(blk, x)
+            else:
+                x = blk(x)
             skips.append(x)
 
-        x = self.mid_block(x)
+        if self.gradient_checkpointing:
+            x = paddle.distributed.fleet.utils.recompute(self.mid_block, x)
+        else:
+            x = self.mid_block(x)
 
         for blk in self.out_blocks:
-            x = blk(x, skips.pop())
+            if self.gradient_checkpointing:
+                x = paddle.distributed.fleet.utils.recompute(blk, x, skips.pop())
+            else:
+                x = blk(x, skips.pop())
 
         x = self.norm(x)
 

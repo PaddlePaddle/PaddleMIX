@@ -715,7 +715,7 @@ class UNetMidBlock2DSimpleCrossAttn(nn.Layer):
         attentions = []
 
         for _ in range(num_layers):
-            processor = AttnAddedKVProcessor2_5() if is_ppxformers_available else AttnAddedKVProcessor()
+            processor = AttnAddedKVProcessor2_5() if is_ppxformers_available() else AttnAddedKVProcessor()
 
             attentions.append(
                 Attention(

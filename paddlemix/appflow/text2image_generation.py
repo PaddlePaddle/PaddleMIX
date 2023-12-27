@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ppdiffusers import StableDiffusionPipeline, VersatileDiffusionDualGuidedPipeline
+import paddle
+
+from ppdiffusers import (
+    StableDiffusionPipeline,
+    StableDiffusionXLPipeline,
+    VersatileDiffusionDualGuidedPipeline,
+)
 
 from .apptask import AppTask
 
@@ -33,9 +39,13 @@ class StableDiffusionTask(AppTask):
         """
         Construct the inference model for the predictor.
         """
-
         # build model
-        model_instance = StableDiffusionPipeline.from_pretrained(model)
+        if "-xl-" in model:
+            model_instance = StableDiffusionXLPipeline.from_pretrained(
+                model, paddle_dtype=paddle.float16, variant="fp16"
+            )
+        else:
+            model_instance = StableDiffusionPipeline.from_pretrained(model)
 
         self._model = model_instance
 
@@ -51,12 +61,15 @@ class StableDiffusionTask(AppTask):
         Run the task model from the outputs of the `_preprocess` function.
         """
 
-        result = self._model(
-            prompt=inputs["prompt"],
-            guidance_scale=self._guidance_scale,
-            height=self._height,
-            width=self._width,
-        ).images[0]
+        if isinstance(self._model, StableDiffusionXLPipeline):
+            result = self._model(prompt=inputs["prompt"], generator=paddle.Generator().manual_seed(42)).images[0]
+        else:
+            result = self._model(
+                prompt=inputs["prompt"],
+                guidance_scale=self._guidance_scale,
+                height=self._height,
+                width=self._width,
+            ).images[0]
 
         inputs.pop("prompt", None)
 
