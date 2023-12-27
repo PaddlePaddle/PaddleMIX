@@ -26,8 +26,7 @@ from paddlemix.appflow import Appflow
 class Text2ImageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # TODO: 更换为线上地址
-        cls.expect_img_url = '/home/aistudio/work/PaddleMIX/tests/appflow/riding_horse.png'
+        cls.expect_img_url = 'https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_text2image/riding_horse.png'
 
     def test_text2image(self):
         paddle.seed(1024)

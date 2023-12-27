@@ -15,11 +15,12 @@
 import os
 import sys
 import unittest
+import tempfile
+import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 import paddle
 from paddlemix.appflow import Appflow
-from tests.testing_utils import _run_slow_test
 
 
 class AudioChatTest(unittest.TestCase):
@@ -35,17 +36,19 @@ if __name__ == "__main__":
 
             paddle.seed(1024)
             task = Appflow(app="audio_chat", models=["whisper", "THUDM/chatglm-6b", "speech"])
-            # TODO:更换为线上地址
-            audio_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zh.wav")
+            audio_file_url = "https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_audio/zh.wav"
 
             prompt = (
                 "描述这段话：{}."
             )
             
             output_path = "tmp.wav"
-            result = task(audio=audio_file, prompt=prompt, output=output_path)
+            
+            with tempfile.NamedTemporaryFile() as audio_file:
+                audio_file.write(requests.get(audio_file_url).content)
+                result = task(audio=audio_file.name, prompt=prompt, output=output_path)
 
-            self.assertIsNotNone(result)
+                self.assertIsNotNone(result)
 
         setattr(AudioChatTest, name, test_audio_chat)
 
