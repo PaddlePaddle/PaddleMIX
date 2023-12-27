@@ -248,6 +248,8 @@ python gradio_demo.py
 python gradio_demo.py --model_dir='./runwayml_stable-diffusion-v1-5_fd' --task_name='text2img_img2img_inpaint_legacy'
 ```
 
+请注意，没有指定 `--backend paddle_tensorrt` 的时候默认运行的是 paddle 后端，如果你想使用 tensorrt 加速请显式指定对应参数。
+
 ### 文生图(Text-to-Image Generation)、图生图(Image-to-Image Generation)、文本引导的图像编辑 legacy（Text-Guided Image Inpainting）
 
 准备好模型后，通过下列命令我们可以启动基本任务：
