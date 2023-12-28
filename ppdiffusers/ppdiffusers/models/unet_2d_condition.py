@@ -875,11 +875,15 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
         forward_upsample_size = False
         upsample_size = None
 
-        for dim in sample.shape[-2:]:
-            if dim % default_overall_up_factor != 0:
-                # Forward upsample size to force interpolation output size.
-                forward_upsample_size = True
-                break
+        # (NOTE,lxl): 动转静时不支持
+        # for dim in paddle.shape(sample)[-2:]:
+        #     if dim % default_overall_up_factor != 0:
+        #         # Forward upsample size to force interpolation output size.
+        #         forward_upsample_size = True
+        #         break
+        if any(s % default_overall_up_factor != 0 for s in sample.shape[-2:]):
+            logger.info("Forward upsample size to force interpolation output size.")
+            forward_upsample_size = True
 
         # ensure attention_mask is a bias, and give it a singleton query_tokens dimension
         # expects mask of shape:
@@ -977,7 +981,8 @@ class UNet2DConditionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin)
                 )
             time_ids = added_cond_kwargs.get("time_ids")
             time_embeds = self.add_time_proj(time_ids.flatten())
-            time_embeds = time_embeds.reshape((text_embeds.shape[0], -1))
+            dim = paddle.shape(text_embeds)[0]  # (NOTE,lxl): make it happier for static model export
+            time_embeds = time_embeds.reshape((dim, -1))
             # NEW ADD make sure [text_embeds, time_embeds] has the same dtype
             time_embeds = time_embeds.cast(text_embeds.dtype)
             add_embeds = paddle.concat([text_embeds, time_embeds], axis=-1)

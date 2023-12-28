@@ -71,7 +71,6 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
 
     # 1. Convert text_encoder
     text_encoder = pipeline.text_encoder
-    # text_encoder.forward = MethodType(forward_text_encoder, text_encoder)
     text_encoder = paddle.jit.to_static(
         text_encoder,
         input_spec=[paddle.static.InputSpec(shape=[None, None], dtype="int64", name="input_ids")],  # input_ids
@@ -82,7 +81,6 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     del pipeline.text_encoder
 
     text_encoder_2 = pipeline.text_encoder_2
-    # text_encoder_2.forward = MethodType(forward_text_encoder_2, text_encoder_2)
     text_encoder_2 = paddle.jit.to_static(
         text_encoder_2,
         input_spec=[paddle.static.InputSpec(shape=[None, None], dtype="int64", name="input_ids")],  # input_ids
@@ -142,7 +140,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     paddle.jit.save(vae_encoder, save_path)
     print(f"Save vae_encoder model in {save_path} successfully.")
 
-    # 4. Convert vae encoder
+    # 4. Convert vae decoder
     vae_decoder = pipeline.vae
 
     def forward_vae_decoder(self, z):
@@ -164,11 +162,6 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     del pipeline.vae
 
     fd_pipe_cls = FastDeploySFastDeployStableDiffusionXLPipelineHousing
-    print("mark 1")
-    text_encoder = (FastDeployRuntimeModel.from_pretrained(output_path / "text_encoder"),)
-    # vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
-    print("mark 2")
-
     fastdeploy_pipeline = fd_pipe_cls(
         vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),
         vae_decoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_decoder"),
@@ -180,7 +173,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         scheduler=pipeline.scheduler,
     )
     print("start saving")
-    fastdeploy_pipeline.save_pretrained(output_path)
+    fastdeploy_pipeline.save_pretrained(str(output_path))
     print("FastDeploy pipeline saved to", output_path)
 
 

@@ -755,7 +755,7 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -1149,7 +1149,7 @@ class CrossAttnDownBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -1256,7 +1256,7 @@ class DownBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale=scale)
@@ -1688,7 +1688,7 @@ class ResnetDownsampleBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale)
@@ -1834,7 +1834,7 @@ class SimpleCrossAttnDownBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
                 hidden_states = attn(
                     hidden_states,
@@ -1923,7 +1923,7 @@ class KDownBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale)
@@ -2026,7 +2026,7 @@ class KCrossAttnDownBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -2324,7 +2324,7 @@ class CrossAttnUpBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -2449,7 +2449,7 @@ class UpBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale=scale)
@@ -2933,7 +2933,7 @@ class ResnetUpsampleBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale=scale)
@@ -3085,7 +3085,7 @@ class SimpleCrossAttnUpBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
                 hidden_states = attn(
                     hidden_states,
@@ -3181,7 +3181,7 @@ class KUpBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale=scale)
@@ -3307,7 +3307,7 @@ class KCrossAttnUpBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,

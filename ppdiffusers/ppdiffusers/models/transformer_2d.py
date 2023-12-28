@@ -379,7 +379,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
                     return custom_forward
 
-                ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
                 hidden_states = recompute(
                     create_custom_forward(block),
                     hidden_states,
