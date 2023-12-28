@@ -1,12 +1,14 @@
 from einops import rearrange
 
-from .modelscope_sf_unet import SFUNetModel, default, prob_mask_like, sinusoidal_embedding_paddle, SFUNetOutput,TemporalTransformer,TemporalAttentionMultiBlock,SpatialTransformer,ResBlock
+from .modelscope_sf_unet import SFUNetModel, default, prob_mask_like, sinusoidal_embedding_paddle, SFUNetOutput, \
+    TemporalTransformer, TemporalAttentionMultiBlock, SpatialTransformer, ResBlock
 from ..configuration_utils import register_to_config
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 
 USE_TEMPORAL_TRANSFORMER = True
+
 
 class Downsample(nn.Layer):
     """
@@ -17,7 +19,7 @@ class Downsample(nn.Layer):
                  downsampling occurs in the inner-two dimensions.
     """
 
-    def __init__(self, channels, use_conv, dims=2, out_channels=None, padding=(2,1)):
+    def __init__(self, channels, use_conv, dims=2, out_channels=None, padding=(2, 1)):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -33,6 +35,7 @@ class Downsample(nn.Layer):
     def forward(self, x):
         assert x.shape[1] == self.channels
         return self.op(x)
+
 
 class Upsample(nn.Layer):
     """
@@ -62,6 +65,7 @@ class Upsample(nn.Layer):
         if self.use_conv:
             x = self.conv(x)
         return x
+
 
 class Vid2VidSDUNet(SFUNetModel):
     @register_to_config
@@ -145,7 +149,7 @@ class Vid2VidSDUNet(SFUNetModel):
                 ),
             )
 
-                # encoder
+            # encoder
         self.input_blocks = nn.LayerList()
         init_block = nn.LayerList([nn.Conv2D(self.in_dim, dim, 3, padding=1)])
         if temporal_attention:
@@ -362,7 +366,6 @@ class Vid2VidSDUNet(SFUNetModel):
                 video_mask,
                 reference=xs[-1] if len(xs) > 0 else None,
             )
-            
 
         # head
         x = self.out(x)

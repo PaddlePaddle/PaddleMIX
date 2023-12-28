@@ -15,16 +15,16 @@
 from dataclasses import dataclass
 from typing import Union
 
-import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 
+from .modeling_utils import ModelMixin
+from .vae import DecoderOutput, DiagonalGaussianDistribution, Encoder
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..loaders import FromOriginalVAEMixin
 from ..utils import BaseOutput, apply_forward_hook
-from .modeling_utils import ModelMixin
-from .vae import DecoderOutput, DiagonalGaussianDistribution, Encoder
+
 
 @paddle.no_grad()
 def get_first_stage_encoding(encoder_posterior):
@@ -61,6 +61,7 @@ def Normalize(in_channels, num_groups=32):
 def nonlinearity(x):
     # swish
     return x * F.sigmoid(x)
+
 
 class ResnetBlock(nn.Layer):
     def __init__(self, *, in_channels, out_channels=None, conv_shortcut=False, dropout, temb_channels=512):
@@ -178,21 +179,21 @@ class Downsample(nn.Layer):
 
 class Encoder(nn.Layer):
     def __init__(
-        self,
-        ch,
-        out_ch,
-        ch_mult,
-        num_res_blocks,
-        attn_resolutions,
-        in_channels,
-        resolution,
-        z_channels,
-        dropout=0.0,
-        resamp_with_conv=True,
-        double_z=True,
-        use_linear_attn=False,
-        attn_type="vanilla",
-        **ignore_kwargs
+            self,
+            ch,
+            out_ch,
+            ch_mult,
+            num_res_blocks,
+            attn_resolutions,
+            in_channels,
+            resolution,
+            z_channels,
+            dropout=0.0,
+            resamp_with_conv=True,
+            double_z=True,
+            use_linear_attn=False,
+            attn_type="vanilla",
+            **ignore_kwargs
     ):
         super().__init__()
         self.ch = ch
@@ -277,22 +278,22 @@ class Encoder(nn.Layer):
 
 class Decoder(nn.Layer):
     def __init__(
-        self,
-        ch,
-        out_ch,
-        ch_mult,
-        num_res_blocks,
-        attn_resolutions,
-        in_channels,
-        resolution,
-        z_channels,
-        resamp_with_conv=True,
-        dropout=0.0,
-        give_pre_end=False,
-        tanh_out=False,
-        use_linear_attn=False,
-        attn_type="vanilla",
-        **ignorekwargs
+            self,
+            ch,
+            out_ch,
+            ch_mult,
+            num_res_blocks,
+            attn_resolutions,
+            in_channels,
+            resolution,
+            z_channels,
+            resamp_with_conv=True,
+            dropout=0.0,
+            give_pre_end=False,
+            tanh_out=False,
+            use_linear_attn=False,
+            attn_type="vanilla",
+            **ignorekwargs
     ):
         super().__init__()
         self.ch = ch
@@ -394,29 +395,29 @@ class AutoencoderKL_imgtovideo(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
 
     @register_to_config
     def __init__(
-        self,
-        ch,
-        out_ch,
-        in_channels,
-        resolution,
-        z_channels,
-        embed_dim,
-        attn_resolutions,
-        ch_mult=(1, 2, 4, 8),
-        num_res_blocks=2,
-        dropout=0.0,
-        resamp_with_conv=True,
-        double_z=True,
-        use_linear_attn=False,
-        attn_type="vanilla",
-        pretrained=None,
-        ignore_keys=[],
-        image_key="image",
-        colorize_nlabels=None,
-        monitor=None,
-        ema_decay=None,
-        learn_logvar=False,
-        **kwargs
+            self,
+            ch,
+            out_ch,
+            in_channels,
+            resolution,
+            z_channels,
+            embed_dim,
+            attn_resolutions,
+            ch_mult=(1, 2, 4, 8),
+            num_res_blocks=2,
+            dropout=0.0,
+            resamp_with_conv=True,
+            double_z=True,
+            use_linear_attn=False,
+            attn_type="vanilla",
+            pretrained=None,
+            ignore_keys=[],
+            image_key="image",
+            colorize_nlabels=None,
+            monitor=None,
+            ema_decay=None,
+            learn_logvar=False,
+            **kwargs
     ):
         super().__init__()
         self.learn_logvar = learn_logvar

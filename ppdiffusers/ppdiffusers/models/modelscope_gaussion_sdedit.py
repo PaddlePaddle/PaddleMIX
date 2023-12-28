@@ -4,6 +4,7 @@ import random
 from tqdm.auto import trange
 import paddlesde
 
+
 def _logsnr_cosine(n, logsnr_min=-15, logsnr_max=15):
     t_min = math.atan(math.exp(-0.5 * logsnr_min))
     t_max = math.atan(math.exp(-0.5 * logsnr_max))
@@ -458,8 +459,8 @@ class GaussianDiffusion_SDEdit(object):
             log_sigma = sigma.log()
             dists = log_sigma - log_sigmas[:, None]
 
-            low_idx = dists.greater_equal(paddle.to_tensor(0,dtype=dists.dtype)).astype(dists.dtype)
-            low_idx = paddle.cumsum(low_idx,axis=0).argmax(axis=0).clip_(max=log_sigmas.shape[0] - 2)
+            low_idx = dists.greater_equal(paddle.to_tensor(0, dtype=dists.dtype)).astype(dists.dtype)
+            low_idx = paddle.cumsum(low_idx, axis=0).argmax(axis=0).clip_(max=log_sigmas.shape[0] - 2)
             high_idx = low_idx + 1
             low, high = log_sigmas[low_idx], log_sigmas[high_idx]
             w = (low - log_sigma) / (low - high)

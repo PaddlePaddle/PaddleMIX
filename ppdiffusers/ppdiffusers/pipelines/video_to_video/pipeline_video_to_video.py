@@ -53,7 +53,7 @@ def tensor2vid(video: paddle.Tensor, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) 
 
 class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMixin, LoraLoaderMixin):
     """
-    Pipeline for text-to-video generation.
+    Pipeline for video-to-video generation.
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods
     implemented for all pipelines (downloading, saving, running on a particular device, etc.).
@@ -61,10 +61,12 @@ class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMi
     Args:
         vae ([`AutoencoderKL_imgtovideo`]):
             Variational Auto-Encoder (VAE) Model to encode and decode images to and from latent representations.
-        img_encoder ([`CLIP`]):
-            Frozen img-encoder ([clip-vit-H-patch14](https://huggingface.co/laion/CLIP-ViT-H-14-laion2B-s32B-b79K)).
-        unet ([`SFUnet`]):
-            A [`SFUnet`] to denoise the encoded video latents.
+        text_encoder ([`CLIPTextModel`]):
+            Frozen text-encoder ([clip-vit-large-patch14](https://huggingface.co/openai/clip-vit-large-patch14)).
+        tokenizer (`CLIPTokenizer`):
+            A [`~transformers.CLIPTokenizer`] to tokenize text.
+        unet ([`Vid2VidSDUNet`]):
+            A [`Vid2VidSDUNet`] to denoise the encoded video latents.
 
     """
 
