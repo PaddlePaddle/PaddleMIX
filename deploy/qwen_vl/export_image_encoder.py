@@ -5,15 +5,16 @@ os.environ["FLAGS_use_cuda_managed_memory"]="true"
 
 import paddle
 from paddlemix.models.qwen_vl import Vision
-
+from paddlenlp.transformers.configuration_utils import PretrainedConfig
 
 def export(args):
-    model = Vision.from_pretrained(args.qwen_vl_7b_path, vit_dtype="float16")
+    config = PretrainedConfig.from_pretrained(args.qwen_vl_7b_path)
+    model = Vision(config.visual)
     model.eval()
 
     # convert to static graph with specific input description
     model = paddle.jit.to_static(
-        model.encode_images,
+        model,
         input_spec=[
             paddle.static.InputSpec(
                 shape=[None, 3, None, None], dtype="float32"),  # images

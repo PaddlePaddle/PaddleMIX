@@ -9,19 +9,17 @@ import paddle
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlemix import QWenTokenizer, QwenVLProcessor
 
-from utils import load_real_time_tokens
-
 
 class Predictor(object):
     def __init__(self, args):
         self.args = args
         self.config = PretrainedConfig.from_pretrained(args.qwen_vl_config_path)
+        self.tokenizer = QWenTokenizer.from_pretrained(args.qwen_tokenizer_path)
+        self.processor = QwenVLProcessor(tokenizer=self.tokenizer)
         self.first_predictor = self.create_predictor(args.first_model_path)
         self.second_predictor = self.create_predictor(args.second_model_path)
         print(f"first_model_path: {args.first_model_path}, {self.first_predictor}")
         print(f"second_model_path: {args.second_model_path}, {self.second_predictor}")
-        self.tokenizer = QWenTokenizer.from_pretrained(args.qwen_tokenizer_path)
-        self.processor = QwenVLProcessor(tokenizer=self.tokenizer)
 
     def create_predictor(self, model_path):
 
@@ -59,8 +57,8 @@ class Predictor(object):
     def generate_with_image_features(self, image_features, input_ids):
         batch, seq,_ = image_features.shape
         seq = image_features.shape[1] + input_ids.shape[1]
-        max_len = 204
-        dtype = "float16"
+        max_len = 527
+        dtype = "bfloat16"
         tgt_generation_mask = paddle.full([batch, 1, 1, max_len], 0, dtype=dtype)
         tgt_generation_mask[:,0,0,:seq] = 1
 
@@ -77,7 +75,6 @@ class Predictor(object):
         for i in range(batch):
             position_ids[i,:] = paddle.to_tensor([i for i in range(seq)], dtype="int64")
 
-        # TODO eos token id & input
         inputs = [
             input_ids, # input_ids
             image_features, # image_features
@@ -91,7 +88,7 @@ class Predictor(object):
             paddle.full([batch, 1], max_len - seq, dtype="int64"), # max_length,
             paddle.full([batch, 1], 1.0, dtype="float32"), # temperature,
             paddle.full([batch, 1], 0.0, dtype="float32"), # top_p,
-            paddle.full([1], 2277, dtype="int64"),   # eos_token_id,
+            paddle.full([1], 151643, dtype="int64"),   # eos_token_id,
             paddle.full([batch, 1], seq, dtype="int32"),  # seq_len_encoder,
             paddle.full([batch, 1], seq, dtype="int32"), # seq_len_decoder,
             paddle.full([batch, 1], 0, dtype="int64"), # step_idx,
@@ -102,15 +99,14 @@ class Predictor(object):
             paddle.full([batch, max_len], -100, dtype="int64"), # pre_ids, can be initialized arbitrarily
             paddle.full([1], batch, dtype="int64") # stop_nums, be batch 
         ]
-        for i in range(40):
+        for i in range(32):
             tmp = paddle.rand(shape=[2, batch, 40, max_len, 128], dtype=dtype)
             print(tmp.shape)
             inputs.append(tmp)
 
         # TODO: return outputs?
-        self.second_predictor.run(inputs)
-        tokens: np.ndarray = load_real_time_tokens()
-        generate_ids = tokens.tolist()
+        outputs = self.second_predictor.run(inputs)
+        generate_ids = outputs[0].numpy().tolist()
         return generate_ids, None
 
     def pre_processing(self, url, prompt):
