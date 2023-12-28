@@ -24,7 +24,20 @@ from ..configuration_utils import ConfigMixin, register_to_config
 from ..loaders import FromOriginalVAEMixin
 from ..utils import BaseOutput, apply_forward_hook
 from .modeling_utils import ModelMixin
-from .vae import Decoder, DecoderOutput, DiagonalGaussianDistribution, Encoder
+from .vae import DecoderOutput, DiagonalGaussianDistribution, Encoder
+
+@paddle.no_grad()
+def get_first_stage_encoding(encoder_posterior):
+    scale_factor = 0.18215
+    if isinstance(encoder_posterior, DiagonalGaussianDistribution):
+        z = encoder_posterior.sample()
+    elif isinstance(encoder_posterior, paddle.Tensor):
+        z = encoder_posterior
+    else:
+        raise NotImplementedError(
+            f"encoder_posterior of type '{type(encoder_posterior)}' not yet implemented"
+        )
+    return scale_factor * z
 
 
 @dataclass
@@ -48,48 +61,6 @@ def Normalize(in_channels, num_groups=32):
 def nonlinearity(x):
     # swish
     return x * F.sigmoid(x)
-
-
-class DiagonalGaussianDistribution(object):
-    def __init__(self, parameters, deterministic=False):
-        self.parameters = parameters
-        self.mean, self.logvar = paddle.chunk(parameters, 2, axis=1)
-        self.logvar = paddle.clip(self.logvar, -30.0, 20.0)
-        self.deterministic = deterministic
-        self.std = paddle.exp(0.5 * self.logvar)
-        self.var = paddle.exp(self.logvar)
-        if self.deterministic:
-            self.var = self.std = paddle.zeros_like(self.mean).to(device=self.parameters.device)
-
-    def sample(self):
-        x = self.mean + self.std * paddle.randn(self.mean.shape).to(device=self.parameters.device)
-        return x
-
-    def kl(self, other=None):
-        if self.deterministic:
-            return paddle.to_tensor([0.0])
-        else:
-            if other is None:
-                return 0.5 * paddle.sum(paddle.pow(self.mean, 2) + self.var - 1.0 - self.logvar, axis=[1, 2, 3])
-            else:
-                return 0.5 * paddle.sum(
-                    paddle.pow(self.mean - other.mean, 2) / other.var
-                    + self.var / other.var
-                    - 1.0
-                    - self.logvar
-                    + other.logvar,
-                    axis=[1, 2, 3],
-                )
-
-    def nll(self, sample, dims=[1, 2, 3]):
-        if self.deterministic:
-            return paddle.to_tensor([0.0])
-        logtwopi = np.log(2.0 * np.pi)
-        return 0.5 * paddle.sum(logtwopi + self.logvar + paddle.pow(sample - self.mean, 2) / self.var, axis=dims)
-
-    def mode(self):
-        return self.mean
-
 
 class ResnetBlock(nn.Layer):
     def __init__(self, *, in_channels, out_channels=None, conv_shortcut=False, dropout, temb_channels=512):

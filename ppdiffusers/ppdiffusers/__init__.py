@@ -57,6 +57,8 @@ except OptionalDependencyNotAvailable:
 else:
     from .models import (
         AsymmetricAutoencoderKL,
+        Vid2VidSDUNet,
+        GaussianDiffusion_SDEdit,
         AutoencoderKL,
         AutoencoderKL_imgtovideo,
         ControlNetModel,
@@ -174,6 +176,7 @@ else:
         IFPipeline,
         IFSuperResolutionPipeline,
         ImgToVideoSDPipeline,
+        VideoToVideoModelscopePipeline,
         KandinskyCombinedPipeline,
         KandinskyImg2ImgCombinedPipeline,
         KandinskyImg2ImgPipeline,

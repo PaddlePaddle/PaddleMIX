@@ -23,17 +23,22 @@ from ..utils.import_utils import (
 if is_paddle_available():
     from .adapter import MultiAdapter, T2IAdapter
     from .autoencoder_asym_kl import AsymmetricAutoencoderKL
+
     from .modelscope_autoencoder_img2vid import AutoencoderKL_imgtovideo
+    from .modelscope_sf_unet import SFUNetModel
+    from .modelscope_gaussian_diffusion import GaussianDiffusion
+    from .modelscope_gaussion_sdedit import GaussianDiffusion_SDEdit
+    from .modelscope_sd_unet_video2video import Vid2VidSDUNet
+
     from .autoencoder_kl import AutoencoderKL
     from .controlnet import ControlNetModel
     from .dual_transformer_2d import DualTransformer2DModel
     from .ema import LitEma
-    from .modelscope_gaussian_diffusion import GaussianDiffusion
     from .lvdm_unet_3d import LVDMUNet3DModel
     from .lvdm_vae import LVDMAutoencoderKL
     from .modeling_utils import ModelMixin
     from .prior_transformer import PriorTransformer
-    from .modelscope_sf_unet import SFUNetModel
+
     from .t5_film_transformer import T5FilmDecoder
     from .transformer_2d import Transformer2DModel
     from .unet_1d import UNet1DModel

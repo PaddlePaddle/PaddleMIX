@@ -81,7 +81,7 @@ class GaussianDiffusion(object):
         r"""Distribution of p(x_{t-1} | x_t)."""
         # predict distribution
         if guide_scale is None:
-            out = model(xt, self._scale_timesteps(t), **model_kwargs)
+            out = model(xt, self._scale_timesteps(t), **model_kwargs).sample
         else:
             # classifier-free guidance
             # (model_kwargs[0]: conditional kwargs; model_kwargs[1]: non-conditional kwargs)
@@ -129,7 +129,7 @@ class GaussianDiffusion(object):
 
         # restrict the range of x0
         if percentile is not None:
-            assert percentile > 0 and percentile <= 1
+            assert 0 < percentile <= 1
             s = paddle.quantile(x0.flatten(1).abs(), percentile, axis=1).clip_(1.0).reshape([-1, 1, 1, 1])
             x0 = paddle.min(s, paddle.max(-s, x0)) / s
         elif clamp is not None:

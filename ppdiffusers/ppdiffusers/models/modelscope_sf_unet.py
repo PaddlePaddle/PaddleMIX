@@ -824,18 +824,29 @@ class SFUNetModel(ModelMixin, ConfigMixin):
         # encoder
         self.input_blocks = nn.LayerList()
         init_block = nn.LayerList([nn.Conv2D(self.in_dim, dim, 3, padding=1)])
-        init_block.append(
-            TemporalTransformer(
-                dim,
-                num_heads,
-                head_dim,
-                depth=transformer_depth,
-                context_dim=context_channels,
-                disable_self_attn=disabled_sa,
-                use_linear=use_linear_in_temporal,
-                multiply_zero=use_image_dataset,
-            )
-        )
+        if temporal_attention:
+            if USE_TEMPORAL_TRANSFORMER:
+                init_block.append(
+                    TemporalTransformer(
+                        dim,
+                        num_heads,
+                        head_dim,
+                        depth=transformer_depth,
+                        context_dim=context_channels,
+                        disable_self_attn=disabled_sa,
+                        use_linear=use_linear_in_temporal,
+                        multiply_zero=use_image_dataset,
+                    )
+                )
+            else:
+                init_block.append(
+                    TemporalAttentionMultiBlock(
+                        dim,
+                        num_heads,
+                        head_dim,
+                        rotary_emb=self.rotary_emb,
+                        temporal_attn_times=temporal_attn_times,
+                        use_image_dataset=use_image_dataset))
 
         self.input_blocks.append(init_block)
         shortcut_dims.append(dim)

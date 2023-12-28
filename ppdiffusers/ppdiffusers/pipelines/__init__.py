@@ -84,6 +84,7 @@ else:
         IFSuperResolutionPipeline,
     )
     from .img_to_video import ImgToVideoSDPipeline
+    from .video_to_video import VideoToVideoModelscopePipeline
     from .kandinsky import (
         KandinskyCombinedPipeline,
         KandinskyImg2ImgCombinedPipeline,
