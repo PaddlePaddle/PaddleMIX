@@ -1093,7 +1093,7 @@ def main(args):
                     text_input_ids_list=[batch["input_ids_one"], batch["input_ids_two"]],
                 )
                 unet_added_conditions.update({"text_embeds": pooled_prompt_embeds})
-
+                # westfish: add amp
                 with paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2"):
                     model_pred = unet(
                         noisy_model_input, timesteps, prompt_embeds, added_cond_kwargs=unet_added_conditions
