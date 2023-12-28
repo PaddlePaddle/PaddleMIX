@@ -103,7 +103,6 @@ class IPAdapterMixin:
             else:
                 cache_dir = PPDIFFUSERS_CACHE
         from_diffusers = kwargs.pop("from_diffusers", FROM_DIFFUSERS)
-        weights_from_diffusers = from_diffusers
         force_download = kwargs.pop("force_download", False)
         resume_download = kwargs.pop("resume_download", False)
         proxies = kwargs.pop("proxies", None)
@@ -145,7 +144,7 @@ class IPAdapterMixin:
                         )
                     data_format = metadata.get("format", "pt")
                     if data_format == "pt":
-                        weights_from_diffusers = True
+                        from_diffusers = True
                     for key in f.keys():
                         if key.startswith("image_proj."):
                             state_dict["image_proj"][key.replace("image_proj.", "")] = f.get_tensor(key)
@@ -154,7 +153,7 @@ class IPAdapterMixin:
             else:
                 state_dict = smart_load(model_file, return_numpy=True, return_is_torch_weight=True)
                 if "is_torch_weight" in state_dict and state_dict.pop("is_torch_weight", False) and not from_diffusers:
-                    weights_from_diffusers = True
+                    from_diffusers = True
         else:
             state_dict = pretrained_model_name_or_path_or_dict
 
@@ -182,7 +181,7 @@ class IPAdapterMixin:
             self.feature_extractor = CLIPImageProcessor()
 
         # load ip-adapter into unet
-        self.unet._load_ip_adapter_weights(state_dict, from_diffusers=weights_from_diffusers)
+        self.unet._load_ip_adapter_weights(state_dict, from_diffusers=from_diffusers)
 
     def set_ip_adapter_scale(self, scale):
         for attn_processor in self.unet.attn_processors.values():
