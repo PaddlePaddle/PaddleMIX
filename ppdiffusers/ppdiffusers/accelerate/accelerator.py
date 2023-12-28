@@ -1015,10 +1015,7 @@ class Accelerator:
 
         # if device_placement and not self.verify_device_map(model):
         #     model = model.to(self.device)
-        if hasattr(model, "is_gradient_checkpointing"):
-            model.do_gradient_checkpointing = model.is_gradient_checkpointing
-        else:
-            model.do_gradient_checkpointing = False
+        model.do_gradient_checkpointing = False
         if not evaluation_mode:
             if self.distributed_type in (DistributedType.MULTI_GPU,):
                 if any(not p.stop_gradient for p in model.parameters()):
@@ -1026,9 +1023,9 @@ class Accelerator:
                     model = paddle.DataParallel(
                         model,
                     )
-                    model.do_gradient_checkpointing = model._layers.do_gradient_checkpointing
-                else:
-                    model.do_gradient_checkpointing = False
+                    # only dp model need do_gradient_checkpointing
+                    if hasattr(model._layers, "is_gradient_checkpointing"):
+                        model.do_gradient_checkpointing = model._layers.is_gradient_checkpointing
 
         return model
 
