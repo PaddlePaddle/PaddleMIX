@@ -77,8 +77,8 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     height: int = None,
     width: int = None,
 ):
-    unet_tmp = UNet2DConditionModel.from_pretrained(model_path, resnet_pre_temb_non_linearity=True, subfolder="unet")
-    controlnet_tmp = ControlNetModel.from_pretrained(controlnet_model_path, resnet_pre_temb_non_linearity=True)
+    unet_tmp = UNet2DConditionModel.from_pretrained(model_path, resnet_pre_temb_non_linearity=False, subfolder="unet")
+    controlnet_tmp = ControlNetModel.from_pretrained(controlnet_model_path, resnet_pre_temb_non_linearity=False)
 
     pipeline = StableDiffusionControlNetPipeline.from_pretrained(
         model_path,
@@ -212,7 +212,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         feature_extractor=None,
         requires_safety_checker=False,
     )
-    fastdeploy_pipeline.save_pretrained(output_path)
+    fastdeploy_pipeline.save_pretrained(str(output_path))
     print("FastDeploy pipeline saved to", output_path)
 
 

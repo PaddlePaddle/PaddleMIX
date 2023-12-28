@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ..utils import OptionalDependencyNotAvailable, is_fastdeploy_available
 from .animatediff import AnimateDiffPipeline
 from .consistency_models import ConsistencyModelPipeline
+from .controlnet import StableDiffusionControlNetPipeline
 from .latent_consistency_models import (
     LatentConsistencyModelImg2ImgPipeline,
     LatentConsistencyModelPipeline,
 )
+from .pipeline_utils import DiffusionPipeline
 from .stable_diffusion import StableDiffusionPipeline, StableDiffusionPipelineOutput
 from .stable_diffusion_xl import (
     StableDiffusionXLPipeline,
@@ -27,3 +30,29 @@ from .stable_video_diffusion import (
     StableVideoDiffusionPipeline,
     StableVideoDiffusionPipelineOutput,
 )
+
+try:
+    if not is_fastdeploy_available():
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from ..utils.dummy_fastdeploy_objects import *  # noqa F403
+else:
+    from .controlnet import FastDeployStableDiffusionControlNetPipeline
+    from .fastdeploy_utils import (
+        FastDeployDiffusionPipelineMixin,
+        FastDeployRuntimeModel,
+    )
+    from .stable_diffusion import (
+        FastDeployCycleDiffusionPipeline,
+        FastDeployStableDiffusionImg2ImgPipeline,
+        FastDeployStableDiffusionInpaintPipeline,
+        FastDeployStableDiffusionInpaintPipelineLegacy,
+        FastDeployStableDiffusionMegaPipeline,
+        FastDeployStableDiffusionPipeline,
+    )
+    from .stable_diffusion_xl import (
+        FastDeployStableDiffusionXLImg2ImgPipeline,
+        FastDeployStableDiffusionXLInpaintPipeline,
+        FastDeployStableDiffusionXLMegaPipeline,
+        FastDeployStableDiffusionXLPipeline,
+    )

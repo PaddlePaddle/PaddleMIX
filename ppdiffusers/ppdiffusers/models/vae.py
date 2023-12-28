@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import paddle
@@ -157,7 +157,8 @@ class Encoder(nn.Layer):
                 return custom_forward
 
             # down
-            ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+            # (NOTE, lxl) 去掉typehint，否则动转静会报错
+            ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
             for down_block in self.down_blocks:
                 sample = recompute(create_custom_forward(down_block), sample, **ckpt_kwargs)
             # middle
@@ -289,31 +290,32 @@ class Decoder(nn.Layer):
 
         upscale_dtype = next(iter(self.up_blocks.parameters())).dtype
         if self.training and self.gradient_checkpointing and not sample.stop_gradient:
+            with paddle.jit.not_to_static():
 
-            def create_custom_forward(module):
-                def custom_forward(*inputs):
-                    return module(*inputs)
+                def create_custom_forward(module):
+                    def custom_forward(*inputs):
+                        return module(*inputs)
 
-                return custom_forward
+                    return custom_forward
 
-            ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
-            # middle
-            sample = recompute(
-                create_custom_forward(self.mid_block),
-                sample,
-                latent_embeds,
-                **ckpt_kwargs,
-            )
-            sample = sample.cast(upscale_dtype)
-
-            # up
-            for up_block in self.up_blocks:
+                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                # middle
                 sample = recompute(
-                    create_custom_forward(up_block),
+                    create_custom_forward(self.mid_block),
                     sample,
                     latent_embeds,
                     **ckpt_kwargs,
                 )
+                sample = sample.cast(upscale_dtype)
+
+                # up
+                for up_block in self.up_blocks:
+                    sample = recompute(
+                        create_custom_forward(up_block),
+                        sample,
+                        latent_embeds,
+                        **ckpt_kwargs,
+                    )
         else:
             # middle
             sample = self.mid_block(sample, latent_embeds)
@@ -548,7 +550,7 @@ class MaskConditionDecoder(nn.Layer):
 
                 return custom_forward
 
-            ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+            ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
             # middle
             sample = recompute(
                 create_custom_forward(self.mid_block),
@@ -856,7 +858,7 @@ class EncoderTiny(nn.Layer):
 
                 return custom_forward
 
-            ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+            ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
             x = recompute(create_custom_forward(self.layers), x, **ckpt_kwargs)
         else:
             # scale image from [-1, 1] to [0, 1] to match TAESD convention
@@ -938,7 +940,7 @@ class DecoderTiny(nn.Layer):
 
                 return custom_forward
 
-            ckpt_kwargs: Dict[str, Any] = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+            ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
             x = recompute(create_custom_forward(self.layers), x, **ckpt_kwargs)
         else:
             x = self.layers(x)

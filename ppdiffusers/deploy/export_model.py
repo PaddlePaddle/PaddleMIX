@@ -14,6 +14,7 @@
 
 import argparse
 import os
+
 # set USE_PPXFORMERS=False to avoid using ppxformers
 os.environ["USE_PPXFORMERS"] = "False"
 from pathlib import Path
@@ -156,7 +157,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         feature_extractor=None,
         requires_safety_checker=False,
     )
-    fastdeploy_pipeline.save_pretrained(output_path)
+    fastdeploy_pipeline.save_pretrained(str(output_path))
     print("FastDeploy pipeline saved to", output_path)
 
 

@@ -86,5 +86,5 @@ class FastDeploySFastDeployStableDiffusionXLPipelineHousing(DiffusionPipeline, F
             unet=unet,
             scheduler=scheduler,
         )
-        self.register_to_config(force_zeros_for_empty_prompt=force_zeros_for_empty_prompt)
+        self.register_to_config(force_zeros_for_empty_prompt=force_zeros_for_empty_prompt, dtype="float32")
         self.post_init()

@@ -15,7 +15,8 @@
 from typing import Optional, Tuple
 
 import paddle
-from paddlenlp.transformers.clip.modeling import (
+
+from ppdiffusers.transformers.clip.modeling import (
     CLIPTextModelOutput,
     CLIPTextModelWithProjection,
 )
@@ -43,7 +44,7 @@ class CLIPTextModelWithProjectionHousing(CLIPTextModelWithProjection):
 
         pooled_output = text_outputs[1]
 
-        text_embeds = paddle.matmul(pooled_output, self.text_projection)
+        text_embeds = self.text_projection(pooled_output)
 
         output = CLIPTextModelOutput(
             text_embeds=text_embeds,
@@ -51,7 +52,6 @@ class CLIPTextModelWithProjectionHousing(CLIPTextModelWithProjection):
             hidden_states=text_outputs.hidden_states,
             attentions=text_outputs.attentions,
         )
-        # breakpoint()
 
         pooled_prompt_embeds = output[0]
         prompt_embeds = output.hidden_states[-2]
