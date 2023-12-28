@@ -135,6 +135,8 @@ class IPAdapterMixin:
                 state_dict = {"image_proj": {}, "ip_adapter": {}}
                 with safe_open(model_file, framework="np") as f:
                     metadata = f.metadata()
+                    if metadata is None:
+                        metadata = {}
                     if metadata.get("format", "pt") not in ["pt", "pd", "np"]:
                         raise OSError(
                             f"The safetensors archive passed at {model_file} does not contain the valid metadata. Make sure "

@@ -153,6 +153,8 @@ def load_state_dict(
         # Check format of the archive
         with safe_open(checkpoint_file, framework="np") as f:
             metadata = f.metadata()
+        if metadata is None:
+            metadata = {}
         if metadata.get("format", "pt") not in ["pt", "pd", "np"]:
             raise OSError(
                 f"The safetensors archive passed at {checkpoint_file} does not contain the valid metadata. Make sure "
