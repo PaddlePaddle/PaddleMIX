@@ -16,6 +16,7 @@
 """Fine-tuning script for Stable Diffusion XL for text2image."""
 
 import argparse
+import copy
 import functools
 import gc
 import logging
@@ -791,6 +792,29 @@ def main(args):
     train_flip = transforms.RandomHorizontalFlip(prob=1.0)
     train_transforms = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
 
+    def get_crop_params(image, output_size, center_crop):
+        from PIL import Image
+
+        # 检查image是否为PIL图像，如果是，使用.size获取宽度和高度
+        if isinstance(image, Image.Image):
+            w, h = image.size
+        else:
+            # 如果image不是PIL图像，假设它是一个张量
+            w, h = image.shape[1], image.shape[0]
+
+        th, tw = output_size, output_size  # 裁剪的目标宽度和高度
+
+        if center_crop:
+            # 计算中心裁剪的起始点
+            x1 = int(round((w - tw) / 2.0))
+            y1 = int(round((h - th) / 2.0))
+        else:
+            # 计算随机裁剪的起始点
+            x1 = np.random.randint(0, w - tw + 1)
+            y1 = np.random.randint(0, h - th + 1)
+
+        return y1, x1, th, tw
+
     def preprocess_train(examples):
         images = [image.convert("RGB") for image in examples[image_column]]
         # image aug
@@ -805,7 +829,10 @@ def main(args):
                 x1 = max(0, int(round((image.width - args.resolution) / 2.0)))
                 image = train_crop(image)
             else:
-                y1, x1, h, w = train_crop.get_params(image, (args.resolution, args.resolution))
+                # westfish: 'RandomCrop' object has no attribute 'get_params'
+                # y1, x1, h, w = train_crop.get_params(image, (args.resolution, args.resolution))
+                y1, x1, h, w = get_crop_params(image, args.resolution, args.center_crop)
+
                 image = crop(image, y1, x1, h, w)
             if args.random_flip and random.random() < 0.5:
                 # flip
@@ -966,6 +993,9 @@ def main(args):
         disable=not accelerator.is_local_main_process,
     )
 
+    # westfish: add amp
+    scaler = paddle.amp.GradScaler(init_loss_scaling=1024)
+    unet = paddle.amp.decorate(models=unet.to(dtype=paddle.float32), level="O2")
     for epoch in range(first_epoch, args.num_train_epochs):
         train_loss = 0.0
         for step, batch in enumerate(train_dataloader):
@@ -1009,9 +1039,11 @@ def main(args):
                 prompt_embeds = batch["prompt_embeds"]
                 pooled_prompt_embeds = batch["pooled_prompt_embeds"]
                 unet_added_conditions.update({"text_embeds": pooled_prompt_embeds})
-                model_pred = unet(
-                    noisy_model_input, timesteps, prompt_embeds, added_cond_kwargs=unet_added_conditions
-                ).sample
+                # westfish: add amp
+                with paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2"):
+                    model_pred = unet(
+                        noisy_model_input, timesteps, prompt_embeds, added_cond_kwargs=unet_added_conditions
+                    ).sample
 
                 # Get the target for loss depending on the prediction type
                 if args.prediction_type is not None:
@@ -1053,10 +1085,17 @@ def main(args):
                 train_loss += avg_loss.item() / args.gradient_accumulation_steps
 
                 # Backpropagate
-                accelerator.backward(loss)
-                if accelerator.sync_gradients:
-                    params_to_clip = unet.parameters()
-                    accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+                # westfish: add amp
+                # accelerator.backward(loss)
+                scaled = scaler.scale(loss)  # loss缩放，乘以系数loss_scaling
+                scaled.backward()  # 反向传播
+                scaler.step(optimizer)  # 更新参数（参数梯度先除系数loss_scaling再更新参数）
+                scaler.update()  # 基于动态loss_scaling策略更新loss_scaling系数
+
+                # if accelerator.sync_gradients:
+                #     params_to_clip = unet.parameters()
+                #     accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.clear_grad()
@@ -1091,15 +1130,27 @@ def main(args):
                                     shutil.rmtree(removing_checkpoint)
 
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        # westfish
-                        accelerator.save_state(save_path)
-                        # os.makedirs(save_path, exist_ok=True)
-                        # lora_state_dict = get_module_kohya_state_dict(unet, "lora_unet", weight_dtype)
-                        # save_file(
-                        #     lora_state_dict,
-                        #     os.path.join(save_path, "sdxl_lora.safetensors"),
-                        #     metadata={"format": "pt"},
-                        # )
+                        # westfish: save_state substitute
+                        # accelerator.save_state(save_path)
+                        models = []
+                        models.append(copy.deepcopy(unet))
+                        weights = []
+
+                        def get_state_dict(model):
+                            state_dict = model.state_dict()
+                            if state_dict is not None:
+                                for k in state_dict:
+                                    if getattr(state_dict[k], "dtype", None) == paddle.float16:
+                                        state_dict[k] = state_dict[k]._to(dtype="float32")
+
+                            return state_dict
+
+                        for i, model in enumerate(models):
+                            weights.append(get_state_dict(model))
+                        save_model_hook(models, weights, save_path)
+                        del models, weights
+                        gc.collect()
+                        paddle.device.cuda.empty_cache()
 
                         logger.info(f"Saved state to {save_path}")
 
@@ -1146,11 +1197,10 @@ def main(args):
                 generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
                 pipeline_args = {"prompt": args.validation_prompt}
 
-                with paddle.amp.auto_cast():
-                    images = [
-                        pipeline(**pipeline_args, generator=generator, num_inference_steps=25).images[0]
-                        for _ in range(args.num_validation_images)
-                    ]
+                images = [
+                    pipeline(**pipeline_args, generator=generator, num_inference_steps=25).images[0]
+                    for _ in range(args.num_validation_images)
+                ]
 
                 for tracker in accelerator.trackers:
                     if tracker.name == "tensorboard":
@@ -1200,7 +1250,7 @@ def main(args):
         images = []
         if args.validation_prompt and args.num_validation_images > 0:
             generator = paddle.Generator().manual_seed(args.seed) if args.seed else None
-            with paddle.amp.autocast():
+            with paddle.amp.auto_cast(enable=True, custom_white_list=None, custom_black_list=None, level="O2"):
                 images = [
                     pipeline(args.validation_prompt, num_inference_steps=25, generator=generator).images[0]
                     for _ in range(args.num_validation_images)
