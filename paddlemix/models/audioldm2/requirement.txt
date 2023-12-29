@@ -1,0 +1,5 @@
+librosa
+ppdiffusers
+unidecode
+phonemizer
+espeak
