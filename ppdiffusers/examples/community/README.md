@@ -535,13 +535,12 @@ from ppdiffusers.utils import load_image
 from pipline_stable_diffusion_xl_reference import StableDiffusionXLReferencePipeline
 from ppdiffusers.schedulers import UniPCMultistepScheduler
 
-input_image = load_image("https://raw.githubusercontent.com/Mikubill/sd-webui-controlnet/main/samples/dog_rel.png")
+input_image = load_image("https://github.com/PaddlePaddle/PaddleMIX/assets/68105073/9c8e5c53-dc9a-46bb-9504-3d75a7c22ed2")
 
 pipe = StableDiffusionXLReferencePipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-base-1.0",
-    torch_dtype=paddle.float16,
     use_safetensors=True,
-    variant="fp16").to('gpu:0')
+    variant="fp16")
 
 pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)
 
@@ -554,10 +553,10 @@ result_img = pipe(ref_image=input_image,
 result_img.save("output.png")
 ```
 参考图片：
-<center><img src="https://raw.githubusercontent.com/Mikubill/sd-webui-controlnet/main/samples/dog_rel.png" width=100%></center>
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/68105073/9c8e5c53-dc9a-46bb-9504-3d75a7c22ed2" width=100%></center>
 
 生成的图片如下所示：
-<center><img src="todo" width=100%></center>
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/68105073/05cfede7-a07d-48ef-84e1-2f6239a3fd6f" width=100%></center>
 
 ### Stable Diffusion Mixture Tiling
 `StableDiffusionTilingPipeline`是一个基于Mixture机制的多文本大图生成Stable Diffusion Pipeline。使用方式如下所示：

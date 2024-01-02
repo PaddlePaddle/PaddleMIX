@@ -48,9 +48,8 @@ EXAMPLE_DOC_STRING = """
 
         >>> pipe = StableDiffusionXLReferencePipeline.from_pretrained(
             "stabilityai/stable-diffusion-xl-base-1.0",
-            torch_dtype=paddle.float16,
             use_safetensors=True,
-            variant="fp16").to('gpu:0')
+            variant="fp16")
 
         >>> pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)
         >>> result_img = pipe(ref_image=input_image,
@@ -815,10 +814,6 @@ class StableDiffusionXLReferencePipeline(StableDiffusionXLPipeline):
             image = self.watermark.apply_watermark(image)
 
         image = self.image_processor.postprocess(image, output_type=output_type)
-
-        # Offload last model to CPU
-        if hasattr(self, "final_offload_hook") and self.final_offload_hook is not None:
-            self.final_offload_hook.offload()
 
         if not return_dict:
             return (image,)
