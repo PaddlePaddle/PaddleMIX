@@ -1,5 +1,5 @@
 numpy==1.23.5
 nltk
 paddlenlp>=2.6.0rc0
-paddlespeech
+https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/paddlespeech/paddlespeech-0.0.0-py2.py3-none-any.whl
 opencc==1.1.6
