@@ -34,6 +34,9 @@ import paddle.nn.functional as F
 import paddle.vision.transforms.functional as TF
 import webdataset as wds
 from braceexpand import braceexpand
+from paddle.distributed.fleet.utils.hybrid_parallel_util import (
+    fused_allreduce_gradients,
+)
 from paddle.io.dataloader.collate import default_collate_fn as default_collate
 from paddle.optimizer import AdamW
 from paddle.vision import transforms
@@ -938,8 +941,9 @@ def main(args):
         unet.enable_gradient_checkpointing()
 
     # 12. Optimizer creation
+    parameters = [p for p in unet.parameters() if not p.stop_gradient]
     optimizer = AdamW(
-        parameters=[p for p in unet.parameters() if not p.stop_gradient],
+        parameters=parameters,
         learning_rate=args.learning_rate,
         beta1=args.adam_beta1,
         beta2=args.adam_beta2,
@@ -1238,6 +1242,8 @@ def main(args):
                 accelerator.backward(loss)
                 # if accelerator.sync_gradients:
                 #     accelerator.clip_grad_norm_(unet.parameters(), args.max_grad_norm)
+                if accelerator.num_processes > 1 and args.gradient_checkpointing and accelerator.sync_gradients:
+                    fused_allreduce_gradients(parameters, None)
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad()

@@ -34,6 +34,8 @@ export VAE_NAME="madebyollin/sdxl-vae-fp16-fix"
 export DATASET_NAME="lambdalabs/pokemon-blip-captions"
 
 export HF_ENDPOINT=https://hf-mirror.com
+export FLAGS_conv_workspace_size_limit=4096
+
 
 python -u train_text_to_image_sdxl.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
@@ -64,16 +66,50 @@ python -u train_text_to_image_sdxl.py \
 ### 推理
 
 ```python
-from ppdiffusers import DiffusionPipeline
+from ppdiffusers import StableDiffusionXLPipeline
+from ppdiffusers import (
+    AutoencoderKL,
+    StableDiffusionXLPipeline,
+    UNet2DConditionModel,
+)
 import paddle
 
-model_path = "you-model-id-goes-here" # <-- change this
-pipe = DiffusionPipeline.from_pretrained(model_path, paddle_dtype=paddle.float16)
+unet_path = "your-checkpoint/unet"
+
+pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16)
+vae = AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix")
+unet = UNet2DConditionModel.from_pretrained(unet_path)
 
 prompt = "A pokemon with green eyes and red legs."
 image = pipe(prompt, num_inference_steps=30, guidance_scale=7.5).images[0]
 image.save("pokemon.png")
 ```
+
+可以通过以下代码进行多个checkpoint的推理：
+```python
+from ppdiffusers import StableDiffusionXLPipeline
+from ppdiffusers import (
+    AutoencoderKL,
+    StableDiffusionXLPipeline,
+    UNet2DConditionModel,
+)
+import paddle
+import os
+
+dir_name = "your-checkpoints-dir"
+for file_name in sorted(os.listdir(dir_name)):
+    print(file_name)
+    unet_path = os.path.join(dir_name, file_name)
+
+    pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16)
+    vae = AutoencoderKL.from_pretrained("madebyollin/sdxl-vae-fp16-fix")
+    unet = UNet2DConditionModel.from_pretrained(unet_path, subfolder="unet")
+
+    prompt = "A pokemon with green eyes and red legs."
+    image = pipe(prompt, num_inference_steps=30, guidance_scale=7.5).images[0]
+    image.save("sdxl_train_pokemon_" + file_name + ".png")
+```
+
 
 ## Stable Diffusion XL (SDXL) LoRA 训练示例
 
@@ -101,6 +137,7 @@ export VAE_NAME="madebyollin/sdxl-vae-fp16-fix"
 export DATASET_NAME="lambdalabs/pokemon-blip-captions"
 
 export HF_ENDPOINT=https://hf-mirror.com
+export FLAGS_conv_workspace_size_limit=4096
 ```
 
 
@@ -129,6 +166,7 @@ python -u train_text_to_image_lora_sdxl.py \
 * 不支持`--use_8bit_adam`
 
 
+
 ### 微调文本编码器和 UNet
 
 脚本还允许你微调 `text_encoder` 以及 `unet`。
@@ -138,7 +176,7 @@ python -u train_text_to_image_lora_sdxl.py \
 将 `--train_text_encoder` 参数传递给训练脚本以启用微调 `text_encoder` 和 `unet`：
 
 ```bash
-accelerate launch train_text_to_image_lora_sdxl.py \
+python -u train_text_to_image_lora_sdxl.py \
   --pretrained_model_name_or_path=$MODEL_NAME \
   --dataset_name=$DATASET_NAME --caption_column="text" \
   --resolution=1024 --random_flip \
@@ -153,17 +191,36 @@ accelerate launch train_text_to_image_lora_sdxl.py \
 
 ### 推理
 
-一旦你使用上面的命令训练了一个模型，推理可以简单地使用 `DiffusionPipeline` 在加载训练好的 LoRA 权重后进行。你需要传递 `output_dir` 来加载 LoRA 权重，在这个案例中，是 `sd-pokemon-model-lora-sdxl`。
+一旦你使用上面的命令训练了一个模型，推理可以简单地使用 `StableDiffusionXLPipeline` 在加载训练好的 LoRA 权重后进行。你需要传递 `output_dir` 来加载 LoRA 权重，在这个案例中，是 `sd-pokemon-model-lora-sdxl`。
 
 ```python
-from ppdiffusers import DiffusionPipeline
+from ppdiffusers import StableDiffusionXLPipeline
 import paddle
 
 model_path = "takuoko/sd-pokemon-model-lora-sdxl"
-pipe = DiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16)
+pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16)
 pipe.load_lora_weights(model_path)
 
 prompt = "A pokemon with green eyes and red legs."
 image = pipe(prompt, num_inference_steps=30, guidance_scale=7.5).images[0]
 image.save("pokemon.png")
+```
+
+如果想进行多个checkpoint的推理，你可以使用下面的代码。
+```python
+# multi image
+from ppdiffusers import StableDiffusionXLPipeline
+import paddle
+import os
+
+dir_name = "your-checkpoints-path/sd-pokemon-model-lora-sdxl/"
+for file_name in sorted(os.listdir(dir_name)):
+    print(file_name)
+    model_path = os.path.join(dir_name, file_name)
+    pipe = StableDiffusionXLPipeline.from_pretrained("stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16)
+    pipe.load_lora_weights(model_path)
+
+    prompt = "A pokemon with green eyes and red legs."
+    image = pipe(prompt, num_inference_steps=30, guidance_scale=7.5).images[0]
+    image.save("pokemon_" + file_name + ".png")
 ```

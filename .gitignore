@@ -72,3 +72,10 @@ kernel_meta/
 # MAC
 *.DS_Store
 
+# temp, remove after finish
+examples/text_to_image/README_sdxl.md
+ppdiffusers/examples/text_to_image/paddlenlp/
+ppdiffusers/examples/text_to_image/ppaccelerate/
+ppdiffusers/examples/text_to_image/sd-pokemon-model-lora-sdxl/
+ppdiffusers/examples/text_to_image/sdxl-pokemon-model/
+ppdiffusers/examples/text_to_image/wandb/

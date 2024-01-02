@@ -321,7 +321,7 @@ class Accelerator:
 
         # Mixed precision attributes
         self.scaler = None
-        self.native_amp = True
+        self.native_amp = False
         # err = "{mode} mixed precision requires {requirement}"
         if self.state.mixed_precision == "fp16" and self.state.fp16_opt_level == "O1":
             kwargs = self.scaler_handler.to_kwargs() if self.scaler_handler is not None else {}
@@ -332,6 +332,9 @@ class Accelerator:
                     "incr_every_n_steps": 2000,
                 }
             self.scaler = paddle.amp.GradScaler(**kwargs)
+
+        if self.state.mixed_precision in ["fp16", "bf16"]:
+            self.native_amp = True
 
         # Start of internal step tracking
         self.step = 0
@@ -1012,10 +1015,7 @@ class Accelerator:
 
         # if device_placement and not self.verify_device_map(model):
         #     model = model.to(self.device)
-        if hasattr(model, "is_gradient_checkpointing"):
-            model.do_gradient_checkpointing = model.is_gradient_checkpointing
-        else:
-            model.do_gradient_checkpointing = False
+        model.do_gradient_checkpointing = False
         if not evaluation_mode:
             if self.distributed_type in (DistributedType.MULTI_GPU,):
                 if any(not p.stop_gradient for p in model.parameters()):
@@ -1023,9 +1023,9 @@ class Accelerator:
                     model = paddle.DataParallel(
                         model,
                     )
-                    model.do_gradient_checkpointing = model._layers.do_gradient_checkpointing
-                else:
-                    model.do_gradient_checkpointing = False
+                    # only dp model need do_gradient_checkpointing
+                    if hasattr(model._layers, "is_gradient_checkpointing"):
+                        model.do_gradient_checkpointing = model._layers.is_gradient_checkpointing
 
         return model
 

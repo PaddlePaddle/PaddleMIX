@@ -14,10 +14,23 @@
 
 import builtins
 import math
+import os
 
 import numpy as np
 import paddle
 import paddle.nn as nn
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if not isinstance(v, str):
+        v = str(v)
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise ValueError("Not supported value: {}".format(v))
 
 if not hasattr(paddle, "finfo"):
 
@@ -260,6 +273,22 @@ def device_scope(device="cpu"):
         paddle.set_device(old_device)
 
 
+@contextlib.contextmanager
+def requires_grad_and_without_random(*tensors, seed=0, stop_gradient=False):
+    raw_rng_state = paddle.get_cuda_rng_state()
+    paddle.seed(seed)
+    raw_stop_gradient = [each_tensor.stop_gradient for each_tensor in tensors]
+    need_switch_stop_gradient = False in raw_stop_gradient
+    if need_switch_stop_gradient:
+        for each_tensor in tensors:
+            each_tensor.stop_gradient = stop_gradient
+    yield
+    if need_switch_stop_gradient:
+        for index, each_tensor in enumerate(tensors):
+            each_tensor.stop_gradient = raw_stop_gradient[index]
+    paddle.set_cuda_rng_state(raw_rng_state)
+
+
 paddle.device_scope = device_scope
 
 if not hasattr(nn.Layer, "get_sublayer"):
@@ -289,6 +318,12 @@ if is_ppxformers_available():
     from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
     from paddle.nn.functional.flash_attention import flash_attention
 
+    try:
+        from paddle.incubate.nn.functional import (
+            variable_length_memory_efficient_attention,
+        )
+    except ImportError:
+        variable_length_memory_efficient_attention = None
     try:
         sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 + 64)
         if sdp_kernel == "mem_efficient":
@@ -360,20 +395,46 @@ if is_ppxformers_available():
             if scale is None:
                 scale = 1 / math.sqrt(query.shape[-1])
             # support fp32, fp16, bfp16
-            query.stop_gradient = False
-            key.stop_gradient = False
-            value.stop_gradient = False
-            output = memory_efficient_attention(
-                query,
-                key,
-                value,
-                None,
-                p=dropout_p if training else 0.0,
-                scale=scale,
-                training=True,
-            )  # make sure we use training=True
+            use_cutlass_v2 = str2bool(os.getenv("FLAG_USE_CUTLASS_V2", "no"))
+            if not use_cutlass_v2:
+                with requires_grad_and_without_random(query, key, value):
+                    output = memory_efficient_attention(
+                        query,
+                        key,
+                        value,
+                        None,
+                        p=dropout_p if training else 0.0,
+                        scale=scale,
+                        training=True,
+                    )  # make sure we use training=True
+            else:
+                assert (
+                    variable_length_memory_efficient_attention is not None
+                ), "Please upgrade your paddlepaddle to support variable length attention."
+                batch_size, query_seq_len = query.shape[:2]
+                kv_seqlen = key.shape[1]
+                output = variable_length_memory_efficient_attention(
+                    query.transpose([0, 2, 1, 3]),
+                    key.transpose([0, 2, 1, 3]),
+                    value.transpose([0, 2, 1, 3]),
+                    seq_lens=paddle.to_tensor(
+                        [query_seq_len] * batch_size,
+                        dtype="int32",
+                    ),
+                    kv_seq_lens=paddle.to_tensor(
+                        [kv_seqlen] * batch_size,
+                        dtype="int32",
+                    ),
+                    mask=None if is_causal else attn_mask,
+                    scale=scale,
+                    causal=bool(is_causal),
+                    pre_cache_length=0,
+                ).transpose([0, 2, 1, 3])
         elif attention_op == "flash":
-            output = flash_attention(query, key, value, dropout=dropout_p, causal=is_causal, return_softmax=False)[0]
+            with requires_grad_and_without_random(query, key, value):
+                output = flash_attention(query, key, value, dropout=dropout_p, causal=is_causal, return_softmax=False)[
+                    0
+                ]
         else:
             raise ValueError("ppxformers's attention_op shoulde be in ['cutlass', 'flash', 'math']")
         return output
