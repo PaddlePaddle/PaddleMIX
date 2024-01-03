@@ -40,6 +40,8 @@ if is_paddle_available():
     _import_structure["unet_motion_model"] = ["MotionAdapter", "UNetMotionModel"]
     _import_structure["unet_spatio_temporal_condition"] = ["UNetSpatioTemporalConditionModel"]
     _import_structure["vq_model"] = ["VQModel"]
+    # NOTE, new add
+    _import_structure["ema"] = ["LitEma"]
 
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
@@ -52,6 +54,9 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .consistency_decoder_vae import ConsistencyDecoderVAE
         from .controlnet import ControlNetModel
         from .dual_transformer_2d import DualTransformer2DModel
+
+        # NOTE, new add
+        from .ema import LitEma
         from .modeling_utils import ModelMixin
         from .prior_transformer import PriorTransformer
         from .t5_film_transformer import T5FilmDecoder

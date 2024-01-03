@@ -64,6 +64,8 @@ else:
     _import_structure["scheduling_unipc_multistep"] = ["UniPCMultistepScheduler"]
     _import_structure["scheduling_utils"] = ["KarrasDiffusionSchedulers", "SchedulerMixin"]
     _import_structure["scheduling_vq_diffusion"] = ["VQDiffusionScheduler"]
+    # NOTE, new add for unidiffusers!
+    _import_structure["scheduling_dpmsolver_unidiffuser"] = ["DPMSolverUniDiffuserScheduler"]
 
 
 try:
@@ -123,6 +125,9 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             DPMSolverMultistepInverseScheduler,
         )
         from .scheduling_dpmsolver_singlestep import DPMSolverSinglestepScheduler
+
+        # NOTE, new add for unidiffusers!
+        from .scheduling_dpmsolver_unidiffuser import DPMSolverUniDiffuserScheduler
         from .scheduling_euler_ancestral_discrete import EulerAncestralDiscreteScheduler
         from .scheduling_euler_discrete import EulerDiscreteScheduler
         from .scheduling_heun_discrete import HeunDiscreteScheduler
