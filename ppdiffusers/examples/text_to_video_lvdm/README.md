@@ -26,7 +26,7 @@ pip install -r requirements.txt
 - 基于Webvid数据集的文本条件视频生成非ema权重，使用2d的vae：``westfish/lvdm_text2video_orig_webvid_2m``
 
 ## 模型训练
-模型训练时的参数配置及含义请参考`lvdm/lvdm_args_short.py`或`lvdm/lvdm_args_text2video.py`，分别对应无条件视频生成和文本条件视频生成，均包含、`ModelArguments`、`DatasetArguments`、`TrainerArguments`，分别表示预训练模型及对齐相关的参数，数据集相关的参数，Trainer相关的参数。开发者可以使用默认参数进行训练，也可以根据需要修改参数。
+模型训练时的参数配置及含义请参考`lvdm/lvdm_args_short.py`或`lvdm/lvdm_args_text2video.py`，分别对应无条件视频生成和文本条件视频生成，均包含`ModelArguments`、`DatasetArguments`、`TrainerArguments`，分别表示预训练模型及对齐相关的参数，数据集相关的参数，Trainer相关的参数。开发者可以使用默认参数进行训练，也可以根据需要修改参数。
 
 
 ### 单机单卡训练
