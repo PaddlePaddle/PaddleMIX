@@ -22,9 +22,9 @@ import PIL
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import logging, replace_example_docstring
 from ..fastdeploy_utils import FastDeployRuntimeModel
+from ..fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin
 from ..pipeline_utils import DiffusionPipeline
 from . import StableDiffusionXLPipelineOutput
-from .fastdeployxl_utils import FastDeployDiffusionXLPipelineMixin
 
 logger = logging.get_logger(__name__)
 EXAMPLE_DOC_STRING = """

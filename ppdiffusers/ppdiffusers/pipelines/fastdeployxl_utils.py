@@ -19,9 +19,9 @@ import inspect
 import re
 from typing import List, Optional, Union
 
-from ...image_processor import VaeImageProcessor
-from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
-from ...schedulers import (
+from ..image_processor import VaeImageProcessor
+from ..loaders import LoraLoaderMixin, TextualInversionLoaderMixin
+from ..schedulers import (
     DDIMScheduler,
     DDPMScheduler,
     DEISMultistepScheduler,
@@ -38,8 +38,8 @@ from ...schedulers import (
     PreconfigLMSDiscreteScheduler,
     UniPCMultistepScheduler,
 )
-from ...utils import is_fastdeploy_available, is_paddle_available, logging, randn_tensor
-from ..fastdeploy_utils import FastDeployRuntimeModel
+from ..utils import is_fastdeploy_available, is_paddle_available, logging, randn_tensor
+from .fastdeploy_utils import FastDeployRuntimeModel
 
 __all__ = ["FastDeployDiffusionXLPipelineMixin"]
 
