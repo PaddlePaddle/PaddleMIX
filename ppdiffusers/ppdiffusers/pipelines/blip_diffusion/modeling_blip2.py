@@ -30,14 +30,14 @@ from paddlenlp.transformers.model_outputs import (
 )
 from paddlenlp.transformers.model_utils import apply_chunking_to_forward
 
-from ppdiffusers.transformers import BertTokenizer, PPDiffusersPretrainedModel
+from ppdiffusers.transformers import BertTokenizer, PretrainedModel
 
 from ...utils import logging
 
 logger = logging.get_logger(__name__)
 
 
-class Blip2PreTrainedModel(PPDiffusersPretrainedModel):
+class Blip2PreTrainedModel(PretrainedModel):
     """
     An abstract class to handle weights initialization and a simple interface for downloading and loading pretrained
     models.
