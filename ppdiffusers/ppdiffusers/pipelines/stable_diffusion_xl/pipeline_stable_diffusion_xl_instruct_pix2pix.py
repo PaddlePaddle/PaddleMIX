@@ -490,7 +490,7 @@ class StableDiffusionXLInstructPix2PixPipeline(
     ):
         if not isinstance(image, (paddle.Tensor, PIL.Image.Image, list)):
             raise ValueError(
-                f"`image` has to be of type `torch.Tensor`, `PIL.Image.Image` or list but is {type(image)}"
+                f"`image` has to be of type `paddle.Tensor`, `PIL.Image.Image` or list but is {type(image)}"
             )
 
         image = image.cast(dtype=dtype)

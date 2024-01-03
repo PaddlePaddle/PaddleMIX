@@ -1095,7 +1095,7 @@ class StableDiffusionXLImg2ImgPipeline(
             strength,
             denoising_start=self.denoising_start if denoising_value_valid else None,
         )
-        latent_timestep = timesteps[:1].repeat(batch_size * num_images_per_prompt)
+        latent_timestep = timesteps[:1].tile([batch_size * num_images_per_prompt])
 
         add_noise = True if self.denoising_start is None else False
         # 6. Prepare latent variables
@@ -1142,7 +1142,7 @@ class StableDiffusionXLImg2ImgPipeline(
             dtype=prompt_embeds.dtype,
             text_encoder_projection_dim=text_encoder_projection_dim,
         )
-        add_time_ids = add_time_ids.repeat(batch_size * num_images_per_prompt, 1)
+        add_time_ids = add_time_ids.tile([batch_size * num_images_per_prompt, 1])
 
         if self.do_classifier_free_guidance:
             prompt_embeds = paddle.concat([negative_prompt_embeds, prompt_embeds], axis=0)

@@ -257,10 +257,7 @@ class BlipImageProcessor(BaseImageProcessor):
         images = make_list_of_images(images)
 
         if not valid_images(images):
-            raise ValueError(
-                "Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, "
-                "torch.Tensor, tf.Tensor or jax.ndarray."
-            )
+            raise ValueError("Invalid image type. Must be of type PIL.Image.Image, numpy.ndarray, " "paddle.Tensor.")
 
         if do_resize and size is None or resample is None:
             raise ValueError("Size and resample must be specified if do_resize is True.")
