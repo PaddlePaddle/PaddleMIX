@@ -57,12 +57,11 @@ except OptionalDependencyNotAvailable:
 else:
     from .models import (
         AsymmetricAutoencoderKL,
-        Vid2VidSDUNet,
-        GaussianDiffusion_SDEdit,
         AutoencoderKL,
         AutoencoderKL_imgtovideo,
         ControlNetModel,
         GaussianDiffusion,
+        GaussianDiffusion_SDEdit,
         LitEma,
         LVDMAutoencoderKL,
         LVDMUNet3DModel,
@@ -78,6 +77,7 @@ else:
         UNet2DModel,
         UNet3DConditionModel,
         VQModel,
+        Vid2VidSDUNet,
     )
     from .optimization import (
         get_constant_schedule,
@@ -176,7 +176,6 @@ else:
         IFPipeline,
         IFSuperResolutionPipeline,
         ImgToVideoSDPipeline,
-        VideoToVideoModelscopePipeline,
         KandinskyCombinedPipeline,
         KandinskyImg2ImgCombinedPipeline,
         KandinskyImg2ImgPipeline,
@@ -241,8 +240,10 @@ else:
         VersatileDiffusionImageVariationPipeline,
         VersatileDiffusionPipeline,
         VersatileDiffusionTextToImagePipeline,
+        VideoToVideoModelscopePipeline,
         VideoToVideoSDPipeline,
         VQDiffusionPipeline,
+
     )
     from .pipelines.latent_diffusion.pipeline_latent_diffusion import LDMBertModel
 
