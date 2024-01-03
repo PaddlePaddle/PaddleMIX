@@ -32,10 +32,10 @@ if is_paddle_available():
     from .lvdm_vae import LVDMAutoencoderKL
     from .modeling_utils import ModelMixin
     from .modelscope_autoencoder_img2vid import AutoencoderKL_imgtovideo
-    from .modelscope_sf_unet import SFUNetModel
     from .modelscope_gaussian_diffusion import GaussianDiffusion
     from .modelscope_gaussion_sdedit import GaussianDiffusion_SDEdit
     from .modelscope_sd_unet_video2video import Vid2VidSDUNet
+    from .modelscope_sf_unet import SFUNetModel
     from .prior_transformer import PriorTransformer
 
     from .t5_film_transformer import T5FilmDecoder
