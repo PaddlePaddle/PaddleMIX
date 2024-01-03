@@ -173,8 +173,6 @@ class ImgToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin, LoraL
         noise = self.build_noise()
 
         model_kwargs = [{"y": img_embedding, "fps": self.fps_tensor}, {"y": self.zero_feature, "fps": self.fps_tensor}]
-        state_dict = paddle.load("/home/aistudio/img_to_video/unet/model_state.pdparams")
-        self.unet.set_state_dict(state_dict)
         gen_video = self.diffusion.ddim_sample_loop(
             noise=noise,
             model=self.unet,
