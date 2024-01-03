@@ -12,39 +12,100 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import TYPE_CHECKING
+
 from ...utils import (
-    BaseOutput,
+    PPDIFFUSERS_SLOW_IMPORT,
     OptionalDependencyNotAvailable,
+    _LazyModule,
+    get_objects_from_module,
     is_fastdeploy_available,
     is_paddle_available,
     is_paddlenlp_available,
 )
-from .pipeline_output import StableDiffusionXLPipelineOutput
-from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline
+
+_dummy_objects = {}
+_additional_imports = {}
+_import_structure = {"pipeline_output": ["StableDiffusionXLPipelineOutput"]}
 
 try:
     if not (is_paddlenlp_available() and is_paddle_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
-    from ...utils.dummy_paddle_and_paddlenlp_objects import *
-else:
-    from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline  # noqa F401
+    from ...utils import dummy_paddle_and_paddlenlp_objects  # noqa F403
 
+    _dummy_objects.update(get_objects_from_module(dummy_paddle_and_paddlenlp_objects))
+else:
+    _import_structure["pipeline_stable_diffusion_xl"] = ["StableDiffusionXLPipeline"]
+    _import_structure["pipeline_stable_diffusion_xl_img2img"] = ["StableDiffusionXLImg2ImgPipeline"]
+    _import_structure["pipeline_stable_diffusion_xl_inpaint"] = ["StableDiffusionXLInpaintPipeline"]
+    _import_structure["pipeline_stable_diffusion_xl_instruct_pix2pix"] = ["StableDiffusionXLInstructPix2PixPipeline"]
+
+# fastdeploy
 try:
-    if not (is_paddle_available() and is_fastdeploy_available()):
+    if not (is_paddle_available() and is_paddlenlp_available() and is_fastdeploy_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
-    from ...utils.dummy_fastdeploy_objects import *  # noqa F403
+    from ...utils import dummy_fastdeploy_objects  # noqa F403
+
+    _dummy_objects.update(get_objects_from_module(dummy_fastdeploy_objects))
 else:
-    from .pipeline_fastdeploy_stable_diffusion_xl import (
-        FastDeployStableDiffusionXLPipeline,
+    _import_structure["pipeline_fastdeploy_stable_diffusion_xl"] = ["FastDeployStableDiffusionXLPipeline"]
+    _import_structure["pipeline_fastdeploy_stable_diffusion_xl_img2img"] = [
+        "FastDeployStableDiffusionXLImg2ImgPipeline"
+    ]
+    _import_structure["pipeline_fastdeploy_stable_diffusion_xl_inpaint"] = [
+        "FastDeployStableDiffusionXLInpaintPipeline"
+    ]
+    _import_structure["pipeline_fastdeploy_stable_diffusion_xl_mega"] = ["FastDeployStableDiffusionXLMegaPipeline"]
+
+if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
+    try:
+        if not (is_paddlenlp_available() and is_paddle_available()):
+            raise OptionalDependencyNotAvailable()
+    except OptionalDependencyNotAvailable:
+        from ...utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
+    else:
+        from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline
+        from .pipeline_stable_diffusion_xl_img2img import (
+            StableDiffusionXLImg2ImgPipeline,
+        )
+        from .pipeline_stable_diffusion_xl_inpaint import (
+            StableDiffusionXLInpaintPipeline,
+        )
+        from .pipeline_stable_diffusion_xl_instruct_pix2pix import (
+            StableDiffusionXLInstructPix2PixPipeline,
+        )
+
+    try:
+        if not (is_paddle_available() and is_paddlenlp_available() and is_fastdeploy_available()):
+            raise OptionalDependencyNotAvailable()
+    except OptionalDependencyNotAvailable:
+        from ...utils.dummy_fastdeploy_objects import *
+    else:
+        from .pipeline_fastdeploy_stable_diffusion_xl import (
+            FastDeployStableDiffusionXLPipeline,
+        )
+        from .pipeline_fastdeploy_stable_diffusion_xl_img2img import (
+            FastDeployStableDiffusionXLImg2ImgPipeline,
+        )
+        from .pipeline_fastdeploy_stable_diffusion_xl_inpaint import (
+            FastDeployStableDiffusionXLInpaintPipeline,
+        )
+        from .pipeline_fastdeploy_stable_diffusion_xl_mega import (
+            FastDeployStableDiffusionXLMegaPipeline,
+        )
+else:
+    import sys
+
+    sys.modules[__name__] = _LazyModule(
+        __name__,
+        globals()["__file__"],
+        _import_structure,
+        module_spec=__spec__,
     )
-    from .pipeline_fastdeploy_stable_diffusion_xl_img2img import (
-        FastDeployStableDiffusionXLImg2ImgPipeline,
-    )
-    from .pipeline_fastdeploy_stable_diffusion_xl_inpaint import (
-        FastDeployStableDiffusionXLInpaintPipeline,
-    )
-    from .pipeline_fastdeploy_stable_diffusion_xl_mega import (
-        FastDeployStableDiffusionXLMegaPipeline,
-    )
+
+    for name, value in _dummy_objects.items():
+        setattr(sys.modules[__name__], name, value)
+    for name, value in _additional_imports.items():
+        setattr(sys.modules[__name__], name, value)

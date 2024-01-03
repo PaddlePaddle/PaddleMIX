@@ -147,7 +147,7 @@ class BlipDiffusionControlNetPipeline(DiffusionPipeline):
 
         return rv
 
-    # Copied from diffusers.pipelines.consistency_models.pipeline_consistency_models.ConsistencyModelPipeline.prepare_latents
+    # Copied from ppdiffusers.pipelines.consistency_models.pipeline_consistency_models.ConsistencyModelPipeline.prepare_latents
     def prepare_latents(self, batch_size, num_channels, height, width, dtype, generator, latents=None):
         shape = (batch_size, num_channels, height, width)
         if isinstance(generator, list) and len(generator) != batch_size:
