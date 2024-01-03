@@ -1,4 +1,4 @@
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright 2023 TencentARC and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,24 +15,23 @@
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import numpy as np
 import paddle
+import PIL.Image
 
 from ppdiffusers.transformers import (
-    CLIPImageProcessor,
     CLIPTextModel,
     CLIPTextModelWithProjection,
     CLIPTokenizer,
-    CLIPVisionModelWithProjection,
 )
 
-from ...image_processor import PipelineImageInput, VaeImageProcessor
+from ...image_processor import VaeImageProcessor
 from ...loaders import (
     FromSingleFileMixin,
-    IPAdapterMixin,
     StableDiffusionXLLoraLoaderMixin,
     TextualInversionLoaderMixin,
 )
-from ...models import AutoencoderKL, UNet2DConditionModel
+from ...models import AutoencoderKL, MultiAdapter, T2IAdapter, UNet2DConditionModel
 from ...models.attention_processor import (
     AttnProcessor2_5,
     LoRAAttnProcessor2_5,
@@ -42,18 +41,14 @@ from ...models.attention_processor import (
 from ...models.lora import adjust_lora_scale_text_encoder
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import (
+    PIL_INTERPOLATION,
     USE_PPPEFT_BACKEND,
-    deprecate,
-    is_ppinvisible_watermark_available,
     logging,
     replace_example_docstring,
 )
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
-from .pipeline_output import StableDiffusionXLPipelineOutput
-
-if is_ppinvisible_watermark_available():
-    from .watermark import StableDiffusionXLWatermarker
+from ..stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
@@ -61,16 +56,62 @@ EXAMPLE_DOC_STRING = """
     Examples:
         ```py
         >>> import paddle
-        >>> from ppdiffusers import StableDiffusionXLPipeline
+        >>> from ppdiffusers import T2IAdapter, StableDiffusionXLAdapterPipeline, DDPMScheduler
+        >>> from ppdiffusers.utils import load_image
 
-        >>> pipe = StableDiffusionXLPipeline.from_pretrained(
-        ...     "stabilityai/stable-diffusion-xl-base-1.0", paddle_dtype=paddle.float16
+        >>> sketch_image = load_image("https://huggingface.co/Adapter/t2iadapter/resolve/main/sketch.png").convert("L")
+
+        >>> model_id = "stabilityai/stable-diffusion-xl-base-1.0"
+
+        >>> adapter = T2IAdapter.from_pretrained(
+        ...     "Adapter/t2iadapter",
+        ...     subfolder="sketch_sdxl_1.0",
+        ...     paddle_dtype=paddle.float16,
+        ...     adapter_type="full_adapter_xl",
+        ... )
+        >>> scheduler = DDPMScheduler.from_pretrained(model_id, subfolder="scheduler")
+
+        >>> pipe = StableDiffusionXLAdapterPipeline.from_pretrained(
+        ...     model_id, adapter=adapter, paddle_dtype=paddle.float16, variant="fp16", scheduler=scheduler
         ... )
 
-        >>> prompt = "a photo of an astronaut riding a horse on mars"
-        >>> image = pipe(prompt).images[0]
+        >>> generator = paddle.Generator().manual_seed(42)
+        >>> sketch_image_out = pipe(
+        ...     prompt="a photo of a dog in real world, high quality",
+        ...     negative_prompt="extra digit, fewer digits, cropped, worst quality, low quality",
+        ...     image=sketch_image,
+        ...     generator=generator,
+        ...     guidance_scale=7.5,
+        ... ).images[0]
         ```
 """
+
+
+def _preprocess_adapter_image(image, height, width):
+    if isinstance(image, paddle.Tensor):
+        return image
+    elif isinstance(image, PIL.Image.Image):
+        image = [image]
+
+    if isinstance(image[0], PIL.Image.Image):
+        image = [np.array(i.resize((width, height), resample=PIL_INTERPOLATION["lanczos"])) for i in image]
+        image = [
+            i[None, ..., None] if i.ndim == 2 else i[None, ...] for i in image
+        ]  # expand [h, w] or [h, w, c] to [b, h, w, c]
+        image = np.concatenate(image, axis=0)
+        image = np.array(image).astype(np.float32) / 255.0
+        image = image.transpose(0, 3, 1, 2)
+        image = paddle.to_tensor(image)
+    elif isinstance(image[0], paddle.Tensor):
+        if image[0].ndim == 3:
+            image = paddle.stack(image, axis=0)
+        elif image[0].ndim == 4:
+            image = paddle.concat(image, axis=0)
+        else:
+            raise ValueError(
+                f"Invalid image tensor! Expecting image tensor with 3 or 4 dimension, but recive: {image[0].ndim}"
+            )
+    return image
 
 
 # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.rescale_noise_cfg
@@ -130,76 +171,45 @@ def retrieve_timesteps(
     return timesteps, num_inference_steps
 
 
-class StableDiffusionXLPipeline(
-    DiffusionPipeline,
-    FromSingleFileMixin,
-    StableDiffusionXLLoraLoaderMixin,
-    TextualInversionLoaderMixin,
-    IPAdapterMixin,
+class StableDiffusionXLAdapterPipeline(
+    DiffusionPipeline, FromSingleFileMixin, StableDiffusionXLLoraLoaderMixin, TextualInversionLoaderMixin
 ):
     r"""
-    Pipeline for text-to-image generation using Stable Diffusion XL.
+    Pipeline for text-to-image generation using Stable Diffusion augmented with T2I-Adapter
+    https://arxiv.org/abs/2302.08453
 
     This model inherits from [`DiffusionPipeline`]. Check the superclass documentation for the generic methods the
     library implements for all the pipelines (such as downloading or saving, running on a particular device, etc.)
 
-    In addition the pipeline inherits the following loading methods:
-        - *LoRA*: [`loaders.StableDiffusionXLLoraLoaderMixin.load_lora_weights`]
-        - *Ckpt*: [`loaders.FromSingleFileMixin.from_single_file`]
-
-    as well as the following saving methods:
-        - *LoRA*: [`loaders.StableDiffusionXLLoraLoaderMixin.save_lora_weights`]
-
     Args:
+        adapter ([`T2IAdapter`] or [`MultiAdapter`] or `List[T2IAdapter]`):
+            Provides additional conditioning to the unet during the denoising process. If you set multiple Adapter as a
+            list, the outputs from each Adapter are added together to create one combined additional conditioning.
+        adapter_weights (`List[float]`, *optional*, defaults to None):
+            List of floats representing the weight which will be multiply to each adapter's output before adding them
+            together.
         vae ([`AutoencoderKL`]):
             Variational Auto-Encoder (VAE) Model to encode and decode images to and from latent representations.
         text_encoder ([`CLIPTextModel`]):
-            Frozen text-encoder. Stable Diffusion XL uses the text portion of
+            Frozen text-encoder. Stable Diffusion uses the text portion of
             [CLIP](https://huggingface.co/docs/transformers/model_doc/clip#transformers.CLIPTextModel), specifically
             the [clip-vit-large-patch14](https://huggingface.co/openai/clip-vit-large-patch14) variant.
-        text_encoder_2 ([` CLIPTextModelWithProjection`]):
-            Second frozen text-encoder. Stable Diffusion XL uses the text and pool portion of
-            [CLIP](https://huggingface.co/docs/transformers/model_doc/clip#transformers.CLIPTextModelWithProjection),
-            specifically the
-            [laion/CLIP-ViT-bigG-14-laion2B-39B-b160k](https://huggingface.co/laion/CLIP-ViT-bigG-14-laion2B-39B-b160k)
-            variant.
         tokenizer (`CLIPTokenizer`):
             Tokenizer of class
-            [CLIPTokenizer](https://huggingface.co/docs/transformers/v4.21.0/en/model_doc/clip#transformers.CLIPTokenizer).
-        tokenizer_2 (`CLIPTokenizer`):
-            Second Tokenizer of class
             [CLIPTokenizer](https://huggingface.co/docs/transformers/v4.21.0/en/model_doc/clip#transformers.CLIPTokenizer).
         unet ([`UNet2DConditionModel`]): Conditional U-Net architecture to denoise the encoded image latents.
         scheduler ([`SchedulerMixin`]):
             A scheduler to be used in combination with `unet` to denoise the encoded image latents. Can be one of
             [`DDIMScheduler`], [`LMSDiscreteScheduler`], or [`PNDMScheduler`].
-        force_zeros_for_empty_prompt (`bool`, *optional*, defaults to `"True"`):
-            Whether the negative prompt embeddings shall be forced to always be set to 0. Also see the config of
-            `stabilityai/stable-diffusion-xl-base-1-0`.
-        add_watermarker (`bool`, *optional*):
-            Whether to use the [invisible_watermark library](https://github.com/ShieldMnt/ppinvisible-watermark/) to
-            watermark output images. If not defined, it will default to True if the package is installed, otherwise no
-            watermarker will be used.
+        safety_checker ([`StableDiffusionSafetyChecker`]):
+            Classification module that estimates whether generated images could be considered offensive or harmful.
+            Please, refer to the [model card](https://huggingface.co/runwayml/stable-diffusion-v1-5) for details.
+        feature_extractor ([`CLIPFeatureExtractor`]):
+            Model that extracts features from generated images to be used as inputs for the `safety_checker`.
     """
 
     model_cpu_offload_seq = "text_encoder->text_encoder_2->unet->vae"
-    _optional_components = [
-        "tokenizer",
-        "tokenizer_2",
-        "text_encoder",
-        "text_encoder_2",
-        "image_encoder",
-        "feature_extractor",
-    ]
-    _callback_tensor_inputs = [
-        "latents",
-        "prompt_embeds",
-        "negative_prompt_embeds",
-        "add_text_embeds",
-        "add_time_ids",
-        "negative_pooled_prompt_embeds",
-        "negative_add_time_ids",
-    ]
+    _optional_components = ["tokenizer", "tokenizer_2", "text_encoder", "text_encoder_2"]
 
     def __init__(
         self,
@@ -209,11 +219,9 @@ class StableDiffusionXLPipeline(
         tokenizer: CLIPTokenizer,
         tokenizer_2: CLIPTokenizer,
         unet: UNet2DConditionModel,
+        adapter: Union[T2IAdapter, MultiAdapter, List[T2IAdapter]],
         scheduler: KarrasDiffusionSchedulers,
-        image_encoder: CLIPVisionModelWithProjection = None,
-        feature_extractor: CLIPImageProcessor = None,
         force_zeros_for_empty_prompt: bool = True,
-        add_watermarker: Optional[bool] = None,
     ):
         super().__init__()
 
@@ -224,23 +232,15 @@ class StableDiffusionXLPipeline(
             tokenizer=tokenizer,
             tokenizer_2=tokenizer_2,
             unet=unet,
+            adapter=adapter,
             scheduler=scheduler,
-            image_encoder=image_encoder,
-            feature_extractor=feature_extractor,
         )
         self.register_to_config(force_zeros_for_empty_prompt=force_zeros_for_empty_prompt)
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
-
         self.default_sample_size = self.unet.config.sample_size
 
-        add_watermarker = add_watermarker if add_watermarker is not None else is_ppinvisible_watermark_available()
-
-        if add_watermarker:
-            self.watermark = StableDiffusionXLWatermarker()
-        else:
-            self.watermark = None
-
+    # Copied from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl.StableDiffusionXLPipeline.encode_prompt
     def encode_prompt(
         self,
         prompt: str,
@@ -456,20 +456,6 @@ class StableDiffusionXLPipeline(
 
         return prompt_embeds, negative_prompt_embeds, pooled_prompt_embeds, negative_pooled_prompt_embeds
 
-    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.encode_image
-    def encode_image(self, image, num_images_per_prompt):
-        dtype = next(self.image_encoder.named_parameters())[1].dtype
-
-        if not isinstance(image, paddle.Tensor):
-            image = self.feature_extractor(image, return_tensors="pd").pixel_values
-
-        image = image._to(dtype=dtype)
-        image_embeds = self.image_encoder(image).image_embeds
-        image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
-
-        uncond_image_embeds = paddle.zeros_like(image_embeds)
-        return image_embeds, uncond_image_embeds
-
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
         # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
@@ -488,6 +474,7 @@ class StableDiffusionXLPipeline(
             extra_step_kwargs["generator"] = generator
         return extra_step_kwargs
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl.StableDiffusionXLPipeline.check_inputs
     def check_inputs(
         self,
         prompt,
@@ -585,6 +572,7 @@ class StableDiffusionXLPipeline(
         latents = latents * self.scheduler.init_noise_sigma
         return latents
 
+    # Copied from ppdiffusers.pipelines.stable_diffusion_xl.pipeline_stable_diffusion_xl.StableDiffusionXLPipeline._get_add_time_ids
     def _get_add_time_ids(
         self, original_size, crops_coords_top_left, target_size, dtype, text_encoder_projection_dim=None
     ):
@@ -623,6 +611,34 @@ class StableDiffusionXLPipeline(
             self.vae.decoder.conv_in.to(dtype=dtype)
             self.vae.decoder.mid_block.to(dtype=dtype)
 
+    # Copied from ppdiffusers.pipelines.t2i_adapter.pipeline_stable_diffusion_adapter.StableDiffusionAdapterPipeline._default_height_width
+    def _default_height_width(self, height, width, image):
+        # NOTE: It is possible that a list of images have different
+        # dimensions for each image, so just checking the first image
+        # is not _exactly_ correct, but it is simple.
+        while isinstance(image, list):
+            image = image[0]
+
+        if height is None:
+            if isinstance(image, PIL.Image.Image):
+                height = image.height
+            elif isinstance(image, paddle.Tensor):
+                height = image.shape[-2]
+
+            # round down to nearest multiple of `self.adapter.downscale_factor`
+            height = (height // self.adapter.downscale_factor) * self.adapter.downscale_factor
+
+        if width is None:
+            if isinstance(image, PIL.Image.Image):
+                width = image.width
+            elif isinstance(image, paddle.Tensor):
+                width = image.shape[-1]
+
+            # round down to nearest multiple of `self.adapter.downscale_factor`
+            width = (width // self.adapter.downscale_factor) * self.adapter.downscale_factor
+
+        return height, width
+
     # Copied from ppdiffusers.pipelines.latent_consistency_models.pipeline_latent_consistency_text2img.LatentConsistencyModelPipeline.get_guidance_scale_embedding
     def get_guidance_scale_embedding(self, w, embedding_dim=512, dtype=paddle.float32):
         """
@@ -656,14 +672,6 @@ class StableDiffusionXLPipeline(
     def guidance_scale(self):
         return self._guidance_scale
 
-    @property
-    def guidance_rescale(self):
-        return self._guidance_rescale
-
-    @property
-    def clip_skip(self):
-        return self._clip_skip
-
     # here `guidance_scale` is defined analog to the guidance weight `w` of equation (2)
     # of the Imagen paper: https://arxiv.org/pdf/2205.11487.pdf . `guidance_scale = 1`
     # corresponds to doing no classifier free guidance.
@@ -671,24 +679,13 @@ class StableDiffusionXLPipeline(
     def do_classifier_free_guidance(self):
         return self._guidance_scale > 1 and self.unet.config.time_cond_proj_dim is None
 
-    @property
-    def cross_attention_kwargs(self):
-        return self._cross_attention_kwargs
-
-    @property
-    def denoising_end(self):
-        return self._denoising_end
-
-    @property
-    def num_timesteps(self):
-        return self._num_timesteps
-
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
         prompt: Union[str, List[str]] = None,
         prompt_2: Optional[Union[str, List[str]]] = None,
+        image: Union[paddle.Tensor, PIL.Image.Image, List[PIL.Image.Image]] = None,
         height: Optional[int] = None,
         width: Optional[int] = None,
         num_inference_steps: int = 50,
@@ -705,9 +702,10 @@ class StableDiffusionXLPipeline(
         negative_prompt_embeds: Optional[paddle.Tensor] = None,
         pooled_prompt_embeds: Optional[paddle.Tensor] = None,
         negative_pooled_prompt_embeds: Optional[paddle.Tensor] = None,
-        ip_adapter_image: Optional[PipelineImageInput] = None,
         output_type: Optional[str] = "pil",
         return_dict: bool = True,
+        callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
+        callback_steps: int = 1,
         cross_attention_kwargs: Optional[Dict[str, Any]] = None,
         guidance_rescale: float = 0.0,
         original_size: Optional[Tuple[int, int]] = None,
@@ -716,10 +714,9 @@ class StableDiffusionXLPipeline(
         negative_original_size: Optional[Tuple[int, int]] = None,
         negative_crops_coords_top_left: Tuple[int, int] = (0, 0),
         negative_target_size: Optional[Tuple[int, int]] = None,
+        adapter_conditioning_scale: Union[float, List[float]] = 1.0,
+        adapter_conditioning_factor: float = 1.0,
         clip_skip: Optional[int] = None,
-        callback_on_step_end: Optional[Callable[[int, int, Dict], None]] = None,
-        callback_on_step_end_tensor_inputs: List[str] = ["latents"],
-        **kwargs,
     ):
         r"""
         Function invoked when calling the pipeline for generation.
@@ -731,14 +728,16 @@ class StableDiffusionXLPipeline(
             prompt_2 (`str` or `List[str]`, *optional*):
                 The prompt or prompts to be sent to the `tokenizer_2` and `text_encoder_2`. If not defined, `prompt` is
                 used in both text-encoders
+            image (`paddle.Tensor`, `PIL.Image.Image`, `List[paddle.Tensor]` or `List[PIL.Image.Image]` or `List[List[PIL.Image.Image]]`):
+                The Adapter input condition. Adapter uses this input condition to generate guidance to Unet. If the
+                type is specified as `paddle.Tensor`, it is passed to Adapter as is. PIL.Image.Image` can also be
+                accepted as an image. The control image is automatically resized to fit the output image.
             height (`int`, *optional*, defaults to self.unet.config.sample_size * self.vae_scale_factor):
-                The height in pixels of the generated image. This is set to 1024 by default for the best results.
-                Anything below 512 pixels won't work well for
+                The height in pixels of the generated image. Anything below 512 pixels won't work well for
                 [stabilityai/stable-diffusion-xl-base-1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0)
                 and checkpoints that are not specifically fine-tuned on low resolutions.
             width (`int`, *optional*, defaults to self.unet.config.sample_size * self.vae_scale_factor):
-                The width in pixels of the generated image. This is set to 1024 by default for the best results.
-                Anything below 512 pixels won't work well for
+                The width in pixels of the generated image. Anything below 512 pixels won't work well for
                 [stabilityai/stable-diffusion-xl-base-1.0](https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0)
                 and checkpoints that are not specifically fine-tuned on low resolutions.
             num_inference_steps (`int`, *optional*, defaults to 50):
@@ -774,7 +773,8 @@ class StableDiffusionXLPipeline(
                 Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
                 [`schedulers.DDIMScheduler`], will be ignored for others.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of paddle generator(s) to make generation deterministic.
+                One or a list of [paddle generator(s)](https://pypaddle.org/docs/stable/generated/paddle.Generator.html)
+                to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
@@ -793,13 +793,18 @@ class StableDiffusionXLPipeline(
                 Pre-generated negative pooled text embeddings. Can be used to easily tweak text inputs, *e.g.* prompt
                 weighting. If not provided, pooled negative_prompt_embeds will be generated from `negative_prompt`
                 input argument.
-            ip_adapter_image: (`PipelineImageInput`, *optional*): Optional image input to work with IP Adapters.
             output_type (`str`, *optional*, defaults to `"pil"`):
                 The output format of the generate image. Choose between
                 [PIL](https://pillow.readthedocs.io/en/stable/): `PIL.Image.Image` or `np.array`.
             return_dict (`bool`, *optional*, defaults to `True`):
-                Whether or not to return a [`~pipelines.stable_diffusion_xl.StableDiffusionXLPipelineOutput`] instead
-                of a plain tuple.
+                Whether or not to return a [`~pipelines.stable_diffusion_xl.StableDiffusionAdapterPipelineOutput`]
+                instead of a plain tuple.
+            callback (`Callable`, *optional*):
+                A function that will be called every `callback_steps` steps during inference. The function will be
+                called with the following arguments: `callback(step: int, timestep: int, latents: paddle.Tensor)`.
+            callback_steps (`int`, *optional*, defaults to 1):
+                The frequency at which the `callback` function will be called. If not specified, the callback will be
+                called at every step.
             cross_attention_kwargs (`dict`, *optional*):
                 A kwargs dictionary that if specified is passed along to the `AttentionProcessor` as defined under
                 `self.processor` in
@@ -823,6 +828,7 @@ class StableDiffusionXLPipeline(
                 For most cases, `target_size` should be set to the desired height and width of the generated image. If
                 not specified it will default to `(height, width)`. Part of SDXL's micro-conditioning as explained in
                 section 2.2 of [https://huggingface.co/papers/2307.01952](https://huggingface.co/papers/2307.01952).
+                section 2.2 of [https://huggingface.co/papers/2307.01952](https://huggingface.co/papers/2307.01952).
             negative_original_size (`Tuple[int]`, *optional*, defaults to (1024, 1024)):
                 To negatively condition the generation process based on a specific image resolution. Part of SDXL's
                 micro-conditioning as explained in section 2.2 of
@@ -838,44 +844,39 @@ class StableDiffusionXLPipeline(
                 as the `target_size` for most cases. Part of SDXL's micro-conditioning as explained in section 2.2 of
                 [https://huggingface.co/papers/2307.01952](https://huggingface.co/papers/2307.01952). For more
                 information, refer to this issue thread: https://github.com/huggingface/diffusers/issues/4208.
-            callback_on_step_end (`Callable`, *optional*):
-                A function that calls at the end of each denoising steps during the inference. The function is called
-                with the following arguments: `callback_on_step_end(self: DiffusionPipeline, step: int, timestep: int,
-                callback_kwargs: Dict)`. `callback_kwargs` will include a list of all tensors as specified by
-                `callback_on_step_end_tensor_inputs`.
-            callback_on_step_end_tensor_inputs (`List`, *optional*):
-                The list of tensor inputs for the `callback_on_step_end` function. The tensors specified in the list
-                will be passed as `callback_kwargs` argument. You will only be able to include variables listed in the
-                `._callback_tensor_inputs` attribute of your pipeline class.
+            adapter_conditioning_scale (`float` or `List[float]`, *optional*, defaults to 1.0):
+                The outputs of the adapter are multiplied by `adapter_conditioning_scale` before they are added to the
+                residual in the original unet. If multiple adapters are specified in init, you can set the
+                corresponding scale as a list.
+            adapter_conditioning_factor (`float`, *optional*, defaults to 1.0):
+                The fraction of timesteps for which adapter should be applied. If `adapter_conditioning_factor` is
+                `0.0`, adapter is not applied at all. If `adapter_conditioning_factor` is `1.0`, adapter is applied for
+                all timesteps. If `adapter_conditioning_factor` is `0.5`, adapter is applied for half of the timesteps.
+            clip_skip (`int`, *optional*):
+                Number of layers to be skipped from CLIP while computing the prompt embeddings. A value of 1 means that
+                the output of the pre-final layer will be used for computing the prompt embeddings.
 
         Examples:
 
         Returns:
-            [`~pipelines.stable_diffusion_xl.StableDiffusionXLPipelineOutput`] or `tuple`:
-            [`~pipelines.stable_diffusion_xl.StableDiffusionXLPipelineOutput`] if `return_dict` is True, otherwise a
+            [`~pipelines.stable_diffusion.StableDiffusionAdapterPipelineOutput`] or `tuple`:
+            [`~pipelines.stable_diffusion.StableDiffusionAdapterPipelineOutput`] if `return_dict` is True, otherwise a
             `tuple`. When returning a tuple, the first element is a list with the generated images.
         """
-
-        callback = kwargs.pop("callback", None)
-        callback_steps = kwargs.pop("callback_steps", None)
-
-        if callback is not None:
-            deprecate(
-                "callback",
-                "1.0.0",
-                "Passing `callback` as an input argument to `__call__` is deprecated, consider use `callback_on_step_end`",
-            )
-        if callback_steps is not None:
-            deprecate(
-                "callback_steps",
-                "1.0.0",
-                "Passing `callback_steps` as an input argument to `__call__` is deprecated, consider use `callback_on_step_end`",
-            )
-
         # 0. Default height and width to unet
-        height = height or self.default_sample_size * self.vae_scale_factor
-        width = width or self.default_sample_size * self.vae_scale_factor
 
+        height, width = self._default_height_width(height, width, image)
+
+        if isinstance(self.adapter, MultiAdapter):
+            adapter_input = []
+
+            for one_image in image:
+                one_image = _preprocess_adapter_image(one_image, height, width)
+                one_image = one_image.cast(dtype=self.adapter.dtype)
+                adapter_input.append(one_image)
+        else:
+            adapter_input = _preprocess_adapter_image(image, height, width)
+            adapter_input = adapter_input.cast(dtype=self.adapter.dtype)
         original_size = original_size or (height, width)
         target_size = target_size or (height, width)
 
@@ -892,14 +893,9 @@ class StableDiffusionXLPipeline(
             negative_prompt_embeds,
             pooled_prompt_embeds,
             negative_pooled_prompt_embeds,
-            callback_on_step_end_tensor_inputs,
         )
 
         self._guidance_scale = guidance_scale
-        self._guidance_rescale = guidance_rescale
-        self._clip_skip = clip_skip
-        self._cross_attention_kwargs = cross_attention_kwargs
-        self._denoising_end = denoising_end
 
         # 2. Define call parameters
         if prompt is not None and isinstance(prompt, str):
@@ -910,10 +906,6 @@ class StableDiffusionXLPipeline(
             batch_size = prompt_embeds.shape[0]
 
         # 3. Encode input prompt
-        lora_scale = (
-            self.cross_attention_kwargs.get("scale", None) if self.cross_attention_kwargs is not None else None
-        )
-
         (
             prompt_embeds,
             negative_prompt_embeds,
@@ -930,8 +922,7 @@ class StableDiffusionXLPipeline(
             negative_prompt_embeds=negative_prompt_embeds,
             pooled_prompt_embeds=pooled_prompt_embeds,
             negative_pooled_prompt_embeds=negative_pooled_prompt_embeds,
-            lora_scale=lora_scale,
-            clip_skip=self.clip_skip,
+            clip_skip=clip_skip,
         )
 
         # 4. Prepare timesteps
@@ -952,7 +943,34 @@ class StableDiffusionXLPipeline(
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
-        # 7. Prepare added time ids & embeddings
+        # 6.5 Optionally get Guidance Scale Embedding
+        timestep_cond = None
+        if self.unet.config.time_cond_proj_dim is not None:
+            guidance_scale_tensor = paddle.to_tensor([self.guidance_scale - 1]).tile(
+                [
+                    batch_size * num_images_per_prompt,
+                ]
+            )
+            timestep_cond = self.get_guidance_scale_embedding(
+                guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim
+            ).cast(dtype=latents.dtype)
+
+        # 7. Prepare added time ids & embeddings & adapter features
+        if isinstance(self.adapter, MultiAdapter):
+            adapter_state = self.adapter(adapter_input, adapter_conditioning_scale)
+            for k, v in enumerate(adapter_state):
+                adapter_state[k] = v
+        else:
+            adapter_state = self.adapter(adapter_input)
+            for k, v in enumerate(adapter_state):
+                adapter_state[k] = v * adapter_conditioning_scale
+        if num_images_per_prompt > 1:
+            for k, v in enumerate(adapter_state):
+                adapter_state[k] = v.tile([num_images_per_prompt, 1, 1, 1])
+        if self.do_classifier_free_guidance:
+            for k, v in enumerate(adapter_state):
+                adapter_state[k] = paddle.concat([v] * 2, axis=0)
+
         add_text_embeds = pooled_prompt_embeds
         if self.text_encoder_2 is None:
             text_encoder_projection_dim = int(pooled_prompt_embeds.shape[-1])
@@ -984,43 +1002,20 @@ class StableDiffusionXLPipeline(
 
         add_time_ids = add_time_ids.tile([batch_size * num_images_per_prompt, 1])
 
-        if ip_adapter_image is not None:
-            image_embeds, negative_image_embeds = self.encode_image(ip_adapter_image, num_images_per_prompt)
-            if self.do_classifier_free_guidance:
-                image_embeds = paddle.concat([negative_image_embeds, image_embeds])
-
         # 8. Denoising loop
         num_warmup_steps = max(len(timesteps) - num_inference_steps * self.scheduler.order, 0)
 
-        # 8.1 Apply denoising_end
-        if (
-            self.denoising_end is not None
-            and isinstance(self.denoising_end, float)
-            and self.denoising_end > 0
-            and self.denoising_end < 1
-        ):
+        # 7.1 Apply denoising_end
+        if denoising_end is not None and isinstance(denoising_end, float) and denoising_end > 0 and denoising_end < 1:
             discrete_timestep_cutoff = int(
                 round(
                     self.scheduler.config.num_train_timesteps
-                    - (self.denoising_end * self.scheduler.config.num_train_timesteps)
+                    - (denoising_end * self.scheduler.config.num_train_timesteps)
                 )
             )
             num_inference_steps = len(list(filter(lambda ts: ts >= discrete_timestep_cutoff, timesteps)))
             timesteps = timesteps[:num_inference_steps]
 
-        # 9. Optionally get Guidance Scale Embedding
-        timestep_cond = None
-        if self.unet.config.time_cond_proj_dim is not None:
-            guidance_scale_tensor = paddle.to_tensor([self.guidance_scale - 1]).tile(
-                [
-                    batch_size * num_images_per_prompt,
-                ]
-            )
-            timestep_cond = self.get_guidance_scale_embedding(
-                guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim
-            ).cast(dtype=latents.dtype)
-
-        self._num_timesteps = len(timesteps)
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
                 # expand the latents if we are doing classifier free guidance
@@ -1030,45 +1025,34 @@ class StableDiffusionXLPipeline(
 
                 # predict the noise residual
                 added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
-                if ip_adapter_image is not None:
-                    added_cond_kwargs["image_embeds"] = image_embeds
+
+                if i < int(num_inference_steps * adapter_conditioning_factor):
+                    down_intrablock_additional_residuals = [state.clone() for state in adapter_state]
+                else:
+                    down_intrablock_additional_residuals = None
+
                 noise_pred = self.unet(
                     latent_model_input,
                     t,
                     encoder_hidden_states=prompt_embeds,
                     timestep_cond=timestep_cond,
-                    cross_attention_kwargs=self.cross_attention_kwargs,
+                    cross_attention_kwargs=cross_attention_kwargs,
                     added_cond_kwargs=added_cond_kwargs,
                     return_dict=False,
+                    down_intrablock_additional_residuals=down_intrablock_additional_residuals,
                 )[0]
 
                 # perform guidance
                 if self.do_classifier_free_guidance:
                     noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + self.guidance_scale * (noise_pred_text - noise_pred_uncond)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
-                if self.do_classifier_free_guidance and self.guidance_rescale > 0.0:
+                if self.do_classifier_free_guidance and guidance_rescale > 0.0:
                     # Based on 3.4. in https://arxiv.org/pdf/2305.08891.pdf
-                    noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=self.guidance_rescale)
+                    noise_pred = rescale_noise_cfg(noise_pred, noise_pred_text, guidance_rescale=guidance_rescale)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
-
-                if callback_on_step_end is not None:
-                    callback_kwargs = {}
-                    for k in callback_on_step_end_tensor_inputs:
-                        callback_kwargs[k] = locals()[k]
-                    callback_outputs = callback_on_step_end(self, i, t, callback_kwargs)
-
-                    latents = callback_outputs.pop("latents", latents)
-                    prompt_embeds = callback_outputs.pop("prompt_embeds", prompt_embeds)
-                    negative_prompt_embeds = callback_outputs.pop("negative_prompt_embeds", negative_prompt_embeds)
-                    add_text_embeds = callback_outputs.pop("add_text_embeds", add_text_embeds)
-                    negative_pooled_prompt_embeds = callback_outputs.pop(
-                        "negative_pooled_prompt_embeds", negative_pooled_prompt_embeds
-                    )
-                    add_time_ids = callback_outputs.pop("add_time_ids", add_time_ids)
-                    negative_add_time_ids = callback_outputs.pop("negative_add_time_ids", negative_add_time_ids)
 
                 # call the callback, if provided
                 if i == len(timesteps) - 1 or ((i + 1) > num_warmup_steps and (i + 1) % self.scheduler.order == 0):
@@ -1092,13 +1076,9 @@ class StableDiffusionXLPipeline(
                 self.vae.to(dtype=paddle.float16)
         else:
             image = latents
+            return StableDiffusionXLPipelineOutput(images=image)
 
-        if not output_type == "latent":
-            # apply watermark if available
-            if self.watermark is not None:
-                image = self.watermark.apply_watermark(image)
-
-            image = self.image_processor.postprocess(image, output_type=output_type)
+        image = self.image_processor.postprocess(image, output_type=output_type)
 
         if not return_dict:
             return (image,)
