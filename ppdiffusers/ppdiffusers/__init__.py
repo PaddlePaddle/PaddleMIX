@@ -76,8 +76,8 @@ else:
         UNet2DConditionModel,
         UNet2DModel,
         UNet3DConditionModel,
-        VQModel,
         Vid2VidSDUNet,
+        VQModel,
     )
     from .optimization import (
         get_constant_schedule,
