@@ -66,6 +66,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     except OptionalDependencyNotAvailable:
         from ...utils.dummy_paddle_and_paddlenlp_objects import *  # noqa F403
     else:
+        from .pipeline_output import StableDiffusionXLPipelineOutput
         from .pipeline_stable_diffusion_xl import StableDiffusionXLPipeline
         from .pipeline_stable_diffusion_xl_img2img import (
             StableDiffusionXLImg2ImgPipeline,
@@ -95,6 +96,7 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         from .pipeline_fastdeploy_stable_diffusion_xl_mega import (
             FastDeployStableDiffusionXLMegaPipeline,
         )
+
 else:
     import sys
 
