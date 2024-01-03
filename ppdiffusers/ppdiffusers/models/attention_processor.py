@@ -617,13 +617,13 @@ class Attention(nn.Layer):
                 attention_mask = attention_mask.repeat_interleave(num_heads, axis=0)
         elif out_dim == 4:
             attention_mask = attention_mask.unsqueeze(1)
-            if attention_mask.shape[0] < batch_size * num_heads:
-                attention_mask = attention_mask.repeat_interleave(num_heads, axis=1)
+            attention_mask = attention_mask.repeat_interleave(num_heads, axis=1)
             attention_mask = attention_mask.reshape([batch_size, num_heads, -1, attention_mask.shape[-1]])
 
-        if attention_mask.ndim == 4:
-            if not transpose:
-                attention_mask = attention_mask.transpose([0, 2, 1, 3])
+        # do not need transpose
+        # if attention_mask.ndim == 4:
+        #     if not transpose:
+        #         attention_mask = attention_mask.transpose([0, 2, 1, 3])
         return attention_mask
 
     def norm_encoder_hidden_states(self, encoder_hidden_states: paddle.Tensor) -> paddle.Tensor:
@@ -911,9 +911,7 @@ class XFormersAttnAddedKVProcessor:
     """
 
     def __init__(self, attention_op: Optional[str] = None):
-        assert attention_op in [None, "auto", "flash", "memory_efficient"]
-        if attention_op == "cutlass":
-            attention_op = "memory_efficient"
+        assert attention_op in [None, "math", "auto", "flash", "cutlass", "memory_efficient"]
         self.attention_op = attention_op
 
     def __call__(
@@ -930,7 +928,7 @@ class XFormersAttnAddedKVProcessor:
         )
         batch_size, sequence_length, _ = hidden_states.shape
 
-        attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size, transpose=False)
+        attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
 
         if encoder_hidden_states is None:
             encoder_hidden_states = hidden_states
@@ -997,9 +995,7 @@ class XFormersAttnProcessor:
     """
 
     def __init__(self, attention_op: Optional[str] = None):
-        assert attention_op in [None, "auto", "flash", "memory_efficient"]
-        if attention_op == "cutlass":
-            attention_op = "memory_efficient"
+        assert attention_op in [None, "math", "auto", "flash", "cutlass", "memory_efficient"]
         self.attention_op = attention_op
 
     def __call__(
@@ -1029,7 +1025,7 @@ class XFormersAttnProcessor:
             hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
         )
 
-        attention_mask = attn.prepare_attention_mask(attention_mask, key_tokens, batch_size, transpose=False)
+        attention_mask = attn.prepare_attention_mask(attention_mask, key_tokens, batch_size)
         if attention_mask is not None:
             # expand our mask's singleton query_tokens dimension:
             #   [batch,            1, heads, key_tokens] ->
@@ -1038,7 +1034,7 @@ class XFormersAttnProcessor:
             #   [batch, query_tokens, heads, key_tokens]
             # we do this explicitly because xformers doesn't broadcast the singleton dimension for us.
             _, query_tokens, _ = hidden_states.shape
-            attention_mask = attention_mask.expand([-1, query_tokens, -1, -1])
+            attention_mask = attention_mask.expand([-1, -1, query_tokens, -1])
 
         if attn.group_norm is not None:
             hidden_states = attn.group_norm(hidden_states.transpose([0, 2, 1])).transpose([0, 2, 1])
@@ -1121,9 +1117,7 @@ class CustomDiffusionXFormersAttnProcessor(nn.Layer):
         attention_op: Optional[str] = None,
     ):
         super().__init__()
-        assert attention_op in [None, "auto", "flash", "memory_efficient"]
-        if attention_op == "cutlass":
-            attention_op = "memory_efficient"
+        assert attention_op in [None, "math", "auto", "flash", "cutlass", "memory_efficient"]
         self.train_kv = train_kv
         self.train_q_out = train_q_out
 
@@ -1153,7 +1147,7 @@ class CustomDiffusionXFormersAttnProcessor(nn.Layer):
             hidden_states.shape if encoder_hidden_states is None else encoder_hidden_states.shape
         )
 
-        attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size, transpose=False)
+        attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
 
         if self.train_q_out:
             query = self.to_q_custom_diffusion(hidden_states).cast(attn.to_q.weight.dtype)
@@ -1524,9 +1518,7 @@ class LoRAXFormersAttnProcessor(nn.Layer):
         **kwargs,
     ):
         super().__init__()
-        assert attention_op in [None, "auto", "flash", "memory_efficient"]
-        if attention_op == "cutlass":
-            attention_op = "memory_efficient"
+        assert attention_op in [None, "math", "auto", "flash", "cutlass", "memory_efficient"]
         self.hidden_size = hidden_size
         self.cross_attention_dim = cross_attention_dim
         self.rank = rank
@@ -1767,9 +1759,7 @@ class IPAdapterXFormersAttnProcessor(nn.Layer):
         self, hidden_size, cross_attention_dim=None, num_tokens=4, scale=1.0, attention_op: Optional[str] = None
     ):
         super().__init__()
-        assert attention_op in [None, "auto", "flash", "memory_efficient"]
-        if attention_op == "cutlass":
-            attention_op = "memory_efficient"
+        assert attention_op in [None, "math", "auto", "flash", "cutlass", "memory_efficient"]
         self.attention_op = attention_op
         self.hidden_size = hidden_size
         self.cross_attention_dim = cross_attention_dim
@@ -1807,7 +1797,7 @@ class IPAdapterXFormersAttnProcessor(nn.Layer):
         )
 
         if attention_mask is not None:
-            attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size, transpose=False)
+            attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
             # expand our mask's singleton query_tokens dimension:
             #   [batch*heads,            1, key_tokens] ->
             #   [batch*heads, query_tokens, key_tokens]

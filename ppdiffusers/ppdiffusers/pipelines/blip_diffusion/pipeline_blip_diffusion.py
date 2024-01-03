@@ -228,8 +228,8 @@ class BlipDiffusionPipeline(DiffusionPipeline):
             num_inference_steps (`int`, *optional*, defaults to 50):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
-            generator (`torch.Generator` or `List[torch.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/torch.Generator.html)
+            generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
+                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/paddle.Generator.html)
                 to make generation deterministic.
             neg_prompt (`str`, *optional*, defaults to ""):
                 The prompt or prompts not to guide the image generation. Ignored when not using guidance (i.e., ignored
