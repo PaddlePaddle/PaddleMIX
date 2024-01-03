@@ -15,11 +15,11 @@
 
 from paddlenlp.transformers import CLIPTokenizer
 
-from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
-from ppdiffusers.pipelines.stable_diffusion_xl.fastdeployxl_utils import (
+from ppdiffusers.pipelines.fastdeployxl_utils import (
     FastDeployDiffusionXLPipelineMixin,
     FastDeployRuntimeModel,
 )
+from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
 from ppdiffusers.utils import logging
 

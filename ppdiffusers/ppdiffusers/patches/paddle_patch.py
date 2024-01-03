@@ -20,6 +20,7 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 
+
 def str2bool(v):
     if isinstance(v, bool):
         return v
@@ -31,6 +32,7 @@ def str2bool(v):
         return False
     else:
         raise ValueError("Not supported value: {}".format(v))
+
 
 if not hasattr(paddle, "finfo"):
 
@@ -316,7 +318,6 @@ from ..utils.import_utils import is_ppxformers_available
 
 if is_ppxformers_available():
     from paddle.incubate.nn.memory_efficient_attention import memory_efficient_attention
-    from paddle.nn.functional.flash_attention import flash_attention
 
     try:
         from paddle.incubate.nn.functional import (
@@ -324,22 +325,15 @@ if is_ppxformers_available():
         )
     except ImportError:
         variable_length_memory_efficient_attention = None
-    try:
-        sdp_kernel = paddle.nn.functional.flash_attention._select_sdp_cuda(128 + 64)
-        if sdp_kernel == "mem_efficient":
-            flash_attn_version = 1
-        else:
-            flash_attn_version = 2
-    except Exception:
-        flash_attn_version = 1
 
     is_support_flash_attention = True
     flash_attn_error = None
     try:
-        _ = flash_attention(
+        _ = paddle.nn.functional.scaled_dot_product_attention(
             paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
             paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
             paddle.ones((1, 1, 2, 40), dtype=paddle.float16),
+            attn_mask=paddle.ones((1, 2, 1, 1), dtype=paddle.float16),
         )
     except Exception as error:
         flash_attn_error = error
@@ -349,7 +343,7 @@ if is_ppxformers_available():
         query,
         key,
         value,
-        attn_mask=None,
+        attn_mask=None,  # shape [bs, num_heads, query_len, key_len]
         dropout_p=0.0,
         is_causal=False,
         scale=None,
@@ -358,20 +352,14 @@ if is_ppxformers_available():
     ):
 
         if attention_op in [None, "auto"]:
-            head_dim = query.shape[-1]
             attention_op = "cutlass"
             if is_support_flash_attention and query.dtype not in [paddle.float32]:
-                if flash_attn_version == 1:
-                    if head_dim <= 128:
-                        attention_op = "flash"
-                else:
-                    if head_dim <= 256:
-                        attention_op = "flash"
+                attention_op = "flash"
         else:
             if attention_op == "flash" and flash_attn_error is not None:
                 raise OSError(flash_attn_error)
 
-        if attention_op == "math" or attn_mask is not None:
+        if attention_op == "math":
             if scale is None:
                 scale = 1 / math.sqrt(query.shape[-1])
             qt = paddle.transpose(query, [0, 2, 1, 3])
@@ -382,20 +370,18 @@ if is_ppxformers_available():
                 p = paddle.incubate.softmax_mask_fuse_upper_triangle(s)
             else:
                 if attn_mask is not None:
-                    attn_mask = paddle.transpose(attn_mask, [0, 2, 1, 3])
-                    if attn_mask.cast("float32").min() == 0 and attn_mask.cast("float32").max() == 1:
-                        attn_mask = (attn_mask.cast(s.dtype) - 1) * 10000.0
-                    s = s + attn_mask
+                    s = s + attn_mask.cast(s.dtype)
                 p = paddle.nn.functional.softmax(s, axis=-1)
             if dropout_p > 0.0:
                 p = paddle.nn.functional.dropout(p, dropout_p, training=training, mode="upscale_in_train")
             o = paddle.matmul(p, vt)
             return paddle.transpose(o, [0, 2, 1, 3])
-        elif attention_op == "cutlass":
+        elif attention_op in ["cutlass", "memory_efficient"]:
             if scale is None:
                 scale = 1 / math.sqrt(query.shape[-1])
-            # support fp32, fp16, bfp16
-            use_cutlass_v2 = str2bool(os.getenv("FLAG_USE_CUTLASS_V2", "no"))
+            # (1) attn_mask is not None, use cutlass v2
+            # (2) FLAG_USE_CUTLASS_V2 in yes, y, true, t, 1, use cutlass v2
+            use_cutlass_v2 = attn_mask is not None or str2bool(os.getenv("FLAG_USE_CUTLASS_V2", "no"))
             if not use_cutlass_v2:
                 with requires_grad_and_without_random(query, key, value):
                     output = memory_efficient_attention(
@@ -410,7 +396,7 @@ if is_ppxformers_available():
             else:
                 assert (
                     variable_length_memory_efficient_attention is not None
-                ), "Please upgrade your paddlepaddle to support variable length attention."
+                ), "Please upgrade your `paddlepaddle>=2.6.0` to support `variable_length_memory_efficient_attention`."
                 batch_size, query_seq_len = query.shape[:2]
                 kv_seqlen = key.shape[1]
                 output = variable_length_memory_efficient_attention(
@@ -432,11 +418,19 @@ if is_ppxformers_available():
                 ).transpose([0, 2, 1, 3])
         elif attention_op == "flash":
             with requires_grad_and_without_random(query, key, value):
-                output = flash_attention(query, key, value, dropout=dropout_p, causal=is_causal, return_softmax=False)[
-                    0
-                ]
+                output = paddle.nn.functional.scaled_dot_product_attention(
+                    query,
+                    key,
+                    value,
+                    attn_mask=None if is_causal else attn_mask,
+                    dropout_p=dropout_p if training else 0.0,
+                    is_causal=bool(is_causal),
+                    training=training,
+                )
         else:
-            raise ValueError("ppxformers's attention_op shoulde be in ['cutlass', 'flash', 'math']")
+            raise ValueError(
+                "ppxformers's attention_op shoulde be in ['auto', 'math', 'cutlass', `memory_efficient`, 'flash']."
+            )
         return output
 
     paddle.nn.functional.scaled_dot_product_attention_ = scaled_dot_product_attention_

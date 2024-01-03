@@ -170,7 +170,7 @@ class IPAdapterMixin:
                     subfolder=os.path.join(subfolder, "image_encoder"),
                     from_hf_hub=from_hf_hub,
                     from_aistudio=from_aistudio,
-                    from_diffusers=from_diffusers,
+                    # from_diffusers=from_diffusers, # we must disable this !
                 ).to(dtype=self.dtype)
                 self.image_encoder = image_encoder
             else:

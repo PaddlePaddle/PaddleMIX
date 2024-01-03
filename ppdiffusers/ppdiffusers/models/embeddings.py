@@ -134,6 +134,7 @@ class PatchEmbed(nn.Layer):
         flatten=True,
         bias=True,
         interpolation_scale=1,
+        add_pos_embed=True,
     ):
         super().__init__()
 
@@ -156,10 +157,19 @@ class PatchEmbed(nn.Layer):
         self.height, self.width = height // patch_size, width // patch_size
         self.base_size = height // patch_size
         self.interpolation_scale = interpolation_scale
-        pos_embed = get_2d_sincos_pos_embed(
-            embed_dim, int(num_patches**0.5), base_size=self.base_size, interpolation_scale=self.interpolation_scale
-        )
-        self.register_buffer("pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=False)
+
+        # NOTE, new add for unidiffusers!
+        self.add_pos_embed = add_pos_embed
+        if add_pos_embed:
+            pos_embed = get_2d_sincos_pos_embed(
+                embed_dim,
+                int(num_patches**0.5),
+                base_size=self.base_size,
+                interpolation_scale=self.interpolation_scale,
+            )
+            self.register_buffer(
+                "pos_embed", paddle.to_tensor(pos_embed).cast("float32").unsqueeze(0), persistable=False
+            )
 
     def forward(self, latent):
         height, width = latent.shape[-2] // self.patch_size, latent.shape[-1] // self.patch_size
@@ -184,7 +194,11 @@ class PatchEmbed(nn.Layer):
         else:
             pos_embed = self.pos_embed
 
-        return (latent + pos_embed).cast(latent.dtype)
+        # NOTE, new add for unidiffusers!
+        if self.add_pos_embed:
+            return (latent + pos_embed).cast(latent.dtype)
+        else:
+            return latent.cast(latent.dtype)
 
 
 class TimestepEmbedding(nn.Layer):

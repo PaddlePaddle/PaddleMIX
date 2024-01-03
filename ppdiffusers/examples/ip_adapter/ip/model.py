@@ -119,9 +119,7 @@ class IPAdapterModel(nn.Layer):
         class AttnProcessor2_5_Layer(nn.Layer):
             def __init__(self, attention_op=None):
                 super().__init__()
-                assert attention_op in [None, "auto", "flash", "memory_efficient"]
-                if attention_op == "cutlass":
-                    attention_op = "memory_efficient"
+                assert attention_op in [None, "math", "auto", "flash", "cutlass", "memory_efficient"]
                 self.attention_op = attention_op
 
             __call__ = AttnProcessor2_5.__call__
