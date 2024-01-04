@@ -27,6 +27,8 @@ if is_paddle_available():
     _import_structure["consistency_decoder_vae"] = ["ConsistencyDecoderVAE"]
     _import_structure["controlnet"] = ["ControlNetModel"]
     _import_structure["dual_transformer_2d"] = ["DualTransformer2DModel"]
+    _import_structure["lvdm_vae"] = ["LVDMAutoencoderKL"]
+    _import_structure["lvdm_unet_3d"] = ["LVDMUNet3DModel"]
     _import_structure["modeling_utils"] = ["ModelMixin"]
     _import_structure["prior_transformer"] = ["PriorTransformer"]
     _import_structure["t5_film_transformer"] = ["T5FilmDecoder"]
@@ -57,6 +59,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
 
         # NOTE, new add
         from .ema import LitEma
+        from .lvdm_unet_3d import LVDMUNet3DModel
+        from .lvdm_vae import LVDMAutoencoderKL
         from .modeling_utils import ModelMixin
         from .prior_transformer import PriorTransformer
         from .t5_film_transformer import T5FilmDecoder

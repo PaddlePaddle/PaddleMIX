@@ -26,6 +26,7 @@ from .latent_consistency_models import (
     LatentConsistencyModelImg2ImgPipeline,
     LatentConsistencyModelPipeline,
 )
+from .lvdm import LVDMTextToVideoPipeline, LVDMUncondPipeline
 from .pipeline_utils import DiffusionPipeline
 from .stable_diffusion import StableDiffusionPipeline, StableDiffusionPipelineOutput
 from .stable_diffusion_xl import (

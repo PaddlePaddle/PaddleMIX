@@ -21,6 +21,8 @@ from .models import (
     ControlNetModel,
     Kandinsky3UNet,
     LitEma,
+    LVDMAutoencoderKL,
+    LVDMUNet3DModel,
     ModelMixin,
     MotionAdapter,
     MultiAdapter,
