@@ -32,21 +32,125 @@ pip install -r requirements.txt
 ### 单机单卡训练
 ```bash
 # unconditional generation
-python -u train_lvdm_short.py
+export FLAGS_conv_workspace_size_limit=4096
+python -u train_lvdm_short.py \
+    --do_train \
+    --do_eval \
+    --label_names pixel_values \
+    --eval_steps 5 \
+    --vae_type 3d \
+    --output_dir temp/checkpoints_short \
+    --unet_config_file unet_configs/lvdm_short_sky_no_ema/unet/config.json \
+    --per_device_train_batch_size 1 \
+    --per_device_eval_batch_size 1 \
+    --gradient_accumulation_steps 1 \
+    --learning_rate 6e-5 \
+    --max_steps 1000000000 \
+    --lr_scheduler_type constant \
+    --warmup_steps 0 \
+    --image_logging_steps 10 \
+    --logging_steps 1 \
+    --save_steps 5000 \
+    --seed 23 \
+    --dataloader_num_workers 0 \
+    --weight_decay 0.01 \
+    --max_grad_norm 0 \
+    --overwrite_output_dir False \
+    --pretrained_model_name_or_path westfish/lvdm_short_sky_no_ema
 ```
+
 ```bash
 # text to video generation
-python -u train_lvdm_text2video.py
+export FLAGS_conv_workspace_size_limit=4096
+python -u -m paddle.distributed.launch --gpus "4,5,6,7" train_lvdm_text2video.py \
+    --do_train \
+    --do_eval \
+    --label_names pixel_values \
+    --eval_steps 1000 \
+    --vae_type 2d \
+    --vae_name_or_path  None \
+    --output_dir temp/checkpoints_text2video \
+    --unet_config_file unet_configs/lvdm_text2video_orig_webvid_2m/unet/config.json \
+    --per_device_train_batch_size 4 \
+    --per_device_eval_batch_size 4 \
+    --gradient_accumulation_steps 2 \
+    --learning_rate 6e-5 \
+    --max_steps 100 \
+    --lr_scheduler_type constant \
+    --warmup_steps 0 \
+    --image_logging_steps 1000 \
+    --logging_steps 50 \
+    --save_steps 5000 \
+    --seed 23 \
+    --dataloader_num_workers 8 \
+    --weight_decay 0.01 \
+    --max_grad_norm 0 \
+    --overwrite_output_dir True \
+    --pretrained_model_name_or_path westfish/lvdm_text2video_orig_webvid_2m \
+    --recompute True \
+    --fp16 --fp16_opt_level O1
 ```
 
 ### 单机多卡训练
 ```bash
 # unconditional generation
-python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_lvdm_short.py
+export FLAGS_conv_workspace_size_limit=4096
+python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_lvdm_short.py \
+    --do_train \
+    --do_eval \
+    --label_names pixel_values \
+    --eval_steps 5 \
+    --vae_type 3d \
+    --output_dir temp/checkpoints_short \
+    --unet_config_file unet_configs/lvdm_short_sky_no_ema/unet/config.json \
+    --per_device_train_batch_size 1 \
+    --per_device_eval_batch_size 1 \
+    --gradient_accumulation_steps 1 \
+    --learning_rate 6e-5 \
+    --max_steps 1000000000 \
+    --lr_scheduler_type constant \
+    --warmup_steps 0 \
+    --image_logging_steps 10 \
+    --logging_steps 1 \
+    --save_steps 5000 \
+    --seed 23 \
+    --dataloader_num_workers 0 \
+    --weight_decay 0.01 \
+    --max_grad_norm 0 \
+    --overwrite_output_dir False \
+    --pretrained_model_name_or_path westfish/lvdm_short_sky_no_ema
 ```
+
 ```bash
 # text to video generation
-python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_lvdm_text2video.py
+export FLAGS_conv_workspace_size_limit=4096
+python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_lvdm_text2video.py \
+    --do_train \
+    --do_eval \
+    --label_names pixel_values \
+    --eval_steps 1000 \
+    --vae_type 2d \
+    --vae_name_or_path  None \
+    --output_dir temp/checkpoints_text2video \
+    --unet_config_file unet_configs/lvdm_text2video_orig_webvid_2m/unet/config.json \
+    --per_device_train_batch_size 4 \
+    --per_device_eval_batch_size 4 \
+    --gradient_accumulation_steps 2 \
+    --learning_rate 6e-5 \
+    --max_steps 100 \
+    --lr_scheduler_type constant \
+    --warmup_steps 0 \
+    --image_logging_steps 1000 \
+    --logging_steps 50 \
+    --save_steps 5000 \
+    --seed 23 \
+    --dataloader_num_workers 8 \
+    --weight_decay 0.01 \
+    --max_grad_norm 0 \
+    --overwrite_output_dir True \
+    --pretrained_model_name_or_path westfish/lvdm_text2video_orig_webvid_2m \
+    --recompute True \
+    --fp16 --fp16_opt_level O1
 ```
 
 训练时可通过如下命令通过浏览器观察训练过程：
