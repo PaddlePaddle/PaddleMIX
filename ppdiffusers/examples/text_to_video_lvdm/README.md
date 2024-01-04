@@ -8,7 +8,6 @@
 
 在运行这个训练代码前，我们需要安装ppdiffusers以及相关依赖。
 
-
 ```bash
 cd PaddleMIX/ppdiffusers
 python setup.py install
@@ -16,7 +15,7 @@ pip install -r requirements.txt
 ```
 
 ### 数据准备
-准备扩散模型训练的数据，格式需要适配`VideoFrameDataset`或`WebVidDataset`。数据集相关的配置请参考`lvdm/lvdm_args_short.py`或`lvdm/lvdm_args_text2video.py`中的`DatasetArguments`。相关数据下载链接为[Sky Timelapse](https://github.com/weixiong-ur/mdgan)、[Webvid](https://github.com/m-bain/webvid)。
+准备扩散模型训练的数据，格式需要适配`VideoFrameDataset`或`WebVidDataset`。数据集相关的配置请参考`lvdm/lvdm_args_short.py`或`lvdm/lvdm_args_text2video.py`中的`DatasetArguments`。相关数据下载链接为[Sky Timelapse](https://github.com/weixiong-ur/mdgan)、[Webvid](https://github.com/m-bain/webvid)。可以下载[样例数据集后]()，将数据集解压到`your_data_path_to/sky_timelapse_lvdm`，该数据集对应`lvdm/lvdm_args_short.py`。
 
 
 ### 预训练模型准备
@@ -56,13 +55,15 @@ python -u train_lvdm_short.py \
     --weight_decay 0.01 \
     --max_grad_norm 0 \
     --overwrite_output_dir False \
-    --pretrained_model_name_or_path westfish/lvdm_short_sky_no_ema
+    --pretrained_model_name_or_path westfish/lvdm_short_sky_no_ema \
+    --train_data_root your_data_path_to/sky_timelapse_lvdm \
+    --eval_data_root your_data_path_to/sky_timelapse_lvdm
 ```
 
 ```bash
 # text to video generation
 export FLAGS_conv_workspace_size_limit=4096
-python -u -m paddle.distributed.launch --gpus "4,5,6,7" train_lvdm_text2video.py \
+python -u train_lvdm_text2video.py \
     --do_train \
     --do_eval \
     --label_names pixel_values \
@@ -118,7 +119,9 @@ python -u -m paddle.distributed.launch --gpus "0,1,2,3,4,5,6,7" train_lvdm_short
     --weight_decay 0.01 \
     --max_grad_norm 0 \
     --overwrite_output_dir False \
-    --pretrained_model_name_or_path westfish/lvdm_short_sky_no_ema
+    --pretrained_model_name_or_path westfish/lvdm_short_sky_no_ema \
+    --train_data_root your_data_path_to/sky_timelapse_lvdm \
+    --eval_data_root your_data_path_to/sky_timelapse_lvdm
 ```
 
 ```bash
