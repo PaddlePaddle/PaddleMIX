@@ -36,7 +36,6 @@ EXAMPLE_DOC_STRING = """
     Examples:
         ```py
         >>> import paddle
-        >>> from PIL import Image
         >>> from ppdiffusers import ImgToVideoSDPipeline
         >>> from ppdiffusers.utils import export_to_video,load_image
 

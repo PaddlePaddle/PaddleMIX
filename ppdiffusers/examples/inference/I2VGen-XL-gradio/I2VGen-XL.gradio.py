@@ -4,7 +4,7 @@ from ppdiffusers import ImgToVideoSDPipeline, VideoToVideoModelscopePipeline
 from ppdiffusers.utils import export_to_video, load_image
 
 image_to_video_pipe = ImgToVideoSDPipeline.from_pretrained(
-    "/home/aistudio/img_to_video", paddle_dtype=paddle.float32
+    "Yang-Changhui/img-to-video-paddle", paddle_dtype=paddle.float32
 )
 
 video_to_video_pipe = VideoToVideoModelscopePipeline.from_pretrained("Yang-Changhui/video-to-video-paddle")

@@ -1,6 +1,6 @@
 from einops import rearrange
 
-from .modelscope_st_unet import SFUNetModel, default, prob_mask_like, sinusoidal_embedding_paddle, SFUNetOutput, \
+from .modelscope_st_unet import STUNetModel, default, prob_mask_like, sinusoidal_embedding_paddle, SFUNetOutput, \
     TemporalTransformer, TemporalAttentionMultiBlock, SpatialTransformer, ResBlock
 from ..configuration_utils import register_to_config
 import paddle
@@ -67,7 +67,7 @@ class Upsample(nn.Layer):
         return x
 
 
-class Vid2VidSTUNet(SFUNetModel):
+class Vid2VidSTUNet(STUNetModel):
     @register_to_config
     def __init__(self,
                  in_channels=4,
@@ -91,7 +91,7 @@ class Vid2VidSTUNet(SFUNetModel):
                  training=False,
                  inpainting=True,
                  **kwargs):
-        super(Vid2VidSDUNet, self).__init__(
+        super(Vid2VidSTUNet, self).__init__(
             in_channels=in_channels,
             out_channels=out_channels,
             dim=dim,
