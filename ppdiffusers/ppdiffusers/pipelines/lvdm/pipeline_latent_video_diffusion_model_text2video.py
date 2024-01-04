@@ -512,6 +512,7 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         encoder_type="2d",
         scale_factor=0.18215,
         shift_factor=0,
+        save_fps=8,
     ):
         r"""
         Function invoked when calling the pipeline for generation.
@@ -581,6 +582,8 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
                 Scale factor for the generated video.
             shift_factor (`float`, *optional*, defaults to 0):
                 Shift factor for the generated video.
+            save_fps (`int`, *optional*, defaults to 8):
+                The number of frames per second to save.
         Examples:
         Returns:
             [`VideoPipelineOutput`] or `tuple`: [`VideoPipelineOutput`] if `return_dict` is True, otherwise a `tuple.
@@ -696,5 +699,5 @@ class LVDMTextToVideoPipeline(DiffusionPipeline):
         if not save_dir:
             save_dir = "."
         os.makedirs(save_dir, exist_ok=True)
-        save_results(all_videos, save_dir=save_dir, save_name=save_name, save_fps=8)
+        save_results(all_videos, save_dir=save_dir, save_name=save_name, save_fps=save_fps)
         return VideoPipelineOutput(frames=videos_frames, samples=sampled_videos)
