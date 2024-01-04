@@ -109,7 +109,7 @@ class TemporalDecoder(nn.Layer):
 
                 return custom_forward
 
-            ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
+            ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
             # middle
             sample = recompute(
                 create_custom_forward(self.mid_block),

@@ -780,10 +780,11 @@ def use_old_recompute():
 
 def recompute_use_reentrant():
     if use_old_recompute():
-        return False
-    return str2bool(os.getenv("FLAG_RECOMPUTE_USE_REENTRANT", "True")) and (
-        is_paddle_version(">=", "2.5.0") or is_paddle_version("==", "0.0.0")
-    )
+        return True
+    # if paddle 2.5.0 or higher, recompute_use_reentrant is False by default
+    if is_paddle_version(">=", "2.5.0") or is_paddle_version("==", "0.0.0"):
+        return str2bool(os.getenv("FLAG_RECOMPUTE_USE_REENTRANT", "False"))
+    return True
 
 
 def get_objects_from_module(module):
