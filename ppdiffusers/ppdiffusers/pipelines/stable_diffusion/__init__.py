@@ -12,8 +12,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ...utils import (
+    BaseOutput,
+    OptionalDependencyNotAvailable,
+    is_fastdeploy_available,
+    is_paddle_available,
+    is_paddlenlp_available,
+)
 from .pipeline_stable_diffusion import (
     StableDiffusionPipeline,
     StableDiffusionPipelineOutput,
 )
 from .safety_checker import StableDiffusionSafetyChecker
+
+try:
+    if not (is_paddlenlp_available() and is_paddle_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from ...utils.dummy_paddle_and_paddlenlp_objects import *
+else:
+    from .clip_image_project_model import CLIPImageProjection
+    from .pipeline_stable_diffusion import StableDiffusionPipeline  # noqa F401
+
+try:
+    if not (is_paddle_available() and is_fastdeploy_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from ...utils.dummy_fastdeploy_objects import *  # noqa F403
+else:
+    from .pipeline_fastdeploy_cycle_diffusion import FastDeployCycleDiffusionPipeline
+    from .pipeline_fastdeploy_stable_diffusion import FastDeployStableDiffusionPipeline
+    from .pipeline_fastdeploy_stable_diffusion_img2img import (
+        FastDeployStableDiffusionImg2ImgPipeline,
+    )
+    from .pipeline_fastdeploy_stable_diffusion_inpaint import (
+        FastDeployStableDiffusionInpaintPipeline,
+    )
+    from .pipeline_fastdeploy_stable_diffusion_inpaint_legacy import (
+        FastDeployStableDiffusionInpaintPipelineLegacy,
+    )
+    from .pipeline_fastdeploy_stable_diffusion_mega import (
+        FastDeployStableDiffusionMegaPipeline,
+    )

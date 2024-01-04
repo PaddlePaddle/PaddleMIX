@@ -474,7 +474,7 @@ class FastDeployDiffusionPipelineMixin:
         self.control_image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
         )
-        self.dtype = dtype
+        # self.dtype = dtype
         self.supported_scheduler = [
             "pndm",
             "lms",
@@ -1166,6 +1166,8 @@ class FastDeployRuntimeModel:
         # for zero_copy_infer
         share_with_raw_ptr = kwargs.pop("share_with_raw_ptr", True)
         output_shape = kwargs.pop("output_shape", None)
+        if isinstance(output_shape, list) and not isinstance(output_shape[0], list):
+            output_shape = [output_shape]
 
         inputs = {}
         for k, v in kwargs.items():
@@ -1178,15 +1180,17 @@ class FastDeployRuntimeModel:
             inputs[k] = v
 
         if infer_op == "zero_copy_infer":
-            output = paddle.zeros(output_shape, dtype="float32")
+            outputs = [paddle.zeros(shape, dtype="float32") for shape in output_shape]
+            prebined_inputs = {}
+            for index, output in enumerate(outputs):
+                prebined_inputs[self.model.get_output_info(index).name] = output
+
             self.zero_copy_infer(
                 prebinded_inputs=inputs,
-                prebinded_outputs={self.model.get_output_info(0).name: output},
+                prebinded_outputs=prebined_inputs,
                 share_with_raw_ptr=share_with_raw_ptr,
             )
-            return [
-                output,
-            ]
+            return outputs
         elif infer_op == "raw":
             for k, v in inputs.items():
                 if paddle.is_tensor(v):

@@ -13,7 +13,7 @@
 # limitations under the License.
 
 export CUDA_VISIBLE_DEVICES=1 # 填写: GPU卡号
-LOCAL_PATH=/root/lxl/DEVELOP_PR # 填写: PaddleMIX文件夹所在的本地路径
+LOCAL_PATH=/root/lxl/ADD_SDXL # 填写: PaddleMIX文件夹所在的本地路径
 cd $LOCAL_PATH/PaddleMIX/ppdiffusers/deploy/controlnet
 
 

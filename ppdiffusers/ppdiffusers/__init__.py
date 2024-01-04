@@ -11,9 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from paddlenlp.utils.log import logger
 
-logger.set_level("WARNING")
 from .models import (
     AsymmetricAutoencoderKL,
     AutoencoderKL,
@@ -22,6 +20,9 @@ from .models import (
     ConsistencyDecoderVAE,
     ControlNetModel,
     Kandinsky3UNet,
+    LitEma,
+    LVDMAutoencoderKL,
+    LVDMUNet3DModel,
     ModelMixin,
     MotionAdapter,
     MultiAdapter,
@@ -60,6 +61,7 @@ from .schedulers import (
     DPMSolverMultistepInverseScheduler,
     DPMSolverMultistepScheduler,
     DPMSolverSinglestepScheduler,
+    DPMSolverUniDiffuserScheduler,
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
     HeunDiscreteScheduler,
@@ -68,6 +70,7 @@ from .schedulers import (
     KDPM2AncestralDiscreteScheduler,
     KDPM2DiscreteScheduler,
     LCMScheduler,
+    LMSDiscreteScheduler,
     PNDMScheduler,
     RePaintScheduler,
     SchedulerMixin,
@@ -76,4 +79,40 @@ from .schedulers import (
     UniPCMultistepScheduler,
     VQDiffusionScheduler,
 )
+from .utils import (
+    OptionalDependencyNotAvailable,
+    is_einops_available,
+    is_fastdeploy_available,
+    is_paddle_available,
+    is_paddlenlp_available,
+    logging,
+)
 from .version import VERSION as __version__
+
+try:
+    if not (is_paddle_available() and is_paddlenlp_available() and is_fastdeploy_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from .utils.dummy_paddle_and_paddlenlp_and_fastdeploy_objects import *  # noqa F403
+else:
+    from .pipelines import (  # FastDeployStableDiffusionUpscalePipeline,
+        FastDeployCycleDiffusionPipeline,
+        FastDeployStableDiffusionControlNetPipeline,
+        FastDeployStableDiffusionImg2ImgPipeline,
+        FastDeployStableDiffusionInpaintPipeline,
+        FastDeployStableDiffusionInpaintPipelineLegacy,
+        FastDeployStableDiffusionMegaPipeline,
+        FastDeployStableDiffusionPipeline,
+        FastDeployStableDiffusionXLImg2ImgPipeline,
+        FastDeployStableDiffusionXLInpaintPipeline,
+        FastDeployStableDiffusionXLMegaPipeline,
+        FastDeployStableDiffusionXLPipeline,
+    )
+
+try:
+    if not (is_paddle_available() and is_paddlenlp_available() and is_einops_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from .utils.dummy_paddle_and_paddlenlp_and_einops_objects import *  # noqa F403
+else:
+    from .pipelines import UniDiffuserPipeline

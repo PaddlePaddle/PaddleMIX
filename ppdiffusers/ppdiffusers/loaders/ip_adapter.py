@@ -135,6 +135,8 @@ class IPAdapterMixin:
                 state_dict = {"image_proj": {}, "ip_adapter": {}}
                 with safe_open(model_file, framework="np") as f:
                     metadata = f.metadata()
+                    if metadata is None:
+                        metadata = {}
                     if metadata.get("format", "pt") not in ["pt", "pd", "np"]:
                         raise OSError(
                             f"The safetensors archive passed at {model_file} does not contain the valid metadata. Make sure "
@@ -168,7 +170,7 @@ class IPAdapterMixin:
                     subfolder=os.path.join(subfolder, "image_encoder"),
                     from_hf_hub=from_hf_hub,
                     from_aistudio=from_aistudio,
-                    from_diffusers=from_diffusers,
+                    # from_diffusers=from_diffusers, # we must disable this !
                 ).to(dtype=self.dtype)
                 self.image_encoder = image_encoder
             else:

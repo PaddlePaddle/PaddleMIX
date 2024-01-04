@@ -673,7 +673,6 @@ class DiffusionPipeline(ConfigMixin):
 
         dtype_kwarg = kwargs.pop("dtype", None)
         device_kwarg = kwargs.pop("device", None)
-        silence_dtype_warnings = kwargs.pop("silence_dtype_warnings", False)
 
         if paddle_dtype is not None and dtype_kwarg is not None:
             raise ValueError(
@@ -727,14 +726,6 @@ class DiffusionPipeline(ConfigMixin):
         for module in modules:
             module.to(device=device, dtype=dtype)
 
-            if module.dtype == paddle.float16 and str(device) in ["cpu"] and not silence_dtype_warnings:
-                logger.warning(
-                    "Pipelines loaded with `dtype=paddle.float16` cannot run with `cpu` device. It"
-                    " is not recommended to move them to `cpu` as running them will fail. Please make"
-                    " sure to use an accelerator to run the pipeline in inference, due to the lack of"
-                    " support for`float16` operations on this device in Paddle. Please, remove the"
-                    " `paddle_dtype=paddle.float16` argument, or use another device for inference."
-                )
         return self
 
     @property
@@ -1396,3 +1387,13 @@ class DiffusionPipeline(ConfigMixin):
         if not hasattr(self, "unet"):
             raise ValueError("The pipeline must have `unet` for using FreeU.")
         self.unet.disable_freeu()
+
+    def maybe_free_model_hooks(self):
+        r"""
+        Function that offloads all components, removes all model hooks that were added when using
+        `enable_model_cpu_offload` and then applies them again. In case the model has not been offloaded this function
+        is a no-op. Make sure to add this function to the end of the `__call__` function of your pipeline so that it
+        functions correctly when applying enable_model_cpu_offload.
+        """
+        # do nothing
+        return

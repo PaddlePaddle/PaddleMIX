@@ -13,7 +13,7 @@
 # limitations under the License.
 
 import numpy as np
-import torch
+import paddle
 
 from ...utils import is_ppinvisible_watermark_available
 
@@ -34,16 +34,16 @@ class StableDiffusionXLWatermarker:
 
         self.encoder.set_watermark("bits", self.watermark)
 
-    def apply_watermark(self, images: torch.FloatTensor):
+    def apply_watermark(self, images: paddle.Tensor):
         # can't encode images that are smaller than 256
         if images.shape[-1] < 256:
             return images
 
-        images = (255 * (images / 2 + 0.5)).cpu().permute(0, 2, 3, 1).float().numpy()
+        images = (255 * (images / 2 + 0.5)).cast("float32").transpose([0, 2, 3, 1]).cpu().numpy()
 
         images = [self.encoder.encode(image, "dwtDct") for image in images]
 
-        images = torch.from_numpy(np.array(images)).permute(0, 3, 1, 2)
+        images = paddle.to_tensor(np.array(images)).transpose([0, 3, 1, 2])
 
-        images = torch.clamp(2 * (images / 255 - 0.5), min=-1.0, max=1.0)
+        images = paddle.clip(2 * (images / 255 - 0.5), min=-1.0, max=1.0)
         return images

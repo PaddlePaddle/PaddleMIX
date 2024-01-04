@@ -438,6 +438,11 @@ def is_paddlesde_available():
 
 
 # This is pytorch packge
+def is_invisible_watermark_available():
+    return False  # _invisible_watermark_available
+
+
+# This is pytorch packge
 def is_ppinvisible_watermark_available():
     return _ppinvisible_watermark_available
 
@@ -767,6 +772,18 @@ def is_k_diffusion_version(operation: str, version: str):
     if not _k_diffusion_available:
         return False
     return compare_versions(parse(_k_diffusion_version), operation, version)
+
+
+def use_old_recompute():
+    return str2bool(os.getenv("FLAG_USE_OLD_RECOMPUTE", "False"))
+
+
+def recompute_use_reentrant():
+    if use_old_recompute():
+        return False
+    return str2bool(os.getenv("FLAG_RECOMPUTE_USE_REENTRANT", "True")) and (
+        is_paddle_version(">=", "2.5.0") or is_paddle_version("==", "0.0.0")
+    )
 
 
 def get_objects_from_module(module):

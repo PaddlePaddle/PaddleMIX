@@ -15,11 +15,11 @@
 
 from paddlenlp.transformers import CLIPTokenizer
 
-from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
-from ppdiffusers.pipelines.stable_diffusion_xl.fastdeployxl_utils import (
+from ppdiffusers.pipelines.fastdeployxl_utils import (
     FastDeployDiffusionXLPipelineMixin,
     FastDeployRuntimeModel,
 )
+from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
 from ppdiffusers.utils import logging
 
@@ -86,5 +86,5 @@ class FastDeploySFastDeployStableDiffusionXLPipelineHousing(DiffusionPipeline, F
             unet=unet,
             scheduler=scheduler,
         )
-        self.register_to_config(force_zeros_for_empty_prompt=force_zeros_for_empty_prompt)
+        self.register_to_config(force_zeros_for_empty_prompt=force_zeros_for_empty_prompt, dtype="float32")
         self.post_init()
