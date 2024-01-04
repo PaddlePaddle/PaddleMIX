@@ -38,7 +38,6 @@ from paddle.io import BatchSampler, DataLoader, DistributedBatchSampler
 from paddle.optimizer import AdamW
 from paddle.vision import BaseTransform, transforms
 from paddlenlp.trainer import set_seed
-from paddlenlp.transformers import AutoTokenizer, PretrainedConfig
 from paddlenlp.utils.log import logger
 from tqdm.auto import tqdm
 
@@ -59,8 +58,10 @@ from ppdiffusers.models.attention_processor import (
 )
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import freeze_params, main_process_first, unwrap_model
-from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE, str2bool
+from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
+from ppdiffusers.utils import str2bool
 
+TEXT_ENCODER_ATTN_MODULE = ".self_attn"
 if str2bool(os.getenv("FLAG_FUSED_LINEAR", "False")):
     paddle.nn.Linear = paddle.incubate.nn.FusedLinear
 
@@ -139,7 +140,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     except Exception:
         model_class = "LDMBertModel"
     if model_class == "CLIPTextModel":
-        from paddlenlp.transformers import CLIPTextModel
+        from ppdiffusers.transformers import CLIPTextModel
 
         return CLIPTextModel
     elif model_class == "RobertaSeriesModelWithTransformation":
@@ -149,7 +150,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
 
         return RobertaSeriesModelWithTransformation
     elif model_class == "BertModel":
-        from paddlenlp.transformers import BertModel
+        from ppdiffusers.transformers import BertModel
 
         return BertModel
     elif model_class == "LDMBertModel":
