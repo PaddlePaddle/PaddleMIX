@@ -15,7 +15,7 @@ pip install -r requirements.txt
 ```
 
 ### 数据准备
-准备扩散模型训练的数据，格式需要适配`VideoFrameDataset`或`WebVidDataset`。数据集相关的配置请参考`lvdm/lvdm_args_short.py`或`lvdm/lvdm_args_text2video.py`中的`DatasetArguments`。相关数据下载链接为[Sky Timelapse](https://github.com/weixiong-ur/mdgan)、[Webvid](https://github.com/m-bain/webvid)。可以下载[样例数据集后]()，将数据集解压到`your_data_path_to/sky_timelapse_lvdm`，该数据集对应`lvdm/lvdm_args_short.py`。
+准备扩散模型训练的数据，格式需要适配`VideoFrameDataset`或`WebVidDataset`。数据集相关的配置请参考`lvdm/lvdm_args_short.py`或`lvdm/lvdm_args_text2video.py`中的`DatasetArguments`。相关数据下载链接为[Sky Timelapse](https://github.com/weixiong-ur/mdgan)、[Webvid](https://github.com/m-bain/webvid)。可以下载[样例数据集后](https://paddlenlp.bj.bcebos.com/models/community/westfish/lvdm_datasets/sky_timelapse_lvdm.zip)，将数据集解压到`your_data_path_to/sky_timelapse_lvdm`，该数据集对应`lvdm/lvdm_args_short.py`。
 
 
 ### 预训练模型准备
