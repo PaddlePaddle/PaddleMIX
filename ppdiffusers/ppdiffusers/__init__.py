@@ -57,19 +57,18 @@ except OptionalDependencyNotAvailable:
 else:
     from .models import (
         AsymmetricAutoencoderKL,
-        Vid2VidSDUNet,
-        GaussianDiffusion_SDEdit,
         AutoencoderKL,
         AutoencoderKL_imgtovideo,
         ControlNetModel,
         GaussianDiffusion,
+        GaussianDiffusion_SDEdit,
         LitEma,
         LVDMAutoencoderKL,
         LVDMUNet3DModel,
         ModelMixin,
         MultiAdapter,
         PriorTransformer,
-        SFUNetModel,
+        STUNetModel,
         T2IAdapter,
         T5FilmDecoder,
         Transformer2DModel,
@@ -77,6 +76,7 @@ else:
         UNet2DConditionModel,
         UNet2DModel,
         UNet3DConditionModel,
+        Vid2VidSTUNet,
         VQModel,
     )
     from .optimization import (
@@ -176,7 +176,6 @@ else:
         IFPipeline,
         IFSuperResolutionPipeline,
         ImgToVideoSDPipeline,
-        VideoToVideoModelscopePipeline,
         KandinskyCombinedPipeline,
         KandinskyImg2ImgCombinedPipeline,
         KandinskyImg2ImgPipeline,
@@ -241,6 +240,7 @@ else:
         VersatileDiffusionImageVariationPipeline,
         VersatileDiffusionPipeline,
         VersatileDiffusionTextToImagePipeline,
+        VideoToVideoModelscopePipeline,
         VideoToVideoSDPipeline,
         VQDiffusionPipeline,
     )

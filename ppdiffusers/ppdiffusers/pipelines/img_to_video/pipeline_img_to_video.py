@@ -26,7 +26,7 @@ from PIL import Image
 from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models.modelscope_autoencoder_img2vid import AutoencoderKL_imgtovideo
 from ...models.modelscope_gaussian_diffusion import GaussianDiffusion, beta_schedule
-from ...models.modelscope_sf_unet import SFUNetModel
+from ...models.modelscope_st_unet import STUNetModel
 from ...utils import logging, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import ImgToVideoSDPipelineOutput
@@ -38,13 +38,13 @@ EXAMPLE_DOC_STRING = """
         >>> import paddle
         >>> from PIL import Image
         >>> from ppdiffusers import ImgToVideoSDPipeline
-        >>> from ppdiffusers.utils import export_to_video
+        >>> from ppdiffusers.utils import export_to_video,load_image
 
         >>> pipe = ImgToVideoSDPipeline.from_pretrained(
         ...     "Yangchanghui/img_to_video_paddle", paddle_dtype=paddle.float32
         ... )
 
-        >>> img = Image.open('test.jpg')
+        >>> img = load_image('test.jpg')
         >>> video_frames = pipe(img).frames
         >>> video_path = export_to_video(video_frames)
         >>> video_path
@@ -98,7 +98,7 @@ class ImgToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin, LoraL
         self,
         vae: AutoencoderKL_imgtovideo,
         img_encoder: CLIPVisionModelWithProjection,
-        unet: SFUNetModel,
+        unet: STUNetModel,
     ):
         super().__init__()
         self.register_modules(vae=vae, img_encoder=img_encoder, unet=unet)
@@ -151,7 +151,7 @@ class ImgToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin, LoraL
     # @replace_example_docstring(EXAMPLE_DOC_STRING)
     def __call__(
         self,
-        img,
+        image,
         output_type: Optional[str] = "np",
         return_dict: bool = True,
         callback: Optional[Callable[[int, int, paddle.Tensor], None]] = None,
@@ -160,7 +160,6 @@ class ImgToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin, LoraL
     ):
 
         # img preprocess
-        image = convert_to_rgb(img)
         image = center_crop_wide(image, [self.resolution_crop, self.resolution_crop])
         image = to_numpy_array(image)
         image = resize(image, [self.vit_resolution, self.vit_resolution]).astype("float32")
@@ -173,8 +172,6 @@ class ImgToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin, LoraL
         noise = self.build_noise()
 
         model_kwargs = [{"y": img_embedding, "fps": self.fps_tensor}, {"y": self.zero_feature, "fps": self.fps_tensor}]
-        state_dict = paddle.load("/home/aistudio/img_to_video/unet/model_state.pdparams")
-        self.unet.set_state_dict(state_dict)
         gen_video = self.diffusion.ddim_sample_loop(
             noise=noise,
             model=self.unet,

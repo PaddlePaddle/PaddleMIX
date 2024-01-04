@@ -9,7 +9,7 @@ from paddlenlp.transformers import CLIPTokenizer, CLIPTextModel
 from ...loaders import LoraLoaderMixin, TextualInversionLoaderMixin
 from ...models.modelscope_autoencoder_img2vid import AutoencoderKL_imgtovideo, get_first_stage_encoding
 from ...models.modelscope_gaussion_sdedit import GaussianDiffusion_SDEdit, noise_schedule
-from ...models.modelscope_sd_unet_video2video import Vid2VidSDUNet
+from ...models.modelscope_st_unet_video2video import Vid2VidSTUNet
 from ...utils import logging, replace_example_docstring
 from ..pipeline_utils import DiffusionPipeline
 from . import VideoToVideoModelscopePipelineOutput
@@ -75,7 +75,7 @@ class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMi
             text_encoder: CLIPTextModel,
             tokenizer: CLIPTokenizer,
             vae: AutoencoderKL_imgtovideo,
-            unet: Vid2VidSDUNet,
+            unet: Vid2VidSTUNet,
     ):
         super().__init__()
         self.register_modules(text_encoder=text_encoder, tokenizer=tokenizer, vae=vae, unet=unet)

@@ -746,7 +746,7 @@ class SpatialTransformer(nn.Layer):
         return x + x_in
 
 
-class SFUNetModel(ModelMixin, ConfigMixin):
+class STUNetModel(ModelMixin, ConfigMixin):
     @register_to_config
     def __init__(
         self,
