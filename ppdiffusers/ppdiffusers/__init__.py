@@ -84,6 +84,7 @@ from .utils import (
     is_fastdeploy_available,
     is_paddle_available,
     is_paddlenlp_available,
+    logging,
 )
 from .version import VERSION as __version__
 
