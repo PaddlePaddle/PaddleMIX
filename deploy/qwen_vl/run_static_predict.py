@@ -57,7 +57,7 @@ class Predictor(object):
     def generate_with_image_features(self, image_features, input_ids):
         batch, seq,_ = image_features.shape
         seq = image_features.shape[1] + input_ids.shape[1]
-        max_len = 527
+        max_len = 8192
         dtype = "float16"
         tgt_generation_mask = paddle.full([batch, 1, 1, max_len], 0, dtype=dtype)
         tgt_generation_mask[:,0,0,:seq] = 1
