@@ -99,8 +99,11 @@ class DualTransformer2DModel(nn.Layer):
         hidden_states,
         encoder_hidden_states,
         timestep=None,
-        attention_mask=None,
+        added_cond_kwargs=None,
+        class_labels=None,
         cross_attention_kwargs=None,
+        attention_mask=None,
+        encoder_attention_mask=None,
         return_dict: bool = True,
     ):
         """

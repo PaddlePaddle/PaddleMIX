@@ -17,6 +17,8 @@ import contextlib
 import gc
 import math
 import os
+
+os.environ["FLAG_USE_OLD_RECOMPUTE"] = "True"
 import random
 import sys
 import time

@@ -18,7 +18,12 @@ import paddle
 from paddle import nn
 from paddle.distributed.fleet.utils import recompute
 
-from ..utils import is_paddle_version, is_ppxformers_available, logging
+from ..utils import (
+    is_ppxformers_available,
+    logging,
+    recompute_use_reentrant,
+    use_old_recompute,
+)
 from ..utils.paddle_utils import apply_freeu
 from .activations import get_activation
 from .attention_processor import (
@@ -744,7 +749,12 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
         lora_scale = cross_attention_kwargs.get("scale", 1.0) if cross_attention_kwargs is not None else 1.0
         hidden_states = self.resnets[0](hidden_states, temb, scale=lora_scale)
         for attn, resnet in zip(self.attentions, self.resnets[1:]):
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (
+                self.training
+                and self.gradient_checkpointing
+                and not hidden_states.stop_gradient
+                and not use_old_recompute()
+            ):
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -755,7 +765,7 @@ class UNetMidBlock2DCrossAttn(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -1149,21 +1159,36 @@ class CrossAttnDownBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
                     temb,
                     **ckpt_kwargs,
                 )
-                hidden_states = attn(
-                    hidden_states,
-                    encoder_hidden_states=encoder_hidden_states,
-                    cross_attention_kwargs=cross_attention_kwargs,
-                    attention_mask=attention_mask,
-                    encoder_attention_mask=encoder_attention_mask,
-                    return_dict=False,
-                )[0]
+                if use_old_recompute():
+                    # for sd benchmark
+                    hidden_states = recompute(
+                        create_custom_forward(attn, return_dict=False),
+                        hidden_states,
+                        encoder_hidden_states,
+                        None,  # timestep
+                        None,  # added_cond_kwargs
+                        None,  # class_labels
+                        cross_attention_kwargs,
+                        attention_mask,
+                        encoder_attention_mask,
+                        **ckpt_kwargs,
+                    )[0]
+                else:
+                    hidden_states = attn(
+                        hidden_states,
+                        encoder_hidden_states=encoder_hidden_states,
+                        cross_attention_kwargs=cross_attention_kwargs,
+                        attention_mask=attention_mask,
+                        encoder_attention_mask=encoder_attention_mask,
+                        return_dict=False,
+                    )[0]
             else:
                 hidden_states = resnet(hidden_states, temb, scale=lora_scale)
                 hidden_states = attn(
@@ -1256,7 +1281,7 @@ class DownBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale=scale)
@@ -1688,7 +1713,7 @@ class ResnetDownsampleBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale)
@@ -1834,7 +1859,7 @@ class SimpleCrossAttnDownBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
                 hidden_states = attn(
                     hidden_states,
@@ -1923,7 +1948,7 @@ class KDownBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale)
@@ -2026,7 +2051,7 @@ class KCrossAttnDownBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -2324,21 +2349,36 @@ class CrossAttnUpBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
                     temb,
                     **ckpt_kwargs,
                 )
-                hidden_states = attn(
-                    hidden_states,
-                    encoder_hidden_states=encoder_hidden_states,
-                    cross_attention_kwargs=cross_attention_kwargs,
-                    attention_mask=attention_mask,
-                    encoder_attention_mask=encoder_attention_mask,
-                    return_dict=False,
-                )[0]
+                if use_old_recompute():
+                    # for sd benchmark
+                    hidden_states = recompute(
+                        create_custom_forward(attn, return_dict=False),
+                        hidden_states,
+                        encoder_hidden_states,
+                        None,  # timestep
+                        None,  # added_cond_kwargs
+                        None,  # class_labels
+                        cross_attention_kwargs,
+                        attention_mask,
+                        encoder_attention_mask,
+                        **ckpt_kwargs,
+                    )[0]
+                else:
+                    hidden_states = attn(
+                        hidden_states,
+                        encoder_hidden_states=encoder_hidden_states,
+                        cross_attention_kwargs=cross_attention_kwargs,
+                        attention_mask=attention_mask,
+                        encoder_attention_mask=encoder_attention_mask,
+                        return_dict=False,
+                    )[0]
             else:
                 hidden_states = resnet(hidden_states, temb, scale=lora_scale)
                 hidden_states = attn(
@@ -2449,7 +2489,7 @@ class UpBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale=scale)
@@ -2933,7 +2973,7 @@ class ResnetUpsampleBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale=scale)
@@ -3085,7 +3125,7 @@ class SimpleCrossAttnUpBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
                 hidden_states = attn(
                     hidden_states,
@@ -3181,7 +3221,7 @@ class KUpBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(create_custom_forward(resnet), hidden_states, temb, **ckpt_kwargs)
             else:
                 hidden_states = resnet(hidden_states, temb, scale=scale)
@@ -3307,7 +3347,7 @@ class KCrossAttnUpBlock2D(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,

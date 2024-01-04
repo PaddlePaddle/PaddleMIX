@@ -21,7 +21,13 @@ from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..models.embeddings import ImagePositionalEmbeddings
-from ..utils import USE_PPPEFT_BACKEND, BaseOutput, deprecate, is_paddle_version
+from ..utils import (
+    USE_PPPEFT_BACKEND,
+    BaseOutput,
+    deprecate,
+    recompute_use_reentrant,
+    use_old_recompute,
+)
 from .attention import BasicTransformerBlock
 from .embeddings import CaptionProjection, PatchEmbed
 from .lora import LoRACompatibleConv, LoRACompatibleLinear
@@ -368,7 +374,12 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
 
         for block in self.transformer_blocks:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (
+                self.training
+                and self.gradient_checkpointing
+                and not hidden_states.stop_gradient
+                and not use_old_recompute()
+            ):
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -379,7 +390,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(block),
                     hidden_states,

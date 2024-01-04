@@ -119,7 +119,9 @@ from .import_utils import (
     is_unidecode_available,
     is_visualdl_available,
     is_wandb_available,
+    recompute_use_reentrant,
     requires_backends,
+    use_old_recompute,
 )
 
 # custom load_utils

@@ -18,7 +18,7 @@ import paddle
 from paddle import nn
 from paddle.distributed.fleet.utils import recompute
 
-from ..utils import is_paddle_version
+from ..utils import recompute_use_reentrant
 from ..utils.paddle_utils import apply_freeu
 from .attention import Attention
 from .dual_transformer_2d import DualTransformer2DModel
@@ -1021,7 +1021,7 @@ class DownBlockMotion(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -1194,7 +1194,7 @@ class CrossAttnDownBlockMotion(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -1398,7 +1398,7 @@ class CrossAttnUpBlockMotion(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -1550,7 +1550,7 @@ class UpBlockMotion(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -1710,7 +1710,7 @@ class UNetMidBlockCrossAttnMotion(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -1942,7 +1942,7 @@ class UNetMidBlockSpatioTemporal(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = attn(
                     hidden_states,
                     encoder_hidden_states=encoder_hidden_states,
@@ -2029,7 +2029,7 @@ class DownBlockSpatioTemporal(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -2138,7 +2138,7 @@ class CrossAttnDownBlockSpatioTemporal(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -2237,7 +2237,7 @@ class UpBlockSpatioTemporal(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,
@@ -2343,7 +2343,7 @@ class CrossAttnUpBlockSpatioTemporal(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
                 hidden_states = recompute(
                     create_custom_forward(resnet),
                     hidden_states,

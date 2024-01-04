@@ -68,6 +68,7 @@ from .schedulers import (
     KDPM2AncestralDiscreteScheduler,
     KDPM2DiscreteScheduler,
     LCMScheduler,
+    LMSDiscreteScheduler,
     PNDMScheduler,
     RePaintScheduler,
     SchedulerMixin,
