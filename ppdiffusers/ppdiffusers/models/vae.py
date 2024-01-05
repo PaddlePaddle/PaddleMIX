@@ -158,7 +158,7 @@ class Encoder(nn.Layer):
 
             # down
             # (NOTE, lxl) 去掉typehint，否则动转静会报错
-            ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
+            ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
             for down_block in self.down_blocks:
                 sample = recompute(create_custom_forward(down_block), sample, **ckpt_kwargs)
             # middle
@@ -298,7 +298,7 @@ class Decoder(nn.Layer):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
+                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
                 # middle
                 sample = recompute(
                     create_custom_forward(self.mid_block),
@@ -550,7 +550,7 @@ class MaskConditionDecoder(nn.Layer):
 
                 return custom_forward
 
-            ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
+            ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
             # middle
             sample = recompute(
                 create_custom_forward(self.mid_block),
@@ -858,7 +858,7 @@ class EncoderTiny(nn.Layer):
 
                 return custom_forward
 
-            ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
+            ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
             x = recompute(create_custom_forward(self.layers), x, **ckpt_kwargs)
         else:
             # scale image from [-1, 1] to [0, 1] to match TAESD convention
@@ -940,7 +940,7 @@ class DecoderTiny(nn.Layer):
 
                 return custom_forward
 
-            ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
+            ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
             x = recompute(create_custom_forward(self.layers), x, **ckpt_kwargs)
         else:
             x = self.layers(x)

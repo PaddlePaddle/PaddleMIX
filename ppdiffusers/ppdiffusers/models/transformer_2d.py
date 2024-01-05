@@ -390,7 +390,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
 
                     return custom_forward
 
-                ckpt_kwargs = {"use_reentrant": False} if recompute_use_reentrant() else {}
+                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
                 hidden_states = recompute(
                     create_custom_forward(block),
                     hidden_states,
