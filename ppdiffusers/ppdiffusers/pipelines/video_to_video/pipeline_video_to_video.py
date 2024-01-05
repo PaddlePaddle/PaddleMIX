@@ -326,14 +326,14 @@ class VideoToVideoModelscopePipeline(DiffusionPipeline, TextualInversionLoaderMi
         )
 
         # input_process
-        input = self.input_preprocess(
+        input_data = self.input_preprocess(
             vid_path=video_path,
             prompt=prompt,
             num_images_per_prompt=num_images_per_prompt,
             do_classifier_free_guidance=do_classifier_free_guidance
         )
-        video_data = input['video_data']
-        y = input['y']
+        video_data = input_data['video_data']
+        y = input_data['y']
         video_data = F.interpolate(
             video_data, size=(720, 1280), mode='bilinear')
         video_data = video_data.unsqueeze(0)

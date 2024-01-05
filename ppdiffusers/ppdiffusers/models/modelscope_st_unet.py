@@ -29,7 +29,7 @@ USE_TEMPORAL_TRANSFORMER = True
 
 
 @dataclass
-class SFUNetOutput(BaseOutput):
+class STUNetOutput(BaseOutput):
     """
     The output of [`SFUNetModel`].
 
@@ -1046,7 +1046,7 @@ class STUNetModel(ModelMixin, ConfigMixin):
         mask_last_frame_num=0,
         return_dict: bool = True,
         **kwargs
-    ) -> Union[SFUNetOutput, Tuple]:
+    ) -> Union[STUNetOutput, Tuple]:
         batch, c, f, h, w = x.shape
         device = x.place
         self.batch = batch
@@ -1109,7 +1109,7 @@ class STUNetModel(ModelMixin, ConfigMixin):
         if not return_dict:
             return (sample,)
 
-        return SFUNetOutput(sample=sample)
+        return STUNetOutput(sample=sample)
 
     def _forward_single(
         self, module, x, e, context, time_rel_pos_bias, focus_present_mask, video_mask, reference=None

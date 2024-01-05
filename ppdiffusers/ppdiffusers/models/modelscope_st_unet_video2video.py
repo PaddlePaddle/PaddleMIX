@@ -1,6 +1,6 @@
 from einops import rearrange
 
-from .modelscope_st_unet import STUNetModel, default, prob_mask_like, sinusoidal_embedding_paddle, SFUNetOutput, \
+from .modelscope_st_unet import STUNetModel, default, prob_mask_like, sinusoidal_embedding_paddle, STUNetOutput, \
     TemporalTransformer, TemporalAttentionMultiBlock, SpatialTransformer, ResBlock
 from ..configuration_utils import register_to_config
 import paddle
@@ -376,4 +376,4 @@ class Vid2VidSTUNet(STUNetModel):
         if not return_dict:
             return (sample,)
 
-        return SFUNetOutput(sample=sample)
+        return STUNetOutput(sample=sample)
