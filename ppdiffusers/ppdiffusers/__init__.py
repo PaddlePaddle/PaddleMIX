@@ -20,6 +20,9 @@ from .models import (
     ConsistencyDecoderVAE,
     ControlNetModel,
     Kandinsky3UNet,
+    LitEma,
+    LVDMAutoencoderKL,
+    LVDMUNet3DModel,
     ModelMixin,
     MotionAdapter,
     MultiAdapter,
@@ -46,7 +49,6 @@ from .optimization import (
 )
 from .patches import *
 from .pipelines import *
-from .pipelines import StableDiffusionControlNetPipeline
 from .schedulers import (
     CMStochasticIterativeScheduler,
     DDIMInverseScheduler,
@@ -59,6 +61,7 @@ from .schedulers import (
     DPMSolverMultistepInverseScheduler,
     DPMSolverMultistepScheduler,
     DPMSolverSinglestepScheduler,
+    DPMSolverUniDiffuserScheduler,
     EulerAncestralDiscreteScheduler,
     EulerDiscreteScheduler,
     HeunDiscreteScheduler,
@@ -67,6 +70,7 @@ from .schedulers import (
     KDPM2AncestralDiscreteScheduler,
     KDPM2DiscreteScheduler,
     LCMScheduler,
+    LMSDiscreteScheduler,
     PNDMScheduler,
     RePaintScheduler,
     SchedulerMixin,
@@ -77,9 +81,11 @@ from .schedulers import (
 )
 from .utils import (
     OptionalDependencyNotAvailable,
+    is_einops_available,
     is_fastdeploy_available,
     is_paddle_available,
     is_paddlenlp_available,
+    logging,
 )
 from .version import VERSION as __version__
 
@@ -102,3 +108,11 @@ else:
         FastDeployStableDiffusionXLMegaPipeline,
         FastDeployStableDiffusionXLPipeline,
     )
+
+try:
+    if not (is_paddle_available() and is_paddlenlp_available() and is_einops_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from .utils.dummy_paddle_and_paddlenlp_and_einops_objects import *  # noqa F403
+else:
+    from .pipelines import UniDiffuserPipeline

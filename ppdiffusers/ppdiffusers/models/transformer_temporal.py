@@ -19,7 +19,7 @@ from paddle import nn
 from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
-from ..utils import BaseOutput, is_paddle_version
+from ..utils import BaseOutput, recompute_use_reentrant
 from .attention import BasicTransformerBlock, TemporalBasicTransformerBlock
 from .embeddings import TimestepEmbedding, Timesteps
 from .modeling_utils import ModelMixin
@@ -345,7 +345,7 @@ class TransformerSpatioTemporalModel(nn.Layer):
         # 2. Blocks
         for block, temporal_block in zip(self.transformer_blocks, self.temporal_transformer_blocks):
             if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
-                ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
                 hidden_states = recompute(
                     block,
                     hidden_states,

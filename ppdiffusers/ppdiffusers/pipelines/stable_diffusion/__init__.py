@@ -31,6 +31,7 @@ try:
 except OptionalDependencyNotAvailable:
     from ...utils.dummy_paddle_and_paddlenlp_objects import *
 else:
+    from .clip_image_project_model import CLIPImageProjection
     from .pipeline_stable_diffusion import StableDiffusionPipeline  # noqa F401
 
 try:

@@ -18,7 +18,6 @@ import os
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import (
@@ -29,11 +28,11 @@ from ppdiffusers import (
     is_ppxformers_available,
 )
 from ppdiffusers.initializer import reset_initialized_parameter, zeros_
-from ppdiffusers.models.attention import AttentionBlock
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.models.resnet import ResnetBlock2D
 from ppdiffusers.models.transformer_2d import Transformer2DModel
 from ppdiffusers.training_utils import freeze_params
+from ppdiffusers.transformers import AutoTokenizer, CLIPTextModel
 
 
 class StableDiffusionModel(nn.Layer):
@@ -243,9 +242,6 @@ class StableDiffusionModel(nn.Layer):
         zeros_(self.unet.conv_out.weight)
         zeros_(self.unet.conv_out.bias)
         for _, m in self.unet.named_sublayers():
-            if isinstance(m, AttentionBlock):
-                zeros_(m.proj_attn.weight)
-                zeros_(m.proj_attn.bias)
             if isinstance(m, ResnetBlock2D):
                 zeros_(m.conv2.weight)
                 zeros_(m.conv2.bias)

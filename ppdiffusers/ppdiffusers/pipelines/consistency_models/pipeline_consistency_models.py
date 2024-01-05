@@ -100,14 +100,14 @@ class ConsistencyModelPipeline(DiffusionPipeline):
 
     # Follows diffusers.VaeImageProcessor.postprocess
     def postprocess_image(self, sample: paddle.Tensor, output_type: str = "pil"):
-        if output_type not in ["pt", "np", "pil"]:
+        if output_type not in ["pd", "np", "pil"]:
             raise ValueError(
-                f"output_type={output_type} is not supported. Make sure to choose one of ['pt', 'np', or 'pil']"
+                f"output_type={output_type} is not supported. Make sure to choose one of ['pd', 'np', or 'pil']"
             )
 
         # Equivalent to ppdiffusers.VaeImageProcessor.denormalize
         sample = (sample / 2 + 0.5).clip(0, 1)
-        if output_type == "pt":
+        if output_type == "pd":
             return sample
 
         # Equivalent to ppdiffusers.VaeImageProcessor.pt_to_numpy

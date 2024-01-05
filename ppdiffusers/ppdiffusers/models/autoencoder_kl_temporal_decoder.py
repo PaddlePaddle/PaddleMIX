@@ -19,7 +19,7 @@ from paddle.distributed.fleet.utils import recompute
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..loaders import FromOriginalVAEMixin
-from ..utils import is_paddle_version
+from ..utils import recompute_use_reentrant
 from ..utils.ppaccelerate_utils import apply_forward_hook
 from .attention_processor import (
     CROSS_ATTENTION_PROCESSORS,
@@ -109,7 +109,7 @@ class TemporalDecoder(nn.Layer):
 
                 return custom_forward
 
-            ckpt_kwargs = {"use_reentrant": False} if is_paddle_version(">=", "2.5.0") else {}
+            ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
             # middle
             sample = recompute(
                 create_custom_forward(self.mid_block),

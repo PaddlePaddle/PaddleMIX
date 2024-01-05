@@ -118,6 +118,8 @@ class AsymmetricAutoencoderKL(ModelMixin, ConfigMixin):
 
     @apply_forward_hook
     def encode(self, x: paddle.Tensor, return_dict: bool = True) -> Union[AutoencoderKLOutput, Tuple[paddle.Tensor]]:
+        # TODO junnyu, add this to support pure fp16
+        x = x.cast(self.encoder.conv_in.weight.dtype)
         h = self.encoder(x)
         moments = self.quant_conv(h)
         posterior = DiagonalGaussianDistribution(moments)

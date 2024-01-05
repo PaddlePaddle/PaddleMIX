@@ -774,6 +774,19 @@ def is_k_diffusion_version(operation: str, version: str):
     return compare_versions(parse(_k_diffusion_version), operation, version)
 
 
+def use_old_recompute():
+    return str2bool(os.getenv("FLAG_USE_OLD_RECOMPUTE", "False"))
+
+
+def recompute_use_reentrant():
+    if use_old_recompute():
+        return True
+    # if paddle 2.5.0 or higher, recompute_use_reentrant is False by default
+    if is_paddle_version(">=", "2.5.0") or is_paddle_version("==", "0.0.0"):
+        return str2bool(os.getenv("FLAG_RECOMPUTE_USE_REENTRANT", "False"))
+    return True
+
+
 def get_objects_from_module(module):
     """
     Args:

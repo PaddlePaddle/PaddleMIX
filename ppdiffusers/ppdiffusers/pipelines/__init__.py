@@ -12,7 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ..utils import OptionalDependencyNotAvailable, is_fastdeploy_available
+from ..utils import (
+    OptionalDependencyNotAvailable,
+    is_einops_available,
+    is_fastdeploy_available,
+    is_paddle_available,
+    is_paddlenlp_available,
+)
 from .animatediff import AnimateDiffPipeline
 from .consistency_models import ConsistencyModelPipeline
 from .controlnet import StableDiffusionControlNetPipeline
@@ -20,6 +26,7 @@ from .latent_consistency_models import (
     LatentConsistencyModelImg2ImgPipeline,
     LatentConsistencyModelPipeline,
 )
+from .lvdm import LVDMTextToVideoPipeline, LVDMUncondPipeline
 from .pipeline_utils import DiffusionPipeline
 from .stable_diffusion import StableDiffusionPipeline, StableDiffusionPipelineOutput
 from .stable_diffusion_xl import (
@@ -55,4 +62,16 @@ else:
         FastDeployStableDiffusionXLInpaintPipeline,
         FastDeployStableDiffusionXLMegaPipeline,
         FastDeployStableDiffusionXLPipeline,
+    )
+
+try:
+    if not (is_paddle_available() and is_paddlenlp_available() and is_einops_available()):
+        raise OptionalDependencyNotAvailable()
+except OptionalDependencyNotAvailable:
+    from ..utils.dummy_paddle_and_paddlenlp_and_einops_objects import *  # noqa F403
+else:
+    from .unidiffuser import (
+        UniDiffuserModel,
+        UniDiffuserPipeline,
+        UniDiffuserTextDecoder,
     )
