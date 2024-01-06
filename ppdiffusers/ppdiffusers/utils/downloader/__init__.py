@@ -24,7 +24,7 @@ from huggingface_hub.utils import (
 )
 from requests import HTTPError
 
-from .aistudio_hub.download import aistudio_download, aistudio_hub_file_exists
+from .aistudio_hub.download import aistudio_hub_download, aistudio_hub_file_exists
 from .bos.download import bos_download, bos_file_exists
 from .hf_hub.download import hf_hub_download, hf_hub_file_exists
 
@@ -85,7 +85,7 @@ def bos_aistudio_hf_download(
             )
         elif from_aistudio:
             log_endpoint = "Aistudio Hub"
-            cached_file = aistudio_download(
+            cached_file = aistudio_hub_download(
                 **download_kwargs,
             )
         elif from_hf_hub:

@@ -991,7 +991,7 @@ def _chmod_and_replace(src: str, dst: str) -> None:
     shutil.move(src, dst)
 
 
-def aistudio_download(
+def aistudio_hub_download(
     repo_id: str,
     filename: str,
     *,
