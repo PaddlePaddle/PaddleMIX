@@ -18,7 +18,7 @@ import paddle
 from paddle import nn
 from paddle.distributed.fleet.utils import recompute
 
-from ..utils import recompute_use_reentrant
+from ..utils import recompute_use_reentrant, use_old_recompute
 from ..utils.paddle_utils import apply_freeu
 from .attention import Attention
 from .dual_transformer_2d import DualTransformer2DModel
@@ -1013,7 +1013,12 @@ class DownBlockMotion(nn.Layer):
 
         blocks = zip(self.resnets, self.motion_modules)
         for resnet, motion_module in blocks:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (
+                self.training
+                and self.gradient_checkpointing
+                and not hidden_states.stop_gradient
+                and not use_old_recompute()
+            ):
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -1183,7 +1188,12 @@ class CrossAttnDownBlockMotion(nn.Layer):
 
         blocks = list(zip(self.resnets, self.attentions, self.motion_modules))
         for i, (resnet, attn, motion_module) in enumerate(blocks):
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (
+                self.training
+                and self.gradient_checkpointing
+                and not hidden_states.stop_gradientand
+                and not use_old_recompute()
+            ):
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1387,7 +1397,12 @@ class CrossAttnUpBlockMotion(nn.Layer):
 
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (
+                self.training
+                and self.gradient_checkpointing
+                and not hidden_states.stop_gradient
+                and not use_old_recompute()
+            ):
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1542,7 +1557,12 @@ class UpBlockMotion(nn.Layer):
 
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (
+                self.training
+                and self.gradient_checkpointing
+                and not hidden_states.stop_gradient
+                and not use_old_recompute()
+            ):
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -1699,7 +1719,12 @@ class UNetMidBlockCrossAttnMotion(nn.Layer):
 
         blocks = zip(self.attentions, self.resnets[1:], self.motion_modules)
         for attn, resnet, motion_module in blocks:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if (
+                self.training
+                and self.gradient_checkpointing
+                and not hidden_states.stop_gradient
+                and not use_old_recompute()
+            ):
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):

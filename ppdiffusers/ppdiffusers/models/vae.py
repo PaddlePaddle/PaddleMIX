@@ -19,7 +19,7 @@ import paddle
 import paddle.nn as nn
 from paddle.distributed.fleet.utils import recompute
 
-from ..utils import BaseOutput, recompute_use_reentrant
+from ..utils import BaseOutput, recompute_use_reentrant, use_old_recompute
 from ..utils.paddle_utils import randn_tensor
 from .activations import get_activation
 from .attention_processor import SpatialNorm
@@ -850,7 +850,7 @@ class EncoderTiny(nn.Layer):
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         r"""The forward method of the `EncoderTiny` class."""
-        if self.training and self.gradient_checkpointing and not x.stop_gradient:
+        if self.training and self.gradient_checkpointing and not x.stop_gradient and not use_old_recompute():
 
             def create_custom_forward(module):
                 def custom_forward(*inputs):
@@ -932,7 +932,7 @@ class DecoderTiny(nn.Layer):
         # Clamp.
         x = nn.functional.tanh(x / 3) * 3
 
-        if self.training and self.gradient_checkpointing and not x.stop_gradient:
+        if self.training and self.gradient_checkpointing and not x.stop_gradient and not use_old_recompute():
 
             def create_custom_forward(module):
                 def custom_forward(*inputs):
