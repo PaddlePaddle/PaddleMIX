@@ -433,10 +433,7 @@ class DiffusionPipeline(ConfigMixin):
                 # TODO (junnyu) support paddlenlp.transformers check this ?
                 if "paddlenlp" in not_compiled_module.__module__.split("."):
                     library = "paddlenlp.transformers"
-                elif (
-                    name in ["feature_extractor", "text_encoder", "text_encoder_2", "tokenizer", "tokenizer_2"]
-                    and "ppdiffusers.transformers" in not_compiled_module.__module__
-                ):
+                elif "ppdiffusers.transformers" in not_compiled_module.__module__:
                     library = "ppdiffusers.transformers"
                 else:
                     library = not_compiled_module.__module__.split(".")[0]
