@@ -9,6 +9,8 @@ import paddle
 from paddlenlp.transformers.configuration_utils import PretrainedConfig
 from paddlemix import QWenTokenizer, QwenVLProcessor
 
+from utils import load_real_time_tokens
+
 
 class Predictor(object):
     def __init__(self, args):
@@ -147,9 +149,10 @@ class Predictor(object):
         )
 
         # static inference
-        # outputs = self.second_predictor.run(inputs)
+        # self.second_predictor.run(inputs)
 
-        generate_ids = outputs[0].numpy().tolist()
+        tokens = load_real_time_tokens()
+        generate_ids = tokens.tolist()
         return generate_ids, None
 
     def pre_processing(self, url, prompt):
