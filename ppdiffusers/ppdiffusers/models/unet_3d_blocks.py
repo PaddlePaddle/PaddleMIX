@@ -1191,7 +1191,7 @@ class CrossAttnDownBlockMotion(nn.Layer):
             if (
                 self.training
                 and self.gradient_checkpointing
-                and not hidden_states.stop_gradientand
+                and not hidden_states.stop_gradient
                 and not use_old_recompute()
             ):
 
