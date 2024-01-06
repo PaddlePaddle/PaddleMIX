@@ -100,7 +100,7 @@ class Predictor(object):
             paddle.full([1], batch, dtype="int64") # stop_nums, be batch 
         ]
         for i in range(32):
-            tmp = paddle.rand(shape=[2, batch, 40, max_len, 128], dtype=dtype)
+            tmp = paddle.rand(shape=[2, batch, 32, max_len, 128], dtype=dtype)
             print(tmp.shape)
             inputs.append(tmp)
 
