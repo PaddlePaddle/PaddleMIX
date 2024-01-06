@@ -95,14 +95,14 @@ def save_accelerator_state(
     # Optimizer states
     for i, opt in enumerate(optimizers):
         state = opt.state_dict()
-        optimizer_name = f"{OPTIMIZER_NAME}.bin" if i == 0 else f"{OPTIMIZER_NAME}_{i}.bin"
+        optimizer_name = f"{OPTIMIZER_NAME}.pdparams" if i == 0 else f"{OPTIMIZER_NAME}_{i}.pdparams"
         output_optimizer_file = str(output_dir.joinpath(optimizer_name))
         save(state, output_optimizer_file, save_on_each_node=save_on_each_node, safe_serialization=False)
         logger.info(f"Optimizer state saved in {output_optimizer_file}")
     # Scheduler states
     for i, scheduler in enumerate(schedulers):
         state = scheduler.state_dict()
-        scheduler_name = f"{SCHEDULER_NAME}.bin" if i == 0 else f"{SCHEDULER_NAME}_{i}.bin"
+        scheduler_name = f"{SCHEDULER_NAME}.pdparams" if i == 0 else f"{SCHEDULER_NAME}_{i}.pdparams"
         output_scheduler_file = str(output_dir.joinpath(scheduler_name))
         save(state, output_scheduler_file, save_on_each_node=save_on_each_node, safe_serialization=False)
         logger.info(f"Scheduler state saved in {output_scheduler_file}")
@@ -177,14 +177,14 @@ def load_accelerator_state(
             state_dict = load_file(str(input_model_file), device=str(map_location))
         else:
             # Load with torch
-            input_model_file = input_dir.joinpath(f"{MODEL_NAME}{ending}.bin")
+            input_model_file = input_dir.joinpath(f"{MODEL_NAME}{ending}.pdparams")
             state_dict = paddle.load(str(input_model_file), return_numpy=map_location == "cpu")
         models[i].set_state_dict(state_dict, **load_model_func_kwargs)
     logger.info("All model weights loaded successfully")
 
     # Optimizer states
     for i, opt in enumerate(optimizers):
-        optimizer_name = f"{OPTIMIZER_NAME}.bin" if i == 0 else f"{OPTIMIZER_NAME}_{i}.bin"
+        optimizer_name = f"{OPTIMIZER_NAME}.pdparams" if i == 0 else f"{OPTIMIZER_NAME}_{i}.pdparams"
         input_optimizer_file = input_dir.joinpath(optimizer_name)
         optimizer_state = paddle.load(str(input_optimizer_file), return_numpy=map_location == "cpu")
         optimizers[i].set_state_dict(optimizer_state)
@@ -192,7 +192,7 @@ def load_accelerator_state(
 
     # Scheduler states
     for i, scheduler in enumerate(schedulers):
-        scheduler_name = f"{SCHEDULER_NAME}.bin" if i == 0 else f"{SCHEDULER_NAME}_{i}.bin"
+        scheduler_name = f"{SCHEDULER_NAME}.pdparams" if i == 0 else f"{SCHEDULER_NAME}_{i}.pdparams"
         input_scheduler_file = input_dir.joinpath(scheduler_name)
         scheduler.set_state_dict(paddle.load(str(input_scheduler_file)))
     logger.info("All scheduler states loaded successfully")

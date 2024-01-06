@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from huggingface_hub.file_download import hf_hub_download  # noqa: F401
+from huggingface_hub import file_exists as hf_hub_file_exists  # noqa: F401
+from huggingface_hub import hf_hub_download  # noqa: F401
