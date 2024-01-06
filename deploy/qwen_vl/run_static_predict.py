@@ -12,14 +12,29 @@ from paddlemix import QWenTokenizer, QwenVLProcessor
 
 class Predictor(object):
     def __init__(self, args):
+        # dynamic inference
+        from paddlenlp.experimental.transformers import (
+            QWenForQWenVLInferenceModel
+        )
+        from paddlenlp.transformers import AutoConfig
+        config = AutoConfig.from_pretrained("path/to/.paddlenlp/models/qwen-vl/qwen-vl-7b-change")
+        config.quant_type = None
+        config.weight_only_quant_bits = None
+        paddle.set_default_dtype("float16")
+        self.model = QWenForQWenVLInferenceModel.from_pretrained(
+            "path/to/.paddlenlp/models/qwen-vl/qwen-vl-7b-change",
+            config=config,
+            dtype="float16",
+        )
         self.args = args
         self.config = PretrainedConfig.from_pretrained(args.qwen_vl_config_path)
-        self.tokenizer = QWenTokenizer.from_pretrained(args.qwen_tokenizer_path)
+        self.tokenizer = QWenTokenizer.from_pretrained(args.qwen_vl_config_path)
         self.processor = QwenVLProcessor(tokenizer=self.tokenizer)
         self.first_predictor = self.create_predictor(args.first_model_path)
-        self.second_predictor = self.create_predictor(args.second_model_path)
         print(f"first_model_path: {args.first_model_path}, {self.first_predictor}")
-        print(f"second_model_path: {args.second_model_path}, {self.second_predictor}")
+        # static inference
+        # self.second_predictor = self.create_predictor(args.second_model_path)
+        # print(f"second_model_path: {args.second_model_path}, {self.second_predictor}")
 
     def create_predictor(self, model_path):
 
@@ -56,8 +71,8 @@ class Predictor(object):
     @paddle.no_grad()
     def generate_with_image_features(self, image_features, input_ids):
         batch, seq,_ = image_features.shape
-        seq = image_features.shape[1] + input_ids.shape[1]
-        max_len = 8192
+        seq = input_ids.shape[1]
+        max_len = 1024
         dtype = "float16"
         tgt_generation_mask = paddle.full([batch, 1, 1, max_len], 0, dtype=dtype)
         tgt_generation_mask[:,0,0,:seq] = 1
@@ -101,11 +116,39 @@ class Predictor(object):
         ]
         for i in range(32):
             tmp = paddle.rand(shape=[2, batch, 32, max_len, 128], dtype=dtype)
-            print(tmp.shape)
             inputs.append(tmp)
+        
+        # dynamic inference
+        self.model.eval()
+        outputs = self.model.generate_text_with_image_features(
+            input_ids=inputs[0],
+            image_features=inputs[1],
+            img_pos=inputs[2],
+            attention_mask=inputs[3],
+            position_ids=inputs[4],
+            penalty_score=inputs[5],
+            frequency_score=inputs[6],
+            presence_score=inputs[7],
+            min_length=inputs[8],
+            max_length=inputs[9],
+            temperature=inputs[10],
+            top_p=inputs[11],
+            eos_token_id=inputs[12],
+            seq_len_encoder=inputs[13],
+            seq_len_decoder=inputs[14],
+            step_idx=inputs[15],
+            stop_flags=inputs[16],
+            tgt_ids=inputs[17],
+            tgt_pos=inputs[18],
+            tgt_generation_mask=inputs[19],
+            pre_ids=inputs[20],
+            stop_nums=inputs[21],
+            cache_kvs=inputs[22:],
+        )
 
-        # TODO: return outputs?
-        outputs = self.second_predictor.run(inputs)
+        # static inference
+        # outputs = self.second_predictor.run(inputs)
+
         generate_ids = outputs[0].numpy().tolist()
         return generate_ids, None
 
@@ -118,7 +161,7 @@ class Predictor(object):
         return inputs
 
     def post_processing(self, generate_ids):
-        msg = self.processor.decode(generate_ids)
+        msg = self.processor.batch_decode(generate_ids)
         return msg
 
     def predict(self, url, prompt):
@@ -141,9 +184,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--first_model_path", default='The dir name of image encoder model', type=str, help="", )
     parser.add_argument("--second_model_path", default='The dir name of language model', type=str, help="", )
-    parser.add_argument("--qwen_tokenizer_path", type=str,
-                        default="The qwen tokenizer dir name of saving tokenizer",
-                        help="The path of extraction model path that you want to load.")
     parser.add_argument("--qwen_vl_config_path", type=str,
                         default="The qwen vl config dir name of saving config",
                         help="The path of extraction model path that you want to load.")
@@ -155,20 +195,6 @@ if __name__ == "__main__":
     url = "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"
     prompt = "Generate the caption in English with grounding:"
 
-    # warm up
-    warm_up_times = 2
-    repeat_times = 10
-    for i in range(warm_up_times):
-        msg = predictor.predict(url, prompt)
-
-    # 测试50次
-    starttime = datetime.datetime.now()
-    for i in range(repeat_times):
-        msg = predictor.predict(url, prompt)
-    
-    endtime = datetime.datetime.now()
-    duringtime = endtime - starttime
-    time_ms = duringtime.seconds * 1000 + duringtime.microseconds / 1000.0
+    msg = predictor.predict(url, prompt)
 
     print("Outputs: ", msg)
-    print("The whole time on average: ", time_ms / repeat_times, "ms")
