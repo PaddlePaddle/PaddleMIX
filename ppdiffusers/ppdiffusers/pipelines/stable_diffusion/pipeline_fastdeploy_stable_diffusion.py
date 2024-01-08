@@ -272,7 +272,7 @@ class FastDeployStableDiffusionPipeline(DiffusionPipeline, FastDeployDiffusionPi
 
                 unet_inputs = dict(
                     sample=latent_model_input,
-                    timestep=t,
+                    timestep=paddle.to_tensor(t).reshape([1,]),
                     encoder_hidden_states=prompt_embeds,
                     infer_op=infer_op_dict.get("unet", None),
                     output_shape=latent_model_input.shape,
