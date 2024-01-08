@@ -58,13 +58,17 @@ else:
     from .models import (
         AsymmetricAutoencoderKL,
         AutoencoderKL,
+        AutoencoderKL_imgtovideo,
         ControlNetModel,
+        GaussianDiffusion,
+        GaussianDiffusion_SDEdit,
         LitEma,
         LVDMAutoencoderKL,
         LVDMUNet3DModel,
         ModelMixin,
         MultiAdapter,
         PriorTransformer,
+        STUNetModel,
         T2IAdapter,
         T5FilmDecoder,
         Transformer2DModel,
@@ -72,6 +76,7 @@ else:
         UNet2DConditionModel,
         UNet2DModel,
         UNet3DConditionModel,
+        Vid2VidSTUNet,
         VQModel,
     )
     from .optimization import (
@@ -170,6 +175,7 @@ else:
         IFInpaintingSuperResolutionPipeline,
         IFPipeline,
         IFSuperResolutionPipeline,
+        ImgToVideoSDPipeline,
         KandinskyCombinedPipeline,
         KandinskyImg2ImgCombinedPipeline,
         KandinskyImg2ImgPipeline,
@@ -234,6 +240,7 @@ else:
         VersatileDiffusionImageVariationPipeline,
         VersatileDiffusionPipeline,
         VersatileDiffusionTextToImagePipeline,
+        VideoToVideoModelscopePipeline,
         VideoToVideoSDPipeline,
         VQDiffusionPipeline,
     )
