@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+export FLAGS_use_cuda_managed_memory=true
 export CUDA_VISIBLE_DEVICES=1 # 填写: GPU卡号
 LOCAL_PATH=/root/lxl/DEVELOP_PR # 填写: PaddleMIX文件夹所在的本地路径
 cd $LOCAL_PATH/PaddleMIX/ppdiffusers/deploy/sdxl
@@ -24,8 +25,8 @@ python export_model.py --pretrained_model_name_or_path stabilityai/stable-diffus
 
 echo "### 2. inference"
 rm -rf infer_op_raw_fp16
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "preconfig-euler-ancestral" --backend paddle_tensorrt --device gpu --task_name all --infer_op raw
 python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "preconfig-euler-ancestral" --backend paddle --device gpu --task_name all
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0 --scheduler "preconfig-euler-ancestral" --backend paddle_tensorrt --device gpu --task_name all
 
 
 echo "### 3. test diff"
