@@ -12,8 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """ Paddle BLIP2 model."""
+
 from typing import Optional, Tuple, Union
+from contextlib import contextmanager
 
 import paddle
 import paddle.distributed as dist
@@ -47,6 +50,16 @@ BLIP_2_PRETRAINED_MODEL_ARCHIVE_LIST = [
     "Salesforce/blip2-flan-t5-xl",
     "Salesforce/blip2-opt-2.7b",
 ]
+
+
+@contextmanager
+def dtype_guard(dtype="float32"):
+    origin_dtype = paddle.get_default_dtype()
+    paddle.set_default_dtype(dtype)
+    try:
+        yield
+    finally:
+        paddle.set_default_dtype(origin_dtype)
 
 
 def Parameter(tensor):
@@ -542,21 +555,22 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
         inputs_embeds = paddle.concat([language_model_inputs.cast(inputs_embeds.dtype), inputs_embeds], axis=1)
 
-        outputs = self.language_model.generate(
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            do_sample=False,
-            top_p=0.9,
-            decode_strategy="greedy_search",
-            temperature=1,
-            num_beams=5,
-            max_length=30,
-            min_length=8,
-            eos_token_id=50118,
-            repetition_penalty=1,
-            length_penalty=1,
-            num_return_sequences=1,
-        )
+        with dtype_guard(self.language_model._dtype):
+            outputs = self.language_model.generate(
+                inputs_embeds=inputs_embeds,
+                attention_mask=attention_mask,
+                do_sample=False,
+                top_p=0.9,
+                decode_strategy="greedy_search",
+                temperature=1,
+                num_beams=5,
+                max_length=30,
+                min_length=8,
+                eos_token_id=50118,
+                repetition_penalty=1,
+                length_penalty=1,
+                num_return_sequences=1,
+            )
 
         return outputs
 
@@ -626,18 +640,19 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
         inputs_embeds = self.language_model.get_input_embeddings()(input_ids)
         inputs_embeds = paddle.concat([language_model_inputs, inputs_embeds], axis=1)
 
-        outputs = self.language_model.generate(
-            inputs_embeds=inputs_embeds,
-            attention_mask=attention_mask,
-            do_sample=False,
-            decode_strategy="greedy_search",
-            temperature=1,
-            num_beams=5,
-            max_length=max_len,
-            min_length=min_len,
-            eos_token_id=50118,
-            repetition_penalty=1,
-            length_penalty=0,
-        )
+        with dtype_guard(self.language_model._dtype):
+            outputs = self.language_model.generate(
+                inputs_embeds=inputs_embeds,
+                attention_mask=attention_mask,
+                do_sample=False,
+                decode_strategy="greedy_search",
+                temperature=1,
+                num_beams=5,
+                max_length=max_len,
+                min_length=min_len,
+                eos_token_id=50118,
+                repetition_penalty=1,
+                length_penalty=0,
+            )
 
         return outputs
