@@ -89,7 +89,7 @@ class BertEmbeddings(nn.Layer):
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
 
-        if config.tokenizer_name is not None:
+        if getattr(config, "tokenizer_name", None) is not None:
             tokenizer = AutoTokenizer.from_pretrained(config.tokenizer_name)
             vocab_size = tokenizer.vocab_size
             pad_token_id = tokenizer.pad_token_id

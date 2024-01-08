@@ -182,9 +182,9 @@ class Attention(nn.Layer):
     def forward(self, x, rel_pos_bias=None):
         N, C = x.shape[1:]
         if self.use_flash_attn:
-            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //self.num_heads)).transpose((2, 0, 1, 3, 4))
+            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C // self.num_heads)).transpose((2, 0, 1, 3, 4))
         else:
-            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C //self.num_heads)).transpose((2, 0, 3, 1, 4))
+            qkv = self.qkv(x).reshape((-1, N, 3, self.num_heads, C // self.num_heads)).transpose((2, 0, 3, 1, 4))
         q, k, v = qkv[0], qkv[1], qkv[2]
         if self.use_flash_attn:
             x, _ = flash_attention(q, k, v, dropout=self.proj_drop.p, causal=False, return_softmax=False)
@@ -357,7 +357,7 @@ class VisionTransformer(Blip2PretrainedModel):
         mp_degree = getattr(config, "mp_degree", 1)
         use_flash_attn = getattr(config, "use_flash_attn", False)
         use_fusedlinear = getattr(config, "use_fusedlinear", False)
-        self.class_num = config.class_num
+        self.class_num = getattr(config, "class_num", 1000)  # No usage found, in LAVIS is "num_classes".
         self.num_features = self.embed_dim = config.embed_dim
         _img_size = to_2tuple(config.img_size)
         _patch_size = to_2tuple(config.patch_size)
@@ -502,3 +502,30 @@ def interpolate_pos_embed(model, checkpoint_model):
             pos_tokens = pos_tokens.transpose((0, 2, 3, 1)).flatten(1, 2)
             new_pos_embed = paddle.concat((extra_tokens, pos_tokens), axis=1)
             checkpoint_model["pos_embed"] = new_pos_embed
+
+
+def convert_weights_to_fp16(model: nn.Layer):
+    """Convert applicable model parameters to fp16"""
+
+    def _convert_weights_to_fp16(l):
+        if isinstance(l, (nn.Conv1D, nn.Conv2D, nn.Linear)):
+            l.weight = l.create_parameter(
+                shape=l.weight.shape,
+                dtype=paddle.float16,
+                default_initializer=paddle.nn.initializer.Assign(l.weight.astype(paddle.float16)),
+            )
+            if l.bias is not None:
+                l.bias = l.create_parameter(
+                    shape=l.bias.shape,
+                    dtype=paddle.float16,
+                    default_initializer=paddle.nn.initializer.Assign(l.bias.astype(paddle.float16)),
+                )
+            l._dtype = paddle.float16
+
+    #         if isinstance(l, (nn.MultiheadAttention, Attention)):
+    #             for attr in [*[f"{s}_proj_weight" for s in ["in", "q", "k", "v"]], "in_proj_bias", "bias_k", "bias_v"]:
+    #                 tensor = getattr(l, attr)
+    #                 if tensor is not None:
+    #                     tensor.data = tensor.data.half()
+
+    model.apply(_convert_weights_to_fp16)
