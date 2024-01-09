@@ -285,6 +285,8 @@ class ConsistencyDecoderVAE(ModelMixin, ConfigMixin):
                 [`~models.consistency_decoder_vae.ConsistencyDecoderVAEOutput`] is returned, otherwise a plain `tuple`
                 is returned.
         """
+        # TODO junnyu, support float16
+        x = x.cast(self.encoder.conv_in.weight.dtype)
         if self.use_tiling and (x.shape[-1] > self.tile_sample_min_size or x.shape[-2] > self.tile_sample_min_size):
             return self.tiled_encode(x, return_dict=return_dict)
 
@@ -318,7 +320,7 @@ class ConsistencyDecoderVAE(ModelMixin, ConfigMixin):
 
         batch_size, _, height, width = z.shape
 
-        self.decoder_scheduler.set_timesteps(num_inference_steps, device=self.device)
+        self.decoder_scheduler.set_timesteps(num_inference_steps)
 
         x_t = self.decoder_scheduler.init_noise_sigma * randn_tensor(
             (batch_size, 3, height, width),
