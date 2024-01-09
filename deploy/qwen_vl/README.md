@@ -94,10 +94,3 @@ python deploy/qwen_vl/run_static_predict.py \
     --second_model_path "/path/to/checkpoints/encode_text/qwen" \
     --qwen_vl_config_path "/path/to/.paddlenlp/models/qwen-vl/qwen-vl-7b-inference/" \
 ```
-
-### 3.4 A100 性能数据
-
-* batch_size=1, dtype=float16
-* torch 耗时 1012.11ms
-* paddle 耗时 425.36ms
-* 加速比 2.379X
