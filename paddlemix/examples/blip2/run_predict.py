@@ -168,6 +168,7 @@ def main():
 
 def setdistenv(args):
     if paddle.distributed.get_world_size() == 1:
+	args.sharding_degree = 1
 	args.tensor_parallel_degree=1
     	args.pipeline_parallel_degree=1
     	args.sharding_parallel_degree=1
