@@ -14,29 +14,14 @@ from utils import load_real_time_tokens
 
 class Predictor(object):
     def __init__(self, args):
-        # dynamic inference
-        from paddlenlp.experimental.transformers import (
-            QWenForQWenVLInferenceModel
-        )
-        from paddlenlp.transformers import AutoConfig
-        config = AutoConfig.from_pretrained("path/to/.paddlenlp/models/qwen-vl/qwen-vl-7b-change")
-        config.quant_type = None
-        config.weight_only_quant_bits = None
-        paddle.set_default_dtype("float16")
-        self.model = QWenForQWenVLInferenceModel.from_pretrained(
-            "path/to/.paddlenlp/models/qwen-vl/qwen-vl-7b-change",
-            config=config,
-            dtype="float16",
-        )
         self.args = args
         self.config = PretrainedConfig.from_pretrained(args.qwen_vl_config_path)
         self.tokenizer = QWenTokenizer.from_pretrained(args.qwen_vl_config_path)
         self.processor = QwenVLProcessor(tokenizer=self.tokenizer)
         self.first_predictor = self.create_predictor(args.first_model_path)
         print(f"first_model_path: {args.first_model_path}, {self.first_predictor}")
-        # static inference
-        # self.second_predictor = self.create_predictor(args.second_model_path)
-        # print(f"second_model_path: {args.second_model_path}, {self.second_predictor}")
+        self.second_predictor = self.create_predictor(args.second_model_path)
+        print(f"second_model_path: {args.second_model_path}, {self.second_predictor}")
 
     def create_predictor(self, model_path):
 
@@ -119,38 +104,8 @@ class Predictor(object):
         for i in range(32):
             tmp = paddle.rand(shape=[2, batch, 32, max_len, 128], dtype=dtype)
             inputs.append(tmp)
-        
-        # dynamic inference
-        self.model.eval()
-        outputs = self.model.generate_text_with_image_features(
-            input_ids=inputs[0],
-            image_features=inputs[1],
-            img_pos=inputs[2],
-            attention_mask=inputs[3],
-            position_ids=inputs[4],
-            penalty_score=inputs[5],
-            frequency_score=inputs[6],
-            presence_score=inputs[7],
-            min_length=inputs[8],
-            max_length=inputs[9],
-            temperature=inputs[10],
-            top_p=inputs[11],
-            eos_token_id=inputs[12],
-            seq_len_encoder=inputs[13],
-            seq_len_decoder=inputs[14],
-            step_idx=inputs[15],
-            stop_flags=inputs[16],
-            tgt_ids=inputs[17],
-            tgt_pos=inputs[18],
-            tgt_generation_mask=inputs[19],
-            pre_ids=inputs[20],
-            stop_nums=inputs[21],
-            cache_kvs=inputs[22:],
-        )
 
-        # static inference
-        # self.second_predictor.run(inputs)
-
+        self.second_predictor.run(inputs)
         tokens = load_real_time_tokens()
         generate_ids = tokens.tolist()
         return generate_ids, None
@@ -198,6 +153,19 @@ if __name__ == "__main__":
     url = "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"
     prompt = "Generate the caption in English with grounding:"
 
-    msg = predictor.predict(url, prompt)
+    # warp up
+    warm_up_times = 2
+    repeat_times = 10
+    for i in range(warm_up_times):
+        msg = predictor.predict(url, prompt)
+
+    # test
+    import time
+    start_time = time.time()
+    for i in range(repeat_times):
+        msg = predictor.predict(url, prompt)
+    end_time = time.time()
+    during_time = end_time - start_time
 
     print("Outputs: ", msg)
+    print("The whole end to end time : ", during_time / repeat_times * 1000, "ms")
