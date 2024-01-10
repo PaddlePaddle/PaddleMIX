@@ -191,10 +191,18 @@ class UNet2DConditionLoadersMixin:
             use_safetensors = True
 
         if weight_name is not None:
-            if "paddle" in weight_name.lower() or "pdparams" in weight_name.lower():
-                from_diffusers = False
-            elif "torch" in weight_name.lower() or "bin" in weight_name.lower():
-                from_diffusers = True
+            if "paddle" in weight_name.lower() or ".pdparams" in weight_name.lower():
+                if from_diffusers:
+                    logger.warning(
+                        "Detect the weight is in ppdiffusers format, but currently, `from_diffusers` is set to `True`. To proceed, we will change the value of `from_diffusers` to `False`!"
+                    )
+                    from_diffusers = False
+            elif "torch" in weight_name.lower() or ".bin" in weight_name.lower() or ".pt" in weight_name.lower():
+                if not from_diffusers:
+                    logger.warning(
+                        "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
+                    )
+                    from_diffusers = True
 
         user_agent = {
             "file_type": "attn_procs_weights",
@@ -255,9 +263,15 @@ class UNet2DConditionLoadersMixin:
 
             assert model_file is not None, "Could not find the model file!"
             data_format = load_state_dict(model_file, state_dict)
-            if data_format == "pt":
+            if not from_diffusers and data_format == "pt":
+                logger.warning(
+                    "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
+                )
                 from_diffusers = True
-            if data_format == "pd":
+            if from_diffusers and data_format in ["pd", "np"]:
+                logger.warning(
+                    "Detect the weight is in ppdiffusers format, but currently, `from_diffusers` is set to `True`. To proceed, we will change the value of `from_diffusers` to `False`!"
+                )
                 from_diffusers = False
         else:
             state_dict = pretrained_model_name_or_path_or_dict

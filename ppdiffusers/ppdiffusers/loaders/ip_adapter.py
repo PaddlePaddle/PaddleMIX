@@ -143,7 +143,10 @@ class IPAdapterMixin:
                             "you save your model with the `save_pretrained` method."
                         )
                     data_format = metadata.get("format", "pt")
-                    if data_format == "pt":
+                    if data_format == "pt" and not from_diffusers:
+                        logger.warning(
+                            "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
+                        )
                         from_diffusers = True
                     for key in f.keys():
                         if key.startswith("image_proj."):
@@ -152,7 +155,11 @@ class IPAdapterMixin:
                             state_dict["ip_adapter"][key.replace("ip_adapter.", "")] = f.get_tensor(key)
             else:
                 state_dict = smart_load(model_file, return_numpy=True, return_is_torch_weight=True)
-                if "is_torch_weight" in state_dict and state_dict.pop("is_torch_weight", False) and not from_diffusers:
+                is_torch_weight = state_dict.pop("is_torch_weight", False)
+                if not from_diffusers and is_torch_weight:
+                    logger.warning(
+                        "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
+                    )
                     from_diffusers = True
         else:
             state_dict = pretrained_model_name_or_path_or_dict

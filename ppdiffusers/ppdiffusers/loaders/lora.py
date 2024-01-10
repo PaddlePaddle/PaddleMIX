@@ -324,7 +324,7 @@ class LoraLoaderMixin:
             is_torch_weight = state_dict.pop("is_torch_weight", False)
             if not from_diffusers and is_torch_weight:
                 logger.warning(
-                    "Detect diffusers weights, but `from_diffusers` is set to False. We will set `from_diffusers` to `True`."
+                    "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
                 )
                 from_diffusers = True
         else:
