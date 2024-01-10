@@ -37,17 +37,8 @@ __all__ = [
     "reset_initialized_parameter",
 ]
 
-try:
-    from paddle.nn.initializer.lazy_init import lazy_init_helper
-except ImportError:
-
-    class lazy_init_helper:
-        _state = False
-
 
 def _no_grad_uniform_(tensor, a, b):
-    if lazy_init_helper()._state:
-        return tensor
     try:
         with paddle.no_grad():
             tensor.uniform_(min=a, max=b)
@@ -57,8 +48,6 @@ def _no_grad_uniform_(tensor, a, b):
 
 
 def _no_grad_normal_(tensor, mean=0.0, std=1.0):
-    if lazy_init_helper()._state:
-        return tensor
     try:
         with paddle.no_grad():
             tensor.copy_(paddle.normal(mean=mean, std=std, shape=tensor.shape), False)
@@ -68,8 +57,6 @@ def _no_grad_normal_(tensor, mean=0.0, std=1.0):
 
 
 def _no_grad_fill_(tensor, value=0.0):
-    if lazy_init_helper()._state:
-        return tensor
     try:
         with paddle.no_grad():
             tensor.fill_(value)
@@ -139,8 +126,6 @@ def zeros_(tensor):
 
 
 def vector_(tensor, vector):
-    if lazy_init_helper()._state:
-        return tensor
     try:
         with paddle.no_grad():
             tensor.set_value(paddle.to_tensor(vector, dtype=tensor.dtype))
@@ -186,8 +171,6 @@ def xavier_uniform_(tensor, gain=1.0, reverse=False):
     Return:
         tensor
     """
-    if lazy_init_helper()._state:
-        return tensor
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor, reverse=reverse)
     std = gain * math.sqrt(2.0 / float(fan_in + fan_out))
     k = math.sqrt(3.0) * std
@@ -204,8 +187,6 @@ def xavier_normal_(tensor, gain=1.0, reverse=False):
     Return:
         tensor
     """
-    if lazy_init_helper()._state:
-        return tensor
     fan_in, fan_out = _calculate_fan_in_and_fan_out(tensor, reverse=reverse)
     std = gain * math.sqrt(2.0 / float(fan_in + fan_out))
     return _no_grad_normal_(tensor, 0, std)
@@ -257,8 +238,6 @@ def kaiming_uniform_(tensor, a=0, mode="fan_in", nonlinearity="leaky_relu", reve
     Return:
         tensor
     """
-    if lazy_init_helper()._state:
-        return tensor
     fan = _calculate_correct_fan(tensor, mode, reverse)
     gain = _calculate_gain(nonlinearity, a)
     std = gain / math.sqrt(fan)
@@ -277,8 +256,6 @@ def kaiming_normal_(tensor, a=0, mode="fan_in", nonlinearity="leaky_relu", rever
     Return:
         tensor
     """
-    if lazy_init_helper()._state:
-        return tensor
     fan = _calculate_correct_fan(tensor, mode, reverse)
     gain = _calculate_gain(nonlinearity, a)
     std = gain / math.sqrt(fan)
@@ -286,16 +263,12 @@ def kaiming_normal_(tensor, a=0, mode="fan_in", nonlinearity="leaky_relu", rever
 
 
 def linear_init_(module):
-    if lazy_init_helper()._state:
-        return
     bound = 1 / math.sqrt(module.weight.shape[0])
     uniform_(module.weight, -bound, bound)
     uniform_(module.bias, -bound, bound)
 
 
 def conv_init_(module):
-    if lazy_init_helper()._state:
-        return
     bound = 1 / np.sqrt(np.prod(module.weight.shape[1:]))
     uniform_(module.weight, -bound, bound)
     if module.bias is not None:
@@ -318,8 +291,6 @@ def reset_initialized_parameter(model, include_self=True):
     Return:
         None
     """
-    if lazy_init_helper()._state:
-        return
     for _, m in model.named_sublayers(include_self=include_self):
         if isinstance(m, nn.Conv2D):
             k = float(m._groups) / (m._in_channels * m._kernel_size[0] * m._kernel_size[1])

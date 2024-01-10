@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import builtins
 import math
 import os
@@ -23,13 +24,6 @@ import paddle
 import paddle.nn as nn
 from paddle.base.dygraph.base import param_guard
 from paddle.base.framework import Parameter as ParameterBase
-
-try:
-    from paddle.nn.initializer.lazy_init import lazy_init_helper
-except ImportError:
-
-    class lazy_init_helper:
-        _state = False
 
 
 def str2bool(v):
@@ -216,11 +210,7 @@ nn.Linear.out_features = property(out_features)
 
 
 def Parameter(data: paddle.Tensor, requires_grad=True):
-    if lazy_init_helper()._state:
-        default_initializer = None
-    else:
-        default_initializer = nn.initializer.Assign(data)
-    tensor = paddle.create_parameter(data.shape, dtype=data.dtype, default_initializer=default_initializer)
+    tensor = paddle.create_parameter(data.shape, dtype=data.dtype, default_initializer=nn.initializer.Assign(data))
     if not requires_grad:
         tensor.stop_gradient = True
     return tensor

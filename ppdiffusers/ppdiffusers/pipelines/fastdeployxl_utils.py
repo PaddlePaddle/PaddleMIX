@@ -604,6 +604,79 @@ class FastDeployDiffusionXLPipelineMixin:
             control_image = paddle.concat([control_image] * 2)
         return control_image, controlnet_conditioning_scale
 
+    def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
+        """
+        Rescale `noise_cfg` according to `guidance_rescale`. Based on findings of [Common Diffusion Noise Schedules and
+        Sample Steps are Flawed](https://arxiv.org/pdf/2305.08891.pdf). See Section 3.4
+        """
+        std_text = noise_pred_text.std(axis=list(range(1, noise_pred_text.ndim)), keepdim=True)
+        std_cfg = noise_cfg.std(axis=list(range(1, noise_cfg.ndim)), keepdim=True)
+        # rescale the results from guidance (fixes overexposure)
+        noise_pred_rescaled = noise_cfg * (std_text / std_cfg)
+        # mix with the original results from guidance by factor guidance_rescale to avoid "plain looking" images
+        noise_cfg = guidance_rescale * noise_pred_rescaled + (1 - guidance_rescale) * noise_cfg
+        return noise_cfg
+
+    def retrieve_timesteps(
+        self,
+        scheduler,
+        num_inference_steps: Optional[int] = None,
+        timesteps: Optional[List[int]] = None,
+        **kwargs,
+    ):
+        """
+        Calls the scheduler's `set_timesteps` method and retrieves timesteps from the scheduler after the call. Handles
+        custom timesteps. Any kwargs will be supplied to `scheduler.set_timesteps`.
+
+        Args:
+            scheduler (`SchedulerMixin`):
+                The scheduler to get timesteps from.
+            num_inference_steps (`int`):
+                The number of diffusion steps used when generating samples with a pre-trained model. If used,
+                `timesteps` must be `None`.
+            timesteps (`List[int]`, *optional*):
+                    Custom timesteps used to support arbitrary spacing between timesteps. If `None`, then the default
+                    timestep spacing strategy of the scheduler is used. If `timesteps` is passed, `num_inference_steps`
+                    must be `None`.
+
+        Returns:
+            `Tuple[paddle.Tensor, int]`: A tuple where the first element is the timestep schedule from the scheduler and the
+            second element is the number of inference steps.
+        """
+        if timesteps is not None:
+            accepts_timesteps = "timesteps" in set(inspect.signature(scheduler.set_timesteps).parameters.keys())
+            if not accepts_timesteps:
+                raise ValueError(
+                    f"The current scheduler class {scheduler.__class__}'s `set_timesteps` does not support custom"
+                    f" timestep schedules. Please check whether you are using the correct scheduler."
+                )
+            scheduler.set_timesteps(timesteps=timesteps, **kwargs)
+            timesteps = scheduler.timesteps
+            num_inference_steps = len(timesteps)
+        else:
+            scheduler.set_timesteps(num_inference_steps, **kwargs)
+            timesteps = scheduler.timesteps
+        return timesteps, num_inference_steps
+
+    def encode_image(self, image, num_images_per_prompt, infer_op=None):
+        dtype = self.dtype
+
+        if not isinstance(image, paddle.Tensor):
+            image = self.feature_extractor(image, return_tensors="pd").pixel_values
+
+        image = image._to(dtype=dtype)
+        image_embeds = self.image_encoder(
+            image=image,
+            infer_op=infer_op,
+            output_shape=[
+                num_images_per_prompt,
+                1280,
+            ],
+        )[0]
+        image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
+        uncond_image_embeds = paddle.zeros_like(image_embeds)
+        return image_embeds, uncond_image_embeds
+
     def prepare_latents(
         self,
         batch_size,
