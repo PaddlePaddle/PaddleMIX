@@ -28,7 +28,7 @@ from ...loaders import FromSingleFileMixin, LoraLoaderMixin, TextualInversionLoa
 from ...models import AutoencoderKL, UNet2DConditionModel
 from ...models.lora import adjust_lora_scale_text_encoder
 from ...schedulers import LCMScheduler
-from ...utils import USE_PPPEFT_BACKEND, deprecate, logging, replace_example_docstring
+from ...utils import USE_PEFT_BACKEND, deprecate, logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion import (
@@ -244,7 +244,7 @@ class LatentConsistencyModelImg2ImgPipeline(
             self._lora_scale = lora_scale
 
             # dynamically adjust the LoRA scale
-            if not USE_PPPEFT_BACKEND:
+            if not USE_PEFT_BACKEND:
                 adjust_lora_scale_text_encoder(self.text_encoder, lora_scale)
 
         if prompt is not None and isinstance(prompt, str):

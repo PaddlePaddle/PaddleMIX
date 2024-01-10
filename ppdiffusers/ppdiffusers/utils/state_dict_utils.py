@@ -24,7 +24,7 @@ class StateDictType(enum.Enum):
 
     PPDIFFUSERS_OLD = "ppdiffusers_old"
     # KOHYA_SS = "kohya_ss" # TODO: implement this
-    PPPEFT = "pppeft"
+    PEFT = "peft"
     PPDIFFUSERS = "ppdiffusers"
 
 
@@ -44,7 +44,7 @@ UNET_TO_PPDIFFUSERS = {
 }
 
 
-PPDIFFUSERS_TO_PPPEFT = {
+PPDIFFUSERS_TO_PEFT = {
     ".q_proj.lora_linear_layer.up": ".q_proj.lora_B",
     ".q_proj.lora_linear_layer.down": ".q_proj.lora_A",
     ".k_proj.lora_linear_layer.up": ".k_proj.lora_B",
@@ -57,7 +57,7 @@ PPDIFFUSERS_TO_PPPEFT = {
     ".lora_linear_layer.down": ".lora_A",
 }
 
-PPDIFFUSERS_OLD_TO_PPPEFT = {
+PPDIFFUSERS_OLD_TO_PEFT = {
     ".to_q_lora.up": ".q_proj.lora_B",
     ".to_q_lora.down": ".q_proj.lora_A",
     ".to_k_lora.up": ".k_proj.lora_B",
@@ -70,7 +70,7 @@ PPDIFFUSERS_OLD_TO_PPPEFT = {
     ".lora_linear_layer.down": ".lora_A",
 }
 
-PEFT_TO_DIFFUSERS = {
+PEFT_TO_PPDIFFUSERS = {
     ".q_proj.lora_B": ".q_proj.lora_linear_layer.up",
     ".q_proj.lora_A": ".q_proj.lora_linear_layer.down",
     ".k_proj.lora_B": ".k_proj.lora_linear_layer.up",
@@ -92,14 +92,14 @@ PPDIFFUSERS_OLD_TO_PPDIFFUSERS = {
     ".to_out_lora.down": ".out_proj.lora_linear_layer.down",
 }
 
-PPPEFT_STATE_DICT_MAPPINGS = {
-    StateDictType.PPDIFFUSERS_OLD: PPDIFFUSERS_OLD_TO_PPPEFT,
-    StateDictType.PPDIFFUSERS: PPDIFFUSERS_TO_PPPEFT,
+PEFT_STATE_DICT_MAPPINGS = {
+    StateDictType.PPDIFFUSERS_OLD: PPDIFFUSERS_OLD_TO_PEFT,
+    StateDictType.PPDIFFUSERS: PPDIFFUSERS_TO_PEFT,
 }
 
 PPDIFFUSERS_STATE_DICT_MAPPINGS = {
     StateDictType.PPDIFFUSERS_OLD: PPDIFFUSERS_OLD_TO_PPDIFFUSERS,
-    StateDictType.PPPEFT: PEFT_TO_DIFFUSERS,
+    StateDictType.PEFT: PEFT_TO_PPDIFFUSERS,
 }
 
 KEYS_TO_ALWAYS_REPLACE = {
@@ -140,41 +140,40 @@ def convert_state_dict(state_dict, mapping):
     return converted_state_dict
 
 
-def convert_state_dict_to_pppeft(state_dict, original_type=None, **kwargs):
-    raise NotImplementedError()
-    # r"""
-    # Converts a state dict to the PEFT format The state dict can be from previous diffusers format (`OLD_DIFFUSERS`), or
-    # new diffusers format (`PPDIFFUSERS`). The method only supports the conversion from diffusers old/new to PEFT for now.
+def convert_state_dict_to_peft(state_dict, original_type=None, **kwargs):
+    r"""
+    Converts a state dict to the PEFT format The state dict can be from previous ppdiffusers format (`OLD_PPDIFFUSERS`), or
+    new ppdiffusers format (`PPDIFFUSERS`). The method only supports the conversion from ppdiffusers old/new to PEFT for now.
 
-    # Args:
-    #     state_dict (`dict[str, paddle.Tensor]`):
-    #         The state dict to convert.
-    #     original_type (`StateDictType`, *optional*):
-    #         The original type of the state dict, if not provided, the method will try to infer it automatically.
-    # """
-    # if original_type is None:
-    #     # Old diffusers to PEFT
-    #     if any("to_out_lora" in k for k in state_dict.keys()):
-    #         original_type = StateDictType.PPDIFFUSERS_OLD
-    #     elif any("lora_linear_layer" in k for k in state_dict.keys()):
-    #         original_type = StateDictType.PPDIFFUSERS
-    #     else:
-    #         raise ValueError("Could not automatically infer state dict type")
+    Args:
+        state_dict (`dict[str, paddle.Tensor]`):
+            The state dict to convert.
+        original_type (`StateDictType`, *optional*):
+            The original type of the state dict, if not provided, the method will try to infer it automatically.
+    """
+    if original_type is None:
+        # Old diffusers to PEFT
+        if any("to_out_lora" in k for k in state_dict.keys()):
+            original_type = StateDictType.PPDIFFUSERS_OLD
+        elif any("lora_linear_layer" in k for k in state_dict.keys()):
+            original_type = StateDictType.PPDIFFUSERS
+        else:
+            raise ValueError("Could not automatically infer state dict type")
 
-    # if original_type not in PPPEFT_STATE_DICT_MAPPINGS.keys():
-    #     raise ValueError(f"Original type {original_type} is not supported")
+    if original_type not in PEFT_STATE_DICT_MAPPINGS.keys():
+        raise ValueError(f"Original type {original_type} is not supported")
 
-    # mapping = PPPEFT_STATE_DICT_MAPPINGS[original_type]
-    # return convert_state_dict(state_dict, mapping)
+    mapping = PEFT_STATE_DICT_MAPPINGS[original_type]
+    return convert_state_dict(state_dict, mapping)
 
 
 def convert_state_dict_to_ppdiffusers(state_dict, original_type=None, **kwargs):
     r"""
     Converts a state dict to new ppdiffusers format. The state dict can be from previous ppdiffusers format
-    (`OLD_PPDIFFUSERS`), or PEFT format (`PPPEFT`) or new ppdiffusers format (`PPDIFFUSERS`). In the last case the method will
+    (`OLD_PPDIFFUSERS`), or PEFT format (`PEFT`) or new ppdiffusers format (`PPDIFFUSERS`). In the last case the method will
     return the state dict as is.
 
-    The method only supports the conversion from ppdiffusers old, PPPEFT to ppdiffusers new for now.
+    The method only supports the conversion from ppdiffusers old, PEFT to ppdiffusers new for now.
 
     Args:
         state_dict (`dict[str, paddle.Tensor]`):
@@ -184,7 +183,7 @@ def convert_state_dict_to_ppdiffusers(state_dict, original_type=None, **kwargs):
         kwargs (`dict`, *args*):
             Additional arguments to pass to the method.
 
-            - **adapter_name**: For example, in case of PPPEFT, some keys will be pre-pended
+            - **adapter_name**: For example, in case of PEFT, some keys will be pre-pended
                 with the adapter name, therefore needs a special handling. By default PEFT also takes care of that in
                 `get_peft_model_state_dict` method:
                 https://github.com/huggingface/peft/blob/ba0477f2985b1ba311b83459d29895c809404e99/src/peft/utils/save_and_load.py#L92
@@ -201,7 +200,7 @@ def convert_state_dict_to_ppdiffusers(state_dict, original_type=None, **kwargs):
         if any("to_out_lora" in k for k in state_dict.keys()):
             original_type = StateDictType.PPDIFFUSERS_OLD
         elif any(f".lora_A{peft_adapter_name}.weight" in k for k in state_dict.keys()):
-            original_type = StateDictType.PPPEFT
+            original_type = StateDictType.PEFT
         elif any("lora_linear_layer" in k for k in state_dict.keys()):
             # nothing to do
             return state_dict
@@ -215,10 +214,9 @@ def convert_state_dict_to_ppdiffusers(state_dict, original_type=None, **kwargs):
     return convert_state_dict(state_dict, mapping)
 
 
-def convert_unet_state_dict_to_pppeft(state_dict):
-    raise NotImplementedError()
-    # r"""
-    # Converts a state dict from UNet format to diffusers format - i.e. by removing some keys
-    # """
-    # mapping = UNET_TO_PPDIFFUSERS
-    # return convert_state_dict(state_dict, mapping)
+def convert_unet_state_dict_to_peft(state_dict):
+    r"""
+    Converts a state dict from UNet format to ppdiffusers format - i.e. by removing some keys
+    """
+    mapping = UNET_TO_PPDIFFUSERS
+    return convert_state_dict(state_dict, mapping)

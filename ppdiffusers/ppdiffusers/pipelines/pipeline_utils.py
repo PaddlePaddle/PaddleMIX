@@ -43,6 +43,7 @@ from ..utils import (
     is_paddle_available,
     is_paddle_version,
     is_paddlenlp_available,
+    is_peft_available,
     logging,
     numpy_to_pil,
 )
@@ -182,6 +183,12 @@ def is_safetensors_compatible(filenames, variant=None, passed_components=None) -
 
 def _unwrap_model(model):
     # do nothing
+    if is_peft_available():
+        from ppdiffusers.peft import PeftModel
+
+        if isinstance(model, PeftModel):
+            model = model.base_model.model
+
     return model
 
 

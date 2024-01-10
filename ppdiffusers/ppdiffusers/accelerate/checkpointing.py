@@ -66,7 +66,7 @@ def save_accelerator_state(
     Args:
         output_dir (`str` or `os.PathLike`):
             The name of the folder to save all relevant weights and states.
-        model_states (`List[torch.nn.Module]`):
+        model_states (`List[paddle.nn.Layer]`):
             A list of model states
         optimizers (`List[torch.optim.Optimizer]`):
             A list of optimizer instances

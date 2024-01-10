@@ -33,6 +33,7 @@ from ppdiffusers.utils import (
 )
 
 from ..utils import logging
+from .peft_utils import PeftAdapterMixin
 
 logger = logging.get_logger(__name__)
 
@@ -184,7 +185,7 @@ class ModuleUtilsMixin:
         return extended_attention_mask
 
 
-class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin):
+class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
     supports_gradient_checkpointing = False
 
     def _set_gradient_checkpointing(self, enable: bool = True, gradient_checkpointing_func: Callable = recompute):

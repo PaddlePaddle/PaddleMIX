@@ -18,7 +18,7 @@ import numpy as np
 import paddle
 from paddle import nn
 
-from ..utils import USE_PPPEFT_BACKEND
+from ..utils import USE_PEFT_BACKEND
 from .activations import get_activation
 from .lora import LoRACompatibleLinear
 
@@ -212,7 +212,7 @@ class TimestepEmbedding(nn.Layer):
         cond_proj_dim=None,
     ):
         super().__init__()
-        linear_cls = nn.Linear if USE_PPPEFT_BACKEND else LoRACompatibleLinear
+        linear_cls = nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
 
         self.linear_1 = linear_cls(in_channels, time_embed_dim)
 

@@ -42,7 +42,7 @@ from ...models.lora import adjust_lora_scale_text_encoder
 from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import (
     PIL_INTERPOLATION,
-    USE_PPPEFT_BACKEND,
+    USE_PEFT_BACKEND,
     logging,
     replace_example_docstring,
 )
@@ -303,11 +303,11 @@ class StableDiffusionXLAdapterPipeline(
 
             # dynamically adjust the LoRA scale
             if self.text_encoder is not None:
-                if not USE_PPPEFT_BACKEND:
+                if not USE_PEFT_BACKEND:
                     adjust_lora_scale_text_encoder(self.text_encoder, lora_scale)
 
             if self.text_encoder_2 is not None:
-                if not USE_PPPEFT_BACKEND:
+                if not USE_PEFT_BACKEND:
                     adjust_lora_scale_text_encoder(self.text_encoder_2, lora_scale)
 
         prompt = [prompt] if isinstance(prompt, str) else prompt

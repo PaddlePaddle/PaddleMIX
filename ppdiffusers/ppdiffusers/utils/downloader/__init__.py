@@ -77,13 +77,7 @@ def bos_aistudio_hf_download(
     log_endpoint = "N/A"
     log_filename = os.path.join(download_kwargs["subfolder"], filename)
     try:
-        if from_bos:
-            log_endpoint = "BOS"
-            download_kwargs["url"] = url
-            cached_file = bos_download(
-                **download_kwargs,
-            )
-        elif from_aistudio:
+        if from_aistudio:
             log_endpoint = "Aistudio Hub"
             cached_file = aistudio_hub_download(
                 **download_kwargs,
@@ -91,6 +85,12 @@ def bos_aistudio_hf_download(
         elif from_hf_hub:
             log_endpoint = "Huggingface Hub"
             cached_file = hf_hub_download(
+                **download_kwargs,
+            )
+        else:
+            log_endpoint = "BOS"
+            download_kwargs["url"] = url
+            cached_file = bos_download(
                 **download_kwargs,
             )
     except LocalEntryNotFoundError:
@@ -148,16 +148,7 @@ def bos_aistudio_hf_file_exist(
     if subfolder is None:
         subfolder = ""
     filename = os.path.join(subfolder, filename)
-    if from_bos:
-        out = bos_file_exists(
-            repo_id=repo_id,
-            filename=filename,
-            repo_type=repo_type,
-            revision=revision,
-            token=token,  # donot need token
-            endpoint=endpoint,
-        )
-    elif from_aistudio:
+    if from_aistudio:
         out = aistudio_hub_file_exists(
             repo_id=repo_id,
             filename=filename,
@@ -173,5 +164,14 @@ def bos_aistudio_hf_file_exist(
             repo_type=repo_type,
             revision=revision,
             token=token,
+        )
+    else:
+        out = bos_file_exists(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type=repo_type,
+            revision=revision,
+            token=token,  # donot need token
+            endpoint=endpoint,
         )
     return out

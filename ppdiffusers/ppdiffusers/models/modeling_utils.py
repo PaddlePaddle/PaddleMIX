@@ -20,7 +20,7 @@ import os
 from collections import OrderedDict
 from contextlib import ExitStack
 from functools import partial
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 import numpy as np
 from aistudio_sdk.hub import create_repo as aistudio_create_repo
@@ -36,6 +36,7 @@ from ..utils import (
     FROM_HF_HUB,
     HF_HUB_OFFLINE,
     LOW_CPU_MEM_USAGE_DEFAULT,
+    MIN_PEFT_VERSION,
     PADDLE_SAFETENSORS_WEIGHTS_NAME,
     PADDLE_SAFETENSORS_WEIGHTS_NAME_INDEX_NAME,
     PADDLE_WEIGHTS_NAME,
@@ -48,7 +49,7 @@ from ..utils import (
     TORCH_WEIGHTS_NAME_INDEX_NAME,
     _add_variant,
     _get_model_file,
-    check_pppeft_version,
+    check_peft_version,
     deprecate,
     get_checkpoint_shard_files,
     is_paddle_available,
@@ -86,6 +87,7 @@ if is_paddlenlp_available():
     except ImportError:
         from ..utils.paddle_utils import no_init_weights
     # from paddlenlp.transformers.utils import device_guard
+    from paddlenlp.transformers.model_utils import shard_checkpoint
 
 
 def faster_set_state_dict(model, state_dict):
@@ -201,89 +203,6 @@ def load_state_dict(
     return data_format
 
 
-def shard_checkpoint(
-    state_dict: Dict[str, paddle.Tensor],
-    max_shard_size: Union[int, str] = "10GB",
-    weights_name: str = PADDLE_WEIGHTS_NAME,
-    shard_format="naive",
-):
-    """
-    Splits a model state dictionary in sub-checkpoints so that the final size of each sub-checkpoint does not exceed a
-    given size.
-
-    The sub-checkpoints are determined by iterating through the `state_dict` in the order of its keys, so there is no
-    optimization made to make each sub-checkpoint as close as possible to the maximum size passed. For example, if the
-    limit is 10GB and we have weights of sizes [6GB, 6GB, 2GB, 6GB, 2GB, 2GB] they will get sharded as [6GB], [6+2GB],
-    [6+2+2GB] and not [6+2+2GB], [6+2GB], [6GB].
-
-    <Tip warning={true}>
-
-    If one of the model's weight is bigger that `max_sahrd_size`, it will end up in its own sub-checkpoint which will
-    have a size greater than `max_shard_size`.
-
-    </Tip>
-
-    Args:
-        state_dict (`Dict[str, paddle.Tensor]`): The state dictionary of a model to save.
-        max_shard_size (`int` or `str`, *optional*, defaults to `"10GB"`):
-            The maximum size of each sub-checkpoint. If expressed as a string, needs to be digits followed by a unit
-            (like `"5MB"`).
-        weights_name (`str`, *optional*, defaults to `"model_state.pdparams"`):
-            The name of the model save file.
-        shard_format (`str`, *optional*, defaults to `"naive"`):
-            only support naive.
-    """
-    assert shard_format in [
-        "naive",
-    ], f"Invalid shard_format: {shard_format}, it should be `naive`."
-    from paddlenlp.transformers.utils import convert_file_size_to_int, dtype_byte_size
-
-    max_shard_size = convert_file_size_to_int(max_shard_size)
-
-    sharded_state_dicts = []
-    current_block = {}
-    current_block_size = 0
-    total_size = 0
-
-    if shard_format == "naive":
-        for key, weight in state_dict.items():
-            weight_size = weight.numel().item() * dtype_byte_size(weight.dtype)
-            # If this weight is going to tip up over the maximal size, we split.
-            if current_block_size + weight_size > max_shard_size:
-                # fix if the first param is large than max_shard_size
-                if len(current_block) > 0:
-                    sharded_state_dicts.append(current_block)
-                current_block = {}
-                current_block_size = 0
-
-            current_block[key] = weight
-            current_block_size += weight_size
-            total_size += weight_size
-
-        # Add the last block
-        sharded_state_dicts.append(current_block)
-
-    # If we only have one shard, we return it
-    if len(sharded_state_dicts) == 1:
-        return {weights_name: sharded_state_dicts[0]}, None
-
-    # Otherwise, let's build the index
-    weight_map = {}
-    shards = {}
-    for idx, shard in enumerate(sharded_state_dicts):
-        weights_name_list = weights_name.split(".")
-        weights_name_list[-2] = weights_name_list[-2] + f"-{idx+1:05d}-of-{len(sharded_state_dicts):05d}"
-        shard_file = ".".join(weights_name_list)
-        shards[shard_file] = shard
-        for key in shard.keys():
-            weight_map[key] = shard_file
-
-    # Add the metadata
-    metadata = {"total_size": total_size}
-    index = {"metadata": metadata, "weight_map": weight_map}
-    return shards, index
-
-
 class ModelMixin(nn.Layer):
     r"""
     Base class for all models.
@@ -298,7 +217,7 @@ class ModelMixin(nn.Layer):
     _automatically_saved_args = ["_ppdiffusers_version", "_class_name", "_name_or_path"]
     _supports_gradient_checkpointing = False
     _keys_to_ignore_on_load_unexpected = None
-    _hf_peft_config_loaded = False
+    _pp_peft_config_loaded = False
 
     def __init__(self):
         super().__init__()
@@ -425,7 +344,25 @@ class ModelMixin(nn.Layer):
             adapter_name (`str`, *optional*, defaults to `"default"`):
                 The name of the adapter to add. If no name is passed, a default name is assigned to the adapter.
         """
-        check_pppeft_version()
+        check_peft_version(min_version=MIN_PEFT_VERSION)
+
+        from ppdiffusers.peft import PeftConfig, inject_adapter_in_model
+
+        if not self._pp_peft_config_loaded:
+            self._pp_peft_config_loaded = True
+        elif adapter_name in self.peft_config:
+            raise ValueError(f"Adapter with name {adapter_name} already exists. Please use a different name.")
+
+        if not isinstance(adapter_config, PeftConfig):
+            raise ValueError(
+                f"adapter_config should be an instance of PeftConfig. Got {type(adapter_config)} instead."
+            )
+
+        # Unlike transformers, here we don't need to retrieve the name_or_path of the unet as the loading logic is
+        # handled by the `load_lora_layers` or `LoraLoaderMixin`. Therefore we set it to `None` here.
+        adapter_config.base_model_name_or_path = None
+        inject_adapter_in_model(adapter_config, self, adapter_name)
+        self.set_adapter(adapter_name)
 
     def set_adapter(self, adapter_name: Union[str, List[str]]) -> None:
         """
@@ -438,7 +375,43 @@ class ModelMixin(nn.Layer):
             adapter_name (Union[str, List[str]])):
                 The list of adapters to set or the adapter name in case of single adapter.
         """
-        check_pppeft_version()
+        check_peft_version(min_version=MIN_PEFT_VERSION)
+
+        if not self._pp_peft_config_loaded:
+            raise ValueError("No adapter loaded. Please load an adapter first.")
+
+        if isinstance(adapter_name, str):
+            adapter_name = [adapter_name]
+
+        missing = set(adapter_name) - set(self.peft_config)
+        if len(missing) > 0:
+            raise ValueError(
+                f"Following adapter(s) could not be found: {', '.join(missing)}. Make sure you are passing the correct adapter name(s)."
+                f" current loaded adapters are: {list(self.peft_config.keys())}"
+            )
+
+        from peft.tuners.tuners_utils import BaseTunerLayer
+
+        _adapters_has_been_set = False
+
+        for _, module in self.named_sublayers(include_self=True)():
+            if isinstance(module, BaseTunerLayer):
+                if hasattr(module, "set_adapter"):
+                    module.set_adapter(adapter_name)
+                # Previous versions of PEFT does not support multi-adapter inference
+                elif not hasattr(module, "set_adapter") and len(adapter_name) != 1:
+                    raise ValueError(
+                        "You are trying to set multiple adapters and you have a PEFT version that does not support multi-adapter inference. Please upgrade to the latest version of PEFT."
+                        " `pip install -U peft` or `pip install -U git+https://github.com/huggingface/peft.git`"
+                    )
+                else:
+                    module.active_adapter = adapter_name
+                _adapters_has_been_set = True
+
+        if not _adapters_has_been_set:
+            raise ValueError(
+                "Did not succeeded in setting the adapter. Please make sure you are using a model that supports adapters."
+            )
 
     def disable_adapters(self) -> None:
         r"""
@@ -447,7 +420,20 @@ class ModelMixin(nn.Layer):
         If you are not familiar with adapters and PEFT methods, we invite you to read more about them on the PEFT
         official documentation: https://huggingface.co/docs/peft
         """
-        check_pppeft_version()
+        check_peft_version(min_version=MIN_PEFT_VERSION)
+
+        if not self._pp_peft_config_loaded:
+            raise ValueError("No adapter loaded. Please load an adapter first.")
+
+        from peft.tuners.tuners_utils import BaseTunerLayer
+
+        for _, module in self.named_sublayers(include_self=True)():
+            if isinstance(module, BaseTunerLayer):
+                if hasattr(module, "enable_adapters"):
+                    module.enable_adapters(enabled=False)
+                else:
+                    # support for older PEFT versions
+                    module.disable_adapters = True
 
     def enable_adapters(self) -> None:
         """
@@ -457,7 +443,20 @@ class ModelMixin(nn.Layer):
         If you are not familiar with adapters and PEFT methods, we invite you to read more about them on the PEFT
         official documentation: https://huggingface.co/docs/peft
         """
-        check_pppeft_version()
+        check_peft_version(min_version=MIN_PEFT_VERSION)
+
+        if not self._pp_peft_config_loaded:
+            raise ValueError("No adapter loaded. Please load an adapter first.")
+
+        from peft.tuners.tuners_utils import BaseTunerLayer
+
+        for _, module in self.named_sublayers(include_self=True)():
+            if isinstance(module, BaseTunerLayer):
+                if hasattr(module, "enable_adapters"):
+                    module.enable_adapters(enabled=True)
+                else:
+                    # support for older PEFT versions
+                    module.disable_adapters = False
 
     def active_adapters(self) -> List[str]:
         """
@@ -466,7 +465,16 @@ class ModelMixin(nn.Layer):
         If you are not familiar with adapters and PEFT methods, we invite you to read more about them on the PEFT
         official documentation: https://huggingface.co/docs/peft
         """
-        check_pppeft_version()
+        check_peft_version(min_version=MIN_PEFT_VERSION)
+
+        if not self._pp_peft_config_loaded:
+            raise ValueError("No adapter loaded. Please load an adapter first.")
+
+        from peft.tuners.tuners_utils import BaseTunerLayer
+
+        for _, module in self.named_sublayers(include_self=True)():
+            if isinstance(module, BaseTunerLayer):
+                return module.active_adapter
 
     def save_pretrained(
         self,

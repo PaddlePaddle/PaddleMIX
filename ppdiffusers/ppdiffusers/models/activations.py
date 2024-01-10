@@ -17,7 +17,7 @@ import paddle
 import paddle.nn.functional as F
 from paddle import nn
 
-from ..utils import USE_PPPEFT_BACKEND
+from ..utils import USE_PEFT_BACKEND
 from .lora import LoRACompatibleLinear
 
 ACTIVATION_FUNCTIONS = {
@@ -81,7 +81,7 @@ class GEGLU(nn.Layer):
 
     def __init__(self, dim_in: int, dim_out: int):
         super().__init__()
-        linear_cls = LoRACompatibleLinear if not USE_PPPEFT_BACKEND else nn.Linear
+        linear_cls = LoRACompatibleLinear if not USE_PEFT_BACKEND else nn.Linear
 
         self.proj = linear_cls(dim_in, dim_out * 2)
 
@@ -89,7 +89,7 @@ class GEGLU(nn.Layer):
         return F.gelu(gate)
 
     def forward(self, hidden_states, scale: float = 1.0):
-        args = () if USE_PPPEFT_BACKEND else (scale,)
+        args = () if USE_PEFT_BACKEND else (scale,)
         hidden_states, gate = self.proj(hidden_states, *args).chunk(2, axis=-1)
         return hidden_states * self.gelu(gate)
 

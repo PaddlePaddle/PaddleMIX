@@ -25,7 +25,7 @@ from ..models.modeling_pytorch_paddle_utils import (
     convert_pytorch_state_dict_to_paddle,
 )
 from ..models.modeling_utils import faster_set_state_dict, load_state_dict
-from ..utils import (  # delete_adapter_layers,; set_adapter_layers,; set_weights_and_activate_adapters,
+from ..utils import (
     DIFFUSERS_CACHE,
     FROM_AISTUDIO,
     FROM_DIFFUSERS,
@@ -34,13 +34,16 @@ from ..utils import (  # delete_adapter_layers,; set_adapter_layers,; set_weight
     LOW_CPU_MEM_USAGE_DEFAULT,
     PPDIFFUSERS_CACHE,
     TO_DIFFUSERS,
-    USE_PPPEFT_BACKEND,
+    USE_PEFT_BACKEND,
     _get_model_file,
+    delete_adapter_layers,
     is_paddle_version,
     is_ppxformers_available,
     is_safetensors_available,
     is_torch_available,
     logging,
+    set_adapter_layers,
+    set_weights_and_activate_adapters,
 )
 from .utils import AttnProcsLayers
 
@@ -262,7 +265,7 @@ class UNet2DConditionLoadersMixin:
         # fill attn processors
         lora_layers_list = []
 
-        is_lora = all(("lora" in k or k.endswith(".alpha")) for k in state_dict.keys()) and not USE_PPPEFT_BACKEND
+        is_lora = all(("lora" in k or k.endswith(".alpha")) for k in state_dict.keys()) and not USE_PEFT_BACKEND
         is_custom_diffusion = any("custom_diffusion" in k for k in state_dict.keys())
 
         if is_lora:
@@ -381,7 +384,7 @@ class UNet2DConditionLoadersMixin:
                     if from_diffusers:
                         convert_pytorch_state_dict_to_paddle(attn_processors[key], value_dict)
                     faster_set_state_dict(attn_processors[key], value_dict)
-        elif USE_PPPEFT_BACKEND:
+        elif USE_PEFT_BACKEND:
             # In that case we have nothing to do as loading the adapter weights is already handled above by `set_peft_model_state_dict`
             # on the Unet
             pass
@@ -391,7 +394,7 @@ class UNet2DConditionLoadersMixin:
             )
 
         # For PEFT backend the Unet is already offloaded at this stage as it is handled inside `lora_lora_weights_into_unet`
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
 
             # only custom diffusion needs to set attn processors
             if is_custom_diffusion:
@@ -577,17 +580,29 @@ class UNet2DConditionLoadersMixin:
         self.apply(self._fuse_lora_apply)
 
     def _fuse_lora_apply(self, module):
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             if hasattr(module, "_fuse_lora"):
                 module._fuse_lora(self.lora_scale, self._safe_fusing)
+        else:
+            from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
+
+            if isinstance(module, BaseTunerLayer):
+                if self.lora_scale != 1.0:
+                    module.scale_layer(self.lora_scale)
+                module.merge(safe_merge=self._safe_fusing)
 
     def unfuse_lora(self):
         self.apply(self._unfuse_lora_apply)
 
     def _unfuse_lora_apply(self, module):
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             if hasattr(module, "_unfuse_lora"):
                 module._unfuse_lora()
+        else:
+            from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
+
+            if isinstance(module, BaseTunerLayer):
+                module.unmerge()
 
     def set_adapters(
         self,
@@ -620,8 +635,22 @@ class UNet2DConditionLoadersMixin:
         pipeline.set_adapters(["cinematic", "pixel"], adapter_weights=[0.5, 0.5])
         ```
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for `set_adapters()`.")
+
+        adapter_names = [adapter_names] if isinstance(adapter_names, str) else adapter_names
+
+        if weights is None:
+            weights = [1.0] * len(adapter_names)
+        elif isinstance(weights, float):
+            weights = [weights] * len(adapter_names)
+
+        if len(adapter_names) != len(weights):
+            raise ValueError(
+                f"Length of adapter names {len(adapter_names)} is not equal to the length of their weights {len(weights)}."
+            )
+
+        set_weights_and_activate_adapters(self, adapter_names, weights)
 
     def disable_lora(self):
         """
@@ -642,8 +671,9 @@ class UNet2DConditionLoadersMixin:
         pipeline.disable_lora()
         ```
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
+        set_adapter_layers(self, enabled=False)
 
     def enable_lora(self):
         """
@@ -664,8 +694,9 @@ class UNet2DConditionLoadersMixin:
         pipeline.enable_lora()
         ```
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
+        set_adapter_layers(self, enabled=True)
 
     def delete_adapters(self, adapter_names: Union[List[str], str]):
         """
@@ -690,8 +721,18 @@ class UNet2DConditionLoadersMixin:
         pipeline.delete_adapters("cinematic")
         ```
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
+
+        if isinstance(adapter_names, str):
+            adapter_names = [adapter_names]
+
+        for adapter_name in adapter_names:
+            delete_adapter_layers(self, adapter_name)
+
+            # Pop also the corresponding adapter from the config
+            if hasattr(self, "peft_config"):
+                self.peft_config.pop(adapter_name, None)
 
     def _load_ip_adapter_weights(self, state_dict, from_diffusers=None):
         if from_diffusers is None:
@@ -769,4 +810,4 @@ class UNet2DConditionLoadersMixin:
         self.encoder_hid_proj = image_projection.to(dtype=self.dtype)
         self.config.encoder_hid_dim_type = "ip_image_proj"
 
-    # delete_adapter_layers
+    delete_adapter_layers

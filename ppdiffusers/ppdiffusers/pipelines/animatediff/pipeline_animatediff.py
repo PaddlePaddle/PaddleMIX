@@ -39,7 +39,7 @@ from ...schedulers import (
     LMSDiscreteScheduler,
     PNDMScheduler,
 )
-from ...utils import USE_PPPEFT_BACKEND, BaseOutput, logging
+from ...utils import USE_PEFT_BACKEND, BaseOutput, logging
 from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 
@@ -187,7 +187,7 @@ class AnimateDiffPipeline(DiffusionPipeline, TextualInversionLoaderMixin, IPAdap
             self._lora_scale = lora_scale
 
             # dynamically adjust the LoRA scale
-            if not USE_PPPEFT_BACKEND:
+            if not USE_PEFT_BACKEND:
                 adjust_lora_scale_text_encoder(self.text_encoder, lora_scale)
 
         if prompt is not None and isinstance(prompt, str):
