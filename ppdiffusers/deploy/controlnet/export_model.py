@@ -210,6 +210,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         scheduler=pipeline.scheduler,
         safety_checker=None,
         feature_extractor=None,
+        image_encoder=None,
         requires_safety_checker=False,
     )
     fastdeploy_pipeline.save_pretrained(str(output_path))
