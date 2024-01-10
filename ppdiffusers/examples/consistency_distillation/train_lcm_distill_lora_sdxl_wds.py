@@ -76,28 +76,55 @@ check_min_version("0.24.0")
 
 logger = get_logger(__name__)
 
+USE_PEFT_BACKEND = False
 
-def get_module_kohya_state_dict(module, prefix: str = "", dtype: paddle.dtype = "float32"):
+if USE_PEFT_BACKEND:
+    from ppdiffusers.peft import LoraConfig, get_peft_model, get_peft_model_state_dict
+else:
+    from paddlenlp.peft import LoRAConfig, LoRAModel
+
+
+def get_module_kohya_state_dict(
+    module, prefix: str = "", dtype: paddle.dtype = "float32", adapter_name: str = "default"
+):
     kohya_ss_state_dict = {}
     if prefix is not None and prefix != "" and not prefix.endswith("."):
         prefix += "."
 
-    for peft_key, weight in module.get_trainable_state_dict().items():
-        kohya_key = prefix + peft_key.rstrip(".weight")
-        kohya_key = kohya_key.replace("lora_A", "lora_down.weight")
-        kohya_key = kohya_key.replace("lora_B", "lora_up.weight")
-        kohya_key = kohya_key.replace(".", "_", kohya_key.count(".") - 2)
-        # transpose 2D weight for torch
-        if weight.ndim == 2:
-            weight = weight.T
-        kohya_ss_state_dict[kohya_key] = np.ascontiguousarray(weight.cast(dtype))
+    if USE_PEFT_BACKEND:
+        for peft_key, weight in get_peft_model_state_dict(module, adapter_name=adapter_name).items():
+            kohya_key = peft_key.replace("base_model.model", prefix)
+            kohya_key = kohya_key.replace("lora_A", "lora_down")
+            kohya_key = kohya_key.replace("lora_B", "lora_up")
+            kohya_key = kohya_key.replace(".", "_", kohya_key.count(".") - 2)
 
-        # Set alpha parameter
-        if "lora_down" in kohya_key:
-            alpha_key = f'{kohya_key.split(".")[0]}.alpha'
-            kohya_ss_state_dict[alpha_key] = np.ascontiguousarray(
-                paddle.to_tensor(module.lora_config.lora_alpha, dtype=dtype)
-            )
+            if weight.ndim == 2:
+                weight = weight.T
+            kohya_ss_state_dict[kohya_key] = np.ascontiguousarray(weight.cast(dtype))
+
+            # Set alpha parameter
+            if "lora_down" in kohya_key:
+                alpha_key = f'{kohya_key.split(".")[0]}.alpha'
+                kohya_ss_state_dict[alpha_key] = np.ascontiguousarray(
+                    paddle.to_tensor(module.peft_config[adapter_name].lora_alpha, dtype=dtype)
+                )
+    else:
+        for peft_key, weight in module.get_trainable_state_dict().items():
+            kohya_key = prefix + peft_key.rstrip(".weight")
+            kohya_key = kohya_key.replace("lora_A", "lora_down.weight")
+            kohya_key = kohya_key.replace("lora_B", "lora_up.weight")
+            kohya_key = kohya_key.replace(".", "_", kohya_key.count(".") - 2)
+            # transpose 2D weight for torch
+            if weight.ndim == 2:
+                weight = weight.T
+            kohya_ss_state_dict[kohya_key] = np.ascontiguousarray(weight.cast(dtype))
+
+            # Set alpha parameter
+            if "lora_down" in kohya_key:
+                alpha_key = f'{kohya_key.split(".")[0]}.alpha'
+                kohya_ss_state_dict[alpha_key] = np.ascontiguousarray(
+                    paddle.to_tensor(module.lora_config.lora_alpha, dtype=dtype)
+                )
 
     return kohya_ss_state_dict
 
@@ -884,31 +911,51 @@ def main(args):
         )
 
     # 8. Add LoRA to the student U-Net, only the LoRA projection matrix will be updated by the optimizer.
-    from paddlenlp.peft import LoRAConfig, LoRAModel
-
-    lora_config = LoRAConfig(
-        r=args.lora_rank,
-        target_modules=[
-            ".*to_q.*",
-            ".*to_k.*",
-            ".*to_v.*",
-            ".*to_out.0.*",
-            ".*proj_in.*",
-            ".*proj_out.*",
-            ".*ff.net.0.proj.*",
-            ".*ff.net.2.*",
-            ".*conv1.*",
-            ".*conv2.*",
-            ".*conv_shortcut.*",
-            ".*downsamplers.0.conv.*",
-            ".*upsamplers.0.conv.*",
-            ".*time_emb_proj.*",
-        ],
-    )
-    unet.config.tensor_parallel_degree = 1
-    unet = LoRAModel(unet, lora_config)
-    unet.mark_only_lora_as_trainable()
-    unet.print_trainable_parameters()
+    if USE_PEFT_BACKEND:
+        lora_config = LoraConfig(
+            r=args.lora_rank,
+            target_modules=[
+                "to_q",
+                "to_k",
+                "to_v",
+                "to_out.0",
+                "proj_in",
+                "proj_out",
+                "ff.net.0.proj",
+                "ff.net.2",
+                "conv1",
+                "conv2",
+                "conv_shortcut",
+                "downsamplers.0.conv",
+                "upsamplers.0.conv",
+                "time_emb_proj",
+            ],
+        )
+        unet = get_peft_model(unet, lora_config)
+    else:
+        lora_config = LoRAConfig(
+            r=args.lora_rank,
+            target_modules=[
+                ".*to_q.*",
+                ".*to_k.*",
+                ".*to_v.*",
+                ".*to_out.0.*",
+                ".*proj_in.*",
+                ".*proj_out.*",
+                ".*ff.net.0.proj.*",
+                ".*ff.net.2.*",
+                ".*conv1.*",
+                ".*conv2.*",
+                ".*conv_shortcut.*",
+                ".*downsamplers.0.conv.*",
+                ".*upsamplers.0.conv.*",
+                ".*time_emb_proj.*",
+            ],
+        )
+        unet.config.tensor_parallel_degree = 1
+        unet = LoRAModel(unet, lora_config)
+        unet.mark_only_lora_as_trainable()
+        unet.print_trainable_parameters()
 
     # 9. Handle mixed precision and device placement
     # For mixed precision training we cast all non-trainable weigths to half-precision
