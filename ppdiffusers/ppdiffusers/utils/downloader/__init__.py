@@ -24,9 +24,9 @@ from huggingface_hub.utils import (
 )
 from requests import HTTPError
 
-from .aistudio_hub.download import aistudio_download
-from .bos.download import bos_download
-from .hf_hub.download import hf_hub_download
+from .aistudio_hub.download import aistudio_hub_download, aistudio_hub_file_exists
+from .bos.download import bos_download, bos_file_exists
+from .hf_hub.download import hf_hub_download, hf_hub_file_exists
 
 
 def bos_aistudio_hf_download(
@@ -77,20 +77,20 @@ def bos_aistudio_hf_download(
     log_endpoint = "N/A"
     log_filename = os.path.join(download_kwargs["subfolder"], filename)
     try:
-        if from_bos:
-            log_endpoint = "BOS"
-            download_kwargs["url"] = url
-            cached_file = bos_download(
-                **download_kwargs,
-            )
-        elif from_aistudio:
+        if from_aistudio:
             log_endpoint = "Aistudio Hub"
-            cached_file = aistudio_download(
+            cached_file = aistudio_hub_download(
                 **download_kwargs,
             )
         elif from_hf_hub:
             log_endpoint = "Huggingface Hub"
             cached_file = hf_hub_download(
+                **download_kwargs,
+            )
+        else:
+            log_endpoint = "BOS"
+            download_kwargs["url"] = url
+            cached_file = bos_download(
                 **download_kwargs,
             )
     except LocalEntryNotFoundError:
@@ -130,3 +130,48 @@ def bos_aistudio_hf_download(
             f"containing a file named {log_filename}"
         )
     return cached_file
+
+
+def bos_aistudio_hf_file_exist(
+    repo_id: str,
+    filename: str,
+    *,
+    subfolder: Optional[str] = None,
+    repo_type: Optional[str] = None,
+    revision: Optional[str] = None,
+    token: Optional[str] = None,
+    endpoint: Optional[str] = None,
+    from_bos: bool = True,
+    from_aistudio: bool = False,
+    from_hf_hub: bool = False,
+):
+    if subfolder is None:
+        subfolder = ""
+    filename = os.path.join(subfolder, filename)
+    if from_aistudio:
+        out = aistudio_hub_file_exists(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type=repo_type,
+            revision=revision,
+            token=token,
+            endpoint=endpoint,
+        )
+    elif from_hf_hub:
+        out = hf_hub_file_exists(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type=repo_type,
+            revision=revision,
+            token=token,
+        )
+    else:
+        out = bos_file_exists(
+            repo_id=repo_id,
+            filename=filename,
+            repo_type=repo_type,
+            revision=revision,
+            token=token,  # donot need token
+            endpoint=endpoint,
+        )
+    return out

@@ -300,6 +300,8 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
 
     @apply_forward_hook
     def encode(self, x: paddle.Tensor, return_dict: bool = True) -> Union[AutoencoderTinyOutput, Tuple[paddle.Tensor]]:
+        # TODO junnyu, support float16
+        x = x.cast(self.encoder.layers[0].weight.dtype)
         if self.use_slicing and x.shape[0] > 1:
             output = [
                 self._tiled_encode(x_slice) if self.use_tiling else self.encoder(x) for x_slice in x.chunk(x.shape[0])
@@ -318,7 +320,7 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
         self, x: paddle.Tensor, generator: Optional[paddle.Generator] = None, return_dict: bool = True
     ) -> Union[DecoderOutput, Tuple[paddle.Tensor]]:
         # TODO junnyu, add this to support pure fp16
-        x = x.cast(self.decoder.dtype)
+        x = x.cast(self.decoder.layers[0].weight.dtype)
 
         if self.use_slicing and x.shape[0] > 1:
             output = [

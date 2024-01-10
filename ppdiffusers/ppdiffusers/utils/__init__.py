@@ -33,6 +33,7 @@ from .constants import (  # fastdeploy; NEW; DIFFUSERS; PPDIFFUSERS; TRANSFORMER
     HF_MODULES_CACHE,
     HUGGINGFACE_CO_RESOLVE_ENDPOINT,
     LOW_CPU_MEM_USAGE_DEFAULT,
+    MIN_PEFT_VERSION,
     NEG_INF,
     ONNX_EXTERNAL_WEIGHTS_NAME,
     ONNX_WEIGHTS_NAME,
@@ -58,7 +59,7 @@ from .constants import (  # fastdeploy; NEW; DIFFUSERS; PPDIFFUSERS; TRANSFORMER
     TRANSFORMERS_SAFE_WEIGHTS_NAME,
     TRANSFORMERS_TORCH_WEIGHTS_INDEX_NAME,
     TRANSFORMERS_TORCH_WEIGHTS_NAME,
-    USE_PPPEFT_BACKEND,
+    USE_PEFT_BACKEND,
     get_map_location_default,
     str2bool,
 )
@@ -105,10 +106,10 @@ from .import_utils import (
     is_paddle_version,
     is_paddlenlp_available,
     is_paddlesde_available,
+    is_peft_available,
     is_ppaccelerate_available,
     is_ppaccelerate_version,
     is_ppinvisible_watermark_available,
-    is_pppeft_available,
     is_ppxformers_available,
     is_safetensors_available,
     is_scipy_available,
@@ -129,18 +130,6 @@ from .load_utils import is_torch_file, safetensors_load, smart_load, torch_load
 from .loading_utils import load_image
 from .logging import get_logger
 from .outputs import BaseOutput
-
-# from .peft_utils import (
-#     check_pppeft_version,
-#     delete_adapter_layers,
-#     get_adapter_name,
-#     get_peft_kwargs,
-#     recurse_remove_peft_layers,
-#     scale_lora_layers,
-#     set_adapter_layers,
-#     set_weights_and_activate_adapters,
-#     unscale_lora_layers,
-# )
 from .paddle_utils import (
     apply_freeu,
     fourier_filter,
@@ -150,15 +139,26 @@ from .paddle_utils import (
     randint_tensor,
     randn_tensor,
 )
+from .peft_utils import (
+    check_peft_version,
+    delete_adapter_layers,
+    get_adapter_name,
+    get_peft_kwargs,
+    recurse_remove_peft_layers,
+    scale_lora_layers,
+    set_adapter_layers,
+    set_weights_and_activate_adapters,
+    unscale_lora_layers,
+)
 from .pil_utils import PIL_INTERPOLATION, make_image_grid, numpy_to_pil, pt_to_pil
 from .ppaccelerate_utils import apply_forward_hook
 
 image_grid = make_image_grid
 
 from .state_dict_utils import (
+    convert_state_dict_to_peft,
     convert_state_dict_to_ppdiffusers,
-    convert_state_dict_to_pppeft,
-    convert_unet_state_dict_to_pppeft,
+    convert_unet_state_dict_to_peft,
 )
 
 logger = get_logger(__name__)
@@ -172,7 +172,7 @@ def check_pppeft_version(min_version: str = "") -> None:
         version (`str`):
             The version of PEFT to check against.
     """
-    if not is_pppeft_available():
+    if not is_peft_available():
         raise ValueError("PP-PEFT is not installed. Please install it with `pip install pppeft`")
 
 

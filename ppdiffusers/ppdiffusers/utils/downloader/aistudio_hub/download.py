@@ -991,7 +991,7 @@ def _chmod_and_replace(src: str, dst: str) -> None:
     shutil.move(src, dst)
 
 
-def aistudio_download(
+def aistudio_hub_download(
     repo_id: str,
     filename: str,
     *,
@@ -1316,3 +1316,65 @@ def aistudio_download(
             pointer_path = local_dir_filepath  # for return value
 
     return pointer_path
+
+
+def aistudio_hub_file_exists(
+    repo_id: str,
+    filename: str,
+    *,
+    repo_type: Optional[str] = None,
+    revision: Optional[str] = None,
+    token: Optional[str] = None,
+    endpoint: Optional[str] = None,
+) -> bool:
+    """
+    Checks if a file exists in a repository on the Aistudio Hub.
+
+    Args:
+        repo_id (`str`):
+            A namespace (user or an organization) and a repo name separated
+            by a `/`.
+        filename (`str`):
+            The name of the file to check, for example:
+            `"config.json"`
+        repo_type (`str`, *optional*):
+            Set to `"dataset"` or `"space"` if getting repository info from a dataset or a space,
+            `None` or `"model"` if getting repository info from a model. Default is `None`.
+        revision (`str`, *optional*):
+            The revision of the repository from which to get the information. Defaults to `"main"` branch.
+        token (`bool` or `str`, *optional*):
+            A valid authentication token (see https://huggingface.co/settings/token).
+            If `None` or `True` and machine is logged in (through `huggingface-cli login`
+            or [`~login`]), token will be retrieved from the cache.
+            If `False`, token is not sent in the request header.
+
+    Returns:
+        True if the file exists, False otherwise.
+
+    <Tip>
+
+    Examples:
+        ```py
+        >>> from huggingface_hub import file_exists
+        >>> file_exists("bigcode/starcoder", "config.json")
+        True
+        >>> file_exists("bigcode/starcoder", "not-a-file")
+        False
+        >>> file_exists("bigcode/not-a-repo", "config.json")
+        False
+        ```
+
+    </Tip>
+    """
+    url = aistudio_hub_url(
+        repo_id=repo_id, repo_type=repo_type, revision=revision, filename=filename, endpoint=endpoint
+    )
+    try:
+        if token is None:
+            token = get_token()
+        get_aistudio_file_metadata(url, token=token)
+        return True
+    except GatedRepoError:  # raise specifically on gated repo
+        raise
+    except (RepositoryNotFoundError, EntryNotFoundError, RevisionNotFoundError):
+        return False

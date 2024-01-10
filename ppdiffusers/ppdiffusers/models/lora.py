@@ -21,6 +21,7 @@
 # ----------------------------------------------------------------#
 ###################################################################
 
+import contextlib
 from typing import Optional, Tuple, Union
 
 import paddle
@@ -199,12 +200,14 @@ class LoRALinearLayer(nn.Layer):
         dtype: Optional[paddle.dtype] = None,
     ):
         super().__init__()
-
-        self.down = nn.Linear(in_features, rank, bias_attr=False)
-        self.up = nn.Linear(rank, out_features, bias_attr=False)
         if dtype is not None:
-            self.down.to(dtype=dtype)
-            self.up.to(dtype=dtype)
+            ctx = paddle.dtype_guard(dtype)
+        else:
+            ctx = contextlib.nullcontext()
+        with ctx:
+            self.down = nn.Linear(in_features, rank, bias_attr=False)
+            self.up = nn.Linear(rank, out_features, bias_attr=False)
+
         # This value has the same meaning as the `--network_alpha` option in the kohya-ss trainer script.
         # See https://github.com/darkstorm2150/sd-scripts/blob/main/docs/train_network_README-en.md#execute-learning
         self.network_alpha = network_alpha
@@ -218,10 +221,7 @@ class LoRALinearLayer(nn.Layer):
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         orig_dtype = hidden_states.dtype
         dtype = self.down.weight.dtype
-        try:
-            down_hidden_states = self.down(hidden_states.cast(dtype))
-        except:
-            breakpoint()
+        down_hidden_states = self.down(hidden_states.cast(dtype))
         up_hidden_states = self.up(down_hidden_states)
 
         if self.network_alpha is not None:

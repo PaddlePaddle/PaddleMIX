@@ -36,14 +36,23 @@ from ..utils import (
     LOW_CPU_MEM_USAGE_DEFAULT,
     PPDIFFUSERS_CACHE,
     TO_DIFFUSERS,
-    USE_PPPEFT_BACKEND,
+    USE_PEFT_BACKEND,
     _get_model_file,
+    convert_state_dict_to_peft,
     convert_state_dict_to_ppdiffusers,
+    convert_unet_state_dict_to_peft,
+    delete_adapter_layers,
     deprecate,
+    get_adapter_name,
+    get_peft_kwargs,
     is_paddlenlp_available,
     is_safetensors_available,
     is_torch_available,
     logging,
+    recurse_remove_peft_layers,
+    scale_lora_layers,
+    set_adapter_layers,
+    set_weights_and_activate_adapters,
 )
 from ..version import VERSION as __version__
 from .lora_conversion_utils import (
@@ -311,11 +320,13 @@ class LoraLoaderMixin:
             # TODO, check this
             from ppdiffusers.utils import smart_load
 
-            state_dict = smart_load(model_file)
-            # state_dict = smart_load(model_file, return_is_torch_weight=True)
-            # breakpoint()
-            # if "is_torch_weight" in state_dict and state_dict.pop("is_torch_weight", False) and not from_diffusers:
-            #     from_diffusers = True
+            state_dict = smart_load(model_file, return_is_torch_weight=True)
+            is_torch_weight = state_dict.pop("is_torch_weight", False)
+            if not from_diffusers and is_torch_weight:
+                logger.warning(
+                    "Detect the weight is in diffusers format, but currently, `from_diffusers` is set to `False`. To proceed, we will change the value of `from_diffusers` to `True`!"
+                )
+                from_diffusers = True
         else:
             state_dict = pretrained_model_name_or_path_or_dict
 
@@ -448,6 +459,55 @@ class LoraLoaderMixin:
             warn_message = "You have saved the LoRA weights using the old format. To convert the old LoRA weights to the new format, you can first load them in a dictionary and then create a new dictionary like the following: `new_state_dict = {f'unet.{module_name}': params for module_name, params in old_state_dict.items()}`."
             logger.warn(warn_message)
 
+        if USE_PEFT_BACKEND and len(state_dict.keys()) > 0:
+            from ppdiffusers.peft import (
+                LoraConfig,
+                inject_adapter_in_model,
+                set_peft_model_state_dict,
+            )
+
+            if adapter_name in getattr(unet, "peft_config", {}):
+                raise ValueError(
+                    f"Adapter name {adapter_name} already in use in the Unet - please select a new adapter name."
+                )
+
+            state_dict = convert_unet_state_dict_to_peft(state_dict)
+
+            if network_alphas is not None:
+                # The alphas state dict have the same structure as Unet, thus we convert it to peft format using
+                # `convert_unet_state_dict_to_peft` method.
+                network_alphas = convert_unet_state_dict_to_peft(network_alphas)
+
+            rank = {}
+            index = 1 if from_diffusers else 0
+            for key, val in state_dict.items():
+                if "lora_B" in key:
+                    rank[key] = val.shape[index]
+
+            lora_config_kwargs = get_peft_kwargs(rank, network_alphas, state_dict, is_unet=True)
+            lora_config = LoraConfig(**lora_config_kwargs)
+
+            # adapter_name
+            if adapter_name is None:
+                adapter_name = get_adapter_name(unet)
+
+            # In case the pipeline has been already offloaded to CPU - temporarily remove the hooks
+            # otherwise loading LoRA weights will lead to an error
+
+            inject_adapter_in_model(lora_config, unet, adapter_name=adapter_name)
+            incompatible_keys = set_peft_model_state_dict(
+                unet, state_dict, adapter_name, from_diffusers=from_diffusers
+            )  # NOTE: new add from_diffusers
+
+            if incompatible_keys is not None:
+                # check only for unexpected keys
+                unexpected_keys = getattr(incompatible_keys, "unexpected_keys", None)
+                if unexpected_keys:
+                    logger.warning(
+                        f"Loading adapter weights from state_dict led to unexpected keys not found in the model: "
+                        f" {unexpected_keys}. "
+                    )
+
         unet.load_attn_procs(
             state_dict,
             network_alphas=network_alphas,
@@ -516,27 +576,35 @@ class LoraLoaderMixin:
                 logger.info(f"Loading {prefix}.")
                 rank = {}
                 text_encoder_lora_state_dict = convert_state_dict_to_ppdiffusers(text_encoder_lora_state_dict)
+                index = 1 if from_diffusers else 0
+                if USE_PEFT_BACKEND:
+                    # convert state dict
+                    text_encoder_lora_state_dict = convert_state_dict_to_peft(text_encoder_lora_state_dict)
 
-                if USE_PPPEFT_BACKEND:
-                    pass
+                    for name, _ in text_encoder_attn_modules(text_encoder):
+                        rank_key = f"{name}.out_proj.lora_B.weight"
+                        rank[rank_key] = text_encoder_lora_state_dict[rank_key].shape[index]
+
+                    patch_mlp = any(".mlp." in key for key in text_encoder_lora_state_dict.keys())
+                    if patch_mlp:
+                        for name, _ in text_encoder_mlp_modules(text_encoder):
+                            rank_key_fc1 = f"{name}.fc1.lora_B.weight"
+                            rank_key_fc2 = f"{name}.fc2.lora_B.weight"
+
+                            rank[rank_key_fc1] = text_encoder_lora_state_dict[rank_key_fc1].shape[index]
+                            rank[rank_key_fc2] = text_encoder_lora_state_dict[rank_key_fc2].shape[index]
                 else:
                     for name, _ in text_encoder_attn_modules(text_encoder):
                         rank_key = f"{name}.out_proj.lora_linear_layer.up.weight"
-                        if from_diffusers:
-                            rank.update({rank_key: text_encoder_lora_state_dict[rank_key].shape[1]})
-                        else:
-                            rank.update({rank_key: text_encoder_lora_state_dict[rank_key].shape[0]})
+                        rank.update({rank_key: text_encoder_lora_state_dict[rank_key].shape[index]})
+
                     patch_mlp = any(".mlp." in key for key in text_encoder_lora_state_dict.keys())
                     if patch_mlp:
                         for name, _ in text_encoder_mlp_modules(text_encoder):
                             rank_key_fc1 = f"{name}.fc1.lora_linear_layer.up.weight"
                             rank_key_fc2 = f"{name}.fc2.lora_linear_layer.up.weight"
-                            if from_diffusers:
-                                rank[rank_key_fc1] = text_encoder_lora_state_dict[rank_key_fc1].shape[1]
-                                rank[rank_key_fc2] = text_encoder_lora_state_dict[rank_key_fc2].shape[1]
-                            else:
-                                rank[rank_key_fc1] = text_encoder_lora_state_dict[rank_key_fc1].shape[0]
-                                rank[rank_key_fc2] = text_encoder_lora_state_dict[rank_key_fc2].shape[0]
+                            rank[rank_key_fc1] = text_encoder_lora_state_dict[rank_key_fc1].shape[index]
+                            rank[rank_key_fc2] = text_encoder_lora_state_dict[rank_key_fc2].shape[index]
                 if network_alphas is not None:
                     alpha_keys = [
                         k for k in network_alphas.keys() if k.startswith(prefix) and k.split(".")[0] == prefix
@@ -545,8 +613,30 @@ class LoraLoaderMixin:
                         k.replace(f"{prefix}.", ""): v for k, v in network_alphas.items() if k in alpha_keys
                     }
 
-                if USE_PPPEFT_BACKEND:
-                    pass
+                if USE_PEFT_BACKEND:
+                    from ppdiffusers.peft import LoraConfig
+
+                    lora_config_kwargs = get_peft_kwargs(
+                        rank, network_alphas, text_encoder_lora_state_dict, is_unet=False
+                    )
+
+                    lora_config = LoraConfig(**lora_config_kwargs)
+
+                    # adapter_name
+                    if adapter_name is None:
+                        adapter_name = get_adapter_name(text_encoder)
+
+                    # inject LoRA layers and load the state dict
+                    # in transformers we automatically check whether the adapter name is already in use or not
+                    text_encoder.load_adapter(
+                        adapter_name=adapter_name,
+                        adapter_state_dict=text_encoder_lora_state_dict,
+                        peft_config=lora_config,
+                        from_diffusers=from_diffusers,  # new add from diffusers
+                    )
+
+                    # scale LoRA layers with `lora_scale`
+                    scale_lora_layers(text_encoder, weight=lora_scale)
                 else:
                     cls._modify_text_encoder(
                         text_encoder,
@@ -570,24 +660,23 @@ class LoraLoaderMixin:
         return self._lora_scale if hasattr(self, "_lora_scale") else 1.0
 
     def _remove_text_encoder_monkey_patch(self):
-        if USE_PPPEFT_BACKEND:
-            pass
-            # remove_method = recurse_remove_peft_layers
+        if USE_PEFT_BACKEND:
+            remove_method = recurse_remove_peft_layers
         else:
             remove_method = self._remove_text_encoder_monkey_patch_classmethod
 
         if hasattr(self, "text_encoder"):
             remove_method(self.text_encoder)
 
-            # # In case text encoder have no Lora attached
-            # if USE_PPPEFT_BACKEND and getattr(self.text_encoder, "peft_config", None) is not None:
-            #     del self.text_encoder.peft_config
-            #     self.text_encoder._hf_peft_config_loaded = None
+            # In case text encoder have no Lora attached
+            if USE_PEFT_BACKEND and getattr(self.text_encoder, "peft_config", None) is not None:
+                del self.text_encoder.peft_config
+                self.text_encoder._pp_peft_config_loaded = None
         if hasattr(self, "text_encoder_2"):
             remove_method(self.text_encoder_2)
-            # if USE_PPPEFT_BACKEND:
-            #     del self.text_encoder_2.peft_config
-            #     self.text_encoder_2._hf_peft_config_loaded = None
+            if USE_PEFT_BACKEND:
+                del self.text_encoder_2.peft_config
+                self.text_encoder_2._pp_peft_config_loaded = None
 
     @classmethod
     def _remove_text_encoder_monkey_patch_classmethod(cls, text_encoder):
@@ -835,7 +924,7 @@ class LoraLoaderMixin:
         >>> ...
         ```
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             if version.parse(__version__) > version.parse("0.23"):
                 logger.warn(
                     "You are using `unload_lora_weights` to disable and unload lora weights. If you want to iteratively enable and disable adapter weights,"
@@ -846,10 +935,9 @@ class LoraLoaderMixin:
                 if hasattr(module, "set_lora_layer"):
                     module.set_lora_layer(None)
         else:
-            # recurse_remove_peft_layers(self.unet)
-            # if hasattr(self.unet, "peft_config"):
-            #     del self.unet.peft_config
-            pass
+            recurse_remove_peft_layers(self.unet)
+            if hasattr(self.unet, "peft_config"):
+                del self.unet.peft_config
 
         # Safe to call the following regardless of LoRA.
         self._remove_text_encoder_monkey_patch()
@@ -890,18 +978,18 @@ class LoraLoaderMixin:
         if fuse_unet:
             self.unet.fuse_lora(lora_scale, safe_fusing=safe_fusing)
 
-        if USE_PPPEFT_BACKEND:
-            # from peft.tuners.tuners_utils import BaseTunerLayer
+        if USE_PEFT_BACKEND:
+            from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
 
-            # def fuse_text_encoder_lora(text_encoder, lora_scale=1.0, safe_fusing=False):
-            #     # TODO(Patrick, Younes): enable "safe" fusing
-            #     for module in text_encoder.modules():
-            #         if isinstance(module, BaseTunerLayer):
-            #             if lora_scale != 1.0:
-            #                 module.scale_layer(lora_scale)
+            def fuse_text_encoder_lora(text_encoder, lora_scale=1.0, safe_fusing=False):
+                # TODO(Patrick, Younes): enable "safe" fusing
+                for module in text_encoder.sublayers(include_self=True):
+                    if isinstance(module, BaseTunerLayer):
+                        if lora_scale != 1.0:
+                            module.scale_layer(lora_scale)
 
-            #             module.merge()
-            pass
+                        module.merge()
+
         else:
             if version.parse(__version__) > version.parse("0.23"):
                 deprecate("fuse_text_encoder_lora", "0.25", LORA_DEPRECATION_MESSAGE)
@@ -943,10 +1031,24 @@ class LoraLoaderMixin:
                 LoRA parameters then it won't have any effect.
         """
         if unfuse_unet:
-            if not USE_PPPEFT_BACKEND:
+            if not USE_PEFT_BACKEND:
                 self.unet.unfuse_lora()
+            else:
+                from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
 
-        if not USE_PPPEFT_BACKEND:
+                for module in self.unet.sublayers(include_self=True):
+                    if isinstance(module, BaseTunerLayer):
+                        module.unmerge()
+
+        if USE_PEFT_BACKEND:
+            from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
+
+            def unfuse_text_encoder_lora(text_encoder):
+                for module in text_encoder.sublayers(include_self=True):
+                    if isinstance(module, BaseTunerLayer):
+                        module.unmerge()
+
+        else:
             if version.parse(__version__) > version.parse("0.23"):
                 deprecate("unfuse_text_encoder_lora", "0.25", LORA_DEPRECATION_MESSAGE)
 
@@ -989,8 +1091,29 @@ class LoraLoaderMixin:
             text_encoder_weights (`List[float]`, *optional*):
                 The weights to use for the text encoder. If `None`, the weights are set to `1.0` for all the adapters.
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
+
+        def process_weights(adapter_names, weights):
+            if weights is None:
+                weights = [1.0] * len(adapter_names)
+            elif isinstance(weights, float):
+                weights = [weights]
+
+            if len(adapter_names) != len(weights):
+                raise ValueError(
+                    f"Length of adapter names {len(adapter_names)} is not equal to the length of the weights {len(weights)}"
+                )
+            return weights
+
+        adapter_names = [adapter_names] if isinstance(adapter_names, str) else adapter_names
+        text_encoder_weights = process_weights(adapter_names, text_encoder_weights)
+        text_encoder = text_encoder or getattr(self, "text_encoder", None)
+        if text_encoder is None:
+            raise ValueError(
+                "The pipeline does not have a default `pipe.text_encoder` class. Please make sure to pass a `text_encoder` instead."
+            )
+        set_weights_and_activate_adapters(text_encoder, adapter_names, text_encoder_weights)
 
     def disable_lora_for_text_encoder(self, text_encoder: Optional["PretrainedModel"] = None):
         """
@@ -1001,8 +1124,13 @@ class LoraLoaderMixin:
                 The text encoder module to disable the LoRA layers for. If `None`, it will try to get the
                 `text_encoder` attribute.
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
+
+        text_encoder = text_encoder or getattr(self, "text_encoder", None)
+        if text_encoder is None:
+            raise ValueError("Text Encoder not found.")
+        set_adapter_layers(text_encoder, enabled=False)
 
     def enable_lora_for_text_encoder(self, text_encoder: Optional["PretrainedModel"] = None):
         """
@@ -1013,8 +1141,12 @@ class LoraLoaderMixin:
                 The text encoder module to enable the LoRA layers for. If `None`, it will try to get the `text_encoder`
                 attribute.
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
+        text_encoder = text_encoder or getattr(self, "text_encoder", None)
+        if text_encoder is None:
+            raise ValueError("Text Encoder not found.")
+        set_adapter_layers(self.text_encoder, enabled=True)
 
     def set_adapters(
         self,
@@ -1031,12 +1163,30 @@ class LoraLoaderMixin:
             self.set_adapters_for_text_encoder(adapter_names, self.text_encoder_2, adapter_weights)
 
     def disable_lora(self):
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
 
+        # Disable unet adapters
+        self.unet.disable_lora()
+
+        # Disable text encoder adapters
+        if hasattr(self, "text_encoder"):
+            self.disable_lora_for_text_encoder(self.text_encoder)
+        if hasattr(self, "text_encoder_2"):
+            self.disable_lora_for_text_encoder(self.text_encoder_2)
+
     def enable_lora(self):
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
+
+        # Enable unet adapters
+        self.unet.enable_lora()
+
+        # Enable text encoder adapters
+        if hasattr(self, "text_encoder"):
+            self.enable_lora_for_text_encoder(self.text_encoder)
+        if hasattr(self, "text_encoder_2"):
+            self.enable_lora_for_text_encoder(self.text_encoder_2)
 
     def delete_adapters(self, adapter_names: Union[List[str], str]):
         """
@@ -1045,8 +1195,21 @@ class LoraLoaderMixin:
             adapter_names (`Union[List[str], str]`):
                 The names of the adapter to delete. Can be a single string or a list of strings
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
+
+        if isinstance(adapter_names, str):
+            adapter_names = [adapter_names]
+
+        # Delete unet adapters
+        self.unet.delete_adapters(adapter_names)
+
+        for adapter_name in adapter_names:
+            # Delete text encoder adapters
+            if hasattr(self, "text_encoder"):
+                delete_adapter_layers(self.text_encoder, adapter_name)
+            if hasattr(self, "text_encoder_2"):
+                delete_adapter_layers(self.text_encoder_2, adapter_name)
 
     def get_active_adapters(self) -> List[str]:
         """
@@ -1064,24 +1227,45 @@ class LoraLoaderMixin:
         pipeline.get_active_adapters()
         ```
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError(
                 "PEFT backend is required for this method. Please install the latest version of PEFT `pip install -U peft`"
             )
+
+        from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
+
+        active_adapters = []
+
+        for module in self.unet.sublayers(include_self=True):
+            if isinstance(module, BaseTunerLayer):
+                active_adapters = module.active_adapters
+                break
+
+        return active_adapters
 
     def get_list_adapters(self) -> Dict[str, List[str]]:
         """
         Gets the current list of all available adapters in the pipeline.
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError(
                 "PEFT backend is required for this method. Please install the latest version of PEFT `pip install -U peft`"
             )
 
-    def set_lora_device(
-        self,
-        adapter_names: List[str],
-    ) -> None:
+        set_adapters = {}
+
+        if hasattr(self, "text_encoder") and hasattr(self.text_encoder, "peft_config"):
+            set_adapters["text_encoder"] = list(self.text_encoder.peft_config.keys())
+
+        if hasattr(self, "text_encoder_2") and hasattr(self.text_encoder_2, "peft_config"):
+            set_adapters["text_encoder_2"] = list(self.text_encoder_2.peft_config.keys())
+
+        if hasattr(self, "unet") and hasattr(self.unet, "peft_config"):
+            set_adapters["unet"] = list(self.unet.peft_config.keys())
+
+        return set_adapters
+
+    def set_lora_device(self, adapter_names: List[str], device: Union[str, int]) -> None:
         """
         Moves the LoRAs listed in `adapter_names` to a target device. Useful for offloading the LoRA to the CPU in case
         you want to load multiple adapters and free some GPU memory.
@@ -1089,11 +1273,36 @@ class LoraLoaderMixin:
         Args:
             adapter_names (`List[str]`):
                 List of adapters to send device to.
-            device (`Union[torch.device, str, int]`):
+            device (`Union[str, int]`):
                 Device to send the adapters to. Can be either a torch device, a str or an integer.
         """
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             raise ValueError("PEFT backend is required for this method.")
+
+        # from ppdiffusers.peft.tuners.tuners_utils import BaseTunerLayer
+
+        # Handle the UNET
+        # for unet_module in self.unet.sublayers(include_self=True):
+        #     if isinstance(unet_module, BaseTunerLayer):
+        #         for adapter_name in adapter_names:
+        #             unet_module.lora_A[adapter_name].to(device)
+        #             unet_module.lora_B[adapter_name].to(device)
+
+        # Handle the text encoder
+        # modules_to_process = []
+        # if hasattr(self, "text_encoder"):
+        #     modules_to_process.append(self.text_encoder)
+
+        # if hasattr(self, "text_encoder_2"):
+        #     modules_to_process.append(self.text_encoder_2)
+
+        # for text_encoder in modules_to_process:
+        #     # loop over submodules
+        #     for text_encoder_module in text_encoder.sublayers(include_self=True):
+        #         if isinstance(text_encoder_module, BaseTunerLayer):
+        #             for adapter_name in adapter_names:
+        #                 text_encoder_module.lora_A[adapter_name].to(device)
+        #                 text_encoder_module.lora_B[adapter_name].to(device)
 
 
 class StableDiffusionXLLoraLoaderMixin(LoraLoaderMixin):
@@ -1247,8 +1456,17 @@ class StableDiffusionXLLoraLoaderMixin(LoraLoaderMixin):
         )
 
     def _remove_text_encoder_monkey_patch(self):
-        if USE_PPPEFT_BACKEND:
-            pass
+        if USE_PEFT_BACKEND:
+            recurse_remove_peft_layers(self.text_encoder)
+            # TODO: @younesbelkada handle this in transformers side
+            if getattr(self.text_encoder, "peft_config", None) is not None:
+                del self.text_encoder.peft_config
+                self.text_encoder._pp_peft_config_loaded = None
+
+            recurse_remove_peft_layers(self.text_encoder_2)
+            if getattr(self.text_encoder_2, "peft_config", None) is not None:
+                del self.text_encoder_2.peft_config
+                self.text_encoder_2._pp_peft_config_loaded = None
         else:
             self._remove_text_encoder_monkey_patch_classmethod(self.text_encoder)
             self._remove_text_encoder_monkey_patch_classmethod(self.text_encoder_2)

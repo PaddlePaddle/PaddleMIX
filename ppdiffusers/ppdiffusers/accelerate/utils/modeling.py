@@ -35,7 +35,7 @@ def named_module_tensors(
     it's the same as doing `module.named_parameters(recurse=recurse) + module.named_buffers(recurse=recurse)`.
 
     Args:
-        module (`torch.nn.Module`):
+        module (`paddle.nn.Layer`):
             The module we want the tensors on.
         include_buffer (`bool`, *optional*, defaults to `True`):
             Whether or not to include the buffers in the result.

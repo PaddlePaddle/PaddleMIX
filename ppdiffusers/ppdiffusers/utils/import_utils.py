@@ -321,12 +321,7 @@ except importlib_metadata.PackageNotFoundError:
     _ppinvisible_watermark_available = False
 
 
-_peft_available = importlib.util.find_spec("peft") is not None
-try:
-    _peft_version = importlib_metadata.version("peft")
-    logger.debug(f"Successfully imported peft version {_peft_version}")
-except importlib_metadata.PackageNotFoundError:
-    _peft_available = False
+_peft_available = str2bool(os.getenv("USE_PEFT_BACKEND", False))
 
 
 def is_paddle_available():
@@ -447,7 +442,7 @@ def is_ppinvisible_watermark_available():
     return _ppinvisible_watermark_available
 
 
-def is_pppeft_available():
+def is_peft_available():
     return _peft_available
 
 

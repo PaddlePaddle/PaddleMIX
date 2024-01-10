@@ -20,7 +20,7 @@ import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
 
-from ..utils import USE_PPPEFT_BACKEND
+from ..utils import USE_PEFT_BACKEND
 from .activations import get_activation
 from .attention_processor import SpatialNorm
 from .lora import LoRACompatibleConv, LoRACompatibleLinear
@@ -150,7 +150,7 @@ class Upsample2D(nn.Layer):
         self.use_conv = use_conv
         self.use_conv_transpose = use_conv_transpose
         self.name = name
-        conv_cls = nn.Conv2D if USE_PPPEFT_BACKEND else LoRACompatibleConv
+        conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
 
         conv = None
         if use_conv_transpose:
@@ -184,7 +184,6 @@ class Upsample2D(nn.Layer):
 
         # upsample_nearest_nhwc fails with large batch sizes. see https://github.com/huggingface/diffusers/issues/984
         # if hidden_states.shape[0] >= 64:
-        #     breakpoint()
         #     hidden_states = hidden_states.contiguous()
 
         # if `output_size` is passed we force the interpolation output
@@ -201,12 +200,12 @@ class Upsample2D(nn.Layer):
         # TODO(Suraj, Patrick) - clean up after weight dicts are correctly renamed
         if self.use_conv:
             if self.name == "conv":
-                if isinstance(self.conv, LoRACompatibleConv) and not USE_PPPEFT_BACKEND:
+                if isinstance(self.conv, LoRACompatibleConv) and not USE_PEFT_BACKEND:
                     hidden_states = self.conv(hidden_states, scale)
                 else:
                     hidden_states = self.conv(hidden_states)
             else:
-                if isinstance(self.Conv2d_0, LoRACompatibleConv) and not USE_PPPEFT_BACKEND:
+                if isinstance(self.Conv2d_0, LoRACompatibleConv) and not USE_PEFT_BACKEND:
                     hidden_states = self.Conv2d_0(hidden_states, scale)
                 else:
                     hidden_states = self.Conv2d_0(hidden_states)
@@ -245,7 +244,7 @@ class Downsample2D(nn.Layer):
         self.padding = padding
         stride = 2
         self.name = name
-        conv_cls = nn.Conv2D if USE_PPPEFT_BACKEND else LoRACompatibleConv
+        conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
 
         if use_conv:
             conv = conv_cls(self.channels, self.out_channels, 3, stride=stride, padding=padding)
@@ -271,7 +270,7 @@ class Downsample2D(nn.Layer):
 
         assert hidden_states.shape[1] == self.channels
 
-        if not USE_PPPEFT_BACKEND:
+        if not USE_PEFT_BACKEND:
             if isinstance(self.conv, LoRACompatibleConv):
                 hidden_states = self.conv(hidden_states, scale)
             else:
@@ -639,8 +638,8 @@ class ResnetBlock2D(nn.Layer):
         self.time_embedding_norm = time_embedding_norm
         self.skip_time_act = skip_time_act
 
-        linear_cls = nn.Linear if USE_PPPEFT_BACKEND else LoRACompatibleLinear
-        conv_cls = nn.Conv2D if USE_PPPEFT_BACKEND else LoRACompatibleConv
+        linear_cls = nn.Linear if USE_PEFT_BACKEND else LoRACompatibleLinear
+        conv_cls = nn.Conv2D if USE_PEFT_BACKEND else LoRACompatibleConv
 
         if groups_out is None:
             groups_out = groups
@@ -752,14 +751,14 @@ class ResnetBlock2D(nn.Layer):
                 else self.downsample(hidden_states)
             )
 
-        hidden_states = self.conv1(hidden_states, scale) if not USE_PPPEFT_BACKEND else self.conv1(hidden_states)
+        hidden_states = self.conv1(hidden_states, scale) if not USE_PEFT_BACKEND else self.conv1(hidden_states)
 
         if self.time_emb_proj is not None:
             if not self.skip_time_act:
                 temb = self.nonlinearity(temb)
             temb = (
                 self.time_emb_proj(temb, scale)[:, :, None, None]
-                if not USE_PPPEFT_BACKEND
+                if not USE_PEFT_BACKEND
                 else self.time_emb_proj(temb)[:, :, None, None]
             )
 
@@ -778,11 +777,11 @@ class ResnetBlock2D(nn.Layer):
         hidden_states = self.nonlinearity(hidden_states)
 
         hidden_states = self.dropout(hidden_states)
-        hidden_states = self.conv2(hidden_states, scale) if not USE_PPPEFT_BACKEND else self.conv2(hidden_states)
+        hidden_states = self.conv2(hidden_states, scale) if not USE_PEFT_BACKEND else self.conv2(hidden_states)
 
         if self.conv_shortcut is not None:
             input_tensor = (
-                self.conv_shortcut(input_tensor, scale) if not USE_PPPEFT_BACKEND else self.conv_shortcut(input_tensor)
+                self.conv_shortcut(input_tensor, scale) if not USE_PEFT_BACKEND else self.conv_shortcut(input_tensor)
             )
 
         # TODO this maybe result -inf, input_tensor's min value -57644  hidden_states's min value -10000
@@ -867,7 +866,7 @@ class ResidualTemporalBlock1D(nn.Layer):
         self.time_emb = nn.Linear(embed_dim, out_channels)
 
         self.residual_conv = (
-            nn.Conv1d(inp_channels, out_channels, 1) if inp_channels != out_channels else nn.Identity()
+            nn.Conv1D(inp_channels, out_channels, 1) if inp_channels != out_channels else nn.Identity()
         )
 
     def forward(self, inputs: paddle.Tensor, t: paddle.Tensor) -> paddle.Tensor:

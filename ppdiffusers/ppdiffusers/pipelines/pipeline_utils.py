@@ -43,6 +43,7 @@ from ..utils import (
     is_paddle_available,
     is_paddle_version,
     is_paddlenlp_available,
+    is_peft_available,
     logging,
     numpy_to_pil,
 )
@@ -182,6 +183,12 @@ def is_safetensors_compatible(filenames, variant=None, passed_components=None) -
 
 def _unwrap_model(model):
     # do nothing
+    if is_peft_available():
+        from ppdiffusers.peft import PeftModel
+
+        if isinstance(model, PeftModel):
+            model = model.base_model.model
+
     return model
 
 
@@ -433,10 +440,7 @@ class DiffusionPipeline(ConfigMixin):
                 # TODO (junnyu) support paddlenlp.transformers check this ?
                 if "paddlenlp" in not_compiled_module.__module__.split("."):
                     library = "paddlenlp.transformers"
-                elif (
-                    name in ["feature_extractor", "text_encoder", "text_encoder_2", "tokenizer", "tokenizer_2"]
-                    and "ppdiffusers.transformers" in not_compiled_module.__module__
-                ):
+                elif "ppdiffusers.transformers" in not_compiled_module.__module__:
                     library = "ppdiffusers.transformers"
                 else:
                     library = not_compiled_module.__module__.split(".")[0]

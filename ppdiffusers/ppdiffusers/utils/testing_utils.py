@@ -56,7 +56,7 @@ global_rng = random.Random()
 logger = get_logger(__name__)
 
 
-USE_PPPEFT_BACKEND = False
+USE_PEFT_BACKEND = False
 
 if is_paddle_available():
     import paddle
@@ -257,14 +257,14 @@ def require_peft_backend(test_case):
     Decorator marking a test that requires PEFT backend, this would require some specific versions of PEFT and
     transformers.
     """
-    return unittest.skipUnless(USE_PPPEFT_BACKEND, "test requires PEFT backend")(test_case)
+    return unittest.skipUnless(USE_PEFT_BACKEND, "test requires PEFT backend")(test_case)
 
 
 def deprecate_after_peft_backend(test_case):
     """
     Decorator marking a test that will be skipped after PEFT backend
     """
-    return unittest.skipUnless(not USE_PPPEFT_BACKEND, "test skipped in favor of PEFT backend")(test_case)
+    return unittest.skipUnless(not USE_PEFT_BACKEND, "test skipped in favor of PEFT backend")(test_case)
 
 
 def require_python39_or_higher(test_case):

@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 import paddle
 from paddle import nn
 
-from ..utils import USE_PPPEFT_BACKEND
+from ..utils import USE_PEFT_BACKEND
 from ..utils.paddle_utils import maybe_allow_in_graph
 from .activations import GEGLU, GELU, ApproximateGELU
 from .attention_processor import Attention
@@ -524,7 +524,7 @@ class FeedForward(nn.Layer):
         super().__init__()
         inner_dim = int(dim * mult)
         dim_out = dim_out if dim_out is not None else dim
-        linear_cls = LoRACompatibleLinear if not USE_PPPEFT_BACKEND else nn.Linear
+        linear_cls = LoRACompatibleLinear if not USE_PEFT_BACKEND else nn.Linear
 
         if activation_fn == "gelu":
             act_fn = GELU(dim, inner_dim)
@@ -547,7 +547,7 @@ class FeedForward(nn.Layer):
             self.net.append(nn.Dropout(dropout))
 
     def forward(self, hidden_states: paddle.Tensor, scale: float = 1.0) -> paddle.Tensor:
-        compatible_cls = (GEGLU,) if USE_PPPEFT_BACKEND else (GEGLU, LoRACompatibleLinear)
+        compatible_cls = (GEGLU,) if USE_PEFT_BACKEND else (GEGLU, LoRACompatibleLinear)
         for module in self.net:
             if isinstance(module, compatible_cls):
                 hidden_states = module(hidden_states, scale)

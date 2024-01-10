@@ -2026,10 +2026,7 @@ class Accelerator:
 
         map_location = load_model_func_kwargs.pop("map_location", None)
         if map_location is None:
-            if self.num_processes > 1 and self.distributed_type in (
-                DistributedType.MULTI_GPU,
-                DistributedType.MULTI_NPU,
-            ):
+            if self.num_processes > 1 and self.distributed_type in (DistributedType.MULTI_GPU,):
                 map_location = "on_device"
             else:
                 map_location = "cpu"

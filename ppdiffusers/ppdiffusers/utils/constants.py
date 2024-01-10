@@ -30,6 +30,8 @@ def str2bool(v):
         raise ValueError("Not supported value: {}".format(v))
 
 
+MIN_PEFT_VERSION = "0.6.0"
+
 # make sure we have abs path
 ppnlp_cache_home = os.path.abspath(
     os.path.expanduser(os.getenv("PPNLP_HOME", os.path.join(os.getenv("XDG_CACHE_HOME", "~/.cache"), "paddlenlp")))
@@ -100,8 +102,7 @@ FROM_DIFFUSERS = str2bool(os.getenv("FROM_DIFFUSERS", False))
 TO_DIFFUSERS = str2bool(os.getenv("TO_DIFFUSERS", False))
 FROM_AISTUDIO = str2bool(os.getenv("FROM_AISTUDIO", False))
 
-
-USE_PPPEFT_BACKEND = False  # donot support pppeft backend
+USE_PEFT_BACKEND = str2bool(os.getenv("USE_PEFT_BACKEND", False))  # support peft backend
 
 # FOR tests
 if bool(os.getenv("PATCH_ALLCLOSE", False)):
