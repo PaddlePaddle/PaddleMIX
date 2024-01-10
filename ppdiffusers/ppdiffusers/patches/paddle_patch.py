@@ -77,6 +77,9 @@ if not hasattr(paddle, "is_floating_point"):
 if not hasattr(paddle.Tensor, "data_ptr"):
     paddle.Tensor.data_ptr = lambda x: x.value().get_tensor()._ptr()
 
+if not hasattr(paddle.Tensor, "data"):
+    paddle.Tensor.data = lambda x: x
+
 
 def permute_pt(x, *perm: builtins.int, name=None):
     return paddle.transpose(x, perm=perm, name=name)
@@ -215,56 +218,56 @@ def Parameter(data: paddle.Tensor, requires_grad=True):
 
 nn.Parameter = Parameter
 
+if not hasattr(nn, "TorchLinear"):
 
-class TorchLinear(nn.Layer):
-    """
-    Same as paddle.layer.Linear, except weight matrix is stored as [out_features, in_features] (same as torch),
-    instead of [in_features, out_features]
-    """
+    class TorchLinear(nn.Layer):
+        """
+        Same as paddle.layer.Linear, except weight matrix is stored as [out_features, in_features] (same as torch),
+        instead of [in_features, out_features]
+        """
 
-    def __init__(
-        self,
-        in_features,
-        out_features,
-        weight_attr=None,
-        bias_attr=None,
-        name=None,
-        bias=None,
-    ):
-        super().__init__()
-        self._dtype = self._helper.get_default_dtype()
-        self._weight_attr = weight_attr
-        if bias is not None:
-            bias_attr = bias
-        self._bias_attr = bias_attr
-        self.in_features = self._in_features = in_features
-        self.out_features = self.out_features = out_features
-        self.weight = self.create_parameter(
-            shape=[out_features, in_features],  # regular linear has shape [in_features, out_features]
-            attr=self._weight_attr,
-            dtype=self._dtype,
-            is_bias=False,
-        )
-        self.bias = self.create_parameter(
-            shape=[out_features],
-            attr=self._bias_attr,
-            dtype=self._dtype,
-            is_bias=True,
-        )
-        self.name = name
+        def __init__(
+            self,
+            in_features,
+            out_features,
+            weight_attr=None,
+            bias_attr=None,
+            name=None,
+            bias=None,
+        ):
+            super().__init__()
+            self._dtype = self._helper.get_default_dtype()
+            self._weight_attr = weight_attr
+            if bias is not None:
+                bias_attr = bias
+            self._bias_attr = bias_attr
+            self.in_features = self._in_features = in_features
+            self.out_features = self.out_features = out_features
+            self.weight = self.create_parameter(
+                shape=[out_features, in_features],  # regular linear has shape [in_features, out_features]
+                attr=self._weight_attr,
+                dtype=self._dtype,
+                is_bias=False,
+            )
+            self.bias = self.create_parameter(
+                shape=[out_features],
+                attr=self._bias_attr,
+                dtype=self._dtype,
+                is_bias=True,
+            )
+            self.name = name
 
-    def forward(self, input):
-        out = paddle.nn.functional.linear(x=input, weight=self.weight.T, bias=self.bias, name=self.name)
-        return out
+        def forward(self, input):
+            out = paddle.nn.functional.linear(x=input, weight=self.weight.T, bias=self.bias, name=self.name)
+            return out
 
-    def extra_repr(self):
-        name_str = ", name={}".format(self.name) if self.name else ""
-        return "in_features={}, out_features={}, dtype={}{}".format(
-            self.weight.shape[1], self.weight.shape[0], self._dtype, name_str
-        )
+        def extra_repr(self):
+            name_str = ", name={}".format(self.name) if self.name else ""
+            return "in_features={}, out_features={}, dtype={}{}".format(
+                self.weight.shape[1], self.weight.shape[0], self._dtype, name_str
+            )
 
-
-nn.TorchLinear = TorchLinear
+    nn.TorchLinear = TorchLinear
 
 import contextlib
 
@@ -285,7 +288,7 @@ def requires_grad_and_without_random(*tensors, seed=0, stop_gradient=False):
     raw_rng_state = paddle.get_cuda_rng_state()
     paddle.seed(seed)
     raw_stop_gradient = [each_tensor.stop_gradient for each_tensor in tensors]
-    need_switch_stop_gradient = False in raw_stop_gradient
+    need_switch_stop_gradient = len(set(raw_stop_gradient)) > 1
     if need_switch_stop_gradient:
         for each_tensor in tensors:
             each_tensor.stop_gradient = stop_gradient

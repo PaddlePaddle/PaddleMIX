@@ -184,7 +184,6 @@ class Upsample2D(nn.Layer):
 
         # upsample_nearest_nhwc fails with large batch sizes. see https://github.com/huggingface/diffusers/issues/984
         # if hidden_states.shape[0] >= 64:
-        #     breakpoint()
         #     hidden_states = hidden_states.contiguous()
 
         # if `output_size` is passed we force the interpolation output
