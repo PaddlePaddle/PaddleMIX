@@ -93,7 +93,7 @@ if is_paddlenlp_available():
 def faster_set_state_dict(model, state_dict):
     # the state_dict will be destroied.
     with paddle.no_grad():
-        for k, v in model.state_dict().items():
+        for k, v in model.state_dict(use_hook=False).items():
             if k in state_dict:
                 v_new = state_dict.pop(k)
                 # with device_guard(): donot do device guard
@@ -179,11 +179,8 @@ def load_state_dict(
                     weight = tensor_parallel_split_mapping[key](py_safe_slice_)
                 else:
                     weight = py_safe_slice_[:]
-                state_dict[key] = weight
+                state_dict[key] = paddle.Tensor(weight, zero_copy=True)
 
-        for k in list(state_dict.keys()):
-            # with device_guard():
-            state_dict[k] = paddle.Tensor(state_dict.pop(k), zero_copy=True)
     else:
         if any(checkpoint_file.endswith(suffix) for suffix in [".pt", ".pth", ".bin", ".ckpt"]):
             data_format = "pt"
