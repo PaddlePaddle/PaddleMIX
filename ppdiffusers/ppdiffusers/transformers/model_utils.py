@@ -27,9 +27,9 @@ from paddlenlp.transformers.configuration_utils import (
 from paddlenlp.transformers.model_utils import PretrainedModel as PPNLPPretrainedModel
 
 from ppdiffusers.utils import (
-    is_paddle_version,
     is_safetensors_available,
     is_torch_available,
+    recompute_use_reentrant,
 )
 
 from ..utils import logging
@@ -243,7 +243,10 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
         if gradient_checkpointing_kwargs is None:
             gradient_checkpointing_kwargs = {}
 
-        if is_paddle_version(">=", "2.5.0") and not self.config.recompute_use_reentrant:
+        if recompute_use_reentrant():
+            # do nothint, default use_reentrant is True, we will use pylayer recompute
+            pass
+        else:
             gradient_checkpointing_kwargs["use_reentrant"] = False
 
         gradient_checkpointing_func = functools.partial(recompute, **gradient_checkpointing_kwargs)

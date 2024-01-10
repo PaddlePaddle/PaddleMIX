@@ -867,7 +867,7 @@ class ResidualTemporalBlock1D(nn.Layer):
         self.time_emb = nn.Linear(embed_dim, out_channels)
 
         self.residual_conv = (
-            nn.Conv1d(inp_channels, out_channels, 1) if inp_channels != out_channels else nn.Identity()
+            nn.Conv1D(inp_channels, out_channels, 1) if inp_channels != out_channels else nn.Identity()
         )
 
     def forward(self, inputs: paddle.Tensor, t: paddle.Tensor) -> paddle.Tensor:
