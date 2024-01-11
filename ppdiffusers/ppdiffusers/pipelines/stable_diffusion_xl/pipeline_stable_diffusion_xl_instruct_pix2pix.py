@@ -1,4 +1,3 @@
-# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 Harutatsu Akiyama and The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
