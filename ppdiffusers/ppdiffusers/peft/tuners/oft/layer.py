@@ -326,7 +326,7 @@ class OFTLayer(nn.Layer, LycorisLayer):
             if len(result.shape) == 4:
                 result = result.transpose([0, 3, 1, 2])
 
-        result = result._to(dtype=previous_dtype)
+        result = result.cast(dtype=previous_dtype)
         return result
 
 

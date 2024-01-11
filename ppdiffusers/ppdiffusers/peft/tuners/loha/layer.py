@@ -223,7 +223,7 @@ class LoHaLayer(nn.Layer, LycorisLayer):
                 ):
                     result = result + self._get_delta_activations(active_adapter, x, *args, **kwargs)
 
-        result = result._to(dtype=previous_dtype)
+        result = result.cast(dtype=previous_dtype)
         return result
 
 

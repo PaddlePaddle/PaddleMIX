@@ -179,16 +179,16 @@ class Linear(nn.Layer, IA3Layer):
                 ia3_scaling *= self.ia3_l[active_adapter].flatten()
 
             if self.is_feedforward:
-                x = x._to(dtype=dtype)
+                x = x.cast(dtype=dtype)
                 # TODO: weight.dtype can be != self.ia3_l[self.active_adapters].dtype
                 # e.g. bf16 vs fp32. Is that okay?
                 interm = (x * ia3_scaling).to(self.get_base_layer().weight.dtype)
                 result = self.base_layer(interm, *args, **kwargs)
             else:
                 result = self.base_layer(x, *args, **kwargs)
-                result = result._to(dtype=dtype) * ia3_scaling
+                result = result.cast(dtype=dtype) * ia3_scaling
 
-        result = result._to(dtype=previous_dtype)
+        result = result.cast(dtype=previous_dtype)
         return result
 
 
@@ -310,14 +310,14 @@ class Conv2d(nn.Layer, IA3Layer):
                 ia3_scaling *= self.ia3_l[active_adapter]
 
             if self.is_feedforward:
-                x = x._to(dtype=dtype)
+                x = x.cast(dtype=dtype)
                 # TODO: weight.dtype can be != self.ia3_l[self.active_adapters].dtype
                 # e.g. bf16 vs fp32. Is that okay?
                 interm = (x * ia3_scaling).cast(self.get_base_layer().weight.dtype)
                 result = self.base_layer(interm, *args, **kwargs)
             else:
                 result = self.base_layer(x, *args, **kwargs)
-                result = result._to(dtype=dtype) * ia3_scaling
+                result = result.cast(dtype=dtype) * ia3_scaling
 
-        result = result._to(dtype=previous_dtype)
+        result = result.cast(dtype=previous_dtype)
         return result
