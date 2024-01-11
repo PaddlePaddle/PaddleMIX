@@ -143,7 +143,6 @@ class StableVideoDiffusionPipeline(DiffusionPipeline):
         self.image_encoder.vision_model.embeddings.position_ids = (
             self.image_encoder.vision_model.embeddings.position_ids.cast(dtype="int64")
         )
-
         image_embeddings = self.image_encoder(image).image_embeds
         image_embeddings = image_embeddings.unsqueeze(1)
 
