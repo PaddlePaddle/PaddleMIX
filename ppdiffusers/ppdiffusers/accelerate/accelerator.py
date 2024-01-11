@@ -983,7 +983,7 @@ class Accelerator:
             dtype = "float16"
         elif self.state.mixed_precision == "bf16":
             dtype = "bfloat16"
-        if dtype in ["float16", "bfloat16"]:
+        if dtype in ["float16", "bfloat16"] and self.state.fp16_opt_level != "O0":
             model = paddle.amp.decorate(
                 models=model,
                 level=self.state.fp16_opt_level,

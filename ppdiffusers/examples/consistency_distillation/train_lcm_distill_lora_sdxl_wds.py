@@ -90,12 +90,10 @@ def get_module_kohya_state_dict(
     module, prefix: str = "", dtype: paddle.dtype = "float32", adapter_name: str = "default"
 ):
     kohya_ss_state_dict = {}
-    if prefix is not None and prefix != "" and not prefix.endswith("."):
-        prefix += "."
 
     if USE_PEFT_BACKEND:
         for peft_key, weight in get_peft_model_state_dict(module, adapter_name=adapter_name).items():
-            kohya_key = peft_key.replace("base_model.model", prefix)
+            kohya_key = peft_key.replace("base_model.model", prefix.rstrip("."))
             kohya_key = kohya_key.replace("lora_A", "lora_down")
             kohya_key = kohya_key.replace("lora_B", "lora_up")
             kohya_key = kohya_key.replace(".", "_", kohya_key.count(".") - 2)
@@ -111,6 +109,8 @@ def get_module_kohya_state_dict(
                     paddle.to_tensor(module.peft_config[adapter_name].lora_alpha, dtype=dtype)
                 )
     else:
+        if prefix is not None and prefix != "" and not prefix.endswith("."):
+            prefix += "."
         for peft_key, weight in module.get_trainable_state_dict().items():
             kohya_key = prefix + peft_key.rstrip(".weight")
             kohya_key = kohya_key.replace("lora_A", "lora_down.weight")
