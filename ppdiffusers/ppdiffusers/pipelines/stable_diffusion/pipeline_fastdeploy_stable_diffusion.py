@@ -17,7 +17,8 @@ from typing import Callable, Dict, List, Optional, Union
 
 import paddle
 import PIL
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
+
+from ppdiffusers.transformers import CLIPImageProcessor, CLIPTokenizer
 
 from ...image_processor import PipelineImageInput
 from ...loaders import IPAdapterMixin
