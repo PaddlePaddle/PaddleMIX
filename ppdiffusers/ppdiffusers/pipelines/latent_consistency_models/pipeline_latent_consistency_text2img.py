@@ -293,7 +293,7 @@ class LatentConsistencyModelPipeline(
         else:
             prompt_embeds_dtype = prompt_embeds.dtype
 
-        prompt_embeds = prompt_embeds._to(dtype=prompt_embeds_dtype)
+        prompt_embeds = prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -349,7 +349,7 @@ class LatentConsistencyModelPipeline(
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds._to(dtype=prompt_embeds_dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
@@ -367,7 +367,7 @@ class LatentConsistencyModelPipeline(
                 feature_extractor_input = self.image_processor.numpy_to_pil(image)
             safety_checker_input = self.feature_extractor(feature_extractor_input, return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image, clip_input=safety_checker_input.pixel_values._to(dtype=dtype)
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype=dtype)
             )
         return image, has_nsfw_concept
 
@@ -383,7 +383,7 @@ class LatentConsistencyModelPipeline(
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            latents = latents._to(dtype=dtype)
+            latents = latents.cast(dtype=dtype)
 
         # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
@@ -410,7 +410,7 @@ class LatentConsistencyModelPipeline(
         half_dim = embedding_dim // 2
         emb = paddle.log(paddle.to_tensor(10000.0)) / (half_dim - 1)
         emb = paddle.exp(paddle.arange(half_dim, dtype=dtype) * -emb)
-        emb = w._to(dtype=dtype)[:, None] * emb[None, :]
+        emb = w.cast(dtype=dtype)[:, None] * emb[None, :]
         emb = paddle.concat([paddle.sin(emb), paddle.cos(emb)], axis=1)
         if embedding_dim % 2 == 1:
             emb = paddle.concat(emb, paddle.zeros([emb.shape[0], 1]), axis=-1)
@@ -676,7 +676,7 @@ class LatentConsistencyModelPipeline(
         self._num_timesteps = len(timesteps)
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-                latents = latents._to(dtype=prompt_embeds.dtype)
+                latents = latents.cast(dtype=prompt_embeds.dtype)
 
                 # model prediction (v-prediction, eps, x)
                 model_pred = self.unet(

@@ -278,7 +278,7 @@ class BertSelfAttention(nn.Layer):
             distance = position_ids_l - position_ids_r
 
             positional_embedding = self.distance_embedding(distance + self.max_position_embeddings - 1)
-            positional_embedding = positional_embedding._to(dtype=query_layer.dtype)  # fp16 compatibility
+            positional_embedding = positional_embedding.cast(dtype=query_layer.dtype)  # fp16 compatibility
 
             if self.position_embedding_type == "relative_key":
                 relative_position_scores = paddle.einsum("bhld,lrd->bhlr", query_layer, positional_embedding)

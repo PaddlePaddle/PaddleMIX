@@ -352,7 +352,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
         else:
             prompt_embeds_dtype = prompt_embeds.dtype
 
-        prompt_embeds = prompt_embeds._to(dtype=prompt_embeds_dtype)
+        prompt_embeds = prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -408,7 +408,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds._to(dtype=prompt_embeds_dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
@@ -426,7 +426,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
                 feature_extractor_input = self.image_processor.numpy_to_pil(image)
             safety_checker_input = self.feature_extractor(feature_extractor_input, return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image, clip_input=safety_checker_input.pixel_values._to(dtype=dtype)
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype=dtype)
             )
         return image, has_nsfw_concept
 
@@ -439,7 +439,7 @@ class StableDiffusionControlNetImg2ImgPipeline(
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(0, 1)
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
-        image = image._to(dtype=paddle.float32).transpose([0, 2, 3, 1]).cpu().numpy()
+        image = image.cast(dtype=paddle.float32).transpose([0, 2, 3, 1]).cpu().numpy()
         return image
 
     # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs

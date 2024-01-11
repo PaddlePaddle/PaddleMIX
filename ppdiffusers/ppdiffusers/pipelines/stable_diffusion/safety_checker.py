@@ -179,9 +179,9 @@ class StableDiffusionSafetyChecker(PretrainedModel):
 
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
         special_cos_dist = (
-            cosine_distance(image_embeds, self.special_care_embeds)._to(dtype=paddle.float32).cpu().numpy()
+            cosine_distance(image_embeds, self.special_care_embeds).cast(dtype=paddle.float32).cpu().numpy()
         )
-        cos_dist = cosine_distance(image_embeds, self.concept_embeds)._to(dtype=paddle.float32).cpu().numpy()
+        cos_dist = cosine_distance(image_embeds, self.concept_embeds).cast(dtype=paddle.float32).cpu().numpy()
 
         result = []
         batch_size = image_embeds.shape[0]

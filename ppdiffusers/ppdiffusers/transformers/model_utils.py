@@ -111,7 +111,7 @@ class ModuleUtilsMixin:
         # /transformer/transformer_layers.py#L270
         # encoder_extended_attention_mask = (encoder_extended_attention_mask ==
         # encoder_extended_attention_mask.transpose(-1, -2))
-        encoder_extended_attention_mask = encoder_extended_attention_mask._to(dtype=self.dtype)  # fp16 compatibility
+        encoder_extended_attention_mask = encoder_extended_attention_mask.cast(dtype=self.dtype)  # fp16 compatibility
         encoder_extended_attention_mask = (1.0 - encoder_extended_attention_mask) * paddle.finfo(self.dtype).min
 
         return encoder_extended_attention_mask
@@ -123,7 +123,7 @@ class ModuleUtilsMixin:
         causal_mask = seq_ids[None, None, :].tile([batch_size, seq_length, 1]) <= seq_ids[None, :, None]
         # in case past_key_values are used we need to add a prefix ones mask to the causal mask
         # causal and attention masks must have same type with pytorch version < 1.3
-        causal_mask = causal_mask._to(dtype=attention_mask.dtype)
+        causal_mask = causal_mask.cast(dtype=attention_mask.dtype)
 
         if causal_mask.shape[1] < attention_mask.shape[1]:
             prefix_seq_len = attention_mask.shape[1] - causal_mask.shape[1]
@@ -180,7 +180,7 @@ class ModuleUtilsMixin:
         # positions we want to attend and the dtype's smallest value for masked positions.
         # Since we are adding it to the raw scores before the softmax, this is
         # effectively the same as removing these entirely.
-        extended_attention_mask = extended_attention_mask._to(dtype=dtype)  # fp16 compatibility
+        extended_attention_mask = extended_attention_mask.cast(dtype=dtype)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * paddle.finfo(dtype).min
         return extended_attention_mask
 
