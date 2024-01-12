@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import contextlib
 import inspect
 import math
 import os
@@ -166,7 +167,7 @@ def update_ema(target_params, source_params, rate=0.99):
 
 
 class LCMModel(nn.Layer):
-    def __init__(self, model_args):
+    def __init__(self, model_args, training_args):
         super().__init__()
         self.model_args = model_args
         self.is_lora = model_args.is_lora
@@ -288,6 +289,11 @@ class LCMModel(nn.Layer):
             return_tensors="pd",
         ).input_ids
 
+        if training_args.bf16 or training_args.fp16:
+            self.autocast_smart_context_manager = contextlib.nullcontext()
+        else:
+            self.autocast_smart_context_manager = paddle.amp.auto_cast()
+
     def forward(self, input_ids=None, pixel_values=None, **kwargs):
         self.vae.eval()
         self.text_encoder.eval()
@@ -360,7 +366,7 @@ class LCMModel(nn.Layer):
         # noisy_latents with both the conditioning embedding c and unconditional embedding 0
         # Get teacher model prediction on noisy_latents and conditional embedding
         with paddle.no_grad():
-            with paddle.amp.auto_cast():
+            with self.autocast_smart_context_manager:
                 cond_teacher_output = self.teacher_unet(
                     noisy_model_input,
                     start_timesteps,
@@ -397,7 +403,7 @@ class LCMModel(nn.Layer):
 
         # 20.4.12. Get target LCM prediction on x_prev, w, c, t_n
         with paddle.no_grad():
-            with paddle.amp.auto_cast():
+            with self.autocast_smart_context_manager:
                 module = self.unet if self.is_lora else self.target_unet
                 target_noise_pred = module(
                     x_prev,

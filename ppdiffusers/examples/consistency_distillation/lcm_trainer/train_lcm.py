@@ -51,7 +51,7 @@ def main():
     if training_args.seed is not None:
         set_seed(training_args.seed)
 
-    model = LCMModel(model_args)
+    model = LCMModel(model_args, training_args)
     model.set_recompute(training_args.recompute)
     model.set_xformers(training_args.enable_xformers_memory_efficient_attention)
 

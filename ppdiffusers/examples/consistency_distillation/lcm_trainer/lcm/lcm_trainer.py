@@ -307,7 +307,7 @@ class LCMTrainer(Trainer):
             unwraped_model = unwrap_model(self.model)
             if unwraped_model.is_lora:
                 logger.info(f"Saving lcm unet lora checkpoint to `{output_dir}/lora`.")
-                unwraped_model.unet.save_pretrained(os.path.join(output_dir, "lora"))
+                unwraped_model.unet.save_pretrained(os.path.join(output_dir, "lora"), save_model_config=False)
                 from safetensors.numpy import save_file
 
                 lora_kohya_state_dict = get_module_kohya_state_dict(unwraped_model.unet, prefix="lora_unet")
