@@ -266,7 +266,6 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Layer):
             self.tmodel,
             self.pretrained,
             precision=self.precision,
-            device=self.device,
             enable_fusion=self.enable_fusion,
             fusion_type=self.fusion_type,
         )

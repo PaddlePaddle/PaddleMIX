@@ -40,25 +40,13 @@ class Vanilla_AudioMAE(nn.Layer):
             if no_mask:
                 if no_average:
                     raise RuntimeError("This function is deprecated")
-                    embed = self.model.forward_encoder_no_random_mask_no_average(
-                        x
-                    )  # mask_ratio
                 else:
                     embed = self.model.forward_encoder_no_mask(x)  # mask_ratio
             else:
                 raise RuntimeError("This function is deprecated")
-                embed, _, _, _ = self.model.forward_encoder(x, mask_ratio=mask_ratio)
         return embed
     
 class AudioMAEConditionCTPoolRand(nn.Layer):
-    """
-    audiomae = AudioMAEConditionCTPool2x2()
-    data = paddle.randn((4, 1024, 128))
-    output = audiomae(data)
-    import ipdb;ipdb.set_trace()
-    exit(0)
-    """
-
     def __init__(
         self,
         time_pooling_factors=[1, 2, 4, 8],

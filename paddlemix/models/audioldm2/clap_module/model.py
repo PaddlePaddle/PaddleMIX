@@ -12,18 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
 from typing import Callable, Optional
 
 import numpy as np
 import paddle
 import paddle.nn.functional as F
 import paddle.nn as nn
+from dataclasses import dataclass
 
 import logging
-# from .utils import freeze_batch_norm_2d
 
-from .pann_model import create_pann_model
 from .htsat_model import create_htsat_model
 from paddlenlp.transformers import BertModel, BartModel
 from .roberta.model import RobertaModel
@@ -90,39 +88,35 @@ class Transformer(nn.Layer):
             x = r(x, attn_mask=attn_mask)
         return x
 
-
 # Audio Config Class
 @dataclass
-class CLAPAudioCfp:
-    model_type: str = "PANN"
-    model_name: str = "Cnn14"
+class CLAPAudioCfg:
+    model_type: str = "HTSAT"
+    model_name: str = "base"
     sample_rate: int = 48000
-    # Param
     audio_length: int = 1024
     window_size: int = 1024
-    hop_size: int = 1024
+    hop_size: int = 480
     fmin: int = 50
     fmax: int = 14000
     class_num: int = 527
     mel_bins: int = 64
     clip_samples: int = 480000
 
-
 @dataclass
 class CLAPTextCfg:
-    context_length: int
-    vocab_size: int
-    width: int
-    heads: int
-    layers: int
-    model_type: str
-
+    context_length: int = 77
+    vocab_size: int = 49408
+    width: int = 512
+    heads: int = 8
+    layers: int = 12
+    model_type: str = "roberta"
 
 class CLAP(nn.Layer):
     def __init__(
         self,
         embed_dim: int,
-        audio_cfg: CLAPAudioCfp,
+        audio_cfg: CLAPAudioCfg,
         text_cfg: CLAPTextCfg,
         quick_gelu: bool = False,
         enable_fusion: bool = False,
@@ -132,7 +126,7 @@ class CLAP(nn.Layer):
     ):
         super().__init__()
         if isinstance(audio_cfg, dict):
-            audio_cfg = CLAPAudioCfp(**audio_cfg)
+            audio_cfg = CLAPAudioCfg(**audio_cfg)
         if isinstance(text_cfg, dict):
             text_cfg = CLAPTextCfg(**text_cfg)
 
@@ -157,7 +151,7 @@ class CLAP(nn.Layer):
         # audio branch
         # audio branch parameters
         if audio_cfg.model_type == "PANN":
-            self.audio_branch = create_pann_model(audio_cfg, enable_fusion, fusion_type)
+            raise ValueError("PANN has not been implemented.")
         elif audio_cfg.model_type == "HTSAT":
             self.audio_branch = create_htsat_model(
                 audio_cfg, enable_fusion, fusion_type
@@ -273,63 +267,6 @@ class CLAP(nn.Layer):
         self.logit_scale_a = paddle.create_parameter([],"float32",default_initializer=nn.initializer.Assign(paddle.ones([])*np.log(1 / 0.07)))
         self.logit_scale_t = paddle.create_parameter([],"float32",default_initializer=nn.initializer.Assign(paddle.ones([])*np.log(1 / 0.07)))
         self.register_buffer("attn_mask", self.build_attention_mask(), persistable=False)
-
-        self.init_text_branch_parameters()
-
-    def init_text_branch_parameters(self):
-        if self.text_branch_type == "transformer":
-            self.token_embedding.weight = paddle.create_parameter(
-                self.token_embedding.weight.shape,
-                str(self.token_embedding.weight.numpy().dtype),
-                default_initializer=nn.initializer.Normal(std=0.02)
-            )
-            self.positional_embedding = paddle.create_parameter(
-                self.positional_embedding.shape,
-                str(self.positional_embedding.numpy().dtype),
-                default_initializer=nn.initializer.Normal(std=0.01)
-            )
-            proj_std = (self.text_branch.width**-0.5) * (
-                (2 * self.text_branch.layers) ** -0.5
-            )
-            attn_std = self.text_branch.width**-0.5
-            fc_std = (2 * self.text_branch.width) ** -0.5
-            for block in self.text_branch.resblocks:
-                block.attn.k_proj.weight = paddle.create_parameter(
-                    block.attn.k_proj.weight,
-                    str(block.attn.k_proj.weight.numpy().dtype),
-                    default_initializer=nn.initializer.Normal(std=attn_std)
-                )
-                block.attn.q_proj.weight = paddle.create_parameter(
-                    block.attn.q_proj.weight,
-                    str(block.attn.q_proj.weight.numpy().dtype),
-                    default_initializer=nn.initializer.Normal(std=attn_std)
-                )
-                block.attn.v_proj.weight = paddle.create_parameter(
-                    block.attn.v_proj.weight,
-                    str(block.attn.v_proj.weight.numpy().dtype),
-                    default_initializer=nn.initializer.Normal(std=attn_std)
-                )
-                block.attn.out_proj.weight = paddle.create_parameter(
-                    block.attn.out_proj.weight,
-                    str(block.attn.out_proj.weight.numpy().dtype),
-                    default_initializer=nn.initializer.Normal(std=proj_std)
-                )
-                block.mlp.c_fc.weight = paddle.create_parameter(
-                    block.mlp.c_fc.weight,
-                    str(block.mlp.c_fc.weight.numpy().dtype),
-                    default_initializer=nn.initializer.Normal(std=fc_std)
-                )
-                block.mlp.c_proj.weight = paddle.create_parameter(
-                    block.mlp.c_proj.weight,
-                    str(block.mlp.c_proj.weight.numpy().dtype),
-                    default_initializer=nn.initializer.Normal(std=proj_std)
-                )
-        if self.text_branch_type == "bert" or self.text_branch_type == "roberta":
-            self.text_branch.embeddings.word_embeddings.weight.shape[-1]
-        elif self.text_branch_type == "bart":
-            self.text_branch.shared.weight.shape[-1]
-        else:
-            self.text_branch.width
 
     def build_attention_mask(self):
 

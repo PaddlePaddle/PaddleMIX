@@ -16,8 +16,7 @@ from functools import partial
 
 import paddle
 import paddle.nn as nn
-from itertools import repeat
-import collections.abc
+from ..utils import to_2tuple, DropPath, Mlp
 from ..clap_module.htsat_model import SwinTransformerBlock
 
 class Attention(nn.Layer):
@@ -92,73 +91,6 @@ class LayerScale(nn.Layer):
         else:
             return x * self.gamma
         # return paddle.multiply(x, self.gamma) if self.inplace else x * self.gamma
-
-def drop_path(x, drop_prob: float = 0., training: bool = False, scale_by_keep: bool = True):
-    """Drop paths (Stochastic Depth) per sample (when applied in main path of residual blocks).
-
-    This is the same as the DropConnect impl I created for EfficientNet, etc networks, however,
-    the original name is misleading as 'Drop Connect' is a different form of dropout in a separate paper...
-    See discussion: https://github.com/tensorflow/tpu/issues/494#issuecomment-532968956 ... I've opted for
-    changing the layer and argument names to 'drop path' rather than mix DropConnect as a layer name and use
-    'survival rate' as the argument.
-
-    """
-    if drop_prob == 0. or not training:
-        return x
-    keep_prob = 1 - drop_prob
-    shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # work with diff dim tensors, not just 2D ConvNets
-    random_tensor = paddle.bernoulli(paddle.full(shape, fill_value=keep_prob, dtype=x.dtype))
-    if keep_prob > 0.0 and scale_by_keep:
-        random_tensor = paddle.divide(random_tensor, keep_prob)
-    return x * random_tensor
- 
-class DropPath(nn.Layer):
-    """Drop paths (Stochastic Depth) per sample  (when applied in main path of residual blocks).
-    """
-    def __init__(self, drop_prob: float = 0., scale_by_keep: bool = True):
-        super(DropPath, self).__init__()
-        self.drop_prob = drop_prob
-        self.scale_by_keep = scale_by_keep
-
-    def forward(self, x):
-        return drop_path(x, self.drop_prob, self.training, self.scale_by_keep)
-
-    def extra_repr(self):
-        return f'drop_prob={round(self.drop_prob,3):0.3f}'
-    
-class Mlp(nn.Layer):
-    """ MLP as used in Vision Transformer, MLP-Mixer and related networks
-    """
-    def __init__(
-            self,
-            in_features,
-            hidden_features=None,
-            out_features=None,
-            act_layer=nn.GELU,
-            bias=True,
-            drop=0.,
-            use_conv=False,
-    ):
-        super().__init__()
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
-        bias = to_2tuple(bias)
-        drop_probs = to_2tuple(drop)
-        linear_layer = partial(nn.Conv2D, kernel_size=1) if use_conv else nn.Linear
-
-        self.fc1 = linear_layer(in_features, hidden_features, bias_attr=bias[0])
-        self.act = act_layer()
-        self.drop1 = nn.Dropout(drop_probs[0])
-        self.fc2 = linear_layer(hidden_features, out_features, bias_attr=bias[1])
-        self.drop2 = nn.Dropout(drop_probs[1])
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.drop1(x)
-        x = self.fc2(x)
-        x = self.drop2(x)
-        return x
     
 class Block(nn.Layer):
 
@@ -190,50 +122,6 @@ class Block(nn.Layer):
     def forward(self, x):
         x = x + self.drop_path1(self.ls1(self.attn(self.norm1(x))))
         x = x + self.drop_path2(self.ls2(self.mlp(self.norm2(x))))
-        return x
-    
-def _ntuple(n):
-    def parse(x):
-        if isinstance(x, collections.abc.Iterable) and not isinstance(x, str):
-            return tuple(x)
-        return tuple(repeat(x, n))
-    return parse
-
-to_2tuple = _ntuple(2)
-
-class PatchEmbed_new(nn.Layer):
-    """Flexible Image to Patch Embedding"""
-
-    def __init__(
-        self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, stride=10
-    ):
-        super().__init__()
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        stride = to_2tuple(stride)
-
-        self.img_size = img_size
-        self.patch_size = patch_size
-
-        self.proj = nn.Conv2D(
-            in_chans, embed_dim, kernel_size=patch_size, stride=stride
-        )  # with overlapped patches
-
-        _, _, h, w = self.get_output_shape(img_size)  # n, emb_dim, h, w
-        self.patch_hw = (h, w)
-        self.num_patches = h * w
-
-    def get_output_shape(self, img_size):
-        return self.proj(paddle.randn([1, 1, img_size[0], img_size[1]])).shape
-
-    def forward(self, x):
-        B, C, H, W = x.shape
-        # FIXME look at relaxing size constraints
-        # assert H == self.img_size[0] and W == self.img_size[1], \
-        #    f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-        x = self.proj(x)  # 32, 1, 1024, 128 -> 32, 768, 101, 12
-        x = x.flatten(2)  # 32, 768, 101, 12 -> 32, 768, 1212
-        x = x.transpose([0, 2, 1])  # 32, 768, 1212 -> 32, 1212, 768
         return x
     
 class PatchEmbed_org(nn.Layer):
@@ -285,7 +173,6 @@ class MaskedAutoencoderViT(nn.Layer):
         temperature=0.2,
         mode=0,
         contextual_depth=8,
-        use_custom_patch=False,
         split_pos=False,
         pos_trainable=False,
         use_nce=False,
@@ -296,6 +183,7 @@ class MaskedAutoencoderViT(nn.Layer):
         mask_2d=False,
         epoch=0,
         no_shift=False,
+        use_custom_patch=False,
     ):
         super().__init__()
 
@@ -304,22 +192,10 @@ class MaskedAutoencoderViT(nn.Layer):
         self.decoder_embed_dim = decoder_embed_dim
         # --------------------------------------------------------------------------
         # MAE encoder specifics
-        if use_custom_patch:
-            print(
-                f"Use custom patch_emb with patch size: {patch_size}, stride: {stride}"
-            )
-            self.patch_embed = PatchEmbed_new(
-                img_size=img_size,
-                patch_size=patch_size,
-                in_chans=in_chans,
-                embed_dim=embed_dim,
-                stride=stride,
-            )
-        else:
-            self.patch_embed = PatchEmbed_org(img_size, patch_size, in_chans, embed_dim)
+        self.patch_embed = PatchEmbed_org(img_size, patch_size, in_chans, embed_dim)
         self.use_custom_patch = use_custom_patch
+        
         num_patches = self.patch_embed.num_patches
-
         tmp = paddle.zeros([1, 1, embed_dim])
         self.cls_token = paddle.create_parameter(shape=tmp.shape,
                         dtype=tmp.dtype,
@@ -472,21 +348,6 @@ class MaskedAutoencoderViT(nn.Layer):
         return contextual_emb
 
 
-def mae_vit_small_patch16_dec512d8b(**kwargs):
-    model = MaskedAutoencoderViT(
-        patch_size=16,
-        embed_dim=384,
-        depth=12,
-        num_heads=6,
-        decoder_embed_dim=512,
-        decoder_num_heads=16,
-        mlp_ratio=4,
-        norm_layer=partial(nn.LayerNorm, epsilon=1e-6),
-        **kwargs,
-    )
-    return model
-
-
 def mae_vit_base_patch16_dec512d8b(**kwargs):
     model = MaskedAutoencoderViT(
         patch_size=16,
@@ -502,38 +363,5 @@ def mae_vit_base_patch16_dec512d8b(**kwargs):
     return model
 
 
-def mae_vit_large_patch16_dec512d8b(**kwargs):
-    model = MaskedAutoencoderViT(
-        patch_size=16,
-        embed_dim=1024,
-        depth=24,
-        num_heads=16,
-        decoder_embed_dim=512,
-        decoder_num_heads=16,
-        mlp_ratio=4,
-        norm_layer=partial(nn.LayerNorm, epsilon=1e-6),
-        **kwargs,
-    )
-    return model
-
-
-def mae_vit_huge_patch14_dec512d8b(**kwargs):
-    model = MaskedAutoencoderViT(
-        patch_size=14,
-        embed_dim=1280,
-        depth=32,
-        num_heads=16,
-        decoder_embed_dim=512,
-        decoder_num_heads=16,
-        mlp_ratio=4,
-        norm_layer=partial(nn.LayerNorm, epsilon=1e-6),
-        **kwargs,
-    )
-    return model
-
-
 # set recommended archs
 mae_vit_base_patch16 = mae_vit_base_patch16_dec512d8b  # decoder: 512 dim, 8 blocks
-mae_vit_large_patch16 = mae_vit_large_patch16_dec512d8b  # decoder: 512 dim, 8 blocks
-mae_vit_huge_patch14 = mae_vit_huge_patch14_dec512d8b  # decoder: 512 dim, 8 blocks
-mae_vit_small_patch16 = mae_vit_small_patch16_dec512d8b  # decoder: 512 dim, 8 blocks
