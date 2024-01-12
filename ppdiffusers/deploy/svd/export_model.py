@@ -74,7 +74,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
             )
         ],  # pixel_values
     )
-    save_path = os.path.join(args.output_path, "text_encoder", "inference")
+    save_path = os.path.join(args.output_path, "image_encoder", "inference")
     paddle.jit.save(image_encoder, save_path)
     print(f"Save image_encoder model in {save_path} successfully.")
     del pipeline.image_encoder
@@ -92,7 +92,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
             paddle.static.InputSpec(
                 shape=[None, None, unet_cross_attention_dim], dtype="float32", name="encoder_hidden_states"
             ),  # encoder_hidden_states
-            paddle.static.InputSpec(shape=[None, 3], dtype="float32", name="added_time_ids"),  # added_time_ids
+            paddle.static.InputSpec(shape=[None, None], dtype="float32", name="added_time_ids"),  # added_time_ids
         ],
     )
     save_path = os.path.join(args.output_path, "unet", "inference")
