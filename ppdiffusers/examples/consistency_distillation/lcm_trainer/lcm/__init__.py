@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # flake8: noqa
+import ppdiffusers
 
 from .lcm_args import LCMDataArguments, LCMModelArguments, LCMTrainingArguments
 from .lcm_scheduler import LCMScheduler

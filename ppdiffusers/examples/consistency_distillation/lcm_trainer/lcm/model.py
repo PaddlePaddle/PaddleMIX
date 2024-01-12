@@ -233,7 +233,7 @@ class LCMModel(nn.Layer):
             )
             self.unet.config.tensor_parallel_degree = 1
             self.unet = LoRAModel(self.unet, lora_config)
-            self.reset_lora_parameters(self.unet, init_lora_weights=True)
+            self.reset_lora_parameters(self.unet, init_lora_weights=False)
             self.unet.mark_only_lora_as_trainable()
             self.unet.print_trainable_parameters()
         else:
@@ -290,9 +290,9 @@ class LCMModel(nn.Layer):
         ).input_ids
 
         if training_args.bf16 or training_args.fp16:
-            self.autocast_smart_context_manager = contextlib.nullcontext()
+            self.autocast_smart_context_manager = contextlib.nullcontext
         else:
-            self.autocast_smart_context_manager = paddle.amp.auto_cast()
+            self.autocast_smart_context_manager = paddle.amp.auto_cast
 
     def forward(self, input_ids=None, pixel_values=None, **kwargs):
         self.vae.eval()
@@ -366,7 +366,7 @@ class LCMModel(nn.Layer):
         # noisy_latents with both the conditioning embedding c and unconditional embedding 0
         # Get teacher model prediction on noisy_latents and conditional embedding
         with paddle.no_grad():
-            with self.autocast_smart_context_manager:
+            with self.autocast_smart_context_manager():
                 cond_teacher_output = self.teacher_unet(
                     noisy_model_input,
                     start_timesteps,
@@ -403,7 +403,7 @@ class LCMModel(nn.Layer):
 
         # 20.4.12. Get target LCM prediction on x_prev, w, c, t_n
         with paddle.no_grad():
-            with self.autocast_smart_context_manager:
+            with self.autocast_smart_context_manager():
                 module = self.unet if self.is_lora else self.target_unet
                 target_noise_pred = module(
                     x_prev,
