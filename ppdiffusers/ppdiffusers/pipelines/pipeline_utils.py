@@ -81,6 +81,7 @@ if is_paddlenlp_available():
     from paddlenlp.transformers import PretrainedModel
 
 from .fastdeploy_utils import FastDeployRuntimeModel
+from .paddle_infer_utils import PaddleInferModel
 
 TRANSFORMERS_SAFE_WEIGHTS_NAME = "model.safetensors"
 TRANSFORMERS_WEIGHTS_NAME = "pytorch_model.bin"
@@ -102,6 +103,7 @@ LOADABLE_CLASSES = {
         "SchedulerMixin": ["save_pretrained", "from_pretrained"],
         "DiffusionPipeline": ["save_pretrained", "from_pretrained"],
         "FastDeployRuntimeModel": ["save_pretrained", "from_pretrained"],
+        "PaddleInferModel": ["save_pretrained", "from_pretrained"],
     },
     "paddlenlp.transformers": {
         "PretrainedTokenizer": ["save_pretrained", "from_pretrained"],
@@ -371,6 +373,7 @@ def load_sub_model(
     pipeline_class: Any,
     paddle_dtype: paddle.dtype,
     runtime_options: Any,
+    infer_configs: Any,
     model_variants: Dict[str, str],
     name: str,
     from_diffusers: bool,
@@ -431,6 +434,10 @@ def load_sub_model(
                 )
         loading_kwargs["is_onnx_model"] = is_onnx_model
 
+    if issubclass(class_obj, PaddleInferModel):
+        loading_kwargs["infer_configs"] = infer_configs.get(name, None) if isinstance(infer_configs, dict) else infer_configs
+    
+    
     from ppdiffusers import ModelMixin
 
     # PaddleNLP or PPDiffusers Model
@@ -444,6 +451,7 @@ def load_sub_model(
     try:
         # check if the module is in a subdirectory
         if os.path.isdir(os.path.join(cached_folder, name)):
+            # import pdb; pdb.set_trace()
             loaded_sub_model = load_method(os.path.join(cached_folder, name), **loading_kwargs)
         else:
             # else load from the root directory
@@ -462,7 +470,6 @@ def load_sub_model(
             )
         if loaded_sub_model is None:
             raise ValueError(f"We cant load '{name}' from {pretrained_model_name_or_path} or {cached_folder}! \n {e} ")
-
     return loaded_sub_model
 
 
@@ -930,6 +937,7 @@ class DiffusionPipeline(ConfigMixin):
         custom_pipeline = kwargs.pop("custom_pipeline", None)
         custom_revision = kwargs.pop("custom_revision", None)
         runtime_options = kwargs.pop("runtime_options", None)
+        infer_configs = kwargs.pop("infer_configs", None)
         low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", LOW_CPU_MEM_USAGE_DEFAULT)
         use_safetensors = kwargs.pop("use_safetensors", None if is_safetensors_available() else False)
         variant = kwargs.pop("variant", None)
@@ -1109,6 +1117,7 @@ class DiffusionPipeline(ConfigMixin):
                     pipeline_class=pipeline_class,
                     paddle_dtype=paddle_dtype,
                     runtime_options=runtime_options,
+                    infer_configs=infer_configs,
                     model_variants=model_variants,
                     name=name,
                     from_diffusers=from_diffusers,

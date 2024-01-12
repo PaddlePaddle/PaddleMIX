@@ -55,6 +55,8 @@ PPDIFFUSERS_MODULES_CACHE = os.path.abspath(os.getenv("PPDIFFUSERS_MODULES_CACHE
 PADDLE_WEIGHTS_NAME = "model_state.pdparams"
 FASTDEPLOY_WEIGHTS_NAME = "inference.pdiparams"
 FASTDEPLOY_MODEL_NAME = "inference.pdmodel"
+PADDLE_INFER_WEIGHTS_NAME = "inference.pdiparams"
+PADDLE_INFER_MODEL_NAME = "inference.pdmodel"
 WEIGHTS_NAME = PADDLE_WEIGHTS_NAME
 
 TEST_DOWNLOAD_SERVER = "https://paddlenlp.bj.bcebos.com/models/community/ppdiffusers/tests"

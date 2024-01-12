@@ -174,6 +174,7 @@ try:
 except OptionalDependencyNotAvailable:
     from ..utils.dummy_paddle_and_paddlenlp_and_fastdeploy_objects import *  # noqa F403
 else:
+    from .paddle_infer_utils import PaddleInferModel
     from .controlnet import FastDeployStableDiffusionControlNetPipeline
     from .stable_diffusion import (
         FastDeployCycleDiffusionPipeline,
@@ -190,6 +191,7 @@ else:
         FastDeployStableDiffusionXLImg2ImgPipeline,
         FastDeployStableDiffusionXLInpaintPipeline,
         FastDeployStableDiffusionXLMegaPipeline,
+        PaddleInferStableDiffusionXLPipeline,
     )
 
 try:
