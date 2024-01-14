@@ -13,14 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from paddlenlp.transformers import CLIPImageProcessor, CLIPTokenizer
-
 from ppdiffusers.pipelines.fastdeployxl_utils import (
     FastDeployDiffusionXLPipelineMixin,
     FastDeployRuntimeModel,
 )
 from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
+from ppdiffusers.transformers import CLIPImageProcessor, CLIPTokenizer
 from ppdiffusers.utils import logging
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name

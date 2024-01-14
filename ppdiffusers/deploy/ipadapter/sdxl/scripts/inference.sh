@@ -13,10 +13,10 @@
 # limitations under the License.
 
 # text2img
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter --scheduler "ddim" --backend paddle --device gpu --task_name text2img
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter --scheduler "ddim" --backend paddle_tensorrt --device gpu --task_name text2img
 
 # img2img
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle --device gpu --task_name img2img
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle_tensorrt --device gpu --task_name img2img
 
 # # inpaint
-python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle --device gpu --task_name inpaint
+python infer.py --model_dir static_model/stable-diffusion-xl-base-1.0-ipadapter/ --scheduler "ddim" --backend paddle_tensorrt --device gpu --task_name inpaint
