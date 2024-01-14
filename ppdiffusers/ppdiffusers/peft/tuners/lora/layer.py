@@ -310,11 +310,11 @@ class Linear(nn.Layer, LoraLayer):
         output_tensor = transpose(weight_B.T @ weight_A.T, self.fan_in_fan_out) * self.scaling[adapter]
 
         if cast_to_fp32:
-            output_tensor = output_tensor._to(dtype=dtype)
+            output_tensor = output_tensor.cast(dtype=dtype)
 
             # cast back the weights
-            self.lora_A[adapter].weight.data = weight_A._to(dtype)
-            self.lora_B[adapter].weight.data = weight_B._to(dtype)
+            self.lora_A[adapter].weight.data = weight_A.cast(dtype=dtype)
+            self.lora_B[adapter].weight.data = weight_B.cast(dtype=dtype)
 
         return output_tensor
 
@@ -336,10 +336,10 @@ class Linear(nn.Layer, LoraLayer):
                 lora_B = self.lora_B[active_adapter]
                 dropout = self.lora_dropout[active_adapter]
                 scaling = self.scaling[active_adapter]
-                x = x._to(dtype=lora_A.weight.dtype)
+                x = x.cast(dtype=lora_A.weight.dtype)
                 result += lora_B(lora_A(dropout(x))) * scaling
 
-        result = result._to(dtype=previous_dtype)
+        result = result.cast(dtype=previous_dtype)
         return result
 
     def __repr__(self) -> str:
@@ -446,11 +446,11 @@ class Embedding(nn.Layer, LoraLayer):
         output_tensor = transpose(weight_B @ weight_A, True) * self.scaling[adapter]
 
         if cast_to_fp32:
-            output_tensor = output_tensor._to(dtype=dtype)
+            output_tensor = output_tensor.cast(dtype=dtype)
 
             # cast back the weights
-            self.lora_embedding_A[adapter] = weight_A._to(dtype=dtype)
-            self.lora_embedding_B[adapter] = weight_B._to(dtype=dtype)
+            self.lora_embedding_A[adapter] = weight_A.cast(dtype=dtype)
+            self.lora_embedding_B[adapter] = weight_B.cast(dtype=dtype)
 
         return output_tensor
 
@@ -601,11 +601,11 @@ class Conv2d(nn.Layer, LoraLayer):
             )
 
         if cast_to_fp32:
-            output_tensor = output_tensor._to(dtype=dtype)
+            output_tensor = output_tensor.cast(dtype=dtype)
 
             # cast back the weights
-            self.lora_A[adapter].weight.data = weight_A._to(dtype=dtype)
-            self.lora_B[adapter].weight.data = weight_B._to(dtype=dtype)
+            self.lora_A[adapter].weight.data = weight_A.cast(dtype=dtype)
+            self.lora_B[adapter].weight.data = weight_B.cast(dtype=dtype)
 
         return output_tensor
 
@@ -627,10 +627,10 @@ class Conv2d(nn.Layer, LoraLayer):
                 lora_B = self.lora_B[active_adapter]
                 dropout = self.lora_dropout[active_adapter]
                 scaling = self.scaling[active_adapter]
-                x = x._to(dtype=lora_A.weight.dtype)
+                x = x.cast(dtype=lora_A.weight.dtype)
                 result += lora_B(lora_A(dropout(x))) * scaling
 
-        result = result._to(dtype=previous_dtype)
+        result = result.cast(dtype=previous_dtype)
         return result
 
     def __repr__(self) -> str:

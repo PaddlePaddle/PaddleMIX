@@ -62,7 +62,7 @@ from ppdiffusers.accelerate.logging import get_logger
 from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
-from ppdiffusers.utils import check_min_version, is_wandb_available
+from ppdiffusers.utils import USE_PEFT_BACKEND, check_min_version, is_wandb_available
 
 MAX_SEQ_LENGTH = 77
 
@@ -71,8 +71,6 @@ MAX_SEQ_LENGTH = 77
 check_min_version("0.24.0")
 
 logger = get_logger(__name__)
-
-USE_PEFT_BACKEND = False
 
 if USE_PEFT_BACKEND:
     from ppdiffusers.peft import LoraConfig, get_peft_model, get_peft_model_state_dict
@@ -84,12 +82,9 @@ def get_module_kohya_state_dict(
     module, prefix: str = "", dtype: paddle.dtype = "float32", adapter_name: str = "default"
 ):
     kohya_ss_state_dict = {}
-    if prefix is not None and prefix != "" and not prefix.endswith("."):
-        prefix += "."
-
     if USE_PEFT_BACKEND:
         for peft_key, weight in get_peft_model_state_dict(module, adapter_name=adapter_name).items():
-            kohya_key = peft_key.replace("base_model.model", prefix)
+            kohya_key = peft_key.replace("base_model.model", prefix.rstrip("."))
             kohya_key = kohya_key.replace("lora_A", "lora_down")
             kohya_key = kohya_key.replace("lora_B", "lora_up")
             kohya_key = kohya_key.replace(".", "_", kohya_key.count(".") - 2)
@@ -105,6 +100,8 @@ def get_module_kohya_state_dict(
                     paddle.to_tensor(module.peft_config[adapter_name].lora_alpha, dtype=dtype)
                 )
     else:
+        if prefix is not None and prefix != "" and not prefix.endswith("."):
+            prefix += "."
         for peft_key, weight in module.get_trainable_state_dict().items():
             kohya_key = prefix + peft_key.rstrip(".weight")
             kohya_key = kohya_key.replace("lora_A", "lora_down.weight")
@@ -716,6 +713,13 @@ def parse_args():
         ),
     )
     parser.add_argument(
+        "--fp16_opt_level",
+        type=str,
+        default="O1",
+        choices=["O0", "O1", "O2"],
+        help=("For fp16/bf16: AMP optimization level selected in ['O0', 'O1', and 'O2']."),
+    )
+    parser.add_argument(
         "--cast_teacher_unet",
         action="store_true",
         help="Whether to cast the teacher U-Net to the precision specified by `--mixed_precision`.",
@@ -794,6 +798,7 @@ def main(args):
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
+        fp16_opt_level=args.fp16_opt_level,
         log_with=args.report_to,
         project_config=accelerator_project_config,
         split_batches=True,  # It's important to set this to True when using webdataset to get the right number of steps for lr scheduling. If set to False, the number of steps will be devide by the number of processes assuming batches are multiplied by the number of processes
@@ -966,7 +971,11 @@ def main(args):
 
     # 12. Optimizer creation
     parameters = [p for p in unet.parameters() if not p.stop_gradient]
-    optimizer = AdamW(
+    optimizer_cls = AdamW
+    optimizer_kwargs = {}
+    if hasattr(optimizer_cls, "_create_master_weight") and accelerator.fp16_opt_level == "O2":
+        optimizer_kwargs["multi_precision"] = True
+    optimizer = optimizer_cls(
         parameters=parameters,
         learning_rate=args.learning_rate,
         beta1=args.adam_beta1,
@@ -974,6 +983,7 @@ def main(args):
         weight_decay=args.adam_weight_decay,
         epsilon=args.adam_epsilon,
         grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
+        **optimizer_kwargs,
     )
 
     # 13. Dataset creation and data processing
@@ -1233,10 +1243,10 @@ def main(args):
                 with paddle.no_grad():
                     with paddle.amp.auto_cast():
                         target_noise_pred = unet(
-                            x_prev.cast(dtype=paddle.float32),
+                            x_prev.cast(dtype=weight_dtype),
                             timesteps,
                             timestep_cond=None,
-                            encoder_hidden_states=prompt_embeds.cast(dtype=paddle.float32),
+                            encoder_hidden_states=prompt_embeds.cast(dtype=weight_dtype),
                         ).sample
                     pred_x_0 = get_predicted_original_sample(
                         target_noise_pred,

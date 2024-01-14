@@ -429,9 +429,9 @@ class StableDiffusionXLControlNetImg2ImgPipeline(
             negative_prompt_embeds = paddle.concat(negative_prompt_embeds_list, axis=-1)
 
         if self.text_encoder_2 is not None:
-            prompt_embeds = prompt_embeds._to(dtype=self.text_encoder_2.dtype)
+            prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder_2.dtype)
         else:
-            prompt_embeds = prompt_embeds._to(dtype=self.unet.dtype)
+            prompt_embeds = prompt_embeds.cast(dtype=self.unet.dtype)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -443,9 +443,9 @@ class StableDiffusionXLControlNetImg2ImgPipeline(
             seq_len = negative_prompt_embeds.shape[1]
 
             if self.text_encoder_2 is not None:
-                negative_prompt_embeds = negative_prompt_embeds._to(dtype=self.text_encoder_2.dtype)
+                negative_prompt_embeds = negative_prompt_embeds.cast(dtype=self.text_encoder_2.dtype)
             else:
-                negative_prompt_embeds = negative_prompt_embeds._to(dtype=self.unet.dtype)
+                negative_prompt_embeds = negative_prompt_embeds.cast(dtype=self.unet.dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
