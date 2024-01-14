@@ -62,7 +62,7 @@ from ppdiffusers.accelerate.logging import get_logger
 from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
-from ppdiffusers.utils import check_min_version, is_wandb_available
+from ppdiffusers.utils import USE_PEFT_BACKEND, check_min_version, is_wandb_available
 
 MAX_SEQ_LENGTH = 77
 
@@ -71,8 +71,6 @@ MAX_SEQ_LENGTH = 77
 check_min_version("0.24.0")
 
 logger = get_logger(__name__)
-
-USE_PEFT_BACKEND = False
 
 if USE_PEFT_BACKEND:
     from ppdiffusers.peft import LoraConfig, get_peft_model, get_peft_model_state_dict
@@ -1245,10 +1243,10 @@ def main(args):
                 with paddle.no_grad():
                     with paddle.amp.auto_cast():
                         target_noise_pred = unet(
-                            x_prev.cast(dtype=paddle.float32),
+                            x_prev.cast(dtype=weight_dtype),
                             timesteps,
                             timestep_cond=None,
-                            encoder_hidden_states=prompt_embeds.cast(dtype=paddle.float32),
+                            encoder_hidden_states=prompt_embeds.cast(dtype=weight_dtype),
                         ).sample
                     pred_x_0 = get_predicted_original_sample(
                         target_noise_pred,
