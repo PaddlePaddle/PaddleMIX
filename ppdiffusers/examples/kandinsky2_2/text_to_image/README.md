@@ -11,8 +11,8 @@ ___这个脚本是试验性的。该脚本会对整个'decoder'或'prior'模型�
 在运行这个训练代码前，我们需要安装下面的训练依赖:
 
 ```bash
-# 安装2.5.2版本的paddlepaddle-gpu，当前我们选择了cuda11.7的版本，可以查看 https://www.paddlepaddle.org.cn/ 寻找自己适合的版本
-python -m pip install paddlepaddle-gpu==2.5.2.post117 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+# 安装2.6.0版本的paddlepaddle-gpu，当前我们选择了cuda12.0的版本，可以查看 https://www.paddlepaddle.org.cn/ 寻找自己适合的版本
+python -m pip install paddlepaddle-gpu==2.6.0.post120 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 
 # 安装所需的依赖, 如果提示权限不够，请在最后增加 --user 选项
 pip install -r requirements.txt
@@ -64,12 +64,12 @@ python -u train_text_to_image_decoder.py \
   --output_dir="kandi2-decoder-pokemon-model" 
 ```
 
-训练完成后，模型将保存在命令中指定的 `output_dir` 目录中。在本例中是 `kandi22-decoder-pokemon-model`。要加载微调后的模型进行推理，后将该路径传递给 `AutoPipelineForText2Image` :
+训练完成后，模型将保存在命令中指定的 `output_dir` 目录中。在本例中是 `kandi22-decoder-pokemon-model`。要加载微调后的模型进行推理，后将该路径传递给 `KandinskyV22CombinedPipeline` :
 
 ```python
-from ppdiffusers import AutoPipelineForText2Image
+from ppdiffusers import KandinskyV22CombinedPipeline
 
-pipe = AutoPipelineForText2Image.from_pretrained(output_dir)
+pipe = KandinskyV22CombinedPipeline.from_pretrained(output_dir)
 
 prompt='A robot pokemon, 4k photo'
 images = pipe(prompt=prompt).images
@@ -79,13 +79,13 @@ images[0].save("robot-pokemon.png")
 Checkpoints只保存 unet，因此要从checkpoints运行推理只需加载 unet：
 
 ```python
-from ppdiffusers import AutoPipelineForText2Image, UNet2DConditionModel
+from ppdiffusers import KandinskyV22CombinedPipeline, UNet2DConditionModel
 
 model_path = "path_to_saved_model"
 
 unet = UNet2DConditionModel.from_pretrained(model_path + "/checkpoint-<N>/unet")
 
-pipe = AutoPipelineForText2Image.from_pretrained("kandinsky-community/kandinsky-2-2-decoder", unet=unet)
+pipe = KandinskyV22CombinedPipeline.from_pretrained("kandinsky-community/kandinsky-2-2-decoder", unet=unet)
 
 images = pipe(prompt="A robot pokemon, 4k photo").images
 images[0].save("robot-pokemon.png")
@@ -117,11 +117,11 @@ python -u train_text_to_image_prior.py \
 要使用微调prior模型进行推理，首先需要将 `output_dir`传给 `DiffusionPipeline`从而创建一个prior pipeline。然后，从一个预训练或微调decoder以及刚刚创建的prior pipeline的所有模块中创建一个`KandinskyV22CombinedPipeline`：
 
 ```python
-from ppdiffusers import AutoPipelineForText2Image, DiffusionPipeline
+from ppdiffusers import KandinskyV22CombinedPipeline, DiffusionPipeline
 
 pipe_prior = DiffusionPipeline.from_pretrained(output_dir)
 prior_components = {"prior_" + k: v for k,v in pipe_prior.components.items()}
-pipe = AutoPipelineForText2Image.from_pretrained("kandinsky-community/kandinsky-2-2-decoder", **prior_components)
+pipe = KandinskyV22CombinedPipeline.from_pretrained("kandinsky-community/kandinsky-2-2-decoder", **prior_components)
 
 prompt='A robot pokemon, 4k photo'
 images = pipe(prompt=prompt, negative_prompt=negative_prompt).images
@@ -218,12 +218,12 @@ python -u train_text_to_image_prior_lora.py \
 
 #### 2.1 LoRA微调decoder推理流程
 
-使用上述命令训练好Kandinsky decoder模型后，就可以在加载训练好 LoRA 权重后使用 `AutoPipelineForText2Image` 进行推理。您需要传递用于加载 LoRA 权重的 `output_dir` 目录，在本例中是 `kandi22-decoder-pokemon-lora`。
+使用上述命令训练好Kandinsky decoder模型后，就可以在加载训练好 LoRA 权重后使用 `KandinskyV22CombinedPipeline` 进行推理。您需要传递用于加载 LoRA 权重的 `output_dir` 目录，在本例中是 `kandi22-decoder-pokemon-lora`。
 
 ```python
-from ppdiffusers import AutoPipelineForText2Image
+from ppdiffusers import KandinskyV22CombinedPipeline
 
-pipe = AutoPipelineForText2Image.from_pretrained("kandinsky-community/kandinsky-2-2-decoder")
+pipe = KandinskyV22CombinedPipeline.from_pretrained("kandinsky-community/kandinsky-2-2-decoder")
 pipe.unet.load_attn_procs(output_dir)
 
 prompt='A robot pokemon, 4k photo'
@@ -234,9 +234,9 @@ image.save("robot_pokemon.png")
 #### 2.2 LoRA微调prior推理流程
 
 ```python
-from ppdiffusers import AutoPipelineForText2Image
+from ppdiffusers import KandinskyV22CombinedPipeline
 
-pipe = AutoPipelineForText2Image.from_pretrained("kandinsky-community/kandinsky-2-2-decoder")
+pipe = KandinskyV22CombinedPipeline.from_pretrained("kandinsky-community/kandinsky-2-2-decoder")
 pipe.prior_prior.load_attn_procs(output_dir)
 
 prompt='A robot pokemon, 4k photo'

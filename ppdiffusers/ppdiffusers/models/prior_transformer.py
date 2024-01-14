@@ -26,7 +26,7 @@ from .attention import BasicTransformerBlock
 from .attention_processor import AttentionProcessor, AttnProcessor
 from .embeddings import TimestepEmbedding, Timesteps
 from .modeling_utils import ModelMixin
-
+from ..loaders import UNet2DConditionLoadersMixin
 
 @dataclass
 class PriorTransformerOutput(BaseOutput):
@@ -41,7 +41,7 @@ class PriorTransformerOutput(BaseOutput):
     predicted_image_embedding: paddle.Tensor
 
 
-class PriorTransformer(ModelMixin, ConfigMixin):
+class PriorTransformer(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
     """
     A Prior Transformer model.
 
