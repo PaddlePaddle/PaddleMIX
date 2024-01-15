@@ -84,6 +84,7 @@ def _expand_mask(mask: paddle.Tensor, dtype: paddle.dtype, tgt_len: Optional[int
 class QWen(QWenModel):
     def __init__(self, config):
         super().__init__(config)
+        self.recompute = config.recompute if hasattr(config, "recompute") else False
 
     def _prepare_decoder_attention_mask(self, attention_mask, input_shape, inputs_embeds, past_key_values_length):
         combined_attention_mask = None
@@ -173,7 +174,7 @@ class QWen(QWenModel):
             hidden_states.shape[-1],
         ]
 
-        if self.enable_recompute and self.training:
+        if self.recompute and self.training:
             if use_cache:
                 logger.warning_once("`use_cache=True` is incompatible with recompute")
                 use_cache = False
@@ -182,11 +183,12 @@ class QWen(QWenModel):
         all_self_attentions = () if output_attentions else None
         all_hidden_states = () if output_hidden_states else None
         for i, (block, layer_past) in enumerate(zip(self.h, past_key_values)):
-            has_gradient = not hidden_states.stop_gradient
+
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            if self.enable_recompute and self.training and has_gradient:
+            if self.recompute and self.training:
+                hidden_states.stop_gradient = False
                 outputs = self.recompute_training(
                     block,
                     hidden_states,
@@ -351,8 +353,10 @@ class QWenLMHeadModel(QWenPretrainedModel):
             images = self.visual(images)
 
             assert images.shape[0] == len(images)
+        else:
+            images = None
 
-        transformer_outputs = self.transformer(
+        llm_outputs = self.transformer(
             input_ids,
             images=images,
             img_pos=img_pos,
@@ -369,7 +373,7 @@ class QWenLMHeadModel(QWenPretrainedModel):
             return_dict=return_dict,
         )
 
-        hidden_states = transformer_outputs[0]
+        hidden_states = llm_outputs[0]
 
         lm_logits = self.lm_head(hidden_states)
 
@@ -383,15 +387,15 @@ class QWenLMHeadModel(QWenPretrainedModel):
             loss = loss_fct(shift_logits.reshape([-1, shift_logits.shape[-1]]), shift_labels.reshape([-1]))
 
         if not return_dict:
-            output = (lm_logits,) + transformer_outputs[1:]
+            output = (lm_logits,) + llm_outputs[1:]
             return (loss,) + output if loss is not None else output
 
         return CausalLMOutputWithPast(
             loss=loss,
             logits=lm_logits,
-            past_key_values=transformer_outputs.past_key_values,
-            hidden_states=transformer_outputs.hidden_states,
-            attentions=transformer_outputs.attentions,
+            past_key_values=llm_outputs.past_key_values,
+            hidden_states=llm_outputs.hidden_states,
+            attentions=llm_outputs.attentions,
         )
 
     def chat(
