@@ -22,9 +22,9 @@ PaddleMIX工具箱秉承了飞桨套件一站式体验、性能极致、生态�
 
 ### 1. 精调
 PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略，提供统一、高效精调方案：
-- **统一训练入口**。PaddleMIX 精调方案可适配业界主流跨模态大模型，用户只需修改[config](../config/) 配置文件，即能在单卡或多卡进行多种大模型精调；
-- **支持多数据集和混合数据集** 支持多种数据集和混合数据集同时精调，包括：VQA、Caption、Chatml等数据集混合使用；
-- **高效数据和分布式策略** MIXToken策略有效增加数据吞吐量，大幅度提高模型训练效率。自适应Trainer和定制化Trainer灵活配置，无缝链接飞桨分布式并行策略，大幅降低大模型精调硬件门槛。
+- **统一训练入口** PaddleMIX 精调方案可适配业界主流跨模态大模型，用户只需修改[config](../config/) 配置文件，即能在单卡或多卡进行多种大模型精调；
+- **多数据集和混合数据集** 支持多种数据集和混合数据集同时精调，包括：VQA、Caption、Chatml等数据集混合使用；
+- **强大数据流和分布式策略** MIXToken策略有效增加数据吞吐量，大幅度提高模型训练效率。自适应Trainer和定制化Trainer灵活配置，无缝链接飞桨分布式并行策略，大幅降低大模型精调硬件门槛。
 
 
 **数据准备**：
@@ -36,8 +36,14 @@ PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略
 ...
 
 "dataset": {
-      "train":[{"name": "chatml_dataset", "data_files": "train.json"},{"name": "coco_caption", "data_files": "train.json"},......],
-      "eval": [{"name": "chatml_dataset", "data_files": "val.json"},{"name": "coco_caption", "data_files": "val.json"},......],
+      "train":[
+        {"name": "chatml_dataset", "data_files": "train.json"},
+        {"name": "coco_caption", "data_files": "train.json"},
+        ......],
+      "eval": [
+        {"name": "chatml_dataset", "data_files": "val.json"},
+        {"name": "coco_caption", "data_files": "val.json"},
+        ......],
     },
 ....
 
