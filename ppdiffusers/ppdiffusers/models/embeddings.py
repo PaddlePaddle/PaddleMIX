@@ -466,17 +466,17 @@ class ImageProjection(nn.Layer):
         num_image_text_embeds: int = 32,
     ):
         super().__init__()
-
+        self.cross_attention_dim = cross_attention_dim
         self.num_image_text_embeds = num_image_text_embeds
         self.image_embeds = nn.Linear(image_embed_dim, self.num_image_text_embeds * cross_attention_dim)
         self.norm = nn.LayerNorm(cross_attention_dim)
 
     def forward(self, image_embeds: paddle.Tensor):
-        batch_size = image_embeds.shape[0]
+        batch_size = paddle.shape(image_embeds)[0]
 
         # image
         image_embeds = self.image_embeds(image_embeds)
-        image_embeds = image_embeds.reshape([batch_size, self.num_image_text_embeds, -1])
+        image_embeds = image_embeds.reshape([batch_size, self.num_image_text_embeds, self.cross_attention_dim])
         image_embeds = self.norm(image_embeds)
         return image_embeds
 

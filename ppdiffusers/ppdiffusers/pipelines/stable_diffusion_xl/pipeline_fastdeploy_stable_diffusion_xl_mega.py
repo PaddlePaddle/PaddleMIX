@@ -18,6 +18,7 @@ from typing import Callable, Dict, List, Optional, Union
 import paddle
 import PIL.Image
 
+from ...image_processor import PipelineImageInput
 from ...utils import logging
 from .pipeline_fastdeploy_stable_diffusion_xl import FastDeployStableDiffusionXLPipeline
 from .pipeline_fastdeploy_stable_diffusion_xl_img2img import (
@@ -60,7 +61,7 @@ class FastDeployStableDiffusionXLMegaPipeline(FastDeployStableDiffusionXLPipelin
         feature_extractor ([`CLIPFeatureExtractor`]):
             Model that extracts features from generated images to be used as inputs for the `safety_checker`.
     """
-    _optional_components = ["vae_encoder", "safety_checker", "feature_extractor"]
+    _optional_components = ["image_encoder", "vae_encoder", "safety_checker", "feature_extractor"]
 
     def __call__(self, *args, **kwargs):
         return self.text2img(*args, **kwargs)
@@ -85,6 +86,7 @@ class FastDeployStableDiffusionXLMegaPipeline(FastDeployStableDiffusionXLPipelin
         callback_steps: Optional[int] = 1,
         controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
         controlnet_conditioning_scale: float = 1.0,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
         infer_op_dict: Dict[str, str] = None,
     ):
 
@@ -111,6 +113,7 @@ class FastDeployStableDiffusionXLMegaPipeline(FastDeployStableDiffusionXLPipelin
             callback_steps=callback_steps,
             # controlnet_cond=controlnet_cond,
             # controlnet_conditioning_scale=controlnet_conditioning_scale,
+            ip_adapter_image=ip_adapter_image,
             infer_op_dict=infer_op_dict,
         )
         return output
@@ -137,6 +140,7 @@ class FastDeployStableDiffusionXLMegaPipeline(FastDeployStableDiffusionXLPipelin
         callback_steps: Optional[int] = 1,
         # controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
         # controlnet_conditioning_scale: float = 1.0,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
         infer_op_dict: Dict[str, str] = None,
     ):
         expected_components = inspect.signature(FastDeployStableDiffusionXLImg2ImgPipeline.__init__).parameters.keys()
@@ -164,6 +168,7 @@ class FastDeployStableDiffusionXLMegaPipeline(FastDeployStableDiffusionXLPipelin
             callback_steps=callback_steps,
             # controlnet_cond=controlnet_cond,
             # controlnet_conditioning_scale=controlnet_conditioning_scale,
+            ip_adapter_image=ip_adapter_image,
             infer_op_dict=infer_op_dict,
         )
 
@@ -192,6 +197,7 @@ class FastDeployStableDiffusionXLMegaPipeline(FastDeployStableDiffusionXLPipelin
         callback_steps: Optional[int] = 1,
         controlnet_cond: Union[paddle.Tensor, PIL.Image.Image] = None,
         controlnet_conditioning_scale: float = 1.0,
+        ip_adapter_image: Optional[PipelineImageInput] = None,
         infer_op_dict: Dict[str, str] = None,
     ):
         assert self.unet_num_latent_channels in [4, 9]
@@ -221,6 +227,7 @@ class FastDeployStableDiffusionXLMegaPipeline(FastDeployStableDiffusionXLPipelin
             callback_steps=callback_steps,
             # controlnet_cond=controlnet_cond,
             # controlnet_conditioning_scale=controlnet_conditioning_scale,
+            ip_adapter_image=ip_adapter_image,
             infer_op_dict=infer_op_dict,
         )
 

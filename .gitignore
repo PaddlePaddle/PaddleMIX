@@ -63,6 +63,9 @@ coverage.xml
 
 *.tar
 *.pyc
+*.pdiparams
+*.safetensors
+*.bin
 
 .idea/
 
