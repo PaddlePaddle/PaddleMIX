@@ -313,7 +313,12 @@ class TransformerSpatioTemporalModel(nn.Layer):
         time_context_first_timestep = time_context[None, :].reshape(
             [batch_size, num_frames, -1, time_context.shape[-1]]
         )[:, 0]
-        time_context = time_context_first_timestep[None, :].broadcast_to(
+
+        # westfish: change broadcast_to to expand to resolve dynamic to static problem, caused by .broadcast_to, with AssertionError: Elements in shape must be 1-D Tensors or integers.
+        # time_context = time_context_first_timestep[None, :].broadcast_to(
+        #     [height * width, batch_size, 1, time_context.shape[-1]]
+        # )
+        time_context = time_context_first_timestep[None, :].expand(
             [height * width, batch_size, 1, time_context.shape[-1]]
         )
         time_context = time_context.reshape([height * width * batch_size, 1, time_context.shape[-1]])

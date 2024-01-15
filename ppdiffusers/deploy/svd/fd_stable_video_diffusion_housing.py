@@ -13,7 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ppdiffusers.pipelines.fastdeployxl_utils import FastDeployRuntimeModel
+from ppdiffusers.pipelines.fastdeploy_utils import (
+    FastDeployDiffusionPipelineMixin,
+    FastDeployRuntimeModel,
+)
 from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
 from ppdiffusers.schedulers import EulerDiscreteScheduler
 from ppdiffusers.transformers import CLIPImageProcessor
@@ -24,6 +27,7 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 class FastDeployStableVideoDiffusionPipelineHousing(
     DiffusionPipeline,
+    FastDeployDiffusionPipelineMixin,
     # FastDeployDiffusionXLPipelineMixin
 ):
     r"""
