@@ -399,9 +399,9 @@ class StableDiffusionXLControlNetPipeline(
             negative_prompt_embeds = paddle.concat(negative_prompt_embeds_list, axis=-1)
 
         if self.text_encoder_2 is not None:
-            prompt_embeds = prompt_embeds._to(dtype=self.text_encoder_2.dtype)
+            prompt_embeds = prompt_embeds.cast(dtype=self.text_encoder_2.dtype)
         else:
-            prompt_embeds = prompt_embeds._to(dtype=self.unet.dtype)
+            prompt_embeds = prompt_embeds.cast(dtype=self.unet.dtype)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -413,9 +413,9 @@ class StableDiffusionXLControlNetPipeline(
             seq_len = negative_prompt_embeds.shape[1]
 
             if self.text_encoder_2 is not None:
-                negative_prompt_embeds = negative_prompt_embeds._to(dtype=self.text_encoder_2.dtype)
+                negative_prompt_embeds = negative_prompt_embeds.cast(dtype=self.text_encoder_2.dtype)
             else:
-                negative_prompt_embeds = negative_prompt_embeds._to(dtype=self.unet.dtype)
+                negative_prompt_embeds = negative_prompt_embeds.cast(dtype=self.unet.dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
@@ -763,7 +763,7 @@ class StableDiffusionXLControlNetPipeline(
         half_dim = embedding_dim // 2
         emb = paddle.log(paddle.to_tensor(10000.0)) / (half_dim - 1)
         emb = paddle.exp(paddle.arange(half_dim, dtype=dtype) * -emb)
-        emb = w._to(dtype=dtype)[:, None] * emb[None, :]
+        emb = w.cast(dtype=dtype)[:, None] * emb[None, :]
         emb = paddle.concat([paddle.sin(emb), paddle.cos(emb)], axis=1)
         if embedding_dim % 2 == 1:
             emb = paddle.concat(emb, paddle.zeros([emb.shape[0], 1]), axis=-1)

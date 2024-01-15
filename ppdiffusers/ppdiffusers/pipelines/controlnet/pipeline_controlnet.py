@@ -372,7 +372,7 @@ class StableDiffusionControlNetPipeline(
         else:
             prompt_embeds_dtype = prompt_embeds.dtype
 
-        prompt_embeds = prompt_embeds._to(dtype=prompt_embeds_dtype)
+        prompt_embeds = prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -428,7 +428,7 @@ class StableDiffusionControlNetPipeline(
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds._to(dtype=prompt_embeds_dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
@@ -727,7 +727,7 @@ class StableDiffusionControlNetPipeline(
         half_dim = embedding_dim // 2
         emb = paddle.log(paddle.to_tensor(10000.0)) / (half_dim - 1)
         emb = paddle.exp(paddle.arange(half_dim, dtype=dtype) * -emb)
-        emb = w._to(dtype=dtype)[:, None] * emb[None, :]
+        emb = w.cast(dtype=dtype)[:, None] * emb[None, :]
         emb = paddle.concat([paddle.sin(emb), paddle.cos(emb)], axis=1)
         if embedding_dim % 2 == 1:
             emb = paddle.concat(emb, paddle.zeros([emb.shape[0], 1]), axis=-1)

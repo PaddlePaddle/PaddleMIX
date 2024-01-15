@@ -395,7 +395,7 @@ class StableDiffusionPipeline(
         else:
             prompt_embeds_dtype = prompt_embeds.dtype
 
-        prompt_embeds = prompt_embeds._to(dtype=prompt_embeds_dtype)
+        prompt_embeds = prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -451,7 +451,7 @@ class StableDiffusionPipeline(
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds._to(dtype=prompt_embeds_dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
@@ -468,7 +468,7 @@ class StableDiffusionPipeline(
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(image, return_tensors="pd").pixel_values
 
-        image = image._to(dtype=dtype)
+        image = image.cast(dtype=dtype)
         image_embeds = self.image_encoder(image).image_embeds
         image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
 
@@ -485,7 +485,7 @@ class StableDiffusionPipeline(
                 feature_extractor_input = self.image_processor.numpy_to_pil(image)
             safety_checker_input = self.feature_extractor(feature_extractor_input, return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image, clip_input=safety_checker_input.pixel_values._to(dtype=dtype)
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype=dtype)
             )
         return image, has_nsfw_concept
 
@@ -497,7 +497,7 @@ class StableDiffusionPipeline(
         image = self.vae.decode(latents, return_dict=False)[0]
         image = (image / 2 + 0.5).clip(0, 1)
         # we always cast to float32 as this does not cause significant overhead and is compatible with bfloat16
-        image = image._to(dtype=paddle.float32).transpose([0, 2, 3, 1]).cpu().numpy()
+        image = image.cast(dtype=paddle.float32).transpose([0, 2, 3, 1]).cpu().numpy()
         return image
 
     def prepare_extra_step_kwargs(self, generator, eta):
@@ -608,7 +608,7 @@ class StableDiffusionPipeline(
         half_dim = embedding_dim // 2
         emb = paddle.log(paddle.to_tensor(10000.0)) / (half_dim - 1)
         emb = paddle.exp(paddle.arange(half_dim, dtype=dtype) * -emb)
-        emb = w._to(dtype=dtype)[:, None] * emb[None, :]
+        emb = w.cast(dtype=dtype)[:, None] * emb[None, :]
         emb = paddle.concat([paddle.sin(emb), paddle.cos(emb)], axis=1)
         if embedding_dim % 2 == 1:
             emb = paddle.concat(emb, paddle.zeros([emb.shape[0], 1]), axis=-1)

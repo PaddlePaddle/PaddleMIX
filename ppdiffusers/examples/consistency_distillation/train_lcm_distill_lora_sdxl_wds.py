@@ -35,6 +35,9 @@ import paddle.nn.functional as F
 import paddle.vision.transforms.functional as TF
 import webdataset as wds
 from braceexpand import braceexpand
+from paddle.distributed.fleet.utils.hybrid_parallel_util import (
+    fused_allreduce_gradients,
+)
 from paddle.io.dataloader.collate import default_collate_fn
 from paddle.optimizer import AdamW
 from paddle.vision import transforms
@@ -61,7 +64,6 @@ from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
 from ppdiffusers.utils import check_min_version, is_wandb_available
-from ppdiffusers.utils.import_utils import is_ppxformers_available
 
 MAX_SEQ_LENGTH = 77
 
@@ -88,12 +90,10 @@ def get_module_kohya_state_dict(
     module, prefix: str = "", dtype: paddle.dtype = "float32", adapter_name: str = "default"
 ):
     kohya_ss_state_dict = {}
-    if prefix is not None and prefix != "" and not prefix.endswith("."):
-        prefix += "."
 
     if USE_PEFT_BACKEND:
         for peft_key, weight in get_peft_model_state_dict(module, adapter_name=adapter_name).items():
-            kohya_key = peft_key.replace("base_model.model", prefix)
+            kohya_key = peft_key.replace("base_model.model", prefix.rstrip("."))
             kohya_key = kohya_key.replace("lora_A", "lora_down")
             kohya_key = kohya_key.replace("lora_B", "lora_up")
             kohya_key = kohya_key.replace(".", "_", kohya_key.count(".") - 2)
@@ -109,6 +109,8 @@ def get_module_kohya_state_dict(
                     paddle.to_tensor(module.peft_config[adapter_name].lora_alpha, dtype=dtype)
                 )
     else:
+        if prefix is not None and prefix != "" and not prefix.endswith("."):
+            prefix += "."
         for peft_key, weight in module.get_trainable_state_dict().items():
             kohya_key = prefix + peft_key.rstrip(".weight")
             kohya_key = kohya_key.replace("lora_A", "lora_down.weight")
@@ -713,6 +715,13 @@ def parse_args():
         ),
     )
     parser.add_argument(
+        "--fp16_opt_level",
+        type=str,
+        default="O1",
+        choices=["O0", "O1", "O2"],
+        help=("For fp16/bf16: AMP optimization level selected in ['O0', 'O1', and 'O2']."),
+    )
+    parser.add_argument(
         "--cast_teacher_unet",
         action="store_true",
         help="Whether to cast the teacher U-Net to the precision specified by `--mixed_precision`.",
@@ -806,6 +815,7 @@ def main(args):
     accelerator = Accelerator(
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         mixed_precision=args.mixed_precision,
+        fp16_opt_level=args.fp16_opt_level,
         log_with=args.report_to,
         project_config=accelerator_project_config,
         # split_batches=True,  # It's important to set this to True when using webdataset to get the right number of steps for lr scheduling. If set to False, the number of steps will be devide by the number of processes assuming batches are multiplied by the number of processes
@@ -979,26 +989,32 @@ def main(args):
         teacher_unet.to(dtype=weight_dtype)
 
     # 11. Enable optimizations
-    if args.enable_xformers_memory_efficient_attention:
-        if is_ppxformers_available():
-            unet.enable_xformers_memory_efficient_attention()
-            teacher_unet.enable_xformers_memory_efficient_attention()
-            # target_unet.enable_xformers_memory_efficient_attention()
-        else:
-            raise ValueError("xformers is not available. Make sure it is installed correctly")
+    # if args.enable_xformers_memory_efficient_attention:
+    #     if is_ppxformers_available():
+    #         unet.enable_xformers_memory_efficient_attention()
+    #         teacher_unet.enable_xformers_memory_efficient_attention()
+    #         # target_unet.enable_xformers_memory_efficient_attention()
+    #     else:
+    #         raise ValueError("xformers is not available. Make sure it is installed correctly")
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
 
     # 12. Optimizer creation
-    optimizer = AdamW(
-        parameters=[p for p in unet.parameters() if not p.stop_gradient],
+    parameters = [p for p in unet.parameters() if not p.stop_gradient]
+    optimizer_cls = AdamW
+    optimizer_kwargs = {}
+    if hasattr(optimizer_cls, "_create_master_weight") and accelerator.fp16_opt_level == "O2":
+        optimizer_kwargs["multi_precision"] = True
+    optimizer = optimizer_cls(
+        parameters=parameters,
         learning_rate=args.learning_rate,
         beta1=args.adam_beta1,
         beta2=args.adam_beta2,
         weight_decay=args.adam_weight_decay,
         epsilon=args.adam_epsilon,
         grad_clip=nn.ClipGradByGlobalNorm(args.max_grad_norm) if args.max_grad_norm > 0 else None,
+        **optimizer_kwargs,
     )
 
     # 13. Dataset creation and data processing
@@ -1291,6 +1307,10 @@ def main(args):
 
                 # 20.4.14. Backpropagate on the online student model (`unet`)
                 accelerator.backward(loss)
+                # if accelerator.sync_gradients:
+                #     accelerator.clip_grad_norm_(unet.parameters(), args.max_grad_norm)
+                if accelerator.num_processes > 1 and args.gradient_checkpointing and accelerator.sync_gradients:
+                    fused_allreduce_gradients(parameters, None)
                 optimizer.step()
                 lr_scheduler.step()
                 optimizer.zero_grad()

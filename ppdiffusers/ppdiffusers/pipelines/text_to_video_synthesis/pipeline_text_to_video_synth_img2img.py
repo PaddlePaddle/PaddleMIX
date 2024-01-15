@@ -323,7 +323,7 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lor
         else:
             prompt_embeds_dtype = prompt_embeds.dtype
 
-        prompt_embeds = prompt_embeds._to(dtype=prompt_embeds_dtype)
+        prompt_embeds = prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -379,7 +379,7 @@ class VideoToVideoSDPipeline(DiffusionPipeline, TextualInversionLoaderMixin, Lor
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds._to(dtype=prompt_embeds_dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])

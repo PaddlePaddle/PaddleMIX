@@ -92,7 +92,7 @@ class ConsistencyModelPipeline(DiffusionPipeline):
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            latents = latents._to(dtype=dtype)
+            latents = latents.cast(dtype=dtype)
 
         # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma

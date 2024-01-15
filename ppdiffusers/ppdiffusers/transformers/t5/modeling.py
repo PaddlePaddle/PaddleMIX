@@ -106,7 +106,7 @@ class T5LayerNorm(nn.Layer):
         # w/o mean and there is no bias. Additionally we want to make sure that the accumulation for
         # half-precision inputs is done in fp32
 
-        variance = hidden_states._to(dtype=paddle.float32).pow(2).mean(-1, keepdim=True)
+        variance = hidden_states.cast(dtype=paddle.float32).pow(2).mean(-1, keepdim=True)
         hidden_states = hidden_states * paddle.rsqrt(variance + self.variance_epsilon)
 
         # convert into half-precision if necessary
@@ -144,7 +144,7 @@ class T5DenseActDense(nn.Layer):
             and hidden_states.dtype != self.wo.weight.dtype
             and self.wo.weight.dtype != paddle.int8
         ):
-            hidden_states = hidden_states._to(dtype=self.wo.weight.dtype)
+            hidden_states = hidden_states.cast(dtype=self.wo.weight.dtype)
         hidden_states = self.wo(hidden_states)
         return hidden_states
 
@@ -183,7 +183,7 @@ class T5DenseGatedActDense(nn.Layer):
             and hidden_states.dtype != self.wo.weight.dtype
             and self.wo.weight.dtype != paddle.int8
         ):
-            hidden_states = hidden_states._to(dtype=self.wo.weight.dtype)
+            hidden_states = hidden_states.cast(dtype=self.wo.weight.dtype)
 
         hidden_states = self.wo(hidden_states)
         return hidden_states
@@ -272,7 +272,7 @@ class T5Attention(nn.Layer):
         relative_buckets = 0
         if bidirectional:
             num_buckets //= 2
-            relative_buckets += (relative_position > 0)._to(dtype=paddle.int64) * num_buckets
+            relative_buckets += (relative_position > 0).cast(dtype=paddle.int64) * num_buckets
             relative_position = paddle.abs(relative_position)
         else:
             relative_position = -paddle.minimum(relative_position, paddle.zeros_like(relative_position))
@@ -287,7 +287,7 @@ class T5Attention(nn.Layer):
             paddle.log(relative_position.cast("float32") / max_exact)
             / math.log(max_distance / max_exact)
             * (num_buckets - max_exact)
-        )._to(dtype=paddle.int64)
+        ).cast(dtype=paddle.int64)
         relative_position_if_large = paddle.minimum(
             relative_position_if_large, paddle.full_like(relative_position_if_large, num_buckets - 1)
         )
@@ -410,7 +410,7 @@ class T5Attention(nn.Layer):
         position_bias_masked = position_bias
 
         scores += position_bias_masked
-        attn_weights = nn.functional.softmax(scores._to(dtype=paddle.float32), axis=-1)._to(
+        attn_weights = nn.functional.softmax(scores.cast(dtype=paddle.float32), axis=-1)._to(
             dtype=scores.dtype
         )  # (batch_size, n_heads, seq_length, key_length)
         attn_weights = nn.functional.dropout(

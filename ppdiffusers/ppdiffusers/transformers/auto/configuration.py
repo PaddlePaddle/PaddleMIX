@@ -48,12 +48,12 @@ def get_configurations():
         if not os.path.exists(configuration_path):
             continue
 
-        configuration_module = import_module(f"ppdiffusers.transformers.{model_name}.configuration")
-        for key in dir(configuration_module):
-            value = getattr(configuration_module, key)
-            if inspect.isclass(value) and issubclass(value, PretrainedConfig):
-                mappings[model_name].append(value)
-
+        for package in ["paddlenlp", "ppdiffusers"]:
+            configuration_module = import_module(f"{package}.transformers.{model_name}.configuration")
+            for key in dir(configuration_module):
+                value = getattr(configuration_module, key)
+                if inspect.isclass(value) and issubclass(value, PretrainedConfig):
+                    mappings[model_name].append(value)
     return mappings
 
 
@@ -74,8 +74,12 @@ class AutoConfig(PPNLPAutoConfig):
                 return cls
 
         model_name = architectures[0]
-        model_class = import_module(f"ppdiffusers.transformers.{model_name}")
-
+        for package in ["ppdiffusers", "paddlenlp"]:
+            model_class = import_module(f"{package}.transformers.{model_name}")
+            if model_class is not None:
+                break
+        if model_class is None:
+            raise ImportError(f"Cannot find the {model_class} from paddlenlp or ppdiffusers.")
         assert inspect.isclass(model_class) and issubclass(
             model_class, PretrainedModel
         ), f"<{model_class}> should be a PretarinedModel class, but <{type(model_class)}>"

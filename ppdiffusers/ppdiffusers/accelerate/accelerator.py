@@ -983,7 +983,7 @@ class Accelerator:
             dtype = "float16"
         elif self.state.mixed_precision == "bf16":
             dtype = "bfloat16"
-        if dtype in ["float16", "bfloat16"]:
+        if dtype in ["float16", "bfloat16"] and self.state.fp16_opt_level != "O0":
             model = paddle.amp.decorate(
                 models=model,
                 level=self.state.fp16_opt_level,
@@ -1004,15 +1004,16 @@ class Accelerator:
                 self.native_amp, self.autocast_handler, self.state.fp16_opt_level
             )
             new_forward = autocast_context(model_forward_func)
-            # if hasattr(model.forward, "__func__"):
-            #     model.forward = MethodType(new_forward, model)
-            #     if hasattr(model.forward, "__func__"):
-            #         model.forward = MethodType(convert_outputs_to_fp32(model.forward.__func__), model)
-            #     else:
-            #         model.forward = MethodType(convert_outputs_to_fp32(new_forward), model)
-            # else:
-            model.forward = MethodType(new_forward, model)
-
+            if hasattr(model.forward, "__func__"):
+                model.forward = MethodType(new_forward, model)
+                model.forward = MethodType(
+                    convert_outputs_to_fp32(
+                        model.forward.__func__ if hasattr(model.forward, "__func__") else model.forward
+                    ),
+                    model,
+                )
+            else:
+                model.forward = convert_outputs_to_fp32(new_forward)
         # if device_placement and not self.verify_device_map(model):
         #     model = model.to(self.device)
         model.do_gradient_checkpointing = False

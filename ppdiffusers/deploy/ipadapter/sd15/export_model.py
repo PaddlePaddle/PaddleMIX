@@ -21,27 +21,39 @@ from pathlib import Path
 from types import MethodType
 
 import paddle
+from unet_2d_condition_housing import UNet2DConditionModelSDHousing
 
 from ppdiffusers import (
     FastDeployRuntimeModel,
     FastDeployStableDiffusionInpaintPipeline,
     FastDeployStableDiffusionMegaPipeline,
     StableDiffusionPipeline,
-    UNet2DConditionModel,
 )
 
 
 def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     model_path: str,
+    ipadapter_pretrained_model_name_or_path: str,
+    ipadapter_subfolder: str,
+    ipadapter_weight_name: str,
     output_path: str,
     sample: bool = False,
     height: int = None,
     width: int = None,
 ):
     # specify unet model with unet pre_temb_act opt enabled.
-    unet_model = UNet2DConditionModel.from_pretrained(model_path, resnet_pre_temb_non_linearity=True, subfolder="unet")
+    unet_model = UNet2DConditionModelSDHousing.from_pretrained(
+        model_path, resnet_pre_temb_non_linearity=False, subfolder="unet"
+    )
     pipeline = StableDiffusionPipeline.from_pretrained(
-        model_path, unet=unet_model, safety_checker=None, feature_extractor=None
+        model_path,
+        unet=unet_model,
+        safety_checker=None,
+    )
+    pipeline.load_ip_adapter(
+        ipadapter_pretrained_model_name_or_path,
+        subfolder=ipadapter_subfolder,
+        weight_name=ipadapter_weight_name,
     )
     output_path = Path(output_path)
     # calculate latent's H and W
@@ -83,6 +95,11 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
                 dtype="float32",
                 name="encoder_hidden_states",
             ),  # encoder_hidden_states
+            paddle.static.InputSpec(
+                shape=[None, 1024],
+                dtype="float32",
+                name="image_embeds",
+            ),  # image_embeds
         ],
     )
     save_path = os.path.join(args.output_path, "unet", "inference")
@@ -141,6 +158,23 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     print(f"Save vae_decoder model in {save_path} successfully.")
     del pipeline.vae
 
+    # 5. Convert image encoder
+    image_encoder = paddle.jit.to_static(
+        pipeline.image_encoder,
+        input_spec=[
+            paddle.static.InputSpec(
+                shape=[None, 3, 224, 224],
+                dtype="float32",
+                name="image",  # N, C, H, W
+            ),  # image
+        ],
+    )
+    # Save image_encoder in static graph model.
+    save_path = os.path.join(args.output_path, "image_encoder", "inference")
+    paddle.jit.save(image_encoder, save_path)
+    print(f"Save image_encoder model in {save_path} successfully.")
+    del pipeline.image_encoder
+
     if "inpainting" in model_path:
         fd_pipe_cls = FastDeployStableDiffusionInpaintPipeline
     else:
@@ -153,9 +187,9 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         unet=FastDeployRuntimeModel.from_pretrained(output_path / "unet"),
         tokenizer=pipeline.tokenizer,
         scheduler=pipeline.scheduler,
+        feature_extractor=pipeline.feature_extractor,
         safety_checker=None,
-        feature_extractor=None,
-        image_encoder=None,
+        image_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "image_encoder"),
         requires_safety_checker=False,
     )
     fastdeploy_pipeline.save_pretrained(str(output_path))
@@ -170,6 +204,24 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Path to the `ppdiffusers` checkpoint to convert (either a local directory or on the bos).",
+    )
+    parser.add_argument(
+        "--ipadapter_pretrained_model_name_or_path",
+        type=str,
+        required=True,
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: h94/IP-Adapter",
+    )
+    parser.add_argument(
+        "--ipadapter_model_subfolder",
+        type=str,
+        required=True,
+        help="Path to the `ppdiffusers`'s ip-adapter checkpoint to convert (either a local directory or on the bos).Example: models",
+    )
+    parser.add_argument(
+        "--ipadapter_weight_name",
+        type=str,
+        required=True,
+        help="Name of the weight to convert.Example: ip-adapter_sd15.safetensors",
     )
     parser.add_argument("--output_path", type=str, required=True, help="Path to the output model.")
     parser.add_argument(
@@ -194,6 +246,9 @@ if __name__ == "__main__":
 
     convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
         args.pretrained_model_name_or_path,
+        args.ipadapter_pretrained_model_name_or_path,
+        args.ipadapter_model_subfolder,
+        args.ipadapter_weight_name,
         args.output_path,
         args.sample,
         args.height,

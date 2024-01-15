@@ -27,7 +27,9 @@ __all__ = [
     "AutoModel",
 ]
 
-MAPPING_NAMES = OrderedDict(
+from paddlenlp.transformers.auto.modeling import MAPPING_NAMES
+
+NEW_MAPPING_NAMES = OrderedDict(
     [
         ("CLIPText", "clip"),
         ("CLIPVision", "clip"),
@@ -38,6 +40,7 @@ MAPPING_NAMES = OrderedDict(
         ("XLMRoberta", "xlm_roberta"),
     ]
 )
+MAPPING_NAMES.update(NEW_MAPPING_NAMES)
 
 
 def get_configurations():
@@ -64,11 +67,12 @@ def get_configurations():
         if not os.path.exists(modeling_path):
             continue
 
-        modeling_module = import_module(f"ppdiffusers.transformers.{model_name}.modeling")
-        for key in dir(modeling_module):
-            value = getattr(modeling_module, key)
-            if inspect.isclass(value) and issubclass(value, PretrainedModel):
-                mappings[model_name].append(value)
+        for package in ["paddlenlp", "ppdiffusers"]:
+            modeling_module = import_module(f"{package}.transformers.{model_name}.modeling")
+            for key in dir(modeling_module):
+                value = getattr(modeling_module, key)
+                if inspect.isclass(value) and issubclass(value, PretrainedModel):
+                    mappings[model_name].append(value)
 
     return mappings
 
@@ -106,6 +110,11 @@ class AutoModel(PPNLPAutoModel):
             raise AttributeError(
                 f"Unable to parse 'architectures' or 'init_class' from {config_file_path}. Also unable to infer model class from '{pretrained_model_name_or_path}'"
             )
-        import_class = import_module(f"ppdiffusers.transformers.{class_name}.modeling")
+        for package in ["ppdiffusers", "paddlenlp"]:
+            import_class = import_module(f"{package}.transformers.{class_name}.modeling")
+            if import_class is not None:
+                break
+        if import_class is None:
+            raise ImportError(f"Cannot find the {class_name} from paddlenlp or ppdiffusers.")
         model_class = getattr(import_class, model_name)
         return model_class

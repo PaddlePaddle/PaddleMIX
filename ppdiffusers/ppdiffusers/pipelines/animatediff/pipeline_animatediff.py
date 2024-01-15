@@ -252,7 +252,7 @@ class AnimateDiffPipeline(DiffusionPipeline, TextualInversionLoaderMixin, IPAdap
         else:
             prompt_embeds_dtype = prompt_embeds.dtype
 
-        prompt_embeds = prompt_embeds._to(dtype=prompt_embeds_dtype)
+        prompt_embeds = prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -308,7 +308,7 @@ class AnimateDiffPipeline(DiffusionPipeline, TextualInversionLoaderMixin, IPAdap
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds._to(dtype=prompt_embeds_dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
@@ -444,7 +444,7 @@ class AnimateDiffPipeline(DiffusionPipeline, TextualInversionLoaderMixin, IPAdap
         if latents is None:
             latents = randn_tensor(shape, generator=generator, dtype=dtype)
         else:
-            latents = latents._to(dtype=dtype)
+            latents = latents.cast(dtype=dtype)
 
         # scale the initial noise by the standard deviation required by the scheduler
         latents = latents * self.scheduler.init_noise_sigma
