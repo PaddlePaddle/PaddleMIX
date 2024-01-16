@@ -146,7 +146,10 @@ if __name__ == "__main__":
                         default="The qwen vl config dir name of saving config",
                         help="The path of extraction model path that you want to load.")
     parser.add_argument("--device", default="gpu", choices=["gpu", "cpu", "xpu"], help="Device selected for inference.")
+    parser.add_argument("--seed", default=1234)
     args = parser.parse_args()
+
+    paddle.seed(args.seed)
 
     predictor = Predictor(args)
 
