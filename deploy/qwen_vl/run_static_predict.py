@@ -155,19 +155,5 @@ if __name__ == "__main__":
     url = "https://bj.bcebos.com/v1/paddlenlp/models/community/GroundingDino/000000004505.jpg"
     prompt = "Generate the caption in English with grounding:"
 
-    # warp up
-    warm_up_times = 2
-    repeat_times = 10
-    for i in range(warm_up_times):
-        msg = predictor.predict(url, prompt)
-
-    # test
-    import time
-    start_time = time.time()
-    for i in range(repeat_times):
-        msg = predictor.predict(url, prompt)
-    end_time = time.time()
-    during_time = end_time - start_time
-
+    msg = predictor.predict(url, prompt)
     print("Outputs: ", msg)
-    print("The whole end to end time : ", during_time / repeat_times * 1000, "ms")
