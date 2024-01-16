@@ -61,8 +61,7 @@ class Predictor(object):
         seq = input_ids.shape[1]
         max_len = 1024
         dtype = "float16"
-        tgt_generation_mask = paddle.full([batch, 1, 1, max_len], 0, dtype=dtype)
-        tgt_generation_mask[:,0,0,:seq] = 1
+        tgt_generation_mask = paddle.full([batch, 1, 1, max_len], 1, dtype=dtype)
 
         img_pos = None
         if paddle.any(input_ids == self.config.visual["image_start_id"]):
