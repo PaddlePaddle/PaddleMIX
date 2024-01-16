@@ -1,0 +1,4 @@
+paddlenlp>=2.6.0rc0
+Pillow
+visualdl
+ppdiffusers>=0.16.1
