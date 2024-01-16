@@ -118,8 +118,8 @@ def main():
     total_samples = len(train_ds) if train_ds is not None else 0
 
     if data_args.mixtoken:
-        if model.base_model_prefix not in ["qwen"] and training_args.pipeline_parallel_degree < 1:
-            raise NotImplementedError("MIXToke data stream is only implemented for QWen-VL so far.")
+        if model.base_model_prefix not in ["qwen", "visualglm"] and training_args.pipeline_parallel_degree < 1:
+            raise NotImplementedError("MIXToke data stream is only implemented for QWen-VL Visualglm so far.")
         mixtoken_dataset = MIXTokenMapDataset
         logger.info("Creating MIXToken Data Stream. This may take a few minutes.")
         train_ds = mixtoken_dataset(train_ds, max_length=data_args.max_length, processor=train_processor)

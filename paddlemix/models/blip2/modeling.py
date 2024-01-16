@@ -15,8 +15,8 @@
 
 """ Paddle BLIP2 model."""
 
-from typing import Optional, Tuple, Union
 from contextlib import contextmanager
+from typing import Optional, Tuple, Union
 
 import paddle
 import paddle.distributed as dist
@@ -34,7 +34,6 @@ from paddlemix.models.blip2.base_model import (
 from paddlemix.models.blip2.modeling_utils import (
     all_gather_with_grad,
     concat_all_gather,
-    disabled_train,
     masked_fill,
 )
 from paddlemix.models.blip2.Qformer import BertLMHeadModel
@@ -100,7 +99,6 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
             for name, param in self.visual_encoder.named_parameters():
                 param.stop_gradient = True
             self.visual_encoder.eval()
-            self.visual_encoder.train = disabled_train
             logger.info("freeze vision encoder")
         if config.get("train_mode", None) == "stage1":
             self.train_stage1 = True
@@ -135,7 +133,6 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                         ignore_mismatched_sizes=True,
                     )
 
-
                 elif "llama" in name_or_path:
 
                     from paddlenlp.transformers.llama.configuration import LlamaConfig
@@ -158,7 +155,6 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
                     language_model.hidden_size = LlamaConfig.from_pretrained(config.text_config).hidden_size
                     language_model.pad_token_id = LlamaConfig.from_pretrained(config.text_config).pad_token_id
 
-
                 elif "bloom" in name_or_path:
 
                     import paddle.distributed.fleet as fleet
@@ -174,15 +170,19 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
 
                 elif "glm2" in name_or_path:
                     import paddle.distributed.fleet as fleet
-                    from paddlenlp.transformers.chatglm_v2.configuration import ChatGLMv2Config
-                    from paddlenlp.transformers.chatglm_v2.modeling import ChatGLMv2ForCausalLM
+                    from paddlenlp.transformers.chatglm_v2.configuration import (
+                        ChatGLMv2Config,
+                    )
+                    from paddlenlp.transformers.chatglm_v2.modeling import (
+                        ChatGLMv2ForCausalLM,
+                    )
 
                     llm_config = ChatGLMv2Config.from_pretrained(config.text_config)
 
                     if config.mp_degree > 1:
                         hcg = fleet.get_hybrid_communicate_group()
                         language_model = ChatGLMv2ForCausalLM.from_pretrained(
-                            config.text_config, 
+                            config.text_config,
                             tensor_parallel_degree=config.mp_degree,
                             tensor_parallel_rank=hcg.get_model_parallel_rank(),
                             tensor_parallel_output=False,
@@ -195,7 +195,7 @@ class Blip2ForConditionalGeneration(Blip2PretrainedModel):
 
                     language_model.pad_token_id = llm_config.pad_token_id
                     language_model.hidden_size = llm_config.hidden_size
-                    
+
             else:
                 from paddlenlp.transformers import T5Config
 

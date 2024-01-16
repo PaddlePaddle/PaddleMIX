@@ -22,6 +22,7 @@ from paddlemix.datasets.collator import (
     EVA02Collator,
     MiniGPT4Collator,
     QwenVLCollator,
+    VisualglmCollator,
 )
 from paddlemix.metrics.clip_zero_shot import ClipZeroShot
 from paddlemix.models.blip2.utils import BlipCollator
@@ -205,6 +206,8 @@ def get_trainer(
     else:
         if "qwen_vl" in pretrained_model_name_or_path:
             collator = QwenVLCollator(train_processor, mode="train", mixtokens=mixtokens)
+        elif "visualglm" in pretrained_model_name_or_path:
+            collator = VisualglmCollator(train_processor, mode="train")
         else:
             collator = None
 

@@ -20,6 +20,10 @@ from paddlenlp.trainer import TrainingArguments
 @dataclass
 class TrainingArguments(TrainingArguments):
     benchmark: bool = field(default=False, metadata={"help": "Whether runs benchmark"})
+    profiler_options: Optional[str] = field(default=None, metadata={"help": "Whether runs profiler"})
+    warmup_start_lr: float = field(default=1e-6, metadata={"help": "Initial learning rate of warm up."})
+    eta_min: float = field(default=1e-5, metadata={"help": "The minimum value of learning rate."})
+    lr_scheduler_name: str = field(default="CosineDecayWithWarmup", metadata={"help": "The scheduler name to use."})
 
 
 @dataclass
@@ -31,7 +35,7 @@ class DataArgument:
     max_length: int = field(
         default=2048,
         metadata={
-            "help": "The maximum length that model input tokens can have. When intokens is set to True, it's also the maximum length for InTokens data stream"
+            "help": "The maximum length that model input tokens can have. When mixtokens is set to True, it's also the maximum length for InTokens data stream"
         },
     )
     eval_with_do_generation: bool = field(default=False, metadata={"help": "Whether to do generation for evaluation"})
