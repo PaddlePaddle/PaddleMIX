@@ -125,7 +125,7 @@ class LCMModelArguments:
         metadata={"help": "The exponential moving average (EMA) rate or decay factor."},
     )
     # --------------------- LORA --------------------------
-    is_lora: bool = field(default=False, metadata={"help": "Whether or not lora model"})
+    is_lora: bool = field(default=True, metadata={"help": "Whether or not lora model"})
     lora_rank: int = field(
         default=64, metadata={"help": "The rank of the LoRA projection matrix. Only used if `--is_lora=True`."}
     )

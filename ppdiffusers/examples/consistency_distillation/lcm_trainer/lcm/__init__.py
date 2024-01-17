@@ -19,3 +19,4 @@ from .lcm_scheduler import LCMScheduler
 from .lcm_trainer import LCMTrainer
 from .model import LCMModel
 from .text_image_pair_dataset import TextImagePair, worker_init_fn
+from .utils import merge_weights
