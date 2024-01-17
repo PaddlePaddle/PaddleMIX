@@ -999,13 +999,13 @@ class WebUIStableDiffusionPipeline(DiffusionPipeline):
                     step = i // self.scheduler.order
                     do_batch = False
                     conds_list, cond_tensor = reconstruct_multicond_batch(prompt_embeds, step)
-                    cond_tensor = cond_tensor.to(self.unet.dtype)
+                    cond_tensor = cond_tensor.cast(self.unet.dtype)
                     try:
                         weight = conds_list[0][0][1]
                     except Exception:
                         weight = 1.0
                     if do_classifier_free_guidance:
-                        uncond_tensor = reconstruct_cond_batch(negative_prompt_embeds, step).to(self.unet.dtype)
+                        uncond_tensor = reconstruct_cond_batch(negative_prompt_embeds, step).cast(self.unet.dtype)
                         do_batch = cond_tensor.shape[1] == uncond_tensor.shape[1] and not isinstance(
                             self.controlnet, MultiControlNetModel
                         )
