@@ -14,8 +14,7 @@
 
 import paddle
 import paddle.nn as nn
-from ..gpt2.model import GPT2Model
-from ..gpt2.configration import get_gpt2_config, GPT2Config
+from paddlenlp.transformers import GPTModel
 import importlib
 
 class Sequence2AudioMAE(nn.Layer):
@@ -68,19 +67,8 @@ class Sequence2AudioMAE(nn.Layer):
         self.instantiate_cond_stage(cond_stage_config)
         self.initialize_param_check_toolkit()
 
-        # configuration = GPT2Config(**get_gpt2_config()["n_layer"]=1) # TODO
-        # self.model=GPT2Model(configuration)
-        ###################
-        # self.model=nn.Linear(768,768, bias=False) # TODO change the model
-        # with paddle.no_grad():
-        #     self.model.weight.copy_(paddle.eye(768))
-        ###################
-        gpt2_config = GPT2Config(**get_gpt2_config())
-        self.model = GPT2Model(gpt2_config)
-        ###################
-        # self.model = nn.LSTM(input_size=768, hidden_size=768, num_layers=1,bias=False) # TODO
-
-        # self.loss_fn = nn.MSELoss()
+        self.model = GPTModel.from_pretrained("gpt2")
+        
         self.loss_fn = nn.L1Loss()
 
         self.logger_save_dir = None

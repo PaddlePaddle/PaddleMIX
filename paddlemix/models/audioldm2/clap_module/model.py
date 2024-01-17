@@ -23,9 +23,7 @@ from dataclasses import dataclass
 import logging
 
 from .htsat_model import create_htsat_model
-from paddlenlp.transformers import BertModel, BartModel
-from .roberta.model import RobertaModel
-from .roberta.configuration import get_rbt_config, RobertaConfig
+from paddlenlp.transformers import RobertaModel, BertModel, BartModel
 
 
 class MLPLayers(nn.Layer):
@@ -208,10 +206,7 @@ class CLAP(nn.Layer):
                 nn.Linear(self.joint_embed_shape, self.joint_embed_shape),
             )
         elif text_cfg.model_type == "roberta":
-            rbt_cfg = RobertaConfig(**get_rbt_config())
-            self.text_branch = RobertaModel(
-                rbt_cfg
-            )
+            self.text_branch = RobertaModel.from_pretrained("roberta-base")
             self.text_transform = MLPLayers(
                 units=[
                     self.joint_embed_shape,
