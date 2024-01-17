@@ -1,20 +1,22 @@
 # Grounding DINO
 
-## 1. 模型简介
+## 1.模型简介
 
-该模型是 [Grounding DINO](https://arxiv.org/abs/2303.05499) 的 paddle 实现。
+[Grounding DINO](https://arxiv.org/abs/2303.05499) 是一个开集（Open-Set）的目标检测模型，根据输入的文本提示，进行目标检测。
+本仓库是Grounding DINO的Paddle实现，提供部署代码。
 
 
-## 2. 示例
 
-## 2.1 依赖安装 （可选）
+## 2.自定义op安装 （可选）
 ```bash
 #Multi-scale deformable attention custom OP compilation
 cd /paddlemix/models/groundingdino/csrc/
 python setup_ms_deformable_attn_op.py install
 
 ```
-## 2.2 静态图导出与预测
+
+## 3.快速开始
+## 静态图导出与预测
 ```bash
 cd deploy/groundingdino
 
