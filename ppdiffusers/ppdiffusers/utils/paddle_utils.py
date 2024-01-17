@@ -150,9 +150,7 @@ if is_paddle_available():
 
         if isinstance(generator, (list, tuple)):
             batch_size = shape[0]
-            shape = [
-                1,
-            ] + shape[1:]
+            shape = (1,) + tuple(shape[1:])
             latents = [randn_pt(shape, generator=generator[i], dtype=dtype) for i in range(batch_size)]
             latents = paddle.concat(latents, axis=0)
         else:

@@ -279,7 +279,7 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         sigmas_interpol = sigmas_interpol.cpu()
         log_sigmas = self.log_sigmas.cpu()
         timesteps_interpol = np.array(
-            [self._sigma_to_t(sigma_interpol, log_sigmas) for sigma_interpol in sigmas_interpol]
+            [self._sigma_to_t(sigma_interpol, log_sigmas.numpy()) for sigma_interpol in sigmas_interpol.numpy()]
         )
 
         timesteps_interpol = paddle.to_tensor(timesteps_interpol, dtype=timesteps.dtype)
