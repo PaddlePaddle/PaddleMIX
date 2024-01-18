@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import tqdm
 from .encoders.clap_encoder import CLAPAudioEmbeddingClassifierFreev2
 from .latentdiffusion_samplers import DDIMSampler, PLMSSampler
 from .latent_encoder.autoencoder import DiagonalGaussianDistribution
-from .latentdiffusion import (
+from .diffusionwrapper import (
     DiffusionWrapper,
     make_beta_schedule,
     extract_into_tensor,

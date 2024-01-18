@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,15 +13,10 @@
 # limitations under the License.
 
 import paddle
-import paddle.nn as nn
-import os
-
-import paddle.nn.functional as F
 import numpy as np
 
-import soundfile as sf
 from ppdiffusers import AutoencoderKL
-from ..hifigan.model import get_vocoder, synth_one_sample
+from ..hifigan.model import get_vocoder
 
 class DiagonalGaussianDistribution(object):
     def __init__(self, parameters, deterministic=False):

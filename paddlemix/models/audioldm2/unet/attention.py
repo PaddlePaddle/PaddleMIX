@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,20 +14,14 @@
 
 import paddle
 from paddle import nn
-from inspect import isfunction
 from ppdiffusers.models.attention import GEGLU
 from einops import rearrange, repeat
-
-def default(val, d):
-    if val is not None:
-        return val
-    return d() if isfunction(d) else d
+from ..diffusionwrapper import default
 
 def Normalize(in_channels):
     return nn.GroupNorm(
         num_groups=32, num_channels=in_channels, epsilon=1e-6
     )
-
 
 class FeedForward(nn.Layer):
     def __init__(self, dim, dim_out=None, mult=4, glu=False, dropout=0.0):
