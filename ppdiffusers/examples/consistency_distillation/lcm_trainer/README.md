@@ -38,7 +38,7 @@ git clone https://github.com/PaddlePaddle/PaddleMIX
 # 安装2.5.2版本的paddlepaddle-gpu，当前我们选择了cuda11.7的版本，可以查看 https://www.paddlepaddle.org.cn/ 寻找自己适合的版本
 python -m pip install paddlepaddle-gpu==2.5.2.post117 -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 
-# 进入stable diffusion目录
+# 进入consistency_distillation目录
 cd PaddleMIX/ppdiffusers/examples/consistency_distillation/lcm_trainer
 
 # 安装所需的依赖, 如果提示权限不够，请在最后增加 --user 选项
@@ -70,6 +70,7 @@ LCM蒸馏训练或LCM-LoRA训练需要使用 `Laion400M数据集`或者`自定�
 ```bash
 export FLAGS_conv_workspace_size_limit=4096
 
+# 2.6.0的时候会有很多类型提升的warning，GLOG_minloglevel=2将会关闭这些warning
 export GLOG_minloglevel=2
 export OUTPUT_DIR="sd15_lcm_outputs"
 export BATCH_SIZE=12
@@ -142,15 +143,16 @@ python train_lcm.py \
 * `--is_lora`: 是否使用`lora`训练，默认为`True`。
 * `--lora_rank`: lora的rank大小，只有当`--is_lora=True`时候才有作用，默认为`64`。
 * `--unet_time_cond_proj_dim`: `Unet`中`CFG embedding`嵌入的维度，只有当`--is_lora=False`时候才有作用，默认为`256`。
-* `--ema_decay`: `EMA`更新`target_unet`所使用的`decay`参数，只有当`--is_lora=False`时候才有作用，默认为`256`。
+* `--ema_decay`: `EMA`更新`target_unet`所使用的`decay`参数，只有当`--is_lora=False`时候才有作用，默认为`0.95`。
 
 
 ### 4.3 单机多卡训练
 ```bash
 export FLAGS_conv_workspace_size_limit=4096
 
+# 2.6.0的时候会有很多类型提升的warning，GLOG_minloglevel=2将会关闭这些warning
 export GLOG_minloglevel=2
-export OUTPUT_DIR="sd15_lcm_outputs"
+export OUTPUT_DIR="sd15_lcm_8gpus_outputs"
 export BATCH_SIZE=12
 export MAX_ITER=50000
 
@@ -210,10 +212,11 @@ pipe = StableDiffusionPipeline.from_pretrained(
     requires_safety_checker=False,
 )
 
-# merge lora weights, only support safetensors
+# 合并我们训练好后的lora权重，注意这里的lora权重只支持kohya格式的safetensors权重。
 lora_path = "./sd15_lcm_outputs/checkpoint-50000/lora/lcm_lora.safetensors"
 merge_weights(pipe.unet, lora_path)
-# save merged lcm lora unet model
+
+# 合并完毕后，我们可以保存一份合并后的unet的权重，方便我们后续直接加载无需重复合并。
 pipe.unet.save_pretrained("./merged_lcm_lora_unet")
 
 generator = paddle.Generator().manual_seed(42)
