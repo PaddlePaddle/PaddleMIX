@@ -580,9 +580,7 @@ scheduler = LMSDiscreteScheduler(
     beta_schedule="scaled_linear",
     num_train_timesteps=1000,
 )
-pipeline = StableDiffusionCanvasPipeline.from_pretrained(
-    "CompVis/stable-diffusion-v1-4", scheduler=scheduler, use_auth_token=True
-)
+pipeline = StableDiffusionCanvasPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", scheduler=scheduler)
 
 # Mixture of Diffusers generation
 output = pipeline(

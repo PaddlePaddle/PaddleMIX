@@ -1,15 +1,29 @@
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import re
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 from enum import Enum
 from typing import List, Optional, Union
-import paddle
-import numpy as np
-from numpy import exp, pi, sqrt
 
+import numpy as np
+import paddle
+from numpy import exp, pi, sqrt
 from paddle.vision.transforms import functional as F
-from tqdm.auto import tqdm
 from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
+from tqdm.auto import tqdm
 
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
 from ppdiffusers.pipelines.pipeline_utils import DiffusionPipeline
@@ -77,7 +91,7 @@ class CanvasRegion:
     @property
     def height(self):
         return self.row_end - self.row_init
-    
+
     def get_region_generator(self):
         """Creates a paddle.Generator based on the random seed of this region"""
         # Initialize region generator
@@ -163,11 +177,10 @@ class Image2ImageRegion(DiffusionRegion):
             raise ValueError("Must provide a reference image when creating an Image2ImageRegion")
         if self.strength < 0 or self.strength > 1:
             raise ValueError(f"The value of strength should in [0.0, 1.0] but is {self.strength}")
-    
+
         self.reference_image = self.reference_image.squeeze(0)
         self.reference_image = F.resize(self.reference_image, size=[self.height, self.width]).unsqueeze(0)
 
-        
     def encode_reference_image(self, encoder, generator, cpu_vae=False):
         """Encodes the reference image for this Image2Image region into the latent space"""
         # Place encoder in CPU or not following the parameter cpu_vae
@@ -175,9 +188,7 @@ class Image2ImageRegion(DiffusionRegion):
             # Note here we use mean instead of sample, to avoid moving also generator to CPU, which is troublesome
             self.reference_latents = encoder.cpu().encode(self.reference_image).latent_dist.mean
         else:
-            self.reference_latents = encoder.encode(self.reference_image).latent_dist.sample(
-                generator=generator
-            )
+            self.reference_latents = encoder.encode(self.reference_image).latent_dist.sample(generator=generator)
         self.reference_latents = 0.18215 * self.reference_latents
 
     @property
@@ -224,8 +235,9 @@ class MaskWeightsBuilder:
         """Computes a tensor of constant for a given diffusion region"""
         latent_width = region.latent_col_end - region.latent_col_init
         latent_height = region.latent_row_end - region.latent_row_init
-        return paddle.ones(shape=[self.nbatch, self.latent_space_dim,
-            latent_height, latent_width]) * region.mask_weight
+        return (
+            paddle.ones(shape=[self.nbatch, self.latent_space_dim, latent_height, latent_width]) * region.mask_weight
+        )
 
     def _gaussian_weights(self, region: DiffusionRegion) -> paddle.to_tensor:
         """Generates a gaussian mask of weights for tile contributions"""
@@ -246,7 +258,7 @@ class MaskWeightsBuilder:
 
         weights = np.outer(y_probs, x_probs) * region.mask_weight
         return paddle.tile(x=paddle.to_tensor(data=weights), repeat_times=(self.nbatch, self.latent_space_dim, 1, 1))
-    
+
     def _quartic_weights(self, region: DiffusionRegion) -> paddle.to_tensor:
         """Generates a quartic mask of weights for tile contributions
 
@@ -350,8 +362,8 @@ class StableDiffusionCanvasPipeline(DiffusionPipeline):
         # Prepare text embeddings
         for region in text2image_regions:
             region.tokenize_prompt(self.tokenizer)
-            region.encode_prompt(self.text_encoder) # region.encode_prompt(self.text_encoder, self.device)
-            
+            region.encode_prompt(self.text_encoder)  # region.encode_prompt(self.text_encoder, self.device)
+
         # Create original noisy latents using the timesteps
         latents_shape = (batch_size, self.unet.config.in_channels, canvas_height // 8, canvas_width // 8)
         generator = paddle.Generator().manual_seed(seed)
@@ -407,12 +419,14 @@ class StableDiffusionCanvasPipeline(DiffusionPipeline):
             # For classifier free guidance, we need to do two forward passes.
             # Here we concatenate the unconditional and text embeddings into a single batch
             # to avoid doing two forward passes
-            
+
             region.encoded_prompt = paddle.concat(x=[uncond_embeddings, region.encoded_prompt])
 
         # Prepare image latents
         for region in image2image_regions:
-            region.encode_reference_image(self.vae, generator=generator) # region.encode_reference_image(self.vae, device=self.device, generator=generator)
+            region.encode_reference_image(
+                self.vae, generator=generator
+            )  # region.encode_reference_image(self.vae, device=self.device, generator=generator)
 
         # Prepare mask of weights for each region
         mask_builder = MaskWeightsBuilder(latent_space_dim=self.unet.config.in_channels, nbatch=batch_size)
@@ -454,7 +468,9 @@ class StableDiffusionCanvasPipeline(DiffusionPipeline):
                     :,
                     region.latent_row_init : region.latent_row_end,
                     region.latent_col_init : region.latent_col_end,
-                ] += noise_pred_region * mask_weights_region
+                ] += (
+                    noise_pred_region * mask_weights_region
+                )
                 contributors[
                     :,
                     :,
@@ -463,7 +479,9 @@ class StableDiffusionCanvasPipeline(DiffusionPipeline):
                 ] += mask_weights_region
             # Average overlapping areas with more than 1 contributor
             noise_pred /= contributors
-            noise_pred = paddle.nan_to_num(x=noise_pred)  # Replace NaNs by zeros: NaN can appear if a position is not covered by any DiffusionRegion
+            noise_pred = paddle.nan_to_num(
+                x=noise_pred
+            )  # Replace NaNs by zeros: NaN can appear if a position is not covered by any DiffusionRegion
 
             # compute the previous noisy sample x_t -> x_t-1
             latents = self.scheduler.step(noise_pred, t, latents).prev_sample
