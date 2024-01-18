@@ -113,7 +113,7 @@ class AudioLDM2Config(PretrainedConfig):
         self.unet_config["params"]["transformer_depth"] = unet_transformer_depth
 
         self.first_stage_config = {}
-        self.first_stage_config["target"] = ".latent_encoder.autoencoder.AutoencoderKL"
+        self.first_stage_config["target"] = ".latent_encoder.autoencoder.AudioLDMAutoencoderKL"
         self.first_stage_config["params"] = {}
         self.first_stage_config["params"]["sampling_rate"] = autoencoder_sampling_rate
         self.first_stage_config["params"]["batchsize"] = autoencoder_batchsize
