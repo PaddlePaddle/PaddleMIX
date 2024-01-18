@@ -45,10 +45,6 @@ class Sequence2AudioMAE(nn.Layer):
         # Even though the LDM can be conditioned on mutliple pooling rate
         # Our model always predict the higest pooling rate
 
-        # self.time_pool = max(self.cond_stage_config["crossattn_audiomae_pooled"]["params"]["time_pooling_factors"])
-        # self.freq_pool = max(self.cond_stage_config["crossattn_audiomae_pooled"]["params"]["freq_pooling_factors"])
-        # self.mae_token_num = int(512/(self.time_pool*self.freq_pool))
-
         self.mae_token_num = sequence_gen_length
         self.sequence_input_key = sequence_input_key
         self.sequence_input_embed_dim = sequence_input_embed_dim
@@ -210,8 +206,6 @@ class Sequence2AudioMAE(nn.Layer):
             cond_dict = self.get_input(batch)
 
         print("Generate partially prompted audio with in-context learning")
-        # self.model.train()
-        # assert self.model.training==True
 
         target_embeds, target_embeds_attn_mask = (
             cond_dict["crossattn_audiomae_pooled"][0],
@@ -258,9 +252,6 @@ class Sequence2AudioMAE(nn.Layer):
     def generate(self, batch, cond_dict=None, no_grad=False):
         if cond_dict is None:
             cond_dict = self.get_input(batch)
-
-        # self.model.train()
-        # print("!!!!!!!!!!!!!train")
 
         (
             input_embeds,
@@ -319,10 +310,6 @@ class Sequence2AudioMAE(nn.Layer):
                 cond_stage_key = self.cond_stage_model_metadata[cond_model_key][
                     "cond_stage_key"
                 ]
-
-                # if(not self.training):
-                #     if(isinstance(self.cond_stage_models[self.cond_stage_model_metadata[cond_model_key]["model_idx"]], CLAPAudioEmbeddingClassifierFreev2)):
-                #         assert cond_stage_key == "text" # CLAP model should use text for evaluation
 
                 # The original data for conditioning
                 xc = self.get_input_item(batch, cond_stage_key)

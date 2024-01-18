@@ -89,28 +89,8 @@ def _get_sinc_resample_kernel(
         raise ValueError("Low pass filter width should be positive.")
     base_freq = min(orig_freq, new_freq)
     # This will perform antialiasing filtering by removing the highest frequencies.
-    # At first I thought I only needed this when downsampling, but when upsampling
-    # you will get edge artifacts without this, as the edge is equivalent to zero padding,
-    # which will add high freq artifacts.
     base_freq *= rolloff
 
-    # The key idea of the algorithm is that x(t) can be exactly reconstructed from x[i] (tensor)
-    # using the sinc interpolation formula:
-    #   x(t) = sum_i x[i] sinc(pi * orig_freq * (i / orig_freq - t))
-    # We can then sample the function x(t) with a different sample rate:
-    #    y[j] = x(j / new_freq)
-    # or,
-    #    y[j] = sum_i x[i] sinc(pi * orig_freq * (i / orig_freq - j / new_freq))
-
-    # We see here that y[j] is the convolution of x[i] with a specific filter, for which
-    # we take an FIR approximation, stopping when we see at least `lowpass_filter_width` zeros crossing.
-    # But y[j+1] is going to have a different set of weights and so on, until y[j + new_freq].
-    # Indeed:
-    # y[j + new_freq] = sum_i x[i] sinc(pi * orig_freq * ((i / orig_freq - (j + new_freq) / new_freq))
-    #                 = sum_i x[i] sinc(pi * orig_freq * ((i - orig_freq) / orig_freq - j / new_freq))
-    #                 = sum_i x[i + orig_freq] sinc(pi * orig_freq * (i / orig_freq - j / new_freq))
-    # so y[j+new_freq] uses the same filter as y[j], but on a shifted version of x by `orig_freq`.
-    # This will explain the F.conv1d after, with a stride of orig_freq.
     width = math.ceil(lowpass_filter_width * orig_freq / base_freq)
     # If orig_freq is still big after GCD reduction, most filters will be very unbalanced, i.e.,
     # they will have a lot of almost zero values to the left or to the right...
@@ -124,8 +104,6 @@ def _get_sinc_resample_kernel(
     t *= base_freq
     t = t.clip_(-lowpass_filter_width, lowpass_filter_width)
 
-    # we do not use built in torch windows here as we need to evaluate the window
-    # at specific positions, not over a regular grid.
     if resampling_method == "sinc_interp_hann":
         window = paddle.cos(t * math.pi / lowpass_filter_width / 2) ** 2
     else:
