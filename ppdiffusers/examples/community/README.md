@@ -11,6 +11,7 @@
 |AUTOMATIC1111 WebUI Stable Diffusion| 与AUTOMATIC1111的WebUI基本一致的Pipeline |[AUTOMATIC1111 WebUI Stable Diffusion](#automatic1111-webui-stable-diffusion)||
 |Stable Diffusion with High Resolution Fixing| 使用高分辨率修复功能进行文图生成|[Stable Diffusion with High Resolution Fixing](#stable-diffusion-with-high-resolution-fixing)||
 |ControlNet Reference Only| 基于参考图片生成与图片相似的图片|[ControlNet Reference Only](#controlnet-reference-only)||
+|Stable Diffusion XL Reference| 基于参考图片，利用stable diffusion xl 生成与图片相似的图片|[Stable Diffusion XL Reference](#Stable Diffusion XL Reference)||
 |Stable Diffusion Mixture Tiling| 基于Mixture机制的多文本大图生成Stable Diffusion Pipeline|[Stable Diffusion Mixture Tiling](#stable-diffusion-mixture-tiling)||
 |Stable Diffusion Mixture Canvas| 基于Mixture机制的文本引导大图生成Stable Diffusion Pipeline|[Stable Diffusion Mixture Canvas](#stable-diffusion-mixture-canvas)||
 |CLIP Guided Images Mixing Stable Diffusion Pipeline| 一个用于图片融合的Stable Diffusion Pipeline|[CLIP Guided Images Mixing Using Stable Diffusion](#clip-guided-images-mixing-with-stable-diffusion)||
@@ -525,6 +526,38 @@ for control_name in ["none", "reference_only", "reference_adain", "reference_ada
 [reference_adain]: https://github.com/PaddlePaddle/PaddleNLP/assets/50394665/266968c7-5065-4589-9bd8-47515d50c6de
 [reference_adain+attn]: https://github.com/PaddlePaddle/PaddleNLP/assets/50394665/73d53a4f-e601-4969-9cb8-e3fdf719ae0c
 
+### Stable Diffusion XL Reference
+[Stable Diffusion XL Reference](https://github.com/Mikubill/sd-webui-controlnet#reference-only-control) 是一种基于stable diffusion xl不需要任何控制模型就可以直接使用图像作为参考来引导生成图像的方法。它使用方式如下所示：
+
+```python
+import paddle
+from PIL import Image
+from ppdiffusers.utils import load_image
+from pipline_stable_diffusion_xl_reference import StableDiffusionXLReferencePipeline
+from ppdiffusers.schedulers import UniPCMultistepScheduler
+
+input_image = load_image("https://github.com/PaddlePaddle/PaddleMIX/assets/68105073/9c8e5c53-dc9a-46bb-9504-3d75a7c22ed2")
+
+pipe = StableDiffusionXLReferencePipeline.from_pretrained(
+    "stabilityai/stable-diffusion-xl-base-1.0",
+    use_safetensors=True,
+    variant="fp16")
+
+pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)
+
+result_img = pipe(ref_image=input_image,
+      prompt="a dog running on grassland, best quality",
+      num_inference_steps=20,
+      reference_attn=True,
+      reference_adain=False).images[0]
+
+result_img.save("output.png")
+```
+参考图片：
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/68105073/9c8e5c53-dc9a-46bb-9504-3d75a7c22ed2" width=100%></center>
+
+生成的图片如下所示：
+<center><img src="https://github.com/PaddlePaddle/PaddleMIX/assets/68105073/05cfede7-a07d-48ef-84e1-2f6239a3fd6f" width=100%></center>
 
 ### Stable Diffusion Mixture Tiling
 `StableDiffusionTilingPipeline`是一个基于Mixture机制的多文本大图生成Stable Diffusion Pipeline。使用方式如下所示：
