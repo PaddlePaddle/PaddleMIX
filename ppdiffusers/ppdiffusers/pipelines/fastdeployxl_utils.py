@@ -664,7 +664,7 @@ class FastDeployDiffusionXLPipelineMixin:
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(image, return_tensors="pd").pixel_values
 
-        image = image._to(dtype=dtype)
+        image = image.cast(dtype=dtype)
         image_embeds = self.image_encoder(
             image=image,
             infer_op=infer_op,

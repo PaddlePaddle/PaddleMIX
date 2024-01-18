@@ -322,7 +322,7 @@ class AnimateDiffPipeline(DiffusionPipeline, TextualInversionLoaderMixin, IPAdap
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(image, return_tensors="pd").pixel_values
 
-        image = image._to(ddtype=dtype)
+        image = image.cast(dtype=dtype)
         image_embeds = self.image_encoder(image).image_embeds
         image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
 
