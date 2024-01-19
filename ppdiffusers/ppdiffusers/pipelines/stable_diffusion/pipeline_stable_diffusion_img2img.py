@@ -65,7 +65,7 @@ EXAMPLE_DOC_STRING = """
         >>> from ppdiffusers import StableDiffusionImg2ImgPipeline
 
         >>> model_id_or_path = "runwayml/stable-diffusion-v1-5"
-        >>> pipe = StableDiffusionImg2ImgPipeline.from_pretrained(model_id_or_path, torch_dtype=paddle.float16)
+        >>> pipe = StableDiffusionImg2ImgPipeline.from_pretrained(model_id_or_path, paddle_dtype=paddle.float16)
 
         >>> url = "https://raw.githubusercontent.com/CompVis/stable-diffusion/main/assets/stable-samples/img2img/sketch-mountains-input.jpg"
 
@@ -292,7 +292,7 @@ class StableDiffusionImg2ImgPipeline(
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
         self.register_to_config(requires_safety_checker=requires_safety_checker)
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline._encode_prompt
     def _encode_prompt(
         self,
         prompt,
@@ -431,13 +431,13 @@ class StableDiffusionImg2ImgPipeline(
                 prompt_embeds = self.text_encoder.text_model.final_layer_norm(prompt_embeds)
 
         if self.text_encoder is not None:
-            prompt_embeds_dtype = self.text_encoder.dtype
+            prompt_embeds_dtype = self.text_encoder._dtype
         elif self.unet is not None:
             prompt_embeds_dtype = self.unet.dtype
         else:
             prompt_embeds_dtype = prompt_embeds.dtype
 
-        prompt_embeds = prompt_embeds.to(dtype=prompt_embeds_dtype)
+        prompt_embeds = prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -493,7 +493,7 @@ class StableDiffusionImg2ImgPipeline(
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds.to(dtype=prompt_embeds_dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
@@ -504,22 +504,22 @@ class StableDiffusionImg2ImgPipeline(
 
         return prompt_embeds, negative_prompt_embeds
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.encode_image
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.encode_image
     def encode_image(self, image, num_images_per_prompt):
         # dtype = next(self.image_encoder.parameters()).dtype
-        dtype = next(self.image_encoder.parameters())[1].dtype
+        dtype = next(self.image_encoder.named_parameters())[1].dtype
 
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(image, return_tensors="pd").pixel_values
 
-        image = image.to(dtype=dtype)
+        image = image.cast(dtype=dtype)
         image_embeds = self.image_encoder(image).image_embeds
         image_embeds = image_embeds.repeat_interleave(num_images_per_prompt, axis=0)
 
         uncond_image_embeds = paddle.zeros_like(image_embeds)
         return image_embeds, uncond_image_embeds
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
@@ -530,11 +530,11 @@ class StableDiffusionImg2ImgPipeline(
                 feature_extractor_input = self.image_processor.numpy_to_pil(image)
             safety_checker_input = self.feature_extractor(feature_extractor_input, return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image, clip_input=safety_checker_input.pixel_values.to(dtype)
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype)
             )
         return image, has_nsfw_concept
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.decode_latents
     def decode_latents(self, latents):
         deprecation_message = "The decode_latents method is deprecated and will be removed in 1.0.0. Please use VaeImageProcessor.postprocess(...) instead"
         deprecate("decode_latents", "1.0.0", deprecation_message, standard_warn=False)
@@ -546,7 +546,7 @@ class StableDiffusionImg2ImgPipeline(
         image = image.cast(dtype=paddle.float32).transpose([0, 2, 3, 1]).cpu().numpy()
         return image
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
         # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
         # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
@@ -931,7 +931,7 @@ class StableDiffusionImg2ImgPipeline(
             )
             timestep_cond = self.get_guidance_scale_embedding(
                 guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim
-            ).to(dtype=latents.dtype)
+            ).cast(dtype=latents.dtype)
 
         # 8. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order

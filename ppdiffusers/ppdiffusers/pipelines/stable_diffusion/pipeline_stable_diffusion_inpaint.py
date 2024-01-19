@@ -189,7 +189,7 @@ def retrieve_latents(
         raise AttributeError("Could not access latents of provided encoder_output")
 
 
-# Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.retrieve_timesteps
+# Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.retrieve_timesteps
 def retrieve_timesteps(
     scheduler,
     num_inference_steps: Optional[int] = None,
@@ -508,13 +508,13 @@ class StableDiffusionInpaintPipeline(
                 prompt_embeds = self.text_encoder.text_model.final_layer_norm(prompt_embeds)
 
         if self.text_encoder is not None:
-            prompt_embeds_dtype = self.text_encoder.dtype
+            prompt_embeds_dtype = self.text_encoder._dtype
         elif self.unet is not None:
             prompt_embeds_dtype = self.unet.dtype
         else:
             prompt_embeds_dtype = prompt_embeds.dtype
 
-        prompt_embeds = prompt_embeds.to(dtype=prompt_embeds_dtype)
+        prompt_embeds = prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
         bs_embed, seq_len, _ = prompt_embeds.shape
         # duplicate text embeddings for each generation per prompt, using mps friendly method
@@ -570,7 +570,7 @@ class StableDiffusionInpaintPipeline(
             # duplicate unconditional embeddings for each generation per prompt, using mps friendly method
             seq_len = negative_prompt_embeds.shape[1]
 
-            negative_prompt_embeds = negative_prompt_embeds.to(dtype=prompt_embeds_dtype)
+            negative_prompt_embeds = negative_prompt_embeds.cast(dtype=prompt_embeds_dtype)
 
             negative_prompt_embeds = negative_prompt_embeds.tile([1, num_images_per_prompt, 1])
             negative_prompt_embeds = negative_prompt_embeds.reshape([batch_size * num_images_per_prompt, seq_len, -1])
@@ -581,10 +581,10 @@ class StableDiffusionInpaintPipeline(
 
         return prompt_embeds, negative_prompt_embeds
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.encode_image
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.encode_image
     def encode_image(self, image, num_images_per_prompt):
         # dtype = next(self.image_encoder.parameters()).dtype
-        dtype = next(self.image_encoder.parameters())[1].dtype
+        dtype = next(self.image_encoder.named_parameters())[1].dtype
 
         if not isinstance(image, paddle.Tensor):
             image = self.feature_extractor(image, return_tensors="pd").pixel_values
@@ -596,7 +596,7 @@ class StableDiffusionInpaintPipeline(
         uncond_image_embeds = paddle.zeros_like(image_embeds)
         return image_embeds, uncond_image_embeds
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.run_safety_checker
     def run_safety_checker(self, image, dtype):
         if self.safety_checker is None:
             has_nsfw_concept = None
@@ -607,11 +607,11 @@ class StableDiffusionInpaintPipeline(
                 feature_extractor_input = self.image_processor.numpy_to_pil(image)
             safety_checker_input = self.feature_extractor(feature_extractor_input, return_tensors="pd")
             image, has_nsfw_concept = self.safety_checker(
-                images=image, clip_input=safety_checker_input.pixel_values.to(dtype)
+                images=image, clip_input=safety_checker_input.pixel_values.cast(dtype)
             )
         return image, has_nsfw_concept
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.prepare_extra_step_kwargs
     def prepare_extra_step_kwargs(self, generator, eta):
         # prepare extra kwargs for the scheduler step, since not all schedulers have the same signature
         # eta (η) is only used with the DDIMScheduler, it will be ignored for other schedulers.
@@ -799,10 +799,10 @@ class StableDiffusionInpaintPipeline(
         )
 
         # aligning device to prevent device errors when concating it with the latent model input
-        masked_image_latents = masked_image_latents.to(dtype=dtype)
+        masked_image_latents = masked_image_latents.cast(dtype=dtype)
         return mask, masked_image_latents
 
-    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.get_timesteps
+    # Copied from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_img2img.StableDiffusionImg2ImgPipeline.get_timesteps
     def get_timesteps(self, num_inference_steps, strength):
         # get the original timestep using init_timestep
         init_timestep = min(int(num_inference_steps * strength), num_inference_steps)
@@ -834,7 +834,7 @@ class StableDiffusionInpaintPipeline(
         half_dim = embedding_dim // 2
         emb = paddle.log(paddle.to_tensor(10000.0)) / (half_dim - 1)
         emb = paddle.exp(paddle.arange(half_dim, dtype=dtype) * -emb)
-        emb = w.to(dtype)[:, None] * emb[None, :]
+        emb = w.cast(dtype)[:, None] * emb[None, :]
         emb = paddle.concat([paddle.sin(emb), paddle.sin(emb)], axis=1)
         if embedding_dim % 2 == 1:  # zero pad
             emb = paddle.concat(emb, paddle.zeros([emb.shape[0], 1]), axis=-1)
@@ -998,7 +998,7 @@ class StableDiffusionInpaintPipeline(
         >>> mask_image = download_image(mask_url).resize((512, 512))
 
         >>> pipe = StableDiffusionInpaintPipeline.from_pretrained(
-        ...     "runwayml/stable-diffusion-inpainting", torch_dtype=torch.float16
+        ...     "runwayml/stable-diffusion-inpainting", paddle_dtype=torch.float16
         ... )
 
         >>> prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
@@ -1178,7 +1178,7 @@ class StableDiffusionInpaintPipeline(
             )
             timestep_cond = self.get_guidance_scale_embedding(
                 guidance_scale_tensor, embedding_dim=self.unet.config.time_cond_proj_dim
-            ).to(dtype=latents.dtype)
+            ).cast(dtype=latents.dtype)
 
         # 10. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
