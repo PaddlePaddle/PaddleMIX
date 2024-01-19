@@ -21,3 +21,5 @@ from .minigpt4.modeling import *
 from .qwen_vl import *
 from .visualglm.configuration import *
 from .visualglm.modeling import *
+from .audioldm2.modeling import *
+from .audioldm2.configuration import *
