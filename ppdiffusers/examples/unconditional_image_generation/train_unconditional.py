@@ -328,6 +328,7 @@ def parse_args():
         action="store_true",
         help="Whether or not to use xformers.",
     )
+    parser.add_argument("--report_to", type=str, default="", help="Report to.")
     args = parser.parse_args()
 
     if args.dataset_name is None and args.train_data_dir is None:
