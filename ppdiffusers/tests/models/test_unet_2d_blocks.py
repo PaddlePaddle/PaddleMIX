@@ -1,5 +1,6 @@
+# coding=utf-8
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright 2023 HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,41 +13,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# noqa F403
 import unittest
 
-from ppdiffusers.models.unet_2d_blocks import (
-    AttnDownBlock2D,
-    AttnDownEncoderBlock2D,
-    AttnSkipDownBlock2D,
-    AttnSkipUpBlock2D,
-    AttnUpBlock2D,
-    AttnUpDecoderBlock2D,
-    CrossAttnDownBlock2D,
-    CrossAttnUpBlock2D,
-    DownBlock2D,
-    DownEncoderBlock2D,
-    ResnetDownsampleBlock2D,
-    ResnetUpsampleBlock2D,
-    SimpleCrossAttnDownBlock2D,
-    SimpleCrossAttnUpBlock2D,
-    SkipDownBlock2D,
-    SkipUpBlock2D,
-    UNetMidBlock2D,
-    UNetMidBlock2DCrossAttn,
-    UNetMidBlock2DSimpleCrossAttn,
-    UpBlock2D,
-    UpDecoderBlock2D,
-)
+from ppdiffusers.models.unet_2d_blocks import *  # noqa F403
+from ppdiffusers.utils.testing_utils import paddle_device
 
 from .test_unet_blocks_common import UNetBlockTesterMixin
 
 
 class DownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = DownBlock2D
+    block_class = DownBlock2D  # noqa F405
     block_type = "down"
 
     def test_output(self):
+
         expected_slice = [
             1.4686200618743896,
             -1.0339399576187134,
@@ -62,10 +42,11 @@ class DownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class ResnetDownsampleBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = ResnetDownsampleBlock2D
+    block_class = ResnetDownsampleBlock2D  # noqa F405
     block_type = "down"
 
     def test_output(self):
+
         expected_slice = [
             0.1373986005783081,
             -0.06267327070236206,
@@ -81,10 +62,11 @@ class ResnetDownsampleBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class AttnDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = AttnDownBlock2D
+    block_class = AttnDownBlock2D  # noqa F405
     block_type = "down"
 
     def test_output(self):
+
         expected_slice = [
             -3.9491326808929443,
             -0.5726033449172974,
@@ -100,7 +82,7 @@ class AttnDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class CrossAttnDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = CrossAttnDownBlock2D
+    block_class = CrossAttnDownBlock2D  # noqa F405
     block_type = "down"
 
     def prepare_init_args_and_inputs_for_common(self):
@@ -109,6 +91,7 @@ class CrossAttnDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return init_dict, inputs_dict
 
     def test_output(self):
+
         expected_slice = [
             2.6956636905670166,
             -4.308715343475342,
@@ -124,7 +107,7 @@ class CrossAttnDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class SimpleCrossAttnDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = SimpleCrossAttnDownBlock2D
+    block_class = SimpleCrossAttnDownBlock2D  # noqa F405
     block_type = "down"
 
     @property
@@ -136,7 +119,9 @@ class SimpleCrossAttnDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         init_dict["cross_attention_dim"] = 32
         return init_dict, inputs_dict
 
+    @unittest.skipIf(paddle_device == "mps", "MPS result is not consistent")
     def test_output(self):
+
         expected_slice = [
             -1.6289970874786377,
             1.3748600482940674,
@@ -152,7 +137,7 @@ class SimpleCrossAttnDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class SkipDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = SkipDownBlock2D
+    block_class = SkipDownBlock2D  # noqa F405
     block_type = "down"
 
     @property
@@ -160,6 +145,7 @@ class SkipDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return super().get_dummy_input(include_skip_sample=True)
 
     def test_output(self):
+
         expected_slice = [
             0.2892754375934601,
             -0.4464714229106903,
@@ -175,7 +161,7 @@ class SkipDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class AttnSkipDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = AttnSkipDownBlock2D
+    block_class = AttnSkipDownBlock2D  # noqa F405
     block_type = "down"
 
     @property
@@ -183,6 +169,7 @@ class AttnSkipDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return super().get_dummy_input(include_skip_sample=True)
 
     def test_output(self):
+
         expected_slice = [
             -0.4862610697746277,
             0.8827285766601562,
@@ -198,7 +185,7 @@ class AttnSkipDownBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class DownEncoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = DownEncoderBlock2D
+    block_class = DownEncoderBlock2D  # noqa F405
     block_type = "down"
 
     @property
@@ -206,11 +193,15 @@ class DownEncoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return super().get_dummy_input(include_temb=False)
 
     def prepare_init_args_and_inputs_for_common(self):
-        init_dict = {"in_channels": 32, "out_channels": 32}
+        init_dict = {
+            "in_channels": 32,
+            "out_channels": 32,
+        }
         inputs_dict = self.dummy_input
         return init_dict, inputs_dict
 
     def test_output(self):
+
         expected_slice = [
             2.2016096115112305,
             -0.15662731230258942,
@@ -226,7 +217,7 @@ class DownEncoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class AttnDownEncoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = AttnDownEncoderBlock2D
+    block_class = AttnDownEncoderBlock2D  # noqa F405
     block_type = "down"
 
     @property
@@ -234,11 +225,15 @@ class AttnDownEncoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return super().get_dummy_input(include_temb=False)
 
     def prepare_init_args_and_inputs_for_common(self):
-        init_dict = {"in_channels": 32, "out_channels": 32}
+        init_dict = {
+            "in_channels": 32,
+            "out_channels": 32,
+        }
         inputs_dict = self.dummy_input
         return init_dict, inputs_dict
 
     def test_output(self):
+
         expected_slice = [
             2.127671957015991,
             -0.11142143607139587,
@@ -254,15 +249,19 @@ class AttnDownEncoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class UNetMidBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = UNetMidBlock2D
+    block_class = UNetMidBlock2D  # noqa F405
     block_type = "mid"
 
     def prepare_init_args_and_inputs_for_common(self):
-        init_dict = {"in_channels": 32, "temb_channels": 128}
+        init_dict = {
+            "in_channels": 32,
+            "temb_channels": 128,
+        }
         inputs_dict = self.dummy_input
         return init_dict, inputs_dict
 
     def test_output(self):
+
         expected_slice = [
             -2.115619421005249,
             -0.18567246198654175,
@@ -278,7 +277,7 @@ class UNetMidBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class UNetMidBlock2DCrossAttnTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = UNetMidBlock2DCrossAttn
+    block_class = UNetMidBlock2DCrossAttn  # noqa F405
     block_type = "mid"
 
     def prepare_init_args_and_inputs_for_common(self):
@@ -287,6 +286,7 @@ class UNetMidBlock2DCrossAttnTests(UNetBlockTesterMixin, unittest.TestCase):
         return init_dict, inputs_dict
 
     def test_output(self):
+
         expected_slice = [
             -2.235785961151123,
             -2.2744078636169434,
@@ -302,7 +302,7 @@ class UNetMidBlock2DCrossAttnTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class UNetMidBlock2DSimpleCrossAttnTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = UNetMidBlock2DSimpleCrossAttn
+    block_class = UNetMidBlock2DSimpleCrossAttn  # noqa F405
     block_type = "mid"
 
     @property
@@ -315,23 +315,23 @@ class UNetMidBlock2DSimpleCrossAttnTests(UNetBlockTesterMixin, unittest.TestCase
         return init_dict, inputs_dict
 
     def test_output(self):
-        pass
-        # expected_slice = [
-        #     -3.61512899,
-        #     0.17301944,
-        #     -0.69105405,
-        #     -1.40025711,
-        #     -1.59702873,
-        #     -1.47273242,
-        #     -0.79226393,
-        #     -1.22910488,
-        #     1.09667253,
-        # ]
-        # super().test_output(expected_slice)
+
+        expected_slice = [
+            -3.61512899,
+            0.17301944,
+            -0.69105405,
+            -1.40025711,
+            -1.59702873,
+            -1.47273242,
+            -0.79226393,
+            -1.22910488,
+            1.09667253,
+        ]
+        super().test_output(expected_slice)
 
 
 class UpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = UpBlock2D
+    block_class = UpBlock2D  # noqa F405
     block_type = "up"
 
     @property
@@ -339,6 +339,7 @@ class UpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return super().get_dummy_input(include_res_hidden_states_tuple=True)
 
     def test_output(self):
+
         expected_slice = [
             -4.957080364227295,
             0.49701011180877686,
@@ -354,7 +355,7 @@ class UpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class ResnetUpsampleBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = ResnetUpsampleBlock2D
+    block_class = ResnetUpsampleBlock2D  # noqa F405
     block_type = "up"
 
     @property
@@ -362,6 +363,7 @@ class ResnetUpsampleBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return super().get_dummy_input(include_res_hidden_states_tuple=True)
 
     def test_output(self):
+
         expected_slice = [
             -2.075526714324951,
             -3.90122652053833,
@@ -377,7 +379,7 @@ class ResnetUpsampleBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class CrossAttnUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = CrossAttnUpBlock2D
+    block_class = CrossAttnUpBlock2D  # noqa F405
     block_type = "up"
 
     @property
@@ -390,6 +392,7 @@ class CrossAttnUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return init_dict, inputs_dict
 
     def test_output(self):
+
         expected_slice = [
             -1.2535507678985596,
             -2.480539083480835,
@@ -405,7 +408,7 @@ class CrossAttnUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class SimpleCrossAttnUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = SimpleCrossAttnUpBlock2D
+    block_class = SimpleCrossAttnUpBlock2D  # noqa F405
     block_type = "up"
 
     @property
@@ -418,6 +421,7 @@ class SimpleCrossAttnUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return init_dict, inputs_dict
 
     def test_output(self):
+
         expected_slice = [
             -0.2477731704711914,
             -2.644524097442627,
@@ -433,14 +437,16 @@ class SimpleCrossAttnUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class AttnUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = AttnUpBlock2D
+    block_class = AttnUpBlock2D  # noqa F405
     block_type = "up"
 
     @property
     def dummy_input(self):
         return super().get_dummy_input(include_res_hidden_states_tuple=True)
 
+    @unittest.skipIf(paddle_device == "mps", "MPS result is not consistent")
     def test_output(self):
+
         expected_slice = [
             -1.8902320861816406,
             -1.3337427377700806,
@@ -456,7 +462,7 @@ class AttnUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class SkipUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = SkipUpBlock2D
+    block_class = SkipUpBlock2D  # noqa F405
     block_type = "up"
 
     @property
@@ -464,6 +470,7 @@ class SkipUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return super().get_dummy_input(include_res_hidden_states_tuple=True)
 
     def test_output(self):
+
         expected_slice = [
             -0.987883985042572,
             -0.5670157074928284,
@@ -479,7 +486,7 @@ class SkipUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class AttnSkipUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = AttnSkipUpBlock2D
+    block_class = AttnSkipUpBlock2D  # noqa F405
     block_type = "up"
 
     @property
@@ -487,6 +494,7 @@ class AttnSkipUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
         return super().get_dummy_input(include_res_hidden_states_tuple=True)
 
     def test_output(self):
+
         expected_slice = [
             0.5064516067504883,
             0.582533061504364,
@@ -502,7 +510,7 @@ class AttnSkipUpBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class UpDecoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = UpDecoderBlock2D
+    block_class = UpDecoderBlock2D  # noqa F405
     block_type = "up"
 
     @property
@@ -511,10 +519,12 @@ class UpDecoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
     def prepare_init_args_and_inputs_for_common(self):
         init_dict = {"in_channels": 32, "out_channels": 32}
+
         inputs_dict = self.dummy_input
         return init_dict, inputs_dict
 
     def test_output(self):
+
         expected_slice = [
             -0.14693844318389893,
             0.4114452600479126,
@@ -530,7 +540,7 @@ class UpDecoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
 
 class AttnUpDecoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
-    block_class = AttnUpDecoderBlock2D
+    block_class = AttnUpDecoderBlock2D  # noqa F405
     block_type = "up"
 
     @property
@@ -539,10 +549,12 @@ class AttnUpDecoderBlock2DTests(UNetBlockTesterMixin, unittest.TestCase):
 
     def prepare_init_args_and_inputs_for_common(self):
         init_dict = {"in_channels": 32, "out_channels": 32}
+
         inputs_dict = self.dummy_input
         return init_dict, inputs_dict
 
     def test_output(self):
+
         expected_slice = [
             -1.6499664783477783,
             -2.1455278396606445,

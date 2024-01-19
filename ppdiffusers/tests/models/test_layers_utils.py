@@ -1,5 +1,5 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright 2023 HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,11 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 import unittest
 
 import numpy as np
 import paddle
-import paddle.nn
+from paddle import nn
 
 from ppdiffusers.models.attention import GEGLU, AdaLayerNorm, ApproximateGELU
 from ppdiffusers.models.embeddings import get_timestep_embedding
@@ -29,12 +30,22 @@ from ppdiffusers.models.transformer_2d import Transformer2DModel
 class EmbeddingsTests(unittest.TestCase):
     def test_timestep_embeddings(self):
         embedding_dim = 256
-        timesteps = paddle.arange(start=16)
+        timesteps = paddle.arange(16)
+
         t1 = get_timestep_embedding(timesteps, embedding_dim)
-        assert (t1[0, : embedding_dim // 2] - 0).abs().sum() < 1e-05
-        assert (t1[0, embedding_dim // 2 :] - 1).abs().sum() < 1e-05
-        assert (t1[:, -1] - 1).abs().sum() < 1e-05
+
+        # first vector should always be composed only of 0's and 1's
+        assert (t1[0, : embedding_dim // 2] - 0).abs().sum() < 1e-5
+        assert (t1[0, embedding_dim // 2 :] - 1).abs().sum() < 1e-5
+
+        # last element of each vector should be one
+        assert (t1[:, -1] - 1).abs().sum() < 1e-5
+
+        # For large embeddings (e.g. 128) the frequency of every vector is higher
+        # than the previous one which means that the gradients of later vectors are
+        # ALWAYS higher than the previous ones
         grad_mean = np.abs(np.gradient(t1, axis=-1)).mean(axis=1)
+
         prev_grad = 0.0
         for grad in grad_mean:
             assert grad > prev_grad
@@ -42,35 +53,50 @@ class EmbeddingsTests(unittest.TestCase):
 
     def test_timestep_defaults(self):
         embedding_dim = 16
-        timesteps = paddle.arange(start=10)
+        timesteps = paddle.arange(10)
+
         t1 = get_timestep_embedding(timesteps, embedding_dim)
         t2 = get_timestep_embedding(
-            timesteps, embedding_dim, flip_sin_to_cos=False, downscale_freq_shift=1, max_period=10000
+            timesteps, embedding_dim, flip_sin_to_cos=False, downscale_freq_shift=1, max_period=10_000
         )
-        assert paddle.allclose(t1.cpu(), t2.cpu(), atol=0.01)
+
+        assert paddle.allclose(t1.cpu(), t2.cpu(), atol=1e-2)
 
     def test_timestep_flip_sin_cos(self):
         embedding_dim = 16
-        timesteps = paddle.arange(start=10)
+        timesteps = paddle.arange(10)
+
         t1 = get_timestep_embedding(timesteps, embedding_dim, flip_sin_to_cos=True)
-        t1 = paddle.concat(x=[t1[:, embedding_dim // 2 :], t1[:, : embedding_dim // 2]], axis=-1)
+        t1 = paddle.concat([t1[:, embedding_dim // 2 :], t1[:, : embedding_dim // 2]], axis=-1)
+
         t2 = get_timestep_embedding(timesteps, embedding_dim, flip_sin_to_cos=False)
-        assert paddle.allclose(t1.cpu(), t2.cpu(), atol=0.01)
+
+        assert paddle.allclose(t1.cpu(), t2.cpu(), 1e-3)
 
     def test_timestep_downscale_freq_shift(self):
         embedding_dim = 16
-        timesteps = paddle.arange(start=10)
+        timesteps = paddle.arange(10)
+
         t1 = get_timestep_embedding(timesteps, embedding_dim, downscale_freq_shift=0)
         t2 = get_timestep_embedding(timesteps, embedding_dim, downscale_freq_shift=1)
+
+        # get cosine half (vectors that are wrapped into cosine)
         cosine_half = (t1 - t2)[:, embedding_dim // 2 :]
-        assert (np.abs((cosine_half <= 0).numpy()) - 1).sum() < 1e-05
+
+        # cosine needs to be negative
+        assert (np.abs((cosine_half <= 0).numpy()) - 1).sum() < 1e-5
 
     def test_sinoid_embeddings_hardcoded(self):
         embedding_dim = 64
-        timesteps = paddle.arange(start=128)
+        timesteps = paddle.arange(128)
+
+        # standard unet, score_vde
         t1 = get_timestep_embedding(timesteps, embedding_dim, downscale_freq_shift=1, flip_sin_to_cos=False)
+        # glide, ldm
         t2 = get_timestep_embedding(timesteps, embedding_dim, downscale_freq_shift=0, flip_sin_to_cos=True)
+        # grad-tts
         t3 = get_timestep_embedding(timesteps, embedding_dim, scale=1000)
+
         assert paddle.allclose(
             t1[23:26, 47:50].flatten().cpu(),
             paddle.to_tensor([0.9646, 0.9804, 0.9892, 0.9615, 0.9787, 0.9882, 0.9582, 0.9769, 0.9872]),
@@ -91,10 +117,11 @@ class EmbeddingsTests(unittest.TestCase):
 class Upsample2DBlockTests(unittest.TestCase):
     def test_upsample_default(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 32, 32])
+        sample = paddle.randn([1, 32, 32, 32])
         upsample = Upsample2D(channels=32, use_conv=False)
         with paddle.no_grad():
             upsampled = upsample(sample)
+
         assert tuple(upsampled.shape) == (1, 32, 64, 64)
         output_slice = upsampled[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -110,14 +137,15 @@ class Upsample2DBlockTests(unittest.TestCase):
                 0.78776687,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-2)
 
     def test_upsample_with_conv(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 32, 32])
+        sample = paddle.randn([1, 32, 32, 32])
         upsample = Upsample2D(channels=32, use_conv=True)
         with paddle.no_grad():
             upsampled = upsample(sample)
+
         assert tuple(upsampled.shape) == (1, 32, 64, 64)
         output_slice = upsampled[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -133,14 +161,15 @@ class Upsample2DBlockTests(unittest.TestCase):
                 0.17928099632263184,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-2)
 
     def test_upsample_with_conv_out_dim(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 32, 32])
+        sample = paddle.randn([1, 32, 32, 32])
         upsample = Upsample2D(channels=32, use_conv=True, out_channels=64)
         with paddle.no_grad():
             upsampled = upsample(sample)
+
         assert tuple(upsampled.shape) == (1, 64, 64, 64)
         output_slice = upsampled[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -156,14 +185,15 @@ class Upsample2DBlockTests(unittest.TestCase):
                 0.7197026610374451,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-2)
 
     def test_upsample_with_transpose(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 32, 32])
+        sample = paddle.randn([1, 32, 32, 32])
         upsample = Upsample2D(channels=32, use_conv=False, use_conv_transpose=True)
         with paddle.no_grad():
             upsampled = upsample(sample)
+
         assert tuple(upsampled.shape) == (1, 32, 64, 64)
         output_slice = upsampled[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -179,16 +209,17 @@ class Upsample2DBlockTests(unittest.TestCase):
                 -0.10978640615940094,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-2)
 
 
 class Downsample2DBlockTests(unittest.TestCase):
     def test_downsample_default(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
+        sample = paddle.randn([1, 32, 64, 64])
         downsample = Downsample2D(channels=32, use_conv=False)
         with paddle.no_grad():
             downsampled = downsample(sample)
+
         assert tuple(downsampled.shape) == (1, 32, 32, 32)
         output_slice = downsampled[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -205,16 +236,19 @@ class Downsample2DBlockTests(unittest.TestCase):
             ]
         )
         max_diff = (output_slice.flatten() - expected_slice).abs().sum().item()
-        assert max_diff <= 0.001
+        assert max_diff <= 1e-3
+        # assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-1)
 
     def test_downsample_with_conv(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
+        sample = paddle.randn([1, 32, 64, 64])
         downsample = Downsample2D(channels=32, use_conv=True)
         with paddle.no_grad():
             downsampled = downsample(sample)
+
         assert tuple(downsampled.shape) == (1, 32, 32, 32)
         output_slice = downsampled[0, -1, -3:, -3:]
+
         expected_slice = paddle.to_tensor(
             [
                 -0.009430217556655407,
@@ -228,14 +262,15 @@ class Downsample2DBlockTests(unittest.TestCase):
                 -1.5272349119186401,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_downsample_with_conv_pad1(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
+        sample = paddle.randn([1, 32, 64, 64])
         downsample = Downsample2D(channels=32, use_conv=True, padding=1)
         with paddle.no_grad():
             downsampled = downsample(sample)
+
         assert tuple(downsampled.shape) == (1, 32, 32, 32)
         output_slice = downsampled[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -251,14 +286,15 @@ class Downsample2DBlockTests(unittest.TestCase):
                 -1.5272349119186401,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_downsample_with_conv_out_dim(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
+        sample = paddle.randn([1, 32, 64, 64])
         downsample = Downsample2D(channels=32, use_conv=True, out_channels=16)
         with paddle.no_grad():
             downsampled = downsample(sample)
+
         assert tuple(downsampled.shape) == (1, 16, 32, 32)
         output_slice = downsampled[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -274,17 +310,18 @@ class Downsample2DBlockTests(unittest.TestCase):
                 0.8763526082038879,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
 
 class ResnetBlock2DTests(unittest.TestCase):
     def test_resnet_default(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
-        temb = paddle.randn(shape=[1, 128])
+        sample = paddle.randn([1, 32, 64, 64])
+        temb = paddle.randn([1, 128])
         resnet_block = ResnetBlock2D(in_channels=32, temb_channels=128)
         with paddle.no_grad():
             output_tensor = resnet_block(sample, temb)
+
         assert tuple(output_tensor.shape) == (1, 32, 64, 64)
         output_slice = output_tensor[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -300,15 +337,16 @@ class ResnetBlock2DTests(unittest.TestCase):
                 -0.5504958629608154,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_restnet_with_use_in_shortcut(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
-        temb = paddle.randn(shape=[1, 128])
+        sample = paddle.randn([1, 32, 64, 64])
+        temb = paddle.randn([1, 128])
         resnet_block = ResnetBlock2D(in_channels=32, temb_channels=128, use_in_shortcut=True)
         with paddle.no_grad():
             output_tensor = resnet_block(sample, temb)
+
         assert tuple(output_tensor.shape) == (1, 32, 64, 64)
         output_slice = output_tensor[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -324,15 +362,16 @@ class ResnetBlock2DTests(unittest.TestCase):
                 3.2780206203460693,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_resnet_up(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
-        temb = paddle.randn(shape=[1, 128])
+        sample = paddle.randn([1, 32, 64, 64])
+        temb = paddle.randn([1, 128])
         resnet_block = ResnetBlock2D(in_channels=32, temb_channels=128, up=True)
         with paddle.no_grad():
             output_tensor = resnet_block(sample, temb)
+
         assert tuple(output_tensor.shape) == (1, 32, 128, 128)
         output_slice = output_tensor[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -348,15 +387,16 @@ class ResnetBlock2DTests(unittest.TestCase):
                 -0.014697253704071045,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_resnet_down(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
-        temb = paddle.randn(shape=[1, 128])
+        sample = paddle.randn([1, 32, 64, 64])
+        temb = paddle.randn([1, 128])
         resnet_block = ResnetBlock2D(in_channels=32, temb_channels=128, down=True)
         with paddle.no_grad():
             output_tensor = resnet_block(sample, temb)
+
         assert tuple(output_tensor.shape) == (1, 32, 32, 32)
         output_slice = output_tensor[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -372,15 +412,16 @@ class ResnetBlock2DTests(unittest.TestCase):
                 -0.75424242019653322,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_restnet_with_kernel_fir(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
-        temb = paddle.randn(shape=[1, 128])
+        sample = paddle.randn([1, 32, 64, 64])
+        temb = paddle.randn([1, 128])
         resnet_block = ResnetBlock2D(in_channels=32, temb_channels=128, kernel="fir", down=True)
         with paddle.no_grad():
             output_tensor = resnet_block(sample, temb)
+
         assert tuple(output_tensor.shape) == (1, 32, 32, 32)
         output_slice = output_tensor[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -396,15 +437,16 @@ class ResnetBlock2DTests(unittest.TestCase):
                 -0.24661940336227417,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_restnet_with_kernel_sde_vp(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
-        temb = paddle.randn(shape=[1, 128])
+        sample = paddle.randn([1, 32, 64, 64])
+        temb = paddle.randn([1, 128])
         resnet_block = ResnetBlock2D(in_channels=32, temb_channels=128, kernel="sde_vp", down=True)
         with paddle.no_grad():
             output_tensor = resnet_block(sample, temb)
+
         assert tuple(output_tensor.shape) == (1, 32, 32, 32)
         output_slice = output_tensor[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
@@ -420,20 +462,27 @@ class ResnetBlock2DTests(unittest.TestCase):
                 -0.7542424201965332,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
 
 class Transformer2DModelTests(unittest.TestCase):
     def test_spatial_transformer_default(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
+
+        sample = paddle.randn([1, 32, 64, 64])
         spatial_transformer_block = Transformer2DModel(
-            in_channels=32, num_attention_heads=1, attention_head_dim=32, dropout=0.0, cross_attention_dim=None
+            in_channels=32,
+            num_attention_heads=1,
+            attention_head_dim=32,
+            dropout=0.0,
+            cross_attention_dim=None,
         )
         with paddle.no_grad():
             attention_scores = spatial_transformer_block(sample).sample
-        assert attention_scores.shape == [1, 32, 64, 64]
+
+        assert tuple(attention_scores.shape) == (1, 32, 64, 64)
         output_slice = attention_scores[0, -1, -3:, -3:]
+
         expected_slice = paddle.to_tensor(
             [
                 2.6310853958129883,
@@ -447,18 +496,24 @@ class Transformer2DModelTests(unittest.TestCase):
                 2.316770076751709,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_spatial_transformer_cross_attention_dim(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 64, 64, 64])
+
+        sample = paddle.randn([1, 64, 64, 64])
         spatial_transformer_block = Transformer2DModel(
-            in_channels=64, num_attention_heads=2, attention_head_dim=32, dropout=0.0, cross_attention_dim=64
+            in_channels=64,
+            num_attention_heads=2,
+            attention_head_dim=32,
+            dropout=0.0,
+            cross_attention_dim=64,
         )
         with paddle.no_grad():
-            context = paddle.randn(shape=[1, 4, 64])
+            context = paddle.randn([1, 4, 64])
             attention_scores = spatial_transformer_block(sample, context).sample
-        assert attention_scores.shape == [1, 64, 64, 64]
+
+        assert tuple(attention_scores.shape) == (1, 64, 64, 64)
         output_slice = attention_scores[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(
             [
@@ -473,12 +528,14 @@ class Transformer2DModelTests(unittest.TestCase):
                 1.4856826066970825,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_spatial_transformer_timestep(self):
         paddle.seed(0)
+
         num_embeds_ada_norm = 5
-        sample = paddle.randn(shape=[1, 64, 64, 64])
+
+        sample = paddle.randn([1, 64, 64, 64])
         spatial_transformer_block = Transformer2DModel(
             in_channels=64,
             num_attention_heads=2,
@@ -492,10 +549,13 @@ class Transformer2DModelTests(unittest.TestCase):
             timestep_2 = paddle.to_tensor(2, dtype="int64")
             attention_scores_1 = spatial_transformer_block(sample, timestep=timestep_1).sample
             attention_scores_2 = spatial_transformer_block(sample, timestep=timestep_2).sample
-        assert tuple(attention_scores_1.shape) == (1, 64, 64, 64)
-        assert tuple(attention_scores_2.shape) == (1, 64, 64, 64)
+
+        assert attention_scores_1.shape == [1, 64, 64, 64]
+        assert attention_scores_2.shape == [1, 64, 64, 64]
+
         output_slice_1 = attention_scores_1[0, -1, -3:, -3:]
         output_slice_2 = attention_scores_2[0, -1, -3:, -3:]
+
         expected_slice_1 = paddle.to_tensor(
             [
                 -0.15322405099868774,
@@ -522,19 +582,27 @@ class Transformer2DModelTests(unittest.TestCase):
                 -0.564710259437561,
             ]
         )
-        assert paddle.allclose(output_slice_1.flatten(), expected_slice_1, atol=0.01)
-        assert paddle.allclose(output_slice_2.flatten(), expected_slice_2, atol=0.01)
+
+        assert paddle.allclose(output_slice_1.flatten(), expected_slice_1, atol=1e-3)
+        assert paddle.allclose(output_slice_2.flatten(), expected_slice_2, atol=1e-3)
 
     def test_spatial_transformer_dropout(self):
         paddle.seed(0)
-        sample = paddle.randn(shape=[1, 32, 64, 64])
+
+        sample = paddle.randn([1, 32, 64, 64])
         spatial_transformer_block = Transformer2DModel(
-            in_channels=32, num_attention_heads=2, attention_head_dim=16, dropout=0.3, cross_attention_dim=None
+            in_channels=32,
+            num_attention_heads=2,
+            attention_head_dim=16,
+            dropout=0.3,
+            cross_attention_dim=None,
         ).eval()
         with paddle.no_grad():
             attention_scores = spatial_transformer_block(sample).sample
-        assert attention_scores.shape == [1, 32, 64, 64]
+
+        assert tuple(attention_scores.shape) == (1, 32, 64, 64)
         output_slice = attention_scores[0, -1, -3:, -3:]
+
         expected_slice = paddle.to_tensor(
             [
                 2.535370349884033,
@@ -548,19 +616,28 @@ class Transformer2DModelTests(unittest.TestCase):
                 2.3483340740203857,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_spatial_transformer_discrete(self):
         paddle.seed(0)
+
         num_embed = 5
+
         sample = paddle.randint(0, num_embed, (1, 32))
         spatial_transformer_block = Transformer2DModel(
-            num_attention_heads=1, attention_head_dim=32, num_vector_embeds=num_embed, sample_size=16
+            num_attention_heads=1,
+            attention_head_dim=32,
+            num_vector_embeds=num_embed,
+            sample_size=16,
         ).eval()
+
         with paddle.no_grad():
             attention_scores = spatial_transformer_block(sample).sample
-        assert attention_scores.shape == [1, num_embed - 1, 32]
+
+        assert tuple(attention_scores.shape) == (1, num_embed - 1, 32)
+
         output_slice = attention_scores[0, -2:, -3:]
+
         expected_slice = paddle.to_tensor(
             [
                 -0.14130862057209015,
@@ -571,43 +648,68 @@ class Transformer2DModelTests(unittest.TestCase):
                 -2.099970579147339,
             ]
         )
-        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=0.01)
+        assert paddle.allclose(output_slice.flatten(), expected_slice, atol=1e-3)
 
     def test_spatial_transformer_default_norm_layers(self):
         spatial_transformer_block = Transformer2DModel(num_attention_heads=1, attention_head_dim=32, in_channels=32)
-        assert spatial_transformer_block.transformer_blocks[0].norm1.__class__ == paddle.nn.LayerNorm
-        assert spatial_transformer_block.transformer_blocks[0].norm3.__class__ == paddle.nn.LayerNorm
+
+        assert spatial_transformer_block.transformer_blocks[0].norm1.__class__ == nn.LayerNorm
+        assert spatial_transformer_block.transformer_blocks[0].norm3.__class__ == nn.LayerNorm
 
     def test_spatial_transformer_ada_norm_layers(self):
         spatial_transformer_block = Transformer2DModel(
-            num_attention_heads=1, attention_head_dim=32, in_channels=32, num_embeds_ada_norm=5
+            num_attention_heads=1,
+            attention_head_dim=32,
+            in_channels=32,
+            num_embeds_ada_norm=5,
         )
+
         assert spatial_transformer_block.transformer_blocks[0].norm1.__class__ == AdaLayerNorm
-        assert spatial_transformer_block.transformer_blocks[0].norm3.__class__ == paddle.nn.LayerNorm
+        assert spatial_transformer_block.transformer_blocks[0].norm3.__class__ == nn.LayerNorm
 
     def test_spatial_transformer_default_ff_layers(self):
-        spatial_transformer_block = Transformer2DModel(num_attention_heads=1, attention_head_dim=32, in_channels=32)
+        spatial_transformer_block = Transformer2DModel(
+            num_attention_heads=1,
+            attention_head_dim=32,
+            in_channels=32,
+        )
+
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].__class__ == GEGLU
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[1].__class__ == paddle.nn.Dropout
+        assert spatial_transformer_block.transformer_blocks[0].ff.net[1].__class__ == nn.Dropout
         assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == LoRACompatibleLinear
+
         dim = 32
         inner_dim = 128
+
+        # First dimension change
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].proj.weight.shape[0] == dim
+        # NOTE: inner_dim * 2 because GEGLU
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].proj.weight.shape[1] == inner_dim * 2
+
+        # Second dimension change
         assert spatial_transformer_block.transformer_blocks[0].ff.net[2].weight.shape[0] == inner_dim
         assert spatial_transformer_block.transformer_blocks[0].ff.net[2].weight.shape[1] == dim
 
     def test_spatial_transformer_geglu_approx_ff_layers(self):
         spatial_transformer_block = Transformer2DModel(
-            num_attention_heads=1, attention_head_dim=32, in_channels=32, activation_fn="geglu-approximate"
+            num_attention_heads=1,
+            attention_head_dim=32,
+            in_channels=32,
+            activation_fn="geglu-approximate",
         )
+
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].__class__ == ApproximateGELU
-        assert spatial_transformer_block.transformer_blocks[0].ff.net[1].__class__ == paddle.nn.Dropout
+        assert spatial_transformer_block.transformer_blocks[0].ff.net[1].__class__ == nn.Dropout
         assert spatial_transformer_block.transformer_blocks[0].ff.net[2].__class__ == LoRACompatibleLinear
+
         dim = 32
         inner_dim = 128
+
+        # First dimension change
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].proj.weight.shape[0] == dim
         assert spatial_transformer_block.transformer_blocks[0].ff.net[0].proj.weight.shape[1] == inner_dim
+
+        # Second dimension change
         assert spatial_transformer_block.transformer_blocks[0].ff.net[2].weight.shape[0] == inner_dim
         assert spatial_transformer_block.transformer_blocks[0].ff.net[2].weight.shape[1] == dim
 
@@ -615,6 +717,7 @@ class Transformer2DModelTests(unittest.TestCase):
         spatial_transformer_block = Transformer2DModel(
             num_attention_heads=1, attention_head_dim=32, in_channels=32, attention_bias=True
         )
+
         assert spatial_transformer_block.transformer_blocks[0].attn1.to_q.bias is not None
         assert spatial_transformer_block.transformer_blocks[0].attn1.to_k.bias is not None
         assert spatial_transformer_block.transformer_blocks[0].attn1.to_v.bias is not None

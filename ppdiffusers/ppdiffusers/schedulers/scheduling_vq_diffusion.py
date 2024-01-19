@@ -234,7 +234,7 @@ class VQDiffusionScheduler(SchedulerMixin, ConfigMixin):
 
         log_p_x_t_min_1 = gumbel_noised(log_p_x_t_min_1, generator)
 
-        x_t_min_1 = log_p_x_t_min_1.argmax(dim=1)
+        x_t_min_1 = log_p_x_t_min_1.argmax(axis=1)
 
         if not return_dict:
             return (x_t_min_1,)

@@ -575,14 +575,17 @@ class UNet2DConditionLoadersMixin:
                         save_function = partial(np_safe_save_file, metadata={"format": "pt"})
                 else:
                     save_function = torch.save
+
+                convert_paddle_state_dict_to_pytorch(self, state_dict)
             else:
                 if safe_serialization:
+                    for k, v in state_dict.items():
+                        if isinstance(v, paddle.Tensor):
+                            state_dict[k] = v.cpu().numpy()
+
                     save_function = partial(np_safe_save_file, metadata={"format": "pd"})
                 else:
                     save_function = paddle.save
-
-        if to_diffusers:
-            convert_paddle_state_dict_to_pytorch(self, state_dict)
 
         # Save the model
         save_function(state_dict, os.path.join(save_directory, weight_name))

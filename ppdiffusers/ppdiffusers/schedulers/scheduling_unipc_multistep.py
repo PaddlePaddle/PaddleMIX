@@ -548,6 +548,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
         if self.predict_x0:
             x_t_ = sigma_t / sigma_s0 * x - alpha_t * h_phi_1 * m0
             if D1s is not None:
+                D1s = D1s.cast(x.dtype)
                 pred_res = paddle.einsum("k,bkc...->bc...", rhos_p, D1s)
             else:
                 pred_res = 0
@@ -785,6 +786,7 @@ class UniPCMultistepScheduler(SchedulerMixin, ConfigMixin):
             sample=sample,
             order=self.this_order,
         )
+        prev_sample = prev_sample.cast(sample.dtype)
 
         if self.lower_order_nums < self.config.solver_order:
             self.lower_order_nums += 1

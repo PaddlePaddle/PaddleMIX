@@ -439,7 +439,7 @@ class DiffusionPipeline(ConfigMixin):
 
                 # TODO (junnyu) support paddlenlp.transformers check this ?
                 if "paddlenlp" in not_compiled_module.__module__.split("."):
-                    library = "paddlenlp.transformers"
+                    library = "ppdiffusers.transformers"
                 elif "ppdiffusers.transformers" in not_compiled_module.__module__:
                     library = "ppdiffusers.transformers"
                 else:
@@ -1053,7 +1053,7 @@ class DiffusionPipeline(ConfigMixin):
             # 6.1 - now that JAX/Flax is an official framework of the library, we might load from Flax names
             if library_name in ["diffusers_paddle", "diffusers"]:
                 library_name = "ppdiffusers"
-            if library_name == "transformers":
+            if library_name in ["transformers", "paddlenlp.transformers"]:
                 library_name = "ppdiffusers.transformers"
 
             class_name = class_name[4:] if class_name.startswith("Flax") else class_name

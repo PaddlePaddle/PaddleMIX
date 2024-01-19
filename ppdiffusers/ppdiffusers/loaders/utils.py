@@ -78,6 +78,10 @@ class AttnProcsLayers(nn.Layer):
         def map_to(state_dict, *args, **kwargs):
             new_state_dict = {}
             for key, value in state_dict.items():
+                # if isinstance(value, dict):
+                #     if len(value) == 0:
+                #         continue
+
                 num = int(key.split(".")[1])  # 0 is always "layers"
                 new_key = key.replace(f"layers.{num}", self.mapping[num])
                 new_state_dict[new_key] = value

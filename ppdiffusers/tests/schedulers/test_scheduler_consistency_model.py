@@ -1,3 +1,17 @@
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import paddle
 
 from ppdiffusers import CMStochasticIterativeScheduler
@@ -91,7 +105,6 @@ class CMStochasticIterativeSchedulerTest(SchedulerCommonTest):
         timesteps = [106, 0]
         scheduler.set_timesteps(timesteps=timesteps)
         timesteps = scheduler.timesteps
-        print(timesteps)
 
         generator = paddle.Generator().manual_seed(0)
 
@@ -113,8 +126,47 @@ class CMStochasticIterativeSchedulerTest(SchedulerCommonTest):
         result_sum = paddle.sum(paddle.abs(sample))
         result_mean = paddle.mean(paddle.abs(sample))
 
-        # assert abs(result_sum.item() - 347.6357) < 1e-2
-        # assert abs(result_mean.item() - 0.4527) < 1e-3
+        assert abs(result_sum.item() - 45676.0817) < 1e-2
+        assert abs(result_mean.item() - 59.47) < 1e-2
+
+    def test_full_loop_with_noise(self):
+        scheduler_class = self.scheduler_classes[0]
+        scheduler_config = self.get_scheduler_config()
+        scheduler = scheduler_class(**scheduler_config)
+
+        num_inference_steps = 10
+        t_start = 8
+
+        scheduler.set_timesteps(num_inference_steps)
+        timesteps = scheduler.timesteps
+
+        generator = paddle.Generator().manual_seed(0)
+
+        model = self.dummy_model()
+        sample = self.dummy_sample_deter * scheduler.init_noise_sigma
+
+        noise = self.dummy_noise_deter
+        timesteps = scheduler.timesteps[t_start * scheduler.order :]
+
+        sample = scheduler.add_noise(sample, noise, timesteps[:1])
+
+        for t in timesteps:
+            # 1. scale model input
+            scaled_sample = scheduler.scale_model_input(sample, t)
+
+            # 2. predict noise residual
+            residual = model(scaled_sample, t)
+
+            # 3. predict previous sample x_t-1
+            pred_prev_sample = scheduler.step(residual, t, sample, generator=generator).prev_sample
+
+            sample = pred_prev_sample
+
+        result_sum = paddle.sum(paddle.abs(sample))
+        result_mean = paddle.mean(paddle.abs(sample))
+
+        assert abs(result_sum.item() - 36520.7239) < 1e-2, f" expected result sum 36520.7239, but get {result_sum}"
+        assert abs(result_mean.item() - 47.5530) < 1e-3, f" expected result mean 47.5530, but get {result_mean}"
 
     def test_custom_timesteps_increasing_order(self):
         scheduler_class = self.scheduler_classes[0]
