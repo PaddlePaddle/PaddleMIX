@@ -13,6 +13,7 @@
 |ControlNet Reference Only| 基于参考图片生成与图片相似的图片|[ControlNet Reference Only](#controlnet-reference-only)||
 |Stable Diffusion XL Reference| 基于参考图片，利用stable diffusion xl 生成与图片相似的图片|[Stable Diffusion XL Reference](#Stable Diffusion XL Reference)||
 |Stable Diffusion Mixture Tiling| 基于Mixture机制的多文本大图生成Stable Diffusion Pipeline|[Stable Diffusion Mixture Tiling](#stable-diffusion-mixture-tiling)||
+|Stable Diffusion Mixture Canvas| 基于Mixture机制的文本引导大图生成Stable Diffusion Pipeline|[Stable Diffusion Mixture Canvas](#stable-diffusion-mixture-canvas)||
 |CLIP Guided Images Mixing Stable Diffusion Pipeline| 一个用于图片融合的Stable Diffusion Pipeline|[CLIP Guided Images Mixing Using Stable Diffusion](#clip-guided-images-mixing-with-stable-diffusion)||
 |EDICT Image Editing Pipeline| 一个用于文本引导的图像编辑的 Stable Diffusion Pipeline|[EDICT Image Editing Pipeline](#edict_pipeline)||
 |FABRIC - Stable Diffusion with feedback Pipeline| 一个用于喜欢图片和不喜欢图片的反馈 Pipeline|[FABRIC - Stable Diffusion with feedback Pipeline](#fabric_pipeline)||
@@ -587,6 +588,61 @@ image.save('mixture_tiling' + ".png")
 ```
 生成的图片如下所示：
 <center><img src="https://user-images.githubusercontent.com/20476674/250050184-c3d26d20-dbdf-42f6-9723-5f35f628f68e.png" width=100%></center>
+
+
+### Stable Diffusion Mixture Canvas
+`StableDiffusionCanvasPipeline`是一个基于Mixture机制的文本引导大图生成Stable Diffusion Pipeline。使用方式如下所示：
+
+```python
+from PIL import Image
+from ppdiffusers import LMSDiscreteScheduler
+from mixture_canvas import (
+    StableDiffusionCanvasPipeline,
+    Text2ImageRegion,
+    Image2ImageRegion,
+    preprocess_image,
+)
+
+# Load and preprocess guide image
+iic_image = preprocess_image(Image.open("input_image.png").convert("RGB"))
+
+# Creater scheduler and model (similar to StableDiffusionPipeline)
+scheduler = LMSDiscreteScheduler(
+    beta_start=0.00085,
+    beta_end=0.012,
+    beta_schedule="scaled_linear",
+    num_train_timesteps=1000,
+)
+pipeline = StableDiffusionCanvasPipeline.from_pretrained("CompVis/stable-diffusion-v1-4", scheduler=scheduler)
+
+# Mixture of Diffusers generation
+output = pipeline(
+    canvas_height=800,
+    canvas_width=352,
+    regions=[
+        Text2ImageRegion(
+            0,
+            800,
+            0,
+            352,
+            guidance_scale=8,
+            prompt=f"best quality, masterpiece, WLOP, sakimichan, art contest winner on pixiv, 8K, intricate details, wet effects, rain drops, ethereal, mysterious, futuristic, UHD, HDR, cinematic lighting, in a beautiful forest, rainy day, award winning, trending on artstation, beautiful confident cheerful young woman, wearing a futuristic sleeveless dress, ultra beautiful detailed  eyes, hyper-detailed face, complex,  perfect, model,  textured,  chiaroscuro, professional make-up, realistic, figure in frame, ",
+        ),
+        Image2ImageRegion(
+            800 - 352, 800, 0, 352, reference_image=iic_image, strength=1.0
+        ),
+    ],
+    num_inference_steps=100,
+    seed=5525475061,
+)["images"][0]
+
+output.save("output_image.png")
+```
+输入图像和生成图片如下所示：
+
+![Input_Image](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/b449a867-2dfb-4016-b5fd-75fc41bcf4ab)
+![mixture_canvas_results](https://github.com/PaddlePaddle/PaddleMIX/assets/46399096/57ee99bf-98a3-49c3-8c9b-021c02115372)
+
 
 ### CLIP Guided Images Mixing With Stable Diffusion
 `CLIPGuidedImagesMixingStableDiffusion` 基于Stable Diffusion来针对输入的两个图片进行融合：
