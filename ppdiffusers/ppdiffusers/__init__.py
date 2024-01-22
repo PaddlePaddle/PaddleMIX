@@ -60,6 +60,7 @@ from .schedulers import (
     DEISMultistepScheduler,
     DPMSolverMultistepInverseScheduler,
     DPMSolverMultistepScheduler,
+    DPMSolverSDEScheduler,
     DPMSolverSinglestepScheduler,
     DPMSolverUniDiffuserScheduler,
     EulerAncestralDiscreteScheduler,

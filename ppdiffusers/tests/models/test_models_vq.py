@@ -1,5 +1,6 @@
+# coding=utf-8
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright 2023 HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,8 +19,7 @@ import unittest
 import paddle
 
 from ppdiffusers import VQModel
-from ppdiffusers.utils import floats_tensor
-from ppdiffusers.utils.testing_utils import enable_full_determinism
+from ppdiffusers.utils.testing_utils import enable_full_determinism, floats_tensor
 
 from .test_modeling_common import ModelTesterMixin, UNetTesterMixin
 
@@ -34,16 +34,18 @@ class VQModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
     def dummy_input(self, sizes=(32, 32)):
         batch_size = 4
         num_channels = 3
+
         image = floats_tensor((batch_size, num_channels) + sizes)
+
         return {"sample": image}
 
     @property
     def input_shape(self):
-        return 3, 32, 32
+        return (3, 32, 32)
 
     @property
     def output_shape(self):
-        return 3, 32, 32
+        return (3, 32, 32)
 
     def prepare_init_args_and_inputs_for_common(self):
         init_dict = {
@@ -67,17 +69,23 @@ class VQModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
         model, loading_info = VQModel.from_pretrained("fusing/vqgan-dummy", output_loading_info=True)
         self.assertIsNotNone(model)
         self.assertEqual(len(loading_info["missing_keys"]), 0)
+
         image = model(**self.dummy_input)
+
         assert image is not None, "Make sure output is not None"
 
     def test_output_pretrained(self):
         model = VQModel.from_pretrained("fusing/vqgan-dummy")
         model.eval()
+
         paddle.seed(0)
-        image = paddle.randn(shape=[1, model.config.in_channels, model.config.sample_size, model.config.sample_size])
+
+        image = paddle.randn([1, model.config.in_channels, model.config.sample_size, model.config.sample_size])
         with paddle.no_grad():
             output = model(image).sample
+
         output_slice = output[0, -1, -3:, -3:].flatten().cpu()
+        # fmt: off
         expected_output_slice = paddle.to_tensor(
             [
                 -0.027147896587848663,
@@ -91,4 +99,5 @@ class VQModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
                 -0.01736617460846901,
             ]
         )
-        self.assertTrue(paddle.allclose(output_slice, expected_output_slice, atol=0.01))
+        # fmt: on
+        self.assertTrue(paddle.allclose(output_slice, expected_output_slice, atol=1e-3))

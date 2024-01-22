@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,11 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import paddle
 
 from ppdiffusers import DPMSolverSDEScheduler
-from ppdiffusers.utils import paddle_device
-from ppdiffusers.utils.testing_utils import require_paddlesde
+from ppdiffusers.utils.testing_utils import paddle_device, require_paddlesde
 
 from .test_schedulers import SchedulerCommonTest
 
@@ -120,7 +120,7 @@ class DPMSolverSDESchedulerTest(SchedulerCommonTest):
         scheduler_config = self.get_scheduler_config()
         scheduler = scheduler_class(**scheduler_config)
 
-        scheduler.set_timesteps(self.num_inference_steps, device=paddle_device)
+        scheduler.set_timesteps(self.num_inference_steps)
 
         model = self.dummy_model()
         sample = self.dummy_sample_deter * scheduler.init_noise_sigma
@@ -151,7 +151,7 @@ class DPMSolverSDESchedulerTest(SchedulerCommonTest):
         scheduler_config = self.get_scheduler_config()
         scheduler = scheduler_class(**scheduler_config, use_karras_sigmas=True)
 
-        scheduler.set_timesteps(self.num_inference_steps, device=paddle_device)
+        scheduler.set_timesteps(self.num_inference_steps)
 
         model = self.dummy_model()
         sample = self.dummy_sample_deter * scheduler.init_noise_sigma

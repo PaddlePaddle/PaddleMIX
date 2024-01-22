@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -49,6 +49,14 @@ class EulerDiscreteSchedulerTest(SchedulerCommonTest):
     def test_prediction_type(self):
         for prediction_type in ["epsilon", "v_prediction"]:
             self.check_over_configs(prediction_type=prediction_type)
+
+    def test_timestep_type(self):
+        timestep_types = ["discrete", "continuous"]
+        for timestep_type in timestep_types:
+            self.check_over_configs(timestep_type=timestep_type)
+
+    def test_karras_sigmas(self):
+        self.check_over_configs(use_karras_sigmas=True, sigma_min=0.02, sigma_max=700.0)
 
     def test_full_loop_no_noise(self):
         scheduler_class = self.scheduler_classes[0]
@@ -153,3 +161,35 @@ class EulerDiscreteSchedulerTest(SchedulerCommonTest):
 
         assert abs(result_sum.item() - 124.52299499511719) < 1e-2
         assert abs(result_mean.item() - 0.16213932633399963) < 1e-3
+
+    def test_full_loop_with_noise(self):
+        scheduler_class = self.scheduler_classes[0]
+        scheduler_config = self.get_scheduler_config()
+        scheduler = scheduler_class(**scheduler_config)
+
+        scheduler.set_timesteps(self.num_inference_steps)
+
+        generator = paddle.Generator().manual_seed(0)
+
+        model = self.dummy_model()
+        sample = self.dummy_sample_deter * scheduler.init_noise_sigma
+
+        # add noise
+        t_start = self.num_inference_steps - 2
+        noise = self.dummy_noise_deter
+        timesteps = scheduler.timesteps[t_start * scheduler.order :]
+        sample = scheduler.add_noise(sample, noise, timesteps[:1])
+
+        for i, t in enumerate(timesteps):
+            sample = scheduler.scale_model_input(sample, t)
+
+            model_output = model(sample, t)
+
+            output = scheduler.step(model_output, t, sample, generator=generator)
+            sample = output.prev_sample
+
+        result_sum = paddle.sum(paddle.abs(sample))
+        result_mean = paddle.mean(paddle.abs(sample))
+
+        assert abs(result_sum.item() - 57062.9023) < 1e-2, f" expected result sum 57062.9297, but get {result_sum}"
+        assert abs(result_mean.item() - 74.3007) < 1e-3, f" expected result mean 74.3007, but get {result_mean}"

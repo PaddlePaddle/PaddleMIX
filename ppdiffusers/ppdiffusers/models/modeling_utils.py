@@ -188,15 +188,22 @@ def load_state_dict(
         tmp_state_dict = smart_load(checkpoint_file, return_numpy=True)
         for key in list(tmp_state_dict.keys()):
             need_continue = False
-            for ik in ignore_keys:
-                if key.startswith(ik):
-                    logger.info("Deleting key {} from state_dict.".format(key))
-                    need_continue = True
-                    break
+            if ignore_keys is not None:
+                for ik in ignore_keys:
+                    if key.startswith(ik):
+                        logger.info("Deleting key {} from state_dict.".format(key))
+                        need_continue = True
+                        break
             if need_continue:
                 continue
             # with device_guard():
-            state_dict[key] = paddle.Tensor(tmp_state_dict.pop(key), zero_copy=True)
+            t = tmp_state_dict.pop(key)
+            if isinstance(t, dict):
+                if len(t) == 0:
+                    state_dict[key] = {}
+            else:
+                state_dict[key] = paddle.Tensor(t, zero_copy=True)
+
     return data_format
 
 

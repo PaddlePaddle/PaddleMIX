@@ -308,6 +308,11 @@ class KDPM2DiscreteScheduler(SchedulerMixin, ConfigMixin):
 
     # Copied from ppdiffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._sigma_to_t
     def _sigma_to_t(self, sigma, log_sigmas):
+        if isinstance(sigma, paddle.Tensor):
+            sigma = sigma.cpu().numpy()
+        if isinstance(log_sigmas, paddle.Tensor):
+            log_sigmas = log_sigmas.cpu().numpy()
+
         # get log sigma
         log_sigma = np.log(np.maximum(sigma, 1e-10))
 

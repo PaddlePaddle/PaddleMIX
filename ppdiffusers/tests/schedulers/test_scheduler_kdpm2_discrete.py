@@ -1,4 +1,4 @@
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 import paddle
 
 from ppdiffusers import KDPM2DiscreteScheduler
+from ppdiffusers.utils.testing_utils import paddle_device
 
 from .test_schedulers import SchedulerCommonTest
 
@@ -71,12 +72,17 @@ class KDPM2DiscreteSchedulerTest(SchedulerCommonTest):
         result_sum = paddle.sum(paddle.abs(sample))
         result_mean = paddle.mean(paddle.abs(sample))
 
-        # CUDA
-        assert abs(result_sum.item() - 4.693428650170972e-07) < 1e-2
-        assert abs(result_mean.item() - 0.0002) < 1e-3
+        if paddle_device in ["cpu", "mps"]:
+            assert abs(result_sum.item() - 4.6934e-07) < 1e-2
+            assert abs(result_mean.item() - 6.1112e-10) < 1e-3
+        else:
+            # CUDA
+            assert abs(result_sum.item() - 4.693428650170972e-07) < 1e-2
+            assert abs(result_mean.item() - 0.0002) < 1e-3
 
     def test_full_loop_no_noise(self):
-
+        if paddle_device == "mps":
+            return
         scheduler_class = self.scheduler_classes[0]
         scheduler_config = self.get_scheduler_config()
         scheduler = scheduler_class(**scheduler_config)
@@ -97,11 +103,17 @@ class KDPM2DiscreteSchedulerTest(SchedulerCommonTest):
         result_sum = paddle.sum(paddle.abs(sample))
         result_mean = paddle.mean(paddle.abs(sample))
 
-        # CUDA
-        assert abs(result_sum.item() - 20.4125) < 1e-2
-        assert abs(result_mean.item() - 0.0266) < 1e-3
+        if paddle_device in ["cpu", "mps"]:
+            assert abs(result_sum.item() - 20.4125) < 1e-2
+            assert abs(result_mean.item() - 0.0266) < 1e-3
+        else:
+            # CUDA
+            assert abs(result_sum.item() - 20.4125) < 1e-2
+            assert abs(result_mean.item() - 0.0266) < 1e-3
 
     def test_full_loop_device(self):
+        if paddle_device == "mps":
+            return
         scheduler_class = self.scheduler_classes[0]
         scheduler_config = self.get_scheduler_config()
         scheduler = scheduler_class(**scheduler_config)
@@ -122,6 +134,43 @@ class KDPM2DiscreteSchedulerTest(SchedulerCommonTest):
         result_sum = paddle.sum(paddle.abs(sample))
         result_mean = paddle.mean(paddle.abs(sample))
 
-        # CUDA
-        assert abs(result_sum.item() - 20.4125) < 1e-2
-        assert abs(result_mean.item() - 0.0266) < 1e-3
+        if str(paddle_device).startswith("cpu"):
+            # The following sum varies between 148 and 156 on mps. Why?
+            assert abs(result_sum.item() - 20.4125) < 1e-2
+            assert abs(result_mean.item() - 0.0266) < 1e-3
+        else:
+            # CUDA
+            assert abs(result_sum.item() - 20.4125) < 1e-2
+            assert abs(result_mean.item() - 0.0266) < 1e-3
+
+    def test_full_loop_with_noise(self):
+        if paddle_device == "mps":
+            return
+        scheduler_class = self.scheduler_classes[0]
+        scheduler_config = self.get_scheduler_config()
+        scheduler = scheduler_class(**scheduler_config)
+
+        scheduler.set_timesteps(self.num_inference_steps)
+
+        model = self.dummy_model()
+        sample = self.dummy_sample_deter * scheduler.init_noise_sigma
+
+        # add noise
+        t_start = self.num_inference_steps - 2
+        noise = self.dummy_noise_deter
+        timesteps = scheduler.timesteps[t_start * scheduler.order :]
+        sample = scheduler.add_noise(sample, noise, timesteps[:1])
+
+        for i, t in enumerate(timesteps):
+            sample = scheduler.scale_model_input(sample, t)
+
+            model_output = model(sample, t)
+
+            output = scheduler.step(model_output, t, sample)
+            sample = output.prev_sample
+
+        result_sum = paddle.sum(paddle.abs(sample))
+        result_mean = paddle.mean(paddle.abs(sample))
+
+        assert abs(result_sum.item() - 70408.421875) < 1e-2, f" expected result sum 70408.4062, but get {result_sum}"
+        assert abs(result_mean.item() - 91.677635) < 1e-3, f" expected result mean 91.6776, but get {result_mean}"

@@ -543,7 +543,7 @@ class LCMScheduler(SchedulerMixin, ConfigMixin):
         if self.config.thresholding:
             predicted_original_sample = self._threshold_sample(predicted_original_sample)
         elif self.config.clip_sample:
-            predicted_original_sample = predicted_original_sample.clamp(
+            predicted_original_sample = predicted_original_sample.clip(
                 -self.config.clip_sample_range, self.config.clip_sample_range
             )
 

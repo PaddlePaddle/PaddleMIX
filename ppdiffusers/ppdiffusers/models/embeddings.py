@@ -312,7 +312,7 @@ class SinusoidalPositionalEmbedding(nn.Layer):
 
     def __init__(self, embed_dim: int, max_seq_length: int = 32):
         super().__init__()
-        position = paddle.arange(max_seq_length).unsqueeze(1)
+        position = paddle.arange(max_seq_length, dtype="float32").unsqueeze(1)
         div_term = paddle.exp(paddle.arange(0, embed_dim, 2) * (-math.log(10000.0) / embed_dim))
         pe = paddle.zeros([1, max_seq_length, embed_dim])
         pe[0, :, 0::2] = paddle.sin(position * div_term)

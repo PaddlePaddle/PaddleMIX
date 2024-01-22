@@ -1,5 +1,4 @@
 # coding=utf-8
-# Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
 # Copyright 2023 HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -259,6 +258,21 @@ class SchedulerCommonTest(unittest.TestCase):
         return sample
 
     @property
+    def dummy_noise_deter(self):
+        batch_size = 4
+        num_channels = 3
+        height = 8
+        width = 8
+
+        num_elems = batch_size * num_channels * height * width
+        sample = paddle.arange(num_elems).flip(-1)
+        sample = sample.reshape([num_channels, height, width, batch_size])
+        sample = sample / num_elems
+        sample = sample.transpose([3, 0, 1, 2])
+
+        return sample
+
+    @property
     def dummy_sample_deter(self):
         batch_size = 4
         num_channels = 3
@@ -331,8 +345,8 @@ class SchedulerCommonTest(unittest.TestCase):
                 _ = scheduler.scale_model_input(sample, scaled_sigma_max)
                 _ = new_scheduler.scale_model_input(sample, scaled_sigma_max)
             elif scheduler_class != VQDiffusionScheduler:
-                _ = scheduler.scale_model_input(sample, 0)
-                _ = new_scheduler.scale_model_input(sample, 0)
+                _ = scheduler.scale_model_input(sample, scheduler.timesteps[-1])
+                _ = new_scheduler.scale_model_input(sample, scheduler.timesteps[-1])
 
             # Set the seed before step() as some schedulers are stochastic like EulerAncestralDiscreteScheduler, EulerDiscreteScheduler
             if "generator" in set(inspect.signature(scheduler.step).parameters.keys()):
@@ -478,8 +492,8 @@ class SchedulerCommonTest(unittest.TestCase):
 
         num_inference_steps = kwargs.pop("num_inference_steps", None)
 
-        timestep_0 = 0
-        timestep_1 = 1
+        timestep_0 = 1
+        timestep_1 = 0
 
         for scheduler_class in self.scheduler_classes:
             if scheduler_class in (EulerAncestralDiscreteScheduler, EulerDiscreteScheduler, LMSDiscreteScheduler):
@@ -524,11 +538,11 @@ class SchedulerCommonTest(unittest.TestCase):
             elif tuple_object is None:
                 return
             else:
+                tuple_object = tuple_object.cast(paddle.float32)
+                dict_object = dict_object.cast(paddle.float32)
                 self.assertTrue(
                     paddle.allclose(
-                        set_nan_tensor_to_zero(tuple_object).cast("float32"),
-                        set_nan_tensor_to_zero(dict_object).cast("float32"),
-                        atol=1e-5,
+                        set_nan_tensor_to_zero(tuple_object), set_nan_tensor_to_zero(dict_object), atol=1e-5
                     ),
                     msg=(
                         "Tuple and dict output are not equal. Difference:"
