@@ -945,7 +945,7 @@ class UNet2DConditionModelIntegrationTests(unittest.TestCase):
         with paddle.no_grad():
             sample = model(latents, timestep=timestep, encoder_hidden_states=encoder_hidden_states).sample
 
-        assert sample.shape == (4, 4, 64, 64)
+        assert sample.shape == [4, 4, 64, 64]
 
         output_slice = sample[-1, -2:, -2:, :2].flatten().cast("float32").cpu()
         expected_output_slice = paddle.to_tensor(expected_slice)
