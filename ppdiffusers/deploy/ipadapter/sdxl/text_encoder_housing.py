@@ -37,7 +37,6 @@ class CLIPTextModelHousing(CLIPTextModel):
             output_hidden_states=True,
             return_dict=True,
         )
-        # breakpoint()
 
         pooled_prompt_embeds = output[0]
         prompt_embeds = output.hidden_states[-2]
