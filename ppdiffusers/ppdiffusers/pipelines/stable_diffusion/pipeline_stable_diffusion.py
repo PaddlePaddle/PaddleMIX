@@ -389,7 +389,7 @@ class StableDiffusionPipeline(
                 prompt_embeds = self.text_encoder.text_model.final_layer_norm(prompt_embeds)
 
         if self.text_encoder is not None:
-            prompt_embeds_dtype = self.text_encoder._dtype
+            prompt_embeds_dtype = self.text_encoder.dtype
         elif self.unet is not None:
             prompt_embeds_dtype = self.unet.dtype
         else:
