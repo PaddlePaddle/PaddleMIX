@@ -17,7 +17,7 @@ python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion
 ```shell
 # 关闭ppxformers，否则会导致模型导出失败
 export USE_PPXFORMERS=False
-python export_model.py --pretrained_model_name_or_path runwayml/stable-diffusion-v1-5 --output_path lcm-stable-diffusion-v1-5 --unet_path ./outputs/checkpoint-10000/unet
+python export_model.py --pretrained_model_name_or_path LCM-MODEL-NAME-OR-PATH --output_path lcm-stable-diffusion-v1-5 --unet_path ./outputs/checkpoint-10000/unet
 ```
 
 注: 上述指令没有导出固定尺寸的模型，固定尺寸的导出模型有利于优化模型推理性能，但会牺牲一定灵活性。若要导出固定尺寸的模型，可指定`--height`和`--width`参数。
@@ -59,7 +59,7 @@ lcm-stable-diffusion-v1-5/
 
 | 参数 |参数说明 |
 |----------|--------------|
-| <span style="display:inline-block;width: 230pt"> --pretrained_model_name_or_path </span> | ppdiffuers提供的diffusion预训练模型。默认为："CompVis/stable-diffusion-v1-4"。更多 StableDiffusion 预训练模型可参考 [ppdiffusers 模型列表](../README.md#ppdiffusers模型支持的权重)。|
+| <span style="display:inline-block;width: 230pt"> --pretrained_model_name_or_path </span> | ppdiffuers提供的Diffusion预训练模型，默认为，"runwayml/stable-diffusion-v1-5"。|
 | --output_path | 导出的模型目录。 |
 | --unet_path | 需要导出的Unet的模型权重，如果指定后我们将会优先使用本参数设置路劲下的文件，默认值为`None`，当我们训练了非lora版本LCM的时候，我们需要设置这个参数。|
 | --lcm_lora_path | 需要合并的lcm lora权重的地址，注意当前仅仅支持`kohya`的`safetensors`权重，默认值为`None`。|
