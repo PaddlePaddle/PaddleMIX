@@ -117,3 +117,8 @@ except OptionalDependencyNotAvailable:
     from .utils.dummy_paddle_and_paddlenlp_and_einops_objects import *  # noqa F403
 else:
     from .pipelines import UniDiffuserPipeline
+    from .pipelines.stable_diffusion import (
+        StableDiffusionImg2ImgPipeline,
+        StableDiffusionInpaintPipeline,
+        StableDiffusionInpaintPipelineLegacy,
+    )

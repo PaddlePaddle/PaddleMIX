@@ -268,8 +268,8 @@ class KDPM2DiscreteScheduler(SchedulerMixin, ConfigMixin):
         timesteps = paddle.to_tensor(timesteps, dtype=paddle.float32)
 
         # interpolate timesteps
-        sigmas_interpol = sigmas_interpol.cpu()
-        log_sigmas = self.log_sigmas.cpu()
+        sigmas_interpol = sigmas_interpol.cpu().numpy()
+        log_sigmas = self.log_sigmas.cpu().numpy()
         timesteps_interpol = np.array(
             [self._sigma_to_t(sigma_interpol, log_sigmas) for sigma_interpol in sigmas_interpol]
         )
