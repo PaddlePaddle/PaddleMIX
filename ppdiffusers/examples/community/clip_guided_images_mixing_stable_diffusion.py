@@ -141,7 +141,6 @@ class CLIPGuidedImagesMixingStableDiffusion(DiffusionPipeline, FromCkptMixin):
                 f"Make sure to define a feature extractor when loading {self.__class__} if you want to use the safety"
                 " checker. If you do not want to use the safety checker, you can pass `'safety_checker=None'` instead."
             )
-        # breakpoint()
         self.register_modules(
             vae=vae,
             text_encoder=text_encoder,

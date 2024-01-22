@@ -295,11 +295,6 @@ class LDMBertConfig(PretrainedConfig):
         super().__init__(pad_token_id=pad_token_id, **kwargs)
 
 
-def masked_fill(x, mask, value):
-    y = paddle.full(x.shape, value, x.dtype)
-    return paddle.where(mask, y, x)
-
-
 def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
     """
     Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
@@ -311,7 +306,7 @@ def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
 
     inverted_mask = 1.0 - expanded_mask
 
-    return masked_fill(inverted_mask, inverted_mask.cast(paddle.bool), paddle.finfo(dtype).min)
+    return paddle.masked_fill(inverted_mask, inverted_mask.cast(paddle.bool), paddle.finfo(dtype).min)
 
 
 class LDMBertAttention(nn.Layer):
@@ -525,6 +520,20 @@ class LDMBertPreTrainedModel(PretrainedModel):
     base_model_prefix = "model"
     _supports_gradient_checkpointing = True
     _keys_to_ignore_on_load_unexpected = [r"encoder\.version", r"decoder\.version"]
+
+    _deprecated_dict = {
+        "key": "encoder.layers",
+        "name_mapping": {
+            "embeddings.word_embeddings.weight": "model.embed_tokens.weight",
+            "embeddings.position_embeddings.weight": "model.embed_positions.weight",
+            "final_layer_norm.": "model.layer_norm.",
+            "encoder.layers.": "model.layers.",
+            ".norm1.": ".self_attn_layer_norm.",
+            ".norm2.": ".final_layer_norm.",
+            ".linear1.": ".fc1.",
+            ".linear2.": ".fc2.",
+        },
+    }
 
     @classmethod
     def _get_name_mappings(cls, config):

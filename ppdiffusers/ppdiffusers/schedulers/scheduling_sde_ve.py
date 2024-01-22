@@ -216,7 +216,7 @@ class ScoreSdeVeScheduler(SchedulerMixin, ConfigMixin):
         drift = drift - diffusion**2 * model_output
 
         #  equation 6: sample noise for the diffusion term of
-        noise = randn_tensor(sample.shape, layout=sample.layout, generator=generator, dtype=sample.dtype)
+        noise = randn_tensor(sample.shape, generator=generator, dtype=sample.dtype)
         prev_sample_mean = sample - drift  # subtract because `dt` is a small negative timestep
         # TODO is the variable diffusion the correct scaling term for the noise?
         prev_sample = prev_sample_mean + diffusion * noise  # add impact of diffusion field g

@@ -197,6 +197,16 @@ class Attention(nn.Layer):
             processor = AttnProcessor2_5() if is_ppxformers_available() else AttnProcessor()
         self.set_processor(processor)
 
+    @property
+    def dtype(self: nn.Layer) -> paddle.dtype:
+        try:
+            return next(self.named_parameters())[1].dtype
+        except StopIteration:
+            try:
+                return next(self.named_buffers())[1].dtype
+            except StopIteration:
+                return self._dtype
+
     def set_use_memory_efficient_attention_xformers(
         self, use_memory_efficient_attention_xformers: bool, attention_op: Optional[str] = None
     ) -> None:

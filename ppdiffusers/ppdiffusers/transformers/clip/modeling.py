@@ -40,11 +40,6 @@ CLIP_PRETRAINED_MODEL_ARCHIVE_LIST = [
 LinearClass = nn.Linear
 
 
-def masked_fill(x, mask, value):
-    y = paddle.full(x.shape, value, x.dtype)
-    return paddle.where(mask, y, x)
-
-
 def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
     """
     Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
@@ -56,7 +51,7 @@ def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
 
     inverted_mask = 1.0 - expanded_mask
 
-    return masked_fill(inverted_mask, inverted_mask.cast(paddle.bool), paddle.finfo(dtype).min)
+    return paddle.masked_fill(inverted_mask, inverted_mask.cast(paddle.bool), paddle.finfo(dtype).min)
 
 
 # contrastive loss function, adapted from
@@ -416,6 +411,31 @@ class CLIPPreTrainedModel(PretrainedModel):
     config_class = CLIPConfig
     base_model_prefix = "clip"
     supports_gradient_checkpointing = True
+
+    _deprecated_dict = {
+        "key": ".transformer.",
+        "name_mapping": {
+            # common
+            ".transformer.": ".encoder.",
+            ".positional_embedding.": ".embeddings.position_embedding.",
+            # text
+            ".token_embedding.": ".embeddings.token_embedding.",
+            ".ln_final.": ".final_layer_norm.",
+            # transformers
+            ".linear1.": ".mlp.fc1.",
+            ".linear2.": ".mlp.fc2.",
+            ".norm1.": ".layer_norm1.",
+            ".norm2.": ".layer_norm2.",
+            # vision
+            ".class_embedding": ".embeddings.class_embedding",
+            ".conv1.weight": ".embeddings.patch_embedding.weight",
+            ".ln_pre.": ".pre_layrnorm.",
+            ".ln_post.": ".post_layernorm.",
+            # projection
+            "text_projection": "text_projection.weight",
+            "vision_projection": "visual_projection.weight",
+        },
+    }
 
     @classmethod
     def _get_name_mappings(cls, config):

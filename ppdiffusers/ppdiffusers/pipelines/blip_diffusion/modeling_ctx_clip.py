@@ -23,11 +23,6 @@ from ppdiffusers.transformers.clip.configuration import CLIPTextConfig
 from ppdiffusers.transformers.clip.modeling import CLIPEncoder
 
 
-def masked_fill(x, mask, value):
-    y = paddle.full(x.shape, value, x.dtype)
-    return paddle.where(mask, y, x)
-
-
 def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
     """
     Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
@@ -39,7 +34,7 @@ def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
 
     inverted_mask = 1.0 - expanded_mask
 
-    return masked_fill(inverted_mask, inverted_mask.cast(paddle.bool), paddle.finfo(dtype).min)
+    return paddle.masked_fill(inverted_mask, inverted_mask.cast(paddle.bool), paddle.finfo(dtype).min)
 
 
 # This is a modified version of the CLIPTextModel from transformers.models.clip.modeling_clip

@@ -290,32 +290,32 @@ class Decoder(nn.Layer):
 
         upscale_dtype = next(iter(self.up_blocks.parameters())).dtype
         if self.training and self.gradient_checkpointing and not sample.stop_gradient:
-            with paddle.jit.not_to_static():
+            # test_model_vae error on this
+            # with paddle.jit.not_to_static():
+            def create_custom_forward(module):
+                def custom_forward(*inputs):
+                    return module(*inputs)
 
-                def create_custom_forward(module):
-                    def custom_forward(*inputs):
-                        return module(*inputs)
+                return custom_forward
 
-                    return custom_forward
+            ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
+            # middle
+            sample = recompute(
+                create_custom_forward(self.mid_block),
+                sample,
+                latent_embeds,
+                **ckpt_kwargs,
+            )
+            sample = sample.cast(upscale_dtype)
 
-                ckpt_kwargs = {} if recompute_use_reentrant() else {"use_reentrant": False}
-                # middle
+            # up
+            for up_block in self.up_blocks:
                 sample = recompute(
-                    create_custom_forward(self.mid_block),
+                    create_custom_forward(up_block),
                     sample,
                     latent_embeds,
                     **ckpt_kwargs,
                 )
-                sample = sample.cast(upscale_dtype)
-
-                # up
-                for up_block in self.up_blocks:
-                    sample = recompute(
-                        create_custom_forward(up_block),
-                        sample,
-                        latent_embeds,
-                        **ckpt_kwargs,
-                    )
         else:
             # middle
             sample = self.mid_block(sample, latent_embeds)

@@ -45,6 +45,15 @@ def str2bool(v):
         raise ValueError("Not supported value: {}".format(v))
 
 
+if not hasattr(paddle, "masked_fill"):
+
+    def masked_fill(x, mask, value):
+        y = paddle.full(x.shape, value, x.dtype)
+        return paddle.where(mask, y, x)
+
+    paddle.masked_fill = masked_fill
+
+
 if not hasattr(paddle, "finfo"):
 
     def finfo(dtype: paddle.dtype = None):

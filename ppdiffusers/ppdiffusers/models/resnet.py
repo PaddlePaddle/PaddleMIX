@@ -1108,8 +1108,9 @@ class TemporalConvLayer(nn.Layer):
         )
 
         # zero out the last layer params,so the conv block is identity
-        self.conv4[-1].weight.zero_()
-        self.conv4[-1].bias.zero_()
+        with paddle.no_grad():
+            self.conv4[-1].weight.zero_()
+            self.conv4[-1].bias.zero_()
 
     def forward(self, hidden_states: paddle.Tensor, num_frames: int = 1) -> paddle.Tensor:
         hidden_states = (

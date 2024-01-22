@@ -160,6 +160,21 @@ from .state_dict_utils import (
     convert_state_dict_to_ppdiffusers,
     convert_unet_state_dict_to_peft,
 )
+from .testing_utils import (  # load_image,
+    floats_tensor,
+    image_grid,
+    load_hf_numpy,
+    load_numpy,
+    load_pd,
+    load_ppnlp_numpy,
+    nightly,
+    paddle_all_close,
+    paddle_device,
+    parse_flag_from_env,
+    print_tensor_test,
+    require_paddle_gpu,
+    slow,
+)
 
 logger = get_logger(__name__)
 

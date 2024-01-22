@@ -880,7 +880,7 @@ class UNetMotionModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         sample = self.conv_out(sample)
 
         # reshape to (batch, channel, framerate, width, height)
-        sample = sample[None, :].reshape([-1, num_frames] + sample.shape[1:]).tranpose([0, 2, 1, 3, 4])
+        sample = sample[None, :].reshape([-1, num_frames] + sample.shape[1:]).transpose([0, 2, 1, 3, 4])
 
         if not return_dict:
             return (sample,)

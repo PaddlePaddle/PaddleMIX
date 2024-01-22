@@ -25,6 +25,7 @@ from paddlenlp.transformers.configuration_utils import (
     PretrainedConfig as PPNLPPretrainedConfig,
 )
 from paddlenlp.transformers.model_utils import PretrainedModel as PPNLPPretrainedModel
+from paddlenlp.utils.log import logger as ppnlp_logger
 
 from ppdiffusers.utils import (
     is_safetensors_available,
@@ -210,6 +211,57 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
                 " `gradient_checkpointing` to modules of the model that uses checkpointing."
             )
 
+    @classmethod
+    def _load_pretrained_model(
+        cls,
+        model,
+        state_dict,
+        loaded_keys,
+        resolved_archive_file,
+        pretrained_model_name_or_path,
+        config=None,
+        ignore_mismatched_sizes=False,
+        low_cpu_mem_usage=False,
+        dtype=None,
+        keep_in_fp32_modules=None,
+        quantization_linear_list=None,
+        **kwargs,
+    ):
+        # load from deprecated state dict
+        state_dict, loaded_keys = cls._update_deprecated_state_dict(state_dict, loaded_keys, model)
+        return super()._load_pretrained_model(
+            model,
+            state_dict,
+            loaded_keys,
+            resolved_archive_file,
+            pretrained_model_name_or_path,
+            config=config,
+            ignore_mismatched_sizes=ignore_mismatched_sizes,
+            low_cpu_mem_usage=low_cpu_mem_usage,
+            dtype=dtype,
+            keep_in_fp32_modules=keep_in_fp32_modules,
+            quantization_linear_list=quantization_linear_list,
+            **kwargs,
+        )
+
+    @classmethod
+    def _update_deprecated_state_dict(cls, state_dict, loaded_keys, model):
+        _deprecated_dict = getattr(cls, "_deprecated_dict", None)
+        from_deprecated_state_dict = _deprecated_dict is not None and any(
+            cls._deprecated_dict.get("key", "NONE") in all_key for all_key in state_dict.keys()
+        )
+        if from_deprecated_state_dict:
+            ppnlp_logger.warning(
+                "Loading from deprecated state_dict, please load new state_dict via setting `use_safetensors=True`."
+            )
+            for name in list(state_dict.keys()):
+                deprecated_name = name
+                for old_name, new_name in cls._deprecated_dict.get("name_mapping", {}).items():
+                    name = name.replace(old_name, new_name)
+                state_dict[name] = state_dict.pop(deprecated_name)
+            loaded_keys = list(state_dict.keys())
+        return state_dict, loaded_keys
+
     @property
     def is_gradient_checkpointing(self) -> bool:
         """
@@ -259,7 +311,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
             self._set_gradient_checkpointing(enable=True, gradient_checkpointing_func=gradient_checkpointing_func)
         else:
             self.apply(partial(self._set_gradient_checkpointing, value=True))
-            logger.warn(
+            ppnlp_logger.warn(
                 "You are using an old version of the checkpointing format that is deprecated (We will also silently ignore `gradient_checkpointing_kwargs` in case you passed it)."
                 "Please update to the new format on your modeling file. To use the new format, you need to completely remove the definition of the method `_set_gradient_checkpointing` in your model."
             )
@@ -278,7 +330,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
             if not _is_using_old_format:
                 self._set_gradient_checkpointing(enable=False)
             else:
-                logger.warn(
+                ppnlp_logger.warn(
                     "You are using an old version of the checkpointing format that is deprecated (We will also silently ignore `gradient_checkpointing_kwargs` in case you passed it)."
                     "Please update to the new format on your modeling file. To use the new format, you need to completely remove the definition of the method `_set_gradient_checkpointing` in your model."
                 )

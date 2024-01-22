@@ -276,8 +276,8 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
         self.sigmas_down = paddle.concat([sigmas_down[:1], sigmas_down[1:].repeat_interleave(2), sigmas_down[-1:]])
 
         timesteps = paddle.to_tensor(timesteps, dtype=paddle.float32)
-        sigmas_interpol = sigmas_interpol.cpu()
-        log_sigmas = self.log_sigmas.cpu()
+        sigmas_interpol = sigmas_interpol.cpu().numpy()
+        log_sigmas = self.log_sigmas.cpu().numpy()
         timesteps_interpol = np.array(
             [self._sigma_to_t(sigma_interpol, log_sigmas) for sigma_interpol in sigmas_interpol]
         )
@@ -297,6 +297,11 @@ class KDPM2AncestralDiscreteScheduler(SchedulerMixin, ConfigMixin):
 
     # Copied from ppdiffusers.schedulers.scheduling_euler_discrete.EulerDiscreteScheduler._sigma_to_t
     def _sigma_to_t(self, sigma, log_sigmas):
+        if isinstance(sigma, paddle.Tensor):
+            sigma = sigma.cpu().numpy()
+        if isinstance(log_sigmas, paddle.Tensor):
+            log_sigmas = log_sigmas.cpu().numpy()
+
         # get log sigma
         log_sigma = np.log(np.maximum(sigma, 1e-10))
 

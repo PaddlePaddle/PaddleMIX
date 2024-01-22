@@ -731,7 +731,7 @@ class LatentConsistencyModelImg2ImgPipeline(
                 bs,
             ]
         )
-        w_embedding = self.get_guidance_scale_embedding(w, embedding_dim=self.unet.config.time_cond_proj_dim)._to(
+        w_embedding = self.get_guidance_scale_embedding(w, embedding_dim=self.unet.config.time_cond_proj_dim).cast(
             dtype=latents.dtype
         )
 

@@ -40,8 +40,11 @@ class PaintByExampleImageEncoder(CLIPPreTrainedModel):
             ["proj_out.bias", "proj_out.bias"],
             ["uncond_vector", "uncond_vector"],
             # model prefix
-            ["model.vision_model.embeddings.class_embedding", "vision_model.embeddings.class_embedding"],
-            ["model.vision_model.embeddings.patch_embedding.weight", "vision_model.embeddings.patch_embedding.weight"],
+            ["model.vision_model.embeddings.class_embedding", "model.vision_model.embeddings.class_embedding"],
+            [
+                "model.vision_model.embeddings.patch_embedding.weight",
+                "model.vision_model.embeddings.patch_embedding.weight",
+            ],
             [
                 "model.vision_model.embeddings.position_embedding.weight",
                 "model.vision_model.embeddings.position_embedding.weight",

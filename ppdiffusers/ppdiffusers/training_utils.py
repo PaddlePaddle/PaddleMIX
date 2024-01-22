@@ -1,4 +1,5 @@
 # Copyright (c) 2023 PaddlePaddle Authors. All Rights Reserved.
+# Copyright 2023 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -200,8 +201,8 @@ class EMAModel:
         """
         Compute the decay factor for the exponential moving average.
         """
-        # NOTE we donot -1!
-        step = max(0, optimization_step - self.update_after_step - 1)
+        # NOTE we donot -1! (yujun06) diffirent from diffusers's implementation
+        step = max(0, optimization_step - self.update_after_step)
 
         if step <= 0:
             return 0.0
@@ -241,8 +242,6 @@ class EMAModel:
         one_minus_decay = 1 - decay
 
         context_manager = contextlib.nullcontext
-        # if is_paddlenlp_available() and deepspeed.is_deepspeed_zero3_enabled():
-        #     import deepspeed
 
         for s_param, param in zip(self.shadow_params, parameters):
             with context_manager():
