@@ -37,6 +37,7 @@ from huggingface_hub.utils import (
     EntryNotFoundError,
     FileMetadataError,
     GatedRepoError,
+    HfHubHTTPError,
     LocalEntryNotFoundError,
     RepositoryNotFoundError,
     RevisionNotFoundError,
@@ -1188,5 +1189,5 @@ def bos_file_exists(
         return True
     except GatedRepoError:  # raise specifically on gated repo
         raise
-    except (RepositoryNotFoundError, EntryNotFoundError, RevisionNotFoundError):
+    except (RepositoryNotFoundError, EntryNotFoundError, RevisionNotFoundError, HfHubHTTPError):
         return False
