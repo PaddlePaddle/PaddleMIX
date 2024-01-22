@@ -1,8 +1,8 @@
 {
     "model_name_or_path": "qwen-vl/qwen-vl-chat-7b",
     "dataset": {
-      "train":[{"name": "chatml_dataset", "data_files": "train.json"}],
-      "eval": [{"name": "chatml_dataset", "data_files": "val.json"}]
+      "train":[{"name": "chatml_dataset", "data_files": "train.json","chat_template":"chat_template.json"}],
+      "eval": [{"name": "chatml_dataset", "data_files": "val.json","chat_template":"chat_template.json"}]
     },
     "mixtoken": true,
     "output_dir": "./checkpoints/qwen_vl_sft_ckpts",

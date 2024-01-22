@@ -34,7 +34,9 @@ from .configuration import get_configurations
 
 __all__ = [
     "AutoModelMIX",
+    # "AutoLLM"
 ]
+
 
 # This mapping specifies a unique calling class name for the model.
 # When 'architecture' is not defined in the config file, the calling class is specified based on this mapping.
@@ -76,7 +78,6 @@ def get_model_mapping():
                 continue
 
             model_module = import_module(f"paddlemix.models.{model_name}.{file_name[:-3]}")
-
             for key in dir(model_module):
                 if key == "PretrainedModel" or key == "MixPretrainedModel":
                     continue

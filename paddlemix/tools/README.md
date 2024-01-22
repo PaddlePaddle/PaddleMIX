@@ -37,11 +37,11 @@ PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略
 
 "dataset": {
       "train":[
-        {"name": "chatml_dataset", "data_files": "train.json"},
+        {"name": "chatml_dataset", "data_files": "train.json"，"chat_template":"chat_template.json"},
         {"name": "coco_caption", "data_files": "train.json"},
         ......],
       "eval": [
-        {"name": "chatml_dataset", "data_files": "val.json"},
+        {"name": "chatml_dataset", "data_files": "val.json"，"chat_template":"chat_template.json"},
         {"name": "coco_caption", "data_files": "val.json"},
         ......],
     },
@@ -49,13 +49,12 @@ PaddleMIX 精调支持多个主流跨模态大模型的SFT、LoRA等精调策略
 
 ```
 
-而对于每个子数据集，如上述的 chatml_dataset、coco_caption 格式，可参考[examples](../examples/) 下对应的模型目录里面的文档介绍。
+而对于每个子数据集，如上述的 coco_caption 数据格式，可参考[examples](../examples/) 下对应的模型目录里面的文档介绍。
 
-为了方便测试，我们也提供了chatml_dataset格式的数据集,用于 qwen-vl 模型精调，可以直接使用：
-```bash
-wget https://bj.bcebos.com/v1/paddlenlp/datasets/examples/ocrvqa_examples.zip
-unzip ocrvqa_examples.zip
-```
+同时，我们通过 chatml_dataset 数据集支持主流的LLM对话自定义模版。关于自定义对话模板，请参考[自定义对话模版](https://github.com/PaddlePaddle/PaddleNLP/blob/16d3c49d2b8d0c7e56d1be8d7f6f2ca20aac80cb/docs/get_started/chat_template.md#自定义对话模板
+)
+
+为了方便测试，我们也提供了 chatml_dataset 格式的数据集和对应的 chat_template.json,用于 qwen-vl 模型精调，可以直接[下载](https://bj.bcebos.com/v1/paddlenlp/datasets/examples/ScienceQA.tar)使用。
 
 **config** 配置文件参数说明：
 ```

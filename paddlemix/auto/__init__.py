@@ -15,3 +15,4 @@
 from .configuration import AutoConfigMIX
 from .modeling import AutoModelMIX
 from .processing import AutoProcessorMIX
+from .tokenizer import AutoTokenizerMIX

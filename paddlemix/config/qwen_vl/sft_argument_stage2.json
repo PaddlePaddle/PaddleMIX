@@ -3,8 +3,8 @@
   "freeze_include": ["*visual*"],
   "freeze_exclude": ["*visual.attn_pool*"],
   "dataset": {
-    "train":[{"name": "chatml_dataset", "data_files": "train.json"}],
-    "eval": [{"name": "chatml_dataset", "data_files": "val.json"}]
+    "train":[{"name": "chatml_dataset", "data_files": "train.json","chat_template":"chat_template.json"}],
+    "eval": [{"name": "chatml_dataset", "data_files": "val.json","chat_template":"chat_template.json"}]
   },
   "mixtoken": true,
   "output_dir": "./checkpoints/qwen_vl_sft_ckpts",

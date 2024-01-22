@@ -56,15 +56,15 @@ class QwenVLProcessor(ProcessorMixin):
         if query is None:
             query = record
 
-        images = []
-        for ele in query:
-            if "image" in ele:
-                images.append(ele["image"])
-
         if mode == "train":
             inputs = self.sft_preprocess(query)
 
         else:
+            images = []
+            for ele in query:
+                if "image" in ele:
+                    images.append(ele["image"])
+
             query = self.tokenizer.from_list_format(query)
             inputs = self.tokenizer(query, return_tensors=return_tensors)
             inputs["images"] = None
@@ -89,39 +89,37 @@ class QwenVLProcessor(ProcessorMixin):
 
         import re
 
-        pattern = re.compile(r"<img>.*</img>")
+        image_pattern = re.compile(r"<img>.*</img>")
         image_path = []
+        if "<img>" in sources:
+            result = image_pattern.findall(sources)
+            for ele in result:
+                image_path.append(ele[5:-6])
 
-        for j, sentence in enumerate(sources):
-            if "<img>" in sentence["value"]:
-                result = pattern.findall(sentence["value"])
-                for ele in result:
-                    image_path.append(ele[5:-6])
+        input_id_conversation = self.tokenizer(sources).input_ids
+        input_id += input_id_conversation
 
-            role = sentence["from"]
-            _input_id = (
-                self.tokenizer(role).input_ids
-                + nl_tokens
-                + self.tokenizer(sentence["value"]).input_ids
+        im_start_index = np.where(np.array(input_id_conversation) == im_start)[0]
+        im_end_index = np.where(np.array(input_id_conversation) == im_end)[0]
+        index_list = list(zip(im_start_index, im_end_index))
+
+        for i in range(0, len(index_list), 2):
+            q = index_list[i]
+            a = index_list[i + 1]
+
+            target += [im_start] + [IGNORE_TOKEN_ID] * (q[1] - q[0] + 2 - 3) + [im_end] + nl_tokens
+            target += (
+                [im_start]
+                + [IGNORE_TOKEN_ID] * len(self.tokenizer("<|im_start|>assistant").input_ids)
+                + input_id_conversation[a[0] : a[1] + 2][
+                    len(self.tokenizer("<|im_start|>assistant").input_ids) + 1 : -2
+                ]
                 + [im_end]
                 + nl_tokens
             )
-            input_id += _input_id
-            if role == "<|im_start|>user":
-                _target = [im_start] + [IGNORE_TOKEN_ID] * (len(_input_id) - 3) + [im_end] + nl_tokens
-            elif role == "<|im_start|>assistant":
-                _target = (
-                    [im_start]
-                    + [IGNORE_TOKEN_ID] * len(self.tokenizer(role).input_ids)
-                    + _input_id[len(self.tokenizer(role).input_ids) + 1 : -2]
-                    + [im_end]
-                    + nl_tokens
-                )
-            else:
-                raise NotImplementedError
-            target += _target
 
         assert len(input_id) == len(target)
+
         inputs = dict(
             input_ids=input_id,
             labels=target,

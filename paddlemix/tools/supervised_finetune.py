@@ -19,7 +19,7 @@ from paddlenlp.peft import LoRAConfig, LoRAModel
 from paddlenlp.trainer import PdArgumentParser, get_last_checkpoint
 from paddlenlp.utils.log import logger
 
-from paddlemix import QWenTokenizer
+from paddlemix import QWenVLTokenizer
 from paddlemix.auto import AutoConfigMIX, AutoModelMIX, AutoProcessorMIX
 from paddlemix.datasets import MixDataset, MIXTokenMapDataset
 from paddlemix.trainer import (
@@ -91,17 +91,15 @@ def main():
         model_args.model_name_or_path,
         text_model_name_or_path=model_args.text_model_name_or_path,
         train="train",
-        dtype=dtype,
     )
     if training_args.do_eval:
         eval_processor, _ = AutoProcessorMIX.from_pretrained(
             model_args.model_name_or_path,
             text_model_name_or_path=model_args.text_model_name_or_path,
-            train="eval",
-            dtype=dtype,
+            eval="eval",
         )
 
-    if isinstance(tokenizer, QWenTokenizer):
+    if isinstance(tokenizer, QWenVLTokenizer):
         tokenizer.pad_token_id = tokenizer.eod_id
 
     # Load dataset

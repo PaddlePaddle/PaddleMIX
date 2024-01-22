@@ -195,7 +195,6 @@ def load_dataset(path_or_read_func, name=None, data_files=None, splits=None, laz
             datasets = load_from_hf(path_or_read_func, name=name, splits=splits, **kwargs)
         else:
             reader_instance = reader_cls(lazy=lazy, name=name, **kwargs)
-
             # Check if selected name and split is valid in this DatasetBuilder
             if hasattr(reader_instance, "BUILDER_CONFIGS"):
                 if name in reader_cls.BUILDER_CONFIGS.keys():
@@ -1158,7 +1157,8 @@ class MixDataset(Dataset):
             name = d["name"]
             data_files = d["data_files"] if "data_files" in d else None
             splits = d["splits"] if "splits" in d else None
-            self.datasets.append(load_dataset(name, data_files=data_files, splits=splits))
+            chat_template = d["chat_template"] if "chat_template" in d else None
+            self.datasets.append(load_dataset(name, data_files=data_files, splits=splits, chat_template=chat_template))
 
         self.datasets = ConcatDataset(self.datasets)
 

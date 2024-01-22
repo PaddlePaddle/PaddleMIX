@@ -16,12 +16,12 @@ from typing import List, Optional, Tuple, Union
 
 import paddle
 from paddlenlp.generation import GenerationConfig
-from paddlenlp.transformers import PretrainedTokenizer
+from paddlenlp.transformers import AutoConfig, AutoModel, PretrainedTokenizer
 from paddlenlp.transformers.model_outputs import (
     BaseModelOutputWithPast,
     CausalLMOutputWithPast,
 )
-from paddlenlp.transformers.qwen.modeling import QWenModel
+from paddlenlp.transformers.model_utils import PretrainedModel
 
 try:
     from paddlenlp.transformers.qwen.modeling import QWenPretrainedModel
@@ -81,9 +81,11 @@ def _expand_mask(mask: paddle.Tensor, dtype: paddle.dtype, tgt_len: Optional[int
     return masked_fill(inverted_mask, inverted_mask.astype("bool"), paddle.finfo(dtype).min)
 
 
-class QWen(QWenModel):
+class QWen(PretrainedModel):
     def __init__(self, config):
         super().__init__(config)
+        llm_config = AutoConfig.from_pretrained(config.llm_pretrained_model_name_or_path)
+        self.llm = AutoModel.from_config(config=llm_config, dtype=config.dtype)
         self.recompute = config.recompute if hasattr(config, "recompute") else False
 
     def _prepare_decoder_attention_mask(self, attention_mask, input_shape, inputs_embeds, past_key_values_length):
@@ -116,12 +118,12 @@ class QWen(QWenModel):
         output_hidden_states: Optional[bool] = None,
         return_dict: Optional[bool] = None,
     ):
-        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
+        output_attentions = output_attentions if output_attentions is not None else self.llm.config.output_attentions
         output_hidden_states = (
-            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None else self.llm.config.output_hidden_states
         )
-        use_cache = use_cache if use_cache is not None else self.config.use_cache
-        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+        use_cache = use_cache if use_cache is not None else self.llm.config.use_cache
+        return_dict = return_dict if return_dict is not None else self.llm.config.use_return_dict
 
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
@@ -139,7 +141,7 @@ class QWen(QWenModel):
             position_ids = position_ids.reshape([-1, input_shape[-1]])
         if past_key_values is None:
             past_length = 0
-            past_key_values = tuple([None] * len(self.h))
+            past_key_values = tuple([None] * len(self.llm.h))
         else:
             past_length = past_key_values[0][0].shape[-2]
         if position_ids is None:
@@ -148,14 +150,14 @@ class QWen(QWenModel):
 
         encoder_attention_mask = None
         if inputs_embeds is None:
-            inputs_embeds = self.wte(input_ids)
+            inputs_embeds = self.llm.wte(input_ids)
 
         hidden_states = inputs_embeds
 
         # bool 4D mask
         attention_mask = self._prepare_decoder_attention_mask(attention_mask, input_shape, inputs_embeds, past_length)
 
-        hidden_states = self.drop(hidden_states)
+        hidden_states = self.llm.drop(hidden_states)
 
         if images is not None:
             hidden_states_dtype = hidden_states.dtype
@@ -182,14 +184,14 @@ class QWen(QWenModel):
         presents = () if use_cache else None
         all_self_attentions = () if output_attentions else None
         all_hidden_states = () if output_hidden_states else None
-        for i, (block, layer_past) in enumerate(zip(self.h, past_key_values)):
+        for i, (block, layer_past) in enumerate(zip(self.llm.h, past_key_values)):
 
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
             if self.recompute and self.training:
                 hidden_states.stop_gradient = False
-                outputs = self.recompute_training(
+                outputs = self.llm.recompute_training(
                     block,
                     hidden_states,
                     layer_past=layer_past,
@@ -223,7 +225,7 @@ class QWen(QWenModel):
             if output_attentions:
                 all_self_attentions = all_self_attentions + (outputs[2 if use_cache else 1],)
 
-        hidden_states = self.ln_f(hidden_states)
+        hidden_states = self.llm.ln_f(hidden_states)
         hidden_states = hidden_states.reshape(output_shape)
 
         # Add last hidden state

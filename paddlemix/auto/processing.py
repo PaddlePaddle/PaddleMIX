@@ -16,48 +16,20 @@ import inspect
 import os
 from collections import defaultdict
 
-from paddlenlp.transformers import (
-    AutoTokenizer,
-    BloomTokenizer,
-    LlamaTokenizer,
-    T5Tokenizer,
-)
 from paddlenlp.utils.import_utils import import_module
 
-from paddlemix import QWenTokenizer
 from paddlemix.processors.base_processing import ProcessorMixin
-from paddlemix.processors.processing_utils import BaseImageProcessor, BaseTextProcessor
-from paddlemix.processors.tokenizer import SimpleTokenizer
+from paddlemix.processors.processing_utils import (
+    BaseAudioProcessor,
+    BaseImageProcessor,
+    BaseTextProcessor,
+)
+
+from .tokenizer import AutoTokenizerMIX
 
 __all__ = [
     "AutoProcessorMIX",
 ]
-
-TOKENIZER_MAPPING = {
-    "opt": AutoTokenizer,
-    "bloom": BloomTokenizer,
-    "llama": LlamaTokenizer,
-    "t5": T5Tokenizer,
-    "qwen_vl": QWenTokenizer,
-    "clip": SimpleTokenizer,
-    "coca": SimpleTokenizer,
-    "evaclip": SimpleTokenizer,
-}
-
-ASSIGN_MAPPING = {
-    # Assign process mapping
-    "blip": ["processor", "image_processor", "text_processor"],
-    "clip": ["processor", "image_processor", "text_processor"],
-    "coca": ["processor", "image_processor", "text_processor"],
-    "eva02": ["processor", "image_processor"],
-    "evaclip": ["processor", "image_processor", "text_processor"],
-    "groundingdino": ["processor"],
-    "imagebind": ["processor"],
-    "minigpt4": ["processor"],
-    "qwen_vl": ["processor"],
-    "sam": ["processor"],
-    "visualglm": ["processor"],
-}
 
 
 def get_processpr_mapping():
@@ -92,6 +64,8 @@ def get_processpr_mapping():
                     mappings[model_name]["image_processor"] = value
                 elif issubclass(value, BaseTextProcessor):
                     mappings[model_name]["text_processor"] = value
+                elif issubclass(value, BaseAudioProcessor):
+                    mappings[model_name]["audio_processor"] = value
 
     return mappings
 
@@ -117,8 +91,6 @@ class AutoProcessorMIX:
     def _get_processor_class(cls, pretrained_model_name_or_path, text_model_name_or_path=None, **kwargs):
 
         name_or_path = None
-        image_processor = None
-        text_processor = None
         processor = None
         tokenizer = None
 
@@ -145,35 +117,29 @@ class AutoProcessorMIX:
         if text_model_name_or_path is None:
             text_model_name_or_path = pretrained_model_name_or_path
 
-        # tokenuzer
-        for name, tokenizer_class in TOKENIZER_MAPPING.items():
-            if name.lower() in text_model_name_or_path.lower().replace("-", "_"):
-                tokenizer = tokenizer_class.from_pretrained(text_model_name_or_path, **kwargs)
-                break
-
         for names, processor_class in cls._processor_mapping.items():
-
             if names.lower() in pretrained_model_name_or_path.lower().replace("-", "_"):
+                attributes = processor_class["processor"].attributes
+                attributes_dict = {}
 
-                if "image_processor" in ASSIGN_MAPPING[names]:
-                    image_processor = processor_class["image_processor"].from_pretrained(name_or_path, **kwargs)
-                if "text_processor" in ASSIGN_MAPPING[names]:
-                    text_processor = processor_class["text_processor"].from_pretrained(name_or_path, **kwargs)
+                for attr in attributes:
+                    if attr == "tokenizer":
+                        continue
+                    if attr in processor_class:
+                        attributes_dict[attr] = processor_class[attr].from_pretrained(name_or_path, **kwargs)
+                    else:
+                        class_name = attr + "_class"
+                        class_name = getattr(processor_class["processor"], class_name)
+                        attributes_dict[attr] = import_module(f"paddlenlp.transformers.{class_name}")
 
-                if image_processor is None and text_processor is None:
-                    processor = (
-                        processor_class["processor"].from_pretrained(pretrained_model_name_or_path, **kwargs)
-                        if tokenizer is None
-                        else processor_class["processor"](tokenizer=tokenizer, **kwargs)
-                    )
-                elif image_processor is not None and text_processor is None:
-                    processor = processor_class["processor"](image_processor=image_processor)
-                elif image_processor is None and text_processor is not None:
-                    processor = processor_class["processor"](text_processor=text_processor, tokenizer=tokenizer)
-                else:
-                    processor = processor_class["processor"](
-                        image_processor=image_processor, text_processor=text_processor, tokenizer=tokenizer
-                    )
+                if "tokenizer" in attributes:
+                    tokenizer = AutoTokenizerMIX.from_pretrained(text_model_name_or_path, **kwargs)
+                    attributes_dict["tokenizer"] = tokenizer
+
+                for key, value in attributes_dict.items():
+                    kwargs[key] = value
+
+                processor = processor_class["processor"](**kwargs)
 
                 break
 

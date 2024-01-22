@@ -265,7 +265,7 @@ class Blip2PretrainedModel(MixPretrainedModel):
         use_keep_in_fp32_modules = False
 
         # resolve model_weight file
-        resolved_archive_file, sharded_metadata, is_sharded = cls._resolve_model_file_path(
+        resolved_archive_file, sharded_metadata, _, is_sharded = cls._resolve_model_file_path(
             pretrained_model_name_or_path,
             cache_dir=cache_dir,
             subfolder=subfolder,

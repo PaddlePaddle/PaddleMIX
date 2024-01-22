@@ -15,30 +15,33 @@
 
 import json
 
+from paddlenlp.transformers.tokenizer_utils import ChatTemplateMixin
+
 from .dataset import DatasetBuilder
 
 __all__ = ["ChatMLDataset"]
 
 
-class ChatMLDataset(DatasetBuilder):
+class ChatMLDataset(DatasetBuilder, ChatTemplateMixin):
     """
     ChatMLDataset dataset.
     """
 
     SPLITS = {"train": "train.json", "val": "eval.json", "test": "test.json"}
-    roles = {"user": "<|im_start|>user", "assistant": "<|im_start|>assistant"}
 
     def _read(self, filename, *args):
+        if self.config["chat_template"] is not None:
+            self.init_chat_template(self.config["chat_template"])
         raw_data = json.load(open(filename, "r"))
         annotations = raw_data
+
         for ann in annotations:
+            yield_data = None
             conversations = ann["conversations"]
-            yield_data = []
-            for conversation in conversations:
-                sentence = {
-                    "from": self.roles[conversation["from"]],
-                    "value": conversation["value"],
-                }
-                yield_data.append(sentence)
+            if "chat_template" in self.config:
+                conversations.append([""])
+                yield_data = self.apply_chat_template(conversations, tokenize=False)
+            else:
+                yield_data = conversations
 
             yield yield_data
