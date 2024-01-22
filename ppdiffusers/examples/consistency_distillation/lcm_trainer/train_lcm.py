@@ -55,6 +55,15 @@ def main():
     model.set_recompute(training_args.recompute)
     model.set_xformers(training_args.enable_xformers_memory_efficient_attention)
 
+    # only for sdxl
+    ext_data_kwargs = {}
+    if model_args.is_sdxl:
+        ext_data_kwargs = dict(
+            tokenizer_2=model.tokenizer_2,
+            use_fix_crop_and_size=model_args.use_fix_crop_and_size,
+            center_crop=model_args.center_crop,
+            random_flip=model_args.random_flip,
+        )
     train_dataset = TextImagePair(
         file_list=data_args.file_list,
         size=training_args.resolution,
@@ -64,6 +73,7 @@ def main():
         interpolation=data_args.interpolation,
         tokenizer=model.tokenizer,
         proportion_empty_prompts=data_args.proportion_empty_prompts,
+        **ext_data_kwargs,
     )
 
     trainer = LCMTrainer(

@@ -90,33 +90,44 @@ class VisualDLWithImageCallback(VisualDLCallback):
 
             with self.autocast_smart_context_manager(args):
                 max_batch = 4 if args.resolution > 256 else 8
+                if model.is_sdxl:
+                    max_batch = 2
+                # vae reconstruction log
                 image_logs["reconstruction"] = model.decode_image(
-                    pixel_values=inputs["pixel_values"], max_batch=max_batch
+                    pixel_values=inputs["pixel_values"],
+                    max_batch=max_batch,
                 )
+                # train sample log
                 image_logs["sample"] = model.log_image(
                     input_ids=inputs["input_ids"],
+                    input_ids_2=inputs.get("input_ids_2", None),
                     height=args.resolution,
                     width=args.resolution,
                     max_batch=max_batch,
                 )
-                prefix = "eval_prompt/" if model.is_lora else "eval_prompt/online_unet/"
-                for prompt, input_ids in zip(model.validation_prompts, model.text_input_ids):
-                    image_logs[prefix + prompt] = model.log_image(
-                        input_ids=input_ids.unsqueeze(0).tile([max_batch, 1]),
-                        height=args.resolution,
-                        width=args.resolution,
-                        max_batch=max_batch,
-                        seed=args.seed,
-                    )
-                if not model.is_lora:
-                    for prompt, input_ids in zip(model.validation_prompts, model.text_input_ids):
-                        image_logs["eval_prompt/target_unet/" + prompt] = model.log_image(
-                            input_ids=input_ids.unsqueeze(0).tile([max_batch, 1]),
+
+                # validation_prompts log
+                validation_prompts = [
+                    "portrait photo of a girl, photograph, highly detailed face, depth of field, moody light, golden hour, style by Dan Winters, Russell James, Steve McCurry, centered, extremely detailed, Nikon D850, award winning photography",
+                    "Self-portrait oil painting, a beautiful cyborg with golden hair, 8k",
+                    "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
+                    "A photo of beautiful mountain with realistic sunset and blue lake, highly detailed, masterpiece",
+                ]
+                logs_prefix_list = (
+                    ["eval_prompt/"] if model.is_lora else ["eval_prompt/online_unet/", "eval_prompt/target_unet/"]
+                )
+
+                for logs_prefix in logs_prefix_list:
+                    for prompt in validation_prompts:
+                        image_logs[logs_prefix + prompt] = model.log_image(
+                            prompt=prompt,
                             height=args.resolution,
                             width=args.resolution,
                             max_batch=max_batch,
                             seed=args.seed,
-                            unet=model.target_unet,
+                            unet=model.target_unet
+                            if ("target_unet" in logs_prefix) and hasattr(model, "target_unet")
+                            else None,
                         )
         if not state.is_world_process_zero:
             return

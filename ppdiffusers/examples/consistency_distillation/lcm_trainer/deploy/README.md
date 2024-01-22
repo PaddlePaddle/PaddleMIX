@@ -1,4 +1,4 @@
-# Latent Consistency Models 高性能推理
+# Latent Consistency Models 高性能推理 （当前仅支持SD15）
 
  **目录**
 - [LCM 模型高性能部署](#lcm-模型高性能部署)
@@ -27,15 +27,16 @@
 
 在示例中使用了 FastDeploy，需要执行以下命令安装依赖。
 
-```shell
+```bash
 pip install fastdeploy-gpu-python==1.0.7 -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
+pip install ppdiffusers==0.19.4
 ```
 
 <a name="快速体验"></a>
 
 ## 快速体验
 
-我们经过部署模型准备，可以开始进行测试。本目录提供 StableDiffusion 模型支持的三种任务，分别是文图生成、文本引导的图像变换以及文本引导的图像编辑。
+我们经过部署模型准备，即可开始测试。本目录提供了 StableDiffusion 1-5 模型支持的三种任务，分别是文图生成、文本引导的图像变换以及文本引导的图像编辑。
 
 <a name="文图生成"></a>
 

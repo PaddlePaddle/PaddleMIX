@@ -27,7 +27,6 @@ from lcm import merge_weights
 
 from ppdiffusers import (
     FastDeployRuntimeModel,
-    FastDeployStableDiffusionInpaintPipeline,
     FastDeployStableDiffusionMegaPipeline,
     StableDiffusionPipeline,
     UNet2DConditionModel,
@@ -152,10 +151,7 @@ def convert_ppdiffusers_pipeline_to_fastdeploy_pipeline(
     print(f"Save vae_decoder model in {save_path} successfully.")
     del pipeline.vae
 
-    if "inpainting" in model_path:
-        fd_pipe_cls = FastDeployStableDiffusionInpaintPipeline
-    else:
-        fd_pipe_cls = FastDeployStableDiffusionMegaPipeline
+    fd_pipe_cls = FastDeployStableDiffusionMegaPipeline
 
     fastdeploy_pipeline = fd_pipe_cls(
         vae_encoder=FastDeployRuntimeModel.from_pretrained(output_path / "vae_encoder"),

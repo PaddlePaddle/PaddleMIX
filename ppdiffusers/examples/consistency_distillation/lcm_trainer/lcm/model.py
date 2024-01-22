@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import contextlib
+import copy
 import inspect
 import math
 import os
@@ -21,7 +22,11 @@ import paddle
 import paddle.amp
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
+from paddlenlp.transformers import (
+    AutoTokenizer,
+    CLIPTextModel,
+    CLIPTextModelWithProjection,
+)
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
@@ -41,23 +46,47 @@ def append_dims(x, target_dims):
 
 # From LCMScheduler.get_scalings_for_boundary_condition_discrete
 def scalings_for_boundary_conditions(timestep, sigma_data=0.5, timestep_scaling=10.0):
-    c_skip = sigma_data**2 / ((timestep / 0.1) ** 2 + sigma_data**2)
-    c_out = (timestep / 0.1) / ((timestep / 0.1) ** 2 + sigma_data**2) ** 0.5
+    scaled_timestep = timestep_scaling * timestep
+    c_skip = sigma_data**2 / (scaled_timestep**2 + sigma_data**2)
+    c_out = scaled_timestep / (scaled_timestep**2 + sigma_data**2) ** 0.5
     return c_skip, c_out
 
 
 # Compare LCMScheduler.step, Step 4
-def predicted_origin(model_output, timesteps, sample, prediction_type, alphas, sigmas):
+def get_predicted_original_sample(model_output, timesteps, sample, prediction_type, alphas, sigmas):
+    alphas = extract_into_tensor(alphas, timesteps, sample.shape)
+    sigmas = extract_into_tensor(sigmas, timesteps, sample.shape)
     if prediction_type == "epsilon":
-        sigmas = extract_into_tensor(sigmas, timesteps, sample.shape)
-        alphas = extract_into_tensor(alphas, timesteps, sample.shape)
         pred_x_0 = (sample - sigmas * model_output) / alphas
+    elif prediction_type == "sample":
+        pred_x_0 = model_output
     elif prediction_type == "v_prediction":
-        pred_x_0 = alphas[timesteps] * sample - sigmas[timesteps] * model_output
+        pred_x_0 = alphas * sample - sigmas * model_output
     else:
-        raise ValueError(f"Prediction type {prediction_type} currently not supported.")
+        raise ValueError(
+            f"Prediction type {prediction_type} is not supported; currently, `epsilon`, `sample`, and `v_prediction`"
+            f" are supported."
+        )
 
     return pred_x_0
+
+
+# Based on step 4 in DDIMScheduler.step
+def get_predicted_noise(model_output, timesteps, sample, prediction_type, alphas, sigmas):
+    alphas = extract_into_tensor(alphas, timesteps, sample.shape)
+    sigmas = extract_into_tensor(sigmas, timesteps, sample.shape)
+    if prediction_type == "epsilon":
+        pred_epsilon = model_output
+    elif prediction_type == "sample":
+        pred_epsilon = (sample - alphas * model_output) / sigmas
+    elif prediction_type == "v_prediction":
+        pred_epsilon = alphas * model_output + sigmas * sample
+    else:
+        raise ValueError(
+            f"Prediction type {prediction_type} is not supported; currently, `epsilon`, `sample`, and `v_prediction`"
+            f" are supported."
+        )
+    return pred_epsilon
 
 
 def extract_into_tensor(a, t, x_shape):
@@ -171,11 +200,8 @@ class LCMModel(nn.Layer):
         super().__init__()
         self.model_args = model_args
         self.is_lora = model_args.is_lora
-        tokenizer_name_or_path = (
-            model_args.tokenizer_name
-            if model_args.tokenizer_name is not None
-            else os.path.join(model_args.pretrained_model_name_or_path, "tokenizer")
-        )
+        self.is_sdxl = model_args.is_sdxl
+
         vae_name_or_path = (
             model_args.vae_name_or_path
             if model_args.vae_name_or_path is not None
@@ -191,23 +217,52 @@ class LCMModel(nn.Layer):
             if model_args.teacher_unet_name_or_path is not None
             else os.path.join(model_args.pretrained_model_name_or_path, "unet")
         )
+
+        # text encoder 1
+        tokenizer_name_or_path = (
+            model_args.tokenizer_name
+            if model_args.tokenizer_name is not None
+            else os.path.join(model_args.pretrained_model_name_or_path, "tokenizer")
+        )
         # init model and tokenizer
         tokenizer_kwargs = {}
         if model_args.model_max_length is not None:
             tokenizer_kwargs["model_max_length"] = model_args.model_max_length
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name_or_path, **tokenizer_kwargs)
-        self.vae = AutoencoderKL.from_pretrained(vae_name_or_path)
-        self.text_encoder = CLIPTextModel.from_pretrained(text_encoder_name_or_path)
-        self.teacher_unet = UNet2DConditionModel.from_pretrained(teacher_unet_name_or_path)
-        freeze_params(self.vae.parameters())
+        self.text_encoder = CLIPTextModel.from_pretrained(text_encoder_name_or_path, dtype="float32")
         freeze_params(self.text_encoder.parameters())
+
+        # text encoder 2
+        if self.is_sdxl:
+            tokenizer_2_name_or_path = (
+                model_args.tokenizer_2_name
+                if model_args.tokenizer_2_name is not None
+                else os.path.join(model_args.pretrained_model_name_or_path, "tokenizer_2")
+            )
+            text_encoder_2_name_or_path = (
+                model_args.text_encoder_2_name_or_path
+                if model_args.text_encoder_2_name_or_path is not None
+                else os.path.join(model_args.pretrained_model_name_or_path, "text_encoder_2")
+            )
+            # init model and tokenizer
+            self.tokenizer_2 = AutoTokenizer.from_pretrained(tokenizer_2_name_or_path, **tokenizer_kwargs)
+            self.text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(
+                text_encoder_2_name_or_path, dtype="float32"
+            )
+            freeze_params(self.text_encoder_2.parameters())
+
+        self.vae = AutoencoderKL.from_pretrained(vae_name_or_path, paddle_dtype=paddle.float32)
+        self.teacher_unet = UNet2DConditionModel.from_pretrained(
+            teacher_unet_name_or_path, paddle_dtype=paddle.float32
+        )
+        freeze_params(self.vae.parameters())
         freeze_params(self.teacher_unet.parameters())
         self.vae.eval()
         self.text_encoder.eval()
         self.teacher_unet.eval()
 
         if self.is_lora:
-            self.unet = UNet2DConditionModel.from_pretrained(teacher_unet_name_or_path)
+            self.unet = UNet2DConditionModel.from_pretrained(teacher_unet_name_or_path, paddle_dtype=paddle.float32)
             self.unet.train()
             from paddlenlp.peft import LoRAConfig, LoRAModel
 
@@ -236,24 +291,35 @@ class LCMModel(nn.Layer):
             self.reset_lora_parameters(self.unet, init_lora_weights=False)
             self.unet.mark_only_lora_as_trainable()
             self.unet.print_trainable_parameters()
+            self.time_cond_proj_dim = None
         else:
-            # 8. Create online (`unet`) student U-Nets. This will be updated by the optimizer (e.g. via backpropagation.)
+            # Create online (`unet`) student U-Nets. This will be updated by the optimizer (e.g. via backpropagation.)
             # Add `time_cond_proj_dim` to the student U-Net if `teacher_unet.config.time_cond_proj_dim` is None
-            if self.teacher_unet.config.time_cond_proj_dim is None:
-                self.teacher_unet.config["time_cond_proj_dim"] = self.model_args.unet_time_cond_proj_dim
-            self.unet = UNet2DConditionModel(**self.teacher_unet.config)
+            time_cond_proj_dim = (
+                self.teacher_unet.config.time_cond_proj_dim
+                if self.teacher_unet.config.time_cond_proj_dim is not None
+                else self.model_args.unet_time_cond_proj_dim
+            )
+            self.unet = UNet2DConditionModel.from_config(
+                self.teacher_unet.config,
+                time_cond_proj_dim=time_cond_proj_dim,
+            )
             # inialize the `time_embedding.cond_proj` like `torch.nn.Linear``
             reset_initialized_parameter(self.unet.time_embedding.cond_proj)
             # load teacher_unet weights into unet
             self.unet.load_dict(self.teacher_unet.state_dict())
             self.unet.train()
 
-            # 9. Create target (`ema_unet`) student U-Net parameters. This will be updated via EMA updates (polyak averaging).
+            # Create target (`ema_unet`) student U-Net parameters. This will be updated via EMA updates (polyak averaging).
             # Initialize from unet
-            self.target_unet = UNet2DConditionModel(**self.teacher_unet.config)
+            self.target_unet = UNet2DConditionModel.from_config(
+                self.teacher_unet.config,
+                time_cond_proj_dim=time_cond_proj_dim,
+            )
             self.target_unet.load_dict(self.unet.state_dict())
             self.target_unet.train()
             freeze_params(self.target_unet.parameters())
+            self.time_cond_proj_dim = time_cond_proj_dim
 
         # init noise_scheduler and eval_scheduler
         self.noise_scheduler = DDPMScheduler.from_pretrained(vae_name_or_path.replace("vae", "scheduler"))
@@ -268,90 +334,115 @@ class LCMModel(nn.Layer):
         # set this attr for eval
         self.eval_scheduler = LCMScheduler.from_pretrained(vae_name_or_path.replace("vae", "scheduler"))
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
-        uncond_input_ids = self.tokenizer(
-            [""],
-            return_tensors="pd",
-            padding="max_length",
-            max_length=self.tokenizer.model_max_length,
-        ).input_ids
-        self.uncond_prompt_embeds = self.text_encoder(uncond_input_ids)[0]
-        self.validation_prompts = [
-            "portrait photo of a girl, photograph, highly detailed face, depth of field, moody light, golden hour, style by Dan Winters, Russell James, Steve McCurry, centered, extremely detailed, Nikon D850, award winning photography",
-            "Self-portrait oil painting, a beautiful cyborg with golden hair, 8k",
-            "Astronaut in a jungle, cold color palette, muted colors, detailed, 8k",
-            "A photo of beautiful mountain with realistic sunset and blue lake, highly detailed, masterpiece",
-        ]
-        self.text_input_ids = self.tokenizer(
-            self.validation_prompts,
-            padding="max_length",
-            max_length=self.tokenizer.model_max_length,
-            truncation=True,
-            return_tensors="pd",
-        ).input_ids
+
+        if not self.is_sdxl:
+            # Create uncond embeds for classifier free guidance
+            uncond_input_ids = self.tokenizer(
+                [""],
+                return_tensors="pd",
+                padding="max_length",
+                max_length=self.tokenizer.model_max_length,
+            ).input_ids
+            self.uncond_prompt_embeds = self.text_encoder(uncond_input_ids)[0]
 
         if training_args.bf16 or training_args.fp16:
             self.autocast_smart_context_manager = contextlib.nullcontext
         else:
             self.autocast_smart_context_manager = paddle.amp.auto_cast
 
-    def forward(self, input_ids=None, pixel_values=None, **kwargs):
+    @paddle.no_grad()
+    def compute_embeddings(self, input_ids=None, input_ids_2=None, add_time_ids=None, height=1024, width=1024):
+        if self.is_sdxl:
+            assert input_ids_2 is not None
+            if add_time_ids is None:
+                add_time_ids = self._get_add_time_ids((height, width), (0, 0), (height, width), dtype="float32").tile(
+                    [input_ids.shape[0], 1]
+                )
+            prompt_embeds_list = []
+            for text_inputs_ids, text_encoder in zip(
+                [input_ids, input_ids_2], [self.text_encoder, self.text_encoder_2]
+            ):
+                text_encoder.eval()
+                prompt_embeds = text_encoder(
+                    text_inputs_ids,
+                    output_hidden_states=True,
+                )
+                prompt_embeds_list.append(prompt_embeds.hidden_states[-2])
+            # text encoder 2 pooled output
+            add_text_embeds = prompt_embeds[0]
+            prompt_embeds = paddle.concat(prompt_embeds_list, axis=-1)
+            unet_added_cond_kwargs = {"text_embeds": add_text_embeds, "time_ids": add_time_ids}
+        else:
+            prompt_embeds = self.text_encoder(input_ids)[0]
+            unet_added_cond_kwargs = {}
+        return {"prompt_embeds": prompt_embeds, **unet_added_cond_kwargs}
+
+    def forward(self, input_ids=None, pixel_values=None, input_ids_2=None, add_time_ids=None, **kwargs):
         self.vae.eval()
-        self.text_encoder.eval()
         self.teacher_unet.eval()
 
+        encoded_text = self.compute_embeddings(
+            input_ids=input_ids,
+            input_ids_2=input_ids_2,
+            add_time_ids=add_time_ids,
+        )
+
         with paddle.no_grad():
+            # encode pixel values with batch size of at most vae_encode_batch_size
             latents = []
-            for i in range(0, pixel_values.shape[0], self.model_args.vae_encode_max_batch_size):
+            for i in range(0, pixel_values.shape[0], self.model_args.vae_encode_batch_size):
                 latents.append(
-                    self.vae.encode(
-                        pixel_values[i : i + self.model_args.vae_encode_max_batch_size]
-                    ).latent_dist.sample()
+                    self.vae.encode(pixel_values[i : i + self.model_args.vae_encode_batch_size]).latent_dist.sample()
                 )
             latents = paddle.concat(latents, axis=0)
             latents = latents * self.vae.config.scaling_factor
+            bsz = latents.shape[0]
 
-            # 20.4.8. Prepare prompt embeds and unet_added_conditions
-            prompt_embeds = self.text_encoder(input_ids)[0]
-
-        # Sample noise that we'll add to the latents
-        noise = paddle.randn(latents.shape, dtype=latents.dtype)
-        bsz = latents.shape[0]
-
-        # Sample a random timestep for each image t_n ~ U[0, N - k - 1] without bias.
+        # 2. Sample a random timestep for each image t_n from the ODE solver timesteps without bias.
+        # For the DDIM solver, the timestep schedule is [T - 1, T - k - 1, T - 2 * k - 1, ...]
         topk = self.noise_scheduler.config.num_train_timesteps // self.model_args.num_ddim_timesteps
         index = paddle.randint(0, self.model_args.num_ddim_timesteps, (bsz,), dtype="int64")
         start_timesteps = self.solver.ddim_timesteps[index]
         timesteps = start_timesteps - topk
         timesteps = paddle.where(timesteps < 0, paddle.zeros_like(timesteps), timesteps)
 
-        # 20.4.4. Get boundary scalings for start_timesteps and (end) timesteps.
-        c_skip_start, c_out_start = scalings_for_boundary_conditions(start_timesteps)
+        # 3. Get boundary scalings for start_timesteps and (end) timesteps.
+        c_skip_start, c_out_start = scalings_for_boundary_conditions(
+            start_timesteps, timestep_scaling=self.model_args.timestep_scaling_factor
+        )
         c_skip_start, c_out_start = [append_dims(x, latents.ndim) for x in [c_skip_start, c_out_start]]
-        c_skip, c_out = scalings_for_boundary_conditions(timesteps)
+        c_skip, c_out = scalings_for_boundary_conditions(
+            timesteps, timestep_scaling=self.model_args.timestep_scaling_factor
+        )
         c_skip, c_out = [append_dims(x, latents.ndim) for x in [c_skip, c_out]]
 
-        # 20.4.5. Add noise to the latents according to the noise magnitude at each timestep
-        # (this is the forward diffusion process) [z_{t_{n + k}} in Algorithm 1]
+        # 4. Sample noise from the prior and add it to the latents according to the noise magnitude at each
+        # timestep (this is the forward diffusion process) [z_{t_{n + k}} in Algorithm 1]
+        noise = paddle.randn(latents.shape, dtype=latents.dtype)
         noisy_model_input = self.noise_scheduler.add_noise(latents, noise, start_timesteps)
 
-        # 20.4.6. Sample a random guidance scale w from U[w_min, w_max] and embed it
+        # 5. Sample a random guidance scale w from U[w_min, w_max]
+        # Note that for LCM-LoRA distillation it is not necessary to use a guidance scale embedding
         w = (self.model_args.w_max - self.model_args.w_min) * paddle.rand((bsz,)) + self.model_args.w_min
-
-        if not self.model_args.is_lora:
-            w_embedding = get_guidance_scale_embedding(w, embedding_dim=self.unet.config.time_cond_proj_dim)
-        else:
+        if self.time_cond_proj_dim is None:
             w_embedding = None
+        else:
+            w_embedding = get_guidance_scale_embedding(w, embedding_dim=self.time_cond_proj_dim)
         w = w.reshape([bsz, 1, 1, 1])
 
-        # 20.4.9. Get online LCM prediction on z_{t_{n + k}}, w, c, t_{n + k}
+        # 6. Prepare prompt embeds and unet_added_conditions
+        prompt_embeds = encoded_text.pop("prompt_embeds")
+
+        # 7. Get online LCM prediction on z_{t_{n + k}} (noisy_model_input), w, c, t_{n + k} (start_timesteps)
         noise_pred = self.unet(
             noisy_model_input,
             start_timesteps,
             timestep_cond=w_embedding,
             encoder_hidden_states=prompt_embeds,
+            added_cond_kwargs=encoded_text,
         ).sample
 
-        pred_x_0 = predicted_origin(
+        pred_x_0 = get_predicted_original_sample(
             noise_pred,
             start_timesteps,
             noisy_model_input,
@@ -362,17 +453,28 @@ class LCMModel(nn.Layer):
 
         model_pred = c_skip_start * noisy_model_input + c_out_start * pred_x_0
 
-        # 20.4.10. Use the ODE solver to predict the kth step in the augmented PF-ODE trajectory after
-        # noisy_latents with both the conditioning embedding c and unconditional embedding 0
-        # Get teacher model prediction on noisy_latents and conditional embedding
+        # 8. Compute the conditional and unconditional teacher model predictions to get CFG estimates of the
+        # predicted noise eps_0 and predicted original sample x_0, then run the ODE solver using these
+        # estimates to predict the data point in the augmented PF-ODE trajectory corresponding to the next ODE
+        # solver timestep.
         with paddle.no_grad():
             with self.autocast_smart_context_manager():
+                # 1. Get teacher model prediction on noisy_model_input z_{t_{n + k}} and conditional embedding c
                 cond_teacher_output = self.teacher_unet(
                     noisy_model_input,
                     start_timesteps,
                     encoder_hidden_states=prompt_embeds,
+                    added_cond_kwargs=encoded_text,
                 ).sample
-                cond_pred_x0 = predicted_origin(
+                cond_pred_x0 = get_predicted_original_sample(
+                    cond_teacher_output,
+                    start_timesteps,
+                    noisy_model_input,
+                    self.noise_scheduler.config.prediction_type,
+                    self.alpha_schedule,
+                    self.sigma_schedule,
+                )
+                cond_pred_noise = get_predicted_noise(
                     cond_teacher_output,
                     start_timesteps,
                     noisy_model_input,
@@ -381,13 +483,29 @@ class LCMModel(nn.Layer):
                     self.sigma_schedule,
                 )
 
-                # Get teacher model prediction on noisy_latents and unconditional embedding
+                # 2. Get teacher model prediction on noisy_model_input z_{t_{n + k}} and unconditional embedding 0
+                if self.is_sdxl:
+                    uncond_prompt_embeds = paddle.zeros_like(prompt_embeds)
+                    uncond_added_conditions = copy.deepcopy(encoded_text)
+                    uncond_added_conditions["text_embeds"] = paddle.zeros_like(encoded_text["text_embeds"])
+                else:
+                    uncond_prompt_embeds = self.uncond_prompt_embeds.expand([bsz, -1, -1])
+                    uncond_added_conditions = {}
                 uncond_teacher_output = self.teacher_unet(
                     noisy_model_input,
                     start_timesteps,
-                    encoder_hidden_states=self.uncond_prompt_embeds.expand([bsz, -1, -1]),
+                    encoder_hidden_states=uncond_prompt_embeds,
+                    added_cond_kwargs=uncond_added_conditions,
                 ).sample
-                uncond_pred_x0 = predicted_origin(
+                uncond_pred_x0 = get_predicted_original_sample(
+                    uncond_teacher_output,
+                    start_timesteps,
+                    noisy_model_input,
+                    self.noise_scheduler.config.prediction_type,
+                    self.alpha_schedule,
+                    self.sigma_schedule,
+                )
+                uncond_pred_noise = get_predicted_noise(
                     uncond_teacher_output,
                     start_timesteps,
                     noisy_model_input,
@@ -396,12 +514,17 @@ class LCMModel(nn.Layer):
                     self.sigma_schedule,
                 )
 
-                # 20.4.11. Perform "CFG" to get x_prev estimate (using the LCM paper's CFG formulation)
+                # 3. Calculate the CFG estimate of x_0 (pred_x0) and eps_0 (pred_noise)
+                # Note that this uses the LCM paper's CFG formulation rather than the Imagen CFG formulation
                 pred_x0 = cond_pred_x0 + w * (cond_pred_x0 - uncond_pred_x0)
-                pred_noise = cond_teacher_output + w * (cond_teacher_output - uncond_teacher_output)
+                pred_noise = cond_pred_noise + w * (cond_pred_noise - uncond_pred_noise)
+                # 4. Run one step of the ODE solver to estimate the next point x_prev on the
+                # augmented PF-ODE trajectory (solving backward in time)
+                # Note that the DDIM step depends on both the predicted x_0 and source noise eps_0.
                 x_prev = self.solver.ddim_step(pred_x0, pred_noise, index)
 
-        # 20.4.12. Get target LCM prediction on x_prev, w, c, t_n
+        # 9. Get target LCM prediction on x_prev, w, c, t_n (timesteps)
+        # Note that we do not use a separate target network for LCM-LoRA distillation.
         with paddle.no_grad():
             with self.autocast_smart_context_manager():
                 module = self.unet if self.is_lora else self.target_unet
@@ -410,8 +533,9 @@ class LCMModel(nn.Layer):
                     timesteps,
                     timestep_cond=w_embedding,
                     encoder_hidden_states=prompt_embeds,
+                    added_cond_kwargs=encoded_text,
                 ).sample
-            pred_x_0 = predicted_origin(
+            pred_x_0 = get_predicted_original_sample(
                 target_noise_pred,
                 timesteps,
                 x_prev,
@@ -421,7 +545,7 @@ class LCMModel(nn.Layer):
             )
             target = c_skip * x_prev + c_out * pred_x_0
 
-        # 20.4.13. Calculate loss
+        # 10. Calculate loss
         if self.model_args.loss_type == "l2":
             loss = F.mse_loss(
                 model_pred.cast(dtype=paddle.float32), target.cast(dtype=paddle.float32), reduction="mean"
@@ -451,16 +575,31 @@ class LCMModel(nn.Layer):
         if not self.is_lora:
             update_ema(self.target_unet.parameters(), self.unet.parameters(), self.model_args.ema_decay)
 
+    def _get_add_time_ids(self, original_size, crops_coords_top_left, target_size, dtype):
+        add_time_ids = list(original_size + crops_coords_top_left + target_size)
+        passed_add_embed_dim = (
+            self.unet.config.addition_time_embed_dim * len(add_time_ids) + self.text_encoder_2.config.projection_dim
+        )
+        expected_add_embed_dim = self.unet.add_embedding.linear_1.weight.shape[0]
+        if expected_add_embed_dim != passed_add_embed_dim:
+            raise ValueError(
+                f"Model expects an added time embedding vector of length {expected_add_embed_dim}, but a vector of {passed_add_embed_dim} was created. The model has an incorrect config. Please check `unet.config.time_embedding_type` and `text_encoder_2.config.projection_dim`."
+            )
+        add_time_ids = paddle.to_tensor([add_time_ids], dtype=dtype)
+        return add_time_ids
+
     @paddle.no_grad()
     def log_image(
         self,
         input_ids=None,
-        height=256,
-        width=256,
-        max_batch=8,
+        height=512,
+        width=512,
+        max_batch=4,
         timesteps=None,
         seed=42,
         unet=None,
+        input_ids_2=None,
+        prompt=None,
         **kwargs,
     ):
         orig_rng_state = None
@@ -468,13 +607,29 @@ class LCMModel(nn.Layer):
             orig_rng_state = paddle.get_rng_state()
             paddle.seed(seed)
 
-        if self.is_lora:
+        if self.time_cond_proj_dim is None:
             guidance_scale = 1.0
         else:
-            guidance_scale = 7.5
+            guidance_scale = 5.0
         guidance_rescale = 0.0
         num_inference_steps = self.model_args.num_inference_steps
 
+        if prompt is not None:
+            input_ids = self.tokenizer(
+                [prompt] * max_batch,
+                padding="max_length",
+                max_length=self.tokenizer.model_max_length,
+                truncation=True,
+                return_tensors="pd",
+            ).input_ids
+            if self.is_sdxl:
+                input_ids_2 = self.tokenizer_2(
+                    [prompt] * max_batch,
+                    padding="max_length",
+                    max_length=self.tokenizer_2.model_max_length,
+                    truncation=True,
+                    return_tensors="pd",
+                ).input_ids
         #########################################################
         self.eval()
         if height % self.vae_scale_factor != 0 or width % self.vae_scale_factor != 0:
@@ -484,17 +639,28 @@ class LCMModel(nn.Layer):
         # only log max_batch image
         if input_ids.shape[0] > max_batch:
             input_ids = input_ids[:max_batch]
+        if input_ids_2 is not None and input_ids_2.shape[0] > max_batch:
+            input_ids_2 = input_ids_2[:max_batch]
 
         # choose unet to infer
-        unet = self.unet if unet is None else unet
+        unet = unet or self.unet
 
-        prompt_embeds = self.text_encoder(input_ids)[0]
+        encoded_text = self.compute_embeddings(
+            input_ids=input_ids,
+            input_ids_2=input_ids_2,
+            height=height,
+            width=width,
+        )
+        prompt_embeds = encoded_text.pop("prompt_embeds")
 
-        do_classifier_free_guidance = guidance_scale > 1 and unet.config.time_cond_proj_dim is None
+        do_classifier_free_guidance = guidance_scale > 1 and self.time_cond_proj_dim is None
         if do_classifier_free_guidance:
-            prompt_embeds = paddle.concat(
-                [self.uncond_prompt_embeds.expand([prompt_embeds.shape[0], -1, -1]), prompt_embeds]
-            )
+            prompt_embeds = paddle.concat([paddle.zeros_like(prompt_embeds), prompt_embeds], axis=0)
+            if self.is_sdxl:
+                text_embeds = encoded_text.pop("text_embeds")
+                encoded_text["text_embeds"] = paddle.concat([paddle.zeros_like(text_embeds), text_embeds], axis=0)
+                time_ids = encoded_text.pop("time_ids")
+                encoded_text["time_ids"] = paddle.concat([time_ids, time_ids], axis=0)
 
         batch_size = prompt_embeds.shape[0]
         timesteps, num_inference_steps = retrieve_timesteps(self.eval_scheduler, num_inference_steps, timesteps)
@@ -502,15 +668,13 @@ class LCMModel(nn.Layer):
         latents = paddle.randn(shape, dtype=prompt_embeds.dtype) * self.eval_scheduler.init_noise_sigma
 
         timestep_cond = None
-        if unet.config.time_cond_proj_dim is not None:
+        if self.time_cond_proj_dim is not None:
             guidance_scale_tensor = paddle.to_tensor([guidance_scale - 1]).tile(
                 [
                     batch_size,
                 ]
             )
-            timestep_cond = get_guidance_scale_embedding(
-                guidance_scale_tensor, embedding_dim=unet.config.time_cond_proj_dim
-            )
+            timestep_cond = get_guidance_scale_embedding(guidance_scale_tensor, embedding_dim=self.time_cond_proj_dim)
 
         for i, t in enumerate(timesteps):
             # expand the latents if we are doing classifier free guidance
@@ -523,6 +687,7 @@ class LCMModel(nn.Layer):
                 t,
                 encoder_hidden_states=prompt_embeds,
                 timestep_cond=timestep_cond,
+                added_cond_kwargs=encoded_text,
                 return_dict=False,
             )[0]
 

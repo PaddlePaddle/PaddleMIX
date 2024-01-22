@@ -22,7 +22,7 @@ import numpy as np
 import paddle
 import paddle.distributed as dist
 from paddle.io import IterableDataset, get_worker_info
-from paddle.vision import transforms
+from paddle.vision import crop, transforms
 from paddle.vision.transforms.transforms import _get_image_size
 from PIL import Image
 
@@ -56,7 +56,7 @@ def parse_line(line, filename, proportion_empty_prompts=0.1):
             caption = ""
         return dict(image=image, caption=caption)
     except Exception:
-        print(f"error when parse file {filename}")
+        # print(f"error when parse file {filename}")
         # traceback.print_exc()
         return None
 
@@ -86,27 +86,86 @@ class TextImagePair(IterableDataset):
         interpolation="lanczos",
         tokenizer=None,
         proportion_empty_prompts=0.0,
+        tokenizer_2=None,
+        use_fix_crop_and_size=False,
+        center_crop=False,
+        random_flip=False,
     ):
         self.size = size
         self.proportion_empty_prompts = proportion_empty_prompts
-        if image_processing is None:
-            self.image_processing = transforms.Compose(
-                [
-                    transforms.Resize(int(size / 0.9), interpolation),
-                    RandomCrop(size),
-                    transforms.ToTensor(),
-                    transforms.Normalize(0.5, 0.5),
-                ]
-            )
-        else:
-            self.image_processing = image_processing
-        self.text_processing = lambda caption: tokenizer(
-            caption,
-            padding="max_length",
-            truncation=True,
-            max_length=tokenizer.model_max_length,
-            return_tensors="pd",
-        ).input_ids[0]
+        self.image_processing = image_processing
+
+        if self.image_processing is None:
+            if tokenizer_2 is not None:
+                train_resize = transforms.Resize(size, interpolation)
+                train_crop = transforms.CenterCrop(size) if center_crop else RandomCrop(size)
+                train_flip = transforms.RandomHorizontalFlip(1.0)
+                train_transforms = transforms.Compose([transforms.ToTensor(), transforms.Normalize([0.5], [0.5])])
+
+                def preprocess_image(image):
+                    target_size = (size, size)
+                    if use_fix_crop_and_size:
+                        original_size = (size, size)
+                    else:
+                        original_size = (image.height, image.width)
+                    image = train_resize(image)
+                    if center_crop:
+                        y1 = max(0, int(round((image.height - size) / 2.0)))
+                        x1 = max(0, int(round((image.width - size) / 2.0)))
+                        image = train_crop(image)
+                    else:
+                        y1, x1, h, w = train_crop._get_param(image, (size, size))
+                        image = crop(image, y1, x1, h, w)
+                    if random_flip and random.random() < 0.5:
+                        # flip
+                        x1 = image.width - x1
+                        image = train_flip(image)
+
+                    pixel_value = train_transforms(image)
+                    if use_fix_crop_and_size:
+                        crop_top_left = (0, 0)
+                    else:
+                        crop_top_left = (y1, x1)
+                    add_time_ids = original_size + crop_top_left + target_size
+                    return {
+                        "pixel_values": pixel_value,
+                        "add_time_ids": np.array(add_time_ids, dtype="float32"),
+                    }
+
+                self.image_processing = preprocess_image
+            else:
+                preprocess_trans = transforms.Compose(
+                    [
+                        transforms.Resize(int(size / 0.9), interpolation),
+                        RandomCrop(size),
+                        transforms.ToTensor(),
+                        transforms.Normalize(0.5, 0.5),
+                    ]
+                )
+                self.image_processing = lambda image: {"pixel_values": preprocess_trans(image)}
+
+        self.text_processing = self.text_processing_2 = None
+        if tokenizer is not None:
+            self.text_processing = lambda caption: {
+                "input_ids": tokenizer(
+                    caption,
+                    padding="max_length",
+                    truncation=True,
+                    max_length=tokenizer.model_max_length,
+                    return_tensors="pd",
+                ).input_ids[0]
+            }
+        if tokenizer_2 is not None:
+            self.text_processing_2 = lambda caption: {
+                "input_ids_2": tokenizer_2(
+                    caption,
+                    padding="max_length",
+                    truncation=True,
+                    max_length=tokenizer.model_max_length,
+                    return_tensors="pd",
+                ).input_ids[0]
+            }
+
         self.file_list = []
         file_weights = []
         with open(file_list, "r") as f:
@@ -168,10 +227,13 @@ class TextImagePair(IterableDataset):
                             w, h = data["image"].size
                             if w < self.size or h < self.size:
                                 continue
-                            yield {
-                                "pixel_values": self.image_processing(data["image"]),
-                                "input_ids": self.text_processing(data["caption"]),
-                            }
+                            processed_data = {}
+                            processed_data.update(self.image_processing(data["image"]))
+                            if self.text_processing is not None:
+                                processed_data.update(self.text_processing(data["caption"]))
+                            if self.text_processing_2 is not None:
+                                processed_data.update(self.text_processing_2(data["caption"]))
+                            yield processed_data
 
     def random_load_from_multi_dataset(self):
         print(f"lengths of self.file_ids in random_load: {[len(f) for f in self.file_ids]}")

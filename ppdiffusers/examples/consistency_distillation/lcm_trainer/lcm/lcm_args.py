@@ -74,22 +74,30 @@ class LCMTrainingArguments(TrainingArguments):
 class LCMModelArguments:
     vae_name_or_path: Optional[str] = field(default=None, metadata={"help": "vae_name_or_path"})
     text_encoder_name_or_path: Optional[str] = field(default=None, metadata={"help": "text_encoder_name_or_path"})
+    # for sdxl
+    text_encoder_2_name_or_path: Optional[str] = field(default=None, metadata={"help": "text_encoder_2_name_or_path"})
+
     teacher_unet_name_or_path: Optional[str] = field(default=None, metadata={"help": "unet_name_or_path"})
     tokenizer_name: Optional[str] = field(
         default=None,
         metadata={"help": "Pretrained tokenizer name or path if not the same as pretrained_model_name_or_path"},
     )
+    # for sdxl
+    tokenizer_2_name: Optional[str] = field(
+        default=None,
+        metadata={"help": "Pretrained tokenizer_2 name or path if not the same as pretrained_model_name_or_path"},
+    )
     pretrained_model_name_or_path: str = field(
-        default="CompVis/stable-diffusion-v1-4",
+        default="runwayml/stable-diffusion-v1-5",
         metadata={"help": "Path to pretrained model or model, when we want to resume training."},
     )
     model_max_length: int = field(default=77, metadata={"help": "Pretrained tokenizer model_max_length"})
     num_inference_steps: int = field(default=4, metadata={"help": "num_inference_steps"})
 
-    vae_encode_max_batch_size: int = field(default=32, metadata={"help": "vae_encode_max_batch_size"})
+    vae_encode_batch_size: int = field(default=None, metadata={"help": "vae_encode_batch_size"})
     # ----Latent Consistency Distillation (LCD) Specific Arguments----
     w_min: float = field(
-        default=5.0,
+        default=None,
         metadata={
             "help": "The minimum guidance scale value for guidance scale sampling. Note that we are using the Imagen CFG"
             " formulation rather than the LCM formulation, which means all guidance scales have 1 added to them as"
@@ -111,6 +119,14 @@ class LCMModelArguments:
     huber_c: float = field(
         default=0.001, metadata={"help": "The huber loss parameter. Only used if `--loss_type=huber`."}
     )
+    timestep_scaling_factor: float = field(
+        default=10.0,
+        metadata={
+            "help": "The multiplicative timestep scaling factor used when calculating the boundary scalings for LCM. The"
+            " higher the scaling is, the lower the approximation error, but the default value of 10.0 should typically"
+            " suffice."
+        },
+    )
 
     # --------------------- NON LORA --------------------------
     unet_time_cond_proj_dim: int = field(
@@ -129,6 +145,33 @@ class LCMModelArguments:
     lora_rank: int = field(
         default=64, metadata={"help": "The rank of the LoRA projection matrix. Only used if `--is_lora=True`."}
     )
+    # --------------------- SDXL --------------------------
+    is_sdxl: bool = field(default=False, metadata={"help": "Whether or not sdxl model"})
+    use_fix_crop_and_size: bool = field(
+        default=True,
+        metadata={"help": "Whether or not to use the fixed crop and size for the teacher model"},
+    )
+    center_crop: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to center crop the input images to the resolution. If not set, the images will be randomly"
+            " cropped. The images will be resized to the resolution first before cropping."
+        },
+    )
+    random_flip: bool = field(
+        default=False,
+        metadata={"help": "whether to randomly flip images horizontally"},
+    )
+
+    def __post_init__(self):
+        if self.is_sdxl:
+            default_w_min = 3.0
+            default_vae_encode_batch_size = 8
+        else:
+            default_w_min = 5.0
+            default_vae_encode_batch_size = 32
+        self.w_min = self.w_min or default_w_min
+        self.vae_encode_batch_size = self.vae_encode_batch_size or default_vae_encode_batch_size
 
 
 @dataclass
@@ -151,7 +194,7 @@ class LCMDataArguments:
         metadata={"help": "shuffle_every_n_samples."},
     )
     interpolation: str = field(
-        default="lanczos",
+        default="lanczos",  # bilinear, bicubic, lanczos
         metadata={"help": "interpolation method"},
     )
     proportion_empty_prompts: float = field(
