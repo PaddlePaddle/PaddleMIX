@@ -86,11 +86,6 @@ def parallel_matmul(lm_output, logit_weights, parallel_output=True, transpose_y=
         return logits
 
 
-def masked_fill(x, mask, value):
-    y = paddle.full(x.shape, value, x.dtype)
-    return paddle.where(mask, y, x)
-
-
 class T5LayerNorm(nn.Layer):
     def __init__(self, hidden_size, eps=1e-6):
         """
@@ -911,7 +906,7 @@ class T5PreTrainedModel(PretrainedModel):
         if pad_token_id is None:
             raise ValueError("self.model.config.pad_token_id has to be defined.")
         # replace possible -100 values in labels by `pad_token_id`
-        shifted_input_ids = masked_fill(shifted_input_ids, shifted_input_ids == -100, pad_token_id)
+        shifted_input_ids = paddle.masked_fill(shifted_input_ids, shifted_input_ids == -100, pad_token_id)
 
         return shifted_input_ids
 

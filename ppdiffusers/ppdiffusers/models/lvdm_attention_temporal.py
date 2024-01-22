@@ -27,7 +27,6 @@ except:
 
 import math
 
-import numpy as np
 from einops import rearrange, repeat
 
 from ..utils.initializer_utils import constant_, xavier_uniform_
@@ -40,20 +39,6 @@ from .lvdm_util import (
     normalization,
     zero_module,
 )
-
-
-def finfo(dtype):
-    if dtype == paddle.float32:
-        return np.finfo(np.float32)
-    if dtype == paddle.float16:
-        return np.finfo(np.float16)
-    if dtype == paddle.float64:
-        return np.finfo(np.float64)
-
-
-def masked_fill(x, mask, value):
-    y = paddle.full(x.shape, value, x.dtype)
-    return paddle.where(mask, y, x)
 
 
 class FeedForward(paddle.nn.Layer):
@@ -185,9 +170,9 @@ class CrossAttention(paddle.nn.Layer):
         sim = paddle.einsum("b i d, b j d -> b i j", q, k) * self.scale
         if exists(mask):
             mask = rearrange(mask, "b ... -> b (...)")
-            max_neg_value = -finfo(sim.dtype).max
+            max_neg_value = -paddle.finfo(sim.dtype).max
             mask = repeat(mask, "b j -> (b h) () j", h=h)
-            sim = masked_fill(sim, ~mask, max_neg_value)
+            sim = paddle.masked_fill(sim, ~mask, max_neg_value)
         attn = paddle.nn.functional.softmax(sim, axis=-1)
         out = paddle.einsum("b i j, b j d -> b i d", attn, v)
         out = rearrange(out, "(b h) n d -> b n (h d)", h=h)

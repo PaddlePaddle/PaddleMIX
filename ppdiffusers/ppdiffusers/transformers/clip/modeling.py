@@ -40,11 +40,6 @@ CLIP_PRETRAINED_MODEL_ARCHIVE_LIST = [
 LinearClass = nn.Linear
 
 
-def masked_fill(x, mask, value):
-    y = paddle.full(x.shape, value, x.dtype)
-    return paddle.where(mask, y, x)
-
-
 def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
     """
     Expands attention_mask from `[bsz, seq_len]` to `[bsz, 1, tgt_seq_len, src_seq_len]`.
@@ -56,7 +51,7 @@ def _expand_mask(mask: paddle.Tensor, dtype, tgt_len: Optional[int] = None):
 
     inverted_mask = 1.0 - expanded_mask
 
-    return masked_fill(inverted_mask, inverted_mask.cast(paddle.bool), paddle.finfo(dtype).min)
+    return paddle.masked_fill(inverted_mask, inverted_mask.cast(paddle.bool), paddle.finfo(dtype).min)
 
 
 # contrastive loss function, adapted from
