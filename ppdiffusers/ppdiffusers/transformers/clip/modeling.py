@@ -417,6 +417,31 @@ class CLIPPreTrainedModel(PretrainedModel):
     base_model_prefix = "clip"
     supports_gradient_checkpointing = True
 
+    _deprecated_dict = {
+        "key": ".transformer.",
+        "name_mapping": {
+            # common
+            ".transformer.": ".encoder.",
+            ".positional_embedding.": ".embeddings.position_embedding.",
+            # text
+            ".token_embedding.": ".embeddings.token_embedding.",
+            ".ln_final.": ".final_layer_norm.",
+            # transformers
+            ".linear1.": ".mlp.fc1.",
+            ".linear2.": ".mlp.fc2.",
+            ".norm1.": ".layer_norm1.",
+            ".norm2.": ".layer_norm2.",
+            # vision
+            ".class_embedding": ".embeddings.class_embedding",
+            ".conv1.weight": ".embeddings.patch_embedding.weight",
+            ".ln_pre.": ".pre_layrnorm.",
+            ".ln_post.": ".post_layernorm.",
+            # projection
+            "text_projection": "text_projection.weight",
+            "vision_projection": "visual_projection.weight",
+        },
+    }
+
     @classmethod
     def _get_name_mappings(cls, config):
         mappings = []

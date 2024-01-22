@@ -17,7 +17,7 @@ import paddle
 import paddle.nn as nn
 from paddlenlp.utils.converter import StateDictNameMapping
 
-from ppdiffusers.transformers import CLIPConfig, CLIPVisionModel, PretrainedModel
+from ppdiffusers.transformers import CLIPConfig, CLIPPreTrainedModel, CLIPVisionModel
 
 from ...utils import logging
 
@@ -30,10 +30,30 @@ def cosine_distance(image_embeds, text_embeds):
     return paddle.matmul(normalized_image_embeds, normalized_text_embeds.t())
 
 
-class StableDiffusionSafetyChecker(PretrainedModel):
+class StableDiffusionSafetyChecker(CLIPPreTrainedModel):
     config_class = CLIPConfig
 
     _no_split_modules = ["CLIPEncoderLayer"]
+
+    _deprecated_dict = {
+        "key": ".transformer.",
+        "name_mapping": {
+            # common
+            "clip.": "vision_model.",
+            ".transformer.": ".encoder.",
+            ".positional_embedding.": ".embeddings.position_embedding.",
+            ".linear1.": ".mlp.fc1.",
+            ".linear2.": ".mlp.fc2.",
+            ".norm1.": ".layer_norm1.",
+            ".norm2.": ".layer_norm2.",
+            ".class_embedding": ".embeddings.class_embedding",
+            ".conv1.weight": ".embeddings.patch_embedding.weight",
+            ".ln_pre.": ".pre_layrnorm.",
+            ".ln_post.": ".post_layernorm.",
+            # projection
+            "vision_projection": "visual_projection.weight",
+        },
+    }
 
     @classmethod
     def _get_name_mappings(cls, config):

@@ -561,6 +561,25 @@ class XLMRobertaPreTrainedModel(PretrainedModel):
     supports_gradient_checkpointing = True
     _no_split_modules = ["XLMRobertaEmbeddings", "XLMRobertaSelfAttention"]
 
+    _deprecated_dict = {
+        "key": ".self_attn.q_proj.",
+        "name_mapping": {
+            # common
+            "encoder.layers.": "encoder.layer.",
+            # embeddings
+            "embeddings.layer_norm.": "embeddings.LayerNorm.",
+            # transformer
+            ".self_attn.q_proj.": ".attention.self.query.",
+            ".self_attn.k_proj.": ".attention.self.key.",
+            ".self_attn.v_proj.": ".attention.self.value.",
+            ".self_attn.out_proj.": ".attention.output.dense.",
+            ".norm1.": ".attention.output.LayerNorm.",
+            ".linear1.": ".intermediate.dense.",
+            ".linear2.": ".output.dense.",
+            ".norm2.": ".output.LayerNorm.",
+        },
+    }
+
     def can_generate(self) -> bool:
         return False
 

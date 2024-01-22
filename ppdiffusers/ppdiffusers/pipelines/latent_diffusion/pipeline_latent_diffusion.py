@@ -526,6 +526,20 @@ class LDMBertPreTrainedModel(PretrainedModel):
     _supports_gradient_checkpointing = True
     _keys_to_ignore_on_load_unexpected = [r"encoder\.version", r"decoder\.version"]
 
+    _deprecated_dict = {
+        "key": "encoder.layers",
+        "name_mapping": {
+            "embeddings.word_embeddings.weight": "model.embed_tokens.weight",
+            "embeddings.position_embeddings.weight": "model.embed_positions.weight",
+            "final_layer_norm.": "model.layer_norm.",
+            "encoder.layers.": "model.layers.",
+            ".norm1.": ".self_attn_layer_norm.",
+            ".norm2.": ".final_layer_norm.",
+            ".linear1.": ".fc1.",
+            ".linear2.": ".fc2.",
+        },
+    }
+
     @classmethod
     def _get_name_mappings(cls, config):
         architectures = config.architectures + [cls.__name__]
