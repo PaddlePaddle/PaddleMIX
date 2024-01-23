@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#  DummyDataset 通过参数指定训练数据路径; validate时候的demo.jpg可以通过参数指定路径
-
 
 """Script to fine-tune Stable Video Diffusion."""
 import argparse
@@ -131,7 +129,9 @@ def rand_log_normal(shape, loc=0.0, scale=1.0, dtype=paddle.float32):
 
 
 class DummyDataset(Dataset):
-    def __init__(self, num_samples=100000, width=1024, height=576, sample_frames=25):
+    def __init__(
+        self, num_samples=100000, width=1024, height=576, sample_frames=25, train_data_dir="bdd100k/images/track/mini"
+    ):
         """
         Args:
             num_samples (int): Number of samples in the dataset.
@@ -139,7 +139,7 @@ class DummyDataset(Dataset):
         """
         self.num_samples = num_samples
         # Define the path to the folder containing video frames
-        self.base_folder = "bdd100k/images/track/mini"
+        self.base_folder = train_data_dir
         self.folders = os.listdir(self.base_folder)
         self.channels = 3
         self.width = width
@@ -622,6 +622,20 @@ def parse_args():
     if args.non_ema_revision is None:
         args.non_ema_revision = args.revision
 
+    # westfish
+    parser.add_argument(
+        "--train_data_dir",
+        type=str,
+        default="train_data",
+        help=("The directory containing the training data. "),
+    )
+    parser.add_argument(
+        "--valid_data_path",
+        type=str,
+        default="demo.jpg",
+        help=("The directory containing the validation data. "),
+    )
+
     return args
 
 
@@ -845,7 +859,9 @@ def main():
     # DataLoaders creation:
     args.global_batch_size = args.per_gpu_batch_size * accelerator.num_processes
 
-    train_dataset = DummyDataset(width=args.width, height=args.height, sample_frames=args.num_frames)
+    train_dataset = DummyDataset(
+        width=args.width, height=args.height, sample_frames=args.num_frames, train_data_dir=args.train_data_dir
+    )
     sampler = RandomSampler(train_dataset)
     train_dataloader = paddle.io.data.DataLoader(
         train_dataset,
@@ -1186,7 +1202,7 @@ def main():
                             for val_img_idx in range(args.num_validation_images):
                                 num_frames = args.num_frames
                                 video_frames = pipeline(
-                                    load_image("demo.jpg").resize((args.width, args.height)),
+                                    load_image(args.valid_data_path).resize((args.width, args.height)),
                                     height=args.height,
                                     width=args.width,
                                     num_frames=num_frames,
