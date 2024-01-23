@@ -1255,7 +1255,7 @@ def download_from_original_stable_diffusion_ckpt(
         device (`str`, *optional*, defaults to `None`):
             The device to use. Pass `None` to determine automatically.
         from_safetensors (`str`, *optional*, defaults to `False`):
-            If `checkpoint_path` is in `safetensors` format, load checkpoint with safetensors instead of PyTorch.
+            If `checkpoint_path` is in `safetensors` format, load checkpoint with safetensors instead of Paddle.
         load_safety_checker (`bool`, *optional*, defaults to `True`):
             Whether to load the safety checker or not. Defaults to `True`.
         pipeline_class (`str`, *optional*, defaults to `None`):

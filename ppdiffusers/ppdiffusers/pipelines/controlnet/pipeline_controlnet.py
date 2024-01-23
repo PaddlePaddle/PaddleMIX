@@ -82,10 +82,9 @@ EXAMPLE_DOC_STRING = """
         >>> # remove following line if xformers is not installed
         >>> pipe.enable_xformers_memory_efficient_attention()
 
-        >>> pipe.enable_model_cpu_offload()
 
         >>> # generate image
-        >>> generator = torch.manual_seed(0)
+        >>> generator = paddle.Generator().manual_seed(0)
         >>> image = pipe(
         ...     "futuristic-looking woman", num_inference_steps=20, generator=generator, image=canny_image
         ... ).images[0]
@@ -110,8 +109,6 @@ def retrieve_timesteps(
         num_inference_steps (`int`):
             The number of diffusion steps used when generating samples with a pre-trained model. If used,
             `timesteps` must be `None`.
-        device (`str` or `torch.device`, *optional*):
-            The device to which the timesteps should be moved to. If `None`, the timesteps are not moved.
         timesteps (`List[int]`, *optional*):
                 Custom timesteps used to support arbitrary spacing between timesteps. If `None`, then the default
                 timestep spacing strategy of the scheduler is used. If `timesteps` is passed, `num_inference_steps`
@@ -825,8 +822,8 @@ class StableDiffusionControlNetPipeline(
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                                A [`paddle.Generator`] to make generation deterministic.
+
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents

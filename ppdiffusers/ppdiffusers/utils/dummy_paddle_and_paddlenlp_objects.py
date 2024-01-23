@@ -1514,3 +1514,18 @@ class CaptionDecoder(metaclass=DummyObject):
     @classmethod
     def from_pretrained(cls, *args, **kwargs):
         requires_backends(cls, ["paddle", "paddlenlp"])
+
+
+class LearnedClassifierFreeSamplingEmbeddings(metaclass=DummyObject):
+    _backends = ["paddle", "paddlenlp"]
+
+    def __init__(self, *args, **kwargs):
+        requires_backends(self, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_config(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])
+
+    @classmethod
+    def from_pretrained(cls, *args, **kwargs):
+        requires_backends(cls, ["paddle", "paddlenlp"])

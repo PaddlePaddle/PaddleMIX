@@ -229,8 +229,7 @@ class BlipDiffusionPipeline(DiffusionPipeline):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/paddle.Generator.html)
-                to make generation deterministic.
+                                One or a list of [paddle generator(s)] to make generation deterministic.
             neg_prompt (`str`, *optional*, defaults to ""):
                 The prompt or prompts not to guide the image generation. Ignored when not using guidance (i.e., ignored
                 if `guidance_scale` is less than `1`).

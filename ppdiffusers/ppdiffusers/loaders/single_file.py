@@ -450,11 +450,11 @@ class FromOriginalVAEMixin:
 
         # vae_config["scaling_factor"] = vae_scaling_factor
 
-        # ctx = init_empty_weights if is_ppaccelerate_available() else nullcontext
+        # ctx = init_empty_weights if is_accelerate_available() else nullcontext
         # with ctx():
         #     vae = AutoencoderKL(**vae_config)
 
-        # if is_ppaccelerate_available():
+        # if is_accelerate_available():
         #     from ..models.modeling_utils import load_model_dict_into_meta
 
         #     load_model_dict_into_meta(vae, converted_vae_checkpoint, device="cpu")

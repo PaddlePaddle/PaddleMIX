@@ -220,12 +220,7 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _librosa_available = False
 
-_ppaccelerate_available = importlib.util.find_spec("ppaccelerate") is not None
-try:
-    _accelerate_version = importlib_metadata.version("ppaccelerate")
-    logger.debug(f"Successfully imported accelerate version {_accelerate_version}")
-except importlib_metadata.PackageNotFoundError:
-    _ppaccelerate_available = False
+_accelerate_available = True
 
 _k_diffusion_available = importlib.util.find_spec("k_diffusion") is not None
 try:
@@ -388,8 +383,9 @@ def is_ppxformers_available():
         return False
 
 
-def is_ppaccelerate_available():
-    return _ppaccelerate_available
+# NOTE this is paddle accelerate
+def is_accelerate_available():
+    return _accelerate_available
 
 
 def is_einops_available():
@@ -741,7 +737,7 @@ def is_transformers_version(operation: str, version: str):
     return compare_versions(parse(_transformers_version), operation, version)
 
 
-def is_ppaccelerate_version(operation: str, version: str):
+def is_accelerate_version(operation: str, version: str):
     """
     Args:
     Compares the current Accelerate version to a given reference with an operation.
@@ -750,9 +746,11 @@ def is_ppaccelerate_version(operation: str, version: str):
         version (`str`):
             A version string
     """
-    if not _ppaccelerate_available:
+    if not _accelerate_available:
         return False
-    return compare_versions(parse(_accelerate_version), operation, version)
+    import ppdiffusers
+
+    return compare_versions(parse(ppdiffusers.accelerate.__version__), operation, version)
 
 
 def is_k_diffusion_version(operation: str, version: str):

@@ -17,10 +17,9 @@ Accelerate utilities: Utilities related to accelerate
 
 from packaging import version
 
-from .import_utils import is_ppaccelerate_available
+import ppdiffusers
 
-if is_ppaccelerate_available():
-    import ppaccelerate
+from .import_utils import is_accelerate_available
 
 
 def apply_forward_hook(method):
@@ -33,10 +32,10 @@ def apply_forward_hook(method):
 
     :param method: The method to decorate. This method should be a method of a PyTorch module.
     """
-    if not is_ppaccelerate_available():
+    if not is_accelerate_available():
         return method
-    ppaccelerate_version = version.parse(ppaccelerate.__version__).base_version
-    if version.parse(ppaccelerate_version) < version.parse("0.17.0"):
+    accelerate_version = version.parse(ppdiffusers.accelerate.__version__).base_version
+    if version.parse(accelerate_version) < version.parse("0.17.0"):
         return method
 
     def wrapper(self, *args, **kwargs):

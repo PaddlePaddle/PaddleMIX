@@ -392,8 +392,8 @@ class TextToVideoZeroSDXLPipeline(StableDiffusionXLPipeline):
             t1:
                 Timestamp at t1.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                                A [`paddle.Generator`] to make generation deterministic.
+
 
         Returns:
             x_t1:
@@ -570,8 +570,7 @@ class TextToVideoZeroSDXLPipeline(StableDiffusionXLPipeline):
                 Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
                 [`schedulers.DDIMScheduler`], will be ignored for others.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/paddle.Generator.html)
-                to make generation deterministic.
+                                One or a list of [paddle generator(s)] to make generation deterministic.
             frame_ids (`List[int]`, *optional*):
                 Indexes of the frames that are being generated. This is used when generating longer videos
                 chunk-by-chunk.
