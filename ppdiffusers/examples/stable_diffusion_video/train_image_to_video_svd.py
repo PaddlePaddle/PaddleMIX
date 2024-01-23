@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# todo: remove annotated code snippets; clean device-related interface; DummyDataset 通过参数指定训练数据路径; validate时候的demo.jpg可以通过参数指定路径
+#  DummyDataset 通过参数指定训练数据路径; validate时候的demo.jpg可以通过参数指定路径
 
 
 """Script to fine-tune Stable Video Diffusion."""
@@ -71,7 +71,7 @@ logger = get_logger(__name__, log_level="INFO")
 
 
 # copy from https://github.com/crowsonkb/k-diffusion.git
-def stratified_uniform(shape, group=0, groups=1, dtype=None, device=None):
+def stratified_uniform(shape, group=0, groups=1, dtype=None):
     """Draws stratified samples from a uniform distribution."""
     if groups <= 0:
         raise ValueError(f"groups must be positive, got {groups}")
@@ -91,7 +91,6 @@ def rand_cosine_interpolated(
     sigma_data=1.0,
     min_value=1e-3,
     max_value=1e3,
-    device="cpu",
     dtype=paddle.float32,
 ):
     """Draws samples from an interpolated cosine timestep distribution (from simple diffusion)."""
@@ -112,12 +111,12 @@ def rand_cosine_interpolated(
 
     logsnr_min = -2 * math.log(min_value / sigma_data)
     logsnr_max = -2 * math.log(max_value / sigma_data)
-    u = stratified_uniform(shape, group=0, groups=1, dtype=dtype, device=device)
+    u = stratified_uniform(shape, group=0, groups=1, dtype=dtype)
     logsnr = logsnr_schedule_cosine_interpolated(u, image_d, noise_d_low, noise_d_high, logsnr_min, logsnr_max)
     return paddle.exp(-logsnr / 2) * sigma_data
 
 
-def rand_log_normal(shape, loc=0.0, scale=1.0, device="cpu", dtype=paddle.float32):
+def rand_log_normal(shape, loc=0.0, scale=1.0, dtype=paddle.float32):
     """Draws samples from an lognormal distribution."""
     u = paddle.rand(shape, dtype=dtype) * (1 - 2e-7) + 1e-7
     return paddle.distribution.Normal(loc, scale).icdf(u).exp()
@@ -762,7 +761,6 @@ def main():
                     os.path.join(input_dir, "unet_ema"), UNetSpatioTemporalConditionModel
                 )
                 ema_unet.load_state_dict(load_model.state_dict())
-                ema_unet.to(accelerator.device)
                 del load_model
 
             for i in range(len(models)):
