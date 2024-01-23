@@ -34,6 +34,7 @@ from urllib.parse import quote, urlparse
 import requests
 from filelock import FileLock
 from huggingface_hub.utils import (
+    BadRequestError,
     EntryNotFoundError,
     FileMetadataError,
     GatedRepoError,
@@ -41,14 +42,30 @@ from huggingface_hub.utils import (
     LocalEntryNotFoundError,
     RepositoryNotFoundError,
     RevisionNotFoundError,
-    hf_raise_for_status,
     tqdm,
 )
-from requests import Response
+from requests import HTTPError, Response
 from requests.adapters import HTTPAdapter
 from requests.models import PreparedRequest
 
 logger = logging.getLogger(__name__)
+
+
+def aistudio_raise_for_status(response: Response, endpoint_name: Optional[str] = None) -> None:
+
+    try:
+        response.raise_for_status()
+    except HTTPError as e:
+        if response.status_code == 404:
+            message = f"{response.status_code} Client Error." + "\n\n" + f"Entry Not Found for url: {response.url}."
+            raise EntryNotFoundError(message, None) from e
+        elif response.status_code == 400:
+            message = (
+                f"\n\nBad request for {endpoint_name} endpoint:" if endpoint_name is not None else "\n\nBad request:"
+            )
+            raise BadRequestError(message, response=None) from e
+        raise HfHubHTTPError(str(e), response=None) from e
+
 
 ENV_VARS_TRUE_VALUES = {"1", "ON", "YES", "TRUE"}
 
@@ -717,7 +734,7 @@ def _request_wrapper(
 
     # Perform request and return if status_code is not in the retry list.
     response = get_session().request(method=method, url=url, **params)
-    hf_raise_for_status(response)
+    aistudio_raise_for_status(response)
     return response
 
 
@@ -818,7 +835,7 @@ def get_aistudio_file_metadata(
         proxies=proxies,
         timeout=timeout,
     )
-    hf_raise_for_status(r)
+    aistudio_raise_for_status(r)
     res = r.json()
 
     # Return
@@ -895,7 +912,7 @@ def http_get(
     r = _request_wrapper(
         method="GET", url=url, stream=True, proxies=proxies, headers=headers, timeout=AISTUDIO_HUB_DOWNLOAD_TIMEOUT
     )
-    hf_raise_for_status(r)
+    aistudio_raise_for_status(r)
     content_length = r.headers.get("Content-Length")
 
     # NOTE: 'total' is the total number of bytes to download, not the number of bytes in the file.
