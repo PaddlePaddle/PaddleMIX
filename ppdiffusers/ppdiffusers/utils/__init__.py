@@ -152,7 +152,13 @@ from .peft_utils import (
     set_weights_and_activate_adapters,
     unscale_lora_layers,
 )
-from .pil_utils import PIL_INTERPOLATION, make_image_grid, numpy_to_pil, pt_to_pil
+from .pil_utils import (
+    PIL_INTERPOLATION,
+    make_image_grid,
+    numpy_to_pil,
+    pd_to_pil,
+    pt_to_pil,
+)
 
 image_grid = make_image_grid
 
