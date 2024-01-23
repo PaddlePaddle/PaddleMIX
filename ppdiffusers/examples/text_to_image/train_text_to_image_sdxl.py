@@ -36,11 +36,6 @@ from datasets import load_dataset
 # from packaging import version
 from paddle.vision import transforms
 from paddle.vision.transforms.functional import crop
-
-# import paddle.distributed.fleet.utils.recompute
-from ppaccelerate import Accelerator
-from ppaccelerate.logging import get_logger
-from ppaccelerate.utils import ProjectConfiguration, set_seed
 from tqdm.auto import tqdm
 
 import ppdiffusers
@@ -50,6 +45,11 @@ from ppdiffusers import (
     StableDiffusionXLPipeline,
     UNet2DConditionModel,
 )
+
+# import paddle.distributed.fleet.utils.recompute
+from ppdiffusers.accelerate import Accelerator
+from ppdiffusers.accelerate.logging import get_logger
+from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import EMAModel, compute_snr
 from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
