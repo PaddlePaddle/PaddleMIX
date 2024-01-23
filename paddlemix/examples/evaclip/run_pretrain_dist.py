@@ -27,6 +27,7 @@ import socket
 from dataclasses import dataclass, field
 
 import paddle
+from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 from paddlemix.datasets import load_dataset
 from paddlemix.datasets.dataset import ImageFolder
@@ -41,7 +42,6 @@ from paddlemix.processors.clip_processing import (
 from paddlemix.processors.tokenizer import SimpleTokenizer
 from paddlemix.trainer import CLIPTrainer
 from paddlemix.utils.env import setdistenv
-from paddlenlp.trainer import PdArgumentParser, TrainingArguments
 
 
 @dataclass
@@ -63,7 +63,7 @@ class DataArguments:
     )
 
     classification_eval: str = field(
-        default="",
+        default=None,
         metadata={"help": "Path to IN1K data."},
     )
 
@@ -235,8 +235,13 @@ def main_worker(training_args, model_args, data_args):
     processor = CLIPProcessor(image_processor, text_processor, tokenizer)
     collator = Collator(processor)
 
-    eval_dataset = ImageFolder(f"{data_args.classification_eval}/images")
-    zeroshot = ClipZeroShot(model, training_args)
+    if data_args.classification_eval is not None:
+        eval_dataset = ImageFolder(f"{data_args.classification_eval}/images")
+        zeroshot = ClipZeroShot(model, training_args)
+        compute_metrics = zeroshot.zero_shot_eval
+    else:
+        eval_dataset = None
+        compute_metrics = None
 
     trainer = SelfTrainer(
         model=model,
@@ -244,7 +249,7 @@ def main_worker(training_args, model_args, data_args):
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
         data_collator=collator,
-        compute_metrics=zeroshot.zero_shot_eval,
+        compute_metrics=compute_metrics,
     )
 
     # Training
