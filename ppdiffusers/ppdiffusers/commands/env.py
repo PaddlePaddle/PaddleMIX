@@ -49,10 +49,8 @@ class EnvironmentCommand(BasePPDiffusersCLICommand):
 
             paddlenlp_version = paddlenlp.__version__
 
-        import ppdiffusers
-
-        accelerate_version = ppdiffusers.accelerate.__version__
-        peft_version = ppdiffusers.peft.__version__
+        from ppdiffusers.accelerate import __version__ as accelerate_version
+        from ppdiffusers.peft import __version__ as peft_version
 
         xformers_commit_id = "not installed"
         if is_ppxformers_available():

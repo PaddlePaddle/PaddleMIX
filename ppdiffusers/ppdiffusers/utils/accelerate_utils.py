@@ -17,7 +17,7 @@ Accelerate utilities: Utilities related to accelerate
 
 from packaging import version
 
-import ppdiffusers
+from ppdiffusers.accelerate import __version__
 
 from .import_utils import is_accelerate_available
 
@@ -34,7 +34,7 @@ def apply_forward_hook(method):
     """
     if not is_accelerate_available():
         return method
-    accelerate_version = version.parse(ppdiffusers.accelerate.__version__).base_version
+    accelerate_version = version.parse(__version__).base_version
     if version.parse(accelerate_version) < version.parse("0.17.0"):
         return method
 
