@@ -75,7 +75,7 @@ class SafeStableDiffusionSafetyChecker(CLIPPreTrainedModel):
             ["special_care_embeds", "special_care_embeds"],
             ["concept_embeds_weights", "concept_embeds_weights"],
             ["special_care_embeds_weights", "special_care_embeds_weights"],
-        ] + [
+            # vision
             [
                 "vision_model.vision_model.embeddings.class_embedding",
                 "vision_model.vision_model.embeddings.class_embedding",
@@ -96,82 +96,30 @@ class SafeStableDiffusionSafetyChecker(CLIPPreTrainedModel):
 
         hard_mappings.extend(safety_checker_layer_mappings)
         for layer_index in range(num_vision_layer):
-            vision_model_layer_mappings = [
-                # qkv out
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.q_proj.weight",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.q_proj.weight",
-                    "transpose",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.q_proj.bias",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.q_proj.bias",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.k_proj.weight",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.k_proj.weight",
-                    "transpose",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.k_proj.bias",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.k_proj.bias",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.v_proj.weight",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.v_proj.weight",
-                    "transpose",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.v_proj.bias",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.v_proj.bias",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.out_proj.weight",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.out_proj.weight",
-                    "transpose",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.out_proj.bias",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.self_attn.out_proj.bias",
-                ],
-                # fc1
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.mlp.fc1.weight",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.mlp.fc1.weight",
-                    "transpose",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.mlp.fc1.bias",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.mlp.fc1.bias",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.layer_norm1.weight",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.layer_norm1.weight",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.layer_norm1.bias",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.layer_norm1.bias",
-                ],
-                # fc2
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.mlp.fc2.weight",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.mlp.fc2.weight",
-                    "transpose",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.mlp.fc2.bias",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.mlp.fc2.bias",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.layer_norm2.weight",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.layer_norm2.weight",
-                ],
-                [
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.layer_norm2.bias",
-                    f"vision_model.vision_model.encoder.layers.{layer_index}.layer_norm2.bias",
-                ],
-            ]
-            hard_mappings.extend(vision_model_layer_mappings)
+            for name in [
+                "self_attn.q_proj",
+                "self_attn.k_proj",
+                "self_attn.v_proj",
+                "self_attn.out_proj",
+                "mlp.fc1",
+                "mlp.fc2",
+                "layer_norm1",
+                "layer_norm2",
+            ]:
+                action = None if "norm" in name else "transpose"
+                hard_mappings.extend(
+                    [
+                        [
+                            f"vision_model.encoder.layers.{layer_index}.{name}.weight",
+                            f"vision_model.encoder.layers.{layer_index}.{name}.weight",
+                            action,
+                        ],
+                        [
+                            f"vision_model.encoder.layers.{layer_index}.{name}.bias",
+                            f"vision_model.encoder.layers.{layer_index}.{name}.bias",
+                        ],
+                    ]
+                )
 
         mappings = [StateDictNameMapping(*mapping, index=index) for index, mapping in enumerate(hard_mappings)]
         return mappings
