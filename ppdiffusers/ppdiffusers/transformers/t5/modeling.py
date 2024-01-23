@@ -106,7 +106,7 @@ class T5LayerNorm(nn.Layer):
 
         # convert into half-precision if necessary
         if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
-            hidden_states = hidden_states._to(self.weight.dtype)
+            hidden_states = hidden_states.cast(self.weight.dtype)
 
         return self.weight * hidden_states
 
@@ -405,7 +405,7 @@ class T5Attention(nn.Layer):
         position_bias_masked = position_bias
 
         scores += position_bias_masked
-        attn_weights = nn.functional.softmax(scores.cast(dtype=paddle.float32), axis=-1)._to(
+        attn_weights = nn.functional.softmax(scores.cast(dtype=paddle.float32), axis=-1).cast(
             dtype=scores.dtype
         )  # (batch_size, n_heads, seq_length, key_length)
         attn_weights = nn.functional.dropout(
