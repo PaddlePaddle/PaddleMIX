@@ -53,6 +53,9 @@ def bos_aistudio_hf_download(
     from_aistudio: bool = False,
     from_hf_hub: bool = False,
 ) -> str:
+    assert repo_id is not None, "repo_id cannot be None"
+    assert filename is not None, "filename cannot be None"
+
     download_kwargs = dict(
         repo_id=repo_id,
         filename=filename,
@@ -133,9 +136,8 @@ def bos_aistudio_hf_download(
 
 
 def bos_aistudio_hf_file_exist(
-    repo_id: str,
-    filename: str,
-    *,
+    repo_id: str = None,
+    filename: str = None,
     subfolder: Optional[str] = None,
     repo_type: Optional[str] = None,
     revision: Optional[str] = None,
@@ -145,6 +147,9 @@ def bos_aistudio_hf_file_exist(
     from_aistudio: bool = False,
     from_hf_hub: bool = False,
 ):
+    assert repo_id is not None, "repo_id cannot be None"
+    assert filename is not None, "filename cannot be None"
+
     if subfolder is None:
         subfolder = ""
     filename = os.path.join(subfolder, filename)
