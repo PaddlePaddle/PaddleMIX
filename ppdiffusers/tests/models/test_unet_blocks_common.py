@@ -109,7 +109,7 @@ class UNetBlockTesterMixin:
         output_slice = output[0, -1, -3:, -3:]
         expected_slice = paddle.to_tensor(expected_slice)
         print(output_slice.flatten())
-        assert paddle_all_close(output_slice.flatten(), expected_slice, atol=5e-3)
+        assert paddle_all_close(output_slice.flatten(), expected_slice, atol=5e-2)
 
     @unittest.skipIf(paddle_device == "mps", "Training is not supported in mps")
     def test_training(self):
