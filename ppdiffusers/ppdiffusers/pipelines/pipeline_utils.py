@@ -318,6 +318,7 @@ def load_sub_model(
     from_aistudio: bool = False,
     cache_dir: Union[str, os.PathLike] = None,
     variant: str = None,
+    use_safetensors: bool = False,
 ):
     """Helper method to load the module `name` from `library_name` and `class_name`"""
     # retrieve class candidates
@@ -368,6 +369,7 @@ def load_sub_model(
     # PaddleNLP or PPDiffusers Model
     if is_ppdiffusers_model or is_paddlenlp_model:
         loading_kwargs["variant"] = model_variants.pop(name, variant)
+        loading_kwargs["use_safetensors"] = use_safetensors
         if is_paddlenlp_model:
             loading_kwargs["convert_from_torch"] = from_diffusers
             loading_kwargs["dtype"] = (
@@ -1094,6 +1096,7 @@ class DiffusionPipeline(ConfigMixin):
                     from_aistudio=from_aistudio,
                     cache_dir=cache_dir,
                     variant=variant,
+                    use_safetensors=use_safetensors,
                 )
                 logger.info(
                     f"Loaded {name} as {class_name} from `{name}` subfolder of {pretrained_model_name_or_path}."

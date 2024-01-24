@@ -740,7 +740,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         if output_type == "pil":
             # 8. Post-processing
             image = (image / 2 + 0.5).clip(0, 1)
-            image = image.cpu().transpose([0, 2, 3, 1]).cast("float32").numpy()
+            image = image.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
 
             # 9. Run safety checker
             image, nsfw_detected, watermark_detected = self.run_safety_checker(image, prompt_embeds.dtype)
@@ -758,7 +758,7 @@ class IFPipeline(DiffusionPipeline, LoraLoaderMixin):
         else:
             # 8. Post-processing
             image = (image / 2 + 0.5).clip(0, 1)
-            image = image.cpu().transpose([0, 2, 3, 1]).cast("float32").numpy()
+            image = image.transpose([0, 2, 3, 1]).cast("float32").cpu().numpy()
 
             # 9. Run safety checker
             image, nsfw_detected, watermark_detected = self.run_safety_checker(image, prompt_embeds.dtype)
