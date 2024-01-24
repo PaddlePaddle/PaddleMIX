@@ -142,7 +142,9 @@ class UNet1DModelTests(ModelTesterMixin, UNetTesterMixin, unittest.TestCase):
         model = UNet1DModel.from_pretrained(model_id, subfolder="unet")
 
         sample_size = 65536
-        noise = paddle.sin(paddle.arange(sample_size)[None, None, :].tile((1, 2, 1)))
+        noise = paddle.sin(
+            x=paddle.arange(start=sample_size, dtype=paddle.float32)[None, None, :].tile(repeat_times=[1, 2, 1])
+        )
         timestep = paddle.to_tensor([1.0])
 
         with paddle.no_grad():

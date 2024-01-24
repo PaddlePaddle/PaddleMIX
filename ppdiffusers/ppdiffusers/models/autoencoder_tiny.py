@@ -240,6 +240,9 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
 
                 # NOTE this copy_ method is not work in paddlepaddle
                 # tile_out.copy_(blend_mask * tile + (1 - blend_mask) * tile_out)
+                # out[..., i // sf : (i + tile_size) // sf, j // sf : (j + tile_size) // sf] = (
+                #     blend_mask * tile + (1 - blend_mask) * tile_out
+                # )
                 out[..., i // sf : (i + tile_size) // sf, j // sf : (j + tile_size) // sf] = (
                     blend_mask * tile + (1 - blend_mask) * tile_out
                 )
@@ -293,7 +296,11 @@ class AutoencoderTiny(ModelMixin, ConfigMixin):
 
                 # NOTE this copy_ method is not work in paddlepaddle
                 # tile_out.copy_(blend_mask * tile + (1 - blend_mask) * tile_out)
-                out[..., i // sf : (i + tile_size) // sf, j // sf : (j + tile_size) // sf] = (
+                # breakpoint()
+                # out[..., i // sf : (i + tile_size) // sf, j // sf : (j + tile_size) // sf] = (
+                #     blend_mask * tile + (1 - blend_mask) * tile_out
+                # )
+                out[..., i * sf : (i + tile_size) * sf, j * sf : (j + tile_size) * sf] = (
                     blend_mask * tile + (1 - blend_mask) * tile_out
                 )
         return out

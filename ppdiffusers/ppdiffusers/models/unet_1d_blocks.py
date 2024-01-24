@@ -308,7 +308,7 @@ class Upsample1d(nn.Layer):
         self.register_buffer("kernel", kernel_1d)
 
     def forward(self, hidden_states: paddle.Tensor, temb: Optional[paddle.Tensor] = None) -> paddle.Tensor:
-        hidden_states = F.pad(hidden_states, ((self.pad + 1) // 2,) * 2, self.pad_mode)
+        hidden_states = F.pad(hidden_states, ((self.pad + 1) // 2,) * 2, self.pad_mode, data_format="NCL")
         weight = paddle.zeros(
             [hidden_states.shape[1], hidden_states.shape[1], self.kernel.shape[0]], dtype=hidden_states.dtype
         )
