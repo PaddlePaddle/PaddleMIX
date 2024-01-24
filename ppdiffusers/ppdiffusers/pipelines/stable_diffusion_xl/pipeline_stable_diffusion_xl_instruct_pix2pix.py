@@ -42,7 +42,7 @@ from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import (
     USE_PEFT_BACKEND,
     deprecate,
-    is_ppinvisible_watermark_available,
+    is_invisible_watermark_available,
     logging,
     replace_example_docstring,
     scale_lora_layers,
@@ -52,7 +52,7 @@ from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import StableDiffusionXLPipelineOutput
 
-if is_ppinvisible_watermark_available():
+if is_invisible_watermark_available():
     from .watermark import StableDiffusionXLWatermarker
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -197,7 +197,7 @@ class StableDiffusionXLInstructPix2PixPipeline(
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
         self.default_sample_size = self.unet.config.sample_size
 
-        add_watermarker = add_watermarker if add_watermarker is not None else is_ppinvisible_watermark_available()
+        add_watermarker = add_watermarker if add_watermarker is not None else is_invisible_watermark_available()
 
         if add_watermarker:
             self.watermark = StableDiffusionXLWatermarker()

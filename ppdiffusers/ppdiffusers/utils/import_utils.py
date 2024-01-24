@@ -433,11 +433,6 @@ def is_invisible_watermark_available():
     return False  # _invisible_watermark_available
 
 
-# This is pytorch packge
-def is_ppinvisible_watermark_available():
-    return _ppinvisible_watermark_available
-
-
 def is_peft_available():
     return _peft_available
 
@@ -587,7 +582,7 @@ PADDLESDE_IMPORT_ERROR = """
 
 # docstyle-ignore
 INVISIBLE_WATERMARK_IMPORT_ERROR = """
-{0} requires the ppinvisible-watermark library but it was not found in your environment. You can install it with pip: `pip install ppinvisible-watermark>=0.2.0`
+{0} requires the pp-invisible-watermark library but it was not found in your environment. You can install it with pip: `pip install ppinvisible-watermark>=0.2.0`
 """
 
 
@@ -616,7 +611,7 @@ BACKENDS_MAPPING = OrderedDict(
         ("compel", (is_compel_available, COMPEL_IMPORT_ERROR)),
         ("ftfy", (is_ftfy_available, FTFY_IMPORT_ERROR)),
         ("paddlesde", (is_paddlesde_available, PADDLESDE_IMPORT_ERROR)),
-        ("invisible_watermark", (is_ppinvisible_watermark_available, INVISIBLE_WATERMARK_IMPORT_ERROR)),
+        ("invisible_watermark", (is_invisible_watermark_available, INVISIBLE_WATERMARK_IMPORT_ERROR)),
     ]
 )
 

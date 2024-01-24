@@ -182,7 +182,7 @@ class ShapEPipeline(DiffusionPipeline):
         num_images_per_prompt: int = 1,
         num_inference_steps: int = 25,
         generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
-        latents: Optional[paddle.FloatTensor] = None,
+        latents: Optional[paddle.Tensor] = None,
         guidance_scale: float = 4.0,
         frame_size: int = 64,
         output_type: Optional[str] = "pil",  # pil, np, latent, mesh
