@@ -36,10 +36,10 @@ EXAMPLE_DOC_STRING = """
         >>> from ppdiffusers.pipelines import BlipDiffusionControlNetPipeline
         >>> from ppdiffusers.utils import load_image
         >>> from controlnet_aux import CannyDetector
-        >>> import torch
+        >>> import paddle
 
         >>> blip_diffusion_pipe = BlipDiffusionControlNetPipeline.from_pretrained(
-        ...     "Salesforce/blipdiffusion-controlnet", torch_dtype=torch.float16
+        ...     "Salesforce/blipdiffusion-controlnet", paddle_dtype=paddle.float16
         ... )
 
         >>> style_subject = "flower"
@@ -198,7 +198,6 @@ class BlipDiffusionControlNetPipeline(DiffusionPipeline):
         height,
         batch_size,
         num_images_per_prompt,
-        device,
         dtype,
         do_classifier_free_guidance=False,
     ):
@@ -282,8 +281,7 @@ class BlipDiffusionControlNetPipeline(DiffusionPipeline):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/paddle.Generator.html)
-                to make generation deterministic.
+                One or a list of [paddle generator(s)] to make generation deterministic.
             neg_prompt (`str`, *optional*, defaults to ""):
                 The prompt or prompts not to guide the image generation. Ignored when not using guidance (i.e., ignored
                 if `guidance_scale` is less than `1`).

@@ -385,33 +385,41 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
         **kwargs,
     ):
         if to_diffusers:
+            # TODO, currently, we donot support to save the model in shared format.
+            max_shard_size = "99999GB"
             state_dict = self.state_dict()
             from ppdiffusers.models.modeling_pytorch_paddle_utils import (
                 convert_paddle_state_dict_to_pytorch,
             )
 
-            raw_model_name = "model_state.pdparams"
             if not is_torch_available():
                 safe_serialization = True
             if safe_serialization:
+
+                def replace_name(name):
+                    name = name.replace("model_state", "model")
+                    name = name.replace(".pdparams", ".safetensors")
+                    return name
+
                 if is_torch_available():
 
                     def save_function(state_dict, path):
-                        return torch_safe_save_file(
-                            state_dict, path.replace(raw_model_name, "model.safetensors"), metadata={"format": "pt"}
-                        )
+                        return torch_safe_save_file(state_dict, replace_name(path), metadata={"format": "pt"})
 
                 else:
 
                     def save_function(state_dict, path):
-                        return np_safe_save_file(
-                            state_dict, path.replace(raw_model_name, "model.safetensors"), metadata={"format": "pt"}
-                        )
+                        return np_safe_save_file(state_dict, replace_name(path), metadata={"format": "pt"})
 
             else:
 
+                def replace_name(name):
+                    name = name.replace("model_state", "pytorch_model")
+                    name = name.replace(".pdparams", ".bin")
+                    return name
+
                 def save_function(state_dict, path):
-                    return torch.save(state_dict, path.replace(raw_model_name, "pytorch_model.bin"))
+                    return torch.save(state_dict, replace_name(path))
 
             convert_paddle_state_dict_to_pytorch(self, state_dict)
             safe_serialization = False

@@ -19,6 +19,7 @@ from packaging import version
 
 from ..version import VERSION as __version__
 from . import initializer_utils
+from .accelerate_utils import apply_forward_hook
 from .constants import (  # fastdeploy; NEW; DIFFUSERS; PPDIFFUSERS; TRANSFORMERS; PADDLENLP
     CONFIG_NAME,
     DEPRECATED_REVISION_ARGS,
@@ -91,6 +92,8 @@ from .import_utils import (
     OptionalDependencyNotAvailable,
     _LazyModule,
     get_objects_from_module,
+    is_accelerate_available,
+    is_accelerate_version,
     is_bs4_available,
     is_einops_available,
     is_fastdeploy_available,
@@ -105,10 +108,9 @@ from .import_utils import (
     is_paddle_available,
     is_paddle_version,
     is_paddlenlp_available,
+    is_paddlenlp_version,
     is_paddlesde_available,
     is_peft_available,
-    is_ppaccelerate_available,
-    is_ppaccelerate_version,
     is_ppinvisible_watermark_available,
     is_ppxformers_available,
     is_safetensors_available,
@@ -150,8 +152,13 @@ from .peft_utils import (
     set_weights_and_activate_adapters,
     unscale_lora_layers,
 )
-from .pil_utils import PIL_INTERPOLATION, make_image_grid, numpy_to_pil, pt_to_pil
-from .ppaccelerate_utils import apply_forward_hook
+from .pil_utils import (
+    PIL_INTERPOLATION,
+    make_image_grid,
+    numpy_to_pil,
+    pd_to_pil,
+    pt_to_pil,
+)
 
 image_grid = make_image_grid
 

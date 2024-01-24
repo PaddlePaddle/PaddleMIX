@@ -105,8 +105,8 @@ class T5LayerNorm(nn.Layer):
         hidden_states = hidden_states * paddle.rsqrt(variance + self.variance_epsilon)
 
         # convert into half-precision if necessary
-        if self.weight.dtype in [paddle.float16, paddle.bfloat16]:
-            hidden_states = hidden_states._to(self.weight.dtype)
+        if amp_state() or self.weight.dtype in [paddle.float16, paddle.bfloat16]:
+            hidden_states = hidden_states.cast(self.weight.dtype)
 
         return self.weight * hidden_states
 
@@ -173,6 +173,9 @@ class T5DenseGatedActDense(nn.Layer):
         # To make 8bit quantization work for google/flan-t5-xxl, self.wo is kept in float32.
         # See https://github.com/huggingface/transformers/issues/20287
         # we also make sure the weights are not in `int8` in case users will force `_keep_in_fp32_modules` to be `None``
+        # NOTE: (yujun06) NEW ADDED, make sure self.wo.weight.dtype is float32
+        if isinstance(self.wo.weight, paddle.Tensor) and self.wo.weight.dtype != paddle.float32:
+            self.wo.to(dtype=paddle.float32)
         if (
             isinstance(self.wo.weight, paddle.Tensor)
             and hidden_states.dtype != self.wo.weight.dtype
@@ -397,7 +400,7 @@ class T5Attention(nn.Layer):
             # if key and values are already calculated
             # we want only the last query position bias
             if past_key_value is not None:
-                position_bias = position_bias[:, :, -hidden_states.shape[1] :, :]
+                position_bias = position_bias[:, :, -paddle.shape(hidden_states)[1] :, :]
 
             if mask is not None:
                 position_bias = position_bias + mask  # (batch_size, n_heads, seq_length, key_length)
@@ -405,7 +408,7 @@ class T5Attention(nn.Layer):
         position_bias_masked = position_bias
 
         scores += position_bias_masked
-        attn_weights = nn.functional.softmax(scores.cast(dtype=paddle.float32), axis=-1)._to(
+        attn_weights = nn.functional.softmax(scores.cast(dtype=paddle.float32), axis=-1).cast(
             dtype=scores.dtype
         )  # (batch_size, n_heads, seq_length, key_length)
         attn_weights = nn.functional.dropout(
@@ -540,7 +543,7 @@ class T5Block(nn.Layer):
         attention_outputs = self_attention_outputs[2:]  # Keep self-attention outputs and relative position weights
 
         # clamp inf values to enable fp16 training
-        if hidden_states.dtype == paddle.float16 or amp_state():
+        if amp_state() or hidden_states.dtype == paddle.float16:
             clamp_value = paddle.where(
                 paddle.isinf(hidden_states).any(),
                 paddle.finfo(hidden_states.dtype).max - 1000,
@@ -553,7 +556,7 @@ class T5Block(nn.Layer):
             # the actual query length is unknown for cross attention
             # if using past key value states. Need to inject it here
             if present_key_value_state is not None:
-                query_length = present_key_value_state[0].shape[2]
+                query_length = paddle.shape(present_key_value_state[0])[2]
             else:
                 query_length = None
 
@@ -570,7 +573,7 @@ class T5Block(nn.Layer):
             hidden_states = cross_attention_outputs[0]
 
             # clamp inf values to enable fp16 training
-            if hidden_states.dtype == paddle.float16 or amp_state():
+            if amp_state() or hidden_states.dtype == paddle.float16:
                 clamp_value = paddle.where(
                     paddle.isinf(hidden_states).any(),
                     paddle.finfo(hidden_states.dtype).max - 1000,
@@ -589,7 +592,7 @@ class T5Block(nn.Layer):
         hidden_states = self.layer[-1](hidden_states)
 
         # clamp inf values to enable fp16 training
-        if hidden_states.dtype == paddle.float16 or amp_state():
+        if amp_state() or hidden_states.dtype == paddle.float16:
             clamp_value = paddle.where(
                 paddle.isinf(hidden_states).any(),
                 paddle.finfo(hidden_states.dtype).max - 1000,
@@ -636,6 +639,14 @@ class T5PreTrainedModel(PretrainedModel):
     supports_gradient_checkpointing = True
     _no_split_modules = ["T5Block"]
     _keep_in_fp32_modules = ["wo"]
+
+    _deprecated_dict = {
+        "key": "t5.",
+        "name_mapping": {
+            # common
+            "t5.": "transformer.",
+        },
+    }
 
     @property
     def dummy_inputs(self):
@@ -961,10 +972,10 @@ class T5Stack(T5PreTrainedModel):
                 f"You cannot specify both {err_msg_prefix}input_ids and {err_msg_prefix}inputs_embeds at the same time"
             )
         elif input_ids is not None:
-            input_shape = input_ids.shape
+            input_shape = paddle.shape(input_ids)
             input_ids = input_ids.reshape([-1, input_shape[-1]])
         elif inputs_embeds is not None:
-            input_shape = inputs_embeds.shape[:-1]
+            input_shape = paddle.shape(inputs_embeds)[:-1]
         else:
             err_msg_prefix = "decoder_" if self.is_decoder else ""
             raise ValueError(f"You have to specify either {err_msg_prefix}input_ids or {err_msg_prefix}inputs_embeds")
@@ -977,7 +988,9 @@ class T5Stack(T5PreTrainedModel):
         batch_size, seq_length = input_shape
 
         # required mask seq length can be calculated via length of past
-        mask_seq_length = past_key_values[0][0].shape[2] + seq_length if past_key_values is not None else seq_length
+        mask_seq_length = (
+            paddle.shape(past_key_values[0][0])[2] + seq_length if past_key_values is not None else seq_length
+        )
 
         if use_cache is True:
             if not self.is_decoder:
@@ -997,7 +1010,7 @@ class T5Stack(T5PreTrainedModel):
         # If a 2D or 3D attention mask is provided for the cross-attention
         # we need to make broadcastable to [batch_size, num_heads, seq_length, seq_length]
         if self.is_decoder and encoder_hidden_states is not None:
-            encoder_batch_size, encoder_sequence_length, _ = encoder_hidden_states.shape
+            encoder_batch_size, encoder_sequence_length, _ = paddle.shape(encoder_hidden_states)
             encoder_hidden_shape = (encoder_batch_size, encoder_sequence_length)
             if encoder_attention_mask is None:
                 encoder_attention_mask = paddle.ones(encoder_hidden_shape, dtype=paddle.int64)
@@ -1026,7 +1039,7 @@ class T5Stack(T5PreTrainedModel):
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
 
-            if self.gradient_checkpointing and self.training:
+            if self.gradient_checkpointing and self.training and not hidden_states.stop_gradient:
                 layer_outputs = self._gradient_checkpointing_func(
                     layer_module.forward,
                     hidden_states,
@@ -1054,7 +1067,7 @@ class T5Stack(T5PreTrainedModel):
 
             # layer_outputs is a tuple with:
             # hidden-states, key-value-states, (self-attention position bias), (self-attention weights), (cross-attention position bias), (cross-attention weights)
-            if use_cache is False:
+            if not use_cache:
                 layer_outputs = layer_outputs[:1] + (None,) + layer_outputs[1:]
 
             hidden_states, present_key_value_state = layer_outputs[:2]

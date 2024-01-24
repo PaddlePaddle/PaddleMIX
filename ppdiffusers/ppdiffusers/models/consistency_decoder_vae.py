@@ -21,8 +21,8 @@ from paddle import nn
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..schedulers import ConsistencyDecoderScheduler
 from ..utils import BaseOutput
+from ..utils.accelerate_utils import apply_forward_hook
 from ..utils.paddle_utils import randn_tensor
-from ..utils.ppaccelerate_utils import apply_forward_hook
 from .attention_processor import (
     ADDED_KV_ATTENTION_PROCESSORS,
     CROSS_ATTENTION_PROCESSORS,

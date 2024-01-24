@@ -128,6 +128,9 @@ class AutoencoderKL(ModelMixin, ConfigMixin, FromOriginalVAEMixin):
         self.tile_latent_min_size = int(sample_size / (2 ** (len(_up_block_out_channels) - 1)))
         self.tile_overlap_factor = 0.25
 
+        # NOTE: register_to_config, suitable for pipelines
+        self.register_to_config(block_out_channels=_up_block_out_channels)
+
     def _set_gradient_checkpointing(self, module, value=False):
         if isinstance(module, (Encoder, Decoder)):
             module.gradient_checkpointing = value

@@ -36,14 +36,7 @@ from einops import rearrange
 # from huggingface_hub import create_repo, upload_folder
 from paddle.io.DataLoader import Dataset, RandomSampler
 from PIL import Image
-
-# import paddle.nn.functional as F
-# import paddle.distributed.fleet.utils.recompute
-from ppaccelerate import Accelerator
-from ppaccelerate.logging import get_logger
-from ppaccelerate.utils import ProjectConfiguration, set_seed
 from tqdm.auto import tqdm
-from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
 import ppdiffusers
 from ppdiffusers import (
@@ -52,8 +45,15 @@ from ppdiffusers import (
     StableVideoDiffusionPipeline,
     UNetSpatioTemporalConditionModel,
 )
+
+# import paddle.nn.functional as F
+# import paddle.distributed.fleet.utils.recompute
+from ppdiffusers.accelerate import Accelerator
+from ppdiffusers.accelerate.logging import get_logger
+from ppdiffusers.accelerate.utils import ProjectConfiguration, set_seed
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import EMAModel
+from ppdiffusers.transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 from ppdiffusers.utils import (
     check_min_version,
     deprecate,
