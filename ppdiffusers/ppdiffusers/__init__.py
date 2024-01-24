@@ -167,6 +167,9 @@ else:
             "HeunDiscreteScheduler",
             "IPNDMScheduler",
             "KarrasVeScheduler",
+            "ScoreSdeVpScheduler",  # new add
+            "PreconfigEulerAncestralDiscreteScheduler",  # new add
+            "PreconfigLMSDiscreteScheduler",  # new add
             "KDPM2AncestralDiscreteScheduler",
             "KDPM2DiscreteScheduler",
             "LCMScheduler",
@@ -494,9 +497,12 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             KDPM2DiscreteScheduler,
             LCMScheduler,
             PNDMScheduler,
+            PreconfigEulerAncestralDiscreteScheduler,
+            PreconfigLMSDiscreteScheduler,
             RePaintScheduler,
             SchedulerMixin,
             ScoreSdeVeScheduler,
+            ScoreSdeVpScheduler,
             UnCLIPScheduler,
             UniPCMultistepScheduler,
             VQDiffusionScheduler,
