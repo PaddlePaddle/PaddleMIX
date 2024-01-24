@@ -173,6 +173,9 @@ class T5DenseGatedActDense(nn.Layer):
         # To make 8bit quantization work for google/flan-t5-xxl, self.wo is kept in float32.
         # See https://github.com/huggingface/transformers/issues/20287
         # we also make sure the weights are not in `int8` in case users will force `_keep_in_fp32_modules` to be `None``
+        # NOTE: (yujun06) NEW ADDED, make sure self.wo.weight.dtype is float32
+        if isinstance(self.wo.weight, paddle.Tensor) and self.wo.weight.dtype != paddle.float32:
+            self.wo.to(dtype=paddle.float32)
         if (
             isinstance(self.wo.weight, paddle.Tensor)
             and hidden_states.dtype != self.wo.weight.dtype
