@@ -351,11 +351,11 @@ class TextualInversionLoaderMixin:
         To load a Textual Inversion embedding vector in 🤗 Diffusers format:
 
         ```py
-        from diffusers import StableDiffusionPipeline
-        import torch
+        from ppdiffusers import StableDiffusionPipeline
+        import paddle
 
         model_id = "runwayml/stable-diffusion-v1-5"
-        pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16).to("cuda")
+        pipe = StableDiffusionPipeline.from_pretrained(model_id, paddle_dtype=paddle.float16)
 
         pipe.load_textual_inversion("sd-concepts-library/cat-toy")
 
@@ -370,11 +370,11 @@ class TextualInversionLoaderMixin:
         locally:
 
         ```py
-        from diffusers import StableDiffusionPipeline
-        import torch
+        from ppdiffusers import StableDiffusionPipeline
+        import paddle
 
         model_id = "runwayml/stable-diffusion-v1-5"
-        pipe = StableDiffusionPipeline.from_pretrained(model_id, torch_dtype=torch.float16).to("cuda")
+        pipe = StableDiffusionPipeline.from_pretrained(model_id, paddle_dtype=paddle.float16)
 
         pipe.load_textual_inversion("./charturnerv2.pt", token="charturnerv2")
 

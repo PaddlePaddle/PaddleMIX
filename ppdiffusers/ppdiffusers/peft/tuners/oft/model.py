@@ -39,7 +39,7 @@ class OFTModel(LycorisTuner):
 
     Example:
         ```py
-        >>> from diffusers import StableDiffusionPipeline
+        >>> from ppdiffusers import StableDiffusionPipeline
         >>> from ppdiffusers.peft import OFTModel, OFTConfig
 
         >>> config_te = OFTConfig(

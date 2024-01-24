@@ -1167,7 +1167,7 @@ class DiffusionPipeline(ConfigMixin):
         Examples:
 
         ```py
-        >>> from diffusers import (
+        >>> from ppdiffusers import (
         ...     StableDiffusionPipeline,
         ...     StableDiffusionImg2ImgPipeline,
         ...     StableDiffusionInpaintPipeline,
