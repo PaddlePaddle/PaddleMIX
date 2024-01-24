@@ -250,21 +250,21 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _omegaconf_available = False
 
-_tensorboard_available = importlib.util.find_spec("tensorboard")
+_tensorboard_available = importlib.util.find_spec("tensorboard") is not None
 try:
     _tensorboard_version = importlib_metadata.version("tensorboard")
     logger.debug(f"Successfully imported tensorboard version {_tensorboard_version}")
 except importlib_metadata.PackageNotFoundError:
     _tensorboard_available = False
 
-_visualdl_available = importlib.util.find_spec("visualdl")
+_visualdl_available = importlib.util.find_spec("visualdl") is not None
 try:
     _visualdl_version = importlib_metadata.version("visualdl")
     logger.debug(f"Successfully imported visualdl version {_visualdl_version}")
 except importlib_metadata.PackageNotFoundError:
     _visualdl_available = False
 
-_einops_available = importlib.util.find_spec("einops")
+_einops_available = importlib.util.find_spec("einops") is not None
 try:
     try:
         import einops
@@ -277,7 +277,7 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _einops_available = False
 
-_compel_available = importlib.util.find_spec("compel")
+_compel_available = importlib.util.find_spec("compel") is not None
 try:
     _compel_version = importlib_metadata.version("compel")
     logger.debug(f"Successfully imported compel version {_compel_version}")
