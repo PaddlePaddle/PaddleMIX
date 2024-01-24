@@ -15,9 +15,9 @@
 import numpy as np
 import paddle
 
-from ...utils import is_ppinvisible_watermark_available
+from ...utils import is_pp_invisible_watermark_available
 
-if is_ppinvisible_watermark_available():
+if is_pp_invisible_watermark_available():
     from ppimwatermark import WatermarkEncoder
 
 

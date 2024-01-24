@@ -740,7 +740,7 @@ class ModelMixin(nn.Layer):
         Example:
 
         ```py
-        from diffusers import UNet2DConditionModel
+        from ppdiffusers import UNet2DConditionModel
 
         unet = UNet2DConditionModel.from_pretrained("runwayml/stable-diffusion-v1-5", subfolder="unet")
         ```

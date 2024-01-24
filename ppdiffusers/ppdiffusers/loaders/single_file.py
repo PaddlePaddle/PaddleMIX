@@ -109,7 +109,7 @@ class FromSingleFileMixin:
         Examples:
 
         ```py
-        >>> from diffusers import StableDiffusionPipeline
+        >>> from ppdiffusers import StableDiffusionPipeline
 
         >>> # Download pipeline from huggingface.co and cache.
         >>> pipeline = StableDiffusionPipeline.from_single_file(
@@ -125,7 +125,6 @@ class FromSingleFileMixin:
         ...     "https://huggingface.co/runwayml/stable-diffusion-v1-5/blob/main/v1-5-pruned-emaonly.ckpt",
         ...     torch_dtype=torch.float16,
         ... )
-        >>> pipeline.to("cuda")
         ```
         """
         # TODO
@@ -340,7 +339,7 @@ class FromOriginalVAEMixin:
         Examples:
 
         ```py
-        from diffusers import AutoencoderKL
+        from ppdiffusers import AutoencoderKL
 
         url = "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/blob/main/vae-ft-mse-840000-ema-pruned.safetensors"  # can also be local file
         model = AutoencoderKL.from_single_file(url)
@@ -525,7 +524,7 @@ class FromOriginalControlnetMixin:
         Examples:
 
         ```py
-        from diffusers import StableDiffusionControlNetPipeline, ControlNetModel
+        from ppdiffusers import StableDiffusionControlNetPipeline, ControlNetModel
 
         url = "https://huggingface.co/lllyasviel/ControlNet-v1-1/blob/main/control_v11p_sd15_canny.pth"  # can also be a local path
         model = ControlNetModel.from_single_file(url)

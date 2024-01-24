@@ -250,21 +250,21 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _omegaconf_available = False
 
-_tensorboard_available = importlib.util.find_spec("tensorboard")
+_tensorboard_available = importlib.util.find_spec("tensorboard") is not None
 try:
     _tensorboard_version = importlib_metadata.version("tensorboard")
     logger.debug(f"Successfully imported tensorboard version {_tensorboard_version}")
 except importlib_metadata.PackageNotFoundError:
     _tensorboard_available = False
 
-_visualdl_available = importlib.util.find_spec("visualdl")
+_visualdl_available = importlib.util.find_spec("visualdl") is not None
 try:
     _visualdl_version = importlib_metadata.version("visualdl")
     logger.debug(f"Successfully imported visualdl version {_visualdl_version}")
 except importlib_metadata.PackageNotFoundError:
     _visualdl_available = False
 
-_einops_available = importlib.util.find_spec("einops")
+_einops_available = importlib.util.find_spec("einops") is not None
 try:
     try:
         import einops
@@ -277,7 +277,7 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _einops_available = False
 
-_compel_available = importlib.util.find_spec("compel")
+_compel_available = importlib.util.find_spec("compel") is not None
 try:
     _compel_version = importlib_metadata.version("compel")
     logger.debug(f"Successfully imported compel version {_compel_version}")
@@ -308,12 +308,12 @@ try:
 except importlib_metadata.PackageNotFoundError:
     _paddlesde_available = False
 
-_ppinvisible_watermark_available = importlib.util.find_spec("imwatermark") is not None
+_pp_invisible_watermark_available = importlib.util.find_spec("pp-invisible-watermark") is not None
 try:
-    _invisible_watermark_version = importlib_metadata.version("ppinvisible-watermark")
-    logger.debug(f"Successfully imported ppinvisible-watermark version {_invisible_watermark_version}")
+    _invisible_watermark_version = importlib_metadata.version("pp-invisible-watermark")
+    logger.debug(f"Successfully imported pp-invisible-watermark version {_invisible_watermark_version}")
 except importlib_metadata.PackageNotFoundError:
-    _ppinvisible_watermark_available = False
+    _pp_invisible_watermark_available = False
 
 
 _peft_available = str2bool(os.getenv("USE_PEFT_BACKEND", False))
@@ -428,14 +428,9 @@ def is_paddlesde_available():
     return _paddlesde_available
 
 
-# This is pytorch packge
-def is_invisible_watermark_available():
-    return False  # _invisible_watermark_available
-
-
-# This is pytorch packge
-def is_ppinvisible_watermark_available():
-    return _ppinvisible_watermark_available
+# This is paddle packge
+def is_pp_invisible_watermark_available():
+    return _pp_invisible_watermark_available
 
 
 def is_peft_available():
@@ -586,8 +581,8 @@ PADDLESDE_IMPORT_ERROR = """
 """
 
 # docstyle-ignore
-INVISIBLE_WATERMARK_IMPORT_ERROR = """
-{0} requires the ppinvisible-watermark library but it was not found in your environment. You can install it with pip: `pip install ppinvisible-watermark>=0.2.0`
+PP_INVISIBLE_WATERMARK_IMPORT_ERROR = """
+{0} requires the pp-invisible-watermark library but it was not found in your environment. You can install it with pip: `pip install pp-invisible-watermark>=0.2.0`
 """
 
 
@@ -616,7 +611,7 @@ BACKENDS_MAPPING = OrderedDict(
         ("compel", (is_compel_available, COMPEL_IMPORT_ERROR)),
         ("ftfy", (is_ftfy_available, FTFY_IMPORT_ERROR)),
         ("paddlesde", (is_paddlesde_available, PADDLESDE_IMPORT_ERROR)),
-        ("invisible_watermark", (is_ppinvisible_watermark_available, INVISIBLE_WATERMARK_IMPORT_ERROR)),
+        ("pp_invisible_watermark", (is_pp_invisible_watermark_available, PP_INVISIBLE_WATERMARK_IMPORT_ERROR)),
     ]
 )
 
@@ -706,6 +701,10 @@ def is_paddle_version(operation: str, version: str):
         version (`str`):
             A string version of Paddle
     """
+    if not _paddle_available:
+        return False
+    if _paddle_version == "0.0.0":
+        return True
     return compare_versions(parse(_paddle_version), operation, version)
 
 
@@ -720,6 +719,8 @@ def is_paddlenlp_version(operation: str, version: str):
     """
     if not _paddlenlp_available:
         return False
+    if _paddlenlp_version == "0.0.0" or "post" in _paddlenlp_version:
+        return True
     return compare_versions(parse(_paddlenlp_version), operation, version)
 
 
@@ -748,9 +749,9 @@ def is_accelerate_version(operation: str, version: str):
     """
     if not _accelerate_available:
         return False
-    import ppdiffusers
+    from ppdiffusers.accelerate import __version__
 
-    return compare_versions(parse(ppdiffusers.accelerate.__version__), operation, version)
+    return compare_versions(parse(__version__), operation, version)
 
 
 def is_k_diffusion_version(operation: str, version: str):
