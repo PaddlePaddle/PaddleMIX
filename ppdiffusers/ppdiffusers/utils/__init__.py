@@ -99,7 +99,6 @@ from .import_utils import (
     is_fastdeploy_available,
     is_ftfy_available,
     is_inflect_available,
-    is_invisible_watermark_available,
     is_k_diffusion_available,
     is_k_diffusion_version,
     is_librosa_available,
@@ -112,6 +111,7 @@ from .import_utils import (
     is_paddlenlp_version,
     is_paddlesde_available,
     is_peft_available,
+    is_pp_invisible_watermark_available,
     is_ppxformers_available,
     is_safetensors_available,
     is_scipy_available,
@@ -186,25 +186,12 @@ from .testing_utils import (  # load_image,
 logger = get_logger(__name__)
 
 
-def check_pppeft_version(min_version: str = "") -> None:
-    r"""
-    Checks if the version of PP-PEFT is compatible.
-
-    Args:
-        version (`str`):
-            The version of PEFT to check against.
-    """
-    if not is_peft_available():
-        raise ValueError("PP-PEFT is not installed. Please install it with `pip install pppeft`")
-
-
 def check_min_version(min_version):
+    if __version__ == "0.0.0":
+        return
     if version.parse(__version__) < version.parse(min_version):
         if "dev" in min_version:
-            error_message = (
-                "This example requires a source install from HuggingFace diffusers (see "
-                "`https://huggingface.co/docs/diffusers/installation#install-from-source`),"
-            )
+            error_message = "This example requires a source install from PaddleMIX ppdiffusers"
         else:
             error_message = f"This example requires a minimum version of {min_version},"
         error_message += f" but the version found is {__version__}.\n"
