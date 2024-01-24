@@ -358,7 +358,7 @@ class EVA02ForPretrainModelTest(ModelTesterMixin, unittest.TestCase):
                 first = model(**self._prepare_for_class(inputs_dict, model_class))
 
             with tempfile.TemporaryDirectory() as tmpdirname:
-                model.save_pretrained(tmpdirname)
+                model.save_pretrained(tmpdirname, save_function=paddle.save)
                 model = model_class.from_pretrained(tmpdirname)
                 model.eval()
                 with paddle.no_grad():
