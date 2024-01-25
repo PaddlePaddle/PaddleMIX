@@ -434,7 +434,7 @@ class GPT2PretrainedModel(PretrainedModel):
                 else:
                     state_dict[name] = state_dict.pop(deprecated_name)
             loaded_keys = list(state_dict.keys())
-        return state_dict, loaded_keys
+        return loaded_keys
 
     @classmethod
     def _get_name_mappings(cls, config):

@@ -228,7 +228,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
         **kwargs,
     ):
         # load from deprecated state dict
-        state_dict, loaded_keys = cls._update_deprecated_state_dict(state_dict, loaded_keys, model)
+        loaded_keys = cls._update_deprecated_state_dict(state_dict, loaded_keys, model)
         return super()._load_pretrained_model(
             model,
             state_dict,
@@ -260,7 +260,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
                     name = name.replace(old_name, new_name)
                 state_dict[name] = state_dict.pop(deprecated_name)
             loaded_keys = list(state_dict.keys())
-        return state_dict, loaded_keys
+        return loaded_keys
 
     @property
     def is_gradient_checkpointing(self) -> bool:
