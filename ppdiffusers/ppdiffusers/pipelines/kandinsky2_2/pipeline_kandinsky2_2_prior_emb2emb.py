@@ -1,4 +1,4 @@
-# Copyright 2023 The HuggingFace Team. All rights reserved.
+# Copyright (c) 2024 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
 from typing import List, Optional, Union
 
-import numpy as np
 import paddle
 import PIL.Image
 
@@ -28,8 +26,9 @@ from ppdiffusers.transformers import (
 
 from ...models import PriorTransformer
 from ...schedulers import UnCLIPScheduler
-from ...utils import BaseOutput, logging, replace_example_docstring
+from ...utils import logging, replace_example_docstring
 from ...utils.paddle_utils import randn_tensor
+from ..kandinsky import KandinskyPriorPipelineOutput
 from ..pipeline_utils import DiffusionPipeline
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -37,20 +36,25 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 EXAMPLE_DOC_STRING = """
     Examples:
         ```py
-        >>> from ppdiffusers import KandinskyPipeline, KandinskyPriorPipeline
+        >>> from ppdiffusers import KandinskyV22Pipeline, KandinskyV22PriorEmb2EmbPipeline
         >>> import paddle
 
-        >>> pipe_prior = KandinskyPriorPipeline.from_pretrained("kandinsky-community/kandinsky-2-1-prior")
+        >>> pipe_prior = KandinskyPriorPipeline.from_pretrained(
+        ...     "kandinsky-community/kandinsky-2-2-prior", paddle_dtype=paddle.float16
+        ... )
 
         >>> prompt = "red cat, 4k photo"
-        >>> out = pipe_prior(prompt)
-        >>> image_emb = out.image_embeds
-        >>> negative_image_emb = out.negative_image_embeds
+        >>> img = load_image(
+        ...     "https://huggingface.co/datasets/hf-internal-testing/diffusers-images/resolve/main"
+        ...     "/kandinsky/cat.png"
+        ... )
+        >>> image_emb, nagative_image_emb = pipe_prior(prompt, image=img, strength=0.2).to_tuple()
 
-        >>> pipe = KandinskyPipeline.from_pretrained("kandinsky-community/kandinsky-2-1")
+        >>> pipe = KandinskyPipeline.from_pretrained(
+        ...     "kandinsky-community/kandinsky-2-2-decoder, paddle_dtype=paddle.float16"
+        ... )
 
         >>> image = pipe(
-        ...     prompt,
         ...     image_embeds=image_emb,
         ...     negative_image_embeds=negative_image_emb,
         ...     height=768,
@@ -65,15 +69,15 @@ EXAMPLE_DOC_STRING = """
 EXAMPLE_INTERPOLATE_DOC_STRING = """
     Examples:
         ```py
-        >>> from ppdiffusers import KandinskyPriorPipeline, KandinskyPipeline
+        >>> from ppdiffusers import KandinskyV22PriorEmb2EmbPipeline, KandinskyV22Pipeline
         >>> from ppdiffusers.utils import load_image
         >>> import PIL
 
         >>> import paddle
         >>> from torchvision import transforms
 
-        >>> pipe_prior = KandinskyPriorPipeline.from_pretrained(
-        ...     "kandinsky-community/kandinsky-2-1-prior", paddle_dtype=paddle.float16
+        >>> pipe_prior = KandinskyV22PriorPipeline.from_pretrained(
+        ...     "kandinsky-community/kandinsky-2-2-prior", paddle_dtype=paddle.float16
         ... )
 
         >>> img1 = load_image(
@@ -90,10 +94,11 @@ EXAMPLE_INTERPOLATE_DOC_STRING = """
         >>> weights = [0.3, 0.3, 0.4]
         >>> image_emb, zero_image_emb = pipe_prior.interpolate(images_texts, weights)
 
-        >>> pipe = KandinskyPipeline.from_pretrained("kandinsky-community/kandinsky-2-1", paddle_dtype=paddle.float16)
+        >>> pipe = KandinskyV22Pipeline.from_pretrained(
+        ...     "kandinsky-community/kandinsky-2-2-decoder", paddle_dtype=paddle.float16
+        ... )
 
         >>> image = pipe(
-        ...     "",
         ...     image_embeds=image_emb,
         ...     negative_image_embeds=zero_image_emb,
         ...     height=768,
@@ -106,23 +111,7 @@ EXAMPLE_INTERPOLATE_DOC_STRING = """
 """
 
 
-@dataclass
-class KandinskyPriorPipelineOutput(BaseOutput):
-    """
-    Output class for KandinskyPriorPipeline.
-
-    Args:
-        image_embeds (`paddle.Tensor`)
-            clip image embeddings for text prompt
-        negative_image_embeds (`List[PIL.Image.Image]` or `np.ndarray`)
-            clip image embeddings for unconditional tokens
-    """
-
-    image_embeds: Union[paddle.Tensor, np.ndarray]
-    negative_image_embeds: Union[paddle.Tensor, np.ndarray]
-
-
-class KandinskyPriorPipeline(DiffusionPipeline):
+class KandinskyV22PriorEmb2EmbPipeline(DiffusionPipeline):
     """
     Pipeline for generating image prior for Kandinsky
 
@@ -143,8 +132,8 @@ class KandinskyPriorPipeline(DiffusionPipeline):
             A scheduler to be used in combination with `prior` to generate image embedding.
     """
 
+    model_cpu_offload_seq = "text_encoder->image_encoder->prior"
     _exclude_from_cpu_offload = ["prior"]
-    model_cpu_offload_seq = "text_encoder->prior"
 
     def __init__(
         self,
@@ -165,6 +154,15 @@ class KandinskyPriorPipeline(DiffusionPipeline):
             image_encoder=image_encoder,
             image_processor=image_processor,
         )
+
+    def get_timesteps(self, num_inference_steps, strength):
+        # get the original timestep using init_timestep
+        init_timestep = min(int(num_inference_steps * strength), num_inference_steps)
+
+        t_start = max(num_inference_steps - init_timestep, 0)
+        timesteps = self.scheduler.timesteps[t_start:]
+
+        return timesteps, num_inference_steps - t_start
 
     @paddle.no_grad()
     @replace_example_docstring(EXAMPLE_INTERPOLATE_DOC_STRING)
@@ -190,7 +188,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
                 list of weights for each condition in `images_and_prompts`
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
-            num_inference_steps (`int`, *optional*, defaults to 25):
+            num_inference_steps (`int`, *optional*, defaults to 100):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
@@ -234,18 +232,10 @@ class KandinskyPriorPipeline(DiffusionPipeline):
                     latents=latents,
                     negative_prompt=negative_prior_prompt,
                     guidance_scale=guidance_scale,
-                ).image_embeds
+                ).image_embeds.unsqueeze(0)
 
             elif isinstance(cond, (PIL.Image.Image, paddle.Tensor)):
-                if isinstance(cond, PIL.Image.Image):
-                    cond = (
-                        self.image_processor(cond, return_tensors="pd")
-                        .pixel_values[0]
-                        .unsqueeze(0)
-                        .cast(dtype=self.image_encoder.dtype)
-                    )
-
-                image_emb = self.image_encoder(cond)["image_embeds"]
+                image_emb = self._encode_image(cond, num_images_per_prompt=num_images_per_prompt).unsqueeze(0)
 
             else:
                 raise ValueError(
@@ -254,33 +244,50 @@ class KandinskyPriorPipeline(DiffusionPipeline):
 
             image_embeddings.append(image_emb * weight)
 
-        image_emb = paddle.concat(image_embeddings).sum(axis=0, keepdim=True)
+        image_emb = paddle.concat(image_embeddings).sum(axis=0)
 
-        out_zero = self(
-            negative_prompt,
-            num_inference_steps=num_inference_steps,
-            num_images_per_prompt=num_images_per_prompt,
-            generator=generator,
-            latents=latents,
-            negative_prompt=negative_prior_prompt,
-            guidance_scale=guidance_scale,
-        )
-        zero_image_emb = out_zero.negative_image_embeds if negative_prompt == "" else out_zero.image_embeds
+        return KandinskyPriorPipelineOutput(image_embeds=image_emb, negative_image_embeds=paddle.randn_like(image_emb))
 
-        return KandinskyPriorPipelineOutput(image_embeds=image_emb, negative_image_embeds=zero_image_emb)
+    def _encode_image(
+        self,
+        image: Union[paddle.Tensor, List[PIL.Image.Image]],
+        num_images_per_prompt,
+    ):
+        if not isinstance(image, paddle.Tensor):
+            image = self.image_processor(image, return_tensors="pd").pixel_values.cast(dtype=self.image_encoder.dtype)
 
-    # Copied from ppdiffusers.pipelines.unclip.pipeline_unclip.UnCLIPPipeline.prepare_latents
-    def prepare_latents(self, shape, dtype, generator, latents, scheduler):
-        if latents is None:
-            latents = randn_tensor(shape, generator=generator, dtype=dtype)
+        image_emb = self.image_encoder(image)["image_embeds"]  # B, D
+        image_emb = image_emb.repeat_interleave(num_images_per_prompt, axis=0)
+
+        return image_emb
+
+    def prepare_latents(self, emb, timestep, batch_size, num_images_per_prompt, dtype, generator=None):
+        emb = emb.cast(dtype=dtype)
+
+        batch_size = batch_size * num_images_per_prompt
+
+        init_latents = emb
+
+        if batch_size > init_latents.shape[0] and batch_size % init_latents.shape[0] == 0:
+            additional_image_per_prompt = batch_size // init_latents.shape[0]
+            init_latents = paddle.concat([init_latents] * additional_image_per_prompt, axis=0)
+        elif batch_size > init_latents.shape[0] and batch_size % init_latents.shape[0] != 0:
+            raise ValueError(
+                f"Cannot duplicate `image` of batch size {init_latents.shape[0]} to {batch_size} text prompts."
+            )
         else:
-            if latents.shape != list(shape):
-                raise ValueError(f"Unexpected latents shape, got {latents.shape}, expected {list(shape)}")
-            latents = latents.cast(dtype)
+            init_latents = paddle.concat([init_latents], axis=0)
 
-        latents = latents * scheduler.init_noise_sigma
+        shape = init_latents.shape
+        noise = randn_tensor(shape, generator=generator, dtype=dtype)
+
+        # get latents
+        init_latents = self.scheduler.add_noise(init_latents, noise, timestep)
+        latents = init_latents
+
         return latents
 
+    # Copied from ppdiffusers.pipelines.kandinsky.pipeline_kandinsky_prior.KandinskyPriorPipeline.get_zero_embed
     def get_zero_embed(self, batch_size=1):
         zero_img = paddle.zeros(
             [1, 3, self.image_encoder.config.image_size, self.image_encoder.config.image_size]
@@ -289,6 +296,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
         zero_image_emb = zero_image_emb.tile([batch_size, 1])
         return zero_image_emb
 
+    # Copied from ppdiffusers.pipelines.kandinsky.pipeline_kandinsky_prior.KandinskyPriorPipeline._encode_prompt
     def _encode_prompt(
         self,
         prompt,
@@ -306,7 +314,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
             return_tensors="pd",
         )
         text_input_ids = text_inputs.input_ids
-        text_mask = text_inputs.attention_mask.bool()
+        text_mask = text_inputs.attention_mask
 
         untruncated_ids = self.tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
@@ -356,7 +364,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
                 truncation=True,
                 return_tensors="pd",
             )
-            uncond_text_mask = uncond_input.attention_mask.bool()
+            uncond_text_mask = uncond_input.attention_mask
             negative_prompt_embeds_text_encoder_output = self.text_encoder(uncond_input.input_ids)
 
             negative_prompt_embeds = negative_prompt_embeds_text_encoder_output.text_embeds
@@ -392,13 +400,14 @@ class KandinskyPriorPipeline(DiffusionPipeline):
     def __call__(
         self,
         prompt: Union[str, List[str]],
+        image: Union[paddle.Tensor, List[paddle.Tensor], PIL.Image.Image, List[PIL.Image.Image]],
+        strength: float = 0.3,
         negative_prompt: Optional[Union[str, List[str]]] = None,
         num_images_per_prompt: int = 1,
         num_inference_steps: int = 25,
         generator: Optional[Union[paddle.Generator, List[paddle.Generator]]] = None,
-        latents: Optional[paddle.Tensor] = None,
         guidance_scale: float = 4.0,
-        output_type: Optional[str] = "pd",
+        output_type: Optional[str] = "pd",  # pt only
         return_dict: bool = True,
     ):
         """
@@ -407,20 +416,22 @@ class KandinskyPriorPipeline(DiffusionPipeline):
         Args:
             prompt (`str` or `List[str]`):
                 The prompt or prompts to guide the image generation.
+            strength (`float`, *optional*, defaults to 0.8):
+                Conceptually, indicates how much to transform the reference `emb`. Must be between 0 and 1. `image`
+                will be used as a starting point, adding more noise to it the larger the `strength`. The number of
+                denoising steps depends on the amount of noise initially added.
+            emb (`paddle.Tensor`):
+                The image embedding.
             negative_prompt (`str` or `List[str]`, *optional*):
                 The prompt or prompts not to guide the image generation. Ignored when not using guidance (i.e., ignored
                 if `guidance_scale` is less than `1`).
             num_images_per_prompt (`int`, *optional*, defaults to 1):
                 The number of images to generate per prompt.
-            num_inference_steps (`int`, *optional*, defaults to 25):
+            num_inference_steps (`int`, *optional*, defaults to 100):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
                 One or a list of [paddle generator(s)] to make generation deterministic.
-            latents (`paddle.Tensor`, *optional*):
-                Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
-                generation. Can be used to tweak the same generation with different prompts. If not provided, a latents
-                tensor will ge generated by sampling using the supplied random `generator`.
             guidance_scale (`float`, *optional*, defaults to 4.0):
                 Guidance scale as defined in [Classifier-Free Diffusion Guidance](https://arxiv.org/abs/2207.12598).
                 `guidance_scale` is defined as `w` of equation 2. of [Imagen
@@ -463,21 +474,42 @@ class KandinskyPriorPipeline(DiffusionPipeline):
             prompt, num_images_per_prompt, do_classifier_free_guidance, negative_prompt
         )
 
+        if not isinstance(image, List):
+            image = [image]
+
+        if isinstance(image[0], paddle.Tensor):
+            image = paddle.concat(image, axis=0)
+
+        if isinstance(image, paddle.Tensor) and image.ndim == 2:
+            # allow user to pass image_embeds directly
+            image_embeds = image.repeat_interleave(num_images_per_prompt, axis=0)
+        elif isinstance(image, paddle.Tensor) and image.ndim != 4:
+            raise ValueError(
+                f" if pass `image` as pytorch tensor, or a list of pytorch tensor, please make sure each tensor has shape [batch_size, channels, height, width], currently {image[0].unsqueeze(0).shape}"
+            )
+        else:
+            image_embeds = self._encode_image(image, num_images_per_prompt)
+
         # prior
         self.scheduler.set_timesteps(num_inference_steps)
-        prior_timesteps_tensor = self.scheduler.timesteps
 
-        embedding_dim = self.prior.config.embedding_dim
-
+        latents = image_embeds
+        timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength)
+        latent_timestep = timesteps[:1].tile(
+            [
+                batch_size,
+            ]
+        )
         latents = self.prepare_latents(
-            [batch_size, embedding_dim],
+            latents,
+            latent_timestep,
+            batch_size // num_images_per_prompt,
+            num_images_per_prompt,
             prompt_embeds.dtype,
             generator,
-            latents,
-            self.scheduler,
         )
 
-        for i, t in enumerate(self.progress_bar(prior_timesteps_tensor)):
+        for i, t in enumerate(self.progress_bar(timesteps)):
             # expand the latents if we are doing classifier free guidance
             latent_model_input = paddle.concat([latents] * 2) if do_classifier_free_guidance else latents
 
@@ -495,10 +527,10 @@ class KandinskyPriorPipeline(DiffusionPipeline):
                     predicted_image_embedding_text - predicted_image_embedding_uncond
                 )
 
-            if i + 1 == prior_timesteps_tensor.shape[0]:
+            if i + 1 == timesteps.shape[0]:
                 prev_timestep = None
             else:
-                prev_timestep = prior_timesteps_tensor[i + 1]
+                prev_timestep = timesteps[i + 1]
 
             latents = self.scheduler.step(
                 predicted_image_embedding,
@@ -515,7 +547,6 @@ class KandinskyPriorPipeline(DiffusionPipeline):
         # if negative prompt has been defined, we retrieve split the image embedding into two
         if negative_prompt is None:
             zero_embeds = self.get_zero_embed(latents.shape[0])
-
         else:
             image_embeddings, zero_embeds = image_embeddings.chunk(2)
 

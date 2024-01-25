@@ -419,7 +419,7 @@ class WuerstchenDecoderPipeline(DiffusionPipeline):
 
         if output_type not in ["pd", "np", "pil", "latent"]:
             raise ValueError(
-                f"Only the output types `pt`, `np`, `pil` and `latent` are supported not output_type={output_type}"
+                f"Only the output types `pd`, `np`, `pil` and `latent` are supported not output_type={output_type}"
             )
 
         if not output_type == "latent":
@@ -435,7 +435,6 @@ class WuerstchenDecoderPipeline(DiffusionPipeline):
             images = latents
 
         # Offload all models
-        self.maybe_free_model_hooks()
 
         if not return_dict:
             return images

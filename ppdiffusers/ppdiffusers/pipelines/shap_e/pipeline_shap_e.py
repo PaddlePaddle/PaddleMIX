@@ -246,7 +246,7 @@ class ShapEPipeline(DiffusionPipeline):
         embedding_dim = self.prior.config.embedding_dim
 
         latents = self.prepare_latents(
-            (batch_size, num_embeddings * embedding_dim),
+            [batch_size, num_embeddings * embedding_dim],
             prompt_embeds.dtype,
             generator,
             latents,
