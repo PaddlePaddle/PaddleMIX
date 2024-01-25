@@ -865,16 +865,29 @@ class XLMRobertaForCausalLM(XLMRobertaPreTrainedModel):
             logger.warning("If you want to use `XLMRobertaLMHeadModel` as a standalone, add `is_decoder=True.`")
 
         self.roberta = XLMRobertaModel(config, add_pooling_layer=False)
-        self.lm_head = XLMRobertaLMHead(config, input_embeddings=self.roberta.embeddings.word_embeddings.weight)
+
+        if config.tie_word_embeddings:
+            input_embeddings = self.roberta.embeddings.word_embeddings.weight
+        else:
+            input_embeddings = None
+        self.lm_head = XLMRobertaLMHead(config, input_embeddings=input_embeddings)
 
         # Initialize weights and apply final processing
         self.post_init()
 
     def get_output_embeddings(self):
-        return self.lm_head.decoder
+        if self.config.tie_word_embeddings:
+            return None
+        else:
+            return self.lm_head.decoder
 
     def set_output_embeddings(self, new_embeddings):
-        self.lm_head.decoder = new_embeddings
+        if self.config.tie_word_embeddings:
+            logger.warning(
+                "`set_output_embeddings` method is called when `config.tie_word_embeddings=True`. This is not expected. We will do nothing!"
+            )
+        else:
+            self.lm_head.decoder = new_embeddings
 
     def forward(
         self,
@@ -1027,16 +1040,29 @@ class XLMRobertaForMaskedLM(XLMRobertaPreTrainedModel):
             )
 
         self.roberta = XLMRobertaModel(config, add_pooling_layer=False)
-        self.lm_head = XLMRobertaLMHead(config, input_embeddings=self.roberta.embeddings.word_embeddings.weight)
+
+        if config.tie_word_embeddings:
+            input_embeddings = self.roberta.embeddings.word_embeddings.weight
+        else:
+            input_embeddings = None
+        self.lm_head = XLMRobertaLMHead(config, input_embeddings=input_embeddings)
 
         # Initialize weights and apply final processing
         self.post_init()
 
     def get_output_embeddings(self):
-        return self.lm_head.decoder
+        if self.config.tie_word_embeddings:
+            return None
+        else:
+            return self.lm_head.decoder
 
     def set_output_embeddings(self, new_embeddings):
-        self.lm_head.decoder = new_embeddings
+        if self.config.tie_word_embeddings:
+            logger.warning(
+                "`set_output_embeddings` method is called when `config.tie_word_embeddings=True`. This is not expected. We will do nothing!"
+            )
+        else:
+            self.lm_head.decoder = new_embeddings
 
     def forward(
         self,

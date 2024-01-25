@@ -434,6 +434,19 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
             variant=variant,
         )
 
+    @staticmethod
+    def prepare_attention_mask_for_generation(input_ids, pad_token_id, eos_token_id):
+        # NOTE: we use 2D attention mask!
+        is_pad_token_in_inputs_ids = (pad_token_id is not None) and paddle.any(input_ids == pad_token_id).item()
+        is_pad_token_not_equal_to_eos_token_id = (eos_token_id is None) or (
+            (eos_token_id is not None) and (pad_token_id != eos_token_id)
+        )
+        if is_pad_token_in_inputs_ids and is_pad_token_not_equal_to_eos_token_id:
+            attention_mask = (input_ids != pad_token_id).cast("int64")
+        else:
+            attention_mask = paddle.ones_like(input_ids, dtype="int64")
+        return attention_mask
+
 
 class PretrainedConfig(PPNLPPretrainedConfig):
     pass

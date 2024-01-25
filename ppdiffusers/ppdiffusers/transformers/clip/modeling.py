@@ -437,6 +437,9 @@ class CLIPPreTrainedModel(PretrainedModel):
         },
     }
 
+    def can_generate(self) -> bool:
+        return False
+
     @classmethod
     def _get_name_mappings(cls, config):
         mappings = []

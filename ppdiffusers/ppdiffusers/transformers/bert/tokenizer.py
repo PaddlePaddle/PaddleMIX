@@ -18,4 +18,8 @@ __all__ = ["BertTokenizer"]
 
 
 class BertTokenizer(PPNLPBertTokenizer):
-    pass
+    model_input_names = [
+        "input_ids",
+        "token_type_ids",
+        "attention_mask",
+    ]

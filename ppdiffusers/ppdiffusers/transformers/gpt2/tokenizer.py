@@ -11,17 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from paddlenlp.transformers import *
 
-# overrided model
-from .auto import *
-from .bert import *
-from .clip import *
-from .gpt2 import *
+from paddlenlp.transformers.gpt.tokenizer import GPTTokenizer
 
-# overrided model_utils
-from .model_utils import ModuleUtilsMixin, PretrainedConfig, PretrainedModel
+__all__ = ["GPT2Tokenizer"]
 
-# overrided model
-from .t5 import *
-from .xlm_roberta import *
+
+class GPT2Tokenizer(GPTTokenizer):
+    model_input_names = [
+        "input_ids",
+        "attention_mask",
+    ]
