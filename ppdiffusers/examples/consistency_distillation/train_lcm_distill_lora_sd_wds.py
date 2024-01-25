@@ -32,7 +32,7 @@ import paddle.amp
 import paddle.nn as nn
 import paddle.nn.functional as F
 import paddle.vision.transforms.functional as TF
-import webdataset as wds
+import ppwebdataset as wds
 from braceexpand import braceexpand
 from paddle.distributed.fleet.utils.hybrid_parallel_util import (
     fused_allreduce_gradients,
@@ -40,14 +40,14 @@ from paddle.distributed.fleet.utils.hybrid_parallel_util import (
 from paddle.io.dataloader.collate import default_collate_fn as default_collate
 from paddle.optimizer import AdamW
 from paddle.vision import transforms
-from safetensors.numpy import save_file
-from tqdm.auto import tqdm
-from webdataset.tariterators import (
+from ppwebdataset.tariterators import (
     base_plus_ext,
     tar_file_expander,
     url_opener,
     valid_sample,
 )
+from safetensors.numpy import save_file
+from tqdm.auto import tqdm
 
 import ppdiffusers
 from ppdiffusers import (
