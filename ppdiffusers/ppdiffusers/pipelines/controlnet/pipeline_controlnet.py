@@ -635,7 +635,7 @@ class StableDiffusionControlNetPipeline(
             and not image_is_np_list
         ):
             raise TypeError(
-                f"image must be passed and be one of PIL image, numpy array, torch tensor, list of PIL images, list of numpy arrays or list of torch tensors, but is {type(image)}"
+                f"image must be passed and be one of PIL image, numpy array, paddle tensor, list of PIL images, list of numpy arrays or list of paddle tensors, but is {type(image)}"
             )
 
         if image_is_pil:

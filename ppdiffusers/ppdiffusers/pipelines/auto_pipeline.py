@@ -215,7 +215,7 @@ class AutoPipelineForText2Image(ConfigMixin):
 
         ```
         Some weights of UNet2DConditionModel were not initialized from the model checkpoint at runwayml/stable-diffusion-v1-5 and are newly initialized because the shapes did not match:
-        - conv_in.weight: found shape torch.Size([320, 4, 3, 3]) in the checkpoint and torch.Size([320, 9, 3, 3]) in the model instantiated
+        - conv_in.weight: found shape [320, 4, 3, 3] in the checkpoint and [320, 9, 3, 3] in the model instantiated
         You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
         ```
 
@@ -262,7 +262,7 @@ class AutoPipelineForText2Image(ConfigMixin):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
                 guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
                 information.
-            device_map (`str` or `Dict[str, Union[int, str, torch.device]]`, *optional*):
+            device_map (`str` or `Dict[str, Union[int, str, paddle.device]]`, *optional*):
                 A map that specifies where each submodule should go. It doesn’t need to be defined for each
                 parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
                 same device.
@@ -279,10 +279,10 @@ class AutoPipelineForText2Image(ConfigMixin):
                 If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
                 the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
                 when there is some disk offload.
-            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
+            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if paddle version >= 2.5.0 else `False`):
                 Speed up model loading only loading the pretrained weights and not initializing the weights. This also
                 tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
-                Only supported for PyTorch >= 1.9.0. If you are using an older version of PyTorch, setting this
+                Only supported for Paddle >= 2.5.0. If you are using an older version of Paddle, setting this
                 argument to `True` will raise an error.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the safetensors weights are downloaded if they're available **and** if the
@@ -498,7 +498,7 @@ class AutoPipelineForImage2Image(ConfigMixin):
 
         ```
         Some weights of UNet2DConditionModel were not initialized from the model checkpoint at runwayml/stable-diffusion-v1-5 and are newly initialized because the shapes did not match:
-        - conv_in.weight: found shape torch.Size([320, 4, 3, 3]) in the checkpoint and torch.Size([320, 9, 3, 3]) in the model instantiated
+        - conv_in.weight: found shape [320, 4, 3, 3] in the checkpoint and [320, 9, 3, 3] in the model instantiated
         You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
         ```
 
@@ -545,7 +545,7 @@ class AutoPipelineForImage2Image(ConfigMixin):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
                 guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
                 information.
-            device_map (`str` or `Dict[str, Union[int, str, torch.device]]`, *optional*):
+            device_map (`str` or `Dict[str, Union[int, str, paddle.device]]`, *optional*):
                 A map that specifies where each submodule should go. It doesn’t need to be defined for each
                 parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
                 same device.
@@ -562,10 +562,10 @@ class AutoPipelineForImage2Image(ConfigMixin):
                 If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
                 the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
                 when there is some disk offload.
-            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
+            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if paddle version >= 2.5.0 else `False`):
                 Speed up model loading only loading the pretrained weights and not initializing the weights. This also
                 tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
-                Only supported for PyTorch >= 1.9.0. If you are using an older version of PyTorch, setting this
+                Only supported for Paddle >= 2.5.0. If you are using an older version of Paddle, setting this
                 argument to `True` will raise an error.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the safetensors weights are downloaded if they're available **and** if the
@@ -783,7 +783,7 @@ class AutoPipelineForInpainting(ConfigMixin):
 
         ```
         Some weights of UNet2DConditionModel were not initialized from the model checkpoint at runwayml/stable-diffusion-v1-5 and are newly initialized because the shapes did not match:
-        - conv_in.weight: found shape torch.Size([320, 4, 3, 3]) in the checkpoint and torch.Size([320, 9, 3, 3]) in the model instantiated
+        - conv_in.weight: found shape [320, 4, 3, 3] in the checkpoint and [320, 9, 3, 3] in the model instantiated
         You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
         ```
 
@@ -830,7 +830,7 @@ class AutoPipelineForInpainting(ConfigMixin):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
                 guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
                 information.
-            device_map (`str` or `Dict[str, Union[int, str, torch.device]]`, *optional*):
+            device_map (`str` or `Dict[str, Union[int, str, paddle.device]]`, *optional*):
                 A map that specifies where each submodule should go. It doesn’t need to be defined for each
                 parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
                 same device.
@@ -847,10 +847,10 @@ class AutoPipelineForInpainting(ConfigMixin):
                 If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
                 the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
                 when there is some disk offload.
-            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
+            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if paddle version >= 2.5.0 else `False`):
                 Speed up model loading only loading the pretrained weights and not initializing the weights. This also
                 tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
-                Only supported for PyTorch >= 1.9.0. If you are using an older version of PyTorch, setting this
+                Only supported for Paddle >= 2.5.0. If you are using an older version of Paddle, setting this
                 argument to `True` will raise an error.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the safetensors weights are downloaded if they're available **and** if the

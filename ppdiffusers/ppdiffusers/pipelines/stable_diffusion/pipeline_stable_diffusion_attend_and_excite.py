@@ -62,7 +62,7 @@ EXAMPLE_DOC_STRING = """
 
         >>> token_indices = [2, 5]
         >>> seed = 6141
-        >>> generator = paddle.Generator("cuda").manual_seed(seed)
+        >>> generator = paddle.Generator().manual_seed(seed)
 
         >>> images = pipe(
         ...     prompt=prompt,

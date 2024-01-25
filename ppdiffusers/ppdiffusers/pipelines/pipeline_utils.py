@@ -651,12 +651,11 @@ class DiffusionPipeline(ConfigMixin):
         Here are the ways to call `to`:
 
         - `to(dtype, silence_dtype_warnings=False) → DiffusionPipeline` to return a pipeline with the specified
-          [`dtype`](https://pytorch.org/docs/stable/tensor_attributes.html#paddle.dtype)
+          [`dtype`].
         - `to(device, silence_dtype_warnings=False) → DiffusionPipeline` to return a pipeline with the specified
-          [`device`](https://pytorch.org/docs/stable/tensor_attributes.html#torch.device)
+          [`device`].
         - `to(device=None, dtype=None, silence_dtype_warnings=False) → DiffusionPipeline` to return a pipeline with the
-          specified [`device`](https://pytorch.org/docs/stable/tensor_attributes.html#torch.device) and
-          [`dtype`](https://pytorch.org/docs/stable/tensor_attributes.html#paddle.dtype)
+          specified [`device`] and [`dtype`].
 
         Arguments:
             dtype (`paddle.dtype`, *optional*):
@@ -845,7 +844,7 @@ class DiffusionPipeline(ConfigMixin):
                 Mirror source to resolve accessibility issues if you’re downloading a model in China. We do not
                 guarantee the timeliness or safety of the source, and you should refer to the mirror site for more
                 information.
-            device_map (`str` or `Dict[str, Union[int, str, torch.device]]`, *optional*):
+            device_map (`str` or `Dict[str, Union[int, str, paddle.device]]`, *optional*):
                 A map that specifies where each submodule should go. It doesn’t need to be defined for each
                 parameter/buffer name; once a given module name is inside, every submodule of it will be sent to the
                 same device.
@@ -862,10 +861,10 @@ class DiffusionPipeline(ConfigMixin):
                 If `True`, temporarily offloads the CPU state dict to the hard drive to avoid running out of CPU RAM if
                 the weight of the CPU state dict + the biggest shard of the checkpoint does not fit. Defaults to `True`
                 when there is some disk offload.
-            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if torch version >= 1.9.0 else `False`):
+            low_cpu_mem_usage (`bool`, *optional*, defaults to `True` if paddle version >= 2.5.0 else `False`):
                 Speed up model loading only loading the pretrained weights and not initializing the weights. This also
                 tries to not use more than 1x model size in CPU memory (including peak memory) while loading the model.
-                Only supported for PyTorch >= 1.9.0. If you are using an older version of PyTorch, setting this
+                Only supported for Paddle >= 2.5.0. If you are using an older version of Paddle, setting this
                 argument to `True` will raise an error.
             use_safetensors (`bool`, *optional*, defaults to `None`):
                 If set to `None`, the safetensors weights are downloaded if they're available **and** if the

@@ -318,7 +318,7 @@ class AudioLDM2Pipeline(DiffusionPipeline):
                 )
                 text_input_ids = text_inputs.input_ids
                 attention_mask = text_inputs.attention_mask
-                untruncated_ids = tokenizer(prompt, padding="longest", return_tensors="pt").input_ids
+                untruncated_ids = tokenizer(prompt, padding="longest", return_tensors="pd").input_ids
 
                 if untruncated_ids.shape[-1] >= text_input_ids.shape[-1] and not paddle.equal_all(
                     text_input_ids, untruncated_ids
@@ -883,8 +883,6 @@ class AudioLDM2Pipeline(DiffusionPipeline):
                     if callback is not None and i % callback_steps == 0:
                         step_idx = i // getattr(self.scheduler, "order", 1)
                         callback(step_idx, t, latents)
-
-        self.maybe_free_model_hooks()
 
         # 8. Post-processing
         if not output_type == "latent":

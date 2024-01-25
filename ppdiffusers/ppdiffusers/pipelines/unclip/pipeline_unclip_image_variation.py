@@ -295,7 +295,7 @@ class UnCLIPImageVariationPipeline(DiffusionPipeline):
 
         if decoder_latents is None:
             decoder_latents = self.prepare_latents(
-                (batch_size, num_channels_latents, height, width),
+                [batch_size, num_channels_latents, height, width],
                 text_encoder_hidden_states.dtype,
                 generator,
                 decoder_latents,

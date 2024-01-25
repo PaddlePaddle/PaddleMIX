@@ -461,7 +461,6 @@ class ImportanceRaySampler(nn.Layer):
         upper_ = paddle.take_along_axis(upper, axis=-2, indices=inds)
 
         ts = lower_ + (upper_ - lower_) * t_rand
-        # torch.sort vs paddle.sort, use sorted values
         ts = paddle.sort(ts, axis=-2)
         return ts
 

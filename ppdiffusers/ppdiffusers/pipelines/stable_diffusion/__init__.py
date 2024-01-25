@@ -138,10 +138,8 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     else:
         from .clip_image_project_model import CLIPImageProjection
         from .pipeline_cycle_diffusion import CycleDiffusionPipeline
-        from .pipeline_stable_diffusion import (
-            StableDiffusionPipeline,
-            StableDiffusionPipelineOutput,
-        )
+        from .pipeline_output import StableDiffusionPipelineOutput
+        from .pipeline_stable_diffusion import StableDiffusionPipeline
         from .pipeline_stable_diffusion_attend_and_excite import (
             StableDiffusionAttendAndExcitePipeline,
         )
