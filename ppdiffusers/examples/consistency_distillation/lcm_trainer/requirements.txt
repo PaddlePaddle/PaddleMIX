@@ -1,0 +1,3 @@
+ppdififusers>=0.19.4
+paddlenlp>=2.7.1
+visualdl

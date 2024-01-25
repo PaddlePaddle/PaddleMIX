@@ -35,7 +35,7 @@ if __name__ == "__main__":
         def test_audio_chat(self):
 
             paddle.seed(1024)
-            task = Appflow(app="audio_chat", models=["whisper", "THUDM/chatglm-6b", "speech"])
+            task = Appflow(app="audio_chat", models=["conformer_u2pp_online_wenetspeech", "THUDM/chatglm-6b", "speech"])
             audio_file_url = "https://bj.bcebos.com/v1/paddlenlp/models/community/paddlemix/appflow/test/test_audio/zh.wav"
 
             prompt = (

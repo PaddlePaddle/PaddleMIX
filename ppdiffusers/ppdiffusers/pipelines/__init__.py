@@ -83,6 +83,7 @@ else:
         IFPipeline,
         IFSuperResolutionPipeline,
     )
+    from .img_to_video import ImgToVideoSDPipeline
     from .kandinsky import (
         KandinskyCombinedPipeline,
         KandinskyImg2ImgCombinedPipeline,
@@ -153,6 +154,7 @@ else:
         VersatileDiffusionPipeline,
         VersatileDiffusionTextToImagePipeline,
     )
+    from .video_to_video import VideoToVideoModelscopePipeline
     from .vq_diffusion import VQDiffusionPipeline
 
 try:
