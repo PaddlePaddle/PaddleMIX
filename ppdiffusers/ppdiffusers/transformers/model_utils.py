@@ -245,7 +245,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
         )
 
     @classmethod
-    def _update_deprecated_state_dict(cls, state_dict, loaded_keys, model):
+    def _update_deprecated_state_dict(cls, state_dict, loaded_keys=None, model=None):
         _deprecated_dict = getattr(cls, "_deprecated_dict", None)
         from_deprecated_state_dict = _deprecated_dict is not None and any(
             cls._deprecated_dict.get("key", "NONE") in all_key for all_key in state_dict.keys()
