@@ -65,7 +65,7 @@ EXAMPLE_DOC_STRING = """
         >>> import numpy as np
         >>> from PIL import Image
 
-        >>> from paddlenlp.transformers import DPTFeatureExtractor, DPTForDepthEstimation
+        >>> from ppdififusers.transformers import DPTFeatureExtractor, DPTForDepthEstimation
         >>> from ppdiffusers import ControlNetModel, StableDiffusionXLControlNetImg2ImgPipeline, AutoencoderKL
         >>> from ppdiffusers.utils import load_image
 

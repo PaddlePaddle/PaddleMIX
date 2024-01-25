@@ -19,7 +19,8 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import paddle
 from einops import rearrange
-from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
+
+from ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer
 
 from ...configuration_utils import FrozenDict
 from ...models import LVDMAutoencoderKL, LVDMUNet3DModel
