@@ -12,17 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import builtins
+import contextlib
+import copy
+import functools
 import math
 import os
 from collections import OrderedDict
 from collections import abc as container_abcs
+from types import FunctionType, MethodType
 from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple, Union
 
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddle.base.dygraph.base import param_guard
-from paddle.base.framework import Parameter as ParameterBase
+
+try:
+    from paddle.base.dygraph.base import param_guard
+except ImportError:
+
+    @contextlib.contextmanager
+    def param_guard(parameters):
+        yield
+
+
+try:
+    from paddle.base.framework import Parameter as ParameterBase
+except ImportError:
+    from paddle.framework import Parameter as ParameterBase
 
 
 def str2bool(v):
@@ -276,8 +292,6 @@ if not hasattr(nn, "TorchLinear"):
             )
 
     nn.TorchLinear = TorchLinear
-
-import contextlib
 
 
 @contextlib.contextmanager
@@ -721,3 +735,48 @@ if not hasattr(nn, "ParameterDict"):
             return self
 
     nn.ParameterDict = ParameterDict
+
+
+def copy_func(f):
+    "Copy a non-builtin function (NB `copy.copy` does not work for this)"
+    if not isinstance(f, FunctionType):
+        return copy.copy(f)
+    fn = FunctionType(f.__code__, f.__globals__, f.__name__, f.__defaults__, f.__closure__)
+    fn.__kwdefaults__ = f.__kwdefaults__
+    fn.__dict__.update(f.__dict__)
+    fn.__annotations__.update(f.__annotations__)
+    fn.__qualname__ = f.__qualname__
+    return fn
+
+
+class _clsmethod:
+    def __init__(self, f):
+        self.f = f
+
+    def __get__(self, _, f_cls):
+        return MethodType(self.f, f_cls)
+
+
+# copied from https://github.com/fastai/fastcore/blob/c9b4c088d3706569c076e7c197c724730be190ab/fastcore/basics.py#L938-L954
+def patch_to(cls, as_prop=False, cls_method=False):
+    "Decorator: add `f` to `cls`"
+    if not isinstance(cls, (tuple, list)):
+        cls = (cls,)
+
+    def _inner(f):
+        for c_ in cls:
+            nf = copy_func(f)
+            nm = f.__name__
+            # `functools.update_wrapper` when passing patched function to `Pipeline`, so we do it manually
+            for o in functools.WRAPPER_ASSIGNMENTS:
+                setattr(nf, o, getattr(f, o))
+            nf.__qualname__ = f"{c_.__name__}.{nm}"
+            if cls_method:
+                # fix https://github.com/fastai/fastcore/issues/510
+                setattr(c_, nm, _clsmethod(nf))
+            else:
+                setattr(c_, nm, property(nf) if as_prop else nf)
+        # Avoid clobbering existing functions
+        return globals().get(nm, builtins.__dict__.get(nm, None))
+
+    return _inner
