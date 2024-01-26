@@ -374,6 +374,7 @@ def load_sub_model(
     paddle_dtype: paddle.dtype,
     runtime_options: Any,
     infer_configs: Any,
+    paddle_delete_passes: Any,
     model_variants: Dict[str, str],
     name: str,
     from_diffusers: bool,
@@ -436,7 +437,7 @@ def load_sub_model(
 
     if issubclass(class_obj, PaddleInferModel):
         loading_kwargs["infer_configs"] = infer_configs.get(name, None) if isinstance(infer_configs, dict) else infer_configs
-    
+        loading_kwargs["paddle_delete_pass"] = paddle_delete_passes.get(name, None) if isinstance(paddle_delete_passes, dict) else paddle_delete_passes
     
     from ppdiffusers import ModelMixin
 
@@ -451,7 +452,6 @@ def load_sub_model(
     try:
         # check if the module is in a subdirectory
         if os.path.isdir(os.path.join(cached_folder, name)):
-            # import pdb; pdb.set_trace()
             loaded_sub_model = load_method(os.path.join(cached_folder, name), **loading_kwargs)
         else:
             # else load from the root directory
@@ -938,6 +938,7 @@ class DiffusionPipeline(ConfigMixin):
         custom_revision = kwargs.pop("custom_revision", None)
         runtime_options = kwargs.pop("runtime_options", None)
         infer_configs = kwargs.pop("infer_configs", None)
+        paddle_delete_passes = kwargs.pop("paddle_delete_passes", None)
         low_cpu_mem_usage = kwargs.pop("low_cpu_mem_usage", LOW_CPU_MEM_USAGE_DEFAULT)
         use_safetensors = kwargs.pop("use_safetensors", None if is_safetensors_available() else False)
         variant = kwargs.pop("variant", None)
@@ -1118,6 +1119,7 @@ class DiffusionPipeline(ConfigMixin):
                     paddle_dtype=paddle_dtype,
                     runtime_options=runtime_options,
                     infer_configs=infer_configs,
+                    paddle_delete_passes=paddle_delete_passes,
                     model_variants=model_variants,
                     name=name,
                     from_diffusers=from_diffusers,

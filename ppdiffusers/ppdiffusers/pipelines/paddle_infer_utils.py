@@ -1051,16 +1051,17 @@ class PaddleInferModel:
                     v = v.reshape((1,))
                 # fix dtype error
                 v = v.astype("float32")
+            if isinstance(v, np.ndarray):
+                v = paddle.to_tensor(v)
             inputs[k] = v
+        input_list = []
         input_names = self.model.get_input_names()
         for i, name in enumerate(input_names):
-            input_tensor = self.model.get_input_handle(name)
             if name not in inputs:
                 raise ValueError(f"Input {name} is not in the model.")
-            input_tensor.reshape(inputs[name].shape)
-            input_tensor.copy_from_cpu(inputs[name].numpy())
+            input_list.append(inputs[name])
         # do the inference
-        self.model.run()
+        self.model.run(input_list)
         results = []
         # get out data from output tensor
         output_names = self.model.get_output_names()
@@ -1075,6 +1076,7 @@ class PaddleInferModel:
         model_path: Union[str, Path],
         params_path: Union[str, Path] = None,
         infer_config: Optional["paddle_infer.Congig"] = None,
+        paddle_delete_pass: Optional[List] = None,
     ):
         """
         Loads an FastDeploy Inference Model with fastdeploy.RuntimeOption
@@ -1092,6 +1094,9 @@ class PaddleInferModel:
             infer_config = paddle_infer.Config()
         infer_config.set_prog_file(model_path)
         infer_config.set_params_file(params_path)
+        if paddle_delete_pass is not None:
+            for pass_name in paddle_delete_pass:
+                infer_config.delete_pass(pass_name)
         return paddle_infer.create_predictor(infer_config)
 
     def _save_pretrained(
@@ -1167,6 +1172,7 @@ class PaddleInferModel:
         force_download: bool = False,
         cache_dir: Optional[str] = None,
         infer_config: Optional['paddle_infer.Config'] = None,
+        paddle_delete_pass: Optional[List] = None,
         from_hf_hub: Optional[bool] = False,
         proxies: Optional[Dict] = None,
         resume_download: bool = False,
@@ -1220,6 +1226,7 @@ class PaddleInferModel:
                 model_path,
                 params_path,
                 infer_config=infer_config,
+                paddle_delete_pass=paddle_delete_pass,
             )
             kwargs["model_save_dir"] = Path(pretrained_model_name_or_path)
         # load model from hub or paddle bos
@@ -1271,6 +1278,7 @@ class PaddleInferModel:
         model_file_name: Optional[str] = None,
         params_file_name: Optional[str] = None,
         infer_configs: Optional['paddle_infer.Config'] = None,
+        paddle_delete_pass: Optional[List] = None,
         **kwargs,
     ):
         from_hf_hub = kwargs.pop("from_hf_hub", FROM_HF_HUB)
@@ -1302,6 +1310,7 @@ class PaddleInferModel:
             force_download=force_download,
             cache_dir=cache_dir,
             infer_config=infer_configs,
+            paddle_delete_pass=paddle_delete_pass,
             from_hf_hub=from_hf_hub,
             proxies=proxies,
             resume_download=resume_download,

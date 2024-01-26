@@ -18,6 +18,8 @@ import time
 import paddle
 import random
 
+
+
 # isort: split
 import paddle.inference as paddle_infer
 import numpy as np
@@ -36,19 +38,19 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model_dir",
-        default="runwayml/stable-diffusion-v1-5@fastdeploy",
+        default="static_model/stable-diffusion-xl-base-1.0",
         help="The model directory of diffusion_model.",
     )
     parser.add_argument(
         "--inference_steps",
         type=int,
-        default=50,
+        default=30,
         help="The number of unet inference steps.",
     )
     parser.add_argument(
         "--benchmark_steps",
         type=int,
-        default=1,
+        default=5,
         help="The number of performance benchmark steps.",
     )
     parser.add_argument(
@@ -78,25 +80,12 @@ def parse_arguments():
         default="text2img",
         choices=[
             "text2img",
-            "img2img",
-            "inpaint",
-            "all",
         ],
-        help="The task can be one of [text2img, img2img, inpaint, pix2pix, all]. ",
-    )
-    parser.add_argument(
-        "--parse_prompt_type",
-        type=str,
-        default="lpw",
-        choices=[
-            "raw",
-            "lpw",
-        ],
-        help="The parse_prompt_type can be one of [raw, lpw]. ",
+        help="only [text2img]. ",
     )
     parser.add_argument("--use_fp16", type=strtobool, default=True, help="Wheter to use FP16 mode")
     parser.add_argument("--use_bf16", type=strtobool, default=False, help="Wheter to use BF16 mode")
-    parser.add_argument("--device_id", type=int, default=0, help="The selected gpu id. -1 means use cpu")
+    parser.add_argument("--device_id", type=int, default=7, help="The selected gpu id. -1 means use cpu")
     parser.add_argument(
         "--scheduler",
         type=str,
@@ -135,6 +124,21 @@ def parse_arguments():
 
     return parser.parse_args()
 
+
+'''
+关于trt动态shape的使用:
+为了使用trt动态shape，paddle_inference提供了三种方式来设置shape信息：
+1. 直接使用set_trt_dynamic_shape_info设置输入的shape范围，后面op的shape自动推导。但是这种方式潜在很多未知bug,极不推荐使用。
+2. 离线收集：首先在静态图模式下，（下面接口的tune==True）使用collect_shape_range_info收集各OP的shape范围到静态图目录下得到
+shape_range_info.pbtxt，然后开启trt,使用enable_tuned_tensorrt_dynamic_shape(path_shape_file, True)使用收集到的shape信息。
+强烈推荐使用这种方式。
+3. 在线收集：直接开启trt 使用enable_tuned_tensorrt_dynamic_shape()接口，接口参数为空，会自动收集输入的shape信息，但这种方式
+比离线收集要慢。
+
+
+'''
+
+
 def create_paddle_inference_runtime(
     model_dir="",
     model_name="",
@@ -142,11 +146,10 @@ def create_paddle_inference_runtime(
     dynamic_shape=None,
     precision_mode=paddle_infer.PrecisionType.Half,
     device_id=0,
-    disable_paddle_trt_ops=[],
-    disable_paddle_pass=[],
     workspace=24*1024*1024*1024,
-    tune=False,
-):
+    tune=False, #离线收集shape信息
+    auto_tune=False, #在线收集信息
+):  
     config = paddle_infer.Config()
     config.enable_new_executor()
     config.enable_memory_optim()
@@ -156,27 +159,26 @@ def create_paddle_inference_runtime(
     if device_id != -1:
         config.use_gpu()
         config.enable_use_gpu(memory_pool_init_size_mb=2000, device_id=device_id, precision_mode=precision_mode)
-    for pass_name in disable_paddle_pass:
-        config.delete_pass(pass_name)
     if use_trt:
         config.enable_tensorrt_engine(workspace_size=workspace,
                                       precision_mode=precision_mode,
                                       max_batch_size=1,
                                       min_subgraph_size=3,
-                                      uuse_static=True)
+                                      use_static=True,)
         config.enable_tensorrt_memory_optim()
-        config.enable_tuned_tensorrt_dynamic_shape(shape_file, True)
-        cache_file = os.path.join(model_dir, model_name, "_opt_cache/")
-        config.set_optim_cache_dir(cache_file)
-        if precision_mode != paddle_infer.PrecisionType.Half:
-            only_fp16_passes = [
-                "trt_cross_multihead_matmul_fuse_pass",
-                "trt_flash_multihead_matmul_fuse_pass",
-                "preln_elementwise_groupnorm_act_pass",
-                "elementwise_groupnorm_act_pass",
-            ]
-            for curr_pass in only_fp16_passes:
-                config.delete_pass(curr_pass)
+        if dynamic_shape is None:
+            if auto_tune:
+                config.enable_tuned_tensorrt_dynamic_shape()
+            else:
+                if not os.path.exists(shape_file):
+                    raise ValueError(f"shape_range_info.pbtxt not found in {model_dir}/{model_name}, you should set dyanmic_shape or collect shape_range_info by auto_tune firstly.")
+                config.enable_tuned_tensorrt_dynamic_shape(shape_file, True)
+        else:
+            if dynamic_shape is None:
+                raise ValueError("dynamic_shape should be set when use trt when you don's have shape-file.")
+            config.set_trt_dynamic_shape_info(dynamic_shape[0], dynamic_shape[1], dynamic_shape[2])
+        cache_path =  f"{model_dir}/{model_name}/_opt_cache"
+        config.set_optim_cache_dir(cache_path)
     return config
 
 def main(args):
@@ -196,108 +198,120 @@ def main(args):
     unet_in_channels = 4
     bs = 2
 
-    text_encoder_dynamic_shape = {
-        "input_ids": {
-            "min_shape": [1, text_encoder_max_length],
-            "max_shape": [1, text_encoder_max_length],
-            "opt_shape": [1, text_encoder_max_length],
-        }
+    text_encoder_dynamic_min_shape = {
+        "input_ids": [1, text_encoder_max_length],
+    }
+    text_encoder_dynamic_max_shape = {
+        "input_ids": [1, text_encoder_max_length],
+    }
+    text_encoder_dynamic_opt_shape = {
+        "input_ids": [1, text_encoder_max_length],
     }
 
-    text_encoder_2_dynamic_shape = {
-        "input_ids": {
-            "min_shape": [1, text_encoder_max_length],
-            "max_shape": [1, text_encoder_max_length],
-            "opt_shape": [1, text_encoder_max_length],
-        }
+    text_encoder_dynamic_shape = [text_encoder_dynamic_min_shape, text_encoder_dynamic_max_shape, text_encoder_dynamic_opt_shape]
+
+    text_encoder_2_dynamic_min_shape = {
+        "input_ids": [1, text_encoder_max_length],
+    }
+    text_encoder_2_dynamic_max_shape = {
+        "input_ids": [1, text_encoder_max_length],
+    }
+    text_encoder_2_dynamic_opt_shape = {
+        "input_ids": [1, text_encoder_max_length],
     }
 
-    vae_encoder_dynamic_shape = {
-        "sample": {
-            "min_shape": [1, 3, min_image_size, min_image_size],
-            "max_shape": [1, 3, max_image_size, max_image_size],
-            "opt_shape": [1, 3, min_image_size, min_image_size],
-        }
-    }
+    text_encoder_2_dynamic_shape = [text_encoder_2_dynamic_min_shape, text_encoder_2_dynamic_max_shape, text_encoder_2_dynamic_opt_shape]
 
-    vae_decoder_dynamic_shape = {
-        "latent_sample": {
-            "min_shape": [1, vae_in_channels, min_image_size // 8, min_image_size // 8],
-            "max_shape": [1, vae_in_channels, max_image_size // 8, max_image_size // 8],
-            "opt_shape": [1, vae_in_channels, min_image_size // 8, min_image_size // 8],
-        }
+    vae_encoder_dynamic_min_shape = {
+        "sample": [1, 3, min_image_size // 8, min_image_size // 8],
     }
+    vae_encoder_dynamic_max_shape = {
+        "sample": [1, 3, max_image_size // 8, max_image_size // 8],
+    }
+    vae_encoder_dynamic_opt_shape = {
+        "sample": [1, 3, min_image_size // 8, min_image_size // 8],
+    }
+    vae_encoder_dynamic_shape = [vae_encoder_dynamic_min_shape, vae_encoder_dynamic_max_shape, vae_encoder_dynamic_opt_shape]
 
-    unet_dynamic_shape = {
-        "sample": {
-            "min_shape": [
-                1,
-                unet_in_channels,
-                min_image_size // 8,
-                min_image_size // 8,
-            ],
-            "max_shape": [
-                bs,
-                unet_in_channels,
-                max_image_size // 8,
-                max_image_size // 8,
-            ],
-            "opt_shape": [
-                2,
-                unet_in_channels,
-                min_image_size // 8,
-                min_image_size // 8,
-            ],
-        },
-        "timestep": {
-            "min_shape": [1],
-            "max_shape": [1],
-            "opt_shape": [1],
-        },
-        "encoder_hidden_states": {
-            "min_shape": [1, text_encoder_max_length, hidden_states],
-            "max_shape": [bs, unet_max_length, hidden_states],
-            "opt_shape": [2, text_encoder_max_length, hidden_states],
-        },
-        "text_embeds": {
-            "min_shape": [1, 1280],
-            "max_shape": [bs, 1280],
-            "opt_shape": [2, 1280],
-        },
-        "time_ids": {
-            "min_shape": [1, 6],
-            "max_shape": [bs, 6],
-            "opt_shape": [2, 6],
-        },
+
+    vae_decoder_dynamic_min_shape = {
+        "latent_sample": [1, vae_in_channels, min_image_size // 8, min_image_size // 8],
     }
+    vae_decoder_dynamic_max_shape = {
+        "latent_sample": [1, vae_in_channels, min_image_size // 8, min_image_size // 8],
+    }
+    vae_decoder_dynamic_opt_shape = {
+        "latent_sample": [1, vae_in_channels, min_image_size // 8, min_image_size // 8],
+    }
+    vae_decoder_dynamic_shape = [vae_decoder_dynamic_min_shape, vae_decoder_dynamic_max_shape, vae_decoder_dynamic_opt_shape]
+    
+    unet_min_input_shape ={
+        "sample": [1, unet_in_channels, min_image_size // 8, min_image_size // 8],
+        "timestep": [1],
+        "encoder_hidden_states": [1, text_encoder_max_length, hidden_states],
+        "text_embeds": [1, 1280],
+        "time_ids": [1, 6],
+    }
+    unet_max_input_shape ={
+        "sample": [bs, unet_in_channels, max_image_size // 8, max_image_size // 8],
+        "timestep": [1],
+        "encoder_hidden_states": [bs, unet_max_length, hidden_states],
+        "text_embeds": [bs, 1280],
+        "time_ids": [bs, 6],
+    }
+    unet_opt_input_shape ={
+        "sample": [2, unet_in_channels, min_image_size // 8, min_image_size // 8],
+        "timestep": [1],
+        "encoder_hidden_states": [2, text_encoder_max_length, hidden_states],
+        "text_embeds": [2, 1280],
+        "time_ids": [2, 6],
+    }
+    unet_input_shape=[unet_min_input_shape, unet_max_input_shape, unet_opt_input_shape]
     # 4. Init runtime
-    disable_paddle_pass=['auto_mixed_precision_pass']
+    only_fp16_passes = [
+                "trt_cross_multihead_matmul_fuse_pass",
+                "trt_flash_multihead_matmul_fuse_pass",
+                "preln_elementwise_groupnorm_act_pass",
+                "elementwise_groupnorm_act_pass",
+    
+    ]
+    no_need_passes = [
+        'trt_prompt_tuning_embedding_eltwise_layernorm_fuse_pass',
+        'add_support_int8_pass',
+        'auto_mixed_precision_pass',
+    ]
+    paddle_delete_passes = dict(
+        text_encoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
+        text_encoder_2=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
+        vae_encoder=only_fp16_passes + [] if args.use_fp16 else [],
+        vae_decoder=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
+        unet=only_fp16_passes + no_need_passes if not args.use_fp16 else no_need_passes,
+    )
     infer_configs = dict(
-        text_encoder=create_paddle_inference_runtime(
-        model_dir=args.model_dir,
-        use_trt=False,
-        model_name="text_encoder",
-        dynamic_shape=text_encoder_dynamic_shape,
-        precision_mode=paddle_infer.PrecisionType.Half,
-        device_id=7,
-        disable_paddle_trt_ops=["range", "lookup_table_v2"],
-        tune=False),
+            text_encoder=create_paddle_inference_runtime(
+            model_dir=args.model_dir,
+            use_trt=False,
+            model_name="text_encoder",
+            dynamic_shape=None,
+            precision_mode=paddle_infer.PrecisionType.Half,
+            device_id=args.device_id,
+            tune=False,
+        ),
         text_encoder_2=create_paddle_inference_runtime(
             model_dir=args.model_dir,
             use_trt=False,
             model_name="text_encoder_2",
-            dynamic_shape=text_encoder_dynamic_shape,
+            dynamic_shape=None,
             precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=7,
-            disable_paddle_trt_ops=["range", "lookup_table_v2"],
-            tune=False
+            device_id=args.device_id,
+            tune=False,
         ),
         vae_encoder=create_paddle_inference_runtime(
             model_dir=args.model_dir,
             model_name="vae_encoder",
             use_trt=False,
             precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=7,
+            device_id=args.device_id,
             tune=False
         ),
         vae_decoder=create_paddle_inference_runtime(
@@ -305,171 +319,69 @@ def main(args):
             model_name="vae_decoder",
             use_trt=False,
             precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=7,
-            disable_paddle_pass=disable_paddle_pass,
+            device_id=args.device_id,
             tune=False
         ),
         unet=create_paddle_inference_runtime(
             model_dir=args.model_dir,
             model_name="unet",
-            use_trt=False,
+            use_trt=True,
             precision_mode=paddle_infer.PrecisionType.Half,
-            device_id=7,
-            tune=False
+            device_id=args.device_id,
+            dynamic_shape=None,
+            tune=False,
         ),
     )
     pipe = PaddleInferStableDiffusionXLPipeline.from_pretrained(
         args.model_dir,
         infer_configs=infer_configs,
+        paddle_delete_passes=paddle_delete_passes,
     )
     pipe.set_progress_bar_config(disable=True)
     # pipe.change_scheduler(args.scheduler)
-    parse_prompt_type = args.parse_prompt_type
     width = args.width
     height = args.height
+    folder = f"infer_fp16" if args.use_fp16 else f"infer_fp32"
+    os.makedirs(folder, exist_ok=True)
+    if args.task_name in ["text2img", "all"]:
+        # text2img
+        prompt = "beautiful scenery nature glass bottle landscape, purple galaxy bottle"
+        time_costs = []
+        negative_prompt = "text, watermark"
+        # warmup
+        pipe(
+            prompt,
+            num_inference_steps=20,
+            height=height,
+            width=width,
+            # parse_prompt_type=parse_prompt_type,
+            # infer_op_dict=infer_op_dict,
+            negative_prompt=negative_prompt
 
-    if args.infer_op == "all":
-        infer_op_list = ["zero_copy_infer", "raw"]
-    else:
-        infer_op_list = [args.infer_op]
-    if args.device == "kunlunxin_xpu" or args.backend == "paddle":
-        print("When device is kunlunxin_xpu or backend is paddle, we will use `raw` infer op.")
-        infer_op_list = ["raw"]
-
-    for infer_op in infer_op_list:
-        infer_op_dict = {
-            "vae_encoder": infer_op,
-            "vae_decoder": infer_op,
-            "text_encoder": infer_op,
-            "unet": infer_op,
-        }
-        folder = f"infer_op_{infer_op}_fp16" if args.use_fp16 else f"infer_op_{infer_op}_fp32"
-        os.makedirs(folder, exist_ok=True)
-        if args.task_name in ["text2img", "all"]:
-            # text2img
-            prompt = "beautiful scenery nature glass bottle landscape, purple galaxy bottle"
-            time_costs = []
-            negative_prompt = "text, watermark"
-            # warmup
-            # pipe(
-            #     prompt,
-            #     num_inference_steps=20,
-            #     height=height,
-            #     width=width,
-            #     # parse_prompt_type=parse_prompt_type,
-            #     # infer_op_dict=infer_op_dict,
-            #     negative_prompt=negative_prompt
-
-            # )
-            print("==> Test text2img performance.")
-            for step in trange(args.benchmark_steps):
-                start = time.time()
-                paddle.seed(seed)
-                images = pipe(
-                    prompt,
-                    output_type="pil",
-                    num_inference_steps=args.inference_steps,
-                    height=height,
-                    width=width,
-                    # parse_prompt_type=parse_prompt_type,
-                    # infer_op_dict=infer_op_dict,
-                    negative_prompt=negative_prompt
-                ).images
-                latency = time.time() - start
-                time_costs += [latency]
-                # print(f"No {step:3d} time cost: {latency:2f} s")
-            print(
-                f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-                f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
-            )
-            images[0].save(f"{folder}/text2img___1.png")
-
-        if args.task_name in ["img2img", "all"]:
-            # img2img
-            img_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/sketch-mountains-input.png"
-            init_image = load_image(img_url)
-            prompt = "A fantasy landscape, trending on artstation"
-            time_costs = []
-            # warmup
-            pipe.img2img(
+        )
+        print("==> Test text2img performance.")
+        for step in trange(args.benchmark_steps):
+            start = time.time()
+            paddle.seed(seed)
+            images = pipe(
                 prompt,
-                image=init_image,
-                num_inference_steps=20,
+                output_type="pil",
+                num_inference_steps=args.inference_steps,
                 height=height,
                 width=width,
                 # parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict,
-            )
-            print("==> Test img2img performance.")
-            for step in trange(args.benchmark_steps):
-                start = time.time()
-                paddle.seed(seed)
-                images = pipe.img2img(
-                    prompt,
-                    image=init_image,
-                    num_inference_steps=args.inference_steps,
-                    height=height,
-                    width=width,
-                    parse_prompt_type=parse_prompt_type,
-                    infer_op_dict=infer_op_dict,
-                ).images
-                latency = time.time() - start
-                time_costs += [latency]
-                # print(f"No {step:3d} time cost: {latency:2f} s")
-            print(
-                f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-                f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
-            )
-            images[0].save(f"{folder}/img2img.png")
-
-        if args.task_name in ["inpaint", "all"]:
-            img_url = (
-                "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations.png"
-            )
-            mask_url = "https://paddlenlp.bj.bcebos.com/models/community/CompVis/stable-diffusion-v1-4/overture-creations-mask.png"
-            init_image = load_image(img_url)
-            mask_image = load_image(mask_url)
-            prompt = "Face of a yellow cat, high resolution, sitting on a park bench"
-            time_costs = []
-            pipe.inpaint(
-                prompt,
-                image=init_image,
-                mask_image=mask_image,
-                num_inference_steps=20,
-                height=height,
-                width=width,
-                parse_prompt_type=parse_prompt_type,
-                infer_op_dict=infer_op_dict,
-            )
-            print("==> Test inpaint performance.")
-            for step in trange(args.benchmark_steps):
-                start = time.time()
-                paddle.seed(seed)
-                images = pipe.inpaint(
-                    prompt,
-                    image=init_image,
-                    mask_image=mask_image,
-                    num_inference_steps=args.inference_steps,
-                    height=height,
-                    width=width,
-                    parse_prompt_type=parse_prompt_type,
-                    infer_op_dict=infer_op_dict,
-                ).images
-                latency = time.time() - start
-                time_costs += [latency]
-                # print(f"No {step:3d} time cost: {latency:2f} s")
-            print(
-                f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
-                f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
-            )
-
-            images[0].save(f"{folder}/inpaint.png")
-
+                # infer_op_dict=infer_op_dict,
+                negative_prompt=negative_prompt
+            ).images
+            latency = time.time() - start
+            time_costs += [latency]
+            # print(f"No {step:3d} time cost: {latency:2f} s")
+        print(
+            f"Mean latency: {np.mean(time_costs):2f} s, p50 latency: {np.percentile(time_costs, 50):2f} s, "
+            f"p90 latency: {np.percentile(time_costs, 90):2f} s, p95 latency: {np.percentile(time_costs, 95):2f} s."
+        )
+        images[0].save(f"{folder}/text2img_30step.png")
 
 if __name__ == "__main__":
-    seed=2024
-    paddle.seed(seed)
-    np.random.seed(seed)
-    random.seed(seed)
     args = parse_arguments()
     main(args)
