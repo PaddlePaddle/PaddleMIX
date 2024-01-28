@@ -18,4 +18,7 @@ __all__ = ["T5Tokenizer"]
 
 
 class T5Tokenizer(PPNLPT5Tokenizer):
-    pass
+    model_input_names = [
+        "input_ids",
+        "attention_mask",
+    ]

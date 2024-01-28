@@ -162,8 +162,8 @@ def load_accelerator_state(
             "Unsupported optimizer map location passed, please choose one of `None`, `'cpu'`, or `'on_device'`"
         )
     if map_location is None:
-        map_location = "cpu"
-    elif map_location == "on_device":
+        map_location = "on_device"
+    elif map_location == "on_device":  # default on device
         map_location = PartialState().device
 
     input_dir = Path(input_dir)

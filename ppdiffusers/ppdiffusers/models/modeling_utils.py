@@ -100,6 +100,10 @@ def faster_set_state_dict(model, state_dict):
                 if isinstance(v_new, np.ndarray):
                     v_new = paddle.Tensor(v_new, zero_copy=True)
                 v.copy_(v_new._to(dtype=v.dtype), False)
+            else:
+                if "undefined" in str(v.place):
+                    v.initialize()
+                    logger.warning(f"key {k} is not in state_dict. And it is lazy tensor. We will initialize it.")
 
 
 class ContextManagers:

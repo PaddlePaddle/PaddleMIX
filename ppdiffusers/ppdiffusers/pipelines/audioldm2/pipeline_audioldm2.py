@@ -18,9 +18,10 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import numpy as np
 import paddle
 
-from ppdiffusers.transformers import ClapFeatureExtractor, ClapModel
-from ppdiffusers.transformers import GPTModel as GPT2Model  # TODO implement GPT2Model
 from ppdiffusers.transformers import (
+    ClapFeatureExtractor,
+    ClapModel,
+    GPT2Model,
     RobertaTokenizer,
     SpeechT5HifiGan,
     T5EncoderModel,
