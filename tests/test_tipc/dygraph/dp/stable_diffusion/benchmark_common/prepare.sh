@@ -34,7 +34,7 @@ export PYTHONPATH=$(dirname "$PWD"):$PYTHONPATH
 python -m pip install --upgrade pip -i https://mirror.baidu.com/pypi/simple
 python -m pip install einops -i https://mirror.baidu.com/pypi/simple
 python -m pip install -r ../requirements.txt
-python -m pip install --upgrade paddlenlp pybind11 regex sentencepiece tqdm visualdl attrdict easydict pyyaml -i https://mirror.baidu.com/pypi/simple
+python -m pip install --upgrade paddlenlp pybind11 regex sentencepiece tqdm visualdl attrdict easydict pyyaml paddlesde -i https://mirror.baidu.com/pypi/simple
 
 # uninstall ppdiffusers and install develop paddlemix
 python -m pip uninstall -y ppdiffusers
