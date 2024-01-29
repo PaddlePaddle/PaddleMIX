@@ -249,14 +249,14 @@ def set_weights_and_activate_adapters(model, adapter_names, weights):
 
 def check_peft_version(min_version: str) -> None:
     r"""
-    Checks if the version of PEFT is compatible.
+    Checks if the version of PP-PEFT is compatible.
 
     Args:
         version (`str`):
-            The version of PEFT to check against.
+            The version of PP-PEFT to check against.
     """
     if not is_peft_available():
-        raise ValueError("PEFT is not installed. Please install it with `pip install peft`")
+        raise ValueError("PP-PEFT is not installed. Please install it with `pip install -U ppdiffusers`")
 
     from ppdiffusers.peft import __version__ as peft_version
 

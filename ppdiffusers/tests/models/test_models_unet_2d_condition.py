@@ -721,7 +721,7 @@ class UNet2DConditionModelIntegrationTests(unittest.TestCase):
         gc.collect()
         paddle.device.cuda.empty_cache()
 
-    def get_latents(self, seed=0, shape=(4, 4, 64, 64), fp16=False):
+    def get_latents(self, seed=0, shape=[4, 4, 64, 64], fp16=False):
         dtype = paddle.float16 if fp16 else paddle.float32
         image = paddle.to_tensor(load_hf_numpy(self.get_file_format(seed, shape))).cast(dtype)
         return image
@@ -992,8 +992,9 @@ class UNet2DConditionModelIntegrationTests(unittest.TestCase):
     )
     @require_paddle_gpu
     def test_stabilityai_sd_v2_fp16(self, seed, timestep, expected_slice):
-        model = self.get_unet_model(model_id="stabilityai/stable-diffusion-2", fp16=True)
-        latents = self.get_latents(seed, shape=(4, 4, 96, 96), fp16=True)
+        # 没上传这个fp16的分支模型，所以暂时用fp32的模型测试
+        model = self.get_unet_model(model_id="stabilityai/stable-diffusion-2", fp16=False).to(dtype="float16")
+        latents = self.get_latents(seed, shape=[4, 4, 96, 96], fp16=True)
         encoder_hidden_states = self.get_encoder_hidden_states(seed, shape=(4, 77, 1024), fp16=True)
 
         timestep = paddle.to_tensor([timestep], dtype="int64")

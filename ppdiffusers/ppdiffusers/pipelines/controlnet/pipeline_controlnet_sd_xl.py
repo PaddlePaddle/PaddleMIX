@@ -47,7 +47,7 @@ from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import (
     USE_PEFT_BACKEND,
     deprecate,
-    is_ppinvisible_watermark_available,
+    is_pp_invisible_watermark_available,
     logging,
     replace_example_docstring,
 )
@@ -55,7 +55,7 @@ from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
 
-if is_ppinvisible_watermark_available():
+if is_pp_invisible_watermark_available():
     from ..stable_diffusion_xl.watermark import StableDiffusionXLWatermarker
 
 from .multicontrolnet import MultiControlNetModel
@@ -151,7 +151,7 @@ class StableDiffusionXLControlNetPipeline(
             Whether the negative prompt embeddings should always be set to 0. Also see the config of
             `stabilityai/stable-diffusion-xl-base-1-0`.
         add_watermarker (`bool`, *optional*):
-            Whether to use the [invisible_watermark](https://github.com/ShieldMnt/invisible-watermark/) library to
+            Whether to use the [pp_invisible_watermark](https://github.com/junnyu/pp-invisible-watermark/) library to
             watermark output images. If not defined, it defaults to `True` if the package is installed; otherwise no
             watermarker is used.
     """
@@ -205,7 +205,7 @@ class StableDiffusionXLControlNetPipeline(
         self.control_image_processor = VaeImageProcessor(
             vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
         )
-        add_watermarker = add_watermarker if add_watermarker is not None else is_ppinvisible_watermark_available()
+        add_watermarker = add_watermarker if add_watermarker is not None else is_pp_invisible_watermark_available()
 
         if add_watermarker:
             self.watermark = StableDiffusionXLWatermarker()
@@ -661,7 +661,6 @@ class StableDiffusionXLControlNetPipeline(
         height,
         batch_size,
         num_images_per_prompt,
-        device,
         dtype,
         do_classifier_free_guidance=False,
         guess_mode=False,
@@ -876,8 +875,8 @@ class StableDiffusionXLControlNetPipeline(
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                                A [`paddle.Generator`] to make generation deterministic.
+
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents

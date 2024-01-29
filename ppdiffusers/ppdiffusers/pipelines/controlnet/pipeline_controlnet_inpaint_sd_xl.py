@@ -43,7 +43,7 @@ from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import (
     USE_PEFT_BACKEND,
     deprecate,
-    is_ppinvisible_watermark_available,
+    is_pp_invisible_watermark_available,
     logging,
     replace_example_docstring,
 )
@@ -52,7 +52,7 @@ from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
 from .multicontrolnet import MultiControlNetModel
 
-if is_ppinvisible_watermark_available():
+if is_pp_invisible_watermark_available():
     from ppdiffusers.pipelines.stable_diffusion_xl.watermark import (
         StableDiffusionXLWatermarker,
     )
@@ -82,14 +82,14 @@ EXAMPLE_DOC_STRING = """
         >>> from ppdiffusers import StableDiffusionXLControlNetInpaintPipeline, ControlNetModel, DDIMScheduler
         >>> from ppdiffusers.utils import load_image
         >>> import numpy as np
-        >>> import torch
+        >>> import paddle
 
         >>> init_image = load_image(
         ...     "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint/boy.png"
         ... )
         >>> init_image = init_image.resize((1024, 1024))
 
-        >>> generator = paddle.Generator(device="cpu").manual_seed(1)
+        >>> generator = paddle.Generator().manual_seed(1)
 
         >>> mask_image = load_image(
         ...     "https://huggingface.co/datasets/diffusers/test-arrays/resolve/main/stable_diffusion_inpaint/boy_mask.png"
@@ -109,13 +109,11 @@ EXAMPLE_DOC_STRING = """
         >>> control_image = make_canny_condition(init_image)
 
         >>> controlnet = ControlNetModel.from_pretrained(
-        ...     "diffusers/controlnet-canny-sdxl-1.0", torch_dtype=torch.float16
+        ...     "diffusers/controlnet-canny-sdxl-1.0", paddle_dtype=paddle.float16
         ... )
         >>> pipe = StableDiffusionXLControlNetInpaintPipeline.from_pretrained(
-        ...     "stabilityai/stable-diffusion-xl-base-1.0", controlnet=controlnet, torch_dtype=torch.float16
+        ...     "stabilityai/stable-diffusion-xl-base-1.0", controlnet=controlnet, paddle_dtype=paddle.float16
         ... )
-
-        >>> pipe.enable_model_cpu_offload()
 
         >>> # generate image
         >>> image = pipe(
@@ -231,7 +229,7 @@ class StableDiffusionXLControlNetInpaintPipeline(
             vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
         )
 
-        add_watermarker = add_watermarker if add_watermarker is not None else is_ppinvisible_watermark_available()
+        add_watermarker = add_watermarker if add_watermarker is not None else is_pp_invisible_watermark_available()
 
         if add_watermarker:
             self.watermark = StableDiffusionXLWatermarker()
@@ -1088,8 +1086,7 @@ class StableDiffusionXLControlNetInpaintPipeline(
                 Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
                 [`schedulers.DDIMScheduler`], will be ignored for others.
             generator (`paddle.Generator`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/paddle.Generator.html)
-                to make generation deterministic.
+                                One or a list of [paddle generator(s)] to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents

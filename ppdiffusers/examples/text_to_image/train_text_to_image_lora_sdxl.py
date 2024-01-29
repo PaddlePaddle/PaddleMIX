@@ -37,13 +37,6 @@ from datasets import load_dataset
 # from packaging import version
 from paddle.vision import transforms
 from paddle.vision.transforms.functional import crop
-from ppaccelerate import Accelerator
-from ppaccelerate.logging import get_logger
-from ppaccelerate.utils import (
-    DistributedDataParallelKwargs,
-    ProjectConfiguration,
-    set_seed,
-)
 from tqdm.auto import tqdm
 
 import ppdiffusers
@@ -52,6 +45,13 @@ from ppdiffusers import (
     DDPMScheduler,
     StableDiffusionXLPipeline,
     UNet2DConditionModel,
+)
+from ppdiffusers.accelerate import Accelerator
+from ppdiffusers.accelerate.logging import get_logger
+from ppdiffusers.accelerate.utils import (
+    DistributedDataParallelKwargs,
+    ProjectConfiguration,
+    set_seed,
 )
 from ppdiffusers.loaders import LoraLoaderMixin
 from ppdiffusers.models.lora import LoRALinearLayer

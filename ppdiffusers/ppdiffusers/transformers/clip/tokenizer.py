@@ -18,4 +18,7 @@ __all__ = ["CLIPTokenizer"]
 
 
 class CLIPTokenizer(PPNLPCLIPTokenizer):
-    pass
+    model_input_names = [
+        "input_ids",
+        "attention_mask",
+    ]

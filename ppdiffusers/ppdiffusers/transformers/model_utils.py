@@ -228,7 +228,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
         **kwargs,
     ):
         # load from deprecated state dict
-        state_dict, loaded_keys = cls._update_deprecated_state_dict(state_dict, loaded_keys, model)
+        loaded_keys = cls._update_deprecated_state_dict(state_dict, loaded_keys, model)
         return super()._load_pretrained_model(
             model,
             state_dict,
@@ -245,7 +245,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
         )
 
     @classmethod
-    def _update_deprecated_state_dict(cls, state_dict, loaded_keys, model):
+    def _update_deprecated_state_dict(cls, state_dict, loaded_keys=None, model=None):
         _deprecated_dict = getattr(cls, "_deprecated_dict", None)
         from_deprecated_state_dict = _deprecated_dict is not None and any(
             cls._deprecated_dict.get("key", "NONE") in all_key for all_key in state_dict.keys()
@@ -260,7 +260,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
                     name = name.replace(old_name, new_name)
                 state_dict[name] = state_dict.pop(deprecated_name)
             loaded_keys = list(state_dict.keys())
-        return state_dict, loaded_keys
+        return loaded_keys
 
     @property
     def is_gradient_checkpointing(self) -> bool:
@@ -385,33 +385,41 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
         **kwargs,
     ):
         if to_diffusers:
+            # TODO, currently, we donot support to save the model in shared format.
+            max_shard_size = "99999GB"
             state_dict = self.state_dict()
             from ppdiffusers.models.modeling_pytorch_paddle_utils import (
                 convert_paddle_state_dict_to_pytorch,
             )
 
-            raw_model_name = "model_state.pdparams"
             if not is_torch_available():
                 safe_serialization = True
             if safe_serialization:
+
+                def replace_name(name):
+                    name = name.replace("model_state", "model")
+                    name = name.replace(".pdparams", ".safetensors")
+                    return name
+
                 if is_torch_available():
 
                     def save_function(state_dict, path):
-                        return torch_safe_save_file(
-                            state_dict, path.replace(raw_model_name, "model.safetensors"), metadata={"format": "pt"}
-                        )
+                        return torch_safe_save_file(state_dict, replace_name(path), metadata={"format": "pt"})
 
                 else:
 
                     def save_function(state_dict, path):
-                        return np_safe_save_file(
-                            state_dict, path.replace(raw_model_name, "model.safetensors"), metadata={"format": "pt"}
-                        )
+                        return np_safe_save_file(state_dict, replace_name(path), metadata={"format": "pt"})
 
             else:
 
+                def replace_name(name):
+                    name = name.replace("model_state", "pytorch_model")
+                    name = name.replace(".pdparams", ".bin")
+                    return name
+
                 def save_function(state_dict, path):
-                    return torch.save(state_dict, path.replace(raw_model_name, "pytorch_model.bin"))
+                    return torch.save(state_dict, replace_name(path))
 
             convert_paddle_state_dict_to_pytorch(self, state_dict)
             safe_serialization = False
@@ -425,6 +433,19 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
             safe_serialization=safe_serialization,
             variant=variant,
         )
+
+    @staticmethod
+    def prepare_attention_mask_for_generation(input_ids, pad_token_id, eos_token_id):
+        # NOTE: we use 2D attention mask!
+        is_pad_token_in_inputs_ids = (pad_token_id is not None) and paddle.any(input_ids == pad_token_id).item()
+        is_pad_token_not_equal_to_eos_token_id = (eos_token_id is None) or (
+            (eos_token_id is not None) and (pad_token_id != eos_token_id)
+        )
+        if is_pad_token_in_inputs_ids and is_pad_token_not_equal_to_eos_token_id:
+            attention_mask = (input_ids != pad_token_id).cast("int64")
+        else:
+            attention_mask = paddle.ones_like(input_ids, dtype="int64")
+        return attention_mask
 
 
 class PretrainedConfig(PPNLPPretrainedConfig):

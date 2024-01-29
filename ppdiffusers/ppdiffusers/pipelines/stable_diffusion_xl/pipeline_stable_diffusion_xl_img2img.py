@@ -45,7 +45,7 @@ from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import (
     USE_PEFT_BACKEND,
     deprecate,
-    is_ppinvisible_watermark_available,
+    is_pp_invisible_watermark_available,
     logging,
     replace_example_docstring,
     scale_lora_layers,
@@ -55,7 +55,7 @@ from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import StableDiffusionXLPipelineOutput
 
-if is_ppinvisible_watermark_available():
+if is_pp_invisible_watermark_available():
     from .watermark import StableDiffusionXLWatermarker
 
 
@@ -201,7 +201,7 @@ class StableDiffusionXLImg2ImgPipeline(
             Whether the negative prompt embeddings shall be forced to always be set to 0. Also see the config of
             `stabilityai/stable-diffusion-xl-base-1-0`.
         add_watermarker (`bool`, *optional*):
-            Whether to use the [invisible_watermark library](https://github.com/ShieldMnt/invisible-watermark/) to
+            Whether to use the [pp_invisible_watermark library](https://github.com/junnyu/pp-invisible-watermark/) to
             watermark output images. If not defined, it will default to True if the package is installed, otherwise no
             watermarker will be used.
     """
@@ -258,7 +258,7 @@ class StableDiffusionXLImg2ImgPipeline(
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
 
-        add_watermarker = add_watermarker if add_watermarker is not None else is_ppinvisible_watermark_available()
+        add_watermarker = add_watermarker if add_watermarker is not None else is_pp_invisible_watermark_available()
 
         if add_watermarker:
             self.watermark = StableDiffusionXLWatermarker()
@@ -934,8 +934,7 @@ class StableDiffusionXLImg2ImgPipeline(
                 Corresponds to parameter eta (η) in the DDIM paper: https://arxiv.org/abs/2010.02502. Only applies to
                 [`schedulers.DDIMScheduler`], will be ignored for others.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                One or a list of [torch generator(s)](https://pytorch.org/docs/stable/generated/paddle.Generator.html)
-                to make generation deterministic.
+                                One or a list of [paddle generator(s)] to make generation deterministic.
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents, sampled from a Gaussian distribution, to be used as inputs for image
                 generation. Can be used to tweak the same generation with different prompts. If not provided, a latents

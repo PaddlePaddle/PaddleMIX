@@ -20,13 +20,13 @@ from typing import Callable, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-from paddlenlp.transformers import GPTTokenizer
 
 from ppdiffusers.transformers import (
     CLIPImageProcessor,
     CLIPTextModel,
     CLIPTokenizer,
     CLIPVisionModelWithProjection,
+    GPTTokenizer,
 )
 
 from ...models import AutoencoderKL
@@ -1046,8 +1046,8 @@ class UniDiffuserPipeline(DiffusionPipeline):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers.
             generator (`paddle.Generator` or `List[paddle.Generator]`, *optional*):
-                A [`paddle.Generator`](https://pytorch.org/docs/stable/generated/paddle.Generator.html) to make
-                generation deterministic.
+                                A [`paddle.Generator`] to make generation deterministic.
+
             latents (`paddle.Tensor`, *optional*):
                 Pre-generated noisy latents sampled from a Gaussian distribution, to be used as inputs for joint
                 image-text generation. Can be used to tweak the same generation with different prompts. If not

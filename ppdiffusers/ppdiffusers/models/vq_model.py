@@ -19,7 +19,7 @@ import paddle.nn as nn
 
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..utils import BaseOutput
-from ..utils.ppaccelerate_utils import apply_forward_hook
+from ..utils.accelerate_utils import apply_forward_hook
 from .modeling_utils import ModelMixin
 from .vae import Decoder, DecoderOutput, Encoder, VectorQuantizer
 

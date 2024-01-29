@@ -38,6 +38,7 @@ NEW_MAPPING_NAMES = OrderedDict(
         ("T5", "t5"),
         ("Bert", "bert"),
         ("XLMRoberta", "xlm_roberta"),
+        ("GPT2", "gpt2"),
     ]
 )
 MAPPING_NAMES.update(NEW_MAPPING_NAMES)

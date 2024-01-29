@@ -42,7 +42,7 @@ class LoKrModel(LycorisTuner):
 
     Example:
         ```py
-        >>> from diffusers import StableDiffusionPipeline
+        >>> from ppdiffusers import StableDiffusionPipeline
         >>> from ppdiffusers.peft import LoKrModel, LoKrConfig
 
         >>> config_te = LoKrConfig(

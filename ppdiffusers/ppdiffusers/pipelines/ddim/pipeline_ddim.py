@@ -63,9 +63,8 @@ class DDIMPipeline(DiffusionPipeline):
         Args:
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
-            generator (`torch.Generator`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
-                generation deterministic.
+            generator (`paddle.Generator`, *optional*):
+                A [`paddle.Generator`] to make generation deterministic.
             eta (`float`, *optional*, defaults to 0.0):
                 Corresponds to parameter eta (η) from the [DDIM](https://arxiv.org/abs/2010.02502) paper. Only applies
                 to the [`~schedulers.DDIMScheduler`], and is ignored in other schedulers. A value of `0` corresponds to

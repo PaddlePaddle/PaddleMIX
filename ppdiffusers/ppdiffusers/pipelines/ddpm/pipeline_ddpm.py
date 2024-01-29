@@ -57,9 +57,8 @@ class DDPMPipeline(DiffusionPipeline):
         Args:
             batch_size (`int`, *optional*, defaults to 1):
                 The number of images to generate.
-            generator (`torch.Generator`, *optional*):
-                A [`torch.Generator`](https://pytorch.org/docs/stable/generated/torch.Generator.html) to make
-                generation deterministic.
+            generator (`paddle.Generator`, *optional*):
+                A [`paddle.Generator`] to make generation deterministic.
             num_inference_steps (`int`, *optional*, defaults to 1000):
                 The number of denoising steps. More denoising steps usually lead to a higher quality image at the
                 expense of slower inference.

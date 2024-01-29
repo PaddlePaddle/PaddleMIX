@@ -20,7 +20,7 @@ from paddle.distributed.fleet.utils import recompute
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..loaders import FromOriginalVAEMixin
 from ..utils import recompute_use_reentrant
-from ..utils.ppaccelerate_utils import apply_forward_hook
+from ..utils.accelerate_utils import apply_forward_hook
 from .attention_processor import (
     CROSS_ATTENTION_PROCESSORS,
     AttentionProcessor,

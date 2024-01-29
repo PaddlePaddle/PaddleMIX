@@ -21,8 +21,8 @@ from paddle import nn
 from ..configuration_utils import ConfigMixin, register_to_config
 from ..schedulers import ConsistencyDecoderScheduler
 from ..utils import BaseOutput
+from ..utils.accelerate_utils import apply_forward_hook
 from ..utils.paddle_utils import randn_tensor
-from ..utils.ppaccelerate_utils import apply_forward_hook
 from .attention_processor import (
     ADDED_KV_ATTENTION_PROCESSORS,
     CROSS_ATTENTION_PROCESSORS,
@@ -329,7 +329,7 @@ class ConsistencyDecoderVAE(ModelMixin, ConfigMixin):
         )
 
         for t in self.decoder_scheduler.timesteps:
-            model_input = paddle.concat([self.decoder_scheduler.scale_model_input(x_t, t), z], axis=1)
+            model_input = paddle.concat([self.decoder_scheduler.scale_model_input(x_t, t).cast(z.dtype), z], axis=1)
             model_output = self.decoder_unet(model_input, t).sample[:, :3, :, :]
             prev_sample = self.decoder_scheduler.step(model_output, t, x_t, generator).prev_sample
             x_t = prev_sample

@@ -19,6 +19,7 @@ from packaging import version
 
 from ..version import VERSION as __version__
 from . import initializer_utils
+from .accelerate_utils import apply_forward_hook
 from .constants import (  # fastdeploy; NEW; DIFFUSERS; PPDIFFUSERS; TRANSFORMERS; PADDLENLP
     CONFIG_NAME,
     DEPRECATED_REVISION_ARGS,
@@ -91,6 +92,8 @@ from .import_utils import (
     OptionalDependencyNotAvailable,
     _LazyModule,
     get_objects_from_module,
+    is_accelerate_available,
+    is_accelerate_version,
     is_bs4_available,
     is_einops_available,
     is_fastdeploy_available,
@@ -105,17 +108,17 @@ from .import_utils import (
     is_paddle_available,
     is_paddle_version,
     is_paddlenlp_available,
+    is_paddlenlp_version,
     is_paddlesde_available,
     is_peft_available,
-    is_ppaccelerate_available,
-    is_ppaccelerate_version,
-    is_ppinvisible_watermark_available,
+    is_pp_invisible_watermark_available,
     is_ppxformers_available,
     is_safetensors_available,
     is_scipy_available,
     is_tensorboard_available,
     is_torch_available,
     is_torch_version,
+    is_transformers_available,
     is_transformers_version,
     is_unidecode_available,
     is_visualdl_available,
@@ -150,8 +153,13 @@ from .peft_utils import (
     set_weights_and_activate_adapters,
     unscale_lora_layers,
 )
-from .pil_utils import PIL_INTERPOLATION, make_image_grid, numpy_to_pil, pt_to_pil
-from .ppaccelerate_utils import apply_forward_hook
+from .pil_utils import (
+    PIL_INTERPOLATION,
+    make_image_grid,
+    numpy_to_pil,
+    pd_to_pil,
+    pt_to_pil,
+)
 
 image_grid = make_image_grid
 
@@ -179,25 +187,12 @@ from .testing_utils import (  # load_image,
 logger = get_logger(__name__)
 
 
-def check_pppeft_version(min_version: str = "") -> None:
-    r"""
-    Checks if the version of PP-PEFT is compatible.
-
-    Args:
-        version (`str`):
-            The version of PEFT to check against.
-    """
-    if not is_peft_available():
-        raise ValueError("PP-PEFT is not installed. Please install it with `pip install pppeft`")
-
-
 def check_min_version(min_version):
+    if __version__ == "0.0.0":
+        return
     if version.parse(__version__) < version.parse(min_version):
         if "dev" in min_version:
-            error_message = (
-                "This example requires a source install from HuggingFace diffusers (see "
-                "`https://huggingface.co/docs/diffusers/installation#install-from-source`),"
-            )
+            error_message = "This example requires a source install from PaddleMIX ppdiffusers"
         else:
             error_message = f"This example requires a minimum version of {min_version},"
         error_message += f" but the version found is {__version__}.\n"
