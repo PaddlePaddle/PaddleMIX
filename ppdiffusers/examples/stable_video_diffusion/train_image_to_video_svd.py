@@ -43,7 +43,6 @@ from ppaccelerate import Accelerator
 from ppaccelerate.logging import get_logger
 from ppaccelerate.utils import ProjectConfiguration, set_seed
 from tqdm.auto import tqdm
-from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
 import ppdiffusers
 from ppdiffusers import (
@@ -54,6 +53,7 @@ from ppdiffusers import (
 )
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import EMAModel
+from ppdiffusers.transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 from ppdiffusers.utils import (
     check_min_version,
     deprecate,
