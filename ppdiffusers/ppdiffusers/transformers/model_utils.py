@@ -45,9 +45,6 @@ if is_safetensors_available():
         import torch
         from safetensors.torch import save_file as torch_safe_save_file
 
-raw_from_pretrained = PPNLPPretrainedModel.from_pretrained.__func__
-raw_save_pretrained = PPNLPPretrainedModel.save_pretrained
-
 
 ALL_LAYERNORM_LAYERS = [nn.LayerNorm]
 
@@ -362,8 +359,7 @@ class PretrainedModel(PPNLPPretrainedModel, ModuleUtilsMixin, PeftAdapterMixin):
             dtype = str(dtype).replace("paddle.", "")
         if dtype is not None:
             kwargs["dtype"] = dtype
-        model = raw_from_pretrained(
-            cls,
+        model = super().from_pretrained(
             pretrained_model_name_or_path,
             *args,
             **kwargs,

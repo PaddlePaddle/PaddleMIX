@@ -392,7 +392,6 @@ class GPT2PretrainedModel(PretrainedModel):
 
     _deprecated_dict = {
         "key": ".self_attn.q_proj.",
-        "action": [{".attn.c_attn.": "concat"}],
         "name_mapping": {
             # common
             "gpt.": "transformer.",
