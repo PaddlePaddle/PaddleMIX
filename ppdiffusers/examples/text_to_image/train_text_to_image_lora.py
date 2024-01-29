@@ -58,11 +58,9 @@ from ppdiffusers.models.attention_processor import (
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import freeze_params, main_process_first, unwrap_model
 from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
-from ppdiffusers.utils import (
-    PPDIFFUSERS_CACHE,
-    TEXT_ENCODER_ATTN_MODULE,
-    check_min_version,
-)
+from ppdiffusers.utils import PPDIFFUSERS_CACHE, check_min_version
+
+TEXT_ENCODER_ATTN_MODULE = ".self_attn"
 
 check_min_version("0.16.1")
 
