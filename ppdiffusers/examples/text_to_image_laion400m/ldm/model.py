@@ -202,7 +202,7 @@ class LatentDiffusionModel(nn.Layer):
             zeros_(self.unet.conv_out.weight)
             zeros_(self.unet.conv_out.bias)
             for _, m in self.unet.named_sublayers():
-                if isinstance(m, Attention):
+                if isinstance(m, Attention) and getattr(m, "group_norm", None) is not None:
                     zeros_(m.to_out[0].weight)
                     zeros_(m.to_out[0].bias)
                 if isinstance(m, ResnetBlock2D):
