@@ -39,6 +39,7 @@ from huggingface_hub.utils import (
 logger = logging.getLogger(__name__)
 
 from .common import (
+    _CACHED_NO_EXIST,
     DEFALUT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD,
     DEFAULT_ETAG_TIMEOUT,
     DEFAULT_REQUEST_TIMEOUT,
@@ -81,9 +82,6 @@ REPO_TYPE_MODEL = "models"
 REPO_TYPES = [None, REPO_TYPE_MODEL]
 
 
-# Return value when trying to load a file from cache but the file does not exist in the distant repo.
-# _CACHED_NO_EXIST = object()
-# _CACHED_NO_EXIST_T = Any
 REGEX_COMMIT_HASH = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -572,3 +570,53 @@ def bos_file_exists(
         raise
     except (RepositoryNotFoundError, EntryNotFoundError, RevisionNotFoundError, HfHubHTTPError):
         return False
+
+
+def bos_try_to_load_from_cache(
+    repo_id: str,
+    filename: str,
+    cache_dir: Union[str, Path, None] = None,
+    revision: Optional[str] = None,
+    repo_type: Optional[str] = None,
+):
+    if revision is None:
+        revision = DEFAULT_REVISION
+    if repo_type is None:
+        repo_type = REPO_TYPES[-1]
+    if repo_type not in REPO_TYPES:
+        raise ValueError(f"Invalid repo type: {repo_type}. Accepted repo types are: {str(REPO_TYPES)}")
+    if cache_dir is None:
+        cache_dir = BOS_CACHE
+
+    object_id = repo_id.replace("/", "--")
+    repo_cache = os.path.join(cache_dir, f"{repo_type}--{object_id}")
+    if not os.path.isdir(repo_cache):
+        # No cache for this model
+        return None
+
+    refs_dir = os.path.join(repo_cache, "refs")
+    snapshots_dir = os.path.join(repo_cache, "snapshots")
+    no_exist_dir = os.path.join(repo_cache, ".no_exist")
+
+    # Resolve refs (for instance to convert main to the associated commit sha)
+    if os.path.isdir(refs_dir):
+        revision_file = os.path.join(refs_dir, revision)
+        if os.path.isfile(revision_file):
+            with open(revision_file) as f:
+                revision = f.read()
+
+    # Check if file is cached as "no_exist"
+    if os.path.isfile(os.path.join(no_exist_dir, revision, filename)):
+        return _CACHED_NO_EXIST
+
+    # Check if revision folder exists
+    if not os.path.exists(snapshots_dir):
+        return None
+    cached_shas = os.listdir(snapshots_dir)
+    if revision not in cached_shas:
+        # No cache for this revision and we won't try to return a random revision
+        return None
+
+    # Check if file exists in cache
+    cached_file = os.path.join(snapshots_dir, revision, filename)
+    return cached_file if os.path.isfile(cached_file) else None

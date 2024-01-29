@@ -70,6 +70,7 @@ DEFAULT_ETAG_TIMEOUT = 10
 DEFALUT_LOCAL_DIR_AUTO_SYMLINK_THRESHOLD: int = 5 * 1024 * 1024
 
 OFFLINE = _is_true(os.environ.get("AISTUDIO_BOS_OFFLINE"))
+_CACHED_NO_EXIST = object()
 
 
 def _cache_commit_hash_for_specific_revision(storage_folder: str, revision: str, commit_hash: str) -> None:
