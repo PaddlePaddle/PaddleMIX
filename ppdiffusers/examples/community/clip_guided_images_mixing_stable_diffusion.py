@@ -20,12 +20,6 @@ import paddle
 import paddle.nn.functional as F
 import PIL
 from einops import rearrange
-from paddlenlp.transformers import (
-    CLIPFeatureExtractor,
-    CLIPModel,
-    CLIPTextModel,
-    CLIPTokenizer,
-)
 from tqdm import tqdm
 
 from ppdiffusers import (
@@ -43,6 +37,12 @@ from ppdiffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import (
 )
 from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
+)
+from ppdiffusers.transformers import (
+    CLIPFeatureExtractor,
+    CLIPModel,
+    CLIPTextModel,
+    CLIPTokenizer,
 )
 from ppdiffusers.utils import PIL_INTERPOLATION, logging, randn_tensor
 

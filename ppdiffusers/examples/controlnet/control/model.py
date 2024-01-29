@@ -19,7 +19,6 @@ import os
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import (
@@ -31,9 +30,10 @@ from ppdiffusers import (
     UNet2DConditionModel,
     is_ppxformers_available,
 )
-from ppdiffusers.initializer import reset_initialized_parameter
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.training_utils import freeze_params
+from ppdiffusers.transformers import AutoTokenizer, CLIPTextModel
+from ppdiffusers.utils.initializer_utils import reset_initialized_parameter
 
 
 def read_json(file):

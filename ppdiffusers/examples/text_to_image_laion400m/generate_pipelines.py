@@ -16,7 +16,6 @@ import argparse
 import json
 
 import paddle
-from paddlenlp.transformers import AutoTokenizer
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import (
@@ -27,6 +26,7 @@ from ppdiffusers import (
     UNet2DConditionModel,
 )
 from ppdiffusers.pipelines.latent_diffusion import LDMBertConfig
+from ppdiffusers.transformers import AutoTokenizer
 
 
 def parse_args():

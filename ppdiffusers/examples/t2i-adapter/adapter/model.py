@@ -21,7 +21,6 @@ import numpy as np
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddlenlp.transformers import AutoTokenizer, CLIPTextModel
 from paddlenlp.utils.log import logger
 
 from ppdiffusers import (
@@ -34,9 +33,10 @@ from ppdiffusers import (
     is_ppxformers_available,
 )
 
-# from ppdiffusers.initializer import reset_initialized_parameter
+# from ppdiffusers.utils.initializer_utils import reset_initialized_parameter
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.training_utils import freeze_params
+from ppdiffusers.transformers import AutoTokenizer, CLIPTextModel
 
 from .annotator_utils import create_annotator
 
@@ -340,9 +340,5 @@ class AdapterLDM(nn.Layer):
         return image.cast("float32").numpy().round()
 
     def set_recompute(self, value=False):
-        def fn(layer):
-            if hasattr(layer, "gradient_checkpointing"):
-                layer.gradient_checkpointing = value
-                print("Set", layer.__class__, "recompute", layer.gradient_checkpointing)
-
-        self.adapter.apply(fn)
+        if value:
+            self.unet.enable_gradient_checkpointing()

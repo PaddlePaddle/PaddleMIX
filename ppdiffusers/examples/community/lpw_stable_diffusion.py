@@ -19,7 +19,6 @@ from typing import Callable, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 from paddlemix.utils.tools import compare_version
 from ppdiffusers.models import AutoencoderKL, UNet2DConditionModel
@@ -31,6 +30,7 @@ from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
 )
 from ppdiffusers.schedulers import DDIMScheduler, LMSDiscreteScheduler, PNDMScheduler
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import logging
 
 if compare_version(PIL.__version__, "9.1.0") >= 0:

@@ -21,7 +21,6 @@ import numpy as np
 import paddle
 import PIL
 import PIL.Image
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -58,6 +57,7 @@ from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
 )
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import PIL_INTERPOLATION, deprecate, logging, randn_tensor
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name

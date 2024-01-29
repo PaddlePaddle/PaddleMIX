@@ -18,7 +18,6 @@ import os
 import paddle
 import paddle.nn as nn
 import paddle.nn.functional as F
-from paddlenlp.transformers import AutoTokenizer
 
 from ppdiffusers import (
     AutoencoderKL,
@@ -32,6 +31,7 @@ from ppdiffusers.models.attention import AttentionBlock
 from ppdiffusers.models.ema import LitEma
 from ppdiffusers.pipelines.latent_diffusion import LDMBertConfig
 from ppdiffusers.training_utils import freeze_params
+from ppdiffusers.transformers import AutoTokenizer
 
 try:
     from ppdiffusers.models.attention import SpatialTransformer
@@ -338,14 +338,7 @@ class LatentDiffusionModel(nn.Layer):
         return image.cast("float32").numpy().round()
 
     def set_recompute(self, value=False):
-        def fn(layer):
-            # ldmbert
-            if hasattr(layer, "enable_recompute"):
-                layer.enable_recompute = value
-                print("Set", layer.__class__, "recompute", layer.enable_recompute)
-            # unet
-            if hasattr(layer, "gradient_checkpointing"):
-                layer.gradient_checkpointing = value
-                print("Set", layer.__class__, "recompute", layer.gradient_checkpointing)
-
-        self.apply(fn)
+        if value:
+            if hasattr(self.text_encoder, "gradient_checkpointing_enable"):
+                self.text_encoder.gradient_checkpointing_enable()
+            self.unet.enable_gradient_checkpointing()
