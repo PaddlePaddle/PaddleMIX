@@ -130,6 +130,12 @@ class QwenVLProcessor(ProcessorMixin):
         return inputs
 
     def batch_decode(self, *args, **kwargs):
+
+        """
+        This method forwards all its arguments to PreTrainedTokenizer's [`~PreTrainedTokenizer.batch_decode`]. Please
+        refer to the docstring of this method for more information.
+        """
+
         return self.tokenizer.batch_decode(*args, **kwargs)
 
     def decode(self, pred: Union[List, paddle.Tensor]):

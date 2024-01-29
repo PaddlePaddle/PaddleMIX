@@ -786,8 +786,8 @@ class LoRAAttnAddedKVProcessor(nn.Layer):
             value = attn.to_v(hidden_states) + scale * self.to_v_lora(hidden_states)
             key = attn.head_to_batch_dim(key)
             value = attn.head_to_batch_dim(value)
-            key = paddle.concat([encoder_hidden_states_key_proj, key], axis=1)
-            value = paddle.concat([encoder_hidden_states_value_proj, value], axis=1)
+            key = paddle.concat([encoder_hidden_states_key_proj, key], axis=2)
+            value = paddle.concat([encoder_hidden_states_value_proj, value], axis=2)
         else:
             key = encoder_hidden_states_key_proj
             value = encoder_hidden_states_value_proj
