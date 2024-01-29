@@ -26,11 +26,11 @@ from ppdiffusers import (
     ControlNetModel,
     DDIMScheduler,
     DDPMScheduler,
-    LDMBertModel,
     UNet2DConditionModel,
     is_ppxformers_available,
 )
 from ppdiffusers.models.ema import LitEma
+from ppdiffusers.pipelines.latent_diffusion import LDMBertModel
 from ppdiffusers.training_utils import freeze_params
 from ppdiffusers.transformers import AutoTokenizer, CLIPTextModel
 from ppdiffusers.utils.initializer_utils import reset_initialized_parameter

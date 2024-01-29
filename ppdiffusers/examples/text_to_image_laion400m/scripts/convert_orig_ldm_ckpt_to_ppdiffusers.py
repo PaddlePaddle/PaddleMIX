@@ -28,12 +28,12 @@ from ppdiffusers import (
     AutoencoderKL,
     DDIMScheduler,
     EulerAncestralDiscreteScheduler,
-    LDMBertModel,
     LDMTextToImagePipeline,
     LMSDiscreteScheduler,
     PNDMScheduler,
     UNet2DConditionModel,
 )
+from ppdiffusers.pipelines.latent_diffusion import LDMBertModel
 from ppdiffusers.transformers import BertTokenizer
 
 paddle.set_device("cpu")

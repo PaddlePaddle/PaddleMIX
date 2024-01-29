@@ -27,7 +27,6 @@ from ppdiffusers import (
     AutoencoderKL,
     DDIMScheduler,
     DDPMScheduler,
-    LDMBertModel,
     T2IAdapter,
     UNet2DConditionModel,
     is_ppxformers_available,
@@ -35,6 +34,7 @@ from ppdiffusers import (
 
 # from ppdiffusers.utils.initializer_utils import reset_initialized_parameter
 from ppdiffusers.models.ema import LitEma
+from ppdiffusers.pipelines.latent_diffusion import LDMBertModel
 from ppdiffusers.training_utils import freeze_params
 from ppdiffusers.transformers import AutoTokenizer, CLIPTextModel
 
