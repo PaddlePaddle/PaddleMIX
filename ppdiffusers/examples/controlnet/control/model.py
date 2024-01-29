@@ -239,7 +239,7 @@ class ControlNet(nn.Layer):
                 uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0]
                 text_embeddings = paddle.concat([uncond_embeddings, text_embeddings], axis=0)
 
-            latents = paddle.randn((input_ids.shape[0], self.unet.in_channels, height // 8, width // 8))
+            latents = paddle.randn((input_ids.shape[0], self.unet.config.in_channels, height // 8, width // 8))
             # ddim donot use this
             latents = latents * self.eval_scheduler.init_noise_sigma
 

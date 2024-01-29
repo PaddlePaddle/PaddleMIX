@@ -293,7 +293,7 @@ class AdapterLDM(nn.Layer):
             if self.use_preconfig_latents:
                 latents = self.preconfig_latents
             else:
-                latents = paddle.randn((input_ids.shape[0], self.unet.in_channels, height // 8, width // 8))
+                latents = paddle.randn((input_ids.shape[0], self.unet.config.in_channels, height // 8, width // 8))
             # ddim donot use this
             latents = latents * self.eval_scheduler.init_noise_sigma
 

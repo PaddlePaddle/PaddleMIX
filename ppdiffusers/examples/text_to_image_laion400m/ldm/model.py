@@ -23,13 +23,12 @@ from ppdiffusers import (
     AutoencoderKL,
     DDIMScheduler,
     DDPMScheduler,
-    LDMBertModel,
     UNet2DConditionModel,
     is_ppxformers_available,
 )
-from ppdiffusers.models.attention import AttentionBlock
+from ppdiffusers.models.attention_processor import Attention
 from ppdiffusers.models.ema import LitEma
-from ppdiffusers.pipelines.latent_diffusion import LDMBertConfig
+from ppdiffusers.pipelines.latent_diffusion import LDMBertConfig, LDMBertModel
 from ppdiffusers.training_utils import freeze_params
 from ppdiffusers.transformers import AutoTokenizer
 
@@ -195,17 +194,17 @@ class LatentDiffusionModel(nn.Layer):
         # init text_encoder
         if not self.text_encoder_is_pretrained:
             reset_initialized_parameter(self.text_encoder)
-            normal_(self.text_encoder.embeddings.word_embeddings.weight, 0, 0.02)
-            normal_(self.text_encoder.embeddings.position_embeddings.weight, 0, 0.02)
+            normal_(self.text_encoder.model.embed_tokens.weight, 0, 0.02)
+            normal_(self.text_encoder.model.embed_positions.weight, 0, 0.02)
         # init unet
         if not self.unet_is_pretrained:
             reset_initialized_parameter(self.unet)
             zeros_(self.unet.conv_out.weight)
             zeros_(self.unet.conv_out.bias)
             for _, m in self.unet.named_sublayers():
-                if isinstance(m, AttentionBlock):
-                    zeros_(m.proj_attn.weight)
-                    zeros_(m.proj_attn.bias)
+                if isinstance(m, Attention):
+                    zeros_(m.to_out[0].weight)
+                    zeros_(m.to_out[0].bias)
                 if isinstance(m, ResnetBlock2D):
                     zeros_(m.conv2.weight)
                     zeros_(m.conv2.bias)
@@ -308,7 +307,7 @@ class LatentDiffusionModel(nn.Layer):
                 uncond_embeddings = self.text_encoder(uncond_input.input_ids)[0]
                 text_embeddings = paddle.concat([uncond_embeddings, text_embeddings], axis=0)
 
-            latents = paddle.randn((input_ids.shape[0], self.unet.in_channels, height // 8, width // 8))
+            latents = paddle.randn((input_ids.shape[0], self.unet.config.in_channels, height // 8, width // 8))
             # ddim donot use this
             latents = latents * self.eval_scheduler.init_noise_sigma
 
