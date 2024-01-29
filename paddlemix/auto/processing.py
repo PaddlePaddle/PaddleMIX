@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 
-def get_processpr_mapping():
+def get_processor_mapping():
 
     # 1. search the subdir<model-name> to find model-names
     processors_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "processors")
@@ -45,9 +45,9 @@ def get_processpr_mapping():
         if "processing" not in file_name:
             continue
 
-        # 2. find the `*processing.py` file as the identifier of ProcessorMixin class
+        # 2. find the `*processing.py` file as the identifier of ProcessorMixin class,
         model_name = None
-        if "qwen_vl" in file_name:
+        if "qwen_vl" in file_name:  # qwen_vl use qwen_vl_processing
             model_name = "qwen_vl"
         else:
             model_name = file_name.split("_")[0]
@@ -76,7 +76,7 @@ class AutoProcessorMIX:
     base processor classes when created with the Autoprocessor.from_pretrained() classmethod.
     """
 
-    MAPPING_NAMES = get_processpr_mapping()
+    MAPPING_NAMES = get_processor_mapping()
     _processor_mapping = MAPPING_NAMES
 
     processor_config_file = "preprocessor_config.json"

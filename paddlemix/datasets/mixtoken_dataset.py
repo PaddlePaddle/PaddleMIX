@@ -64,6 +64,18 @@ class MIXToken:
 
 
 class MIXTokenMapDataset(MIXToken, Dataset):
+    """
+    MIXToken is a unique feature of PaddleMix training, which replaces traditional pad tokens by
+    concatenating effective tokens to increase the throughput of a single sample and improve training speed.
+
+    traditional pad tokens:
+    len( imageToken + query + paddingToken ) = max_lenght
+
+    MIXToken:
+    len( iamgeToken1 + query1 + imageToken2 + query2 + ... + paddingToken ) = max_lenght
+
+    """
+
     def __init__(self, data, max_length, processor=None, mode="train"):
         self.max_length = max_length
         self.processor = processor

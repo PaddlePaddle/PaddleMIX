@@ -147,7 +147,7 @@ class QwenVLCollator:
         labels = paddle.to_tensor(data=labels, dtype="int32")
         attention_mask = input_ids.not_equal(y=paddle.to_tensor(self.processor.tokenizer.pad_token_id, dtype="int32"))
 
-        if 0 < len(images):
+        if len(images) > 0:
             images = paddle.concat(images, axis=0)
             image_shape = [-1, 3] + images.shape[-2:]
             images = images.reshape(image_shape)

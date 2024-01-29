@@ -57,7 +57,7 @@ class QwenVLProcessor(ProcessorMixin):
             query = record
 
         if mode == "train":
-            inputs = self.sft_preprocess(query)
+            inputs = self.train_preprocess(query)
 
         else:
             images = []
@@ -74,7 +74,7 @@ class QwenVLProcessor(ProcessorMixin):
 
         return inputs
 
-    def sft_preprocess(self, sources, system_message: str = "You are a helpful assistant."):
+    def train_preprocess(self, sources, system_message: str = "You are a helpful assistant."):
         IGNORE_TOKEN_ID = -100
         im_start = self.tokenizer.im_start_id
         im_end = self.tokenizer.im_end_id

@@ -45,7 +45,7 @@ ASSIGN_MAPPING = {
     # Assign model mapping
     "blip2": "Blip2ForConditionalGeneration",
     "clip": "CLIP",
-    "coca": "CoCa",
+    "coca": "CLIP",
     "eva02": "EVA02VisionTransformer",  # unsupport EVA02ForPretrain
     "evaclip": "EVACLIP",
     "groundingdino": "GroundingDinoModel",
@@ -133,8 +133,6 @@ class _MIXBaseAutoModelClass:
             for model_flag, name in ASSIGN_MAPPING.items():
                 pretrained_model_name_or_path = pretrained_model_name_or_path.lower().replace("-", "_")
                 if model_flag.lower() in pretrained_model_name_or_path:
-                    if model_flag == "coca":
-                        model_flag = "clip"
 
                     for class_name in cls._name_mapping[model_flag]:
                         if class_name[0] == name:
