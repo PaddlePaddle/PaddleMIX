@@ -16,6 +16,7 @@
 
 import argparse
 import contextlib
+import copy
 import gc
 import itertools
 import logging
@@ -1613,7 +1614,32 @@ def main(args):
                                     shutil.rmtree(removing_checkpoint)
 
                         save_path = os.path.join(args.output_dir, f"checkpoint-{global_step}")
-                        accelerator.save_state(save_path)
+                        # westfish: save_state substitute
+                        # accelerator.save_state(save_path)
+                        models = []
+                        if args.train_text_encoder:
+                            models.append(copy.deepcopy(unet))
+                            models.append(copy.deepcopy(text_encoder_one))
+                            models.append(copy.deepcopy(text_encoder_two))
+                        else:
+                            models.append(copy.deepcopy(unet))
+                        weights = []
+
+                        def get_state_dict(model):
+                            state_dict = model.state_dict()
+                            if state_dict is not None:
+                                for k in state_dict:
+                                    if getattr(state_dict[k], "dtype", None) == paddle.float16:
+                                        state_dict[k] = state_dict[k]._to(dtype="float32")
+
+                            return state_dict
+
+                        for i, model in enumerate(models):
+                            weights.append(get_state_dict(model))
+                        save_model_hook(models, weights, save_path)
+                        del models, weights
+                        gc.collect()
+                        paddle.device.cuda.empty_cache()
                         logger.info(f"Saved state to {save_path}")
             logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_lr()}
             progress_bar.set_postfix(**logs)
