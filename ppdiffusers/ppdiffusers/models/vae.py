@@ -148,7 +148,7 @@ class Encoder(nn.Layer):
 
         sample = self.conv_in(sample)
 
-        if self.training and self.gradient_checkpointing and not sample.stop_gradient:
+        if self.gradient_checkpointing and not sample.stop_gradient:
 
             def create_custom_forward(module):
                 def custom_forward(*inputs):
@@ -289,7 +289,7 @@ class Decoder(nn.Layer):
         sample = self.conv_in(sample)
 
         upscale_dtype = next(iter(self.up_blocks.parameters())).dtype
-        if self.training and self.gradient_checkpointing and not sample.stop_gradient:
+        if self.gradient_checkpointing and not sample.stop_gradient:
             # test_model_vae error on this
             # with paddle.jit.not_to_static():
             def create_custom_forward(module):
@@ -542,7 +542,7 @@ class MaskConditionDecoder(nn.Layer):
         sample = self.conv_in(sample)
 
         upscale_dtype = next(iter(self.up_blocks.parameters())).dtype
-        if self.training and self.gradient_checkpointing and not sample.stop_gradient:
+        if self.gradient_checkpointing and not sample.stop_gradient:
 
             def create_custom_forward(module):
                 def custom_forward(*inputs):
@@ -850,7 +850,7 @@ class EncoderTiny(nn.Layer):
 
     def forward(self, x: paddle.Tensor) -> paddle.Tensor:
         r"""The forward method of the `EncoderTiny` class."""
-        if self.training and self.gradient_checkpointing and not x.stop_gradient:
+        if self.gradient_checkpointing and not x.stop_gradient:
 
             def create_custom_forward(module):
                 def custom_forward(*inputs):
@@ -932,7 +932,7 @@ class DecoderTiny(nn.Layer):
         # Clamp.
         x = nn.functional.tanh(x / 3) * 3
 
-        if self.training and self.gradient_checkpointing and not x.stop_gradient:
+        if self.gradient_checkpointing and not x.stop_gradient:
 
             def create_custom_forward(module):
                 def custom_forward(*inputs):

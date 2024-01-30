@@ -1013,7 +1013,7 @@ class DownBlockMotion(nn.Layer):
 
         blocks = zip(self.resnets, self.motion_modules)
         for resnet, motion_module in blocks:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -1183,7 +1183,7 @@ class CrossAttnDownBlockMotion(nn.Layer):
 
         blocks = list(zip(self.resnets, self.attentions, self.motion_modules))
         for i, (resnet, attn, motion_module) in enumerate(blocks):
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1387,7 +1387,7 @@ class CrossAttnUpBlockMotion(nn.Layer):
 
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1542,7 +1542,7 @@ class UpBlockMotion(nn.Layer):
 
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -1699,7 +1699,7 @@ class UNetMidBlockCrossAttnMotion(nn.Layer):
 
         blocks = zip(self.attentions, self.resnets[1:], self.motion_modules)
         for attn, resnet, motion_module in blocks:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -1931,7 +1931,7 @@ class UNetMidBlockSpatioTemporal(nn.Layer):
         )
 
         for attn, resnet in zip(self.attentions, self.resnets[1:]):
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -2021,7 +2021,7 @@ class DownBlockSpatioTemporal(nn.Layer):
     ) -> Tuple[paddle.Tensor, Tuple[paddle.Tensor, ...]]:
         output_states = ()
         for resnet in self.resnets:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -2127,7 +2127,7 @@ class CrossAttnDownBlockSpatioTemporal(nn.Layer):
 
         blocks = list(zip(self.resnets, self.attentions))
         for resnet, attn in blocks:
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:  # TODO
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:  # TODO
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):
@@ -2229,7 +2229,7 @@ class UpBlockSpatioTemporal(nn.Layer):
 
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -2332,7 +2332,7 @@ class CrossAttnUpBlockSpatioTemporal(nn.Layer):
 
             hidden_states = paddle.concat([hidden_states, res_hidden_states], axis=1)
 
-            if self.training and self.gradient_checkpointing and not hidden_states.stop_gradient:  # TODO
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:  # TODO
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):

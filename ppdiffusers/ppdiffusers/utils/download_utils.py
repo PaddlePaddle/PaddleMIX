@@ -87,7 +87,10 @@ def _get_model_file(
     file_lock_timeout=-1,
     from_hf_hub=False,
     from_aistudio=False,
+    token=None,
 ):
+    # deprecate
+    use_auth_token = use_auth_token or token
     pretrained_model_name_or_path = str(pretrained_model_name_or_path)
     if os.path.isfile(pretrained_model_name_or_path):
         return pretrained_model_name_or_path
@@ -449,7 +452,9 @@ def bos_aistudio_hf_download(
     commit_hash=None,
     from_hf_hub=False,
     from_aistudio=False,
+    token=None,
 ):
+    token = use_auth_token or token
     if subfolder is None:
         subfolder = ""
     if from_aistudio:
@@ -477,7 +482,7 @@ def bos_aistudio_hf_download(
                     proxies=proxies,
                     resume_download=resume_download,
                     local_files_only=local_files_only,
-                    use_auth_token=use_auth_token,
+                    token=token,
                     user_agent=user_agent,
                     subfolder=subfolder,
                     revision=revision or commit_hash,
@@ -502,7 +507,7 @@ def bos_aistudio_hf_download(
                 proxies=proxies,
                 resume_download=resume_download,
                 local_files_only=local_files_only,
-                use_auth_token=use_auth_token,
+                token=token,
                 user_agent=user_agent,
                 subfolder=subfolder,
                 revision=revision,
@@ -716,7 +721,9 @@ def get_checkpoint_shard_files(
     commit_hash=None,
     from_hf_hub=False,
     from_aistudio=False,
+    token=None,
 ):
+    use_auth_token = use_auth_token or token
     if subfolder is None:
         subfolder = ""
     if not os.path.isfile(index_filename):

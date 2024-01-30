@@ -171,7 +171,7 @@ class WuerstchenPrior(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         c_embed = self.cond_mapper(c)
         r_embed = self.gen_r_embedding(r)
 
-        if self.training and self.gradient_checkpointing and not x.stop_gradient:
+        if self.gradient_checkpointing and not x.stop_gradient:
 
             def create_custom_forward(module):
                 def custom_forward(*inputs):

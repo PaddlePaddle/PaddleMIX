@@ -19,7 +19,6 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 import paddle
 from packaging import version
-from paddlenlp.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 
 from ppdiffusers import AutoencoderKL, DiffusionPipeline, UNet2DConditionModel
 from ppdiffusers.configuration_utils import FrozenDict
@@ -28,6 +27,7 @@ from ppdiffusers.pipelines.stable_diffusion.safety_checker import (
     StableDiffusionSafetyChecker,
 )
 from ppdiffusers.schedulers import KarrasDiffusionSchedulers
+from ppdiffusers.transformers import CLIPFeatureExtractor, CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import (
     deprecate,
     logging,

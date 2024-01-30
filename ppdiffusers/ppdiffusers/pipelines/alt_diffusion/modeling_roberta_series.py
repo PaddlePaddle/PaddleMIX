@@ -97,7 +97,6 @@ class RobertaSeriesModelWithTransformation(XLMRobertaPreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         token_type_ids: Optional[paddle.Tensor] = None,
         position_ids: Optional[paddle.Tensor] = None,
-        head_mask: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         encoder_hidden_states: Optional[paddle.Tensor] = None,
         encoder_attention_mask: Optional[paddle.Tensor] = None,
@@ -105,16 +104,14 @@ class RobertaSeriesModelWithTransformation(XLMRobertaPreTrainedModel):
         return_dict: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
     ):
-        r""" """
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        outputs = self.base_model(
+        outputs = self.roberta(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             position_ids=position_ids,
-            head_mask=head_mask,
             inputs_embeds=inputs_embeds,
             encoder_hidden_states=encoder_hidden_states,
             encoder_attention_mask=encoder_attention_mask,

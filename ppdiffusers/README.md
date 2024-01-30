@@ -194,7 +194,7 @@ pipe.enable_xformers_memory_efficient_attention()
 ### ToME + ControlNet
 ```python
 # 安装develop的ppdiffusers
-# pip install "ppdiffusers>=0.16.1"
+# pip install "ppdiffusers>=0.24.0"
 import paddle
 from ppdiffusers import ControlNetModel, StableDiffusionControlNetPipeline
 from ppdiffusers.utils import load_image
@@ -527,6 +527,7 @@ import paddle
 # load both base & refiner
 base = DiffusionPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-base-1.0",
+    paddle_dtype=paddle.float16,
 )
 refiner = DiffusionPipeline.from_pretrained(
     "stabilityai/stable-diffusion-xl-refiner-1.0",

@@ -345,7 +345,6 @@ class LDMBertAttention(nn.Layer):
         key_value_states: Optional[paddle.Tensor] = None,
         past_key_value: Optional[Tuple[paddle.Tensor]] = None,
         attention_mask: Optional[paddle.Tensor] = None,
-        layer_head_mask: Optional[paddle.Tensor] = None,
         output_attentions: bool = False,
     ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor], Optional[Tuple[paddle.Tensor]]]:
         """Input shape: Batch x Time x Channel"""
@@ -466,7 +465,6 @@ class LDMBertEncoderLayer(nn.Layer):
         self,
         hidden_states: paddle.Tensor,
         attention_mask: paddle.Tensor,
-        layer_head_mask: paddle.Tensor,
         output_attentions: Optional[bool] = False,
     ) -> Tuple[paddle.Tensor, Optional[paddle.Tensor]]:
         """
@@ -474,8 +472,6 @@ class LDMBertEncoderLayer(nn.Layer):
             hidden_states (`paddle.Tensor`): input to the layer of shape `(seq_len, batch, embed_dim)`
             attention_mask (`paddle.Tensor`): attention mask of size
                 `(batch, 1, tgt_len, src_len)` where padding elements are indicated by very large negative values.
-            layer_head_mask (`paddle.Tensor`): mask for attention heads in a given layer of size
-                `(encoder_attention_heads,)`.
             output_attentions (`bool`, *optional*):
                 Whether or not to return the attentions tensors of all attention layers. See `attentions` under
                 returned tensors for more detail.
@@ -485,7 +481,6 @@ class LDMBertEncoderLayer(nn.Layer):
         hidden_states, attn_weights, _ = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
-            layer_head_mask=layer_head_mask,
             output_attentions=output_attentions,
         )
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
@@ -518,7 +513,7 @@ class LDMBertEncoderLayer(nn.Layer):
 class LDMBertPreTrainedModel(PretrainedModel):
     config_class = LDMBertConfig
     base_model_prefix = "model"
-    _supports_gradient_checkpointing = True
+    supports_gradient_checkpointing = True
     _keys_to_ignore_on_load_unexpected = [r"encoder\.version", r"decoder\.version"]
 
     _deprecated_dict = {
@@ -672,11 +667,6 @@ class LDMBertEncoder(LDMBertPreTrainedModel):
                 - 0 for tokens that are **masked**.
 
                 [What are attention masks?](../glossary#attention-mask)
-            head_mask (`paddle.Tensor` of shape `(encoder_layers, encoder_attention_heads)`, *optional*):
-                Mask to nullify selected heads of the attention modules. Mask values selected in `[0, 1]`:
-
-                - 1 indicates the head is **not masked**,
-                - 0 indicates the head is **masked**.
 
             inputs_embeds (`paddle.Tensor` of shape `(batch_size, sequence_length, hidden_size)`, *optional*):
                 Optionally, instead of passing `input_ids` you can choose to directly pass an embedded representation.
@@ -729,7 +719,7 @@ class LDMBertEncoder(LDMBertPreTrainedModel):
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
-            if self.gradient_checkpointing and self.training and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
 
                 def create_custom_forward(module):
                     def custom_forward(*inputs):
@@ -779,7 +769,6 @@ class LDMBertModel(LDMBertPreTrainedModel):
         input_ids=None,
         attention_mask=None,
         position_ids=None,
-        head_mask=None,
         inputs_embeds=None,
         output_attentions=None,
         output_hidden_states=None,
@@ -789,7 +778,6 @@ class LDMBertModel(LDMBertPreTrainedModel):
             input_ids,
             attention_mask=attention_mask,
             position_ids=position_ids,
-            head_mask=head_mask,
             inputs_embeds=inputs_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,

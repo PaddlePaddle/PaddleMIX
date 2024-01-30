@@ -215,6 +215,11 @@ else:
         "WuerstchenDecoderPipeline",
         "WuerstchenPriorPipeline",
     ]
+    _import_structure["lvdm"] = [
+        "LVDMTextToVideoPipeline",
+        "LVDMUncondPipeline",
+        "VideoPipelineOutput",
+    ]
 try:
     if not is_fastdeploy_available():
         raise OptionalDependencyNotAvailable()
@@ -382,6 +387,13 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
             LatentConsistencyModelPipeline,
         )
         from .latent_diffusion import LDMTextToImagePipeline
+
+        # new add
+        from .lvdm import (
+            LVDMTextToVideoPipeline,
+            LVDMUncondPipeline,
+            VideoPipelineOutput,
+        )
         from .musicldm import MusicLDMPipeline
         from .paint_by_example import PaintByExamplePipeline
         from .pixart_alpha import PixArtAlphaPipeline

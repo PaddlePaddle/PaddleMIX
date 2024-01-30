@@ -27,8 +27,6 @@ if is_paddle_available():
     _import_structure["consistency_decoder_vae"] = ["ConsistencyDecoderVAE"]
     _import_structure["controlnet"] = ["ControlNetModel"]
     _import_structure["dual_transformer_2d"] = ["DualTransformer2DModel"]
-    _import_structure["lvdm_vae"] = ["LVDMAutoencoderKL"]
-    _import_structure["lvdm_unet_3d"] = ["LVDMUNet3DModel"]
     _import_structure["modeling_utils"] = ["ModelMixin"]
     _import_structure["prior_transformer"] = ["PriorTransformer"]
     _import_structure["t5_film_transformer"] = ["T5FilmDecoder"]
@@ -43,6 +41,8 @@ if is_paddle_available():
     _import_structure["unet_spatio_temporal_condition"] = ["UNetSpatioTemporalConditionModel"]
     _import_structure["vq_model"] = ["VQModel"]
     # NOTE, new add
+    _import_structure["lvdm_vae"] = ["LVDMAutoencoderKL"]
+    _import_structure["lvdm_unet_3d"] = ["LVDMUNet3DModel"]
     _import_structure["ema"] = ["LitEma"]
 
 
