@@ -16,7 +16,7 @@ pip install -r requirements.txt
 ### 示例
 首先需要获取示例数据集。在这个示例中，我们将使用一些狗的图像：https://paddlenlp.bj.bcebos.com/models/community/westfish/develop-sdxl/dog.zip 。
 
-解压数据集后，使用以下命令启动训练：
+解压数据集``unzip dog.zip``后，使用以下命令启动训练：
 ```bash
 export MODEL_NAME="stabilityai/stable-diffusion-xl-base-1.0"
 export INSTANCE_DIR="dog"
