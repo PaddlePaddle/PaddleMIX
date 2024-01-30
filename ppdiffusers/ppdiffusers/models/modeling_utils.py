@@ -833,6 +833,8 @@ class ModelMixin(nn.Layer):
         index_file = None
 
         variant_list = [variant]
+        if None not in variant_list:
+            variant_list.append(None)
         if "fp16" not in variant_list:
             variant_list.append("fp16")
         if "fp32" not in variant_list:
