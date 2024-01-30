@@ -1115,17 +1115,17 @@ class DiffusionPipeline(ConfigMixin):
             )
 
         # 8. (TODO, junnyu) make sure all modules are in eval mode and cast dtype
-        # for name, _module in init_kwargs.items():
-        #     if isinstance(_module, nn.Layer):
-        #         _module.eval()
-        #         if paddle_dtype is not None:
-        #             _module.to(dtype=paddle_dtype)
-        #     elif isinstance(_module, (tuple, list)):
-        #         for _submodule in _module:
-        #             if isinstance(_submodule, nn.Layer):
-        #                 _submodule.eval()
-        #                 if paddle_dtype is not None:
-        #                     _submodule.to(dtype=paddle_dtype)
+        for name, _module in init_kwargs.items():
+            if isinstance(_module, nn.Layer):
+                _module.eval()
+                if paddle_dtype is not None:
+                    _module.to(dtype=paddle_dtype)
+            elif isinstance(_module, (tuple, list)):
+                for _submodule in _module:
+                    if isinstance(_submodule, nn.Layer):
+                        _submodule.eval()
+                        if paddle_dtype is not None:
+                            _submodule.to(dtype=paddle_dtype)
 
         # 8. Instantiate the pipeline
         model = pipeline_class(**init_kwargs)
