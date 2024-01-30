@@ -41,7 +41,7 @@ class LoHaModel(LycorisTuner):
 
     Example:
         ```py
-        >>> from diffusers import StableDiffusionPipeline
+        >>> from ppdiffusers import StableDiffusionPipeline
         >>> from ppdiffusers.peft import LoHaModel, LoHaConfig
 
         >>> config_te = LoHaConfig(

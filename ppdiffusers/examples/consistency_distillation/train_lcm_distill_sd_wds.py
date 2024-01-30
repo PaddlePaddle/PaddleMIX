@@ -32,18 +32,18 @@ import paddle.amp
 import paddle.nn as nn
 import paddle.nn.functional as F
 import paddle.vision.transforms.functional as TF
-import webdataset as wds
+import ppwebdataset as wds
 from braceexpand import braceexpand
 from paddle.io.dataloader.collate import default_collate_fn
 from paddle.optimizer import AdamW
 from paddle.vision import transforms
-from tqdm.auto import tqdm
-from webdataset.tariterators import (
+from ppwebdataset.tariterators import (
     base_plus_ext,
     tar_file_expander,
     url_opener,
     valid_sample,
 )
+from tqdm.auto import tqdm
 
 import ppdiffusers
 from ppdiffusers import (

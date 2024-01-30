@@ -17,6 +17,7 @@ from paddlenlp.transformers import *
 from .auto import *
 from .bert import *
 from .clip import *
+from .gpt2 import *
 
 # overrided model_utils
 from .model_utils import ModuleUtilsMixin, PretrainedConfig, PretrainedModel

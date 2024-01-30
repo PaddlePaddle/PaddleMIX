@@ -17,9 +17,9 @@ from typing import Optional
 import numpy as np
 import paddle
 import paddle.nn as nn
-from paddlenlp.transformers import GPTConfig
-from paddlenlp.transformers import GPTForCausalLM as GPTLMHeadModel
 
+from ppdiffusers.transformers import GPTConfig
+from ppdiffusers.transformers import GPTForCausalLM as GPTLMHeadModel
 from ppdiffusers.transformers.model_utils import ModuleUtilsMixin
 
 from ...configuration_utils import ConfigMixin, register_to_config

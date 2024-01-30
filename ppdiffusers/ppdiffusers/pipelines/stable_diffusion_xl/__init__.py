@@ -70,6 +70,9 @@ else:
         "FastDeployStableDiffusionXLInpaintPipeline"
     ]
     _import_structure["pipeline_fastdeploy_stable_diffusion_xl_mega"] = ["FastDeployStableDiffusionXLMegaPipeline"]
+    _import_structure["pipeline_fastdeploy_stable_diffusion_xl_instruct_pix2pix"] = [
+        "FastDeployStableDiffusionXLInstructPix2PixPipeline"
+    ]
 
 if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
     try:
@@ -116,6 +119,9 @@ if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
         )
         from .pipeline_fastdeploy_stable_diffusion_xl_inpaint import (
             FastDeployStableDiffusionXLInpaintPipeline,
+        )
+        from .pipeline_fastdeploy_stable_diffusion_xl_instruct_pix2pix import (
+            FastDeployStableDiffusionXLInstructPix2PixPipeline,
         )
         from .pipeline_fastdeploy_stable_diffusion_xl_mega import (
             FastDeployStableDiffusionXLMegaPipeline,

@@ -13,3 +13,4 @@
 # limitations under the License.
 
 from .paddle_patch import *
+from .tomesd_patch_utils import *

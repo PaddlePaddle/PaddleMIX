@@ -13,43 +13,54 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from dataclasses import dataclass
-from typing import List, Union
-
-import numpy as np
-import paddle
+from typing import TYPE_CHECKING
 
 from ...utils import (
-    BaseOutput,
+    PPDIFFUSERS_SLOW_IMPORT,
     OptionalDependencyNotAvailable,
+    _LazyModule,
+    get_objects_from_module,
     is_paddle_available,
     is_paddlenlp_available,
 )
 
-
-@dataclass
-class VideoPipelineOutput(BaseOutput):
-    """
-    Output class for text to video pipelines.
-
-    Args:
-        frames (`List[np.ndarray]` or `paddle.Tensor`)
-            List of denoised frames (essentially images) as NumPy arrays of shape `(height, width, num_channels)` or as
-            a `paddle` tensor. NumPy array present the denoised images of the diffusion pipeline. The length of the list
-            denotes the video length i.e., the number of frames.
-    """
-
-    frames: Union[List[np.ndarray], paddle.Tensor]
-    samples: paddle.Tensor
-
+_dummy_objects = {}
+_import_structure = {"pipeline_output": ["VideoPipelineOutput"]}
 
 try:
     if not (is_paddlenlp_available() and is_paddle_available()):
         raise OptionalDependencyNotAvailable()
 except OptionalDependencyNotAvailable:
-    from ...utils.dummy_paddle_and_paddlenlp_objects import *
+    from ...utils import dummy_paddle_and_paddlenlp_objects  # noqa F403
+
+    _dummy_objects.update(get_objects_from_module(dummy_paddle_and_paddlenlp_objects))
 else:
-    from .pipeline_latent_video_diffusion_model_text2video import (
-        LVDMTextToVideoPipeline,
+    _import_structure["pipeline_latent_video_diffusion_model_text2video"] = ["LVDMTextToVideoPipeline"]
+    _import_structure["pipeline_latent_video_diffusion_model_uncond"] = ["LVDMUncondPipeline"]
+
+
+if TYPE_CHECKING or PPDIFFUSERS_SLOW_IMPORT:
+    try:
+        if not (is_paddlenlp_available() and is_paddle_available()):
+            raise OptionalDependencyNotAvailable()
+
+    except OptionalDependencyNotAvailable:
+        from ...utils.dummy_paddle_and_paddlenlp_objects import *
+    else:
+        from .pipeline_latent_video_diffusion_model_text2video import (
+            LVDMTextToVideoPipeline,
+        )
+        from .pipeline_latent_video_diffusion_model_uncond import LVDMUncondPipeline
+        from .pipeline_output import VideoPipelineOutput
+else:
+    import sys
+
+    sys.modules[__name__] = _LazyModule(
+        __name__,
+        globals()["__file__"],
+        _import_structure,
+        module_spec=__spec__,
     )
-    from .pipeline_latent_video_diffusion_model_uncond import LVDMUncondPipeline
+
+    for name, value in _dummy_objects.items():
+        setattr(sys.modules[__name__], name, value)

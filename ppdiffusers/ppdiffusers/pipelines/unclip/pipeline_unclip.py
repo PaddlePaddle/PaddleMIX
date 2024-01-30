@@ -368,7 +368,7 @@ class UnCLIPPipeline(DiffusionPipeline):
         width = self.decoder.config.sample_size
 
         decoder_latents = self.prepare_latents(
-            (batch_size, num_channels_latents, height, width),
+            [batch_size, num_channels_latents, height, width],
             text_enc_hid_states.dtype,
             generator,
             decoder_latents,

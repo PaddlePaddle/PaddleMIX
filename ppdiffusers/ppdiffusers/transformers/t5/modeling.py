@@ -1169,7 +1169,7 @@ class T5Model(T5PreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         decoder_input_ids: Optional[paddle.Tensor] = None,
         decoder_attention_mask: Optional[paddle.Tensor] = None,
-        encoder_outputs: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
+        encoder_output: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
         past_key_values: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         decoder_inputs_embeds: Optional[paddle.Tensor] = None,
@@ -1206,8 +1206,8 @@ class T5Model(T5PreTrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         # Encode if needed (training, first prediction pass)
-        if encoder_outputs is None:
-            encoder_outputs = self.encoder(
+        if encoder_output is None:
+            encoder_output = self.encoder(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 inputs_embeds=inputs_embeds,
@@ -1215,14 +1215,14 @@ class T5Model(T5PreTrainedModel):
                 output_hidden_states=output_hidden_states,
                 return_dict=return_dict,
             )
-        elif return_dict and not isinstance(encoder_outputs, BaseModelOutput):
-            encoder_outputs = BaseModelOutput(
-                last_hidden_state=encoder_outputs[0],
-                hidden_states=encoder_outputs[1] if len(encoder_outputs) > 1 else None,
-                attentions=encoder_outputs[2] if len(encoder_outputs) > 2 else None,
+        elif return_dict and not isinstance(encoder_output, BaseModelOutput):
+            encoder_output = BaseModelOutput(
+                last_hidden_state=encoder_output[0],
+                hidden_states=encoder_output[1] if len(encoder_output) > 1 else None,
+                attentions=encoder_output[2] if len(encoder_output) > 2 else None,
             )
 
-        hidden_states = encoder_outputs[0]
+        hidden_states = encoder_output[0]
 
         # Decode
         decoder_outputs = self.decoder(
@@ -1239,7 +1239,7 @@ class T5Model(T5PreTrainedModel):
         )
 
         if not return_dict:
-            return decoder_outputs + encoder_outputs
+            return decoder_outputs + encoder_output
 
         return Seq2SeqModelOutput(
             last_hidden_state=decoder_outputs.last_hidden_state,
@@ -1247,9 +1247,9 @@ class T5Model(T5PreTrainedModel):
             decoder_hidden_states=decoder_outputs.hidden_states,
             decoder_attentions=decoder_outputs.attentions,
             cross_attentions=decoder_outputs.cross_attentions,
-            encoder_last_hidden_state=encoder_outputs.last_hidden_state,
-            encoder_hidden_states=encoder_outputs.hidden_states,
-            encoder_attentions=encoder_outputs.attentions,
+            encoder_last_hidden_state=encoder_output.last_hidden_state,
+            encoder_hidden_states=encoder_output.hidden_states,
+            encoder_attentions=encoder_output.attentions,
         )
 
 
@@ -1316,11 +1316,16 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         self.decoder.set_input_embeddings(new_embeddings)
 
     def set_output_embeddings(self, new_embeddings):
-        self.lm_head = new_embeddings
+        if self.config.tie_word_embeddings:
+            logger.warning(
+                "`set_output_embeddings` method is called when `config.tie_word_embeddings=True`. This is not expected. We will do nothing!"
+            )
+        else:
+            self.lm_head = new_embeddings
 
     def get_output_embeddings(self):
         if self.config.tie_word_embeddings:
-            return self.shared
+            return None
         else:
             return self.lm_head
 
@@ -1336,7 +1341,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         decoder_input_ids: Optional[paddle.Tensor] = None,
         decoder_attention_mask: Optional[paddle.Tensor] = None,
-        encoder_outputs: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
+        encoder_output: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
         past_key_values: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         decoder_inputs_embeds: Optional[paddle.Tensor] = None,
@@ -1381,9 +1386,9 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         # Encode if needed (training, first prediction pass)
-        if encoder_outputs is None:
+        if encoder_output is None:
             # Convert encoder inputs in embeddings if needed
-            encoder_outputs = self.encoder(
+            encoder_output = self.encoder(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 inputs_embeds=inputs_embeds,
@@ -1391,14 +1396,14 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
                 output_hidden_states=output_hidden_states,
                 return_dict=return_dict,
             )
-        elif return_dict and not isinstance(encoder_outputs, BaseModelOutput):
-            encoder_outputs = BaseModelOutput(
-                last_hidden_state=encoder_outputs[0],
-                hidden_states=encoder_outputs[1] if len(encoder_outputs) > 1 else None,
-                attentions=encoder_outputs[2] if len(encoder_outputs) > 2 else None,
+        elif return_dict and not isinstance(encoder_output, BaseModelOutput):
+            encoder_output = BaseModelOutput(
+                last_hidden_state=encoder_output[0],
+                hidden_states=encoder_output[1] if len(encoder_output) > 1 else None,
+                attentions=encoder_output[2] if len(encoder_output) > 2 else None,
             )
 
-        hidden_states = encoder_outputs[0]
+        hidden_states = encoder_output[0]
 
         if labels is not None and decoder_input_ids is None and decoder_inputs_embeds is None:
             # get decoder inputs from shifting lm labels to the right
@@ -1449,7 +1454,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
                 # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
 
         if not return_dict:
-            output = (lm_logits,) + decoder_outputs[1:] + encoder_outputs
+            output = (lm_logits,) + decoder_outputs[1:] + encoder_output
             return ((loss,) + output) if loss is not None else output
 
         return Seq2SeqLMOutput(
@@ -1459,9 +1464,9 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             decoder_hidden_states=decoder_outputs.hidden_states,
             decoder_attentions=decoder_outputs.attentions,
             cross_attentions=decoder_outputs.cross_attentions,
-            encoder_last_hidden_state=encoder_outputs.last_hidden_state,
-            encoder_hidden_states=encoder_outputs.hidden_states,
-            encoder_attentions=encoder_outputs.attentions,
+            encoder_last_hidden_state=encoder_output.last_hidden_state,
+            encoder_hidden_states=encoder_output.hidden_states,
+            encoder_attentions=encoder_output.attentions,
         )
 
     def prepare_inputs_for_generation(
@@ -1471,7 +1476,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         attention_mask=None,
         decoder_attention_mask=None,
         use_cache=None,
-        encoder_outputs=None,
+        encoder_output=None,
         **kwargs,
     ):
         # cut decoder_input_ids if past_key_values is used
@@ -1490,7 +1495,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         return {
             "decoder_input_ids": input_ids,
             "past_key_values": past_key_values,
-            "encoder_outputs": encoder_outputs,
+            "encoder_output": encoder_output,
             "attention_mask": attention_mask,
             "decoder_attention_mask": decoder_attention_mask,
             "use_cache": use_cache,
@@ -1594,7 +1599,7 @@ class T5EncoderModel(T5PreTrainedModel):
         ```"""
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        encoder_outputs = self.encoder(
+        encoder_output = self.encoder(
             input_ids=input_ids,
             attention_mask=attention_mask,
             inputs_embeds=inputs_embeds,
@@ -1603,7 +1608,7 @@ class T5EncoderModel(T5PreTrainedModel):
             return_dict=return_dict,
         )
 
-        return encoder_outputs
+        return encoder_output
 
 
 class T5ForSequenceClassification(T5PreTrainedModel):
@@ -1624,7 +1629,7 @@ class T5ForSequenceClassification(T5PreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         decoder_input_ids: Optional[paddle.Tensor] = None,
         decoder_attention_mask: Optional[paddle.Tensor] = None,
-        encoder_outputs: Optional[List[paddle.Tensor]] = None,
+        encoder_output: Optional[List[paddle.Tensor]] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
         decoder_inputs_embeds: Optional[paddle.Tensor] = None,
         labels: Optional[paddle.Tensor] = None,
@@ -1664,7 +1669,7 @@ class T5ForSequenceClassification(T5PreTrainedModel):
             attention_mask=attention_mask,
             decoder_input_ids=decoder_input_ids,
             decoder_attention_mask=decoder_attention_mask,
-            encoder_outputs=encoder_outputs,
+            encoder_output=encoder_output,
             inputs_embeds=inputs_embeds,
             decoder_inputs_embeds=decoder_inputs_embeds,
             use_cache=use_cache,
@@ -1783,7 +1788,7 @@ class T5ForQuestionAnswering(T5PreTrainedModel):
         attention_mask: Optional[paddle.Tensor] = None,
         decoder_input_ids: Optional[paddle.Tensor] = None,
         decoder_attention_mask: Optional[paddle.Tensor] = None,
-        encoder_outputs: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
+        encoder_output: Optional[Tuple[Tuple[paddle.Tensor]]] = None,
         start_positions: Optional[paddle.Tensor] = None,
         end_positions: Optional[paddle.Tensor] = None,
         inputs_embeds: Optional[paddle.Tensor] = None,
@@ -1825,8 +1830,8 @@ class T5ForQuestionAnswering(T5PreTrainedModel):
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         # Encode if needed (training, first prediction pass)
-        if encoder_outputs is None:
-            encoder_outputs = self.encoder(
+        if encoder_output is None:
+            encoder_output = self.encoder(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 inputs_embeds=inputs_embeds,
@@ -1834,14 +1839,14 @@ class T5ForQuestionAnswering(T5PreTrainedModel):
                 output_hidden_states=output_hidden_states,
                 return_dict=return_dict,
             )
-        elif return_dict and not isinstance(encoder_outputs, BaseModelOutput):
-            encoder_outputs = BaseModelOutput(
-                last_hidden_state=encoder_outputs[0],
-                hidden_states=encoder_outputs[1] if len(encoder_outputs) > 1 else None,
-                attentions=encoder_outputs[2] if len(encoder_outputs) > 2 else None,
+        elif return_dict and not isinstance(encoder_output, BaseModelOutput):
+            encoder_output = BaseModelOutput(
+                last_hidden_state=encoder_output[0],
+                hidden_states=encoder_output[1] if len(encoder_output) > 1 else None,
+                attentions=encoder_output[2] if len(encoder_output) > 2 else None,
             )
 
-        hidden_states = encoder_outputs[0]
+        hidden_states = encoder_output[0]
 
         # Decode
         decoder_outputs = self.decoder(
@@ -1882,7 +1887,7 @@ class T5ForQuestionAnswering(T5PreTrainedModel):
             total_loss = (start_loss + end_loss) / 2
 
         if not return_dict:
-            output = (start_logits, end_logits) + decoder_outputs[1:] + encoder_outputs
+            output = (start_logits, end_logits) + decoder_outputs[1:] + encoder_output
             return ((total_loss,) + output) if total_loss is not None else output
 
         return Seq2SeqQuestionAnsweringModelOutput(
@@ -1893,7 +1898,7 @@ class T5ForQuestionAnswering(T5PreTrainedModel):
             decoder_hidden_states=decoder_outputs.hidden_states,
             decoder_attentions=decoder_outputs.attentions,
             cross_attentions=decoder_outputs.cross_attentions,
-            encoder_last_hidden_state=encoder_outputs.last_hidden_state,
-            encoder_hidden_states=encoder_outputs.hidden_states,
-            encoder_attentions=encoder_outputs.attentions,
+            encoder_last_hidden_state=encoder_output.last_hidden_state,
+            encoder_hidden_states=encoder_output.hidden_states,
+            encoder_attentions=encoder_output.attentions,
         )

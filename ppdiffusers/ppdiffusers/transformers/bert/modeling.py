@@ -672,6 +672,8 @@ class BertPreTrainedModel(PretrainedModel):
             ".linear1.": ".intermediate.dense.",
             ".linear2.": ".output.dense.",
             ".norm2.": ".output.LayerNorm.",
+            "LayerNorm.gamma": "LayerNorm.weight",
+            "LayerNorm.beta": "LayerNorm.bias",
         },
     }
 

@@ -261,7 +261,7 @@ class EMAModel:
         """
         parameters = list(parameters)
         for s_param, param in zip(self.shadow_params, parameters):
-            param.copy_(s_param, False)
+            param.copy_(s_param.cast(param.dtype), False)
 
     def to(self, device=None, dtype=None) -> None:
         r"""Move internal buffers of the ExponentialMovingAverage to `device`.
@@ -316,7 +316,7 @@ class EMAModel:
         if self.temp_stored_params is None:
             raise RuntimeError("This ExponentialMovingAverage has no `store()`ed weights " "to `restore()`")
         for c_param, param in zip(self.temp_stored_params, parameters):
-            param.copy_(c_param, False)
+            param.copy_(c_param.cast(param.dtype), False)
 
         # Better memory-wise.
         self.temp_stored_params = None

@@ -539,7 +539,7 @@ class UniDiffuserBlock(nn.Layer):
 
 # Modified from ppdiffusers.models.transformer_2d.Transformer2DModel
 # Modify the transformer block structure to be U-Net like following U-ViT
-# Only supports patch-style input and torch.nn.LayerNorm currently
+# Only supports patch-style input and nn.LayerNorm currently
 # https://github.com/baofff/U-ViT
 class UTransformer2DModel(ModelMixin, ConfigMixin):
     """

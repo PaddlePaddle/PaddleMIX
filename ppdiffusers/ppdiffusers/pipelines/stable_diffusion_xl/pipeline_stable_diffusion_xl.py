@@ -44,7 +44,7 @@ from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import (
     USE_PEFT_BACKEND,
     deprecate,
-    is_ppinvisible_watermark_available,
+    is_pp_invisible_watermark_available,
     logging,
     replace_example_docstring,
     scale_lora_layers,
@@ -54,7 +54,7 @@ from ...utils.paddle_utils import randn_tensor
 from ..pipeline_utils import DiffusionPipeline
 from .pipeline_output import StableDiffusionXLPipelineOutput
 
-if is_ppinvisible_watermark_available():
+if is_pp_invisible_watermark_available():
     from .watermark import StableDiffusionXLWatermarker
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -179,7 +179,7 @@ class StableDiffusionXLPipeline(
             Whether the negative prompt embeddings shall be forced to always be set to 0. Also see the config of
             `stabilityai/stable-diffusion-xl-base-1-0`.
         add_watermarker (`bool`, *optional*):
-            Whether to use the [invisible_watermark library](https://github.com/ShieldMnt/ppinvisible-watermark/) to
+            Whether to use the [pp_invisible_watermark library](https://github.com/junnyu/pp-invisible-watermark/) to
             watermark output images. If not defined, it will default to True if the package is installed, otherwise no
             watermarker will be used.
     """
@@ -236,7 +236,7 @@ class StableDiffusionXLPipeline(
 
         self.default_sample_size = self.unet.config.sample_size
 
-        add_watermarker = add_watermarker if add_watermarker is not None else is_ppinvisible_watermark_available()
+        add_watermarker = add_watermarker if add_watermarker is not None else is_pp_invisible_watermark_available()
 
         if add_watermarker:
             self.watermark = StableDiffusionXLWatermarker()

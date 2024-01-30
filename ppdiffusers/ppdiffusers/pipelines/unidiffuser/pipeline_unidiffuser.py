@@ -20,13 +20,13 @@ from typing import Callable, List, Optional, Union
 import numpy as np
 import paddle
 import PIL
-from paddlenlp.transformers import GPTTokenizer
 
 from ppdiffusers.transformers import (
     CLIPImageProcessor,
     CLIPTextModel,
     CLIPTokenizer,
     CLIPVisionModelWithProjection,
+    GPTTokenizer,
 )
 
 from ...models import AutoencoderKL

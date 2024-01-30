@@ -43,7 +43,7 @@ from ...schedulers import KarrasDiffusionSchedulers
 from ...utils import (
     USE_PEFT_BACKEND,
     deprecate,
-    is_ppinvisible_watermark_available,
+    is_pp_invisible_watermark_available,
     logging,
     replace_example_docstring,
 )
@@ -52,7 +52,7 @@ from ..pipeline_utils import DiffusionPipeline
 from ..stable_diffusion_xl.pipeline_output import StableDiffusionXLPipelineOutput
 from .multicontrolnet import MultiControlNetModel
 
-if is_ppinvisible_watermark_available():
+if is_pp_invisible_watermark_available():
     from ppdiffusers.pipelines.stable_diffusion_xl.watermark import (
         StableDiffusionXLWatermarker,
     )
@@ -229,7 +229,7 @@ class StableDiffusionXLControlNetInpaintPipeline(
             vae_scale_factor=self.vae_scale_factor, do_convert_rgb=True, do_normalize=False
         )
 
-        add_watermarker = add_watermarker if add_watermarker is not None else is_ppinvisible_watermark_available()
+        add_watermarker = add_watermarker if add_watermarker is not None else is_pp_invisible_watermark_available()
 
         if add_watermarker:
             self.watermark = StableDiffusionXLWatermarker()

@@ -470,7 +470,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
         embedding_dim = self.prior.config.embedding_dim
 
         latents = self.prepare_latents(
-            (batch_size, embedding_dim),
+            [batch_size, embedding_dim],
             prompt_embeds.dtype,
             generator,
             latents,
@@ -520,7 +520,7 @@ class KandinskyPriorPipeline(DiffusionPipeline):
             image_embeddings, zero_embeds = image_embeddings.chunk(2)
 
         if output_type not in ["pd", "np"]:
-            raise ValueError(f"Only the output types `pt` and `np` are supported not output_type={output_type}")
+            raise ValueError(f"Only the output types `pd` and `np` are supported not output_type={output_type}")
 
         if output_type == "np":
             image_embeddings = image_embeddings.cpu().numpy()

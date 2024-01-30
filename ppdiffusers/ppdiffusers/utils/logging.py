@@ -29,6 +29,7 @@ from logging import WARN  # NOQA
 from logging import WARNING  # NOQA
 from typing import Dict, Optional
 
+import colorlog
 from tqdm import auto as tqdm_lib
 
 _lock = threading.Lock()
@@ -246,6 +247,28 @@ def enable_explicit_format() -> None:
 
     for handler in handlers:
         formatter = logging.Formatter("[%(levelname)s|%(filename)s:%(lineno)s] %(asctime)s >> %(message)s")
+        handler.setFormatter(formatter)
+
+
+log_config = {
+    "DEBUG": {"level": 10, "color": "purple"},
+    "INFO": {"level": 20, "color": "green"},
+    "TRAIN": {"level": 21, "color": "cyan"},
+    "EVAL": {"level": 22, "color": "blue"},
+    "WARNING": {"level": 30, "color": "yellow"},
+    "ERROR": {"level": 40, "color": "red"},
+    "CRITICAL": {"level": 50, "color": "bold_red"},
+}
+
+
+def enable_colored_format() -> None:
+    handlers = _get_library_root_logger().handlers
+
+    for handler in handlers:
+        formatter = colorlog.ColoredFormatter(
+            "%(log_color)s[%(asctime)-15s] [%(levelname)8s]%(reset)s - %(message)s",
+            log_colors={key: conf["color"] for key, conf in log_config.items()},
+        )
         handler.setFormatter(formatter)
 
 

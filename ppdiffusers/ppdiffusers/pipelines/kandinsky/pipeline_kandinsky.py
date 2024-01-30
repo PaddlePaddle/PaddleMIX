@@ -328,7 +328,7 @@ class KandinskyPipeline(DiffusionPipeline):
 
         # create initial latent
         latents = self.prepare_latents(
-            (batch_size, num_channels_latents, height, width),
+            [batch_size, num_channels_latents, height, width],
             text_encoder_hidden_states.dtype,
             generator,
             latents,
@@ -378,7 +378,7 @@ class KandinskyPipeline(DiffusionPipeline):
         image = self.movq.decode(latents, force_not_quantize=True)["sample"]
 
         if output_type not in ["pd", "np", "pil"]:
-            raise ValueError(f"Only the output types `pt`, `pil` and `np` are supported not output_type={output_type}")
+            raise ValueError(f"Only the output types `pd`, `pil` and `np` are supported not output_type={output_type}")
 
         if output_type in ["np", "pil"]:
             image = image * 0.5 + 0.5
