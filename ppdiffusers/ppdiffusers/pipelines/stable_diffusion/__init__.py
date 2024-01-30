@@ -59,3 +59,18 @@ else:
     from .pipeline_fastdeploy_stable_diffusion_mega import (
         FastDeployStableDiffusionMegaPipeline,
     )
+
+from .pipeline_paddleinfer_cycle_diffusion import PaddleInferCycleDiffusionPipeline
+from .pipeline_paddleinfer_stable_diffusion import PaddleInferStableDiffusionPipeline
+from .pipeline_paddleinfer_stable_diffusion_img2img import (
+    PaddleInferStableDiffusionImg2ImgPipeline,
+)
+from .pipeline_paddleinfer_stable_diffusion_inpaint import (
+    PaddleInferStableDiffusionInpaintPipeline,
+)
+from .pipeline_paddleinfer_stable_diffusion_inpaint_legacy import (
+    PaddleInferStableDiffusionInpaintPipelineLegacy,
+)
+from .pipeline_paddleinfer_stable_diffusion_mega import (
+    PaddleInferStableDiffusionMegaPipeline,
+)

@@ -28,18 +28,25 @@ from .latent_consistency_models import (
 )
 from .lvdm import LVDMTextToVideoPipeline, LVDMUncondPipeline
 from .pipeline_utils import DiffusionPipeline
-from .stable_diffusion import (
-    StableDiffusionImg2ImgPipeline,
-    StableDiffusionInpaintPipeline,
-    StableDiffusionInpaintPipelineLegacy,
-    StableDiffusionPipeline,
-    StableDiffusionPipelineOutput,
-)
+
+# from .stable_diffusion import (
+#     StableDiffusionImg2ImgPipeline,
+#     StableDiffusionInpaintPipeline,
+#     StableDiffusionInpaintPipelineLegacy,
+#     StableDiffusionPipeline,
+#     StableDiffusionPipelineOutput,
+# )
+from .stable_diffusion import *
 from .stable_diffusion_xl import (
+    PaddleInferStableDiffusionXLImg2ImgPipeline,
+    PaddleInferStableDiffusionXLInpaintPipeline,
+    PaddleInferStableDiffusionXLMegaPipeline,
+    PaddleInferStableDiffusionXLPipeline,
     StableDiffusionXLPipeline,
     StableDiffusionXLPipelineOutput,
 )
 from .stable_video_diffusion import (
+    PaddleInferStableVideoDiffusionPipeline,
     StableVideoDiffusionPipeline,
     StableVideoDiffusionPipelineOutput,
 )
@@ -81,3 +88,5 @@ else:
         UniDiffuserPipeline,
         UniDiffuserTextDecoder,
     )
+
+from .controlnet import PaddleInferStableDiffusionControlNetPipeline

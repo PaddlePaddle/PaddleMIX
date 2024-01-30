@@ -1,4 +1,4 @@
-# FastDeploy Stable Diffusion 模型高性能部署
+# Stable Diffusion 模型高性能部署
 
  **目录**
    * [部署模型准备](#部署模型准备)
@@ -7,8 +7,6 @@
        * [文图生成（Text-to-Image Generation）](#文图生成)
        * [文本引导的图像变换（Image-to-Image Text-Guided Generation）](#文本引导的图像变换)
        * [文本引导的图像编辑（Text-Guided Image Inpainting）](#文本引导的图像编辑)
-
-⚡️[FastDeploy](https://github.com/PaddlePaddle/FastDeploy)是一款全场景、易用灵活、极致高效的AI推理部署工具，为开发者提供多硬件、多推理引擎后端的部署能力。开发者只需调用一行代码即可随意切换硬件、推理引擎后端。本示例展现如何通过 FastDeploy 将我们 PPDiffusers 训练好的 Stable Diffusion 模型进行多硬件、多推理引擎后端高性能部署。
 
 <a name="部署模型准备"></a>
 
@@ -20,11 +18,7 @@
 
 ## 环境依赖
 
-在示例中使用了 FastDeploy，需要执行以下命令安装依赖。
-
-```shell
-pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
-```
+paddle 2.6.0
 
 <a name="快速体验"></a>
 
@@ -62,7 +56,7 @@ python infer.py --model_dir stable-diffusion-v1-5/ --scheduler "preconfig-euler-
 [without-hiresfix]: https://github.com/PaddlePaddle/PaddleNLP/assets/50394665/38ab6032-b960-4b76-8d69-0e0f8b5e1f42
 [with-hiresfix]: https://github.com/PaddlePaddle/PaddleNLP/assets/50394665/a472cb31-d8a2-451d-bf80-cd84c9ef0d08
 
-在80G A100上，ppdiffusers==0.16.1、fastdeploy==1.0.7、develop paddle、cuda11.7 的环境下，我们测出了如下的速度。
+在80G A100上，ppdiffusers==0.16.1、develop paddle、cuda11.7 的环境下，我们测出了如下的速度。
 - without hiresfix 的速度为：Mean latency: 1.930896 s, p50 latency: 1.932413 s, p90 latency: 1.933565 s, p95 latency: 1.933630 s.
 - with hiresfix 的速度为：Mean latency: 1.442178 s, p50 latency: 1.442885 s, p90 latency: 1.446133 s, p95 latency: 1.446285 s.
 
@@ -168,14 +162,14 @@ python infer.py --model_dir stable-diffusion-v1-5-inpainting/ --scheduler euler-
 
 | 参数 |参数说明 |
 |----------|--------------|
-| --model_dir | 导出后模型的目录。默认为 `runwayml/stable-diffusion-v1-5@fastdeploy` |
+| --model_dir | 导出后模型的目录。默认为 `runwayml/stable-diffusion-v1-5@paddleinfer` |
 | --backend | 推理引擎后端。默认为 `paddle_tensorrt`，可选列表：`['onnx_runtime', 'paddle', 'paddlelite', 'paddle_tensorrt', 'tensorrt']`。 |
 | --device | 运行设备。默认为 `gpu`，可选列表：`['cpu', 'gpu', 'huawei_ascend_npu', 'kunlunxin_xpu']`。 |
 | --device_id | `gpu` 设备的 id。若 `device_id` 为`-1`，视为使用 `cpu` 推理。 |
 | --inference_steps | `UNet` 模型运行的次数，默认为 `50`。 |
 | --benchmark_steps | `Benchmark` 运行的次数，默认为 `1`。 |
 | --use_fp16 | 是否使用 `fp16` 精度。默认为 `False`。使用 `paddle_tensorrt` 后端及 `kunlunxin_xpu` 设备时可以设为 `True` 开启。 |
-| --task_name | 任务类型，默认为`text2img`，可选列表：`['text2img', 'img2img', 'inpaint', 'inpaint_legacy', 'cycle_diffusion', 'hiresfix', 'all']`。 注意，当`task_name`为`inpaint`时候，我们需要配合`runwayml/stable-diffusion-inpainting@fastdeploy`权重才能正常使用。|
+| --task_name | 任务类型，默认为`text2img`，可选列表：`['text2img', 'img2img', 'inpaint', 'inpaint_legacy', 'cycle_diffusion', 'hiresfix', 'all']`。 注意，当`task_name`为`inpaint`时候，我们需要配合`runwayml/stable-diffusion-inpainting@paddleinfer`权重才能正常使用。|
 | --scheduler | 采样器类型。默认为 `'preconfig-euler-ancestral'`。可选列表：`['pndm', 'lms', 'euler', 'euler-ancestral', 'preconfig-euler-ancestral', 'dpm-multi', 'dpm-single', 'unipc-multi', 'ddim', 'ddpm', 'deis-multi', 'heun', 'kdpm2-ancestral', 'kdpm2']`。|
 | --infer_op | 推理所采用的op，可选列表 `['zero_copy_infer', 'raw', 'all']`，`zero_copy_infer`推理速度更快，默认值为`zero_copy_infer`。 |
 | --parse_prompt_type | 处理prompt文本所使用的方法，可选列表 `['raw', 'lpw']`，`lpw`可强调句子中的单词，并且支持更长的文本输入，默认值为`lpw`。 |

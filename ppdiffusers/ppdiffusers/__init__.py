@@ -26,6 +26,7 @@ from .models import (
     ModelMixin,
     MotionAdapter,
     MultiAdapter,
+    PaddleInferRuntimeModel,
     PriorTransformer,
     T2IAdapter,
     T5FilmDecoder,
