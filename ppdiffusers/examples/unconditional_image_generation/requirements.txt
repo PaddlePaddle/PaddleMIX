@@ -1,5 +1,5 @@
 datasets
 visualdl
-paddlenlp>=2.6.0rc0
+paddlenlp>=2.7.2
 Pillow
-ppdiffusers>=0.16.1
+ppdiffusers>=0.24.0
