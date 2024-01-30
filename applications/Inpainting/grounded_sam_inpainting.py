@@ -25,7 +25,7 @@ from PIL import Image
 
 from paddlemix.models.groundingdino.modeling import GroundingDinoModel
 from paddlemix.models.sam.modeling import SamModel
-from paddlemix.processors.groundingdino_processing import GroudingDinoProcessor
+from paddlemix.processors.groundingdino_processing import GroundingDinoProcessor
 from paddlemix.processors.sam_processing import SamProcessor
 from paddlemix.utils.log import logger
 from ppdiffusers import StableDiffusionInpaintPipeline
@@ -119,7 +119,7 @@ def main():
 
     logger.info("dino_model: {}".format(model_args.dino_model_name_or_path))
     # bulid dino processor
-    dino_processor = GroudingDinoProcessor.from_pretrained(model_args.dino_model_name_or_path)
+    dino_processor = GroundingDinoProcessor.from_pretrained(model_args.dino_model_name_or_path)
     # bulid dino model
     dino_model = GroundingDinoModel.from_pretrained(model_args.dino_model_name_or_path)
     dino_model.eval()

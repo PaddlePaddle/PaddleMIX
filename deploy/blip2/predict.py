@@ -14,12 +14,15 @@
 import argparse
 import os
 
-import numpy as np
+import numpy as np  # noqa: F401
 import paddle
 import requests
 from PIL import Image
 
-from paddlemix.models.blip2.utils import create_tokenizer, load_real_time_tokens
+from paddlemix.models.blip2.utils import (  # noqa: F401
+    create_tokenizer,
+    load_real_time_tokens,
+)
 from paddlemix.processors.blip_processing import (
     Blip2Processor,
     BlipImageProcessor,
@@ -236,4 +239,4 @@ if __name__ == "__main__":
     print("Reference: two coffee mugs with cats on them.")
     print("Outputs: ", msg)
     print("infer OK")
-    print("The whoel end to end time : ", time_ms / repeat_times, "ms")
+    print("The whole end to end time : ", time_ms / repeat_times, "ms")
