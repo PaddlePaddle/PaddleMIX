@@ -694,7 +694,7 @@ class CLIPEncoder(nn.Layer):
         for idx, encoder_layer in enumerate(self.layers):
             if output_hidden_states:
                 encoder_states = encoder_states + (hidden_states,)
-            if self.gradient_checkpointing and self.training and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
                 layer_outputs = self._gradient_checkpointing_func(
                     encoder_layer.__call__,
                     hidden_states,

@@ -374,12 +374,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
             encoder_hidden_states = encoder_hidden_states.reshape([batch_size, -1, hidden_states.shape[-1]])
 
         for block in self.transformer_blocks:
-            if (
-                self.training
-                and self.gradient_checkpointing
-                and not hidden_states.stop_gradient
-                and not use_old_recompute()
-            ):
+            if self.gradient_checkpointing and not hidden_states.stop_gradient and not use_old_recompute():
 
                 def create_custom_forward(module, return_dict=None):
                     def custom_forward(*inputs):

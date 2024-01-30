@@ -780,3 +780,136 @@ def patch_to(cls, as_prop=False, cls_method=False):
         return globals().get(nm, builtins.__dict__.get(nm, None))
 
     return _inner
+
+
+# NOTE: this patch_from_pretrained will be removed in the future.
+import inspect
+
+from paddlenlp.transformers import (
+    AutoConfig,
+    AutoModel,
+    AutoProcessor,
+    AutoTokenizer,
+    FeatureExtractionMixin,
+    ImageProcessingMixin,
+    PretrainedConfig,
+    PretrainedModel,
+    PretrainedTokenizer,
+)
+
+
+def url_or_path_join(*path_list):
+    return os.path.join(*path_list) if os.path.isdir(os.path.join(*path_list)) else "/".join(path_list)
+
+
+from ppdiffusers.utils import DIFFUSERS_CACHE, PPDIFFUSERS_CACHE
+
+
+def patch_from_pretrained(cls):
+    raw_from_pretrained = cls.from_pretrained.__func__
+    num_inputs = len(inspect.signature(cls.from_pretrained).parameters.keys())
+    if num_inputs == 2:
+
+        @classmethod
+        def new_from_pretrained(cls, pretrained_model_name_or_path, **kwargs):
+            # NOTE: NEW ADD, will be removed in the future.
+            from_hf_hub = kwargs.get("from_hf_hub", False)
+            from_aistudio = kwargs.get("from_aistudio", False)
+            cache_dir = kwargs.get("cache_dir", None)
+            if cache_dir is None:
+                if from_hf_hub:
+                    cache_dir = DIFFUSERS_CACHE
+                elif from_aistudio:
+                    cache_dir = None
+                else:
+                    cache_dir = PPDIFFUSERS_CACHE
+                kwargs["cache_dir"] = cache_dir
+            if from_hf_hub or from_aistudio:
+                pass
+            else:
+                subfolder = kwargs.pop("subfolder", None)
+                if subfolder is not None:
+                    pretrained_model_name_or_path = url_or_path_join(pretrained_model_name_or_path, subfolder)
+            return raw_from_pretrained(
+                cls,
+                pretrained_model_name_or_path,
+                **kwargs,
+            )
+
+        return new_from_pretrained
+    elif num_inputs == 3:
+
+        @classmethod
+        def new_from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
+            # NOTE: NEW ADD, will be removed in the future.
+            from_hf_hub = kwargs.get("from_hf_hub", False)
+            from_aistudio = kwargs.get("from_aistudio", False)
+            cache_dir = kwargs.get("cache_dir", None)
+            if cache_dir is None:
+                if from_hf_hub:
+                    cache_dir = DIFFUSERS_CACHE
+                elif from_aistudio:
+                    cache_dir = None
+                else:
+                    cache_dir = PPDIFFUSERS_CACHE
+                kwargs["cache_dir"] = cache_dir
+            if from_hf_hub or from_aistudio:
+                pass
+            else:
+                subfolder = kwargs.pop("subfolder", None)
+                if subfolder is not None:
+                    pretrained_model_name_or_path = url_or_path_join(pretrained_model_name_or_path, subfolder)
+            return raw_from_pretrained(
+                cls,
+                pretrained_model_name_or_path,
+                *args,
+                **kwargs,
+            )
+
+    elif num_inputs == 4:
+
+        @classmethod
+        def new_from_pretrained(cls, pretrained_model_name_or_path, task=None, *args, **kwargs):
+            # NOTE: NEW ADD, will be removed in the future.
+            from_hf_hub = kwargs.get("from_hf_hub", False)
+            from_aistudio = kwargs.get("from_aistudio", False)
+            cache_dir = kwargs.get("cache_dir", None)
+            if cache_dir is None:
+                if from_hf_hub:
+                    cache_dir = DIFFUSERS_CACHE
+                elif from_aistudio:
+                    cache_dir = None
+                else:
+                    cache_dir = PPDIFFUSERS_CACHE
+                kwargs["cache_dir"] = cache_dir
+            if from_hf_hub or from_aistudio:
+                pass
+            else:
+                subfolder = kwargs.pop("subfolder", None)
+                if subfolder is not None:
+                    pretrained_model_name_or_path = url_or_path_join(pretrained_model_name_or_path, subfolder)
+            return raw_from_pretrained(
+                cls,
+                pretrained_model_name_or_path,
+                task=task,
+                *args,
+                **kwargs,
+            )
+
+    return new_from_pretrained
+
+
+for cls in [
+    AutoConfig,
+    AutoModel,
+    AutoTokenizer,
+    AutoProcessor,
+    PretrainedModel,
+    PretrainedConfig,
+    PretrainedTokenizer,
+    ImageProcessingMixin,
+    FeatureExtractionMixin,
+]:
+    if not getattr(cls, "is_patch", False):
+        setattr(cls, "from_pretrained", patch_from_pretrained(cls))
+        setattr(cls, "is_patch", True)

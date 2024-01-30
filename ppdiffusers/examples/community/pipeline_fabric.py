@@ -16,7 +16,6 @@ from typing import List, Optional, Union
 
 import paddle
 from packaging import version
-from paddlenlp.transformers import CLIPTextModel, CLIPTokenizer
 from PIL import Image
 
 from ppdiffusers import AutoencoderKL, UNet2DConditionModel
@@ -31,6 +30,7 @@ from ppdiffusers.schedulers import (
     EulerAncestralDiscreteScheduler,
     KarrasDiffusionSchedulers,
 )
+from ppdiffusers.transformers import CLIPTextModel, CLIPTokenizer
 from ppdiffusers.utils import (
     deprecate,
     logging,

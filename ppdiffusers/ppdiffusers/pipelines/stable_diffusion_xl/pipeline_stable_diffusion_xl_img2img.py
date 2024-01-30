@@ -585,7 +585,7 @@ class StableDiffusionXLImg2ImgPipeline(
                     f" {negative_prompt_embeds.shape}."
                 )
 
-    def get_timesteps(self, num_inference_steps, strength, device, denoising_start=None):
+    def get_timesteps(self, num_inference_steps, strength, denoising_start=None):
         # get the original timestep using init_timestep
         if denoising_start is None:
             init_timestep = min(int(num_inference_steps * strength), num_inference_steps)

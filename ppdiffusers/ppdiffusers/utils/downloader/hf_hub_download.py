@@ -14,3 +14,6 @@
 
 from huggingface_hub import file_exists as hf_hub_file_exists  # noqa: F401
 from huggingface_hub import hf_hub_download  # noqa: F401
+from huggingface_hub import (  # noqa: F401
+    try_to_load_from_cache as hf_hub_try_to_load_from_cache,
+)

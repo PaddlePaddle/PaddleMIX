@@ -200,18 +200,39 @@ if is_paddle_available():
 
         return latents
 
-    @contextmanager
-    def dtype_guard(dtype="float32"):
-        if isinstance(dtype, paddle.dtype):
-            dtype = str(dtype).replace("paddle.", "")
-        origin_dtype = paddle.get_default_dtype()
-        paddle.set_default_dtype(dtype)
-        try:
-            yield
-        finally:
-            paddle.set_default_dtype(origin_dtype)
+    if not hasattr(paddle, "dtype_guard"):
 
-    paddle.dtype_guard = dtype_guard
+        @contextmanager
+        def dtype_guard(dtype="float32"):
+            if isinstance(dtype, paddle.dtype):
+                dtype = str(dtype).replace("paddle.", "")
+            origin_dtype = paddle.get_default_dtype()
+            paddle.set_default_dtype(dtype)
+            try:
+                yield
+            finally:
+                paddle.set_default_dtype(origin_dtype)
+
+        paddle.dtype_guard = dtype_guard
+
+    if not hasattr(paddle, "device_guard"):
+
+        @contextmanager
+        def device_guard(device="cpu", dev_id=0):
+            device = device.replace("cuda", "gpu")
+            if ":" in device:
+                device, dev_id = device.split(":")
+            origin_device = paddle.device.get_device()
+            if device == "cpu":
+                paddle.set_device(device)
+            elif device in ["gpu", "xpu", "npu"]:
+                paddle.set_device("{}:{}".format(device, dev_id))
+            try:
+                yield
+            finally:
+                paddle.set_device(origin_device)
+
+        paddle.device_guard = device_guard
 
     _init_weights = True
 

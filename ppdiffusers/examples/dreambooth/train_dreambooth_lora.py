@@ -39,7 +39,6 @@ from paddle.io import BatchSampler, DataLoader, Dataset, DistributedBatchSampler
 from paddle.optimizer import AdamW
 from paddle.vision import BaseTransform, transforms
 from paddlenlp.trainer import set_seed
-from paddlenlp.transformers import AutoTokenizer, PretrainedConfig
 from paddlenlp.utils.log import logger
 from PIL import Image
 from PIL.ImageOps import exif_transpose
@@ -63,6 +62,7 @@ from ppdiffusers.models.attention_processor import (
 )
 from ppdiffusers.optimization import get_scheduler
 from ppdiffusers.training_utils import freeze_params, unwrap_model
+from ppdiffusers.transformers import AutoTokenizer, PretrainedConfig
 
 # from ppdiffusers.utils import check_min_version
 # from ppdiffusers.utils import TEXT_ENCODER_ATTN_MODULE, check_min_version
@@ -153,7 +153,7 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
     except Exception:
         model_class = "LDMBertModel"
     if model_class == "CLIPTextModel":
-        from paddlenlp.transformers import CLIPTextModel
+        from ppdiffusers.transformers import CLIPTextModel
 
         return CLIPTextModel
     elif model_class == "RobertaSeriesModelWithTransformation":
@@ -163,11 +163,11 @@ def import_model_class_from_model_name_or_path(pretrained_model_name_or_path: st
 
         return RobertaSeriesModelWithTransformation
     elif model_class == "T5EncoderModel":
-        from paddlenlp.transformers import T5EncoderModel
+        from ppdiffusers.transformers import T5EncoderModel
 
         return T5EncoderModel
     elif model_class == "BertModel":
-        from paddlenlp.transformers import BertModel
+        from ppdiffusers.transformers import BertModel
 
         return BertModel
     elif model_class == "LDMBertModel":
@@ -780,7 +780,7 @@ def main():
             )
         except KeyError as e:
             if "XLMRobertaTokenizer" in str(e):
-                from paddlenlp.transformers import XLMRobertaTokenizer
+                from ppdiffusers.transformers import XLMRobertaTokenizer
 
                 tokenizer = XLMRobertaTokenizer.from_pretrained(
                     url_or_path_join(args.pretrained_model_name_or_path, "tokenizer")
@@ -1251,7 +1251,7 @@ def main():
                     break
 
         if is_main_process:
-            if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
+            if args.validation_prompt is not None and epoch % args.validation_epochs == 0 and epoch > 0:
                 logger.info(
                     f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
                     f" {args.validation_prompt}."
