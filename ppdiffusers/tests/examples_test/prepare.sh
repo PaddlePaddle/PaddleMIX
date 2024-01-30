@@ -19,6 +19,7 @@ cd ../../
 pip install -e .
 cd -
 
+export HF_ENDPOINT=https://hf-mirror.com
 python download_sd15.py
 
 cd ../../examples/dreambooth

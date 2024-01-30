@@ -627,8 +627,8 @@ class Attention(nn.Layer):
             if attention_mask.shape[0] < batch_size * num_heads:
                 attention_mask = attention_mask.repeat_interleave(num_heads, axis=0)
         elif out_dim == 4:
-            attention_mask = attention_mask.unsqueeze(1)
-            attention_mask = attention_mask.repeat_interleave(num_heads, axis=1)
+            if attention_mask.shape[0] < batch_size * num_heads:
+                attention_mask = attention_mask.repeat_interleave(num_heads, axis=0)
             attention_mask = attention_mask.reshape([batch_size, num_heads, -1, attention_mask.shape[-1]])
 
         # do not need transpose

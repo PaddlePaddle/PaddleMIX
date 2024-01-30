@@ -16,6 +16,7 @@ set -uex
 # test dreambooth
 cd ../../examples/dreambooth
 
+export HF_ENDPOINT=https://hf-mirror.com
 export FLAGS_conv_workspace_size_limit=4096
 export INSTANCE_DIR="./dogs"
 export MODEL_NAME="runwayml/stable-diffusion-v1-5"
@@ -833,3 +834,145 @@ python -u -m paddle.distributed.launch --gpus "0,1" train_lcm.py \
     --is_sdxl ${IS_SDXL} \
     --is_lora True \
     --overwrite_output_dir
+
+
+cd -
+
+
+# test kandinsky2_2/text_to_image
+# cd ../../examples/kandinsky2_2/text_to_image
+
+# DATASET_NAME="lambdalabs/pokemon-blip-captions"
+# RESOLUTION=512
+
+# OOM
+# python -u train_text_to_image_decoder.py \
+#   --dataset_name=$DATASET_NAME \
+#   --resolution=${RESOLUTION} \
+#   --train_batch_size=1 \
+#   --gradient_accumulation_steps=1 \
+#   --gradient_checkpointing \
+#   --max_train_steps=50 \
+#   --learning_rate=1e-05 \
+#   --checkpointing_steps 25 \
+#   --max_grad_norm=1 \
+#   --checkpoints_total_limit=3 \
+#   --lr_scheduler="constant" --lr_warmup_steps=0 \
+#   --seed=42 \
+#   --output_dir="kandi2-decoder-pokemon-model"
+
+# python -u train_text_to_image_prior.py \
+#   --dataset_name=$DATASET_NAME \
+#   --resolution=${RESOLUTION} \
+#   --train_batch_size=1 \
+#   --gradient_accumulation_steps=1 \
+#   --max_train_steps=50 \
+#   --learning_rate=1e-05 \
+#   --checkpointing_steps 25 \
+#   --max_grad_norm=1 \
+#   --checkpoints_total_limit=3 \
+#   --lr_scheduler="constant" --lr_warmup_steps=0 \
+#   --seed=42 \
+#   --output_dir="kandi2-prior-pokemon-model"
+
+# python -u train_text_to_image_decoder_lora.py \
+#   --dataset_name=$DATASET_NAME \
+#   --resolution=${RESOLUTION} \
+#   --train_batch_size=1 \
+#   --gradient_accumulation_steps=1 \
+#   --max_train_steps=50 \
+#   --learning_rate=1e-04 \
+#   --checkpointing_steps 25 \
+#   --max_grad_norm=1 \
+#   --checkpoints_total_limit=3 \
+#   --lr_scheduler="constant" --lr_warmup_steps=0 \
+#   --seed=42 \
+#   --lora_rank=4 \
+#   --validation_prompt="cute dragon creature" \
+#   --output_dir="kandi22-decoder-pokemon-lora"
+
+
+# python -u train_text_to_image_prior_lora.py \
+#   --dataset_name=$DATASET_NAME \
+#   --resolution=${RESOLUTION} \
+#   --train_batch_size=1 \
+#   --gradient_accumulation_steps=4 \
+#   --max_train_steps=50 \
+#   --learning_rate=1e-04 \
+#   --checkpointing_steps 25 \
+#   --max_grad_norm=1 \
+#   --checkpoints_total_limit=3 \
+#   --lr_scheduler="constant" --lr_warmup_steps=0 \
+#   --seed=42 \
+#   --lora_rank=4 \
+#   --validation_prompt="cute dragon creature" \
+#   --output_dir="kandi22-prior-pokemon-lora"
+
+
+# OOM
+# python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image_decoder.py \
+#   --dataset_name=$DATASET_NAME \
+#   --resolution=${RESOLUTION} \
+#   --train_batch_size=1 \
+#   --gradient_accumulation_steps=1 \
+#   --gradient_checkpointing \
+#   --max_train_steps=50 \
+#   --learning_rate=1e-05 \
+#   --checkpointing_steps 25 \
+#   --max_grad_norm=1 \
+#   --checkpoints_total_limit=3 \
+#   --lr_scheduler="constant" --lr_warmup_steps=0 \
+#   --seed=42 \
+#   --output_dir="kandi2-decoder-pokemon-model-n1c2"
+
+
+
+# python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image_prior.py \
+#   --dataset_name=$DATASET_NAME \
+#   --resolution=${RESOLUTION} \
+#   --train_batch_size=1 \
+#   --gradient_accumulation_steps=1 \
+#   --max_train_steps=50 \
+#   --learning_rate=1e-05 \
+#   --checkpointing_steps 25 \
+#   --max_grad_norm=1 \
+#   --checkpoints_total_limit=3 \
+#   --lr_scheduler="constant" --lr_warmup_steps=0 \
+#   --seed=42 \
+#   --output_dir="kandi2-prior-pokemon-model-n1c2"
+
+
+# python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image_decoder_lora.py \
+#   --dataset_name=$DATASET_NAME \
+#   --resolution=${RESOLUTION} \
+#   --train_batch_size=1 \
+#   --gradient_accumulation_steps=1 \
+#   --max_train_steps=50 \
+#   --learning_rate=1e-04 \
+#   --checkpointing_steps 25 \
+#   --max_grad_norm=1 \
+#   --checkpoints_total_limit=3 \
+#   --lr_scheduler="constant" --lr_warmup_steps=0 \
+#   --seed=42 \
+#   --lora_rank=4 \
+#   --validation_prompt="cute dragon creature" \
+#   --output_dir="kandi22-decoder-pokemon-lora-n1c2"
+
+
+# python -u -m paddle.distributed.launch --gpus "0,1" train_text_to_image_prior_lora.py \
+#   --dataset_name=$DATASET_NAME \
+#   --resolution=${RESOLUTION} \
+#   --train_batch_size=1 \
+#   --gradient_accumulation_steps=4 \
+#   --max_train_steps=50 \
+#   --learning_rate=1e-04 \
+#   --checkpointing_steps 25 \
+#   --max_grad_norm=1 \
+#   --checkpoints_total_limit=3 \
+#   --lr_scheduler="constant" --lr_warmup_steps=0 \
+#   --seed=42 \
+#   --lora_rank=4 \
+#   --validation_prompt="cute dragon creature" \
+#   --output_dir="kandi22-prior-pokemon-lora-n1c2"
+
+# cd -
