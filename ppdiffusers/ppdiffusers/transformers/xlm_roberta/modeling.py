@@ -482,7 +482,7 @@ class XLMRobertaEncoder(nn.Layer):
 
             past_key_value = past_key_values[i] if past_key_values is not None else None
 
-            if self.gradient_checkpointing and self.training and not hidden_states.stop_gradient:
+            if self.gradient_checkpointing and not hidden_states.stop_gradient:
                 layer_outputs = self._gradient_checkpointing_func(
                     layer_module.__call__,
                     hidden_states,
