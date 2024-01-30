@@ -22,8 +22,6 @@ PhotoMaker 要求以下环境和依赖项：
 
 - PPDiffusers >= 0.24.0
 
-- aistudio_sdk == 0.1.5
-
 - Gradio >= 4.0.0 (运行可视化界面需要安装)
 
 通过 `git clone` 命令拉取 PaddleMIX 源码，并安装必要的依赖库。请确保你的 PaddlePaddle 框架版本在 2.6.0 之后，PaddlePaddle 框架安装可参考 [飞桨官网-安装](https://www.paddlepaddle.org.cn/install/quick?docurl=/documentation/docs/zh/install/pip/linux-pip.html)。
@@ -60,7 +58,6 @@ import paddle
 from ppdiffusers.utils import load_image
 from ppdiffusers import EulerDiscreteScheduler
 from photomaker import PhotoMakerStableDiffusionXLPipeline
-from aistudio_sdk.hub import download
 
 base_model_path = "SG161222/RealVisXL_V3.0"
 photomaker_path = "TencentARC/PhotoMaker"

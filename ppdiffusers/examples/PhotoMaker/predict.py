@@ -6,7 +6,6 @@ import paddle
 from ppdiffusers.utils import load_image
 from ppdiffusers import EulerDiscreteScheduler
 from photomaker import PhotoMakerStableDiffusionXLPipeline
-from aistudio_sdk.hub import download
 
 base_model_path = "SG161222/RealVisXL_V3.0"
 photomaker_path = "TencentARC/PhotoMaker"
